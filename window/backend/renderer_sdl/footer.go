@@ -6,6 +6,7 @@ import (
 	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -146,15 +147,24 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 	)
 
 	activeRect := &sdl.Rect{
-		X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN, // - 1,
-		Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN,  // - 1,
-		W: (bottomRightCellX * sr.glyphSize.X) + 1,
-		H: (bottomRightCellY * sr.glyphSize.Y) + 1,
+		X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN - 1,
+		Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN - 1,
+		W: (bottomRightCellX * sr.glyphSize.X) + 2,
+		H: (bottomRightCellY * sr.glyphSize.Y) + 2,
 	}
 	sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
 
 	if sr.windowTabs.mouseOver == -1 {
+		if sr.windowTabs.mouseOver != sr.windowTabs.last {
+			sr.windowTabs.last = sr.windowTabs.mouseOver
+			cursor.Arrow()
+		}
 		return
+	}
+
+	if sr.windowTabs.mouseOver != sr.windowTabs.last {
+		sr.windowTabs.last = sr.windowTabs.mouseOver
+		cursor.Hand()
 	}
 
 	topLeftCellX = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.mouseOver]

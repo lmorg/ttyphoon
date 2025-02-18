@@ -90,6 +90,7 @@ type tabListT struct {
 	active     int
 	mouseOver  int
 	cells      []*types.Cell
+	last       int
 }
 
 type keyboardModeT struct {
