@@ -2,6 +2,7 @@ package virtualterm
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/lmorg/mxtty/types"
@@ -39,8 +40,22 @@ func (term *Term) searchBuf(search string) {
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
 
-	normOk := term._searchBuf(term._normBuf, search)
-	scrollOk := term._searchBuf(term._scrollBuf, search)
+	/*fnMatch := func(phrase string) bool {
+		return strings.Contains(phrase, search)
+	}*/
+
+	rxMatch, err := regexp.Compile(search)
+	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+		return
+	}
+
+	fnMatch := func(phrase string) bool {
+		return rxMatch.MatchString(phrase)
+	}
+
+	normOk := term._searchBuf(term._normBuf, fnMatch)
+	scrollOk := term._searchBuf(term._scrollBuf, fnMatch)
 
 	term._searchHighlight = term._searchHighlight || normOk || scrollOk
 
@@ -66,7 +81,7 @@ func (term *Term) searchClearResults() {
 	return
 }
 
-func (term *Term) _searchBuf(buf types.Screen, search string) bool {
+func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) bool) bool {
 	firstMatch := -1
 	for y := len(buf) - 1; y >= 0; y-- {
 		for x := len(buf[y].Cells) - 1; x >= 0; x-- {
@@ -75,7 +90,7 @@ func (term *Term) _searchBuf(buf types.Screen, search string) bool {
 			}
 
 			s := strings.ToLower(string(*buf[y].Cells[x].Phrase))
-			if strings.Contains(s, search) {
+			if fnSearch(s) {
 				phrase := string(*buf[y].Cells[x].Phrase)
 				phrase = strings.ReplaceAll(phrase, "\n", "")
 				phrase = strings.TrimSpace(phrase)
