@@ -49,7 +49,8 @@ const (
 	// _SGR_PLACEHOLDER4
 	// _SGR_PLACEHOLDER5
 	// _SGR_PLACEHOLDER6
-	// _SGR_PLACEHOLDER7
+
+	SGR_WIDE_CHAR
 )
 
 func (f SgrFlag) Is(flag SgrFlag) bool {

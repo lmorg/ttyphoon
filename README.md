@@ -182,9 +182,9 @@ ticked but not working as expected, then please raise an issue in Github.
   - [x] broad: can run older or more complicated CLI applications
   - [x] xterm compatible
 - [x] Alt character sets
-- [ ] Wide characters
+- [x] Wide characters
   - [ ] vt100 (ASCII characters)
-  - [ ] Unicode (eg logograph-centric languages and emoticons)
+  - [x] Unicode (eg logograph-centric languages and emoticons)
 - Keyboard
   - [x] Ctrl modifiers
   - [x] Alt modifiers

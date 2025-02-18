@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/mattn/go-runewidth"
 )
 
 type _debugWriteCell struct {
@@ -19,9 +20,22 @@ func (term *Term) writeCell(r rune, el types.Element) {
 		return
 	}
 
-	if term._insertOrReplace == _STATE_IRM_INSERT {
-		term.csiInsertCharacters(1)
+	var wide bool
 
+	if r > 128 {
+		// A bit of a hack, but runewidth would be slow for every character on
+		// on predominantly fast scrolling ASCII text.
+		// Another kludge is that we are treating zero width runes as one cell
+		// wide.
+		wide = runewidth.RuneWidth(r) == 2
+	}
+
+	if term._insertOrReplace == _STATE_IRM_INSERT {
+		if wide {
+			term.csiInsertCharacters(2)
+		} else {
+			term.csiInsertCharacters(1)
+		}
 	}
 
 	if term._curPos.X >= term.size.X && !term._noAutoLineWrap {
@@ -53,7 +67,15 @@ func (term *Term) writeCell(r rune, el types.Element) {
 			// ^ new code, keep
 		}
 
-		term._curPos.X++
+		if wide {
+			cell.Sgr.Bitwise.Set(types.SGR_WIDE_CHAR)
+			term._curPos.X += 2
+		} else {
+			term._curPos.X++
+		}
+	} else if wide {
+		// only run this on insert
+		cell.Sgr.Bitwise.Set(types.SGR_WIDE_CHAR)
 	}
 
 	if term._ssFrequency == 0 {

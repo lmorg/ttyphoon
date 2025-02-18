@@ -67,10 +67,15 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 		return
 	}
 
+	glyphSizeX := sr.glyphSize.X
+	if cell.Sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {
+		glyphSizeX *= 2
+	}
+
 	dstRect := &sdl.Rect{
 		X: (sr.glyphSize.X * cellPos.X) + _PANE_LEFT_MARGIN,
 		Y: (sr.glyphSize.Y * cellPos.Y) + _PANE_TOP_MARGIN,
-		W: sr.glyphSize.X + dropShadowOffset,
+		W: glyphSizeX + dropShadowOffset,
 		H: sr.glyphSize.Y + dropShadowOffset,
 	}
 
@@ -81,7 +86,7 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 	if isCellHighlighted(sr, dstRect) {
 		hlTexture = _HLTEXTURE_SELECTION
 	}
-	hash := cell.Sgr.HashValue()
+	hash := cell.Sgr.HashValue() // TODO: am i hashing on the right key? Should it be rune?
 
 	ok := sr.fontCache.atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 	if ok {
@@ -98,7 +103,7 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 		}
 	}
 
-	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, sr.glyphSize, sr.renderer, sr.font)
+	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, sr.font)
 	sr.fontCache.extended[hash] = append(sr.fontCache.extended[hash], atlas)
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 }

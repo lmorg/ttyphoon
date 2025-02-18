@@ -36,7 +36,13 @@ func (term *Term) _renderCursor() {
 	}
 
 	if term._slowBlinkState {
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{1, 1})
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{1, 1})
+		var w int32 = 1
+		sgr := term.currentCell().Sgr
+		if sgr != nil && sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {
+			w = 2
+		}
+
+		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
+		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
 	}
 }
