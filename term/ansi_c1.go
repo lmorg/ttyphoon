@@ -49,6 +49,14 @@ func (term *Term) parseC1Codes() {
 		}
 
 		switch r {
+		case '5':
+			// DEC single-width line (DECSWL), VT100
+			// While this technically isn't an SGR code, we'll treat it like it is one
+			term.sgr.Bitwise.Unset(types.SGR_WIDE_CHAR) // TODO: this doesn't work
+		case '6':
+			// DEC double-width line (DECDWL), VT100
+			// While this technically isn't an SGR code, we'll treat it like it is one
+			term.sgr.Bitwise.Set(types.SGR_WIDE_CHAR) // TODO: this doesn't work
 		case '8':
 			// DEC Screen Alignment Test (DECALN)
 			term.c1DecalnTestAlignment()

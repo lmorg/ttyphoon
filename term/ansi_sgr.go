@@ -63,7 +63,7 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 		//case 29: // Not crossed-out, ECMA-48 3rd
 
 		//
-		// 3bit foreground colour:
+		// 3-bit foreground colour:
 		//
 
 		case 30: // fg black
@@ -101,7 +101,7 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			sgr.Fg = types.SGR_DEFAULT.Fg
 
 		//
-		// 3bit background colour:
+		// 3-bit background colour:
 		//
 
 		case 40: // bg black
@@ -139,7 +139,7 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			sgr.Bg = types.SGR_DEFAULT.Bg
 
 		//
-		// 4bit foreground colour:
+		// 4-bit foreground colour:
 		//
 
 		case 90: // fg black
@@ -167,7 +167,7 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			sgr.Fg = types.SGR_COLOUR_WHITE_BRIGHT
 
 		//
-		// 4bit background colour:
+		// 4-bit background colour:
 		//
 
 		case 100: // bg black

@@ -3,9 +3,9 @@ Tmux:
   # integration via the tmux control plane.
   # You can also disable tmux here and set `tmux` as the default shell if you
   # would prefer to use the vanilla tmux UI.
-  # If  tmux` executable is not in $PATH then this terminal emulator will
+  # If `tmux` executable is not in $PATH then this terminal emulator will
   # revert to the $SHELLs defined below
-  Enabled: true 
+  #Enabled: true 
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
