@@ -3,13 +3,15 @@ package elementImage
 import (
 	"fmt"
 
+	"github.com/lmorg/mxtty/app"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 func (el *ElementImage) fullscreen() error {
+	mouseX, mouseY, _ := sdl.GetGlobalMouseState()
 	window, err := sdl.CreateWindow(
-		"mxtty",
-		sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 0, 0,
+		app.Name,
+		mouseX, mouseY, 0, 0,
 		sdl.WINDOW_SHOWN|sdl.WINDOW_FULLSCREEN_DESKTOP|sdl.WINDOW_ALWAYS_ON_TOP,
 	)
 	if err != nil {
@@ -17,6 +19,8 @@ func (el *ElementImage) fullscreen() error {
 	}
 	defer el.renderer.ShowAndFocusWindow()
 	defer window.Destroy()
+
+	winID, _ := window.GetID()
 
 	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
@@ -61,20 +65,20 @@ func (el *ElementImage) fullscreen() error {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch evt := event.(type) {
 
-			case *sdl.QuitEvent:
+			case sdl.QuitEvent:
 				return nil
 
-			case *sdl.KeyboardEvent:
+			case sdl.KeyboardEvent:
 				return nil
 
-			case *sdl.MouseButtonEvent:
+			case sdl.MouseButtonEvent:
 				if evt.State == sdl.PRESSED {
 					continue
 				}
 				return nil
 
-			case *sdl.WindowEvent:
-				if evt.Event == sdl.WINDOWEVENT_FOCUS_LOST {
+			case sdl.WindowEvent:
+				if evt.Event == sdl.WINDOWEVENT_FOCUS_LOST && evt.WindowID == winID {
 					return nil
 				}
 			}

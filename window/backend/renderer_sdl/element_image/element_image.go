@@ -7,6 +7,7 @@ import (
 	"image/png"
 
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/window/backend/cursor"
 	"golang.design/x/clipboard"
 	"golang.org/x/image/bmp"
 )
@@ -120,10 +121,12 @@ func (el *ElementImage) MouseWheel(_ *types.XY, _ *types.XY, callback types.Even
 }
 func (el *ElementImage) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Open image full screen")
+	cursor.Hand()
 	callback()
 }
 func (el *ElementImage) MouseOut() {
 	el.renderer.StatusBarText("")
+	cursor.Arrow()
 }
 
 func (el *ElementImage) copyImageToClipboard() {
