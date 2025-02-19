@@ -47,7 +47,7 @@ TypeFace:
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
   #FontName: "Monaco"
-  FontSize: 14
+  FontSize: 16
 
   # Enable or disable drop shadows on terminal. I personally like it because
   # it makes the text pop. YMMV

@@ -143,7 +143,7 @@ func (fa *fontAtlasT) printCellToSurface(cell *types.Cell, cellRect *sdl.Rect, s
 		hlTexture > _HLTEXTURE_SELECTION {
 
 		//shadowText, err := font.RenderGlyphBlended(cell.Char, textShadow[hlTexture])
-		shadowText, err := typeface.RenderGlyph(cell.Char, textShadow[hlTexture], cellRect)
+		shadowText, err := typeface.RenderGlyphs(textShadow[hlTexture], cellRect, cell.Char)
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func (fa *fontAtlasT) printCellToSurface(cell *types.Cell, cellRect *sdl.Rect, s
 	}
 
 	// render cell char
-	text, err := typeface.RenderGlyph(cell.Char, fg, cellRect)
+	text, err := typeface.RenderGlyphs(fg, cellRect, cell.Char)
 	if err != nil {
 		return err
 	}

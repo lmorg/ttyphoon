@@ -105,21 +105,22 @@ func (f *fontSdl) SetStyle(style types.SgrFlag) {
 }
 
 // RenderGlyph should be called from a font atlas
-func (f *fontSdl) RenderGlyph(char rune, fg *types.Colour, cellRect *sdl.Rect) (*sdl.Surface, error) {
+// TODO: support multiple glyphs
+func (f *fontSdl) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...rune) (*sdl.Surface, error) {
 	for fontId := range f.fonts {
-		if f.glyphIsProvided(fontId, char) {
-			return f.fonts[fontId].RenderGlyphBlended(char, sdl.Color{
+		if f.glyphIsProvided(fontId, ch[0]) {
+			return f.fonts[fontId].RenderGlyphBlended(ch[0], sdl.Color{
 				R: fg.Red,
 				G: fg.Green,
 				B: fg.Blue,
 				A: fg.Alpha,
 			})
 		}
-		debug.Log(fmt.Sprintf("[sdl] emoji not in font %d: %s", fontId, string(char)))
+		debug.Log(fmt.Sprintf("[sdl] emoji not in font %d: %s", fontId, string(ch)))
 	}
 
 	// not found
-	return f.fonts[_FONT_DEFAULT].RenderGlyphBlended(char, sdl.Color{
+	return f.fonts[_FONT_DEFAULT].RenderGlyphBlended(ch[0], sdl.Color{
 		R: fg.Red,
 		G: fg.Green,
 		B: fg.Blue,

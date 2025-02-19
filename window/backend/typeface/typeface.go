@@ -13,7 +13,7 @@ type typefaceRenderer interface {
 	Open(string, int) error
 	GetSize() *types.XY
 	SetStyle(types.SgrFlag)
-	RenderGlyph(rune, *types.Colour, *sdl.Rect) (*sdl.Surface, error)
+	RenderGlyphs(*types.Colour, *sdl.Rect, ...rune) (*sdl.Surface, error)
 	glyphIsProvided(int, rune) bool
 	Deprecated_GetFont() *ttf.Font
 	Close()
@@ -47,8 +47,8 @@ func GlyphIsEmoji(r rune) bool {
 	return gomoji.ContainsEmoji(string(r))
 }
 
-func RenderGlyph(char rune, fg *types.Colour, cellRect *sdl.Rect) (*sdl.Surface, error) {
-	return renderer.RenderGlyph(char, fg, cellRect)
+func RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...rune) (*sdl.Surface, error) {
+	return renderer.RenderGlyphs(fg, cellRect, ch...)
 }
 
 func Close() {

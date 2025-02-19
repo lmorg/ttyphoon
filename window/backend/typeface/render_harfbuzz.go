@@ -179,20 +179,22 @@ func (f *fontHarfbuzz) getFace(ch rune) *font.Face {
 }
 
 // RenderGlyph should be called from a font atlas
-func (f *fontHarfbuzz) RenderGlyph(ch rune, fg *types.Colour, cellRect *sdl.Rect) (*sdl.Surface, error) {
-	img := image.NewNRGBA(image.Rect(0, 0, int(cellRect.W), int(cellRect.H)))
+func (f *fontHarfbuzz) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...rune) (*sdl.Surface, error) {
+	textWidth := cellRect.W * int32(len(ch))
+
+	img := image.NewNRGBA(image.Rect(0, 0, int(textWidth), int(cellRect.H)))
 
 	textRenderer := &render.Renderer{
 		FontSize: f.fsize,
 		Color:    fg,
 	}
 
-	_ = textRenderer.DrawString(string(ch), img, f.getFace(ch))
+	_ = textRenderer.DrawString(string(ch), img, f.getFace(ch[0]))
 
 	return sdl.CreateRGBSurfaceWithFormatFrom(
 		unsafe.Pointer(&img.Pix[0]),
-		cellRect.W, cellRect.H,
-		32, cellRect.W*4, uint32(sdl.PIXELFORMAT_RGBA32),
+		textWidth, cellRect.H,
+		32, textWidth*4, uint32(sdl.PIXELFORMAT_RGBA32),
 	)
 }
 
