@@ -5,7 +5,7 @@ Tmux:
   # would prefer to use the vanilla tmux UI.
   # If `tmux` executable is not in $PATH then this terminal emulator will
   # revert to the $SHELLs defined below
-  #Enabled: true 
+  Enabled: true 
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
@@ -30,7 +30,7 @@ Terminal:
   # `-1` updates per page, which is fast.
   # Window.RefreshInterval also affects window updates
   # This value can also be overwritten by CSI ?4l &  CSI ?4h (DECSCLM)
-  JumpScrollLineCount: -1  # lines, 0 is per character, -1 is per page
+  JumpScrollLineCount: -1
 
   # LightMode is like Dark Mode but lighter
   #LightMode: true # experimental
@@ -46,7 +46,7 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
-  #FontName: "Hasklig"
+  #FontName: "Monaco"
   FontSize: 14
 
   # Enable or disable drop shadows on terminal. I personally like it because
@@ -62,10 +62,10 @@ TypeFace:
   # Ligatures increases system requirements slightly
   #Ligatures: true
 
-  # Cell Padding. Some people prefer high density while others find that harder
+  # Cell padding. Some people prefer high density while others find that harder
   # to read
   AdjustCellWidth:  0
-  AdjustCellHeight: +1
+  AdjustCellHeight: 0
 
 Window:
   # Window transparency. Some people like it, others do not.

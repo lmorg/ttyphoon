@@ -139,7 +139,7 @@ func (fa *fontAtlasT) printCellToSurface(cell *types.Cell, cellRect *sdl.Rect, s
 
 	// render drop shadow
 
-	if (config.Config.TypeFace.DropShadow && bg == nil) ||
+	if (config.Config.TypeFace.DropShadow && bg == nil && !typeface.GlyphIsEmoji(cell.Char)) ||
 		hlTexture > _HLTEXTURE_SELECTION {
 
 		//shadowText, err := font.RenderGlyphBlended(cell.Char, textShadow[hlTexture])

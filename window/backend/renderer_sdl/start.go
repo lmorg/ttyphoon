@@ -25,12 +25,14 @@ var (
 	Y      int32 = sdl.WINDOWPOS_UNDEFINED
 )
 
-func Initialise() (types.Renderer, *types.XY) {
+func init() {
 	err := sdl.Init(sdl.INIT_VIDEO)
 	if err != nil {
 		panic(err.Error())
 	}
+}
 
+func Initialise() (types.Renderer, *types.XY) {
 	rect, err := sdl.GetDisplayUsableBounds(0)
 	if err != nil {
 		log.Printf("ERROR: %s", err.Error())

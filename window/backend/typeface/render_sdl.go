@@ -6,6 +6,7 @@ import (
 
 	"github.com/flopp/go-findfont"
 	"github.com/lmorg/mxtty/assets"
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
@@ -50,7 +51,10 @@ func (f *fontSdl) Open(name string, size int) (err error) {
 
 func (f *fontSdl) _getSize() error {
 	x, y, err := f.fonts[_FONT_DEFAULT].SizeUTF8("W")
-	f.size = &types.XY{int32(x), int32(y)}
+	f.size = &types.XY{
+		X: int32(x + config.Config.TypeFace.AdjustCellWidth),
+		Y: int32(y + config.Config.TypeFace.AdjustCellWidth),
+	}
 	return err
 }
 
@@ -62,7 +66,7 @@ func (f *fontSdl) openSystemTtf(name string, size int) error {
 	path, err := findfont.Find(name)
 	if err != nil {
 		log.Printf("error in findfont.Find(): %s", err.Error())
-		log.Println("defaulting to compiled log...")
+		log.Println("defaulting to compiled font...")
 	}
 
 	f.fonts[_FONT_DEFAULT], err = ttf.OpenFont(path, size)

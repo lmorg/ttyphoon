@@ -1,6 +1,7 @@
 package typeface
 
 import (
+	"github.com/forPelevin/gomoji"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
@@ -42,6 +43,10 @@ func SetStyle(style types.SgrFlag) {
 	renderer.SetStyle(style)
 }
 
+func GlyphIsEmoji(r rune) bool {
+	return gomoji.ContainsEmoji(string(r))
+}
+
 func RenderGlyph(char rune, fg *types.Colour, cellRect *sdl.Rect) (*sdl.Surface, error) {
 	return renderer.RenderGlyph(char, fg, cellRect)
 }
@@ -62,7 +67,7 @@ func ligSplitSequence(runes []rune) [][]rune {
 	)
 
 	for _, r := range runes {
-		if renderer.glyphIsProvided(_FONT_DEFAULT, r) {
+		if renderer.glyphIsProvided(0, r) {
 			seq[i] = append(seq[i], r)
 			continue
 		}
