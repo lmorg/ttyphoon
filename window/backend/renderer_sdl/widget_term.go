@@ -117,8 +117,15 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 			if x < sr.windowTabs.boundaries[i] {
 				switch evt.Clicks {
 				case 1:
+					if i == 0 {
+						return
+					}
 					sr.selectWindow(i - 1)
+
 				default: // 2 or more
+					if i == 0 {
+						return
+					}
 					sr.DisplayInputBox("Please enter a new name for this window", sr.windowTabs.windows[i-1].Name, func(name string) {
 						err := sr.windowTabs.windows[i-1].Rename(name)
 						if err != nil {
