@@ -46,7 +46,7 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
-  FontName: "Hasklig"
+  #FontName: "Hasklig"
   FontSize: 15
 
   # Enable or disable drop shadows on terminal. I personally like it because

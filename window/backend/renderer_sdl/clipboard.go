@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"os"
 	"unsafe"
 
 	"github.com/lmorg/mxtty/types"
@@ -46,7 +47,30 @@ func (sr *sdlRender) clipboardPasteText() {
 	b := clipboard.Read(clipboard.FmtText)
 	if len(b) != 0 {
 		sr.term.Reply(b)
-	} else {
-		sr.DisplayNotification(types.NOTIFY_WARN, "Clipboard does not contain text to paste")
+		return
 	}
+
+	b = clipboard.Read(clipboard.FmtImage)
+	if len(b) != 0 {
+		f, err := os.CreateTemp("", "*.png")
+		if err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+
+		if _, err = f.Write(b); err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+
+		if err = f.Close(); err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+
+		sr.term.Reply([]byte(f.Name()))
+		return
+	}
+
+	sr.DisplayNotification(types.NOTIFY_WARN, "Clipboard does not contain text to paste")
 }
