@@ -56,18 +56,20 @@ type configT struct {
 
 	Window struct {
 		Opacity         int  `yaml:"Opacity"`
+		InactiveOpacity int  `yaml:"InactiveOpacity"`
 		StatusBar       bool `yaml:"StatusBar"`
 		RefreshInterval int  `yaml:"RefreshInterval"`
 		UseGPU          bool `yaml:"UseGPU"`
 	} `yaml:"Window"`
 
 	TypeFace struct {
-		FontName         string `yaml:"FontName"`
-		FontSize         int    `yaml:"FontSize"`
-		HarfbuzzRenderer bool   `yaml:"HarfbuzzRenderer"`
-		Ligatures        bool   `yaml:"Ligatures"`
-		DropShadow       bool   `yaml:"DropShadow"`
-		AdjustCellWidth  int    `yaml:"AdjustCellWidth"`
-		AdjustCellHeight int    `yaml:"AdjustCellHeight"`
+		FontName         string   `yaml:"FontName"`
+		FontSize         int      `yaml:"FontSize"`
+		HarfbuzzRenderer bool     `yaml:"HarfbuzzRenderer"`
+		Ligatures        bool     `yaml:"Ligatures"`
+		LigaturePairs    []string `yaml:"LigaturePairs"`
+		DropShadow       bool     `yaml:"DropShadow"`
+		AdjustCellWidth  int      `yaml:"AdjustCellWidth"`
+		AdjustCellHeight int      `yaml:"AdjustCellHeight"`
 	} `yaml:"TypeFace"`
 }

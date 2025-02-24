@@ -46,8 +46,8 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
-  #FontName: "Monaco"
-  FontSize: 16
+  FontName: "Hasklig"
+  FontSize: 15
 
   # Enable or disable drop shadows on terminal. I personally like it because
   # it makes the text pop. YMMV
@@ -60,7 +60,19 @@ TypeFace:
   # Ligatures are characters can be combined to make prettier versions of
   # themselves. This requires a supporting font to be used.
   # Ligatures increases system requirements slightly
-  #Ligatures: true
+  Ligatures: true
+  LigaturePairs:
+    - "->"
+    - ">>"
+    - "|>"
+    - "=>"
+    - "=="
+    - "!="
+    - "||"
+    - "&&"
+    - "?:"
+    - ".."
+    - "::"
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
@@ -72,6 +84,7 @@ Window:
   # Value is a percentage.
   # `100` disables transparency
   Opacity: 95
+  InactiveOpacity: 80
 
   StatusBar: true
 

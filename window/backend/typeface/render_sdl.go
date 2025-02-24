@@ -105,7 +105,6 @@ func (f *fontSdl) SetStyle(style types.SgrFlag) {
 }
 
 // RenderGlyph should be called from a font atlas
-// TODO: support multiple glyphs
 func (f *fontSdl) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...rune) (*sdl.Surface, error) {
 	for fontId := range f.fonts {
 		if f.glyphIsProvided(fontId, ch[0]) {

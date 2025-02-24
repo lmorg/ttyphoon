@@ -86,14 +86,15 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 	if isCellHighlighted(sr, dstRect) {
 		hlTexture = _HLTEXTURE_SELECTION
 	}
-	hash := cell.Sgr.HashValue() // TODO: am i hashing on the right key? Should it be rune?
+
+	hash := cell.Sgr.HashValue()
 
 	ok := sr.fontCache.atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 	if ok {
 		return
 	}
 
-	extAtlases, ok := sr.fontCache.extended[hash]
+	extAtlases, ok := sr.fontCache.extended[cell.Char]
 	if ok {
 		for i := range extAtlases {
 			ok = extAtlases[i].Render(sr, dstRect, cell.Char, hash, hlTexture)
@@ -103,7 +104,28 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 		}
 	}
 
-	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, sr.font)
-	sr.fontCache.extended[hash] = append(sr.fontCache.extended[hash], atlas)
+	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, sr.font, _FONT_ATLAS_NOT_LIG)
+	sr.fontCache.extended[cell.Char] = append(sr.fontCache.extended[cell.Char], atlas)
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
+}
+
+func (sr *sdlRender) PrintRow(cells []*types.Cell, pos *types.XY) {
+	cellPos := &types.XY{X: pos.X, Y: pos.Y}
+	l := int32(len(cells))
+
+	for ; cellPos.X < l; cellPos.X++ {
+		if cells[cellPos.X] == nil {
+			continue
+		}
+
+		if config.Config.TypeFace.Ligatures {
+			ligId := sr._isLigaturePair(cells[cellPos.X:])
+			if ligId >= 0 {
+				sr.PrintLigature(cells[cellPos.X:cellPos.X+2], cellPos, ligId)
+				cellPos.X++
+				continue
+			}
+		}
+		sr.PrintCell(cells[cellPos.X], cellPos)
+	}
 }

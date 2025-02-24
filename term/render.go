@@ -17,7 +17,7 @@ func (term *Term) Render() {
 	if !config.Config.TypeFace.Ligatures || term._mouseButtonDown || term._searchHighlight {
 		term._renderCells(screen)
 	} else {
-		term._renderLigatures(screen)
+		term._renderLigs(screen)
 	}
 
 	term._renderOutputBlockChrome(screen)
@@ -58,59 +58,39 @@ func (term *Term) _renderCells(screen types.Screen) {
 	}
 }
 
-func (term *Term) _renderLigatures(screen types.Screen) {
-	var (
-		pos          = new(types.XY)
-		elementStack = make(map[types.Element]bool) // no duplicates
-		hash         uint64
-		defaultHash  = types.SGR_DEFAULT.HashValue()
-	)
+func (term *Term) _renderLigs(screen types.Screen) {
+	pos := new(types.XY)
+	elementStack := make(map[types.Element]bool) // no duplicates
+	row := make([]*types.Cell, term.size.X)
 
 	for ; pos.Y < term.size.Y; pos.Y++ {
-		if screen[pos.Y].Cells[0].Sgr == nil {
-			hash = defaultHash
-		} else {
-			hash = screen[pos.Y].Cells[0].Sgr.HashValue()
-		}
-
-		var start int32
-		for pos.X = 0; pos.X < term.size.X; pos.X++ {
-			newHash := defaultHash // ^uint64(0)
-			if screen[pos.Y].Cells[pos.X].Sgr != nil {
-				newHash = screen[pos.Y].Cells[pos.X].Sgr.HashValue()
-			}
-
-			if screen[pos.Y].Cells[pos.X].Element != nil {
+		for ; pos.X < term.size.X; pos.X++ {
+			switch {
+			case screen[pos.Y].Cells[pos.X].Element != nil:
 				_, ok := elementStack[screen[pos.Y].Cells[pos.X].Element]
 				if !ok {
 					elementStack[screen[pos.Y].Cells[pos.X].Element] = true
 					offset := getElementXY(screen[pos.Y].Cells[pos.X].Char)
 					screen[pos.Y].Cells[pos.X].Element.Draw(nil, &types.XY{X: pos.X - offset.X, Y: pos.Y - offset.Y})
 				}
-				newHash = defaultHash //^uint64(0)
-			}
+				row[pos.X] = nil
 
-			if hash != newHash {
-				if screen[pos.Y].Cells[start].Sgr != nil && screen[pos.Y].Cells[start].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
-					continue // blink
+			case screen[pos.Y].Cells[pos.X].Char == 0:
+				row[pos.X] = nil
+
+			case screen[pos.Y].Cells[pos.X].Sgr == nil:
+				row[pos.X] = nil
+
+			default:
+				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
+					row[pos.X] = nil // blink
+					continue
 				}
-				term.renderer.PrintCellBlock(screen[pos.Y].Cells[start:pos.X], &types.XY{X: start, Y: pos.Y})
-				hash = newHash
-				start = pos.X
-			}
-
-			if screen[pos.Y].Cells[pos.X].Char == 0 || screen[pos.Y].Cells[pos.X].Element != nil {
-				term.renderer.PrintCellBlock(screen[pos.Y].Cells[start:pos.X], &types.XY{X: start, Y: pos.Y})
-				start = pos.X + 1
+				row[pos.X] = screen[pos.Y].Cells[pos.X]
 			}
 		}
-
-		if start < pos.X {
-			if screen[pos.Y].Cells[start].Sgr != nil && screen[pos.Y].Cells[start].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
-				continue // blink
-			}
-			term.renderer.PrintCellBlock(screen[pos.Y].Cells[start:], &types.XY{X: start, Y: pos.Y})
-		}
+		pos.X = 0
+		term.renderer.PrintRow(row, pos)
 	}
 }
 

@@ -14,7 +14,7 @@ type Renderer interface {
 	GetWindowSizeCells() *XY
 	GetGlyphSize() *XY
 	PrintCell(*Cell, *XY)
-	PrintCellBlock([]*Cell, *XY)
+	PrintRow([]*Cell, *XY)
 	DrawTable(*XY, int32, []int32)
 	DrawHighlightRect(*XY, *XY)
 	DrawRectWithColour(*XY, *XY, *Colour, bool)
@@ -36,7 +36,6 @@ type Renderer interface {
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
-	ClearFontCache()
 	Close()
 }
 
