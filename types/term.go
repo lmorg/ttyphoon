@@ -6,6 +6,12 @@ import (
 
 type EventIgnoredCallback func()
 
+type TermWin struct {
+	Terms  []Term
+	Cords  [][2]*XY
+	Active Term
+}
+
 type Term interface {
 	Start(Pty)
 	GetSize() *XY

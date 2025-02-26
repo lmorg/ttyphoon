@@ -177,7 +177,7 @@ func render(sr *sdlRender) error {
 	rect := &sdl.Rect{W: x, H: y}
 
 	sr.drawBg(sr.term, rect)
-	sr.term.Render()
+	sr.term.Active.Render()
 
 	//mouseGX, mouseGY, _ := sdl.GetGlobalMouseState()
 	//winGX, winGY := sr.window.GetPosition()
@@ -186,7 +186,7 @@ func render(sr *sdlRender) error {
 		// only run this if mouse cursor is inside the window
 		mouseX, mouseY, _ := sdl.GetMouseState()
 		posNegX := sr.convertPxToCellXYNegX(mouseX, mouseY)
-		sr.term.MousePosition(posNegX)
+		sr.term.Active.MousePosition(posNegX)
 	}
 
 	sr.renderFooter()

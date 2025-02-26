@@ -28,10 +28,10 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 					if ignore {
 						return
 					}
-					sr.term.Reply(b)
+					sr.term.Active.Reply(b)
 
 				case <-time.After(5 * time.Millisecond):
-					sr.term.Reply(b)
+					sr.term.Active.Reply(b)
 				}
 
 			}()
@@ -79,7 +79,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 
 	switch {
 	case evt.Keysym.Sym == sdl.K_F3 && mod == 0:
-		sr.term.Search()
+		sr.term.Active.Search()
 		return
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
 		sr.clipboardPasteText()
@@ -89,7 +89,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
 	if len(b) > 0 {
-		sr.term.Reply(b)
+		sr.term.Active.Reply(b)
 	}
 }
 
