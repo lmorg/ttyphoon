@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/mxtty/ptty"
 	virtualterm "github.com/lmorg/mxtty/term"
 	"github.com/lmorg/mxtty/tmux"
+	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend"
 	"github.com/lmorg/mxtty/window/backend/typeface"
 )
@@ -36,18 +37,14 @@ func main() {
 	}
 }
 
-func regularSession() {
-	renderer, size := backend.Initialise()
-	defer renderer.Close()
-
-	term := virtualterm.NewTerminal(renderer, size, true)
-	pty, err := ptty.NewPty(size)
-	if err != nil {
-		panic(err)
+func tmuxInstalled() bool {
+	path, err := exec.LookPath("tmux")
+	installed := path != "" && err == nil
+	if !installed {
+		// disable tmux if not installed
+		config.Config.Tmux.Enabled = false
 	}
-
-	term.Start(pty)
-	backend.Start(renderer, term, nil)
+	return installed
 }
 
 func tmuxSession() {
@@ -68,15 +65,28 @@ func tmuxSession() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.ActivePane().Term(), tmuxClient)
+	backend.Start(renderer, tmuxClient.ActiveWindow(), tmuxClient)
 }
 
-func tmuxInstalled() bool {
-	path, err := exec.LookPath("tmux")
-	installed := path != "" && err == nil
-	if !installed {
-		// disable tmux if not installed
-		config.Config.Tmux.Enabled = false
+func regularSession() {
+	renderer, size := backend.Initialise()
+	defer renderer.Close()
+
+	term := virtualterm.NewTerminal(renderer, size, true)
+	pty, err := ptty.NewPty(size)
+	if err != nil {
+		panic(err)
 	}
-	return installed
+
+	termWin := &types.TermWindow{
+		Tiles: []types.Tile{{
+			Term:        term,
+			TopLeft:     &types.XY{},
+			BottomRight: size,
+		}},
+		Active: term,
+	}
+
+	term.Start(pty)
+	backend.Start(renderer, termWin, nil)
 }

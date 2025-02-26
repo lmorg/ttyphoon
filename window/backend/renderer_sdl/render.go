@@ -176,17 +176,16 @@ func render(sr *sdlRender) error {
 	x, y := sr.window.GetSize()
 	rect := &sdl.Rect{W: x, H: y}
 
-	sr.drawBg(sr.term, rect)
-	sr.term.Render()
+	sr.drawBg(sr.termWin.Active, rect) // TODO this should be ran individually for each term
+	for _, tile := range sr.termWin.Tiles {
+		tile.Term.Render()
+	}
 
-	//mouseGX, mouseGY, _ := sdl.GetGlobalMouseState()
-	//winGX, winGY := sr.window.GetPosition()
-	//if mouseGX >= winGX && mouseGY >= winGY && mouseGX <= winGX+x && mouseGY <= winGY+y {
 	if sr.isMouseInsideWindow() {
 		// only run this if mouse cursor is inside the window
 		mouseX, mouseY, _ := sdl.GetMouseState()
 		posNegX := sr.convertPxToCellXYNegX(mouseX, mouseY)
-		sr.term.MousePosition(posNegX)
+		sr.termWin.Active.MousePosition(posNegX)
 	}
 
 	sr.renderFooter()

@@ -101,14 +101,14 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 		}
 	}
 
-	sr.term.ShowCursor(false)
+	sr.term.Active.ShowCursor(false)
 	cursor.Arrow()
 	go sr.menu.cursorBlink(sr)
 }
 
 func (sr *sdlRender) closeMenu() {
 	sr.footerText = ""
-	sr.term.ShowCursor(true)
+	sr.term.Active.ShowCursor(true)
 	cursor.Arrow()
 	sr.menu = nil
 }

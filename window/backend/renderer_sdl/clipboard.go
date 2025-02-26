@@ -46,7 +46,7 @@ func (sr *sdlRender) clipboardPasteText() {
 	sr.highlighter = nil
 	b := clipboard.Read(clipboard.FmtText)
 	if len(b) != 0 {
-		sr.term.Reply(b)
+		sr.termWin.Active.Reply(b)
 		return
 	}
 
@@ -68,7 +68,7 @@ func (sr *sdlRender) clipboardPasteText() {
 			return
 		}
 
-		sr.term.Reply([]byte(f.Name()))
+		sr.termWin.Active.Reply([]byte(f.Name()))
 		return
 	}
 

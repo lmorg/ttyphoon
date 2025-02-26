@@ -8,7 +8,7 @@ type MenuItem struct {
 }
 
 type Renderer interface {
-	Start(Term, any)
+	Start(*TermWindow, any)
 	ShowAndFocusWindow()
 	GetTermSize() *XY
 	GetWindowSizeCells() *XY

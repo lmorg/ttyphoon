@@ -24,8 +24,8 @@ func (sr *sdlRender) renderFooter() {
 
 	rect := &sdl.Rect{
 		X: 0,
-		Y: (sr.term.GetSize().Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
-		W: (sr.term.GetSize().X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
+		Y: (sr.winCellSize.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
+		W: (sr.winCellSize.X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
 		H: (sr.footer * sr.glyphSize.Y) + (_PANE_TOP_MARGIN * 2),
 	}
 
@@ -35,7 +35,7 @@ func (sr *sdlRender) renderFooter() {
 
 	sr.restoreRendererTexture()
 
-	pos := &types.XY{Y: sr.term.GetSize().Y}
+	pos := &types.XY{Y: sr.winCellSize.Y}
 
 	if !config.Config.Window.StatusBar {
 		goto tmuxIntegration
@@ -77,7 +77,7 @@ func (sr *sdlRender) _footerHotkeyMessage() string {
 }
 
 func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {
-	footer := make([]*types.Cell, sr.term.GetSize().X)
+	footer := make([]*types.Cell, sr.winCellSize.X)
 	for i := range footer {
 		footer[i] = new(types.Cell)
 	}

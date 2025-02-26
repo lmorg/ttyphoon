@@ -48,10 +48,10 @@ import (
 	pane_start_command         Command pane started with
 	pane_start_path            Path pane started with
 	pane_synchronized          1 if pane is synchronized
-	PaneTabs                  Pane tab positions
-	PaneTitle             #T  Title of pane (can be set by application)
-	PaneTop                   Top of pane
-	PaneTty                   Pseudo terminal of pane
+	pane_tabs                  Pane tab positions
+	pane_title             #T  Title of pane (can be set by application)
+	pane_top                   Top of pane
+	pane_tty                   Pseudo terminal of pane
 	pane_unseen_changes        1 if there were changes in pane while in mode
 	pane_width                 Width of pane
 */
@@ -63,6 +63,10 @@ type PaneT struct {
 	Id        string `tmux:"pane_id"`
 	Width     int    `tmux:"pane_width"`
 	Height    int    `tmux:"pane_height"`
+	PosTop    int    `tmux:"pane_top"`
+	PosLeft   int    `tmux:"pane_left"`
+	PosBottom int    `tmux:"pane_bottom"`
+	PosRight  int    `tmux:"pane_right"`
 	Active    bool   `tmux:"?pane_active,true,false"`
 	WindowId  string `tmux:"window_id"`
 	tmux      *Tmux

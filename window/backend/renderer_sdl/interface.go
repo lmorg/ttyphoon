@@ -27,13 +27,13 @@ const (
 )
 
 type sdlRender struct {
-	window    *sdl.Window
-	renderer  *sdl.Renderer
-	fontCache *fontCacheT
-	glyphSize *types.XY
-	term      types.Term
-	tmux      *tmux.Tmux
-	limiter   sync.Mutex
+	window      *sdl.Window
+	renderer    *sdl.Renderer
+	fontCache   *fontCacheT
+	glyphSize   *types.XY
+	tmux        *tmux.Tmux
+	limiter     sync.Mutex
+	winCellSize *types.XY
 
 	// deprecated
 	font *ttf.Font
@@ -56,6 +56,7 @@ type sdlRender struct {
 	notifyIconSize *types.XY
 
 	// widgets
+	termWin     *types.TermWindow
 	termWidget  *termWidgetT
 	highlighter *highlightWidgetT
 	inputBox    *inputBoxWidgetT
@@ -115,7 +116,7 @@ func (sr *sdlRender) _triggerQuit() { sr._quit <- true }
 
 func (sr *sdlRender) TriggerRedraw() { go sr._triggerRedraw() }
 func (sr *sdlRender) _triggerRedraw() {
-	if sr.term != nil && sr.limiter.TryLock() {
+	if sr.termWin.Active != nil && sr.limiter.TryLock() {
 		sr._redraw <- true
 	}
 }

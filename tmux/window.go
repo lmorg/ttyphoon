@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/types"
 )
 
 /*
@@ -163,6 +164,22 @@ func (tmux *Tmux) RenderWindows() []*WindowT {
 	})
 
 	return wins
+}
+
+func (tmux *Tmux) ActiveWindow() *types.TermWindow {
+	var termWin types.TermWindow
+
+	for _, pane := range tmux.activeWindow.panes {
+		termWin.Tiles = append(termWin.Tiles, types.Tile{
+			Term:        pane.term,
+			TopLeft:     &types.XY{X: int32(pane.PosLeft), Y: int32(pane.PosTop)},
+			BottomRight: &types.XY{X: int32(pane.PosRight), Y: int32(pane.PosBottom)},
+		})
+	}
+
+	termWin.Active = tmux.activeWindow.activePane.term
+
+	return &termWin
 }
 
 func (win *WindowT) ActivePane() *PaneT {
