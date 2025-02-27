@@ -62,7 +62,7 @@ func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) 
 	return fg, bg
 }
 
-func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
+func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, cellPos *types.XY) {
 	if cell.Char == 0 {
 		return
 	}
@@ -109,7 +109,7 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 }
 
-func (sr *sdlRender) PrintRow(cells []*types.Cell, pos *types.XY) {
+func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, pos *types.XY) {
 	cellPos := &types.XY{X: pos.X, Y: pos.Y}
 	l := int32(len(cells))
 
@@ -126,6 +126,6 @@ func (sr *sdlRender) PrintRow(cells []*types.Cell, pos *types.XY) {
 				continue
 			}
 		}
-		sr.PrintCell(cells[cellPos.X], cellPos)
+		sr.PrintCell(tileId, cells[cellPos.X], cellPos)
 	}
 }

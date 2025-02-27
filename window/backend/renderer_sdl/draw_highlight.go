@@ -15,7 +15,7 @@ const (
 
 var highlightBlendMode sdl.BlendMode // controlled by LightMode
 
-func (sr *sdlRender) DrawHighlightRect(topLeftCell, bottomRightCell *types.XY) {
+func (sr *sdlRender) DrawHighlightRect(tileId types.TileId, topLeftCell, bottomRightCell *types.XY) {
 	sr._drawHighlightRect(
 		&sdl.Rect{
 			X: (topLeftCell.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN,
@@ -27,7 +27,7 @@ func (sr *sdlRender) DrawHighlightRect(topLeftCell, bottomRightCell *types.XY) {
 		highlightAlphaBorder, highlightAlphaFill)
 }
 
-func (sr *sdlRender) DrawRectWithColour(topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+func (sr *sdlRender) DrawRectWithColour(tileId types.TileId, topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
 	leftMargin := _PANE_LEFT_MARGIN
 	if incLeftMargin {
 		leftMargin = _PANE_LEFT_MARGIN_OUTER

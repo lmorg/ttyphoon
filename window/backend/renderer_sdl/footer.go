@@ -89,7 +89,7 @@ func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {
 		footer[i].Sgr = types.SGR_DEFAULT.Copy()
 	}
 
-	sr.PrintRow(footer[:i], pos)
+	sr.PrintRow("", footer[:i], pos)
 }
 
 func tabListNewCell(r rune) *types.Cell {
@@ -136,8 +136,8 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 }
 
 func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
-	sr.PrintRow(sr.windowTabs.cells, pos)
-	sr.DrawTable(sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
+	sr.PrintRow("", sr.windowTabs.cells, pos)
+	sr.DrawTable("", sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
 
 	var (
 		topLeftCellX     = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.active]

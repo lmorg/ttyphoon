@@ -7,9 +7,11 @@ import (
 type EventIgnoredCallback func()
 
 type TermWindow struct {
-	Tiles  []Tile
+	Tiles  map[TileId]Tile
 	Active Term
 }
+
+type TileId string
 
 type Tile struct {
 	TopLeft     *XY

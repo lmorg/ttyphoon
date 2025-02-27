@@ -25,7 +25,7 @@ func getElementXY(r rune) *types.XY {
 }
 
 func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
-	term._activeElement = term.renderer.NewElement(element)
+	term._activeElement = term.renderer.NewElement(term.tileId, element)
 }
 
 func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
@@ -38,7 +38,7 @@ func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
 }
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
-	term._mxapcGenerate(term.renderer.NewElement(element), parameters)
+	term._mxapcGenerate(term.renderer.NewElement(term.tileId, element), parameters)
 }
 
 func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {

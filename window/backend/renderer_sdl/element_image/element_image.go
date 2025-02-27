@@ -14,6 +14,7 @@ import (
 
 type ElementImage struct {
 	renderer   types.Renderer
+	tileId     types.TileId
 	parameters parametersT
 	size       *types.XY
 	load       func([]byte, *types.XY) (types.Image, error)
@@ -28,8 +29,8 @@ type parametersT struct {
 	Height   int32
 }
 
-func New(renderer types.Renderer, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
-	return &ElementImage{renderer: renderer, load: loadFn}
+func New(renderer types.Renderer, paneId types.TileId, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
+	return &ElementImage{renderer: renderer, tileId: paneId, load: loadFn}
 }
 
 func (el *ElementImage) Generate(apc *types.ApcSlice) error {

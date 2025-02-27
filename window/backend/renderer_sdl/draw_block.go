@@ -6,7 +6,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) DrawOutputBlockChrome(start, n int32, c *types.Colour, folded bool) {
+func (sr *sdlRender) DrawOutputBlockChrome(tileId types.TileId, start, n int32, c *types.Colour, folded bool) {
 	texture := sr.createRendererTexture()
 	if texture == nil {
 		return

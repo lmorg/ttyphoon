@@ -93,7 +93,7 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) erro
 		}
 		tmux.pane[pane.Id] = pane
 
-		term := virtualterm.NewTerminal(renderer, size, false)
+		term := virtualterm.NewTerminal(types.TileId(pane.Id), renderer, size, false)
 		pane.term = term
 		term.Start(pane)
 
@@ -126,7 +126,7 @@ func (tmux *Tmux) newPane(paneId string) *PaneT {
 		buf:  runebuf.New(),
 	}
 
-	term := virtualterm.NewTerminal(tmux.renderer, tmux.renderer.GetWindowSizeCells(), false)
+	term := virtualterm.NewTerminal(types.TileId(pane.Id), tmux.renderer, tmux.renderer.GetWindowSizeCells(), false)
 	term.Start(pane)
 	pane.term = term
 

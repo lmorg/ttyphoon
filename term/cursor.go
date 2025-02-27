@@ -42,7 +42,7 @@ func (term *Term) _renderCursor() {
 			w = 2
 		}
 
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
+		term.renderer.DrawHighlightRect(term.tileId, term.curPos(), &types.XY{w, 1})
+		term.renderer.DrawHighlightRect(term.tileId, term.curPos(), &types.XY{w, 1})
 	}
 }

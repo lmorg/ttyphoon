@@ -168,13 +168,14 @@ func (tmux *Tmux) RenderWindows() []*WindowT {
 
 func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 	var termWin types.TermWindow
+	termWin.Tiles = make(map[types.TileId]types.Tile)
 
 	for _, pane := range tmux.activeWindow.panes {
-		termWin.Tiles = append(termWin.Tiles, types.Tile{
+		termWin.Tiles[types.TileId(pane.Id)] = types.Tile{
 			Term:        pane.term,
 			TopLeft:     &types.XY{X: int32(pane.PosLeft), Y: int32(pane.PosTop)},
 			BottomRight: &types.XY{X: int32(pane.PosRight), Y: int32(pane.PosBottom)},
-		})
+		}
 	}
 
 	termWin.Active = tmux.activeWindow.activePane.term

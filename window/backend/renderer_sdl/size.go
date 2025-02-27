@@ -71,8 +71,8 @@ func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
 
 // GetTermSize only exists so that elements can get the terminal size without
 // having access to the term interface.
-func (sr *sdlRender) GetTermSize() *types.XY {
-	return sr.termWin.Active.GetSize()
+func (sr *sdlRender) GetTermSize(tileId types.TileId) *types.XY {
+	return sr.termWin.Tiles[tileId].Term.GetSize()
 }
 
 func (sr *sdlRender) GetWinSize() *types.XY {

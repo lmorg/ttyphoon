@@ -31,6 +31,7 @@ import (
 
 // Term is the display state of the virtual term
 type Term struct {
+	tileId   types.TileId
 	visible  bool
 	size     *types.XY
 	sgr      *types.Sgr
@@ -127,8 +128,9 @@ func (term *Term) lfRedraw() {
 }
 
 // NewTerminal creates a new virtual term
-func NewTerminal(renderer types.Renderer, size *types.XY, visible bool) *Term {
+func NewTerminal(tileId types.TileId, renderer types.Renderer, size *types.XY, visible bool) *Term {
 	term := &Term{
+		tileId:       tileId,
 		renderer:     renderer,
 		size:         size,
 		_hasKeyPress: make(chan bool),
