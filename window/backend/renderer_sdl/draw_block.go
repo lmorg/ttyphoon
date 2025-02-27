@@ -7,6 +7,8 @@ import (
 )
 
 func (sr *sdlRender) DrawOutputBlockChrome(tileId types.TileId, start, n int32, c *types.Colour, folded bool) {
+	start += sr.termWin.Tiles[tileId].TopLeft.Y
+
 	texture := sr.createRendererTexture()
 	if texture == nil {
 		return

@@ -6,8 +6,13 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (sr *sdlRender) DrawTable(tileId types.TileId, pos *types.XY, height int32, boundaries []int32) {
+func (sr *sdlRender) DrawTable(tileId types.TileId, _pos *types.XY, height int32, boundaries []int32) {
 	var err error
+
+	pos := types.XY{
+		X: _pos.X + sr.termWin.Tiles[tileId].TopLeft.X,
+		Y: _pos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
+	}
 
 	fg := types.SGR_DEFAULT.Fg
 

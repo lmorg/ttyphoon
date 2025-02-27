@@ -7,8 +7,8 @@ import (
 type EventIgnoredCallback func()
 
 type TermWindow struct {
-	Tiles  map[TileId]Tile
-	Active Term
+	Tiles  map[TileId]*Tile
+	Active *Tile
 }
 
 type TileId string

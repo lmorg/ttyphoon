@@ -116,7 +116,7 @@ func (sr *sdlRender) _triggerQuit() { sr._quit <- true }
 
 func (sr *sdlRender) TriggerRedraw() { go sr._triggerRedraw() }
 func (sr *sdlRender) _triggerRedraw() {
-	if sr.termWin.Active != nil && sr.limiter.TryLock() {
+	if sr.termWin != nil && sr.limiter.TryLock() {
 		sr._redraw <- true
 	}
 }

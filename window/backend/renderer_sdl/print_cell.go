@@ -62,9 +62,14 @@ func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) 
 	return fg, bg
 }
 
-func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, cellPos *types.XY) {
+func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, _cellPos *types.XY) {
 	if cell.Char == 0 {
 		return
+	}
+
+	cellPos := types.XY{
+		X: _cellPos.X + sr.termWin.Tiles[tileId].TopLeft.X,
+		Y: _cellPos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
 	}
 
 	glyphSizeX := sr.glyphSize.X
@@ -109,8 +114,12 @@ func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, cellPos *t
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 }
 
-func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, pos *types.XY) {
-	cellPos := &types.XY{X: pos.X, Y: pos.Y}
+func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos *types.XY) {
+	cellPos := &types.XY{
+		X: _cellPos.X + sr.termWin.Tiles[tileId].TopLeft.X,
+		Y: _cellPos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
+	}
+
 	l := int32(len(cells))
 
 	for ; cellPos.X < l; cellPos.X++ {

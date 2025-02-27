@@ -78,13 +78,15 @@ func regularSession() {
 		panic(err)
 	}
 
+	tile := &types.Tile{
+		Term:        term,
+		TopLeft:     &types.XY{},
+		BottomRight: size,
+	}
+
 	termWin := &types.TermWindow{
-		Tiles: map[types.TileId]types.Tile{"0": {
-			Term:        term,
-			TopLeft:     &types.XY{},
-			BottomRight: size,
-		}},
-		Active: term,
+		Tiles:  map[types.TileId]*types.Tile{"0": tile},
+		Active: tile,
 	}
 
 	term.Start(pty)

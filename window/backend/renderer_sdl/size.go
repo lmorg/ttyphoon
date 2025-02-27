@@ -8,7 +8,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) convertPxToCellXY(x, y int32) *types.XY {
+func (sr *sdlRender) convertPxToCellXY(x, y int32) (*types.XY, bool) {
 	xy := &types.XY{
 		X: (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X,
 		Y: (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
@@ -25,10 +25,18 @@ func (sr *sdlRender) convertPxToCellXY(x, y int32) *types.XY {
 		xy.Y = sr.winCellSize.Y - 1
 	}
 
-	return xy
+	if xy.X < sr.termWin.Active.TopLeft.X || xy.X > sr.termWin.Active.BottomRight.X ||
+		xy.Y < sr.termWin.Active.TopLeft.Y || xy.Y > sr.termWin.Active.BottomRight.Y {
+		return nil, false
+	}
+
+	xy.X += sr.termWin.Active.TopLeft.X
+	xy.Y += sr.termWin.Active.TopLeft.Y
+
+	return xy, true
 }
 
-func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) *types.XY {
+func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) (*types.XY, bool) {
 	xy := &types.XY{
 		X: (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X,
 		Y: (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
@@ -45,7 +53,15 @@ func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) *types.XY {
 		xy.Y = sr.winCellSize.Y - 1
 	}
 
-	return xy
+	if xy.X < sr.termWin.Active.TopLeft.X || xy.X > sr.termWin.Active.BottomRight.X ||
+		xy.Y < sr.termWin.Active.TopLeft.Y || xy.Y > sr.termWin.Active.BottomRight.Y {
+		return nil, false
+	}
+
+	xy.X -= sr.termWin.Active.TopLeft.X
+	xy.Y -= sr.termWin.Active.TopLeft.Y
+
+	return xy, true
 }
 
 func normaliseRect(rect *sdl.Rect) {
@@ -103,7 +119,7 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 func (sr *sdlRender) windowResized() {
 	sr.windowTabs = nil
 	if sr.termWin != nil {
-		sr.termWin.Active.Resize(sr.GetWindowSizeCells())
+		sr.termWin.Active.Term.Resize(sr.GetWindowSizeCells()) // TODO: is this correct?
 	}
 }
 
