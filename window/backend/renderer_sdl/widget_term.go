@@ -28,10 +28,10 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 					if ignore {
 						return
 					}
-					sr.term.Active.Reply(b)
+					sr.termWin.Active.Reply(b)
 
 				case <-time.After(5 * time.Millisecond):
-					sr.term.Active.Reply(b)
+					sr.termWin.Active.Reply(b)
 				}
 
 			}()
@@ -39,7 +39,7 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 		}
 	}
 
-	sr.term.Reply(b)
+	sr.termWin.Active.Reply(b)
 }
 
 func (tw *termWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
@@ -79,7 +79,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 
 	switch {
 	case evt.Keysym.Sym == sdl.K_F3 && mod == 0:
-		sr.term.Active.Search()
+		sr.termWin.Active.Search()
 		return
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
 		sr.clipboardPasteText()
@@ -89,7 +89,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
 	if len(b) > 0 {
-		sr.term.Active.Reply(b)
+		sr.termWin.Active.Reply(b)
 	}
 }
 
@@ -106,7 +106,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	posCell := sr.convertPxToCellXY(evt.X, evt.Y)
 
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil &&
-		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.term.GetSize().Y+sr.footer-1 {
+		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.termWin.Active.GetSize().Y+sr.footer-1 {
 		// window tab bar
 		if evt.State == sdl.PRESSED {
 			return
@@ -147,13 +147,13 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	if evt.X <= _PANE_LEFT_MARGIN {
 		posCell.X = -1
 
-		sr.term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
+		sr.termWin.Active.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
 		return
 	}
 
 	switch evt.Button {
 	case _MOUSE_BUTTON_LEFT:
-		sr.term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
+		sr.termWin.Active.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
 			if evt.State == sdl.PRESSED {
 				highlighterStart(sr, uint8(evt.Button), evt.X, evt.Y)
 				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
@@ -162,19 +162,19 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 
 	case _MOUSE_BUTTON_MIDDLE:
 		if evt.State == sdl.PRESSED {
-			sr.term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, sr.clipboardPasteText)
+			sr.termWin.Active.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, sr.clipboardPasteText)
 		}
 
 	case _MOUSE_BUTTON_RIGHT:
 		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
-		sr.term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
+		sr.termWin.Active.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
 				tw._eventMouseButtonRightClick(sr, posCell)
 			}
 		})
 
 	case _MOUSE_BUTTON_X1:
-		sr.term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
+		sr.termWin.Active.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
 	}
 }
 
@@ -190,7 +190,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		{
 			Title: "Fold on indentation",
 			Fn: func() {
-				err := sr.term.FoldAtIndent(posCell)
+				err := sr.termWin.Active.FoldAtIndent(posCell)
 				if err != nil {
 					sr.DisplayNotification(types.NOTIFY_WARN, err.Error())
 				}
@@ -202,7 +202,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		//},
 		{
 			Title: "Search text [F3]",
-			Fn:    sr.term.Search,
+			Fn:    sr.termWin.Active.Search,
 		},
 	}
 
@@ -229,11 +229,11 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		},
 		types.MenuItem{
 			Title: "Bash integration (pasted into shell)",
-			Fn:    func() { sr.term.Reply(integrations.Get("shell.bash")) },
+			Fn:    func() { sr.termWin.Active.Reply(integrations.Get("shell.bash")) },
 		},
 		types.MenuItem{
 			Title: "Zsh integration (pasted into shell)",
-			Fn:    func() { sr.term.Reply(integrations.Get("shell.zsh")) },
+			Fn:    func() { sr.termWin.Active.Reply(integrations.Get("shell.zsh")) },
 		},
 	)
 
@@ -262,16 +262,16 @@ func (tw *termWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) 
 	mouseX, mouseY, _ := sdl.GetMouseState()
 
 	if evt.Direction == sdl.MOUSEWHEEL_FLIPPED {
-		sr.term.MouseWheel(sr.convertPxToCellXY(mouseX, mouseY), &types.XY{X: evt.X, Y: -evt.Y})
+		sr.termWin.Active.MouseWheel(sr.convertPxToCellXY(mouseX, mouseY), &types.XY{X: evt.X, Y: -evt.Y})
 	} else {
-		sr.term.MouseWheel(sr.convertPxToCellXY(mouseX, mouseY), &types.XY{X: evt.X, Y: evt.Y})
+		sr.termWin.Active.MouseWheel(sr.convertPxToCellXY(mouseX, mouseY), &types.XY{X: evt.X, Y: evt.Y})
 	}
 }
 
 func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil {
 
-		if (evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.term.GetSize().Y+sr.footer-1 {
+		if (evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.termWin.Active.GetSize().Y+sr.footer-1 {
 			x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
 			for i := range sr.windowTabs.boundaries {
 				if x >= 0 && x < sr.windowTabs.boundaries[i] {
@@ -300,7 +300,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		}
 	}
 
-	sr.term.MouseMotion(
+	sr.termWin.Active.MouseMotion(
 		sr.convertPxToCellXYNegX(evt.X, evt.Y),
 		&types.XY{
 			X: evt.XRel / sr.glyphSize.X,
@@ -334,7 +334,8 @@ func (sr *sdlRender) RefreshWindowList() {
 	sr.limiter.Lock()
 
 	sr.windowTabs = nil
-	sr.term = sr.tmux.ActivePane().Term()
+	//sr.term = sr.tmux.ActivePane().Term()
+	sr.termWin = sr.tmux.ActiveWindow()
 
 	sr.limiter.Unlock()
 }
