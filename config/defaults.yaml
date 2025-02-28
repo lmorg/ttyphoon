@@ -60,7 +60,7 @@ TypeFace:
   # Ligatures are characters can be combined to make prettier versions of
   # themselves. This requires a supporting font to be used.
   # Ligatures increases system requirements slightly
-  Ligatures: true
+  #Ligatures: true
   LigaturePairs:
     - "->"
     - ">>"

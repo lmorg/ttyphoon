@@ -6,9 +6,9 @@ import (
 )
 
 func (term *Term) Render() {
-	if !term.visible {
+	/*if !term.visible {
 		return
-	}
+	}*/
 
 	term._mutex.Lock()
 

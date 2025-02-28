@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"log"
 
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
@@ -27,11 +28,11 @@ func (sr *sdlRender) convertPxToCellXY(x, y int32) (*types.XY, bool) {
 
 	if xy.X < sr.termWin.Active.TopLeft.X || xy.X > sr.termWin.Active.BottomRight.X ||
 		xy.Y < sr.termWin.Active.TopLeft.Y || xy.Y > sr.termWin.Active.BottomRight.Y {
-		return nil, false
+		return xy, false
 	}
 
-	xy.X += sr.termWin.Active.TopLeft.X
-	xy.Y += sr.termWin.Active.TopLeft.Y
+	xy.X -= sr.termWin.Active.TopLeft.X
+	xy.Y -= sr.termWin.Active.TopLeft.Y
 
 	return xy, true
 }
@@ -42,7 +43,7 @@ func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) (*types.XY, bool) {
 		Y: (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
 	}
 
-	if xy.X < 0 || x < _PANE_LEFT_MARGIN {
+	if xy.X < 0 || x < _PANE_LEFT_MARGIN { // TODO
 		xy.X = -1
 	} else if xy.X >= sr.winCellSize.X {
 		xy.X = sr.winCellSize.X - 1
@@ -55,7 +56,7 @@ func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) (*types.XY, bool) {
 
 	if xy.X < sr.termWin.Active.TopLeft.X || xy.X > sr.termWin.Active.BottomRight.X ||
 		xy.Y < sr.termWin.Active.TopLeft.Y || xy.Y > sr.termWin.Active.BottomRight.Y {
-		return nil, false
+		return xy, false
 	}
 
 	xy.X -= sr.termWin.Active.TopLeft.X
@@ -76,18 +77,44 @@ func normaliseRect(rect *sdl.Rect) {
 	}
 }
 
-func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
-	return &sdl.Rect{
+func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) (*sdl.Rect, bool) {
+	newRect := &sdl.Rect{
 		X: (rect.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X,
 		Y: (rect.Y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
 		W: ((rect.X + rect.W - _PANE_LEFT_MARGIN) / sr.glyphSize.X),
 		H: ((rect.Y + rect.H - _PANE_TOP_MARGIN) / sr.glyphSize.Y),
 	}
+
+	if newRect.X < sr.termWin.Active.TopLeft.X || newRect.X+newRect.W > sr.termWin.Active.BottomRight.X ||
+		newRect.Y < sr.termWin.Active.TopLeft.Y || newRect.Y+newRect.H > sr.termWin.Active.BottomRight.Y {
+		return nil, false
+	}
+
+	newRect.X -= sr.termWin.Active.TopLeft.X
+	newRect.Y -= sr.termWin.Active.TopLeft.Y
+
+	return newRect, true
+}
+
+func (sr *sdlRender) getTileIdFromCords(x, y int32) (types.TileId, bool) {
+	for id, tile := range sr.termWin.Tiles {
+		if id == _TILE_ID_WHOLE_WINDOW {
+			continue
+		}
+
+		if x >= tile.TopLeft.X && x <= tile.BottomRight.X &&
+			y >= tile.TopLeft.Y && y <= tile.BottomRight.Y {
+			return id, true
+		}
+	}
+
+	return "", false
 }
 
 // GetTermSize only exists so that elements can get the terminal size without
 // having access to the term interface.
 func (sr *sdlRender) GetTermSize(tileId types.TileId) *types.XY {
+	debug.Log(tileId)
 	return sr.termWin.Tiles[tileId].Term.GetSize()
 }
 
@@ -110,6 +137,7 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 	}
 
 	debug.Log(sr.winCellSize)
+	debug.Log(sr.footer)
 
 	return sr.winCellSize
 }
@@ -119,7 +147,11 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 func (sr *sdlRender) windowResized() {
 	sr.windowTabs = nil
 	if sr.termWin != nil {
-		sr.termWin.Active.Term.Resize(sr.GetWindowSizeCells()) // TODO: is this correct?
+		if config.Config.Tmux.Enabled {
+			// TODO
+		} else {
+			sr.termWin.Active.Term.Resize(sr.GetWindowSizeCells())
+		}
 	}
 }
 

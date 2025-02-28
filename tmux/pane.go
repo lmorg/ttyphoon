@@ -75,7 +75,7 @@ type PaneT struct {
 	term      types.Term
 }
 
-func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) error {
+func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 	panes, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(PaneT{}), "-s")
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) erro
 		}
 		tmux.pane[pane.Id] = pane
 
-		term := virtualterm.NewTerminal(types.TileId(pane.Id), renderer, size, false)
+		term := virtualterm.NewTerminal(types.TileId(pane.Id), renderer, &types.XY{int32(pane.Width), int32(pane.Height)}, false)
 		pane.term = term
 		term.Start(pane)
 
@@ -189,7 +189,7 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		pane.WindowId = info.WindowId
 		pane.term.MakeVisible(info.WinActive)
 		pane.term.HasFocus(info.Active)
-		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
+		//pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 
 		tmux.win[pane.WindowId].panes[pane.Id] = pane
 		if pane.Active {

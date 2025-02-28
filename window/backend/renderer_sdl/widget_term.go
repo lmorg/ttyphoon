@@ -105,6 +105,14 @@ const (
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	posCell, ok := sr.convertPxToCellXY(evt.X, evt.Y)
 	if !ok {
+		tileId, ok := sr.getTileIdFromCords(posCell.X, posCell.Y)
+		if !ok {
+			return
+		}
+		sr.termWin.Active.Term.HasFocus(false)
+		tile := sr.termWin.Tiles[tileId]
+		sr.termWin.Active = tile
+		tile.Term.HasFocus(true)
 		return
 	}
 
@@ -147,18 +155,18 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 
 	state := evt.State == sdl.PRESSED
 
-	if evt.X <= _PANE_LEFT_MARGIN {
+	/*if evt.X <= _PANE_LEFT_MARGIN {
 		posCell.X = -1
 
 		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
 		return
-	}
+	}*/ // TODO
 
 	switch evt.Button {
 	case _MOUSE_BUTTON_LEFT:
 		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
 			if evt.State == sdl.PRESSED {
-				highlighterStart(sr, uint8(evt.Button), evt.X, evt.Y)
+				highlighterStart(sr, uint8(evt.Button), posCell.X, posCell.Y)
 				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
 			}
 		})
@@ -276,7 +284,6 @@ func (tw *termWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) 
 }
 
 func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
-
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil {
 
 		if (evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {

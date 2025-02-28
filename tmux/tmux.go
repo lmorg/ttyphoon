@@ -286,7 +286,7 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 		return err
 	}
 
-	err = tmux.initSessionPanes(renderer, size)
+	err = tmux.initSessionPanes(renderer)
 	if err != nil {
 		return err
 	}

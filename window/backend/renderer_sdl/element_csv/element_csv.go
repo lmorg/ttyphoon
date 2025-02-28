@@ -50,7 +50,7 @@ var arrowGlyph = map[bool]rune{
 const notifyLoading = "Loading CSV. Line %d..."
 
 func New(renderer types.Renderer, tileId types.TileId) *ElementCsv {
-	el := &ElementCsv{renderer: renderer}
+	el := &ElementCsv{renderer: renderer, tileId: tileId}
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines))
 

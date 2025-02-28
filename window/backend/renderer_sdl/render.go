@@ -165,6 +165,8 @@ func (sr *sdlRender) isMouseInsideWindow() bool {
 	return mouseGX >= winGX && mouseGY >= winGY && mouseGX <= winGX+x && mouseGY <= winGY+y
 }
 
+const _TILE_ID_WHOLE_WINDOW = ""
+
 func render(sr *sdlRender) error {
 	defer sr.limiter.Unlock()
 
@@ -177,19 +179,28 @@ func render(sr *sdlRender) error {
 	rect := &sdl.Rect{W: x, H: y}
 
 	sr.drawBg(sr.termWin.Active.Term, rect) // TODO this should be ran individually for each term
-	sr.termWin.Tiles[""] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
+	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 	for _, tile := range sr.termWin.Tiles {
 		if tile.Term == nil {
 			continue
 		}
+
+		if tile.BottomRight.Y < sr.winCellSize.Y-1 {
+			sr._drawHighlightRect(&sdl.Rect{
+				X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),
+				W: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+				H: 0,
+			}, types.SGR_COLOUR_WHITE, types.SGR_COLOUR_WHITE, 64, 64)
+		}
+
+		sr.drawBg(tile.Term, &sdl.Rect{
+			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+			Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
+			W: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+			H: (tile.BottomRight.Y+1)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
+
 		tile.Term.Render()
-		sr._drawHighlightRect(&sdl.Rect{
-			X: tile.TopLeft.X * sr.glyphSize.X,
-			Y: tile.BottomRight.Y * sr.glyphSize.Y,
-			W: tile.BottomRight.X * sr.glyphSize.X,
-			H: 2,
-		},
-			types.SGR_COLOUR_WHITE_BRIGHT, types.SGR_COLOUR_WHITE_BRIGHT, 255, 255)
 	}
 
 	if sr.isMouseInsideWindow() {
