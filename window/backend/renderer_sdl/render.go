@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
@@ -185,7 +186,7 @@ func render(sr *sdlRender) error {
 			continue
 		}
 
-		if tile.BottomRight.Y < sr.winCellSize.Y-1 {
+		if tile.BottomRight.Y < sr.winCellSize.Y-1 || debug.Enabled {
 			sr._drawHighlightRect(&sdl.Rect{
 				X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
 				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),

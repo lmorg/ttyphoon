@@ -203,8 +203,9 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				paneId := string(params[1])
 				pane, ok := tmux.pane[paneId]
 				if !ok {
-					pane = tmux.newPane(paneId)
-					go tmux.UpdateSession()
+					//pane = tmux.newPane(paneId)
+					//go tmux.UpdateSession()
+					panic("pane found but not created")
 				}
 				pane.buf.Write(octal.Unescape(params[2]))
 

@@ -170,6 +170,8 @@ func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 	var termWin types.TermWindow
 	termWin.Tiles = make(map[types.TileId]*types.Tile)
 
+	_ = tmux.updatePaneInfo("")
+
 	for _, pane := range tmux.activeWindow.panes {
 		termWin.Tiles[types.TileId(pane.Id)] = &types.Tile{
 			Term:        pane.term,
@@ -193,21 +195,25 @@ func (win *WindowT) Rename(name string) error {
 	return err
 }
 
-func (tmux *Tmux) SelectWindow(winId string) error {
-	size := tmux.renderer.GetWindowSizeCells()
+func (tmux *Tmux) SelectAndResizeWindow(winId string, size *types.XY) error {
 	command := fmt.Sprintf("resize-window -t %s -x %d -y %d", winId, size.X, size.Y)
-	_, _ = tmux.SendCommand([]byte(command))
-	/*if err != nil {
-		p.Width = int(size.X)
-		p.Height = int(size.Y)
-		return err
-	}*/
-
-	command = fmt.Sprintf("select-window -t %s", winId)
 	_, err := tmux.SendCommand([]byte(command))
 	if err != nil {
 		return err
 	}
+
+	tmux.selectWindow(winId)
+
+	for _, pane := range tmux.win[winId].panes {
+		_ = pane.Resize(&types.XY{int32(pane.Width), int32(pane.Height)})
+	}
+
+	return err
+}
+
+func (tmux *Tmux) selectWindow(winId string) error {
+	command := fmt.Sprintf("select-window -t %s", winId)
+	_, err := tmux.SendCommand([]byte(command))
 
 	go tmux.UpdateSession()
 

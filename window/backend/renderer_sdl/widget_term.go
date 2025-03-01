@@ -334,10 +334,11 @@ func (sr *sdlRender) selectWindow(winIndex int) {
 	}
 
 	winId := sr.windowTabs.windows[winIndex].Id
-	err := sr.tmux.SelectWindow(winId)
+	err := sr.tmux.SelectAndResizeWindow(winId, sr.winCellSize)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
+	sr.RefreshWindowList()
 }
 
 func (sr *sdlRender) RefreshWindowList() {

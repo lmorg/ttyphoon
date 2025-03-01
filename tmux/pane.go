@@ -119,7 +119,7 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 	return nil
 }
 
-func (tmux *Tmux) newPane(paneId string) *PaneT {
+/*func (tmux *Tmux) newPane(paneId string) *PaneT {
 	pane := &PaneT{
 		Id:   paneId,
 		tmux: tmux,
@@ -142,13 +142,17 @@ func (pane *PaneT) _updateInfo(renderer types.Renderer) {
 	if err != nil {
 		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-}
+}*/
 
 type paneInfo struct {
 	Id        string `tmux:"pane_id"`
 	Title     string `tmux:"PaneTitle"`
 	Width     int    `tmux:"pane_width"`
 	Height    int    `tmux:"pane_height"`
+	PosLeft   int    `tmux:"pane_left"`
+	PosTop    int    `tmux:"pane_top"`
+	PosRight  int    `tmux:"pane_right"`
+	PosBottom int    `tmux:"pane_bottom"`
 	Active    bool   `tmux:"?pane_active,true,false"`
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
@@ -180,16 +184,21 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 
 		pane, ok := tmux.pane[info.Id]
 		if !ok {
-			pane = tmux.newPane(info.Id)
+			//pane = tmux.newPane(info)
+			panic("pane not found")
 		}
 		pane.Title = info.Title
 		pane.Width = info.Width
 		pane.Height = info.Height
+		pane.PosLeft = info.PosLeft
+		pane.PosTop = info.PosTop
+		pane.PosRight = info.PosRight
+		pane.PosBottom = info.PosBottom
 		pane.Active = info.Active
 		pane.WindowId = info.WindowId
 		pane.term.MakeVisible(info.WinActive)
 		pane.term.HasFocus(info.Active)
-		//pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
+		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 
 		tmux.win[pane.WindowId].panes[pane.Id] = pane
 		if pane.Active {

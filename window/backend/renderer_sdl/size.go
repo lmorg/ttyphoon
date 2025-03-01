@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/lmorg/mxtty/config"
@@ -157,9 +158,9 @@ func (sr *sdlRender) GetTermSize(tileId types.TileId) *types.XY {
 	return sr.termWin.Tiles[tileId].Term.GetSize()
 }
 
-func (sr *sdlRender) GetWinSize() *types.XY {
+/*func (sr *sdlRender) GetWinSize() *types.XY {
 	return sr.winCellSize
-}
+}*/
 
 // GetWindowSizeCells should only be called upon terminal resizing.
 // All other checks for terminal size should come from winCellSize
@@ -169,6 +170,7 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 		log.Println("i don't know how big the terminal window is")
 		x, y = sr.window.GetSize()
 	}
+	//x, y := sr.window.GetSize()
 
 	sr.winCellSize = &types.XY{
 		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X),
@@ -184,13 +186,28 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 ///// resize
 
 func (sr *sdlRender) windowResized() {
-	sr.windowTabs = nil
-	if sr.termWin != nil {
-		if config.Config.Tmux.Enabled {
-			// TODO
-		} else {
-			sr.termWin.Active.Term.Resize(sr.GetWindowSizeCells())
-		}
+	size := sr.GetWindowSizeCells()
+
+	if sr.termWin == nil {
+		return
+	}
+
+	if !config.Config.Tmux.Enabled {
+		sr.termWin.Active.Term.Resize(size)
+		return
+	}
+
+	if sr.windowTabs == nil {
+		debug.Log("sr.windowTabs is unset")
+		return
+	}
+
+	//winId := sr.windowTabs.windows[sr.windowTabs.active].Id
+	//sr.windowTabs = nil
+	//err := sr.tmux.SelectAndResizeWindow(winId, size)
+	err := sr.tmux.SelectAndResizeWindow(sr.windowTabs.windows[sr.windowTabs.active].Id, size)
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to resize window: %v", err))
 	}
 }
 

@@ -50,7 +50,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}
 
 		oldTerm := tmux.activeWindow.activePane.Term()
-		err := tmux.SelectWindow(windows[i].Id)
+		err := tmux.selectWindow(windows[i].Id)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -63,7 +63,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 	}
 
 	_selectCallback := func(i int) {
-		err := tmux.SelectWindow(windows[i].Id)
+		err := tmux.selectWindow(windows[i].Id)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -71,7 +71,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 
 	activeWindow := tmux.activeWindow.Id
 	_cancelCallback := func(_ int) {
-		err := tmux.SelectWindow(activeWindow)
+		err := tmux.selectWindow(activeWindow)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -97,7 +97,7 @@ func _fnKeySelectWindow(tmux *Tmux, i int) error {
 		return fmt.Errorf("there is not a window %d", i)
 	}
 
-	return tmux.SelectWindow(wins[i].Id)
+	return tmux.selectWindow(wins[i].Id)
 }
 
 func fnKeyLastPane(tmux *Tmux) error {
