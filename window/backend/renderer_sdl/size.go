@@ -132,7 +132,10 @@ func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
 	return newRect
 }
 
-func (sr *sdlRender) getTileFromCordsOrActive(x, y int32) *types.Tile {
+func (sr *sdlRender) getTileFromPxOrActive(x, y int32) *types.Tile {
+	x = (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X
+	y = (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y
+
 	for _, tile := range sr.termWin.Tiles {
 		if tile.Term == nil {
 			continue

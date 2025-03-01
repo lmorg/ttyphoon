@@ -103,10 +103,13 @@ const (
 )
 
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
-	tile := sr.getTileFromCordsOrActive(evt.X, evt.Y)
+	//tile := sr.termWin.Active
+	//if evt.State == sdl.PRESSED {
+	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
 	sr.termWin.Active.Term.HasFocus(false)
 	tile.Term.HasFocus(true)
 	sr.termWin.Active = tile
+	//}
 
 	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 
@@ -265,7 +268,7 @@ func highlighterStart(sr *sdlRender, button uint8, x, y int32) {
 
 func (tw *termWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
 	mouseX, mouseY, _ := sdl.GetMouseState()
-	tile := sr.getTileFromCordsOrActive(mouseX, mouseY)
+	tile := sr.getTileFromPxOrActive(mouseX, mouseY)
 	pos := sr.convertPxToCellXYTile(tile, mouseX, mouseY)
 
 	if evt.Direction == sdl.MOUSEWHEEL_FLIPPED {
@@ -301,7 +304,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		return
 	}*/
 
-	tile := sr.getTileFromCordsOrActive(evt.X, evt.Y)
+	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
 	pos := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 
 	var callback = sr._termMouseMotionCallback

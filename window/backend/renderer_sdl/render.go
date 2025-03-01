@@ -206,7 +206,7 @@ func render(sr *sdlRender) error {
 	if sr.isMouseInsideWindow() {
 		// only run this if mouse cursor is inside the window
 		mouseX, mouseY, _ := sdl.GetMouseState()
-		tile := sr.getTileFromCordsOrActive(mouseX, mouseY)
+		tile := sr.getTileFromPxOrActive(mouseX, mouseY)
 		posNegX := sr.convertPxToCellXYNegXTile(tile, mouseX, mouseY)
 		tile.Term.MousePosition(posNegX)
 	}
