@@ -198,8 +198,8 @@ func render(sr *sdlRender) error {
 		sr.drawBg(tile.Term, &sdl.Rect{
 			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
 			Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
-			W: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-			H: (tile.BottomRight.Y+1)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
+			W: (tile.BottomRight.X-tile.TopLeft.X)*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+			H: (tile.BottomRight.Y+1-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
 
 		tile.Term.Render()
 	}

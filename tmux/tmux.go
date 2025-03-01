@@ -201,12 +201,26 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				params := bytes.SplitN(b, []byte{' '}, 3)
 				paneId := string(params[1])
 				pane, ok := tmux.pane[paneId]
-				if !ok {
-					//pane = tmux.newPane(paneId)
-					//go tmux.UpdateSession()
-					panic("pane found but not created")
+				if ok {
+					pane.buf.Write(octal.Unescape(params[2]))
+					continue
 				}
-				pane.buf.Write(octal.Unescape(params[2]))
+				msg := make([]byte, len(params[2]))
+				copy(msg, params[2])
+				go func() {
+					err = tmux.updatePaneInfo(paneId)
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+						//return //continue
+						panic("cannot create pane")
+					}
+					pane, ok = tmux.pane[paneId]
+					if !ok {
+						panic("cannot create pane")
+					}
+					pane.buf.Write(octal.Unescape(msg))
+					go renderer.RefreshWindowList()
+				}()
 
 			case bytes.HasPrefix(b, _RESP_BEGIN):
 				resp = new(tmuxResponseT)
