@@ -63,6 +63,9 @@ func Initialise() (types.Renderer, *types.XY) {
 
 	sr.font = typeface.Deprecated_GetFont()
 	sr.glyphSize = typeface.GetSize()
+	_PANE_BLOCK_HIGHLIGHT = sr.glyphSize.X / 2
+	_PANE_BLOCK_FOLDED = sr.glyphSize.X
+	_PANE_LEFT_MARGIN = _PANE_LEFT_MARGIN_OUTER + _PANE_BLOCK_FOLDED
 
 	sr.window.SetMinimumSize(
 		(40*sr.glyphSize.X)+(_PANE_LEFT_MARGIN),

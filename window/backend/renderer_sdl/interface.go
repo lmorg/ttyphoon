@@ -16,14 +16,16 @@ import (
 )
 
 const (
-	_PANE_BLOCK_HIGHLIGHT   = int32(5)
-	_PANE_BLOCK_FOLDED      = int32(10)
-	_PANE_LEFT_MARGIN_INNER = int32(6)
-	_PANE_LEFT_MARGIN_OUTER = int32(4)
-	_PANE_LEFT_MARGIN       = _PANE_LEFT_MARGIN_INNER + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER
-	_PANE_TOP_MARGIN        = int32(0) //int32(5)
+	_PANE_LEFT_MARGIN_OUTER = int32(0)
+	_PANE_TOP_MARGIN        = int32(0)
 	_WIDGET_INNER_MARGIN    = int32(5)
 	_WIDGET_OUTER_MARGIN    = int32(10)
+)
+
+var (
+	_PANE_BLOCK_HIGHLIGHT = int32(0)
+	_PANE_BLOCK_FOLDED    = int32(0)
+	_PANE_LEFT_MARGIN     = int32(0)
 )
 
 type sdlRender struct {

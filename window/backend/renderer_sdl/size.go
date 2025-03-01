@@ -173,7 +173,7 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 	//x, y := sr.window.GetSize()
 
 	sr.winCellSize = &types.XY{
-		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X),
+		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - 1,
 		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - sr.footer,
 	}
 
