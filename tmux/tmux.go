@@ -96,7 +96,6 @@ var (
 	_RESP_END    = []byte("%end")
 	_RESP_ERROR  = []byte("%error")
 
-	// currently unused
 	_RESP_CLIENT_DETACHED         = []byte("%client-detached")
 	_RESP_CLIENT_SESSION_CHANGED  = []byte("%client-session-changed")
 	_RESP_CONFIG_ERROR            = []byte("%config-error")
@@ -227,6 +226,21 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				params := bytes.SplitN(b, []byte{' '}, 2)
 				winId := string(params[1])
 				_ = tmux.newWindow(winId)
+				go func() {
+					err := tmux.updatePaneInfo("")
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					err = tmux.updateWinInfo(winId)
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					err = tmux.SelectAndResizeWindow(winId, renderer.GetWindowSizeCells())
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					renderer.RefreshWindowList()
+				}()
 
 			case bytes.HasPrefix(b, _RESP_WINDOW_RENAMED):
 				params := bytes.SplitN(b, []byte{' '}, 3)

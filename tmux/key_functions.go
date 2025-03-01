@@ -50,7 +50,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}
 
 		oldTerm := tmux.activeWindow.activePane.Term()
-		err := tmux.selectWindow(windows[i].Id)
+		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -62,8 +62,8 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}()
 	}
 
-	_selectCallback := func(i int) {
-		err := tmux.selectWindow(windows[i].Id)
+	_chooseCallback := func(i int) {
+		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -77,7 +77,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}
 	}
 
-	tmux.renderer.DisplayMenu("Choose a window", windowNames, _highlightCallback, _selectCallback, _cancelCallback)
+	tmux.renderer.DisplayMenu("Choose a window", windowNames, _highlightCallback, _chooseCallback, _cancelCallback)
 	return nil
 }
 

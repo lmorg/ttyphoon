@@ -119,20 +119,21 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 	return nil
 }
 
-/*func (tmux *Tmux) newPane(paneId string) *PaneT {
+func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	pane := &PaneT{
-		Id:   paneId,
+		Id:   info.Id,
 		tmux: tmux,
 		buf:  runebuf.New(),
 	}
 
-	term := virtualterm.NewTerminal(types.TileId(pane.Id), tmux.renderer, tmux.renderer.GetWindowSizeCells(), false)
+	term := virtualterm.NewTerminal(
+		types.TileId(pane.Id), tmux.renderer,
+		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
+		false)
 	term.Start(pane)
 	pane.term = term
 
 	tmux.pane[pane.Id] = pane
-
-	go pane._updateInfo(tmux.renderer)
 
 	return pane
 }
@@ -142,7 +143,7 @@ func (pane *PaneT) _updateInfo(renderer types.Renderer) {
 	if err != nil {
 		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-}*/
+}
 
 type paneInfo struct {
 	Id        string `tmux:"pane_id"`
@@ -176,7 +177,6 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 	}
 
 	for i := range panes {
-
 		info, ok := panes[i].(*paneInfo)
 		if !ok {
 			return fmt.Errorf("expecting info on a pane, instead got %T", info)
@@ -184,8 +184,7 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 
 		pane, ok := tmux.pane[info.Id]
 		if !ok {
-			//pane = tmux.newPane(info)
-			panic("pane not found")
+			pane = tmux.newPane(info)
 		}
 		pane.Title = info.Title
 		pane.Width = info.Width
