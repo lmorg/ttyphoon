@@ -179,7 +179,7 @@ func render(sr *sdlRender) error {
 	x, y := sr.window.GetSize()
 	rect := &sdl.Rect{W: x, H: y}
 
-	sr.drawBg(sr.termWin.Active.Term, rect) // TODO this should be ran individually for each term
+	//sr.drawBg(sr.termWin.Active.Term, rect) // TODO this should be ran individually for each term
 	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 	for _, tile := range sr.termWin.Tiles {
 		if tile.Term == nil {
@@ -188,18 +188,27 @@ func render(sr *sdlRender) error {
 
 		if tile.BottomRight.Y < sr.winCellSize.Y-1 || debug.Enabled {
 			sr._drawHighlightRect(&sdl.Rect{
-				X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+				X: tile.TopLeft.X * sr.glyphSize.X, // + _PANE_LEFT_MARGIN,
 				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),
-				W: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+				W: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN + _PANE_LEFT_MARGIN,
 				H: 0,
 			}, types.SGR_COLOUR_WHITE, types.SGR_COLOUR_WHITE, 64, 64)
 		}
 
+		if tile.BottomRight.X < sr.winCellSize.X-1 || debug.Enabled {
+			sr._drawHighlightRect(&sdl.Rect{
+				X: (tile.BottomRight.X+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+				Y: ((tile.TopLeft.Y) * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+				W: 0,
+				H: (tile.BottomRight.Y + 2) * sr.glyphSize.Y,
+			}, types.SGR_COLOUR_WHITE, types.SGR_COLOUR_WHITE, 64, 64)
+		}
+
 		sr.drawBg(tile.Term, &sdl.Rect{
-			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-			Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
-			W: (tile.BottomRight.X-tile.TopLeft.X)*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-			H: (tile.BottomRight.Y+1-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
+			X: (tile.TopLeft.X + 1) * sr.glyphSize.X,
+			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+			W: (tile.BottomRight.X-tile.TopLeft.X-1)*sr.glyphSize.X + _PANE_LEFT_MARGIN + _PANE_LEFT_MARGIN,
+			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
 
 		tile.Term.Render()
 	}

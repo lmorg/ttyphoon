@@ -119,6 +119,9 @@ var defaultFnKeys = map[string]fnKeyT{
 	"Select the next window with an alert":     fnKeyNextWindowAlert,
 	"Select the previous window with an alert": fnKeyPreviousWindowAlert,
 	"List key bindings":                        fnKeyListBindings,
+	//"Split window vertically":                  nil,
+	//"Split window horizontally":                nil,
+
 }
 
 func (tmux *Tmux) _getDefaultTmuxKeyBindings() error {
