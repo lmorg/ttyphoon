@@ -86,38 +86,18 @@ func (sr *sdlRender) drawBg() {
 		return
 	}
 
-	/*drawSeparator := func(rect *sdl.Rect, colourBorder, colourFill *types.Colour, alphaBorder, alphaFill byte) {
-		_ = sr.renderer.SetDrawColor(colourBorder.Red, colourBorder.Green, colourBorder.Blue, alphaBorder)
-
-		rect.X -= 1
-		rect.Y -= 1
-		rect.W += 2
-		rect.H += 2
-		_ = sr.renderer.DrawRect(rect)
-
-		rect.X += 1
-		rect.Y += 1
-		rect.W -= 2
-		rect.H -= 2
-		_ = sr.renderer.DrawRect(rect)
-
-		// fill background
-
-		_ = sr.renderer.SetDrawColor(colourFill.Red, colourFill.Green, colourFill.Blue, alphaFill)
-		rect.X += 1
-		rect.Y += 1
-		rect.W -= 2
-		rect.H -= 2
-		_ = sr.renderer.FillRect(rect)
-	}*/
-
 	sr.cacheBgTexture = sr.createRendererTexture()
 	if sr.cacheBgTexture == nil {
 		panic("cannot create bg texture")
 	}
 
+	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
+
 	w, h := sr.window.GetSize()
-	bg := sr.termWin.Active.Term.Bg()
+	bg := types.SGR_COLOUR_BLACK
+	if len(sr.termWin.Tiles) < 3 {
+		bg = sr.termWin.Active.Term.Bg()
+	}
 	_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
 
@@ -128,40 +108,19 @@ func (sr *sdlRender) drawBg() {
 
 		rect := &sdl.Rect{
 			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT,
-			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - _PANE_BLOCK_HIGHLIGHT,
 			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - _PANE_BLOCK_HIGHLIGHT,
-			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN}
+			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN - _PANE_BLOCK_HIGHLIGHT}
 
 		bg := tile.Term.Bg()
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
-
-		/*if tile.BottomRight.Y < sr.winCellSize.Y-1 || debug.Enabled {
-			drawSeparator(&sdl.Rect{
-				X: (tile.TopLeft.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
-				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),
-				W: ((tile.BottomRight.X - tile.TopLeft.X + 2) * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
-				H: 0,
-			}, types.SGR_COLOUR_BLACK, types.SGR_COLOUR_BLACK, 255, 255)
-
-		}
-
-		if tile.BottomRight.X < sr.winCellSize.X-1 || debug.Enabled {
-			drawSeparator(&sdl.Rect{
-				X: (tile.BottomRight.X+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN + 2,
-				Y: ((tile.TopLeft.Y) * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
-				W: 0,
-				H: (tile.BottomRight.Y + 2) * sr.glyphSize.Y,
-			}, types.SGR_COLOUR_BLACK, types.SGR_COLOUR_BLACK, 255, 255)
-		}*/
 	}
 
 	err := sr.renderer.SetRenderTarget(nil)
 	if err != nil {
 		log.Printf("ERROR: %v", err)
 	}
-
-	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 }
 
 func (sr *sdlRender) AddToElementStack(item *layer.RenderStackT) {

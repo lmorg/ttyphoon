@@ -6,6 +6,8 @@ import (
 )
 
 func (sr *sdlRender) eventWindow(evt *sdl.WindowEvent) {
+	sr.cacheBgTexture = nil
+
 	switch evt.Event {
 	case sdl.WINDOWEVENT_RESIZED:
 		sr.windowResized()
