@@ -299,11 +299,6 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		sr.footerText = ""
 	}
 
-	/*pos, ok := sr.convertPxToCellXYNegX(evt.X, evt.Y)
-	if !ok {
-		return
-	}*/
-
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
 	pos := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 
