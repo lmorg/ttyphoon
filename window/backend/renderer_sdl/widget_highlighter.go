@@ -106,10 +106,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 
 	case _HIGHLIGHT_MODE_FULL_LINES:
 		normaliseRect(hl.rect)
-		rect, ok := sr.rectPxToCells(hl.rect)
-		if !ok {
-			return
-		}
+		rect := sr.rectPxToCells(hl.rect)
 		lines := sr.termWin.Active.Term.CopyLines(rect.Y, rect.H)
 		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
@@ -118,26 +115,17 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 
 	case _HIGHLIGHT_MODE_SQUARE:
 		normaliseRect(hl.rect)
-		rect, ok := sr.rectPxToCells(hl.rect)
-		if !ok {
-			return
-		}
+		rect := sr.rectPxToCells(hl.rect)
 		lines := sr.termWin.Active.Term.CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
 		sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%dx%d grid has been copied to clipboard", rect.W-rect.X+1, rect.H-rect.Y+1))
 
 	case _HIGHLIGHT_MODE_LINE_RANGE:
-		rect, ok := sr.rectPxToCells(hl.rect)
-		if !ok {
-			return
-		}
+		rect := sr.rectPxToCells(hl.rect)
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
 			sr.highlighter = nil
-			pos, ok := sr.convertPxToCellXY(evt.X, evt.Y)
-			if !ok {
-				return
-			}
+			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
 			sr.termWin.Active.Term.MouseClick(pos, uint8(evt.Button), evt.Clicks, evt.State == sdl.PRESSED, func() {})
 			return
 		}
@@ -198,14 +186,8 @@ func isCellHighlighted(sr *sdlRender, rect *sdl.Rect) bool {
 	if sr.highlighter.mode != _HIGHLIGHT_MODE_LINE_RANGE {
 		normaliseRect(&hlRect)
 	}
-	runeCell, ok := sr.rectPxToCells(rect)
-	if !ok {
-		return false
-	}
-	hlCell, ok := sr.rectPxToCells(&hlRect)
-	if !ok {
-		return false
-	}
+	runeCell := sr.rectPxToCells(rect)
+	hlCell := sr.rectPxToCells(&hlRect)
 
 	switch sr.highlighter.mode {
 	case _HIGHLIGHT_MODE_FULL_LINES:

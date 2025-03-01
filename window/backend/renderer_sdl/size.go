@@ -9,7 +9,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) convertPxToCellXY(x, y int32) (*types.XY, bool) {
+/*func (sr *sdlRender) convertPxToCellXY(x, y int32) (*types.XY, bool) {
 	xy := &types.XY{
 		X: (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X,
 		Y: (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
@@ -63,6 +63,50 @@ func (sr *sdlRender) convertPxToCellXYNegX(x, y int32) (*types.XY, bool) {
 	xy.Y -= sr.termWin.Active.TopLeft.Y
 
 	return xy, true
+}*/
+
+func (sr *sdlRender) convertPxToCellXYTile(tile *types.Tile, x, y int32) *types.XY {
+	xy := &types.XY{
+		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - tile.TopLeft.X,
+		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.TopLeft.Y,
+	}
+
+	termSize := tile.Term.GetSize()
+
+	if xy.X < 0 {
+		xy.X = 0
+	} else if xy.X >= termSize.X {
+		xy.X = termSize.X - 1
+	}
+	if xy.Y < 0 {
+		xy.Y = 0
+	} else if xy.Y >= termSize.Y {
+		xy.Y = termSize.Y - 1
+	}
+
+	return xy
+}
+
+func (sr *sdlRender) convertPxToCellXYNegXTile(tile *types.Tile, x, y int32) *types.XY {
+	xy := &types.XY{
+		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - tile.TopLeft.X,
+		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.TopLeft.Y,
+	}
+
+	termSize := tile.Term.GetSize()
+
+	if xy.X < 0 {
+		xy.X = -1
+	} else if xy.X >= termSize.X {
+		xy.X = termSize.X - 1
+	}
+	if xy.Y < 0 {
+		xy.Y = 0
+	} else if xy.Y >= termSize.Y {
+		xy.Y = termSize.Y - 1
+	}
+
+	return xy
 }
 
 func normaliseRect(rect *sdl.Rect) {
@@ -77,7 +121,7 @@ func normaliseRect(rect *sdl.Rect) {
 	}
 }
 
-func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) (*sdl.Rect, bool) {
+func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
 	newRect := &sdl.Rect{
 		X: (rect.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X,
 		Y: (rect.Y - _PANE_TOP_MARGIN) / sr.glyphSize.Y,
@@ -85,30 +129,22 @@ func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) (*sdl.Rect, bool) {
 		H: ((rect.Y + rect.H - _PANE_TOP_MARGIN) / sr.glyphSize.Y),
 	}
 
-	if newRect.X < sr.termWin.Active.TopLeft.X || newRect.X+newRect.W > sr.termWin.Active.BottomRight.X ||
-		newRect.Y < sr.termWin.Active.TopLeft.Y || newRect.Y+newRect.H > sr.termWin.Active.BottomRight.Y {
-		return nil, false
-	}
-
-	newRect.X -= sr.termWin.Active.TopLeft.X
-	newRect.Y -= sr.termWin.Active.TopLeft.Y
-
-	return newRect, true
+	return newRect
 }
 
-func (sr *sdlRender) getTileIdFromCords(x, y int32) (types.TileId, bool) {
-	for id, tile := range sr.termWin.Tiles {
-		if id == _TILE_ID_WHOLE_WINDOW {
+func (sr *sdlRender) getTileFromCordsOrActive(x, y int32) *types.Tile {
+	for _, tile := range sr.termWin.Tiles {
+		if tile.Term == nil {
 			continue
 		}
 
 		if x >= tile.TopLeft.X && x <= tile.BottomRight.X &&
 			y >= tile.TopLeft.Y && y <= tile.BottomRight.Y {
-			return id, true
+			return tile
 		}
 	}
 
-	return "", false
+	return sr.termWin.Active
 }
 
 // GetTermSize only exists so that elements can get the terminal size without
