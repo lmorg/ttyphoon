@@ -67,12 +67,13 @@ func (sr *sdlRender) _drawHighlightRect(rect *sdl.Rect, colourBorder, colourFill
 	}
 
 	_ = sr.renderer.SetDrawColor(colourBorder.Red, colourBorder.Green, colourBorder.Blue, alphaBorder)
+
 	rect.X -= 1
 	rect.Y -= 1
 	rect.W += 2
 	rect.H += 2
-
 	_ = sr.renderer.DrawRect(rect)
+
 	rect.X += 1
 	rect.Y += 1
 	rect.W -= 2
@@ -82,6 +83,7 @@ func (sr *sdlRender) _drawHighlightRect(rect *sdl.Rect, colourBorder, colourFill
 	// fill background
 
 	_ = sr.renderer.SetDrawColor(colourFill.Red, colourFill.Green, colourFill.Blue, alphaFill)
+
 	rect.X += 1
 	rect.Y += 1
 	rect.W -= 2

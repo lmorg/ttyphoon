@@ -83,6 +83,9 @@ type sdlRender struct {
 	footer     int32
 	footerText string
 	windowTabs *tabListT
+
+	// caching
+	cacheBgTexture *sdl.Texture
 }
 
 type tabListT struct {

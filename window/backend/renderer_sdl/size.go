@@ -158,10 +158,6 @@ func (sr *sdlRender) GetTermSize(tileId types.TileId) *types.XY {
 	return sr.termWin.Tiles[tileId].Term.GetSize()
 }
 
-/*func (sr *sdlRender) GetWinSize() *types.XY {
-	return sr.winCellSize
-}*/
-
 // GetWindowSizeCells should only be called upon terminal resizing.
 // All other checks for terminal size should come from winCellSize
 func (sr *sdlRender) GetWindowSizeCells() *types.XY {
@@ -170,7 +166,6 @@ func (sr *sdlRender) GetWindowSizeCells() *types.XY {
 		log.Println("i don't know how big the terminal window is")
 		x, y = sr.window.GetSize()
 	}
-	//x, y := sr.window.GetSize()
 
 	sr.winCellSize = &types.XY{
 		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - 1,
@@ -202,9 +197,6 @@ func (sr *sdlRender) windowResized() {
 		return
 	}
 
-	//winId := sr.windowTabs.windows[sr.windowTabs.active].Id
-	//sr.windowTabs = nil
-	//err := sr.tmux.SelectAndResizeWindow(winId, size)
 	err := sr.tmux.SelectAndResizeWindow(sr.windowTabs.windows[sr.windowTabs.active].Id, size)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to resize window: %v", err))

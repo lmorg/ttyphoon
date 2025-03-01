@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
@@ -82,26 +81,87 @@ func (sr *sdlRender) eventLoop() {
 	}
 }
 
-func (sr *sdlRender) drawBg(term types.Term, rect *sdl.Rect) {
-	bg := term.Bg()
-
-	texture := sr.createRendererTexture()
-	if texture == nil {
+func (sr *sdlRender) drawBg() {
+	if sr.cacheBgTexture != nil {
 		return
 	}
-	defer sr.restoreRendererTexture()
 
-	var err error
+	/*drawSeparator := func(rect *sdl.Rect, colourBorder, colourFill *types.Colour, alphaBorder, alphaFill byte) {
+		_ = sr.renderer.SetDrawColor(colourBorder.Red, colourBorder.Green, colourBorder.Blue, alphaBorder)
 
-	err = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
-	if err != nil {
-		log.Printf("ERROR: error drawing background: %v", err)
+		rect.X -= 1
+		rect.Y -= 1
+		rect.W += 2
+		rect.H += 2
+		_ = sr.renderer.DrawRect(rect)
+
+		rect.X += 1
+		rect.Y += 1
+		rect.W -= 2
+		rect.H -= 2
+		_ = sr.renderer.DrawRect(rect)
+
+		// fill background
+
+		_ = sr.renderer.SetDrawColor(colourFill.Red, colourFill.Green, colourFill.Blue, alphaFill)
+		rect.X += 1
+		rect.Y += 1
+		rect.W -= 2
+		rect.H -= 2
+		_ = sr.renderer.FillRect(rect)
+	}*/
+
+	sr.cacheBgTexture = sr.createRendererTexture()
+	if sr.cacheBgTexture == nil {
+		panic("cannot create bg texture")
 	}
 
-	err = sr.renderer.FillRect(rect)
-	if err != nil {
-		log.Printf("ERROR: error drawing background: %v", err)
+	w, h := sr.window.GetSize()
+	bg := sr.termWin.Active.Term.Bg()
+	_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
+	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
+
+	for _, tile := range sr.termWin.Tiles {
+		if tile.Term == nil {
+			continue
+		}
+
+		rect := &sdl.Rect{
+			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT,
+			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - _PANE_BLOCK_HIGHLIGHT,
+			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN}
+
+		bg := tile.Term.Bg()
+		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
+		_ = sr.renderer.FillRect(rect)
+
+		/*if tile.BottomRight.Y < sr.winCellSize.Y-1 || debug.Enabled {
+			drawSeparator(&sdl.Rect{
+				X: (tile.TopLeft.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
+				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),
+				W: ((tile.BottomRight.X - tile.TopLeft.X + 2) * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
+				H: 0,
+			}, types.SGR_COLOUR_BLACK, types.SGR_COLOUR_BLACK, 255, 255)
+
+		}
+
+		if tile.BottomRight.X < sr.winCellSize.X-1 || debug.Enabled {
+			drawSeparator(&sdl.Rect{
+				X: (tile.BottomRight.X+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN + 2,
+				Y: ((tile.TopLeft.Y) * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+				W: 0,
+				H: (tile.BottomRight.Y + 2) * sr.glyphSize.Y,
+			}, types.SGR_COLOUR_BLACK, types.SGR_COLOUR_BLACK, 255, 255)
+		}*/
 	}
+
+	err := sr.renderer.SetRenderTarget(nil)
+	if err != nil {
+		log.Printf("ERROR: %v", err)
+	}
+
+	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 }
 
 func (sr *sdlRender) AddToElementStack(item *layer.RenderStackT) {
@@ -179,36 +239,13 @@ func render(sr *sdlRender) error {
 	x, y := sr.window.GetSize()
 	rect := &sdl.Rect{W: x, H: y}
 
-	//sr.drawBg(sr.termWin.Active.Term, rect) // TODO this should be ran individually for each term
-	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
+	sr.drawBg()
+	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
+
 	for _, tile := range sr.termWin.Tiles {
 		if tile.Term == nil {
 			continue
 		}
-
-		if tile.BottomRight.Y < sr.winCellSize.Y-1 || debug.Enabled {
-			sr._drawHighlightRect(&sdl.Rect{
-				X: (tile.TopLeft.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
-				Y: ((tile.BottomRight.Y + 1) * sr.glyphSize.Y) + _PANE_TOP_MARGIN + (sr.glyphSize.Y / 2),
-				W: ((tile.BottomRight.X - tile.TopLeft.X + 2) * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
-				H: 0,
-			}, types.SGR_COLOUR_WHITE, types.SGR_COLOUR_WHITE, 64, 64)
-		}
-
-		if tile.BottomRight.X < sr.winCellSize.X-1 || debug.Enabled {
-			sr._drawHighlightRect(&sdl.Rect{
-				X: (tile.BottomRight.X+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-				Y: ((tile.TopLeft.Y) * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
-				W: 0,
-				H: (tile.BottomRight.Y + 2) * sr.glyphSize.Y,
-			}, types.SGR_COLOUR_WHITE, types.SGR_COLOUR_WHITE, 64, 64)
-		}
-
-		sr.drawBg(tile.Term, &sdl.Rect{
-			X: tile.TopLeft.X * sr.glyphSize.X,
-			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
-			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER,
-			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN})
 
 		tile.Term.Render()
 	}

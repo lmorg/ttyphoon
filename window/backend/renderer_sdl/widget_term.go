@@ -103,13 +103,11 @@ const (
 )
 
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
-	//tile := sr.termWin.Active
-	//if evt.State == sdl.PRESSED {
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
 	sr.termWin.Active.Term.HasFocus(false)
 	tile.Term.HasFocus(true)
 	sr.termWin.Active = tile
-	//}
+	sr.cacheBgTexture = nil
 
 	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 
@@ -350,6 +348,7 @@ func (sr *sdlRender) RefreshWindowList() {
 
 	sr.windowTabs = nil
 	sr.termWin = sr.tmux.ActiveWindow()
+	sr.cacheBgTexture = nil
 
 	sr.limiter.Unlock()
 }
