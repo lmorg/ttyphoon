@@ -92,7 +92,7 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 		highlightIndex:    _MENU_HIGHLIGHT_INIT,
 	}
 
-	var crop = int(sr.termWin.Active.Term.GetSize().X - 20)
+	var crop = int(sr.winCellSize.X - 20)
 
 	for i := range sr.menu.options {
 		sr.menu.options[i] = runewidth.Truncate(sr.menu.options[i], int(crop), "…")
