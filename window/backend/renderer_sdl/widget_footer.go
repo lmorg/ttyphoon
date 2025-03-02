@@ -178,3 +178,37 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 	}
 	sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
 }
+
+func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButtonEvent) {
+	if evt.State == sdl.RELEASED {
+		return
+	}
+
+	x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
+	for i := range sr.windowTabs.boundaries {
+		if x < sr.windowTabs.boundaries[i] {
+			switch evt.Clicks {
+			case 1:
+				if i == 0 {
+					return
+				}
+				sr.selectWindow(i - 1)
+
+			default: // 2 or more
+				if i == 0 {
+					return
+				}
+				sr.DisplayInputBox("Please enter a new name for this window", sr.windowTabs.windows[i-1].Name, func(name string) {
+					err := sr.windowTabs.windows[i-1].Rename(name)
+					if err != nil {
+						sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+				})
+			}
+			return
+		}
+	}
+	if evt.Clicks == 2 {
+		sr.tmux.NewWindow()
+	}
+}

@@ -216,6 +216,13 @@ func (tmux *Tmux) selectWindow(winId string) error {
 	command := fmt.Sprintf("select-window -t %s", winId)
 	_, err := tmux.SendCommand([]byte(command))
 
+	// old
+	tmux.activeWindow.Active = false
+
+	// new
+	tmux.activeWindow = tmux.win[winId]
+	tmux.activeWindow.Active = true
+
 	go tmux.UpdateSession()
 
 	return err

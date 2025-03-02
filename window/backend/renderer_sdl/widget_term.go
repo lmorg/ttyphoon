@@ -103,6 +103,12 @@ const (
 )
 
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
+	if config.Config.Tmux.Enabled && sr.windowTabs != nil &&
+		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
+		tw._eventMouseButtonFooter(sr, evt)
+		return
+	}
+
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
 	sr.termWin.Active.Term.HasFocus(false)
 	tile.Term.HasFocus(true)
@@ -118,43 +124,6 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 
 	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
-
-	if config.Config.Tmux.Enabled && sr.windowTabs != nil &&
-		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
-		// window tab bar
-		if evt.State == sdl.PRESSED {
-			return
-		}
-
-		x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
-		for i := range sr.windowTabs.boundaries {
-			if x < sr.windowTabs.boundaries[i] {
-				switch evt.Clicks {
-				case 1:
-					if i == 0 {
-						return
-					}
-					sr.selectWindow(i - 1)
-
-				default: // 2 or more
-					if i == 0 {
-						return
-					}
-					sr.DisplayInputBox("Please enter a new name for this window", sr.windowTabs.windows[i-1].Name, func(name string) {
-						err := sr.windowTabs.windows[i-1].Rename(name)
-						if err != nil {
-							sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-						}
-					})
-				}
-				return
-			}
-		}
-		if evt.Clicks == 2 {
-			sr.tmux.NewWindow()
-		}
-		return
-	}
 
 	state := evt.State == sdl.PRESSED
 
