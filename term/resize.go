@@ -1,6 +1,8 @@
 package virtualterm
 
 import (
+	"strings"
+
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
@@ -38,9 +40,15 @@ func (term *Term) Resize(size *types.XY) {
 
 	case yDiff < 0:
 		// shrink
-		for i := 0; i < -yDiff; i++ {
-			term.appendScrollBuf()
+		fromBottom := term._resizeFromBottom(-yDiff)
+		//debug.Log(yDiff)
+		//debug.Log(fromBottom)
+		if fromBottom > 0 {
+			term._normBuf = term._normBuf[:len(term._normBuf)-fromBottom]
+			term._altBuf = term._altBuf[:len(term._altBuf)-fromBottom]
+			yDiff += fromBottom
 		}
+		term.appendScrollBuf(-yDiff)
 		term._normBuf = term._normBuf[-yDiff:]
 		term._altBuf = term._altBuf[-yDiff:]
 	}
@@ -48,6 +56,24 @@ func (term *Term) Resize(size *types.XY) {
 	term.resizePty()
 
 	term._mutex.Unlock()
+}
+
+func (term *Term) _resizeFromBottom(max int) int {
+	if len(term._scrollBuf) > 0 || term.IsAltBuf() {
+		return 0
+	}
+
+	empty := strings.Repeat(" ", int(term.size.X))
+	var i int
+	for y := len(term._normBuf) - 1; i < max; y-- {
+		if term._normBuf[y].String() != empty {
+			//debug.Log(i)
+			return i
+		}
+		i++
+	}
+
+	return i
 }
 
 func (term *Term) _resizeNestedScreenWidth(screen types.Screen, xDiff int32) {

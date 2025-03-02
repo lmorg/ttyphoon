@@ -13,7 +13,12 @@ import (
 
 func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
-func (p *PaneT) Close()              { p.buf.Close() }
+func (p *PaneT) Close() {
+	p.buf.Close()
+	//delete(p.tmux.pane, p.Id)
+	//delete(p.tmux.win[p.WindowId].panes, p.Id)
+	//go p.tmux.renderer.RefreshWindowList()
+}
 
 func (p *PaneT) Write(b []byte) error {
 	if len(b) == 0 {
@@ -72,4 +77,16 @@ func (p *PaneT) _hotkey(b []byte) (bool, error) {
 	}
 
 	return true, fn.fn(p.tmux)
+}
+
+func (p *PaneT) Resize(size *types.XY) error {
+	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.Id, size.X, size.Y)
+	_, err := p.tmux.SendCommand([]byte(command))
+	if err != nil {
+		p.Width = int(size.X)
+		p.Height = int(size.Y)
+		return err
+	}
+
+	return p.tmux.RefreshClient(size)
 }

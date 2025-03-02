@@ -215,18 +215,6 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 	return nil
 }
 
-func (p *PaneT) Resize(size *types.XY) error {
-	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.Id, size.X, size.Y)
-	_, err := p.tmux.SendCommand([]byte(command))
-	if err != nil {
-		p.Width = int(size.X)
-		p.Height = int(size.Y)
-		return err
-	}
-
-	return p.tmux.RefreshClient(size)
-}
-
 func (tmux *Tmux) ActivePane() *PaneT {
 	return tmux.activeWindow.activePane
 }

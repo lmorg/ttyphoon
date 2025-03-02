@@ -16,7 +16,7 @@ func (term *Term) lineFeed() {
 	//debug.Log(term.curPos.Y)
 
 	if term.csiMoveCursorDownwardsExcOrigin(1) != 0 {
-		term.appendScrollBuf()
+		term.appendScrollBuf(1)
 		term.csiScrollUp(1)
 		term.csiMoveCursorDownwardsExcOrigin(1)
 
