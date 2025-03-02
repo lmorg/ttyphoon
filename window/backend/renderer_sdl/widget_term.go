@@ -108,6 +108,14 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	tile.Term.HasFocus(true)
 	sr.termWin.Active = tile
 	sr.cacheBgTexture = nil
+	if sr.tmux != nil {
+		go func() {
+			err := sr.tmux.SelectPane(tile.TmuxPaneId)
+			if err != nil {
+				sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			}
+		}()
+	}
 
 	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 

@@ -147,7 +147,7 @@ func (pane *PaneT) _updateInfo(renderer types.Renderer) {
 
 type paneInfo struct {
 	Id        string `tmux:"pane_id"`
-	Title     string `tmux:"PaneTitle"`
+	Title     string `tmux:"pane_title"`
 	Width     int    `tmux:"pane_width"`
 	Height    int    `tmux:"pane_height"`
 	PosLeft   int    `tmux:"pane_left"`
@@ -155,6 +155,7 @@ type paneInfo struct {
 	PosRight  int    `tmux:"pane_right"`
 	PosBottom int    `tmux:"pane_bottom"`
 	Active    bool   `tmux:"?pane_active,true,false"`
+	Dead      bool   `tmux:"?pane_dead,true,false"`
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
 }
@@ -186,6 +187,12 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		if !ok {
 			pane = tmux.newPane(info)
 		}
+
+		if info.Dead {
+			pane.Close()
+			continue
+		}
+
 		pane.Title = info.Title
 		pane.Width = info.Width
 		pane.Height = info.Height
@@ -226,4 +233,13 @@ func (tmux *Tmux) ActivePane() *PaneT {
 
 func (p *PaneT) Term() types.Term {
 	return p.term
+}
+
+func (tmux *Tmux) SelectPane(paneId string) error {
+	command := fmt.Sprintf("select-pane -t %s", paneId)
+	_, err := tmux.SendCommand([]byte(command))
+
+	go tmux.UpdateSession()
+
+	return err
 }

@@ -37,7 +37,7 @@ func (sr *sdlRender) DrawScrollbar(tileId types.TileId, value, max int) {
 	f := float64(value) / float64(max)
 
 	rect := &sdl.Rect{
-		X: (tile.BottomRight.X+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER,
+		X: tile.BottomRight.X*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - (sr.glyphSize.X / 2),
 		Y: (tile.TopLeft.Y+1)*sr.glyphSize.Y + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
 		W: sr.glyphSize.X,
 		H: (tile.Term.GetSize().Y - 1) * sr.glyphSize.Y,

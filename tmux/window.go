@@ -177,6 +177,7 @@ func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 			Term:        pane.term,
 			TopLeft:     &types.XY{X: int32(pane.PosLeft), Y: int32(pane.PosTop)},
 			BottomRight: &types.XY{X: int32(pane.PosRight), Y: int32(pane.PosBottom)},
+			TmuxPaneId:  pane.Id,
 		}
 	}
 
@@ -205,7 +206,7 @@ func (tmux *Tmux) SelectAndResizeWindow(winId string, size *types.XY) error {
 	tmux.selectWindow(winId)
 
 	for _, pane := range tmux.win[winId].panes {
-		_ = pane.Resize(&types.XY{int32(pane.Width), int32(pane.Height)})
+		_ = pane.Resize(&types.XY{X: int32(pane.Width), Y: int32(pane.Height)})
 	}
 
 	return err

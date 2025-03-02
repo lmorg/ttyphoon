@@ -17,6 +17,7 @@ type Tile struct {
 	TopLeft     *XY
 	BottomRight *XY
 	Term        Term
+	TmuxPaneId  string
 }
 
 type Term interface {
