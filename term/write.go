@@ -1,8 +1,6 @@
 package virtualterm
 
 import (
-	"fmt"
-
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/mattn/go-runewidth"
@@ -111,9 +109,6 @@ func (term *Term) appendScrollBuf() {
 	}
 	if term._scrollOffset > 0 {
 		term._scrollOffset++
-		if term._scrollMsg != nil {
-			term._scrollMsg.SetMessage(fmt.Sprintf("Viewing scrollback history. %d lines from end", term._scrollOffset))
-			//term.renderer.TriggerRedraw()
-		}
+		term.updateScrollback()
 	}
 }

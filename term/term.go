@@ -45,7 +45,6 @@ type Term struct {
 	_altBuf       types.Screen
 	_scrollBuf    types.Screen
 	_scrollOffset int
-	_scrollMsg    types.Notification
 
 	// smooth scroll
 	_ssCounter   int32
@@ -345,6 +344,16 @@ func (term *Term) visibleScreen() types.Screen {
 	}
 
 	return screen
+}
+
+func (term *Term) updateScrollback() {
+	if term._scrollOffset > len(term._scrollBuf) {
+		term._scrollOffset = len(term._scrollBuf)
+	}
+
+	if term._scrollOffset < 0 {
+		term._scrollOffset = 0
+	}
 }
 
 func (term *Term) HasFocus(state bool) {

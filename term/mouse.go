@@ -122,31 +122,6 @@ func (term *Term) _mouseWheelCallback(movement *types.XY) {
 	term.updateScrollback()
 }
 
-func (term *Term) updateScrollback() {
-	if term._scrollOffset > len(term._scrollBuf) {
-		term._scrollOffset = len(term._scrollBuf)
-	}
-
-	if term._scrollOffset < 0 {
-		term._scrollOffset = 0
-	}
-
-	/*if term._scrollOffset == 0 {
-		if term._scrollMsg != nil {
-			term._scrollMsg.Close()
-			term._scrollMsg = nil
-		}
-
-	} else {
-		msg := fmt.Sprintf("Viewing scrollback history. %d lines from end", term._scrollOffset)
-		if term._scrollMsg == nil {
-			term._scrollMsg = term.renderer.DisplaySticky(types.NOTIFY_SCROLL, msg)
-		} else {
-			term._scrollMsg.SetMessage(msg)
-		}
-	}*/
-}
-
 func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
 	term._mousePosRenderer.Set(nil)
 
