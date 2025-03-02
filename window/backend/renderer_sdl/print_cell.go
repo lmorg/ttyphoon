@@ -115,12 +115,11 @@ func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, _cellPos *
 }
 
 func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos *types.XY) {
-	cellPos := &types.XY{
-		X: _cellPos.X + sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _cellPos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
-	}
-
 	l := int32(len(cells))
+	cellPos := &types.XY{
+		X: _cellPos.X, //+ sr.termWin.Tiles[tileId].TopLeft.X,
+		Y: _cellPos.Y, //+ sr.termWin.Tiles[tileId].TopLeft.Y,
+	}
 
 	for ; cellPos.X < l; cellPos.X++ {
 		if cells[cellPos.X] == nil {
@@ -130,7 +129,7 @@ func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos
 		if config.Config.TypeFace.Ligatures {
 			ligId := sr._isLigaturePair(cells[cellPos.X:])
 			if ligId >= 0 {
-				sr.PrintLigature(cells[cellPos.X:cellPos.X+2], cellPos, ligId)
+				sr.PrintLigature(tileId, cells[cellPos.X:cellPos.X+2], cellPos, ligId)
 				cellPos.X++
 				continue
 			}
