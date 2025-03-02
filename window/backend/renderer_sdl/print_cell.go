@@ -117,8 +117,8 @@ func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, _cellPos *
 func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos *types.XY) {
 	l := int32(len(cells))
 	cellPos := &types.XY{
-		X: _cellPos.X, //+ sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _cellPos.Y, //+ sr.termWin.Tiles[tileId].TopLeft.Y,
+		X: _cellPos.X,
+		Y: _cellPos.Y,
 	}
 
 	for ; cellPos.X < l; cellPos.X++ {

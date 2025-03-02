@@ -1,7 +1,6 @@
 package virtualterm
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/lmorg/mxtty/debug"
@@ -132,22 +131,20 @@ func (term *Term) updateScrollback() {
 		term._scrollOffset = 0
 	}
 
-	if term._scrollOffset == 0 {
-		//term.ShowCursor(true)
+	/*if term._scrollOffset == 0 {
 		if term._scrollMsg != nil {
 			term._scrollMsg.Close()
 			term._scrollMsg = nil
 		}
 
 	} else {
-		//term.ShowCursor(false)
 		msg := fmt.Sprintf("Viewing scrollback history. %d lines from end", term._scrollOffset)
 		if term._scrollMsg == nil {
 			term._scrollMsg = term.renderer.DisplaySticky(types.NOTIFY_SCROLL, msg)
 		} else {
 			term._scrollMsg.SetMessage(msg)
 		}
-	}
+	}*/
 }
 
 func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {

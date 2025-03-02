@@ -15,6 +15,7 @@ type Renderer interface {
 	GetGlyphSize() *XY
 	PrintCell(TileId, *Cell, *XY)
 	PrintRow(TileId, []*Cell, *XY)
+	DrawScrollbar(TileId, int, int)
 	DrawTable(TileId, *XY, int32, []int32)
 	DrawHighlightRect(TileId, *XY, *XY)
 	DrawRectWithColour(TileId, *XY, *XY, *Colour, bool)

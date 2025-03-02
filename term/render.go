@@ -20,6 +20,10 @@ func (term *Term) Render() {
 		term._renderLigs(screen)
 	}
 
+	if term._scrollOffset != 0 {
+		term.renderer.DrawScrollbar(term.tileId, len(term._scrollBuf)-term._scrollOffset, len(term._scrollBuf))
+	}
+
 	term._renderOutputBlockChrome(screen)
 
 	term._renderCursor()

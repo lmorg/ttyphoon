@@ -189,11 +189,6 @@ func (term *Term) makeScreen() types.Screen {
 const UINT64_CAP = ^uint64(0)
 
 func (term *Term) _nextRowId() uint64 {
-	/*id := term._rowId.Add(1)
-	if id == ^UINT64_CAP {
-		term._rowId.Store(0)
-	}
-	return id*/
 	if term._rowId == UINT64_CAP {
 		term._rowId = 0
 	} else {
