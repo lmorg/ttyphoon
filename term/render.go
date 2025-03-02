@@ -156,6 +156,10 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 
 func _renderOutputBlockChrome(term *Term, start, end int32, errorBlock bool) {
 	end++
+	if start+end > term.size.Y {
+		end = term.size.Y - start
+	}
+
 	if errorBlock {
 		term.renderer.DrawOutputBlockChrome(term.tileId, start, end, types.COLOUR_ERROR, false)
 	} else {
