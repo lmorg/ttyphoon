@@ -94,11 +94,11 @@ func (sr *sdlRender) drawBg() {
 	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 
 	w, h := sr.window.GetSize()
-	bg := types.SGR_COLOUR_BLACK
+	canvasBg := types.SGR_COLOUR_BLACK
 	if len(sr.termWin.Tiles) < 3 {
-		bg = sr.termWin.Active.Term.Bg()
+		canvasBg = sr.termWin.Active.Term.Bg()
 	}
-	_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
+	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
 
 	for _, tile := range sr.termWin.Tiles {
@@ -107,15 +107,18 @@ func (sr *sdlRender) drawBg() {
 		}
 
 		rect := &sdl.Rect{
-			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT,
+			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
 			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - _PANE_BLOCK_HIGHLIGHT,
-			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - _PANE_BLOCK_HIGHLIGHT,
-			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y + _PANE_TOP_MARGIN - _PANE_BLOCK_HIGHLIGHT}
+			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
+			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
 		bg := tile.Term.Bg()
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
 	}
+
+	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: _PANE_TOP_MARGIN})
 
 	err := sr.renderer.SetRenderTarget(nil)
 	if err != nil {

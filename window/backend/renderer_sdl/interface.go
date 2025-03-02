@@ -15,14 +15,14 @@ import (
 	"golang.design/x/hotkey"
 )
 
-const (
-	_PANE_LEFT_MARGIN_OUTER = int32(0)
-	_PANE_TOP_MARGIN        = int32(0)
+const ( // based at compile time
+	_PANE_LEFT_MARGIN_OUTER = int32(1)
+	_PANE_TOP_MARGIN        = int32(5)
 	_WIDGET_INNER_MARGIN    = int32(5)
 	_WIDGET_OUTER_MARGIN    = int32(10)
 )
 
-var (
+var ( // defined at runtime based on font size
 	_PANE_BLOCK_HIGHLIGHT = int32(0)
 	_PANE_BLOCK_FOLDED    = int32(0)
 	_PANE_LEFT_MARGIN     = int32(0)
