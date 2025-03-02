@@ -337,6 +337,7 @@ func (sr *sdlRender) selectWindow(winIndex int) {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 	go sr.RefreshWindowList()
+	sr.TriggerRedraw()
 }
 
 func (sr *sdlRender) RefreshWindowList() {
