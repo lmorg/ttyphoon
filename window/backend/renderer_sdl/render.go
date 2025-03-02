@@ -233,23 +233,22 @@ func render(sr *sdlRender) error {
 
 	sr.renderStack(&sr._elementStack)
 
-	if sr.highlighter != nil && sr.highlighter.button == 0 {
-		sr.copyRendererToClipboard()
-		return nil
-	}
-
 	switch {
 	case sr.inputBox != nil:
 		sr.renderInputBox(rect)
 
 	case sr.menu != nil:
 		sr.renderMenu(rect)
-
-	default:
-		sr.selectionHighlighter()
 	}
 
 	sr.renderStack(&sr._overlayStack)
+
+	if sr.highlighter != nil && sr.highlighter.button == 0 {
+		sr.copyRendererToClipboard()
+		return nil
+	}
+
+	sr.selectionHighlighter()
 
 	sr.renderNotification(rect)
 
