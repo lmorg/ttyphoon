@@ -106,7 +106,7 @@ func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
 	if params.CreateHeadings {
 		headings = make([]string, len(recs[0]))
 		for i := range headings {
-			headings[i] = string('A' + i)
+			headings[i] = string('A' + i) // A, B, C, D, etc...
 		}
 	}
 

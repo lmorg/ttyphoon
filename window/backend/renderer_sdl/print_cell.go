@@ -63,13 +63,25 @@ func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) 
 }
 
 func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, _cellPos *types.XY) {
-	if cell.Char == 0 {
+	if cell.Char == 0 || _cellPos.X < 0 || _cellPos.Y < 0 {
 		return
 	}
 
+	tile := sr.termWin.Tiles[tileId]
+	if tile.Term != nil {
+		tileSize := tile.Term.GetSize()
+		if _cellPos.X >= tileSize.X || _cellPos.Y >= tileSize.Y {
+			return
+		}
+	}
+
+	sr.printCell(tile, cell, _cellPos)
+}
+
+func (sr *sdlRender) printCell(tile *types.Tile, cell *types.Cell, _cellPos *types.XY) {
 	cellPos := types.XY{
-		X: _cellPos.X + sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _cellPos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
+		X: _cellPos.X + tile.TopLeft.X,
+		Y: _cellPos.Y + tile.TopLeft.Y,
 	}
 
 	glyphSizeX := sr.glyphSize.X
@@ -116,6 +128,13 @@ func (sr *sdlRender) PrintCell(tileId types.TileId, cell *types.Cell, _cellPos *
 
 func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos *types.XY) {
 	l := int32(len(cells))
+
+	tile := sr.termWin.Tiles[tileId]
+
+	if tile.Term != nil && tile.Term.GetSize().X <= _cellPos.X+l {
+		l = tile.Term.GetSize().X - _cellPos.X
+	}
+
 	cellPos := &types.XY{
 		X: _cellPos.X,
 		Y: _cellPos.Y,
@@ -129,11 +148,11 @@ func (sr *sdlRender) PrintRow(tileId types.TileId, cells []*types.Cell, _cellPos
 		if config.Config.TypeFace.Ligatures {
 			ligId := sr._isLigaturePair(cells[cellPos.X:])
 			if ligId >= 0 {
-				sr.PrintLigature(tileId, cells[cellPos.X:cellPos.X+2], cellPos, ligId)
+				sr.PrintLigature(tile, cells[cellPos.X:cellPos.X+2], cellPos, ligId)
 				cellPos.X++
 				continue
 			}
 		}
-		sr.PrintCell(tileId, cells[cellPos.X], cellPos)
+		sr.printCell(tile, cells[cellPos.X], cellPos)
 	}
 }

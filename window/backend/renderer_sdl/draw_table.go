@@ -6,13 +6,15 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (sr *sdlRender) DrawTable(tileId types.TileId, _pos *types.XY, height int32, boundaries []int32) {
+func (sr *sdlRender) DrawTable(tileId types.TileId, pos *types.XY, height int32, boundaries []int32) {
 	var err error
 
-	pos := types.XY{
-		X: _pos.X + sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _pos.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
-	}
+	tile := sr.termWin.Tiles[tileId]
+
+	/*pos := types.XY{
+		X: _pos.X + tile.TopLeft.X,
+		Y: _pos.Y + tile.TopLeft.Y,
+	}*/
 
 	fg := types.SGR_DEFAULT.Fg
 
@@ -20,7 +22,8 @@ func (sr *sdlRender) DrawTable(tileId types.TileId, _pos *types.XY, height int32
 	if texture == nil {
 		return
 	}
-	defer sr.restoreRendererTexture()
+
+	defer sr.restoreRendererTextureCrop(tile)
 
 	sr.renderer.SetDrawColor(fg.Red, fg.Green, fg.Blue, 128)
 

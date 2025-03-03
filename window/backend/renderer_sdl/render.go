@@ -167,6 +167,34 @@ func (sr *sdlRender) restoreRendererTexture() {
 	}
 }
 
+func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
+	if tile.Term == nil {
+		sr.restoreRendererTexture()
+		return
+	}
+
+	src := &sdl.Rect{
+		X: _PANE_LEFT_MARGIN,
+		Y: _PANE_TOP_MARGIN,
+		W: tile.BottomRight.X * sr.glyphSize.X,
+		H: tile.BottomRight.Y * sr.glyphSize.Y,
+	}
+
+	dst := &sdl.Rect{
+		X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+		Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
+		W: tile.BottomRight.X * sr.glyphSize.X,
+		H: tile.BottomRight.Y * sr.glyphSize.Y,
+	}
+
+	texture := sr.renderer.GetRenderTarget()
+	sr.AddToElementStack(&layer.RenderStackT{texture, src, dst, true})
+	err := sr.renderer.SetRenderTarget(nil)
+	if err != nil {
+		log.Printf("ERROR: %v", err)
+	}
+}
+
 func (sr *sdlRender) renderStack(stack *[]*layer.RenderStackT) {
 	var err error
 	for _, item := range *stack {
