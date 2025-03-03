@@ -42,7 +42,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 				_, ok := elementStack[screen[pos.Y].Cells[pos.X].Element]
 				if !ok {
 					elementStack[screen[pos.Y].Cells[pos.X].Element] = true
-					offset := getElementXY(screen[pos.Y].Cells[pos.X].Char)
+					offset := screen[pos.Y].Cells[pos.X].GetElementXY()
 					screen[pos.Y].Cells[pos.X].Element.Draw(nil, &types.XY{X: pos.X - offset.X, Y: pos.Y - offset.Y})
 				}
 
@@ -74,7 +74,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 				_, ok := elementStack[screen[pos.Y].Cells[pos.X].Element]
 				if !ok {
 					elementStack[screen[pos.Y].Cells[pos.X].Element] = true
-					offset := getElementXY(screen[pos.Y].Cells[pos.X].Char)
+					offset := screen[pos.Y].Cells[pos.X].GetElementXY()
 					screen[pos.Y].Cells[pos.X].Element.Draw(nil, &types.XY{X: pos.X - offset.X, Y: pos.Y - offset.Y})
 				}
 				row[pos.X] = nil

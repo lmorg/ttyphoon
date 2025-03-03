@@ -85,7 +85,7 @@ func (term *Term) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed 
 		return
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].ElementXY(), button, clicks, pressed, callback)
+	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, pressed, callback)
 }
 
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
@@ -99,7 +99,7 @@ func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
 	}
 
 	screen[pos.Y].Cells[pos.X].Element.MouseWheel(
-		screen[pos.Y].Cells[pos.X].ElementXY(),
+		screen[pos.Y].Cells[pos.X].GetElementXY(),
 		movement,
 		func() { term._mouseWheelCallback(movement) },
 	)
@@ -171,7 +171,7 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		term._mouseIn = screen[pos.Y].Cells[pos.X].Element
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].ElementXY(), movement, callback)
+	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].GetElementXY(), movement, callback)
 }
 
 func (term *Term) MousePosition(pos *types.XY) {

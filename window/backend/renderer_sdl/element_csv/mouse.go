@@ -147,7 +147,7 @@ func (el *ElementCsv) MouseMotion(pos *types.XY, move *types.XY, callback types.
 		return
 	}
 
-	el.highlight = pos
+	el.highlight = &types.XY{X: pos.X, Y: pos.Y}
 	el.renderer.TriggerRedraw()
 }
 

@@ -173,18 +173,20 @@ func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
 		return
 	}
 
+	size := tile.Term.GetSize()
+
 	src := &sdl.Rect{
 		X: _PANE_LEFT_MARGIN,
 		Y: _PANE_TOP_MARGIN,
-		W: tile.BottomRight.X * sr.glyphSize.X,
-		H: tile.BottomRight.Y * sr.glyphSize.Y,
+		W: size.X * sr.glyphSize.X,
+		H: size.Y * sr.glyphSize.Y,
 	}
 
 	dst := &sdl.Rect{
 		X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
 		Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
-		W: tile.BottomRight.X * sr.glyphSize.X,
-		H: tile.BottomRight.Y * sr.glyphSize.Y,
+		W: size.X * sr.glyphSize.X,
+		H: size.Y * sr.glyphSize.Y,
 	}
 
 	texture := sr.renderer.GetRenderTarget()
