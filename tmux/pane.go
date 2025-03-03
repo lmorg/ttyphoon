@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/debug"
@@ -71,7 +70,6 @@ type PaneT struct {
 	WindowId  string `tmux:"window_id"`
 	tmux      *Tmux
 	buf       *runebuf.Buf
-	prefixTtl time.Time
 	term      types.Term
 }
 

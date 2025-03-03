@@ -3,83 +3,11 @@ package rendersdl
 import (
 	"log"
 	"sync/atomic"
-	"time"
 
-	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
-
-func (sr *sdlRender) refreshInterval() {
-	if config.Config.Window.RefreshInterval == 0 {
-		return
-	}
-
-	d := time.Duration(config.Config.Window.RefreshInterval) * time.Millisecond
-	for {
-		time.Sleep(d)
-		sr.TriggerRedraw()
-	}
-}
-
-func (sr *sdlRender) eventLoop() {
-	for {
-
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch evt := event.(type) {
-
-			case sdl.WindowEvent:
-				sr.eventWindow(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.TextInputEvent:
-				sr.eventTextInput(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.KeyboardEvent:
-				sr.eventKeyPress(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.MouseButtonEvent:
-				sr.eventMouseButton(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.MouseMotionEvent:
-				sr.eventMouseMotion(&evt)
-				// don't trigger redraw
-
-			case sdl.MouseWheelEvent:
-				sr.eventMouseWheel(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.QuitEvent:
-				sr.TriggerQuit()
-
-			}
-		}
-
-		select {
-		case size := <-sr._resize:
-			sr._resizeWindow(size)
-
-		case <-sr._redraw:
-			err := render(sr)
-			if err != nil {
-				log.Printf("ERROR: %s", err.Error())
-			}
-
-		case <-sr.pollEventHotkey():
-			sr.eventHotkey()
-
-		case <-sr._quit:
-			return
-
-		case <-time.After(15 * time.Millisecond):
-			continue
-		}
-	}
-}
 
 func (sr *sdlRender) drawBg() {
 	if sr.cacheBgTexture != nil {
@@ -94,12 +22,18 @@ func (sr *sdlRender) drawBg() {
 	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
 
 	w, h := sr.window.GetSize()
-	canvasBg := types.SGR_COLOUR_BLACK
+	canvasBg := types.SGR_COLOUR_BLACK_BRIGHT
 	if len(sr.termWin.Tiles) < 3 {
 		canvasBg = sr.termWin.Active.Term.Bg()
 	}
 	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
+
+	if len(sr.termWin.Tiles) > 2 {
+		canvasBg := types.SGR_COLOUR_BLACK
+		_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+		_ = sr.renderer.FillRect(&sdl.Rect{X: _PANE_LEFT_MARGIN_OUTER + sr.glyphSize.X, Y: _PANE_TOP_MARGIN, W: sr.winCellSize.X * sr.glyphSize.X, H: sr.winCellSize.Y * sr.glyphSize.Y})
+	}
 
 	for _, tile := range sr.termWin.Tiles {
 		if tile.Term == nil {
@@ -108,7 +42,7 @@ func (sr *sdlRender) drawBg() {
 
 		rect := &sdl.Rect{
 			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
-			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN - _PANE_BLOCK_HIGHLIGHT,
+			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
 			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
 			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
@@ -117,8 +51,8 @@ func (sr *sdlRender) drawBg() {
 		_ = sr.renderer.FillRect(rect)
 	}
 
-	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
-	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: _PANE_TOP_MARGIN})
+	//_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+	//_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: _PANE_TOP_MARGIN})
 
 	err := sr.renderer.SetRenderTarget(nil)
 	if err != nil {

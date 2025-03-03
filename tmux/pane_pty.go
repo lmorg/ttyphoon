@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/octal"
 )
@@ -54,28 +53,28 @@ func (p *PaneT) _hotkey(b []byte) (bool, error) {
 	} else {
 		key = string(b)
 	}
-	debug.Log(key)
 
-	if p.prefixTtl.Before(time.Now()) {
+	if p.tmux.prefixTtl.Before(time.Now()) {
 		if key != p.tmux.keys.prefix {
 			// standard key, do nothing
 			return false, nil
 		}
 
 		// prefix key pressed
-		p.prefixTtl = time.Now().Add(2 * time.Second)
+		p.tmux.prefixTtl = time.Now().Add(2000 * time.Millisecond)
 		return true, nil
 	}
 
 	// run tmux function
 	fn, ok := p.tmux.keys.fnTable[key]
-	debug.Log(ok)
 	if !ok {
 		// no function to run, lets treat as standard key
-		p.prefixTtl = time.Now()
+		p.tmux.prefixTtl = time.Now()
 		return false, nil
 	}
 
+	// valid prefix key, so lets set a repeat key timer
+	p.tmux.prefixTtl = time.Now().Add(500 * time.Millisecond)
 	return true, fn.fn(p.tmux)
 }
 

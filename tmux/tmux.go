@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/lmorg/mxtty/config"
@@ -154,7 +155,8 @@ type Tmux struct {
 	activeWindow *WindowT
 	renderer     types.Renderer
 
-	limiter sync.Mutex
+	limiter   sync.Mutex
+	prefixTtl time.Time
 }
 
 type tmuxResponseT struct {
