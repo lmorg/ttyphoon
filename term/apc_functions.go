@@ -6,7 +6,7 @@ import (
 )
 
 func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
-	term._activeElement = term.renderer.NewElement(term.tileId, element)
+	term._activeElement = term.renderer.NewElement(term.tile, element)
 }
 
 func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
@@ -19,7 +19,7 @@ func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
 }
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
-	term._mxapcGenerate(term.renderer.NewElement(term.tileId, element), parameters)
+	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters)
 }
 
 func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {

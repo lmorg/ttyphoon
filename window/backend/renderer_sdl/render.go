@@ -19,7 +19,8 @@ func (sr *sdlRender) drawBg() {
 		panic("cannot create bg texture")
 	}
 
-	sr.termWin.Tiles[_TILE_ID_WHOLE_WINDOW] = &types.Tile{TopLeft: &types.XY{}, BottomRight: sr.winCellSize}
+	sr.winTile.Right = sr.winCellSize.X
+	sr.winTile.Bottom = sr.winCellSize.Y
 
 	w, h := sr.window.GetSize()
 	canvasBg := types.SGR_COLOUR_BLACK_BRIGHT
@@ -41,10 +42,10 @@ func (sr *sdlRender) drawBg() {
 		}
 
 		rect := &sdl.Rect{
-			X: tile.TopLeft.X*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
-			Y: (tile.TopLeft.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
-			W: (tile.BottomRight.X-tile.TopLeft.X+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
-			H: (tile.BottomRight.Y+2-tile.TopLeft.Y)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
+			X: tile.Left*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
+			Y: (tile.Top * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
+			W: (tile.Right-tile.Left+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
+			H: (tile.Bottom+2-tile.Top)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
 		bg := tile.Term.Bg()
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
@@ -117,8 +118,8 @@ func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
 	}
 
 	dst := &sdl.Rect{
-		X: tile.TopLeft.X*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-		Y: tile.TopLeft.Y*sr.glyphSize.Y + _PANE_TOP_MARGIN,
+		X: tile.Left*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+		Y: tile.Top*sr.glyphSize.Y + _PANE_TOP_MARGIN,
 		W: size.X * sr.glyphSize.X,
 		H: size.Y * sr.glyphSize.Y,
 	}
@@ -151,8 +152,6 @@ func (sr *sdlRender) isMouseInsideWindow() bool {
 	winGX, winGY := sr.window.GetPosition()
 	return mouseGX >= winGX && mouseGY >= winGY && mouseGX <= winGX+x && mouseGY <= winGY+y
 }
-
-const _TILE_ID_WHOLE_WINDOW = ""
 
 func render(sr *sdlRender) error {
 	defer sr.limiter.Unlock()

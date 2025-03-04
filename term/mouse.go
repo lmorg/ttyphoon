@@ -189,7 +189,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 
 		if len(screen[pos.Y].Hidden) > 0 {
 			term._mousePosRenderer.Set(func() {
-				term.renderer.DrawRectWithColour(term.tileId,
+				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
 					&types.XY{X: term.size.X, Y: 1},
 					types.COLOUR_FOLDED, true,
@@ -236,7 +236,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 
 	drawRect:
 		term._mousePosRenderer.Set(func() {
-			term.renderer.DrawRectWithColour(term.tileId,
+			term.renderer.DrawRectWithColour(term.tile,
 				&types.XY{X: 0, Y: block[0]},
 				&types.XY{X: term.size.X, Y: block[1]},
 				colour, true,
@@ -251,7 +251,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 			cursor.Hand()
 			term.renderer.StatusBarText("[Click] Fold branch")
 			term._mousePosRenderer.Set(func() {
-				term.renderer.DrawRectWithColour(term.tileId,
+				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: pos.X, Y: pos.Y},
 					&types.XY{X: term.size.X - pos.X, Y: height - pos.Y},
 					types.COLOUR_FOLDED, false,

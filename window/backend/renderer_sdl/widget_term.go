@@ -116,19 +116,21 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	sr.cacheBgTexture = nil
 	if sr.tmux != nil {
 		go func() {
-			err := sr.tmux.SelectPane(tile.TmuxPaneId)
+			err := sr.tmux.SelectPane(tile.PaneId)
 			if err != nil {
 				sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			}
 		}()
 	}
 
-	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
+	posCell := sr.convertPxToCellXYTile(tile, evt.X, evt.Y)
 
 	state := evt.State == sdl.PRESSED
 
-	//if evt.X <= _PANE_LEFT_MARGIN {
-	//	posCell.X = -1
+	if evt.X <= _PANE_LEFT_MARGIN {
+		posCell.X = -1
+	}
+
 	if posCell.X == -1 {
 		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
 		return

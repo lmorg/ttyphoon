@@ -72,23 +72,22 @@ func regularSession() {
 	renderer, size := backend.Initialise()
 	defer renderer.Close()
 
-	term := virtualterm.NewTerminal("0", renderer, size, true)
+	tile := &types.Tile{
+		Right:  size.X,
+		Bottom: size.Y,
+	}
+
+	virtualterm.NewTerminal(tile, renderer, size, true)
 	pty, err := ptty.NewPty(size)
 	if err != nil {
 		panic(err)
 	}
 
-	tile := &types.Tile{
-		Term:        term,
-		TopLeft:     &types.XY{},
-		BottomRight: size,
-	}
-
 	termWin := &types.TermWindow{
-		Tiles:  map[types.TileId]*types.Tile{"0": tile},
+		Tiles:  []*types.Tile{tile},
 		Active: tile,
 	}
 
-	term.Start(pty)
+	tile.Term.Start(pty)
 	backend.Start(renderer, termWin, nil)
 }

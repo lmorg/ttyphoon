@@ -31,7 +31,7 @@ import (
 
 // Term is the display state of the virtual term
 type Term struct {
-	tileId   types.TileId
+	tile     *types.Tile
 	visible  bool
 	size     *types.XY
 	sgr      *types.Sgr
@@ -127,9 +127,9 @@ func (term *Term) lfRedraw() {
 }
 
 // NewTerminal creates a new virtual term
-func NewTerminal(tileId types.TileId, renderer types.Renderer, size *types.XY, visible bool) *Term {
+func NewTerminal(tile *types.Tile, renderer types.Renderer, size *types.XY, visible bool) {
 	term := &Term{
-		tileId:       tileId,
+		tile:         tile,
 		renderer:     renderer,
 		size:         size,
 		_hasKeyPress: make(chan bool),
@@ -137,8 +137,7 @@ func NewTerminal(tileId types.TileId, renderer types.Renderer, size *types.XY, v
 	}
 
 	term.reset(size)
-
-	return term
+	tile.Term = term
 }
 
 func (term *Term) Start(pty types.Pty) {
@@ -248,9 +247,8 @@ func (term *Term) curPos() *types.XY {
 	switch {
 	case term._curPos.Y < 0:
 		y = 0
-	case term._curPos.Y > term.size.Y:
+	case term._curPos.Y >= term.size.Y: // should this be >= or > ??
 		y = term.size.Y - 1
-		//term.lineFeed()
 	default:
 		y = term._curPos.Y
 	}

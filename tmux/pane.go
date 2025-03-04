@@ -58,19 +58,19 @@ import (
 var CMD_LIST_PANES = "list-panes"
 
 type PaneT struct {
-	Title     string `tmux:"PaneTitle"`
-	Id        string `tmux:"pane_id"`
-	Width     int    `tmux:"pane_width"`
-	Height    int    `tmux:"pane_height"`
-	PosTop    int    `tmux:"pane_top"`
-	PosLeft   int    `tmux:"pane_left"`
-	PosBottom int    `tmux:"pane_bottom"`
-	PosRight  int    `tmux:"pane_right"`
-	Active    bool   `tmux:"?pane_active,true,false"`
-	WindowId  string `tmux:"window_id"`
-	tmux      *Tmux
-	buf       *runebuf.Buf
-	term      types.Term
+	Title  string `tmux:"PaneTitle"`
+	Id     string `tmux:"pane_id"`
+	Width  int    `tmux:"pane_width"`
+	Height int    `tmux:"pane_height"`
+	//PosLeft   int    `tmux:"pane_left"`
+	//PosTop    int    `tmux:"pane_top"`
+	//PosRight  int    `tmux:"pane_right"`
+	//PosBottom int    `tmux:"pane_bottom"`
+	Active   bool   `tmux:"?pane_active,true,false"`
+	WindowId string `tmux:"window_id"`
+	tmux     *Tmux
+	tile     *types.Tile
+	buf      *runebuf.Buf
 }
 
 func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
@@ -82,6 +82,7 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 	for i := range panes.([]any) {
 		pane := panes.([]any)[i].(*PaneT)
 		pane.tmux = tmux
+		pane.tile = new(types.Tile)
 
 		pane.buf = runebuf.New()
 		debug.Log(pane)
@@ -91,9 +92,8 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 		}
 		tmux.pane[pane.Id] = pane
 
-		term := virtualterm.NewTerminal(types.TileId(pane.Id), renderer, &types.XY{int32(pane.Width), int32(pane.Height)}, false)
-		pane.term = term
-		term.Start(pane)
+		virtualterm.NewTerminal(pane.tile, renderer, &types.XY{int32(pane.Width), int32(pane.Height)}, false)
+		pane.tile.Term.Start(pane)
 
 		command := fmt.Sprintf("capture-pane -J -e -p -t %s", pane.Id)
 		resp, err := tmux.SendCommand([]byte(command))
@@ -121,15 +121,16 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	pane := &PaneT{
 		Id:   info.Id,
 		tmux: tmux,
+		tile: new(types.Tile),
 		buf:  runebuf.New(),
 	}
 
-	term := virtualterm.NewTerminal(
-		types.TileId(pane.Id), tmux.renderer,
+	virtualterm.NewTerminal(
+		pane.tile, tmux.renderer,
 		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
 		false)
-	term.Start(pane)
-	pane.term = term
+
+	pane.tile.Term.Start(pane)
 
 	tmux.pane[pane.Id] = pane
 
@@ -187,6 +188,7 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		}
 
 		if info.Dead {
+			panic("closed!")
 			pane.Close()
 			continue
 		}
@@ -194,15 +196,16 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		pane.Title = info.Title
 		pane.Width = info.Width
 		pane.Height = info.Height
-		pane.PosLeft = info.PosLeft
-		pane.PosTop = info.PosTop
-		pane.PosRight = info.PosRight
-		pane.PosBottom = info.PosBottom
 		pane.Active = info.Active
 		pane.WindowId = info.WindowId
-		pane.term.MakeVisible(info.WinActive)
-		pane.term.HasFocus(info.Active)
-		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
+		pane.tile.Term.MakeVisible(info.WinActive)
+		pane.tile.Term.HasFocus(info.Active)
+		pane.tile.PaneId = info.Id
+		pane.tile.Left = int32(info.PosLeft)
+		pane.tile.Top = int32(info.PosTop)
+		pane.tile.Right = int32(info.PosRight)
+		pane.tile.Bottom = int32(info.PosBottom)
+		pane.tile.Term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 
 		tmux.win[pane.WindowId].panes[pane.Id] = pane
 		if pane.Active {
@@ -218,7 +221,7 @@ func (tmux *Tmux) ActivePane() *PaneT {
 }
 
 func (p *PaneT) Term() types.Term {
-	return p.term
+	return p.tile.Term
 }
 
 func (tmux *Tmux) SelectPane(paneId string) error {

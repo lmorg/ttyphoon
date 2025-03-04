@@ -21,7 +21,7 @@ func (term *Term) Render() {
 	}
 
 	if term._scrollOffset != 0 {
-		term.renderer.DrawScrollbar(term.tileId, len(term._scrollBuf)-term._scrollOffset, len(term._scrollBuf))
+		term.renderer.DrawScrollbar(term.tile, len(term._scrollBuf)-term._scrollOffset, len(term._scrollBuf))
 	}
 
 	term._renderOutputBlockChrome(screen)
@@ -56,7 +56,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
 					continue // blink
 				}
-				term.renderer.PrintCell(term.tileId, screen[pos.Y].Cells[pos.X], pos)
+				term.renderer.PrintCell(term.tile, screen[pos.Y].Cells[pos.X], pos)
 			}
 		}
 	}
@@ -94,7 +94,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 			}
 		}
 		pos.X = 0
-		term.renderer.PrintRow(term.tileId, row, pos)
+		term.renderer.PrintRow(term.tile, row, pos)
 	}
 }
 
@@ -110,7 +110,7 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 	for y := int32(len(screen)) - 1; y >= 0; y-- {
 		i++
 		if len(screen[y].Hidden) != 0 {
-			term.renderer.DrawOutputBlockChrome(term.tileId, y, 1, types.COLOUR_FOLDED, true)
+			term.renderer.DrawOutputBlockChrome(term.tile, y, 1, types.COLOUR_FOLDED, true)
 		}
 		if screen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END) {
 			i = 0
@@ -161,9 +161,9 @@ func _renderOutputBlockChrome(term *Term, start, end int32, errorBlock bool) {
 	}
 
 	if errorBlock {
-		term.renderer.DrawOutputBlockChrome(term.tileId, start, end, types.COLOUR_ERROR, false)
+		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOUR_ERROR, false)
 	} else {
-		term.renderer.DrawOutputBlockChrome(term.tileId, start, end, types.COLOUR_OK, false)
+		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOUR_OK, false)
 	}
 	term._cacheBlock = append(term._cacheBlock, []int32{start, end})
 }

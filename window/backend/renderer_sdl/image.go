@@ -73,11 +73,6 @@ func (img *cachedImage) Draw(size *types.XY, pos *types.XY) {
 		H: size.Y * img.sr.glyphSize.Y,
 	}
 
-	// for rendering
-	//err := img.sr.renderer.Copy(img.texture, srcRect, dstRect)
-	//if err != nil {
-	//	img.sr.DisplayNotification(types.NOTIFY_ERROR, "Cannot render image: "+err.Error())
-	//}
 	img.sr.AddToElementStack(&layer.RenderStackT{img.texture, srcRect, dstRect, false})
 }
 

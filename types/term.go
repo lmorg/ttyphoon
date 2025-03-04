@@ -7,17 +7,17 @@ import (
 type EventIgnoredCallback func()
 
 type TermWindow struct {
-	Tiles  map[TileId]*Tile
+	Tiles  []*Tile
 	Active *Tile
 }
 
-type TileId string
-
 type Tile struct {
-	TopLeft     *XY
-	BottomRight *XY
-	Term        Term
-	TmuxPaneId  string
+	Top    int32
+	Left   int32
+	Right  int32
+	Bottom int32
+	Term   Term
+	PaneId string
 }
 
 type Term interface {

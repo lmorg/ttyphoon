@@ -36,6 +36,7 @@ type sdlRender struct {
 	tmux        *tmux.Tmux
 	limiter     sync.Mutex
 	winCellSize *types.XY
+	winTile     types.Tile
 
 	// deprecated
 	font *ttf.Font

@@ -6,8 +6,8 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) DrawOutputBlockChrome(tileId types.TileId, start, n int32, c *types.Colour, folded bool) {
-	start += sr.termWin.Tiles[tileId].TopLeft.Y
+func (sr *sdlRender) DrawOutputBlockChrome(tile *types.Tile, start, n int32, c *types.Colour, folded bool) {
+	start += tile.Top
 
 	texture := sr.createRendererTexture()
 	if texture == nil {
@@ -17,7 +17,7 @@ func (sr *sdlRender) DrawOutputBlockChrome(tileId types.TileId, start, n int32, 
 	defer sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
 
 	rect := &sdl.Rect{
-		X: (sr.termWin.Tiles[tileId].TopLeft.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
+		X: (tile.Left * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
 		Y: (start * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
 		W: _PANE_BLOCK_HIGHLIGHT,
 		H: n * sr.glyphSize.Y,
@@ -32,13 +32,12 @@ func (sr *sdlRender) DrawOutputBlockChrome(tileId types.TileId, start, n int32, 
 	_ = sr.renderer.FillRect(rect)
 }
 
-func (sr *sdlRender) DrawScrollbar(tileId types.TileId, value, max int) {
-	tile := sr.termWin.Tiles[tileId]
+func (sr *sdlRender) DrawScrollbar(tile *types.Tile, value, max int) {
 	f := float64(value) / float64(max)
 
 	rect := &sdl.Rect{
-		X: (tile.BottomRight.X+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - (sr.glyphSize.X / 2),
-		Y: (tile.TopLeft.Y+1)*sr.glyphSize.Y + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
+		X: (tile.Right+1)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - (sr.glyphSize.X / 2),
+		Y: (tile.Top+1)*sr.glyphSize.Y + _PANE_TOP_MARGIN - (sr.glyphSize.Y / 2),
 		W: sr.glyphSize.X,
 		H: (tile.Term.GetSize().Y - 1) * sr.glyphSize.Y,
 	}

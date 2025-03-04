@@ -327,7 +327,7 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 		return err
 	}
 
-	tmux.ActivePane().term.MakeVisible(true)
+	tmux.ActivePane().Term().MakeVisible(true)
 	return nil
 }
 

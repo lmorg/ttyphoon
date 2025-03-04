@@ -15,10 +15,10 @@ const (
 
 var highlightBlendMode sdl.BlendMode // controlled by LightMode
 
-func (sr *sdlRender) DrawHighlightRect(tileId types.TileId, _topLeftCell, bottomRightCell *types.XY) {
+func (sr *sdlRender) DrawHighlightRect(tile *types.Tile, _topLeftCell, bottomRightCell *types.XY) {
 	topLeftCell := types.XY{
-		X: _topLeftCell.X + sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _topLeftCell.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
+		X: _topLeftCell.X + tile.Left,
+		Y: _topLeftCell.Y + tile.Top,
 	}
 
 	sr._drawHighlightRect(
@@ -32,10 +32,10 @@ func (sr *sdlRender) DrawHighlightRect(tileId types.TileId, _topLeftCell, bottom
 		highlightAlphaBorder, highlightAlphaFill)
 }
 
-func (sr *sdlRender) DrawRectWithColour(tileId types.TileId, _topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+func (sr *sdlRender) DrawRectWithColour(tile *types.Tile, _topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
 	topLeftCell := types.XY{
-		X: _topLeftCell.X + sr.termWin.Tiles[tileId].TopLeft.X,
-		Y: _topLeftCell.Y + sr.termWin.Tiles[tileId].TopLeft.Y,
+		X: _topLeftCell.X + tile.Left,
+		Y: _topLeftCell.Y + tile.Top,
 	}
 
 	leftMargin := _PANE_LEFT_MARGIN

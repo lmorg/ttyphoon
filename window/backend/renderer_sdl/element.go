@@ -6,13 +6,13 @@ import (
 	elementImage "github.com/lmorg/mxtty/window/backend/renderer_sdl/element_image"
 )
 
-func (sr *sdlRender) NewElement(tileId types.TileId, id types.ElementID) types.Element {
+func (sr *sdlRender) NewElement(tile *types.Tile, id types.ElementID) types.Element {
 	switch id {
 	case types.ELEMENT_ID_IMAGE:
-		return elementImage.New(sr, tileId, sr.loadImage)
+		return elementImage.New(sr, tile, sr.loadImage)
 
 	case types.ELEMENT_ID_CSV:
-		return elementCsv.New(sr, tileId)
+		return elementCsv.New(sr, tile)
 
 	default:
 		return nil

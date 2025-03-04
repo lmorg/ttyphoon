@@ -57,6 +57,7 @@ type WindowT struct {
 	Active     bool   `tmux:"?window_active,true,false"`
 	panes      map[string]*PaneT
 	activePane *PaneT
+	tiles      types.TermWindow
 	closed     bool
 }
 
@@ -167,23 +168,17 @@ func (tmux *Tmux) RenderWindows() []*WindowT {
 }
 
 func (tmux *Tmux) ActiveWindow() *types.TermWindow {
-	var termWin types.TermWindow
-	termWin.Tiles = make(map[types.TileId]*types.Tile)
-
 	_ = tmux.updatePaneInfo("")
 
+	tmux.activeWindow.tiles.Tiles = []*types.Tile{}
+
 	for _, pane := range tmux.activeWindow.panes {
-		termWin.Tiles[types.TileId(pane.Id)] = &types.Tile{
-			Term:        pane.term,
-			TopLeft:     &types.XY{X: int32(pane.PosLeft), Y: int32(pane.PosTop)},
-			BottomRight: &types.XY{X: int32(pane.PosRight), Y: int32(pane.PosBottom)},
-			TmuxPaneId:  pane.Id,
-		}
+		tmux.activeWindow.tiles.Tiles = append(tmux.activeWindow.tiles.Tiles, pane.tile)
 	}
 
-	termWin.Active = termWin.Tiles[types.TileId(tmux.activeWindow.activePane.Id)]
+	tmux.activeWindow.tiles.Active = tmux.activeWindow.ActivePane().tile
 
-	return &termWin
+	return &tmux.activeWindow.tiles
 }
 
 func (win *WindowT) ActivePane() *PaneT {
@@ -216,10 +211,10 @@ func (tmux *Tmux) selectWindow(winId string) error {
 	command := fmt.Sprintf("select-window -t %s", winId)
 	_, err := tmux.SendCommand([]byte(command))
 
-	// old
+	// old window
 	tmux.activeWindow.Active = false
 
-	// new
+	// new window
 	tmux.activeWindow = tmux.win[winId]
 	tmux.activeWindow.Active = true
 
