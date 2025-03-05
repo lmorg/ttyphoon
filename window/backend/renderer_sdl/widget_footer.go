@@ -42,7 +42,14 @@ func (sr *sdlRender) renderFooter() {
 	}
 
 	if sr.footerText == "" {
-		sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
+		if sr.termWin == nil {
+			sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
+		} else {
+			pane := sr.tmux.ActivePane()
+			//pane := sr.windowTabs.windows[sr.windowTabs.active].ActivePane()
+			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search%s", pane.Id, pane.Title, sr._footerHotkeyMessage())
+
+		}
 	}
 
 	sr._footerRenderStatusBar(pos)
