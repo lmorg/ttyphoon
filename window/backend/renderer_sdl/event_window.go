@@ -22,7 +22,7 @@ func (sr *sdlRender) eventWindow(evt *sdl.WindowEvent) {
 
 	case sdl.WINDOWEVENT_FOCUS_LOST:
 		sr.termWin.Active.Term.HasFocus(false)
-		sr.window.SetWindowOpacity(0.7)
+		sr.window.SetWindowOpacity(float32(config.Config.Window.InactiveOpacity) / 100)
 		sr.hkToggle = false
 	}
 }
