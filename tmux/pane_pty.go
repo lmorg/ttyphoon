@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/octal"
 )
@@ -14,9 +15,12 @@ func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
 func (p *PaneT) Close() {
 	p.buf.Close()
-	//delete(p.tmux.pane, p.Id)
-	//delete(p.tmux.win[p.WindowId].panes, p.Id)
-	//go p.tmux.renderer.RefreshWindowList()
+	p.tile.Term.Close()
+
+	delete(p.tmux.pane, p.Id)
+	delete(p.tmux.win[p.WindowId].panes, p.Id)
+
+	debug.Log(p)
 }
 
 func (p *PaneT) Write(b []byte) error {

@@ -137,6 +137,7 @@ func fnKeySelectPaneUp(tmux *Tmux) error    { return _fnKeySelectPane(tmux, "-U"
 func fnKeySelectPaneDown(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-D") }
 func fnKeySelectPaneLeft(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-L") }
 func fnKeySelectPaneRight(tmux *Tmux) error { return _fnKeySelectPane(tmux, "-R") }
+func fnKeySelectPaneLast(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-l") }
 
 func fnKeyTilePanes(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("select-layout -E"))

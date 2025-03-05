@@ -57,7 +57,6 @@ type WindowT struct {
 	Active     bool   `tmux:"?window_active,true,false"`
 	panes      map[string]*PaneT
 	activePane *PaneT
-	tiles      types.TermWindow
 	closed     bool
 }
 
@@ -170,18 +169,49 @@ func (tmux *Tmux) RenderWindows() []*WindowT {
 func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 	_ = tmux.updatePaneInfo("")
 
-	tmux.activeWindow.tiles.Tiles = []*types.Tile{}
+	tw := new(types.TermWindow)
 
 	for _, pane := range tmux.activeWindow.panes {
-		tmux.activeWindow.tiles.Tiles = append(tmux.activeWindow.tiles.Tiles, pane.tile)
+		if pane.closed {
+			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.Id))
+			continue
+		}
+		tw.Tiles = append(tw.Tiles, pane.tile)
 	}
 
-	tmux.activeWindow.tiles.Active = tmux.activeWindow.ActivePane().tile
+	tw.Active = tmux.activeWindow.ActivePane().tile
 
-	return &tmux.activeWindow.tiles
+	debug.Log(tw)
+
+	return tw
 }
 
 func (win *WindowT) ActivePane() *PaneT {
+	if !win.activePane.closed {
+		return win.activePane
+	}
+
+	err := fnKeySelectPaneLast(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	err = fnKeySelectPaneUp(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	err = fnKeySelectPaneLeft(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	if err != nil {
+		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	} else {
+		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot find an active pane")
+	}
+
 	return win.activePane
 }
 

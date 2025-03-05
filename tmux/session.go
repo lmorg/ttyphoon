@@ -1,5 +1,9 @@
 package tmux
 
+import (
+	"fmt"
+)
+
 /*
 	session_activity              Time of session last activity
 	session_alerts                List of window indexes with alerts
@@ -23,3 +27,11 @@ package tmux
 	session_stack                 Window indexes in most recent order
 	session_windows               Number of windows in session
 */
+
+const _PANE_EXITED = "Pane exited"
+
+func (tmux *Tmux) setSessionHooks() error {
+	command := fmt.Sprintf(`set-hook -g pane-exited 'display-message "%s"'`, _PANE_EXITED)
+	_, err := tmux.SendCommand([]byte(command))
+	return err
+}

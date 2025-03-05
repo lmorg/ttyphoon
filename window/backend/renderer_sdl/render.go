@@ -37,10 +37,6 @@ func (sr *sdlRender) drawBg() {
 	}
 
 	for _, tile := range sr.termWin.Tiles {
-		if tile.Term == nil {
-			continue
-		}
-
 		rect := &sdl.Rect{
 			X: tile.Left*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
 			Y: (tile.Top * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
@@ -168,10 +164,6 @@ func render(sr *sdlRender) error {
 	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
 
 	for _, tile := range sr.termWin.Tiles {
-		if tile.Term == nil {
-			continue
-		}
-
 		tile.Term.Render()
 	}
 

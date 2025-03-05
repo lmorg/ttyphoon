@@ -71,9 +71,10 @@ type Term struct {
 	_mouseButtonDown bool
 	_hasKeyPress     chan bool
 	_eventClose      chan bool
+	_eventClosed     bool // to avoid cyclic events
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
-	_rowId           uint64 //atomic.Uint64
+	_rowId           uint64 // atomic.Uint64
 
 	// search
 	_searchHighlight  bool
@@ -304,7 +305,12 @@ func (term *Term) hasKeyPress() {
 }
 
 func (term *Term) Close() {
-	term._eventClose <- true
+	if !term._eventClosed { // to avoid cyclic events
+		go func() {
+			term._eventClose <- true // to kill any event loops
+		}()
+		//term.reset(&types.XY{1, 1})
+	}
 }
 
 func (term *Term) Reply(b []byte) {
