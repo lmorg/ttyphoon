@@ -92,7 +92,7 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 		highlightIndex:    _MENU_HIGHLIGHT_INIT,
 	}
 
-	var crop = int(sr.term.GetSize().X - 20)
+	var crop = int(sr.winCellSize.X - 20)
 
 	for i := range sr.menu.options {
 		sr.menu.options[i] = runewidth.Truncate(sr.menu.options[i], int(crop), "…")
@@ -101,14 +101,14 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 		}
 	}
 
-	sr.term.ShowCursor(false)
+	sr.termWin.Active.Term.ShowCursor(false)
 	cursor.Arrow()
 	go sr.menu.cursorBlink(sr)
 }
 
 func (sr *sdlRender) closeMenu() {
 	sr.footerText = ""
-	sr.term.ShowCursor(true)
+	sr.termWin.Active.Term.ShowCursor(true)
 	cursor.Arrow()
 	sr.menu = nil
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (sr *sdlRender) DrawTable(pos *types.XY, height int32, boundaries []int32) {
+func (sr *sdlRender) DrawTable(tile *types.Tile, pos *types.XY, height int32, boundaries []int32) {
 	var err error
 
 	fg := types.SGR_DEFAULT.Fg
@@ -15,7 +15,8 @@ func (sr *sdlRender) DrawTable(pos *types.XY, height int32, boundaries []int32) 
 	if texture == nil {
 		return
 	}
-	defer sr.restoreRendererTexture()
+
+	defer sr.restoreRendererTextureCrop(tile)
 
 	sr.renderer.SetDrawColor(fg.Red, fg.Green, fg.Blue, 128)
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/lmorg/mxtty/config"
@@ -96,7 +97,6 @@ var (
 	_RESP_END    = []byte("%end")
 	_RESP_ERROR  = []byte("%error")
 
-	// currently unused
 	_RESP_CLIENT_DETACHED         = []byte("%client-detached")
 	_RESP_CLIENT_SESSION_CHANGED  = []byte("%client-session-changed")
 	_RESP_CONFIG_ERROR            = []byte("%config-error")
@@ -155,7 +155,8 @@ type Tmux struct {
 	activeWindow *WindowT
 	renderer     types.Renderer
 
-	limiter sync.Mutex
+	limiter   sync.Mutex
+	prefixTtl time.Time
 }
 
 type tmuxResponseT struct {
@@ -202,11 +203,26 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				params := bytes.SplitN(b, []byte{' '}, 3)
 				paneId := string(params[1])
 				pane, ok := tmux.pane[paneId]
-				if !ok {
-					pane = tmux.newPane(paneId)
-					go tmux.UpdateSession()
+				if ok {
+					pane.buf.Write(octal.Unescape(params[2]))
+					continue
 				}
-				pane.buf.Write(octal.Unescape(params[2]))
+				msg := make([]byte, len(params[2]))
+				copy(msg, params[2])
+				go func() {
+					err = tmux.updatePaneInfo(paneId)
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+						return
+					}
+					pane, ok = tmux.pane[paneId]
+					if !ok {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+						return
+					}
+					pane.buf.Write(octal.Unescape(msg))
+					go renderer.RefreshWindowList()
+				}()
 
 			case bytes.HasPrefix(b, _RESP_BEGIN):
 				resp = new(tmuxResponseT)
@@ -219,13 +235,32 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				tmux.resp <- resp
 
 			case bytes.HasPrefix(b, _RESP_MESSAGE):
-				msg := b[len(_RESP_MESSAGE):]
-				renderer.DisplayNotification(types.NOTIFY_INFO, string(msg))
+				msg := string(b[len(_RESP_MESSAGE)+1:])
+				if msg == _PANE_EXITED {
+					go func() { errToNotification(renderer, tmux.paneExited()) }()
+					continue
+				}
+				renderer.DisplayNotification(types.NOTIFY_INFO, msg)
 
 			case bytes.HasPrefix(b, _RESP_WINDOW_ADD):
 				params := bytes.SplitN(b, []byte{' '}, 2)
 				winId := string(params[1])
 				_ = tmux.newWindow(winId)
+				go func() {
+					err := tmux.updatePaneInfo("")
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					err = tmux.updateWinInfo(winId)
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					err = tmux.SelectAndResizeWindow(winId, renderer.GetWindowSizeCells())
+					if err != nil {
+						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+					renderer.RefreshWindowList()
+				}()
 
 			case bytes.HasPrefix(b, _RESP_WINDOW_RENAMED):
 				params := bytes.SplitN(b, []byte{' '}, 3)
@@ -272,7 +307,8 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		return nil, err
 	}
 
-	return tmux, nil // could shouldn't reach this point
+	err = tmux.setSessionHooks()
+	return tmux, err
 }
 
 func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
@@ -286,7 +322,7 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 		return err
 	}
 
-	err = tmux.initSessionPanes(renderer, size)
+	err = tmux.initSessionPanes(renderer)
 	if err != nil {
 		return err
 	}
@@ -296,7 +332,7 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 		return err
 	}
 
-	tmux.ActivePane().term.MakeVisible(true)
+	tmux.ActivePane().Term().MakeVisible(true)
 	return nil
 }
 
@@ -327,9 +363,7 @@ func ignoreResponse(b []byte) bool {
 }
 
 func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
-	//debug.Log(fmt.Sprintf("waiting for lock (%s)", string(b)))
 	tmux.limiter.Lock()
-	//debug.Log(fmt.Sprintf("lock granted (%s)", string(b)))
 
 	_, err := tmux.tty.Write(append(b, '\n'))
 	if err != nil {
@@ -337,14 +371,9 @@ func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
 		return nil, err
 	}
 
-	//debug.Log(fmt.Sprintf("command sent (%s)", string(b)))
-
 	resp := <-tmux.resp
 
-	//debug.Log(fmt.Sprintf("response received (%s)", string(b)))
-
 	tmux.limiter.Unlock()
-	//debug.Log(fmt.Sprintf("unlocked (%s)", string(b)))
 
 	if resp.IsErr {
 		return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
@@ -357,5 +386,11 @@ func (tmux *Tmux) NewWindow() {
 	_, err := tmux.SendCommand([]byte("new-window"))
 	if err != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
+func errToNotification(renderer types.Renderer, err error) {
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 }

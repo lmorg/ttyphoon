@@ -3,103 +3,57 @@ package rendersdl
 import (
 	"log"
 	"sync/atomic"
-	"time"
 
-	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) refreshInterval() {
-	if config.Config.Window.RefreshInterval == 0 {
+func (sr *sdlRender) drawBg() {
+	if sr.cacheBgTexture != nil {
 		return
 	}
 
-	d := time.Duration(config.Config.Window.RefreshInterval) * time.Millisecond
-	for {
-		time.Sleep(d)
-		sr.TriggerRedraw()
+	sr.cacheBgTexture = sr.createRendererTexture()
+	if sr.cacheBgTexture == nil {
+		panic("cannot create bg texture")
 	}
-}
 
-func (sr *sdlRender) eventLoop() {
-	for {
+	sr.winTile.Right = sr.winCellSize.X
+	sr.winTile.Bottom = sr.winCellSize.Y
 
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch evt := event.(type) {
-
-			case sdl.WindowEvent:
-				sr.eventWindow(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.TextInputEvent:
-				sr.eventTextInput(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.KeyboardEvent:
-				sr.eventKeyPress(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.MouseButtonEvent:
-				sr.eventMouseButton(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.MouseMotionEvent:
-				sr.eventMouseMotion(&evt)
-				// don't trigger redraw
-
-			case sdl.MouseWheelEvent:
-				sr.eventMouseWheel(&evt)
-				sr.TriggerRedraw()
-
-			case sdl.QuitEvent:
-				sr.TriggerQuit()
-
-			}
-		}
-
-		select {
-		case size := <-sr._resize:
-			sr._resizeWindow(size)
-
-		case <-sr._redraw:
-			err := render(sr)
-			if err != nil {
-				log.Printf("ERROR: %s", err.Error())
-			}
-
-		case <-sr.pollEventHotkey():
-			sr.eventHotkey()
-
-		case <-sr._quit:
-			return
-
-		case <-time.After(15 * time.Millisecond):
-			continue
-		}
+	w, h := sr.window.GetSize()
+	canvasBg := types.SGR_COLOUR_BLACK_BRIGHT
+	if len(sr.termWin.Tiles) < 3 {
+		canvasBg = sr.termWin.Active.Term.Bg()
 	}
-}
+	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
 
-func (sr *sdlRender) drawBg(term types.Term, rect *sdl.Rect) {
-	bg := term.Bg()
-
-	texture := sr.createRendererTexture()
-	if texture == nil {
-		return
+	if len(sr.termWin.Tiles) > 2 {
+		canvasBg := types.SGR_COLOUR_BLACK
+		_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+		_ = sr.renderer.FillRect(&sdl.Rect{X: _PANE_LEFT_MARGIN_OUTER + sr.glyphSize.X, Y: _PANE_TOP_MARGIN, W: sr.winCellSize.X * sr.glyphSize.X, H: sr.winCellSize.Y * sr.glyphSize.Y})
 	}
-	defer sr.restoreRendererTexture()
 
-	var err error
+	for _, tile := range sr.termWin.Tiles {
+		rect := &sdl.Rect{
+			X: tile.Left*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
+			Y: (tile.Top * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
+			W: (tile.Right-tile.Left+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
+			H: (tile.Bottom+2-tile.Top)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
-	err = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
+		bg := tile.Term.Bg()
+		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
+		_ = sr.renderer.FillRect(rect)
+	}
+
+	//_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
+	//_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: _PANE_TOP_MARGIN})
+
+	err := sr.renderer.SetRenderTarget(nil)
 	if err != nil {
-		log.Printf("ERROR: error drawing background: %v", err)
-	}
-
-	err = sr.renderer.FillRect(rect)
-	if err != nil {
-		log.Printf("ERROR: error drawing background: %v", err)
+		log.Printf("ERROR: %v", err)
 	}
 }
 
@@ -144,6 +98,36 @@ func (sr *sdlRender) restoreRendererTexture() {
 	}
 }
 
+func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
+	if tile.Term == nil {
+		sr.restoreRendererTexture()
+		return
+	}
+
+	size := tile.Term.GetSize()
+
+	src := &sdl.Rect{
+		X: _PANE_LEFT_MARGIN,
+		Y: _PANE_TOP_MARGIN,
+		W: size.X * sr.glyphSize.X,
+		H: size.Y * sr.glyphSize.Y,
+	}
+
+	dst := &sdl.Rect{
+		X: tile.Left*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+		Y: tile.Top*sr.glyphSize.Y + _PANE_TOP_MARGIN,
+		W: size.X * sr.glyphSize.X,
+		H: size.Y * sr.glyphSize.Y,
+	}
+
+	texture := sr.renderer.GetRenderTarget()
+	sr.AddToElementStack(&layer.RenderStackT{texture, src, dst, true})
+	err := sr.renderer.SetRenderTarget(nil)
+	if err != nil {
+		log.Printf("ERROR: %v", err)
+	}
+}
+
 func (sr *sdlRender) renderStack(stack *[]*layer.RenderStackT) {
 	var err error
 	for _, item := range *stack {
@@ -176,17 +160,19 @@ func render(sr *sdlRender) error {
 	x, y := sr.window.GetSize()
 	rect := &sdl.Rect{W: x, H: y}
 
-	sr.drawBg(sr.term, rect)
-	sr.term.Render()
+	sr.drawBg()
+	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
 
-	//mouseGX, mouseGY, _ := sdl.GetGlobalMouseState()
-	//winGX, winGY := sr.window.GetPosition()
-	//if mouseGX >= winGX && mouseGY >= winGY && mouseGX <= winGX+x && mouseGY <= winGY+y {
+	for _, tile := range sr.termWin.Tiles {
+		tile.Term.Render()
+	}
+
 	if sr.isMouseInsideWindow() {
 		// only run this if mouse cursor is inside the window
 		mouseX, mouseY, _ := sdl.GetMouseState()
-		posNegX := sr.convertPxToCellXYNegX(mouseX, mouseY)
-		sr.term.MousePosition(posNegX)
+		tile := sr.getTileFromPxOrActive(mouseX, mouseY)
+		posNegX := sr.convertPxToCellXYNegXTile(tile, mouseX, mouseY)
+		tile.Term.MousePosition(posNegX)
 	}
 
 	sr.renderFooter()
@@ -202,23 +188,22 @@ func render(sr *sdlRender) error {
 
 	sr.renderStack(&sr._elementStack)
 
-	if sr.highlighter != nil && sr.highlighter.button == 0 {
-		sr.copyRendererToClipboard()
-		return nil
-	}
-
 	switch {
 	case sr.inputBox != nil:
 		sr.renderInputBox(rect)
 
 	case sr.menu != nil:
 		sr.renderMenu(rect)
-
-	default:
-		sr.selectionHighlighter()
 	}
 
 	sr.renderStack(&sr._overlayStack)
+
+	if sr.highlighter != nil && sr.highlighter.button == 0 {
+		sr.copyRendererToClipboard()
+		return nil
+	}
+
+	sr.selectionHighlighter()
 
 	sr.renderNotification(rect)
 

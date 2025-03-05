@@ -22,11 +22,11 @@ func (sr *sdlRender) eventMouseButton(evt *sdl.MouseButtonEvent) {
 
 func (sr *sdlRender) eventMouseWheel(evt *sdl.MouseWheelEvent) {
 	switch {
-	case sr.menu != nil:
-		sr.menu.eventMouseWheel(sr, evt)
+	//case sr.menu != nil:
+	//	sr.menu.eventMouseWheel(sr, evt)
 
-	case sr.inputBox != nil:
-		sr.inputBox.eventMouseWheel(sr, evt)
+	//case sr.inputBox != nil:
+	//	sr.inputBox.eventMouseWheel(sr, evt)
 
 	case sr.highlighter != nil:
 		sr.highlighter.eventMouseWheel(sr, evt)

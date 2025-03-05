@@ -17,6 +17,7 @@ func (term *Term) slowBlink() {
 			term.renderer.TriggerRedraw()
 
 		case <-term._eventClose:
+			term._eventClosed = true // to avoid cyclic events
 			term.Pty.Close()
 			return
 
@@ -42,7 +43,8 @@ func (term *Term) _renderCursor() {
 			w = 2
 		}
 
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
-		term.renderer.DrawHighlightRect(term.curPos(), &types.XY{w, 1})
+		// draw twice to make it _pop_
+		term.renderer.DrawHighlightRect(term.tile, term.curPos(), &types.XY{X: w, Y: 1})
+		term.renderer.DrawHighlightRect(term.tile, term.curPos(), &types.XY{X: w, Y: 1})
 	}
 }

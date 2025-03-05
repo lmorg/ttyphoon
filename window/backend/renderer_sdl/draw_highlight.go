@@ -15,7 +15,12 @@ const (
 
 var highlightBlendMode sdl.BlendMode // controlled by LightMode
 
-func (sr *sdlRender) DrawHighlightRect(topLeftCell, bottomRightCell *types.XY) {
+func (sr *sdlRender) DrawHighlightRect(tile *types.Tile, _topLeftCell, bottomRightCell *types.XY) {
+	topLeftCell := types.XY{
+		X: _topLeftCell.X + tile.Left,
+		Y: _topLeftCell.Y + tile.Top,
+	}
+
 	sr._drawHighlightRect(
 		&sdl.Rect{
 			X: (topLeftCell.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN,
@@ -27,7 +32,12 @@ func (sr *sdlRender) DrawHighlightRect(topLeftCell, bottomRightCell *types.XY) {
 		highlightAlphaBorder, highlightAlphaFill)
 }
 
-func (sr *sdlRender) DrawRectWithColour(topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+func (sr *sdlRender) DrawRectWithColour(tile *types.Tile, _topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+	topLeftCell := types.XY{
+		X: _topLeftCell.X + tile.Left,
+		Y: _topLeftCell.Y + tile.Top,
+	}
+
 	leftMargin := _PANE_LEFT_MARGIN
 	if incLeftMargin {
 		leftMargin = _PANE_LEFT_MARGIN_OUTER
@@ -57,12 +67,13 @@ func (sr *sdlRender) _drawHighlightRect(rect *sdl.Rect, colourBorder, colourFill
 	}
 
 	_ = sr.renderer.SetDrawColor(colourBorder.Red, colourBorder.Green, colourBorder.Blue, alphaBorder)
+
 	rect.X -= 1
 	rect.Y -= 1
 	rect.W += 2
 	rect.H += 2
-
 	_ = sr.renderer.DrawRect(rect)
+
 	rect.X += 1
 	rect.Y += 1
 	rect.W -= 2
@@ -72,6 +83,7 @@ func (sr *sdlRender) _drawHighlightRect(rect *sdl.Rect, colourBorder, colourFill
 	// fill background
 
 	_ = sr.renderer.SetDrawColor(colourFill.Red, colourFill.Green, colourFill.Blue, alphaFill)
+
 	rect.X += 1
 	rect.Y += 1
 	rect.W -= 2

@@ -36,7 +36,11 @@ func cellsToRunes(cells []*types.Cell) []rune {
 	return r
 }
 
-func (sr *sdlRender) PrintLigature(cells []*types.Cell, cellPos *types.XY, ligId int) {
+func (sr *sdlRender) PrintLigature(tile *types.Tile, cells []*types.Cell, _cellPos *types.XY, ligId int) {
+	cellPos := types.XY{
+		X: _cellPos.X + tile.Left,
+		Y: _cellPos.Y + tile.Left,
+	}
 	glyphSizeX := sr.glyphSize.X * 2
 
 	dstRect := &sdl.Rect{
@@ -54,7 +58,7 @@ func (sr *sdlRender) PrintLigature(cells []*types.Cell, cellPos *types.XY, ligId
 		hlTexture = _HLTEXTURE_SELECTION
 	}
 
-	hash := cells[0].Sgr.HashValue() // TODO: am i hashing on the right key? Should it be rune?
+	hash := cells[0].Sgr.HashValue()
 
 	ok := sr.fontCache.atlas.Render(sr, dstRect, rune(ligId), hash, hlTexture)
 	if ok {

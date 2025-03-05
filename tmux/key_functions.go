@@ -50,11 +50,11 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}
 
 		oldTerm := tmux.activeWindow.activePane.Term()
-		err := tmux.SelectWindow(windows[i].Id)
+		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-		windows[i].activePane.term.ShowCursor(false)
+		windows[i].activePane.Term().ShowCursor(false)
 		go func() {
 			// this is a kludge to avoid the cursor showing as you switch windows
 			time.Sleep(500 * time.Millisecond)
@@ -62,8 +62,8 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		}()
 	}
 
-	_selectCallback := func(i int) {
-		err := tmux.SelectWindow(windows[i].Id)
+	_chooseCallback := func(i int) {
+		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -71,13 +71,13 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 
 	activeWindow := tmux.activeWindow.Id
 	_cancelCallback := func(_ int) {
-		err := tmux.SelectWindow(activeWindow)
+		err := tmux.selectWindow(activeWindow)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 	}
 
-	tmux.renderer.DisplayMenu("Choose a window", windowNames, _highlightCallback, _selectCallback, _cancelCallback)
+	tmux.renderer.DisplayMenu("Choose a window", windowNames, _highlightCallback, _chooseCallback, _cancelCallback)
 	return nil
 }
 
@@ -97,7 +97,7 @@ func _fnKeySelectWindow(tmux *Tmux, i int) error {
 		return fmt.Errorf("there is not a window %d", i)
 	}
 
-	return tmux.SelectWindow(wins[i].Id)
+	return tmux.selectWindow(wins[i].Id)
 }
 
 func fnKeyLastPane(tmux *Tmux) error {
@@ -117,6 +117,31 @@ func fnKeyNextWindowAlert(tmux *Tmux) error {
 
 func fnKeyPreviousWindowAlert(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("previous-window -a"))
+	return err
+}
+
+func _fnKeySplitWindow(tmux *Tmux, flag string) error {
+	_, err := tmux.SendCommand([]byte("split-window " + flag))
+	go tmux.renderer.RefreshWindowList()
+	return err
+}
+func fnKeySplitWindowHorizontally(tmux *Tmux) error { return _fnKeySplitWindow(tmux, "-h") }
+func fnKeySplitWindowVertically(tmux *Tmux) error   { return _fnKeySplitWindow(tmux, "-v") }
+
+func _fnKeySelectPane(tmux *Tmux, flag string) error {
+	_, err := tmux.SendCommand([]byte("select-pane " + flag))
+	go tmux.renderer.RefreshWindowList()
+	return err
+}
+func fnKeySelectPaneUp(tmux *Tmux) error    { return _fnKeySelectPane(tmux, "-U") }
+func fnKeySelectPaneDown(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-D") }
+func fnKeySelectPaneLeft(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-L") }
+func fnKeySelectPaneRight(tmux *Tmux) error { return _fnKeySelectPane(tmux, "-R") }
+func fnKeySelectPaneLast(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-l") }
+
+func fnKeyTilePanes(tmux *Tmux) error {
+	_, err := tmux.SendCommand([]byte("select-layout -E"))
+	go tmux.renderer.RefreshWindowList()
 	return err
 }
 

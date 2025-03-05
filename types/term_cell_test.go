@@ -1,13 +1,9 @@
-package virtualterm
+package types
 
-import (
-	"testing"
-
-	"github.com/lmorg/mxtty/types"
-)
+import "testing"
 
 func TestCellGetSetElementXY(t *testing.T) {
-	tests := []*types.XY{
+	tests := []*XY{
 		{0, 0},
 		{1, 1},
 		{3, 7},
@@ -24,12 +20,13 @@ func TestCellGetSetElementXY(t *testing.T) {
 	}
 
 	for i, expected := range tests {
-		r := setElementXY(expected)
-		actual := getElementXY(r)
+		cell := new(Cell)
+		cell.Char = SetElementXY(expected)
+		actual := cell.GetElementXY()
 		if expected.X != actual.X || expected.Y != actual.Y {
 			t.Errorf("Mismatch in test %d", i)
-			t.Logf("Expected: X: %d, Y%d", expected.X, expected.Y)
-			t.Logf("Actual:   X: %d, Y%d", actual.X, actual.Y)
+			t.Logf("Expected: X: %d, Y: %d", expected.X, expected.Y)
+			t.Logf("Actual:   X: %d, Y: %d", actual.X, actual.Y)
 		}
 	}
 }

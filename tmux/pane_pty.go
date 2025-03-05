@@ -13,7 +13,17 @@ import (
 
 func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
-func (p *PaneT) Close()              { p.buf.Close() }
+func (p *PaneT) Close() {
+	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.Id, p.Title))
+
+	p.buf.Close()
+	p.tile.Term.Close()
+
+	delete(p.tmux.pane, p.Id)
+	delete(p.tmux.win[p.WindowId].panes, p.Id)
+
+	debug.Log(p)
+}
 
 func (p *PaneT) Write(b []byte) error {
 	if len(b) == 0 {
@@ -49,27 +59,39 @@ func (p *PaneT) _hotkey(b []byte) (bool, error) {
 	} else {
 		key = string(b)
 	}
-	debug.Log(key)
 
-	if p.prefixTtl.Before(time.Now()) {
+	if p.tmux.prefixTtl.Before(time.Now()) {
 		if key != p.tmux.keys.prefix {
 			// standard key, do nothing
 			return false, nil
 		}
 
 		// prefix key pressed
-		p.prefixTtl = time.Now().Add(2 * time.Second)
+		p.tmux.prefixTtl = time.Now().Add(2000 * time.Millisecond)
 		return true, nil
 	}
 
 	// run tmux function
 	fn, ok := p.tmux.keys.fnTable[key]
-	debug.Log(ok)
 	if !ok {
 		// no function to run, lets treat as standard key
-		p.prefixTtl = time.Now()
+		p.tmux.prefixTtl = time.Now()
 		return false, nil
 	}
 
+	// valid prefix key, so lets set a repeat key timer
+	p.tmux.prefixTtl = time.Now().Add(500 * time.Millisecond)
 	return true, fn.fn(p.tmux)
+}
+
+func (p *PaneT) Resize(size *types.XY) error {
+	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.Id, size.X, size.Y)
+	_, err := p.tmux.SendCommand([]byte(command))
+	if err != nil {
+		p.Width = int(size.X)
+		p.Height = int(size.Y)
+		return err
+	}
+
+	return p.tmux.RefreshClient(size)
 }

@@ -1,8 +1,6 @@
 package virtualterm
 
 import (
-	"fmt"
-
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/mattn/go-runewidth"
@@ -98,22 +96,19 @@ func (term *Term) writeToElement(r rune) (ok bool) {
 	return false
 }
 
-func (term *Term) appendScrollBuf() {
+func (term *Term) appendScrollBuf(n int) {
 	if term.IsAltBuf() {
 		return
 	}
 
-	if len(term._scrollBuf) < config.Config.Terminal.ScrollbackHistory {
-		term._scrollBuf = append(term._scrollBuf, term._normBuf[0])
-	} else {
-		term.deallocateRows(term._scrollBuf[0])
-		term._scrollBuf = append(term._scrollBuf[1:], term._normBuf[0])
+	term._scrollBuf = append(term._scrollBuf, term._normBuf[0:n]...)
+
+	if len(term._scrollBuf) > config.Config.Terminal.ScrollbackHistory {
+		term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-config.Config.Terminal.ScrollbackHistory:]
 	}
+
 	if term._scrollOffset > 0 {
-		term._scrollOffset++
-		if term._scrollMsg != nil {
-			term._scrollMsg.SetMessage(fmt.Sprintf("Viewing scrollback history. %d lines from end", term._scrollOffset))
-			//term.renderer.TriggerRedraw()
-		}
+		term._scrollOffset += n
+		term.updateScrollback()
 	}
 }

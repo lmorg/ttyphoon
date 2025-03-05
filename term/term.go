@@ -31,6 +31,7 @@ import (
 
 // Term is the display state of the virtual term
 type Term struct {
+	tile     *types.Tile
 	visible  bool
 	size     *types.XY
 	sgr      *types.Sgr
@@ -44,7 +45,6 @@ type Term struct {
 	_altBuf       types.Screen
 	_scrollBuf    types.Screen
 	_scrollOffset int
-	_scrollMsg    types.Notification
 
 	// smooth scroll
 	_ssCounter   int32
@@ -71,9 +71,10 @@ type Term struct {
 	_mouseButtonDown bool
 	_hasKeyPress     chan bool
 	_eventClose      chan bool
+	_eventClosed     bool // to avoid cyclic events
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
-	_rowId           uint64 //atomic.Uint64
+	_rowId           uint64 // atomic.Uint64
 
 	// search
 	_searchHighlight  bool
@@ -127,8 +128,9 @@ func (term *Term) lfRedraw() {
 }
 
 // NewTerminal creates a new virtual term
-func NewTerminal(renderer types.Renderer, size *types.XY, visible bool) *Term {
+func NewTerminal(tile *types.Tile, renderer types.Renderer, size *types.XY, visible bool) {
 	term := &Term{
+		tile:         tile,
 		renderer:     renderer,
 		size:         size,
 		_hasKeyPress: make(chan bool),
@@ -136,8 +138,7 @@ func NewTerminal(renderer types.Renderer, size *types.XY, visible bool) *Term {
 	}
 
 	term.reset(size)
-
-	return term
+	tile.Term = term
 }
 
 func (term *Term) Start(pty types.Pty) {
@@ -187,11 +188,6 @@ func (term *Term) makeScreen() types.Screen {
 const UINT64_CAP = ^uint64(0)
 
 func (term *Term) _nextRowId() uint64 {
-	/*id := term._rowId.Add(1)
-	if id == ^UINT64_CAP {
-		term._rowId.Store(0)
-	}
-	return id*/
 	if term._rowId == UINT64_CAP {
 		term._rowId = 0
 	} else {
@@ -252,9 +248,8 @@ func (term *Term) curPos() *types.XY {
 	switch {
 	case term._curPos.Y < 0:
 		y = 0
-	case term._curPos.Y > term.size.Y:
+	case term._curPos.Y >= term.size.Y: // should this be >= or > ??
 		y = term.size.Y - 1
-		//term.lineFeed()
 	default:
 		y = term._curPos.Y
 	}
@@ -310,7 +305,12 @@ func (term *Term) hasKeyPress() {
 }
 
 func (term *Term) Close() {
-	term._eventClose <- true
+	if !term._eventClosed { // to avoid cyclic events
+		go func() {
+			term._eventClose <- true // to kill any event loops
+		}()
+		//term.reset(&types.XY{1, 1})
+	}
 }
 
 func (term *Term) Reply(b []byte) {
@@ -348,6 +348,16 @@ func (term *Term) visibleScreen() types.Screen {
 	}
 
 	return screen
+}
+
+func (term *Term) updateScrollback() {
+	if term._scrollOffset > len(term._scrollBuf) {
+		term._scrollOffset = len(term._scrollBuf)
+	}
+
+	if term._scrollOffset < 0 {
+		term._scrollOffset = 0
+	}
 }
 
 func (term *Term) HasFocus(state bool) {

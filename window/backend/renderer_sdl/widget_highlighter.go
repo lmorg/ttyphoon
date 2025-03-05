@@ -89,7 +89,7 @@ func (hl *highlightWidgetT) setMode(mode _highlightMode) {
 func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	if evt.State == sdl.RELEASED {
 		sr.StatusBarText("")
-		sr.term.MouseClick(nil, 0, 0, false, func() {})
+		sr.termWin.Active.Term.MouseClick(nil, 0, 0, false, func() {})
 	}
 
 	hl.button = 0
@@ -107,7 +107,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 	case _HIGHLIGHT_MODE_FULL_LINES:
 		normaliseRect(hl.rect)
 		rect := sr.rectPxToCells(hl.rect)
-		lines := sr.term.CopyLines(rect.Y, rect.H)
+		lines := sr.termWin.Active.Term.CopyLines(rect.Y, rect.H)
 		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
 		count := bytes.Count(lines, []byte{'\n'}) + 1
@@ -116,7 +116,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 	case _HIGHLIGHT_MODE_SQUARE:
 		normaliseRect(hl.rect)
 		rect := sr.rectPxToCells(hl.rect)
-		lines := sr.term.CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
+		lines := sr.termWin.Active.Term.CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
 		sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%dx%d grid has been copied to clipboard", rect.W-rect.X+1, rect.H-rect.Y+1))
@@ -125,10 +125,11 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 		rect := sr.rectPxToCells(hl.rect)
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
 			sr.highlighter = nil
-			sr.term.MouseClick(sr.convertPxToCellXY(evt.X, evt.Y), uint8(evt.Button), evt.Clicks, evt.State == sdl.PRESSED, func() {})
+			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
+			sr.termWin.Active.Term.MouseClick(pos, uint8(evt.Button), evt.Clicks, evt.State == sdl.PRESSED, func() {})
 			return
 		}
-		lines := sr.term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
+		lines := sr.termWin.Active.Term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
 		count := bytes.Count(lines, []byte{'\n'}) + 1

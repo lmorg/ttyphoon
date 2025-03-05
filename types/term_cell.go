@@ -18,7 +18,7 @@ func (c *Cell) Clear() {
 func (c *Cell) Rune() rune {
 	switch {
 	case c.Element != nil:
-		return c.Element.Rune(c.ElementXY())
+		return c.Element.Rune(c.GetElementXY())
 
 	case c.Char == 0:
 		return ' '
@@ -28,12 +28,22 @@ func (c *Cell) Rune() rune {
 	}
 }
 
-const cellElementXyMask = (^int32(0)) << 16
+const (
+	_CELL_ELEMENTXY_MASK    = (^int32(0)) << 16
+	_CELL_ELEMENTXY_CEILING = int32(^uint16(0) >> 1)
+)
 
-func (c *Cell) ElementXY() *XY {
+func SetElementXY(xy *XY) rune {
+	if xy.X > _CELL_ELEMENTXY_CEILING || xy.Y > _CELL_ELEMENTXY_CEILING {
+		panic("TODO: proper error handling")
+	}
+	return (xy.X << 16) | xy.Y
+}
+
+func (c *Cell) GetElementXY() *XY {
 	return &XY{
 		X: c.Char >> 16,
-		Y: c.Char &^ cellElementXyMask,
+		Y: c.Char &^ _CELL_ELEMENTXY_MASK,
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/debug"
@@ -48,10 +47,10 @@ import (
 	pane_start_command         Command pane started with
 	pane_start_path            Path pane started with
 	pane_synchronized          1 if pane is synchronized
-	PaneTabs                  Pane tab positions
-	PaneTitle             #T  Title of pane (can be set by application)
-	PaneTop                   Top of pane
-	PaneTty                   Pseudo terminal of pane
+	pane_tabs                  Pane tab positions
+	pane_title             #T  Title of pane (can be set by application)
+	pane_top                   Top of pane
+	pane_tty                   Pseudo terminal of pane
 	pane_unseen_changes        1 if there were changes in pane while in mode
 	pane_width                 Width of pane
 */
@@ -59,19 +58,19 @@ import (
 var CMD_LIST_PANES = "list-panes"
 
 type PaneT struct {
-	Title     string `tmux:"PaneTitle"`
-	Id        string `tmux:"pane_id"`
-	Width     int    `tmux:"pane_width"`
-	Height    int    `tmux:"pane_height"`
-	Active    bool   `tmux:"?pane_active,true,false"`
-	WindowId  string `tmux:"window_id"`
-	tmux      *Tmux
-	buf       *runebuf.Buf
-	prefixTtl time.Time
-	term      types.Term
+	Title    string `tmux:"PaneTitle"`
+	Id       string `tmux:"pane_id"`
+	Width    int    `tmux:"pane_width"`
+	Height   int    `tmux:"pane_height"`
+	Active   bool   `tmux:"?pane_active,true,false"`
+	WindowId string `tmux:"window_id"`
+	tmux     *Tmux
+	tile     *types.Tile
+	buf      *runebuf.Buf
+	closed   bool
 }
 
-func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) error {
+func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 	panes, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(PaneT{}), "-s")
 	if err != nil {
 		return err
@@ -80,6 +79,7 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) erro
 	for i := range panes.([]any) {
 		pane := panes.([]any)[i].(*PaneT)
 		pane.tmux = tmux
+		pane.tile = new(types.Tile)
 
 		pane.buf = runebuf.New()
 		debug.Log(pane)
@@ -89,9 +89,8 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) erro
 		}
 		tmux.pane[pane.Id] = pane
 
-		term := virtualterm.NewTerminal(renderer, size, false)
-		pane.term = term
-		term.Start(pane)
+		virtualterm.NewTerminal(pane.tile, renderer, &types.XY{int32(pane.Width), int32(pane.Height)}, false)
+		pane.tile.Term.Start(pane)
 
 		command := fmt.Sprintf("capture-pane -J -e -p -t %s", pane.Id)
 		resp, err := tmux.SendCommand([]byte(command))
@@ -115,37 +114,37 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer, size *types.XY) erro
 	return nil
 }
 
-func (tmux *Tmux) newPane(paneId string) *PaneT {
+func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	pane := &PaneT{
-		Id:   paneId,
+		Id:   info.Id,
 		tmux: tmux,
+		tile: new(types.Tile),
 		buf:  runebuf.New(),
 	}
 
-	term := virtualterm.NewTerminal(tmux.renderer, tmux.renderer.GetWindowSizeCells(), false)
-	term.Start(pane)
-	pane.term = term
+	virtualterm.NewTerminal(
+		pane.tile, tmux.renderer,
+		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
+		false)
+
+	pane.tile.Term.Start(pane)
 
 	tmux.pane[pane.Id] = pane
-
-	go pane._updateInfo(tmux.renderer)
 
 	return pane
 }
 
-func (pane *PaneT) _updateInfo(renderer types.Renderer) {
-	err := pane.tmux.updatePaneInfo(pane.Id)
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
-}
-
 type paneInfo struct {
 	Id        string `tmux:"pane_id"`
-	Title     string `tmux:"PaneTitle"`
+	Title     string `tmux:"pane_title"`
 	Width     int    `tmux:"pane_width"`
 	Height    int    `tmux:"pane_height"`
+	PosLeft   int    `tmux:"pane_left"`
+	PosTop    int    `tmux:"pane_top"`
+	PosRight  int    `tmux:"pane_right"`
+	PosBottom int    `tmux:"pane_bottom"`
 	Active    bool   `tmux:"?pane_active,true,false"`
+	Dead      bool   `tmux:"?pane_dead,true,false"`
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
 }
@@ -168,7 +167,6 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 	}
 
 	for i := range panes {
-
 		info, ok := panes[i].(*paneInfo)
 		if !ok {
 			return fmt.Errorf("expecting info on a pane, instead got %T", info)
@@ -176,16 +174,33 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 
 		pane, ok := tmux.pane[info.Id]
 		if !ok {
-			pane = tmux.newPane(info.Id)
+			pane = tmux.newPane(info)
 		}
+
+		/*if info.Dead {
+			pane.Close()
+			continue
+		}*/
+
+		if pane.closed {
+			continue
+		}
+
 		pane.Title = info.Title
 		pane.Width = info.Width
 		pane.Height = info.Height
 		pane.Active = info.Active
 		pane.WindowId = info.WindowId
-		pane.term.MakeVisible(info.WinActive)
-		pane.term.HasFocus(info.Active)
-		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
+		pane.tile.PaneId = info.Id
+		pane.tile.Left = int32(info.PosLeft)
+		pane.tile.Top = int32(info.PosTop)
+		pane.tile.Right = int32(info.PosRight)
+		pane.tile.Bottom = int32(info.PosBottom)
+		if pane.tile.Term != nil {
+			pane.tile.Term.MakeVisible(info.WinActive)
+			pane.tile.Term.HasFocus(info.Active)
+			pane.tile.Term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
+		}
 
 		tmux.win[pane.WindowId].panes[pane.Id] = pane
 		if pane.Active {
@@ -196,22 +211,54 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 	return nil
 }
 
-func (p *PaneT) Resize(size *types.XY) error {
-	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.Id, size.X, size.Y)
-	_, err := p.tmux.SendCommand([]byte(command))
-	if err != nil {
-		p.Width = int(size.X)
-		p.Height = int(size.Y)
-		return err
-	}
-
-	return p.tmux.RefreshClient(size)
-}
-
 func (tmux *Tmux) ActivePane() *PaneT {
 	return tmux.activeWindow.activePane
 }
 
 func (p *PaneT) Term() types.Term {
-	return p.term
+	return p.tile.Term
+}
+
+func (tmux *Tmux) SelectPane(paneId string) error {
+	command := fmt.Sprintf("select-pane -t %s", paneId)
+	_, err := tmux.SendCommand([]byte(command))
+
+	go tmux.UpdateSession()
+
+	return err
+}
+
+func (tmux *Tmux) paneExited() error {
+	v, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s")
+	if err != nil {
+		return err
+	}
+
+	panes, ok := v.([]any)
+	if !ok {
+		return fmt.Errorf("expecting an array of panes, instead got %T", v)
+	}
+
+	for _, pane := range tmux.pane {
+		pane.closed = true
+	}
+
+	for i := range panes {
+		info, ok := panes[i].(*paneInfo)
+		if !ok {
+			return fmt.Errorf("expecting info on a pane, instead got %T", info)
+
+		}
+
+		pane, ok := tmux.pane[info.Id]
+		if !ok {
+			continue // ignore new panes
+		}
+
+		pane.closed = false
+	}
+
+	go tmux.renderer.RefreshWindowList()
+
+	return nil
 }

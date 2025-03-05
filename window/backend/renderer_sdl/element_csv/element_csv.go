@@ -14,6 +14,7 @@ import (
 
 type ElementCsv struct {
 	renderer   types.Renderer
+	tile       *types.Tile
 	size       types.XY
 	headings   [][]rune // columns
 	table      [][]rune // rendered rows
@@ -48,8 +49,8 @@ var arrowGlyph = map[bool]rune{
 
 const notifyLoading = "Loading CSV. Line %d..."
 
-func New(renderer types.Renderer) *ElementCsv {
-	el := &ElementCsv{renderer: renderer}
+func New(renderer types.Renderer, tile *types.Tile) *ElementCsv {
+	el := &ElementCsv{renderer: renderer, tile: tile}
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines))
 
@@ -105,7 +106,7 @@ func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
 	if params.CreateHeadings {
 		headings = make([]string, len(recs[0]))
 		for i := range headings {
-			headings[i] = string('A' + i)
+			headings[i] = string('A' + i) // A, B, C, D, etc...
 		}
 	}
 
@@ -143,7 +144,7 @@ func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
 		return fmt.Errorf("cannot commit sqlite3 transaction: %v", err)
 	}
 
-	el.size = *el.renderer.GetTermSize()
+	el.size = *el.tile.Term.GetSize()
 	if el.size.Y > 8 {
 		el.size.Y -= 5
 	}
@@ -194,7 +195,7 @@ func (el *ElementCsv) Draw(size *types.XY, pos *types.XY) {
 	cell.Sgr.Bitwise.Set(types.SGR_INVERT)
 	for i := range el.top {
 		cell.Char = el.top[i]
-		el.renderer.PrintCell(cell, relPos)
+		el.renderer.PrintCell(el.tile, cell, relPos)
 		relPos.X++
 	}
 
@@ -213,7 +214,7 @@ func (el *ElementCsv) Draw(size *types.XY, pos *types.XY) {
 	cell.Sgr.Fg = types.SGR_COLOUR_RED
 
 	cell.Char = arrowGlyph[el.orderDesc]
-	el.renderer.PrintCell(cell, relPos)
+	el.renderer.PrintCell(el.tile, cell, relPos)
 
 	cell.Sgr.Fg = types.SGR_DEFAULT.Fg
 
@@ -226,13 +227,13 @@ skipOrderGlyph:
 		relPos.X = 0
 		for x := -el.renderOffset; x+el.renderOffset < el.size.X && int(x) < len(el.table[y]); x++ {
 			cell.Char = el.table[y][x]
-			el.renderer.PrintCell(cell, relPos)
+			el.renderer.PrintCell(el.tile, cell, relPos)
 			relPos.X++
 		}
 		relPos.Y++
 	}
 
-	el.renderer.DrawTable(pos, int32(len(el.table)), el.boundaries)
+	el.renderer.DrawTable(el.tile, pos, int32(len(el.table)), el.boundaries)
 
 	if el.highlight != nil {
 		var start, end int32
@@ -249,7 +250,7 @@ skipOrderGlyph:
 			}
 		}
 
-		el.renderer.DrawHighlightRect(
+		el.renderer.DrawHighlightRect(el.tile,
 			&types.XY{X: start, Y: el.highlight.Y + pos.Y},
 			&types.XY{X: end, Y: 1},
 		)

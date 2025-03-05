@@ -1,6 +1,8 @@
 package virtualterm
 
 import (
+	"strings"
+
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
@@ -29,18 +31,17 @@ func (term *Term) Resize(size *types.XY) {
 
 	case yDiff > 0:
 		// grow
-		for i := 0; i < yDiff; i++ {
-			term._normBuf = append(term._normBuf, term.makeRow())
-		}
-		for i := 0; i < yDiff; i++ {
-			term._altBuf = append(term._altBuf, term.makeRow())
-		}
+		term._resizeFromTop(yDiff)
 
 	case yDiff < 0:
 		// shrink
-		for i := 0; i < -yDiff; i++ {
-			term.appendScrollBuf()
+		fromBottom := term._resizeFromBottom(-yDiff)
+		if fromBottom > 0 {
+			term._normBuf = term._normBuf[:len(term._normBuf)-fromBottom]
+			term._altBuf = term._altBuf[:len(term._altBuf)-fromBottom]
+			yDiff += fromBottom
 		}
+		term.appendScrollBuf(-yDiff)
 		term._normBuf = term._normBuf[-yDiff:]
 		term._altBuf = term._altBuf[-yDiff:]
 	}
@@ -48,6 +49,51 @@ func (term *Term) Resize(size *types.XY) {
 	term.resizePty()
 
 	term._mutex.Unlock()
+}
+
+func (term *Term) _resizeFromTop(max int) {
+	for i := 0; i < max; i++ {
+		term._altBuf = append(term._altBuf, term.makeRow())
+	}
+
+	if len(term._scrollBuf) > max {
+		term._normBuf = append(term._scrollBuf[len(term._scrollBuf)-max:], term._normBuf...)
+		term._scrollBuf = term._scrollBuf[:len(term._scrollBuf)-max]
+		if !term.IsAltBuf() {
+			term._curPos.Y += int32(max)
+		}
+		return
+	}
+
+	l := len(term._scrollBuf)
+	offset := max - l
+	term._normBuf = append(term._scrollBuf, term._normBuf...)
+	term._scrollBuf = types.Screen{}
+	for i := 0; i < offset; i++ {
+		term._normBuf = append(term._normBuf, term.makeRow())
+	}
+
+	if !term.IsAltBuf() {
+		term._curPos.Y += int32(l)
+	}
+}
+
+func (term *Term) _resizeFromBottom(max int) int {
+	if len(term._scrollBuf) > 0 || term.IsAltBuf() {
+		return 0
+	}
+
+	empty := strings.Repeat(" ", int(term.size.X))
+	var i int
+	for y := len(term._normBuf) - 1; i < max; y-- {
+		if term._normBuf[y].String() != empty {
+			//debug.Log(i)
+			return i
+		}
+		i++
+	}
+
+	return i
 }
 
 func (term *Term) _resizeNestedScreenWidth(screen types.Screen, xDiff int32) {

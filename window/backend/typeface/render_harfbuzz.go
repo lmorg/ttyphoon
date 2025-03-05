@@ -23,24 +23,36 @@ import (
 
 var _FONT_FAMILIES = []string{"monospace", "emoji", "math", "fantasy"}
 
+type styleT int
+
 const (
-	_STYLE_NORMAL = 0
-	_STYLE_BOLD   = 1 << iota
+	_STYLE_NORMAL styleT = 0
+	_STYLE_BOLD   styleT = 1 << iota
 	_STYLE_ITALIC
 	_STYLE_FAINT
+	_STYLE_UNDERLINE
+	_STYLE_STRIKETHROUGH
 )
+
+func (f styleT) Is(flag styleT) bool {
+	return f&flag != 0
+}
+
+func (f styleT) TypeFace() styleT {
+	return f &^ (_STYLE_UNDERLINE | _STYLE_STRIKETHROUGH)
+}
 
 type fontHarfbuzz struct {
 	size  *types.XY
-	face  map[int]*font.Face
-	style int
+	face  map[styleT]*font.Face
+	style styleT
 	fsize float32
 	fmap  *fontscan.FontMap
 	sdl   *fontSdl // just needed while I figure out how to do everything in harfbuzz
 }
 
 func (f *fontHarfbuzz) Init() error {
-	f.face = make(map[int]*font.Face)
+	f.face = make(map[styleT]*font.Face)
 	f.fsize = float32(config.Config.TypeFace.FontSize)
 	f.fmap = fontscan.NewFontMap(log.Default())
 
@@ -64,9 +76,9 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	}
 
 	f.openAsset(assets.TYPEFACE, _STYLE_NORMAL)
+	f.openAsset(assets.TYPEFACE_I, _STYLE_ITALIC)
 	f.openAsset(assets.TYPEFACE_B, _STYLE_BOLD)
 	f.openAsset(assets.TYPEFACE_BI, _STYLE_BOLD|_STYLE_ITALIC)
-	f.openAsset(assets.TYPEFACE_I, _STYLE_ITALIC)
 	f.openAsset(assets.TYPEFACE_L, _STYLE_FAINT)
 	f.openAsset(assets.TYPEFACE_LI, _STYLE_FAINT|_STYLE_ITALIC)
 
@@ -79,7 +91,7 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	return f.sdl.Open("", size)
 }
 
-func (f *fontHarfbuzz) openAsset(name string, style int) {
+func (f *fontHarfbuzz) openAsset(name string, style styleT) {
 	var (
 		res font.Resource
 		err error
@@ -152,27 +164,37 @@ func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
 	query := fontscan.Query{Families: _FONT_FAMILIES}
 	f.style = _STYLE_NORMAL
 
-	if style.Is(types.SGR_BOLD) {
-		query.Aspect.Weight = font.WeightBold
-		f.style |= _STYLE_BOLD
+	if style.Is(types.SGR_ITALIC) {
+		f.style |= _STYLE_ITALIC
+		query.Aspect.Style = font.StyleItalic
 	}
 
-	if style.Is(types.SGR_ITALIC) {
-		query.Aspect.Style = font.StyleItalic
-		f.style |= _STYLE_ITALIC
+	if style.Is(types.SGR_BOLD) {
+		f.style |= _STYLE_BOLD
+		query.Aspect.Weight = font.WeightBold
 	}
 
 	if style.Is(types.SGR_FAINT) {
-		query.Aspect.Weight = font.WeightLight
 		f.style |= _STYLE_FAINT
+		query.Aspect.Weight = font.WeightLight
+	}
+
+	if style.Is(types.SGR_UNDERLINE) {
+		f.style |= _STYLE_UNDERLINE
+	}
+
+	if style.Is(types.SGR_STRIKETHROUGH) {
+		f.style |= _STYLE_STRIKETHROUGH
 	}
 
 	f.fmap.SetQuery(query)
 }
 
 func (f *fontHarfbuzz) getFace(ch rune) *font.Face {
-	if f.face[f.style] != nil && f.glyphIsProvided(f.style, ch) {
-		return f.face[f.style]
+	style := f.style.TypeFace()
+
+	if f.face[style] != nil && f.glyphIsProvided(ch) {
+		return f.face[style]
 	}
 
 	return f.fmap.ResolveFace(ch)
@@ -191,15 +213,40 @@ func (f *fontHarfbuzz) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...
 
 	_ = textRenderer.DrawString(string(ch), img, f.getFace(ch[0]))
 
-	return sdl.CreateRGBSurfaceWithFormatFrom(
+	surface, err := sdl.CreateRGBSurfaceWithFormatFrom(
 		unsafe.Pointer(&img.Pix[0]),
 		textWidth, cellRect.H,
 		32, textWidth*4, uint32(sdl.PIXELFORMAT_RGBA32),
 	)
+
+	if err != nil || !f.style.Is(_STYLE_UNDERLINE) {
+		return surface, err
+	}
+
+	renderer, err := sdl.CreateSoftwareRenderer(surface)
+	if err != nil {
+		return nil, err
+	}
+
+	size := f.GetSize()
+	y := size.Y - 1
+
+	if f.style.Is(_STYLE_UNDERLINE) {
+		_ = renderer.SetDrawColor(fg.Red, fg.Green, fg.Blue, fg.Alpha)
+		_ = renderer.DrawLine(0, y, size.X, y)
+	}
+
+	if f.style.Is(_STYLE_STRIKETHROUGH) {
+		_ = renderer.SetDrawColor(fg.Red, fg.Green, fg.Blue, fg.Alpha)
+		_ = renderer.DrawLine(0, y, size.X, y)
+	}
+
+	renderer.Present()
+	return surface, nil
 }
 
-func (f *fontHarfbuzz) glyphIsProvided(_ int, r rune) bool {
-	_, found := f.face[f.style].NominalGlyph(r)
+func (f *fontHarfbuzz) glyphIsProvided(r rune) bool {
+	_, found := f.face[f.style.TypeFace()].NominalGlyph(r)
 	return found
 }
 

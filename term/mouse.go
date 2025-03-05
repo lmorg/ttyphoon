@@ -1,7 +1,6 @@
 package virtualterm
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/lmorg/mxtty/debug"
@@ -86,7 +85,7 @@ func (term *Term) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed 
 		return
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].ElementXY(), button, clicks, pressed, callback)
+	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, pressed, callback)
 }
 
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
@@ -100,7 +99,7 @@ func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
 	}
 
 	screen[pos.Y].Cells[pos.X].Element.MouseWheel(
-		screen[pos.Y].Cells[pos.X].ElementXY(),
+		screen[pos.Y].Cells[pos.X].GetElementXY(),
 		movement,
 		func() { term._mouseWheelCallback(movement) },
 	)
@@ -121,33 +120,6 @@ func (term *Term) _mouseWheelCallback(movement *types.XY) {
 
 	term._scrollOffset += int(movement.Y * 2)
 	term.updateScrollback()
-}
-
-func (term *Term) updateScrollback() {
-	if term._scrollOffset > len(term._scrollBuf) {
-		term._scrollOffset = len(term._scrollBuf)
-	}
-
-	if term._scrollOffset < 0 {
-		term._scrollOffset = 0
-	}
-
-	if term._scrollOffset == 0 {
-		//term.ShowCursor(true)
-		if term._scrollMsg != nil {
-			term._scrollMsg.Close()
-			term._scrollMsg = nil
-		}
-
-	} else {
-		//term.ShowCursor(false)
-		msg := fmt.Sprintf("Viewing scrollback history. %d lines from end", term._scrollOffset)
-		if term._scrollMsg == nil {
-			term._scrollMsg = term.renderer.DisplaySticky(types.NOTIFY_SCROLL, msg)
-		} else {
-			term._scrollMsg.SetMessage(msg)
-		}
-	}
 }
 
 func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
@@ -199,7 +171,7 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		term._mouseIn = screen[pos.Y].Cells[pos.X].Element
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].ElementXY(), movement, callback)
+	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].GetElementXY(), movement, callback)
 }
 
 func (term *Term) MousePosition(pos *types.XY) {
@@ -217,7 +189,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 
 		if len(screen[pos.Y].Hidden) > 0 {
 			term._mousePosRenderer.Set(func() {
-				term.renderer.DrawRectWithColour(
+				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
 					&types.XY{X: term.size.X, Y: 1},
 					types.COLOUR_FOLDED, true,
@@ -264,7 +236,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 
 	drawRect:
 		term._mousePosRenderer.Set(func() {
-			term.renderer.DrawRectWithColour(
+			term.renderer.DrawRectWithColour(term.tile,
 				&types.XY{X: 0, Y: block[0]},
 				&types.XY{X: term.size.X, Y: block[1]},
 				colour, true,
@@ -279,7 +251,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 			cursor.Hand()
 			term.renderer.StatusBarText("[Click] Fold branch")
 			term._mousePosRenderer.Set(func() {
-				term.renderer.DrawRectWithColour(
+				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: pos.X, Y: pos.Y},
 					&types.XY{X: term.size.X - pos.X, Y: height - pos.Y},
 					types.COLOUR_FOLDED, false,

@@ -14,6 +14,7 @@ import (
 
 type ElementImage struct {
 	renderer   types.Renderer
+	tile       *types.Tile
 	parameters parametersT
 	size       *types.XY
 	load       func([]byte, *types.XY) (types.Image, error)
@@ -28,8 +29,8 @@ type parametersT struct {
 	Height   int32
 }
 
-func New(renderer types.Renderer, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
-	return &ElementImage{renderer: renderer, load: loadFn}
+func New(renderer types.Renderer, tile *types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
+	return &ElementImage{renderer: renderer, tile: tile, load: loadFn}
 }
 
 func (el *ElementImage) Generate(apc *types.ApcSlice) error {
@@ -79,7 +80,7 @@ func (el *ElementImage) Draw(size *types.XY, pos *types.XY) {
 		size = el.size
 	}
 
-	el.image.Draw(size, pos)
+	el.image.Draw(size, &types.XY{pos.X + el.tile.Left, pos.Y + el.tile.Top})
 }
 
 func (el *ElementImage) Rune(_ *types.XY) rune {
@@ -119,11 +120,13 @@ func (el *ElementImage) MouseClick(_ *types.XY, button uint8, _ uint8, pressed b
 func (el *ElementImage) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	callback()
 }
+
 func (el *ElementImage) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Open image full screen")
 	cursor.Hand()
 	callback()
 }
+
 func (el *ElementImage) MouseOut() {
 	el.renderer.StatusBarText("")
 	cursor.Arrow()

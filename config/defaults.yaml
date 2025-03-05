@@ -5,7 +5,7 @@ Tmux:
   # would prefer to use the vanilla tmux UI.
   # If `tmux` executable is not in $PATH then this terminal emulator will
   # revert to the $SHELLs defined below
-  Enabled: true 
+  Enabled: true
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
@@ -15,7 +15,7 @@ Shell:
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
-  ScrollbackHistory: 100000
+  ScrollbackHistory: 10000
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view

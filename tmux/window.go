@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/types"
 )
 
 /*
@@ -165,7 +166,53 @@ func (tmux *Tmux) RenderWindows() []*WindowT {
 	return wins
 }
 
+func (tmux *Tmux) ActiveWindow() *types.TermWindow {
+	_ = tmux.updatePaneInfo("")
+
+	tw := new(types.TermWindow)
+
+	for _, pane := range tmux.activeWindow.panes {
+		if pane.closed {
+			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.Id))
+			go pane.Close()
+			continue
+		}
+		tw.Tiles = append(tw.Tiles, pane.tile)
+	}
+
+	tw.Active = tmux.activeWindow.ActivePane().tile
+
+	debug.Log(tw)
+
+	return tw
+}
+
 func (win *WindowT) ActivePane() *PaneT {
+	if !win.activePane.closed {
+		return win.activePane
+	}
+
+	err := fnKeySelectPaneLast(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	err = fnKeySelectPaneUp(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	err = fnKeySelectPaneLeft(win.activePane.tmux)
+	if err == nil && !win.activePane.closed {
+		return win.activePane
+	}
+
+	if err != nil {
+		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	} else {
+		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot find an active pane")
+	}
+
 	return win.activePane
 }
 
@@ -175,21 +222,32 @@ func (win *WindowT) Rename(name string) error {
 	return err
 }
 
-func (tmux *Tmux) SelectWindow(winId string) error {
-	size := tmux.renderer.GetWindowSizeCells()
+func (tmux *Tmux) SelectAndResizeWindow(winId string, size *types.XY) error {
 	command := fmt.Sprintf("resize-window -t %s -x %d -y %d", winId, size.X, size.Y)
-	_, _ = tmux.SendCommand([]byte(command))
-	/*if err != nil {
-		p.Width = int(size.X)
-		p.Height = int(size.Y)
-		return err
-	}*/
-
-	command = fmt.Sprintf("select-window -t %s", winId)
 	_, err := tmux.SendCommand([]byte(command))
 	if err != nil {
 		return err
 	}
+
+	tmux.selectWindow(winId)
+
+	for _, pane := range tmux.win[winId].panes {
+		_ = pane.Resize(&types.XY{X: int32(pane.Width), Y: int32(pane.Height)})
+	}
+
+	return err
+}
+
+func (tmux *Tmux) selectWindow(winId string) error {
+	command := fmt.Sprintf("select-window -t %s", winId)
+	_, err := tmux.SendCommand([]byte(command))
+
+	// old window
+	tmux.activeWindow.Active = false
+
+	// new window
+	tmux.activeWindow = tmux.win[winId]
+	tmux.activeWindow.Active = true
 
 	go tmux.UpdateSession()
 

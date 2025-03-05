@@ -24,8 +24,8 @@ func (sr *sdlRender) renderFooter() {
 
 	rect := &sdl.Rect{
 		X: 0,
-		Y: (sr.term.GetSize().Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
-		W: (sr.term.GetSize().X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
+		Y: (sr.winCellSize.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
+		W: (sr.winCellSize.X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
 		H: (sr.footer * sr.glyphSize.Y) + (_PANE_TOP_MARGIN * 2),
 	}
 
@@ -35,14 +35,21 @@ func (sr *sdlRender) renderFooter() {
 
 	sr.restoreRendererTexture()
 
-	pos := &types.XY{Y: sr.term.GetSize().Y}
+	pos := &types.XY{Y: sr.winCellSize.Y}
 
 	if !config.Config.Window.StatusBar {
 		goto tmuxIntegration
 	}
 
 	if sr.footerText == "" {
-		sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
+		if sr.termWin == nil {
+			sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
+		} else {
+			pane := sr.tmux.ActivePane()
+			//pane := sr.windowTabs.windows[sr.windowTabs.active].ActivePane()
+			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search%s", pane.Id, pane.Title, sr._footerHotkeyMessage())
+
+		}
 	}
 
 	sr._footerRenderStatusBar(pos)
@@ -77,7 +84,7 @@ func (sr *sdlRender) _footerHotkeyMessage() string {
 }
 
 func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {
-	footer := make([]*types.Cell, sr.term.GetSize().X)
+	footer := make([]*types.Cell, sr.winCellSize.X)
 	for i := range footer {
 		footer[i] = new(types.Cell)
 	}
@@ -89,7 +96,7 @@ func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {
 		footer[i].Sgr = types.SGR_DEFAULT.Copy()
 	}
 
-	sr.PrintRow(footer[:i], pos)
+	sr.PrintRow(&sr.winTile, footer[:i], pos)
 }
 
 func tabListNewCell(r rune) *types.Cell {
@@ -136,8 +143,8 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 }
 
 func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
-	sr.PrintRow(sr.windowTabs.cells, pos)
-	sr.DrawTable(sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
+	sr.PrintRow(&sr.winTile, sr.windowTabs.cells, pos)
+	sr.DrawTable(&sr.winTile, sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
 
 	var (
 		topLeftCellX     = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.active]
@@ -177,4 +184,38 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 		H: (bottomRightCellY * sr.glyphSize.Y),
 	}
 	sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
+}
+
+func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButtonEvent) {
+	if evt.State == sdl.RELEASED {
+		return
+	}
+
+	x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
+	for i := range sr.windowTabs.boundaries {
+		if x < sr.windowTabs.boundaries[i] {
+			switch evt.Clicks {
+			case 1:
+				if i == 0 {
+					return
+				}
+				sr.selectWindow(i - 1)
+
+			default: // 2 or more
+				if i == 0 {
+					return
+				}
+				sr.DisplayInputBox("Please enter a new name for this window", sr.windowTabs.windows[i-1].Name, func(name string) {
+					err := sr.windowTabs.windows[i-1].Rename(name)
+					if err != nil {
+						sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+				})
+			}
+			return
+		}
+	}
+	if evt.Clicks == 2 {
+		sr.tmux.NewWindow()
+	}
 }

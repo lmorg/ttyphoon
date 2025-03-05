@@ -14,7 +14,6 @@ type typefaceRenderer interface {
 	GetSize() *types.XY
 	SetStyle(types.SgrFlag)
 	RenderGlyphs(*types.Colour, *sdl.Rect, ...rune) (*sdl.Surface, error)
-	glyphIsProvided(int, rune) bool
 	Deprecated_GetFont() *ttf.Font
 	Close()
 }

@@ -54,7 +54,6 @@ func (term *Term) eraseScrollBack() {
 	debug.Log(term.curPos())
 
 	term._scrollOffset = 0
-	term._scrollMsg = nil
 
 	term.deallocateRows(term._scrollBuf...)
 	term._scrollBuf = types.Screen{}

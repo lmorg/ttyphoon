@@ -63,6 +63,9 @@ func Initialise() (types.Renderer, *types.XY) {
 
 	sr.font = typeface.Deprecated_GetFont()
 	sr.glyphSize = typeface.GetSize()
+	_PANE_BLOCK_HIGHLIGHT = sr.glyphSize.X / 2
+	_PANE_BLOCK_FOLDED = sr.glyphSize.X
+	_PANE_LEFT_MARGIN = _PANE_LEFT_MARGIN_OUTER + _PANE_BLOCK_FOLDED
 
 	sr.window.SetMinimumSize(
 		(40*sr.glyphSize.X)+(_PANE_LEFT_MARGIN),
@@ -154,13 +157,13 @@ func setLghtOrDarkMode() {
 	}
 }
 
-func (sr *sdlRender) Start(term types.Term, tmuxClient any) {
+func (sr *sdlRender) Start(termWin *types.TermWindow, tmuxClient any) {
 	switch tmuxClient.(type) {
 	case *tmux.Tmux:
 		sr.tmux = tmuxClient.(*tmux.Tmux)
 	}
 
-	sr.term = term
+	sr.termWin = termWin
 
 	sr.registerHotkey()
 	go sr.refreshInterval()

@@ -62,9 +62,25 @@ func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) 
 	return fg, bg
 }
 
-func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
-	if cell.Char == 0 {
+func (sr *sdlRender) PrintCell(tile *types.Tile, cell *types.Cell, _cellPos *types.XY) {
+	if cell.Char == 0 || _cellPos.X < 0 || _cellPos.Y < 0 {
 		return
+	}
+
+	if tile.Term != nil {
+		tileSize := tile.Term.GetSize()
+		if _cellPos.X >= tileSize.X || _cellPos.Y >= tileSize.Y {
+			return
+		}
+	}
+
+	sr.printCell(tile, cell, _cellPos)
+}
+
+func (sr *sdlRender) printCell(tile *types.Tile, cell *types.Cell, _cellPos *types.XY) {
+	cellPos := types.XY{
+		X: _cellPos.X + tile.Left,
+		Y: _cellPos.Y + tile.Top,
 	}
 
 	glyphSizeX := sr.glyphSize.X
@@ -109,9 +125,17 @@ func (sr *sdlRender) PrintCell(cell *types.Cell, cellPos *types.XY) {
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
 }
 
-func (sr *sdlRender) PrintRow(cells []*types.Cell, pos *types.XY) {
-	cellPos := &types.XY{X: pos.X, Y: pos.Y}
+func (sr *sdlRender) PrintRow(tile *types.Tile, cells []*types.Cell, _cellPos *types.XY) {
 	l := int32(len(cells))
+
+	if tile.Term != nil && tile.Term.GetSize().X <= _cellPos.X+l {
+		l = tile.Term.GetSize().X - _cellPos.X
+	}
+
+	cellPos := &types.XY{
+		X: _cellPos.X,
+		Y: _cellPos.Y,
+	}
 
 	for ; cellPos.X < l; cellPos.X++ {
 		if cells[cellPos.X] == nil {
@@ -121,11 +145,11 @@ func (sr *sdlRender) PrintRow(cells []*types.Cell, pos *types.XY) {
 		if config.Config.TypeFace.Ligatures {
 			ligId := sr._isLigaturePair(cells[cellPos.X:])
 			if ligId >= 0 {
-				sr.PrintLigature(cells[cellPos.X:cellPos.X+2], cellPos, ligId)
+				sr.PrintLigature(tile, cells[cellPos.X:cellPos.X+2], cellPos, ligId)
 				cellPos.X++
 				continue
 			}
 		}
-		sr.PrintCell(cells[cellPos.X], cellPos)
+		sr.printCell(tile, cells[cellPos.X], cellPos)
 	}
 }

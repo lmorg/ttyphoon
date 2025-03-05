@@ -5,27 +5,8 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-const (
-	cellElementXyMask    = (^int32(0)) << 16
-	cellElementXyCeiling = int32(^uint16(0) >> 1)
-)
-
-func setElementXY(xy *types.XY) rune {
-	if xy.X > cellElementXyCeiling || xy.Y > cellElementXyCeiling {
-		panic("TODO: proper error handling")
-	}
-	return (xy.X << 16) | xy.Y
-}
-
-func getElementXY(r rune) *types.XY {
-	return &types.XY{
-		X: r >> 16,
-		Y: r &^ cellElementXyMask,
-	}
-}
-
 func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
-	term._activeElement = term.renderer.NewElement(element)
+	term._activeElement = term.renderer.NewElement(term.tile, element)
 }
 
 func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
@@ -38,7 +19,7 @@ func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
 }
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
-	term._mxapcGenerate(term.renderer.NewElement(element), parameters)
+	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters)
 }
 
 func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
@@ -59,7 +40,7 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
 			term.lineFeed()
 		}
 		for elPos.X = 0; elPos.X < size.X && term._curPos.X < term.size.X; elPos.X++ {
-			term.writeCell(setElementXY(elPos), el)
+			term.writeCell(types.SetElementXY(elPos), el)
 		}
 	}
 

@@ -88,7 +88,7 @@ func (el *ElementCsv) MouseClick(pos *types.XY, button uint8, clicks uint8, pres
 }
 
 func (el *ElementCsv) MouseWheel(_ *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
-	termX := el.renderer.GetTermSize().X
+	termX := el.tile.Term.GetSize().X
 	width := el.boundaries[len(el.boundaries)-1]
 	mod := codes.Modifier(el.renderer.GetKeyboardModifier())
 
@@ -147,7 +147,7 @@ func (el *ElementCsv) MouseMotion(pos *types.XY, move *types.XY, callback types.
 		return
 	}
 
-	el.highlight = pos
+	el.highlight = &types.XY{X: pos.X, Y: pos.Y}
 	el.renderer.TriggerRedraw()
 }
 
