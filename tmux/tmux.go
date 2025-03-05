@@ -238,6 +238,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				msg := string(b[len(_RESP_MESSAGE)+1:])
 				if msg == _PANE_EXITED {
 					go func() { errToNotification(renderer, tmux.paneExited()) }()
+					continue
 				}
 				renderer.DisplayNotification(types.NOTIFY_INFO, msg)
 

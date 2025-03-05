@@ -174,6 +174,7 @@ func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 	for _, pane := range tmux.activeWindow.panes {
 		if pane.closed {
 			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.Id))
+			go pane.Close()
 			continue
 		}
 		tw.Tiles = append(tw.Tiles, pane.tile)
