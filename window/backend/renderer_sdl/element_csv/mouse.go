@@ -11,7 +11,7 @@ import (
 	"golang.design/x/clipboard"
 )
 
-func (el *ElementCsv) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed bool, callback types.EventIgnoredCallback) {
+func (el *ElementCsv) MouseClick(pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	pos.X -= el.renderOffset
 
 	if pos.Y != 0 {

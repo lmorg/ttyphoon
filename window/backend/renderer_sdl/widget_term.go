@@ -95,15 +95,6 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 }
 
-// SDL doesn't name these, so lets name it ourselves for convenience
-const (
-	_MOUSE_BUTTON_LEFT = 1 + iota
-	_MOUSE_BUTTON_MIDDLE
-	_MOUSE_BUTTON_RIGHT
-	_MOUSE_BUTTON_X1
-	_MOUSE_BUTTON_X2
-)
-
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil &&
 		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
@@ -127,41 +118,42 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 
 	posCell := sr.convertPxToCellXYTile(tile, evt.X, evt.Y)
 
-	state := evt.State == sdl.PRESSED
+	button := types.MouseButtonT(evt.Button)
+	state := types.ButtonStateT(evt.State)
 
 	if evt.X <= _PANE_LEFT_MARGIN {
 		posCell.X = -1
 	}
 
 	if posCell.X == -1 {
-		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
+		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {})
 		return
 	}
 
-	switch evt.Button {
-	case _MOUSE_BUTTON_LEFT:
-		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
+	switch types.MouseButtonT(evt.Button) {
+	case types.MOUSE_BUTTON_LEFT:
+		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.PRESSED {
-				highlighterStart(sr, uint8(evt.Button), evt.X, evt.Y)
+				highlighterStart(sr, button, evt.X, evt.Y)
 				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
 			}
 		})
 
-	case _MOUSE_BUTTON_MIDDLE:
+	case types.MOUSE_BUTTON_MIDDLE:
 		if evt.State == sdl.PRESSED {
-			sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, sr.clipboardPaste)
+			sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, sr.clipboardPaste)
 		}
 
-	case _MOUSE_BUTTON_RIGHT:
+	case types.MOUSE_BUTTON_RIGHT:
 		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
-		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {
+		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
 				tw._eventMouseButtonRightClick(sr, posCell)
 			}
 		})
 
-	case _MOUSE_BUTTON_X1:
-		sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, func() {})
+	case types.MOUSE_BUTTON_X1:
+		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {})
 	}
 }
 
@@ -232,7 +224,7 @@ var _highlighterStartFooterText = fmt.Sprintf(
 	types.KEY_STR_CTRL, types.KEY_STR_SHIFT, types.KEY_STR_ALT, types.KEY_STR_META,
 )
 
-func highlighterStart(sr *sdlRender, button uint8, x, y int32) {
+func highlighterStart(sr *sdlRender, button types.MouseButtonT, x, y int32) {
 	sr.footerText = _highlighterStartFooterText
 
 	sr.highlighter = &highlightWidgetT{
@@ -285,8 +277,8 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 	if evt.State != 0 {
 		callback = func() {
 			switch evt.State {
-			case _MOUSE_BUTTON_LEFT:
-				highlighterStart(sr, uint8(evt.State), pos.X-evt.XRel, pos.Y-evt.YRel)
+			case sdl.ButtonLMask:
+				highlighterStart(sr, types.MOUSE_BUTTON_LEFT, pos.X-evt.XRel, pos.Y-evt.YRel)
 				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
 			}
 		}

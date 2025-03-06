@@ -9,20 +9,20 @@ import (
 )
 
 // MouseClick: pos X should be -1 when out of bounds
-func (term *Term) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed bool, callback types.EventIgnoredCallback) {
+func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	term._mousePosRenderer.Set(nil)
 
 	screen := term.visibleScreen()
 
 	// this is used to determine whether to override ligatures with default font rendering
-	term._mouseButtonDown = pressed
+	term._mouseButtonDown = state == types.BUTTON_PRESSED
 
 	if pos == nil {
 		// this just exists to reset ligatures
 		return
 	}
 
-	if pressed {
+	if state == types.BUTTON_PRESSED {
 		callback()
 		return
 	}
@@ -69,7 +69,7 @@ func (term *Term) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed 
 	}
 
 	if screen[pos.Y].Cells[pos.X].Element == nil {
-		if button != 1 {
+		if button != types.MOUSE_BUTTON_LEFT {
 			callback()
 			return
 		}
@@ -85,7 +85,7 @@ func (term *Term) MouseClick(pos *types.XY, button uint8, clicks uint8, pressed 
 		return
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, pressed, callback)
+	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, state, callback)
 }
 
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {

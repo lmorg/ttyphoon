@@ -92,8 +92,8 @@ func (el *ElementImage) Close() {
 	el.image.Close()
 }
 
-func (el *ElementImage) MouseClick(_ *types.XY, button uint8, _ uint8, pressed bool, callback types.EventIgnoredCallback) {
-	if pressed {
+func (el *ElementImage) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
+	if state == types.BUTTON_PRESSED {
 		callback()
 		return
 	}

@@ -23,7 +23,7 @@ const (
 )
 
 type highlightWidgetT struct {
-	button uint8
+	button types.MouseButtonT
 	rect   *sdl.Rect
 	mode   _highlightMode
 }
@@ -87,7 +87,7 @@ func (hl *highlightWidgetT) setMode(mode _highlightMode) {
 func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	if evt.State == sdl.RELEASED {
 		sr.StatusBarText("")
-		sr.termWin.Active.Term.MouseClick(nil, 0, 0, false, func() {})
+		sr.termWin.Active.Term.MouseClick(nil, 0, 0, types.BUTTON_RELEASED, func() {})
 	}
 
 	hl.button = 0
@@ -109,7 +109,6 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 		sr.highlighter = nil
 		l := copyTextToClipboard(lines)
 		if l > 0 {
-			//count := bytes.Count(lines, []byte{'\n'}) + 1
 			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
 		}
 
@@ -128,14 +127,13 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
 			sr.highlighter = nil
 			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
-			sr.termWin.Active.Term.MouseClick(pos, uint8(evt.Button), evt.Clicks, evt.State == sdl.PRESSED, func() {})
+			sr.termWin.Active.Term.MouseClick(pos, types.MouseButtonT(evt.Button), evt.Clicks, types.BUTTON_RELEASED, func() {})
 			return
 		}
 		lines := sr.termWin.Active.Term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		sr.highlighter = nil
 		l := copyTextToClipboard(lines)
 		if l > 0 {
-			//count := bytes.Count(lines, []byte{'\n'}) + 1
 			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
 		}
 
