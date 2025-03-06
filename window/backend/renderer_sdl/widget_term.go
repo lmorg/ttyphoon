@@ -284,7 +284,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		}
 	}
 
-	//sr.termWin.Active.Term.MouseMotion(
+	sr.TriggerLazyRedraw()
 	tile.Term.MouseMotion(
 		pos,
 		&types.XY{

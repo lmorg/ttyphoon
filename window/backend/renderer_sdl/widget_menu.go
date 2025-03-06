@@ -2,7 +2,6 @@ package rendersdl
 
 import (
 	"strings"
-	"time"
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/types"
@@ -27,7 +26,6 @@ type menuWidgetT struct {
 	maxLen            int32
 	filter            string
 	hidden            []bool
-	blinkState        bool
 }
 
 const (
@@ -103,7 +101,6 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 
 	sr.termWin.Active.Term.ShowCursor(false)
 	cursor.Arrow()
-	go sr.menu.cursorBlink(sr)
 }
 
 func (sr *sdlRender) closeMenu() {
@@ -601,7 +598,7 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
 
-	if sr.menu.blinkState {
+	if sr.GetBlinkState() {
 		cursorRect := sdl.Rect{
 			X: textRect.X + width,
 			Y: textRect.Y,
@@ -609,15 +606,5 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 			H: sr.glyphSize.Y,
 		}
 		sr._drawHighlightRect(&cursorRect, highlightBorder, highlightFill, 255, 200)
-	}
-}
-
-func (menu *menuWidgetT) cursorBlink(sr *sdlRender) {
-	for {
-		time.Sleep(500 * time.Millisecond)
-		menu.blinkState = !menu.blinkState
-		if sr.menu == nil {
-			return
-		}
 	}
 }

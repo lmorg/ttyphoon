@@ -2,7 +2,6 @@ package rendersdl
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/types"
@@ -23,7 +22,6 @@ type inputBoxWidgetT struct {
 	callback     inputBoxCallbackT
 	value        string
 	defaultValue string
-	blinkState   bool
 }
 
 func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback func(string)) {
@@ -36,7 +34,6 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback
 	sr.footerText = fmt.Sprintf(`[Return] Ok  |  [Esc] Cancel  |  [Ctrl+u] Clear text  |  [Up] Default: "%s"`, defaultValue)
 	sr.termWin.Active.Term.ShowCursor(false)
 	cursor.Arrow()
-	go sr.inputBox.inputBoxCursorBlink(sr)
 }
 
 func (sr *sdlRender) closeInputBox() {
@@ -261,7 +258,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 		}
 	}
 
-	if sr.inputBox.blinkState {
+	if sr.GetBlinkState() {
 		rect = sdl.Rect{
 			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN + textWidth,
 			Y: _WIDGET_INNER_MARGIN + offsetH,
@@ -280,15 +277,5 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	err = sr.renderer.Copy(texture, windowRect, windowRect)
 	if err != nil {
 		panic(err) // TODO: better error handling please!
-	}
-}
-
-func (inputBox *inputBoxWidgetT) inputBoxCursorBlink(sr *sdlRender) {
-	for {
-		time.Sleep(500 * time.Millisecond)
-		inputBox.blinkState = !inputBox.blinkState
-		if sr.inputBox == nil {
-			return
-		}
 	}
 }
