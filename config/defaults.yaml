@@ -95,7 +95,7 @@ Window:
   # Value is time in milliseconds to wait between each refresh.
   # `0` disables a timer-based refresh entirely.
   # Terminal.JumpScrollLineCount also affects the window updates
-  RefreshInterval: 200
+  #RefreshInterval: 200
 
   # Set this to `false` to switch to software rendering
   # most systems except 

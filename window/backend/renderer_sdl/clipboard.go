@@ -13,6 +13,17 @@ import (
 	"golang.design/x/clipboard"
 )
 
+func copyTextToClipboard(b []byte) int {
+	b = bytes.TrimSpace(b)
+
+	if len(b) == 0 {
+		return 0
+	}
+
+	clipboard.Write(clipboard.FmtText, b)
+	return bytes.Count(b, []byte{'\n'}) + 1
+}
+
 func (sr *sdlRender) copyRendererToClipboard() {
 	defer func() {
 		sr.highlighter = nil
@@ -42,7 +53,7 @@ func (sr *sdlRender) copyRendererToClipboard() {
 	sr.DisplayNotification(types.NOTIFY_INFO, "Copied to clipboard as PNG")
 }
 
-func (sr *sdlRender) clipboardPasteText() {
+func (sr *sdlRender) clipboardPaste() {
 	sr.highlighter = nil
 	b := clipboard.Read(clipboard.FmtText)
 	if len(b) != 0 {

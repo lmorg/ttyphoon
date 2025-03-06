@@ -82,7 +82,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.termWin.Active.Term.Search()
 		return
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
-		sr.clipboardPasteText()
+		sr.clipboardPaste()
 		return
 	}
 
@@ -147,7 +147,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 
 	case _MOUSE_BUTTON_MIDDLE:
 		if evt.State == sdl.PRESSED {
-			sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, sr.clipboardPasteText)
+			sr.termWin.Active.Term.MouseClick(posCell, uint8(evt.Button), evt.Clicks, state, sr.clipboardPaste)
 		}
 
 	case _MOUSE_BUTTON_RIGHT:
@@ -167,7 +167,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 	menu := contextMenuT{
 		{
 			Title: fmt.Sprintf("Paste text from clipboard [%s+v]", types.KEY_STR_META),
-			Fn:    sr.clipboardPasteText,
+			Fn:    sr.clipboardPaste,
 		},
 		{
 			Title: MENU_SEPARATOR,

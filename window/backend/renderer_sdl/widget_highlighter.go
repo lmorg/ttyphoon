@@ -1,13 +1,11 @@
 package rendersdl
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
-	"golang.design/x/clipboard"
 )
 
 var (
@@ -99,30 +97,34 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 	case _HIGHLIGHT_MODE_PNG:
 		normaliseRect(hl.rect)
 		if hl.rect.W <= sr.glyphSize.X && hl.rect.H <= sr.glyphSize.Y {
-			sr.clipboardPasteText()
+			sr.clipboardPaste()
 		}
 		// clipboard copy will happen automatically on next redraw
 		sr.TriggerRedraw()
 
 	case _HIGHLIGHT_MODE_FULL_LINES:
 		normaliseRect(hl.rect)
-		rect := sr.rectPxToCells(hl.rect)
+		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
 		lines := sr.termWin.Active.Term.CopyLines(rect.Y, rect.H)
-		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
-		count := bytes.Count(lines, []byte{'\n'}) + 1
-		sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", count))
+		l := copyTextToClipboard(lines)
+		if l > 0 {
+			//count := bytes.Count(lines, []byte{'\n'}) + 1
+			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
+		}
 
 	case _HIGHLIGHT_MODE_SQUARE:
 		normaliseRect(hl.rect)
-		rect := sr.rectPxToCells(hl.rect)
+		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
 		lines := sr.termWin.Active.Term.CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
-		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
-		sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%dx%d grid has been copied to clipboard", rect.W-rect.X+1, rect.H-rect.Y+1))
+		l := copyTextToClipboard(lines)
+		if l > 0 {
+			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%dx%d grid has been copied to clipboard", rect.W-rect.X+1, l)) //rect.H-rect.Y+1))
+		}
 
 	case _HIGHLIGHT_MODE_LINE_RANGE:
-		rect := sr.rectPxToCells(hl.rect)
+		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
 			sr.highlighter = nil
 			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
@@ -130,10 +132,12 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 			return
 		}
 		lines := sr.termWin.Active.Term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
-		clipboard.Write(clipboard.FmtText, lines)
 		sr.highlighter = nil
-		count := bytes.Count(lines, []byte{'\n'}) + 1
-		sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", count))
+		l := copyTextToClipboard(lines)
+		if l > 0 {
+			//count := bytes.Count(lines, []byte{'\n'}) + 1
+			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
+		}
 
 	default:
 		panic(fmt.Sprintf("TODO: unmet conditional '%d'", hl.mode))
@@ -182,11 +186,19 @@ func isCellHighlighted(sr *sdlRender, rect *sdl.Rect) bool {
 		return false
 	}
 
+	runeCell := sr.rectPxToCells(rect)
+
+	if sr.termWin != nil {
+		if runeCell.X < sr.termWin.Active.Left || runeCell.X > sr.termWin.Active.Right ||
+			runeCell.Y < sr.termWin.Active.Top || runeCell.Y > sr.termWin.Active.Bottom {
+			return false
+		}
+	}
+
 	hlRect := *sr.highlighter.rect
 	if sr.highlighter.mode != _HIGHLIGHT_MODE_LINE_RANGE {
 		normaliseRect(&hlRect)
 	}
-	runeCell := sr.rectPxToCells(rect)
 	hlCell := sr.rectPxToCells(&hlRect)
 
 	switch sr.highlighter.mode {

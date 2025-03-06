@@ -77,6 +77,35 @@ func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
 	return newRect
 }
 
+func (sr *sdlRender) rectPxToActiveTileCells(tile *types.Tile, rect *sdl.Rect) *sdl.Rect {
+	newRect := &sdl.Rect{
+		X: (rect.X-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left,
+		Y: (rect.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top,
+		W: (rect.X+rect.W-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left,
+		H: (rect.Y+rect.H-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top,
+	}
+
+	if newRect.X < 0 {
+		newRect.X = 0
+	}
+
+	if newRect.Y < 0 {
+		newRect.Y = 0
+	}
+
+	size := tile.Term.GetSize()
+
+	if newRect.W >= size.X {
+		newRect.W = size.X - 1
+	}
+
+	if newRect.H >= size.Y {
+		newRect.H = size.Y - 1
+	}
+
+	return newRect
+}
+
 func (sr *sdlRender) getTileFromPxOrActive(x, y int32) *types.Tile {
 	x = (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X
 	y = (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y
