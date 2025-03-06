@@ -12,6 +12,8 @@ type Renderer interface {
 	ShowAndFocusWindow()
 	GetWindowSizeCells() *XY
 	GetGlyphSize() *XY
+	GetBlinkState() bool
+	SetBlinkState(bool)
 	PrintCell(*Tile, *Cell, *XY)
 	PrintRow(*Tile, []*Cell, *XY)
 	DrawScrollbar(*Tile, int, int)
@@ -25,6 +27,7 @@ type Renderer interface {
 	RefreshWindowList()
 	Bell()
 	TriggerRedraw()
+	TriggerLazyRedraw()
 	TriggerQuit()
 	NewElement(*Tile, ElementID) Element
 	DisplayNotification(NotificationType, string)

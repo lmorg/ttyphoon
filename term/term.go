@@ -63,15 +63,12 @@ type Term struct {
 
 	// state
 	_vtMode          _stateVtMode
-	_slowBlinkState  bool
 	_insertOrReplace _stateIrmT
 	_hasFocus        bool
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
 	_hasKeyPress     chan bool
-	_eventClose      chan bool
-	_eventClosed     bool // to avoid cyclic events
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
 	_rowId           uint64 // atomic.Uint64
@@ -146,7 +143,6 @@ func (term *Term) Start(pty types.Pty) {
 
 	go term.exec()
 	go term.readLoop()
-	go term.slowBlink()
 }
 
 func (term *Term) reset(size *types.XY) {
@@ -305,12 +301,7 @@ func (term *Term) hasKeyPress() {
 }
 
 func (term *Term) Close() {
-	if !term._eventClosed { // to avoid cyclic events
-		go func() {
-			term._eventClose <- true // to kill any event loops
-		}()
-		//term.reset(&types.XY{1, 1})
-	}
+	term.Pty.Close()
 }
 
 func (term *Term) Reply(b []byte) {
@@ -362,7 +353,8 @@ func (term *Term) updateScrollback() {
 
 func (term *Term) HasFocus(state bool) {
 	term._hasFocus = state
-	term._slowBlinkState = true
+	//term._slowBlinkState = true
+	term.renderer.SetBlinkState(true)
 }
 
 func (term *Term) MakeVisible(visible bool) {

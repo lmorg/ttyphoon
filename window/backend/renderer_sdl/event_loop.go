@@ -8,16 +8,18 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) refreshInterval() {
+func (sr *sdlRender) setRefreshInterval() {
+	d := time.Duration(config.Config.Window.RefreshInterval) * time.Millisecond
+
 	if config.Config.Window.RefreshInterval == 0 {
-		return
+		d = 24 * time.Hour // bit of a hack, but we set it to once a day
 	}
 
-	d := time.Duration(config.Config.Window.RefreshInterval) * time.Millisecond
-	for {
-		time.Sleep(d)
-		sr.TriggerRedraw()
-	}
+	sr._redrawTimer = time.After(d)
+}
+
+func (sr *sdlRender) TriggerLazyRedraw() {
+	sr._redrawRequired.Store(true)
 }
 
 func (sr *sdlRender) eventLoop() {
@@ -52,7 +54,6 @@ func (sr *sdlRender) eventLoop() {
 
 			case sdl.QuitEvent:
 				sr.TriggerQuit()
-
 			}
 		}
 
@@ -65,6 +66,13 @@ func (sr *sdlRender) eventLoop() {
 			if err != nil {
 				log.Printf("ERROR: %s", err.Error())
 			}
+
+		case <-sr._redrawTimer:
+			if sr._redrawRequired.Load() {
+				sr.TriggerRedraw()
+				sr._redrawRequired.Store(false)
+			}
+			sr.setRefreshInterval()
 
 		case <-sr.pollEventHotkey():
 			sr.eventHotkey()

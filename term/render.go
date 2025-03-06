@@ -53,7 +53,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 				continue
 
 			default:
-				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
+				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term.renderer.GetBlinkState() {
 					continue // blink
 				}
 				term.renderer.PrintCell(term.tile, screen[pos.Y].Cells[pos.X], pos)
@@ -86,7 +86,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 				row[pos.X] = nil
 
 			default:
-				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term._slowBlinkState {
+				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term.renderer.GetBlinkState() {
 					row[pos.X] = nil // blink
 					continue
 				}

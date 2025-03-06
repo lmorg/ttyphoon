@@ -174,7 +174,7 @@ func (tmux *Tmux) ActiveWindow() *types.TermWindow {
 	for _, pane := range tmux.activeWindow.panes {
 		if pane.closed {
 			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.Id))
-			go pane.Close()
+			go pane.exit()
 			continue
 		}
 		tw.Tiles = append(tw.Tiles, pane.tile)
@@ -258,6 +258,6 @@ func (win *WindowT) Close() {
 	win.closed = true
 	go win.activePane.tmux.UpdateSession()
 	for _, pane := range win.panes {
-		pane.Close()
+		pane.exit()
 	}
 }

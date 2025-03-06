@@ -18,7 +18,9 @@ func (term *Term) readLoop() {
 		if err != nil {
 			return
 		}
-		term._slowBlinkState = true
+		//term._slowBlinkState = true
+		//term.renderer.SetBlinkState(true)
+		term.renderer.TriggerLazyRedraw()
 
 		term._mutex.Lock()
 		term.readChar(r)

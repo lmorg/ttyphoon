@@ -13,7 +13,9 @@ import (
 
 func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
-func (p *PaneT) Close() {
+func (p *PaneT) Close()              {}
+
+func (p *PaneT) exit() {
 	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.Id, p.Title))
 
 	p.buf.Close()

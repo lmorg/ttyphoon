@@ -166,7 +166,8 @@ func (sr *sdlRender) Start(termWin *types.TermWindow, tmuxClient any) {
 	sr.termWin = termWin
 
 	sr.registerHotkey()
-	go sr.refreshInterval()
+	go sr.blinkSlowLoop()
+	sr.setRefreshInterval()
 
 	sr.eventLoop()
 }

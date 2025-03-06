@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/tmux"
@@ -49,9 +50,10 @@ type sdlRender struct {
 	bell *mix.Music
 
 	// events
-	_quit   chan bool
-	_redraw chan bool
-	_resize chan *types.XY
+	_quit        chan bool
+	_redraw      chan bool
+	_resize      chan *types.XY
+	_redrawTimer <-chan time.Time
 
 	// notifications
 	notifications  notifyT
@@ -71,10 +73,12 @@ type sdlRender struct {
 	contextMenu   contextMenuT
 
 	// state
-	keyboardMode keyboardModeT
-	keyModifier  sdl.Keymod
-	keyIgnore    chan bool
-	hidden       bool
+	keyboardMode    keyboardModeT
+	keyModifier     sdl.Keymod
+	keyIgnore       chan bool
+	hidden          bool
+	_redrawRequired atomic.Bool
+	_blinkSlow      atomic.Bool
 
 	// hotkey
 	hk       *hotkey.Hotkey

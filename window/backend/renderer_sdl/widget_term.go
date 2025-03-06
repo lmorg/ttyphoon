@@ -53,6 +53,8 @@ func (tw *termWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		}
 
 	}()
+
+	sr.SetBlinkState(true)
 	tw._eventKeyPress(sr, evt)
 }
 
