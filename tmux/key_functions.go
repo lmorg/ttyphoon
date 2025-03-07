@@ -141,6 +141,8 @@ func fnKeySelectPaneLast(tmux *Tmux) error  { return _fnKeySelectPane(tmux, "-l"
 
 func fnKeyTilePanes(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("select-layout -E"))
+	//go errToNotification(tmux.renderer,
+	//	tmux.SelectAndResizeWindow(tmux.activeWindow.Id, tmux.renderer.GetWindowSizeCells()))
 	go tmux.renderer.RefreshWindowList()
 	return err
 }

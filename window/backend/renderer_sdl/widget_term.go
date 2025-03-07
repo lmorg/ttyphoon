@@ -116,14 +116,10 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		}()
 	}
 
-	posCell := sr.convertPxToCellXYTile(tile, evt.X, evt.Y)
+	posCell := sr.convertPxToCellXYNegXTile(tile, evt.X, evt.Y)
 
 	button := types.MouseButtonT(evt.Button)
 	state := types.ButtonStateT(evt.State)
-
-	if evt.X <= _PANE_LEFT_MARGIN {
-		posCell.X = -1
-	}
 
 	if posCell.X == -1 {
 		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {})
@@ -250,6 +246,8 @@ func (tw *termWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) 
 }
 
 func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
+	sr.TriggerLazyRedraw()
+
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil {
 
 		if (evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
@@ -284,7 +282,6 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		}
 	}
 
-	sr.TriggerLazyRedraw()
 	tile.Term.MouseMotion(
 		pos,
 		&types.XY{

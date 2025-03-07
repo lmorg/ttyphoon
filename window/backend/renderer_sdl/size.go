@@ -34,7 +34,7 @@ func (sr *sdlRender) convertPxToCellXYTile(tile *types.Tile, x, y int32) *types.
 
 func (sr *sdlRender) convertPxToCellXYNegXTile(tile *types.Tile, x, y int32) *types.XY {
 	xy := &types.XY{
-		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - tile.Left,
+		X: ((x - _PANE_LEFT_MARGIN_OUTER) / sr.glyphSize.X) - tile.Left - 1,
 		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.Top,
 	}
 
@@ -115,7 +115,7 @@ func (sr *sdlRender) getTileFromPxOrActive(x, y int32) *types.Tile {
 			continue
 		}
 
-		if x >= tile.Left && x <= tile.Right &&
+		if x >= tile.Left-1 && x <= tile.Right &&
 			y >= tile.Top && y <= tile.Bottom {
 			return tile
 		}
