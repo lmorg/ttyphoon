@@ -169,6 +169,7 @@ ticked but not working as expected, then please raise an issue in Github.
   - [x] common: can run most CLI applications
   - [x] broad: can run older or more complicated CLI applications
   - [ ] complete: xterm compatible
+  - [ ] extended underline: kitty compatible
 - OSC codes
   - [x] common: can run most CLI applications
   - [x] broad: can run older or more complicated CLI applications
@@ -177,10 +178,6 @@ ticked but not working as expected, then please raise an issue in Github.
   - [ ] common: can run most CLI applications
   - [ ] broad: can run older or more complicated CLI applications
   - [ ] complete: xterm compatible
-- PM codes (out of scope)
-  - [x] common: can run most CLI applications
-  - [x] broad: can run older or more complicated CLI applications
-  - [x] xterm compatible
 - [x] Alt character sets
 - [x] Wide characters
   - [ ] vt100 (ASCII characters)
@@ -238,8 +235,9 @@ eg `xterm` and similar terminal emulators
 #### Common application support
 
 - [x] Supports `tmux`
-  - [x] usable
-  - [x] glitch-free
+  - [x] usable from CLI
+  - [x] glitch-free from CLI
+  - [x] tmux control mode supported
 - [x] Supports `vim`
   - [x] usable
   - [x] glitch-free
@@ -258,13 +256,6 @@ eg `xterm` and similar terminal emulators
 - [ ] Bell can be changed
 - [x] Default term size can be changed
 - [x] Default command / shell can be changed
-
-### Tmux Integration
-
-- [x] Supports single pane
-- [ ] Supports multiple panes
-- [x] Supports multiple windows
-- [x] Hotkey passthrough
 
 ## Supported Platforms
 

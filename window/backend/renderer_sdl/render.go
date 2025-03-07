@@ -23,14 +23,15 @@ func (sr *sdlRender) drawBg() {
 	sr.winTile.Bottom = sr.winCellSize.Y
 
 	w, h := sr.window.GetSize()
-	canvasBg := types.SGR_COLOUR_BLACK_BRIGHT
-	if len(sr.termWin.Tiles) < 3 {
+	canvasBg := types.SGR_COLOUR_BLACK
+	if len(sr.termWin.Tiles) <= 1 {
 		canvasBg = sr.termWin.Active.Term.Bg()
 	}
+
 	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
 
-	if len(sr.termWin.Tiles) > 2 {
+	if len(sr.termWin.Tiles) >= 2 {
 		canvasBg := types.SGR_COLOUR_BLACK
 		_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 		_ = sr.renderer.FillRect(&sdl.Rect{X: _PANE_LEFT_MARGIN_OUTER + sr.glyphSize.X, Y: _PANE_TOP_MARGIN, W: sr.winCellSize.X * sr.glyphSize.X, H: sr.winCellSize.Y * sr.glyphSize.Y})
@@ -47,9 +48,6 @@ func (sr *sdlRender) drawBg() {
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
 	}
-
-	//_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
-	//_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: _PANE_TOP_MARGIN})
 
 	err := sr.renderer.SetRenderTarget(nil)
 	if err != nil {

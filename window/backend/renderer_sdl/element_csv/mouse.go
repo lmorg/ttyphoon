@@ -11,8 +11,13 @@ import (
 	"golang.design/x/clipboard"
 )
 
-func (el *ElementCsv) MouseClick(pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
-	pos.X -= el.renderOffset
+// In my opinion this shouldn't be needed. So it's likely a symptom of a bug
+// elsewhere. However this does seem to fix things and adds next to no overhead
+// so I'm willing to live with this kludge....for now.
+const _RENDER_OFFSETS_OFFSET = 3
+
+func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
+	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
 
 	if pos.Y != 0 {
 		if button != 1 {
@@ -129,7 +134,9 @@ func (el *ElementCsv) MouseWheel(_ *types.XY, movement *types.XY, callback types
 	}
 }
 
-func (el *ElementCsv) MouseMotion(pos *types.XY, move *types.XY, callback types.EventIgnoredCallback) {
+func (el *ElementCsv) MouseMotion(_pos *types.XY, move *types.XY, callback types.EventIgnoredCallback) {
+	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
+
 	switch {
 	case pos.Y == 0:
 		cursor.Hand()
