@@ -20,7 +20,9 @@ require (
 	github.com/forPelevin/gomoji v1.3.0 // indirect
 	github.com/go-text/render v0.2.0 // indirect
 	github.com/go-text/typesetting v0.2.1 // indirect
+	github.com/mattn/go-sixel v0.0.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	golang.org/x/exp v0.0.0-20190731235908-ec7cb31e5a56 // indirect

@@ -28,6 +28,10 @@ func NewApcSlice(apc []rune) *ApcSlice {
 	return as
 }
 
+func NewApcSliceNoParse(s []string) *ApcSlice {
+	return &ApcSlice{s}
+}
+
 func (as *ApcSlice) Index(i int) string {
 	if len(as.slice) <= i {
 		return ""

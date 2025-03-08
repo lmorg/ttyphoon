@@ -223,7 +223,8 @@ eg `xterm` and similar terminal emulators
 - Inlining images
   - [x] Ttyphoon codes
   - [ ] iterm2 compatible
-  - [ ] sixel graphics
+  - [ ] Kitty compatible
+  - [x] sixel graphics
   - [ ] ReGIS graphics
 - Code folding
   - [x] alpha: available but expect changes to the API

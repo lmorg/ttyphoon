@@ -11,7 +11,8 @@ func Escape(b []byte) []byte {
 	var escaped []byte
 
 	for _, c := range b {
-		escaped = append(escaped, []byte(fmt.Sprintf(`\%03o `, c))...)
+		//escaped = append(escaped, []byte(fmt.Sprintf(`\%03o `, c))...)
+		escaped = fmt.Appendf(escaped, `\%03o `, c)
 	}
 
 	debug.Log(string(escaped))

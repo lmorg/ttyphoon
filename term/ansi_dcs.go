@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/mxtty/types"
 )
 
 /*
@@ -18,35 +19,55 @@ func (term *Term) parseDcsCodes() {
 		text []rune
 	)
 
+	r, err = term.Pty.Read()
+	if err != nil {
+		return
+	}
+
+	switch r {
+	case 'q':
+		escSeq := term._parseDcsCodes()
+		escSeq = append([]rune{codes.AsciiEscape, 'P', 'q'}, escSeq...)
+		escSeq = append(escSeq, codes.AsciiEscape, '\\')
+		apc := types.NewApcSliceNoParse([]string{string(escSeq)})
+		term.mxapcInsert(types.ELEMENT_ID_SIXEL, apc)
+
+	default:
+		log.Printf("WARNING: Unhandled DCS code %s", string(text))
+	}
+
+}
+
+func (term *Term) _parseDcsCodes() []rune {
+	var (
+		r      rune
+		err    error
+		escSeq []rune
+	)
+
 	for {
 		r, err = term.Pty.Read()
 		if err != nil {
-			return
+			return escSeq
 		}
-		text = append(text, r)
-		switch r {
 
+		switch r {
 		case codes.AsciiEscape:
 			r, err = term.Pty.Read()
 			if err != nil {
-				return
+				return escSeq
 			}
+			escSeq = append(escSeq, r)
 			if r == '\\' { // ST (DCS terminator)
-				goto parsed
+				return escSeq
 			}
-			text = append(text, r)
 			continue
 
-		case codes.AsciiCtrlG: // bell (xterm OSC terminator)
-			goto parsed
+		case ' ', '\r', '\n':
+			continue
 
+		default:
+			escSeq = append(escSeq, r)
 		}
-
 	}
-parsed:
-	text = text[:len(text)-1]
-
-	//stack := strings.Split(string(text), ";")
-
-	log.Printf("WARNING: Unhandled DCS code %s", string(text))
 }

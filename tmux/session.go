@@ -35,3 +35,36 @@ func (tmux *Tmux) setSessionHooks() error {
 	_, err := tmux.SendCommand([]byte(command))
 	return err
 }
+
+const _COMMAND_SET_OPTION = "set-option terminal-features[%d] %s"
+
+var sessionSetOptions = []string{
+	"256",         // Supports 256 colours with the SGR escape sequences.
+	"//clipboard", // Allows setting the system clipboard.
+	//"ccolour",       // Allows setting the cursor colour.
+	//"cstyle",        // Allows setting the cursor style.
+	"extkeys", // Supports extended keys.
+	//"focus",         // Supports focus reporting.
+	//"hyperlinks",    // Supports OSC 8 hyperlinks.
+	"ignorefkeys", // Ignore function keys from terminfo(5) and use the tmux internal set only.
+	//"margins",       // Supports DECSLRM margins.
+	//"mouse",         // Supports xterm(1) mouse sequences.
+	//"osc7",          // Supports the OSC 7 working directory extension.
+	//"overline",      // Supports the overline SGR attribute.
+	//"rectfill",      // Supports the DECFRA rectangle fill escape sequence.
+	"RGB",           // Supports RGB colour with the SGR escape sequences.
+	"sixel",         // Supports SIXEL graphics.
+	"strikethrough", // Supports the strikethrough SGR escape sequence.
+	//"sync",          // Supports synchronized updates.
+	"title", // Supports xterm(1) title setting.
+	//"usstyle",       // Allows underscore style and colour to be set.
+}
+
+func (tmux *Tmux) setSessionTerminalFeatures() error {
+	for i := range sessionSetOptions {
+		command := fmt.Sprintf(_COMMAND_SET_OPTION, i, sessionSetOptions[i])
+		_, err := tmux.SendCommand([]byte(command))
+		return err
+	}
+	return nil
+}

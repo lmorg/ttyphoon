@@ -128,7 +128,6 @@ var respIgnored = [][]byte{
 	_RESP_CLIENT_SESSION_CHANGED,
 	_RESP_CONFIG_ERROR,
 	_RESP_CONTINUE,
-	_RESP_EXTENDED_OUTPUT,
 	_RESP_LAYOUT_CHANGE,
 	_RESP_PANE_MODE_CHANGED,
 	_RESP_PASTE_BUFFER_CHANGED,
@@ -224,6 +223,9 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 					go renderer.RefreshWindowList()
 				}()
 
+			case bytes.HasPrefix(b, _RESP_EXTENDED_OUTPUT):
+				panic(_RESP_EXTENDED_OUTPUT)
+
 			case bytes.HasPrefix(b, _RESP_BEGIN):
 				resp = new(tmuxResponseT)
 
@@ -307,8 +309,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		return nil, err
 	}
 
-	err = tmux.setSessionHooks()
-	return tmux, err
+	return tmux, nil
 }
 
 func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
@@ -328,6 +329,16 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 	}
 
 	err = tmux._getDefaultTmuxKeyBindings()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.setSessionHooks()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.setSessionTerminalFeatures()
 	if err != nil {
 		return err
 	}

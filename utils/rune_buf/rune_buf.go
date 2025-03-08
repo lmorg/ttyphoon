@@ -38,6 +38,7 @@ func (buf *Buf) loop() {
 				buf.l = runeLength(b[i])
 				if buf.l == 0 {
 					log.Printf("ERROR: skipping invalid byte: %d", b[i])
+					//panic("excellent")
 					continue
 				}
 				buf.utf8 = make([]byte, buf.l)

@@ -17,6 +17,6 @@ type ElementID int
 
 const (
 	ELEMENT_ID_IMAGE ElementID = iota
+	ELEMENT_ID_SIXEL
 	ELEMENT_ID_CSV
-	ELEMENT_ID_FOLDABLE
 )
