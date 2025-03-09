@@ -20,10 +20,23 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
 
 	if pos.Y != 0 {
-		if button != 1 {
+		switch button {
+		case 1:
+			break
+
+		case 3:
+			el.renderer.AddToContextMenu(types.MenuItem{
+				Title: "Copy view to clipboard (CSV)",
+				Fn:    el.ExportCsv,
+			})
+			callback()
+			return
+
+		default:
 			callback()
 			return
 		}
+
 		switch clicks {
 		case 1:
 			if int(pos.Y) > len(el.table) {
@@ -66,7 +79,7 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 
 	var column int
 	for column = range el.boundaries {
-		if int(pos.X) < int(el.boundaries[column]) {
+		if int(pos.X) <= int(el.boundaries[column]) {
 			break
 		}
 	}

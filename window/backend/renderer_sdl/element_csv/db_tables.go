@@ -1,18 +1,27 @@
 package elementCsv
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"strings"
+
+	"github.com/lmorg/mxtty/types"
+	"golang.design/x/clipboard"
 )
 
 const _ROW_ID = "rowid"
 
-func (el *ElementCsv) runQuery() error {
+func (el *ElementCsv) sqlWhere() string {
 	where := el.filter
 	if where != "" {
 		where = "WHERE " + where
 	}
 
+	return where
+}
+
+func (el *ElementCsv) sqlString() string {
 	orderBy := _ROW_ID
 	var sql string
 	if el.orderByIndex > 0 {
@@ -22,8 +31,11 @@ func (el *ElementCsv) runQuery() error {
 		sql = sqlSelect[selectNumeric]
 	}
 
-	query := fmt.Sprintf(sql, el.name, where, orderBy, orderByStr[el.orderDesc], el.size.Y-1, el.limitOffset)
+	return fmt.Sprintf(sql, el.name, el.sqlWhere(), orderBy, orderByStr[el.orderDesc], el.size.Y-1, el.limitOffset)
+}
 
+func (el *ElementCsv) runQuery() error {
+	query := el.sqlString()
 	dbRows, err := el.db.Query(query)
 	if err != nil {
 		return fmt.Errorf("cannot query table: %v\nSQL: %s", err, query)
@@ -97,7 +109,7 @@ func (el *ElementCsv) runQuery() error {
 	el.width = width
 	el.boundaries = boundaries
 
-	err = el.db.QueryRow(fmt.Sprintf(sqlCount, el.name, where)).Scan(&el.lines)
+	err = el.db.QueryRow(fmt.Sprintf(sqlCount, el.name, el.sqlWhere())).Scan(&el.lines)
 	if err != nil {
 		return fmt.Errorf("cannot get table count: %v", err)
 	}
@@ -112,4 +124,51 @@ func _strToAnyPtr(s *[]string, max int) []any {
 	}
 
 	return slice
+}
+
+func (el *ElementCsv) ExportCsv() {
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	w := csv.NewWriter(buf)
+
+	line := make([]string, len(el.headings))
+	for i := range el.headings {
+		line[i] = string(el.headings[i])
+	}
+
+	err := w.Write(line)
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err))
+		return
+	}
+
+	query := el.sqlString()
+	dbRows, err := el.db.Query(query)
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot query table: %v\nSQL: %s", err, query))
+		return
+	}
+
+	var l = len(el.headings)
+
+	for dbRows.Next() {
+		row := make([]string, l)
+		slice := _strToAnyPtr(&row, l)
+
+		err = dbRows.Scan(slice...)
+		if err != nil {
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err, query))
+			return
+		}
+
+		w.Write(row)
+	}
+
+	w.Flush()
+	if w.Error() != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err, query))
+		return
+	}
+
+	clipboard.Write(clipboard.FmtText, buf.Bytes())
 }
