@@ -50,7 +50,9 @@ fallback:
 		defaultErr, fallbackErr))
 }
 
-func _exec(tty *os.File, command []string, proc **os.Process) error {
+func _exec(tty *os.File, _command string, proc **os.Process) error {
+	command := strings.Split(_command, "/")
+
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Env = config.SetEnv()
 	cmd.Stdin = tty
