@@ -32,6 +32,7 @@ const (
 	_STYLE_FAINT
 	_STYLE_UNDERLINE
 	_STYLE_STRIKETHROUGH
+	_STYLE_FONT_AWESOME
 )
 
 func (f styleT) Is(flag styleT) bool {
@@ -81,6 +82,8 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	f.openAsset(assets.TYPEFACE_BI, _STYLE_BOLD|_STYLE_ITALIC)
 	f.openAsset(assets.TYPEFACE_L, _STYLE_FAINT)
 	f.openAsset(assets.TYPEFACE_LI, _STYLE_FAINT|_STYLE_ITALIC)
+
+	f.openAsset(assets.FONT_AWESOME, _STYLE_FONT_AWESOME)
 
 	rx := regexp.MustCompile(`[-.]`)
 	fontName := rx.Split(assets.TYPEFACE, 2)
@@ -177,6 +180,10 @@ func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
 	if style.Is(types.SGR_FAINT) {
 		f.style |= _STYLE_FAINT
 		query.Aspect.Weight = font.WeightLight
+	}
+
+	if style.Is(types.SGR_SPECIAL_FONT_AWESOME) {
+		f.style = _STYLE_NORMAL | _STYLE_FONT_AWESOME
 	}
 
 	if style.Is(types.SGR_UNDERLINE) {

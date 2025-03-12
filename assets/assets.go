@@ -33,12 +33,14 @@ const (
 	TYPEFACE_L  = "Hasklig-Light.ttf"
 	TYPEFACE_LI = "Hasklig-LightIt.ttf"
 
-	EMOJI = "NotoColorEmoji-emojicompat.ttf"
+	EMOJI        = "NotoColorEmoji-emojicompat.ttf"
+	FONT_AWESOME = "Font Awesome 6 Free-Solid-900.otf"
 )
 
 //go:embed bell.mp3
 //go:embed icon.bmp
 //go:embed *.ttf
+//go:embed *.otf
 //go:embed icon-*.bmp
 var embedFs embed.FS
 

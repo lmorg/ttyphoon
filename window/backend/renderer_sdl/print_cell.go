@@ -120,9 +120,42 @@ func (sr *sdlRender) printCell(tile *types.Tile, cell *types.Cell, _cellPos *typ
 		}
 	}
 
-	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, sr.font, _FONT_ATLAS_NOT_LIG)
+	atlas := newFontAtlas([]rune{cell.Char}, cell.Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, _FONT_ATLAS_NOT_LIG)
 	sr.fontCache.extended[cell.Char] = append(sr.fontCache.extended[cell.Char], atlas)
 	atlas.Render(sr, dstRect, cell.Char, hash, hlTexture)
+}
+
+func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
+	glyphSizeX := sr.glyphSize.X * 2
+
+	hlTexture := _HLTEXTURE_NONE
+	if sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT) {
+		hlTexture = _HLTEXTURE_SEARCH_RESULT
+	}
+	if isCellHighlighted(sr, dstRect) {
+		hlTexture = _HLTEXTURE_SELECTION
+	}
+
+	hash := sgr.HashValue()
+
+	ok := sr.fontCache.atlas.Render(sr, dstRect, ch, hash, hlTexture)
+	if ok {
+		return
+	}
+
+	extAtlases, ok := sr.fontCache.extended[ch]
+	if ok {
+		for i := range extAtlases {
+			ok = extAtlases[i].Render(sr, dstRect, ch, hash, hlTexture)
+			if ok {
+				return
+			}
+		}
+	}
+
+	atlas := newFontAtlas([]rune{ch}, sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, _FONT_ATLAS_NOT_LIG)
+	sr.fontCache.extended[ch] = append(sr.fontCache.extended[ch], atlas)
+	atlas.Render(sr, dstRect, ch, hash, hlTexture)
 }
 
 func (sr *sdlRender) PrintRow(tile *types.Tile, cells []*types.Cell, _cellPos *types.XY) {

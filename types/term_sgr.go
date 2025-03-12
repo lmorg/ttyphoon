@@ -51,6 +51,8 @@ const (
 	// _SGR_PLACEHOLDER6
 
 	SGR_WIDE_CHAR
+	
+	SGR_SPECIAL_FONT_AWESOME
 )
 
 func (f SgrFlag) Is(flag SgrFlag) bool {

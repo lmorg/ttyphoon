@@ -8,7 +8,6 @@ import (
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/lmorg/mxtty/window/backend/typeface"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 )
 
 var (
@@ -43,7 +42,7 @@ func NewFontCache(sr *sdlRender) *fontCacheT {
 	chars := []rune(strings.Join(fontAtlasCharacterPreload, ""))
 
 	fc := &fontCacheT{
-		atlas:    newFontAtlas(chars, types.SGR_DEFAULT, sr.glyphSize, sr.renderer, sr.font, _FONT_ATLAS_NOT_LIG),
+		atlas:    newFontAtlas(chars, types.SGR_DEFAULT, sr.glyphSize, sr.renderer, _FONT_ATLAS_NOT_LIG),
 		extended: make(fontTextureLookupTableT),
 		ligs:     make(fontTextureLookupTableT),
 	}
@@ -53,7 +52,7 @@ func NewFontCache(sr *sdlRender) *fontCacheT {
 
 const _FONT_ATLAS_NOT_LIG = -1
 
-func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, font *ttf.Font, ligId rune) *fontAtlasT {
+func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, ligId rune) *fontAtlasT {
 	glyphSizePlusShadow := &types.XY{
 		X: glyphSize.X + dropShadowOffset,
 		Y: glyphSize.Y + dropShadowOffset,
@@ -64,17 +63,17 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 	if ligId == _FONT_ATLAS_NOT_LIG {
 		fa.newFontCacheDefaultLookup(chars, glyphSizePlusShadow)
 		fa.texture = []*sdl.Texture{
-			_HLTEXTURE_NONE:          fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_NONE),
-			_HLTEXTURE_SELECTION:     fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_SELECTION),
-			_HLTEXTURE_SEARCH_RESULT: fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_SEARCH_RESULT),
+			_HLTEXTURE_NONE:          fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_NONE),
+			_HLTEXTURE_SELECTION:     fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SELECTION),
+			_HLTEXTURE_SEARCH_RESULT: fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
 		}
 
 	} else {
 		fa.newFontCacheDefaultLookup([]rune{ligId}, glyphSizePlusShadow)
 		fa.texture = []*sdl.Texture{
-			_HLTEXTURE_NONE:          fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_NONE),
-			_HLTEXTURE_SELECTION:     fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_SELECTION),
-			_HLTEXTURE_SEARCH_RESULT: fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, font, _HLTEXTURE_SEARCH_RESULT),
+			_HLTEXTURE_NONE:          fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_NONE),
+			_HLTEXTURE_SELECTION:     fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SELECTION),
+			_HLTEXTURE_SEARCH_RESULT: fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
 		}
 	}
 
@@ -94,13 +93,12 @@ func (fa *fontAtlasT) newFontCacheDefaultLookup(chars []rune, glyphSize *types.X
 	}
 }
 
-func (fa *fontAtlasT) newFontTexture(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, font *ttf.Font, hlTexture int) *sdl.Texture {
+func (fa *fontAtlasT) newFontTexture(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, hlTexture int) *sdl.Texture {
 	surface := newFontSurface(glyphSize, int32(len(chars)))
 	defer surface.Free()
 
 	cellRect := &sdl.Rect{W: glyphSize.X, H: glyphSize.Y}
 
-	font.SetStyle(fontStyle(sgr.Bitwise))
 	typeface.SetStyle(sgr.Bitwise)
 
 	var i int
@@ -123,13 +121,12 @@ func (fa *fontAtlasT) newFontTexture(chars []rune, sgr *types.Sgr, glyphSize *ty
 	return texture
 }
 
-func (fa *fontAtlasT) newLigTexture(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, font *ttf.Font, hlTexture int) *sdl.Texture {
+func (fa *fontAtlasT) newLigTexture(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, hlTexture int) *sdl.Texture {
 	surface := newFontSurface(glyphSize, int32(len(chars)))
 	defer surface.Free()
 
 	cellRect := &sdl.Rect{W: glyphSize.X * int32(len(chars)), H: glyphSize.Y}
 
-	font.SetStyle(fontStyle(sgr.Bitwise))
 	typeface.SetStyle(sgr.Bitwise)
 
 	err := fa.printCellsToSurface(sgr, cellRect, surface, hlTexture, chars...)

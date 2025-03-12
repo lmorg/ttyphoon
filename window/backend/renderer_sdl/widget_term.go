@@ -156,9 +156,18 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types.XY) {
 	menu := contextMenuT{
 		{
-			Title: fmt.Sprintf("Paste text from clipboard [%s+v]", types.KEY_STR_META),
+			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
 			Fn:    sr.clipboardPaste,
+			Icon:  0xf0ea,
 		},
+	}
+
+	if len(sr.contextMenu) > 0 {
+		menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
+		menu = append(menu, sr.contextMenu...)
+	}
+
+	menu = append(menu, contextMenuT{
 		{
 			Title: MENU_SEPARATOR,
 		},
@@ -171,48 +180,42 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 				}
 			},
 		},
-		//{
-		//	Title: "Match bracket",
-		//	Fn:    func() { sr.term.Match(posCell) },
-		//},
 		{
-			Title: "Search text [F3]",
+			Title: "Find text [F3]",
 			Fn:    sr.termWin.Active.Term.Search,
+			Icon:  0xf002,
 		},
-	}
+	}...)
 
 	if sr.tmux != nil {
-		menu = append(menu,
-			types.MenuItem{
+		menu = append(menu, contextMenuT{
+			{
 				Title: MENU_SEPARATOR,
 			},
-			types.MenuItem{
+			{
 				Title: "List tmux hotkeys",
 				Fn:    sr.tmux.ListKeyBindings,
 			},
-		)
+		}...)
 	}
 
-	if len(sr.contextMenu) > 0 {
-		menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
-		menu = append(menu, sr.contextMenu...)
-	}
-
-	menu = append(menu,
-		types.MenuItem{
+	menu = append(menu, contextMenuT{
+		{
 			Title: MENU_SEPARATOR,
 		},
-		types.MenuItem{
+		{
 			Title: "Bash integration (pasted into shell)",
 			Fn:    func() { sr.termWin.Active.Term.Reply(integrations.Get("shell.bash")) },
+			Icon:  0xf120,
 		},
-		types.MenuItem{
+		{
 			Title: "Zsh integration (pasted into shell)",
 			Fn:    func() { sr.termWin.Active.Term.Reply(integrations.Get("shell.zsh")) },
+			Icon:  0xf120,
 		},
-	)
+	}...)
 
-	sr.DisplayMenuUnderCursor("Select an action", menu.Options(), nil, menu.Callback, nil)
+	sr.DisplayMenuUnderCursor("Select an action", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
 }
 
 var _highlighterStartFooterText = fmt.Sprintf(

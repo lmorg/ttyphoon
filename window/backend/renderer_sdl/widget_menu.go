@@ -7,6 +7,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
+	"github.com/lmorg/mxtty/window/backend/typeface"
 	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -15,8 +16,10 @@ import (
 const MENU_SEPARATOR = "-"
 
 type menuWidgetT struct {
-	options           []string
 	title             string
+	options           []string
+	incIcons          bool
+	icons             []rune
 	highlightIndex    int
 	highlightCallback types.MenuCallbackT
 	selectCallback    types.MenuCallbackT
@@ -33,6 +36,8 @@ const (
 	_MENU_HIGHLIGHT_INIT   = -1
 )
 
+var _MENU_ITEM_COLOR = &types.Colour{Red: 200, Green: 200, Blue: 200, Alpha: 255}
+
 type contextMenuT []types.MenuItem
 
 func (cm *contextMenuT) Options() []string {
@@ -43,24 +48,37 @@ func (cm *contextMenuT) Options() []string {
 	return slice
 }
 
+func (cm *contextMenuT) Icons() []rune {
+	slice := make([]rune, len(*cm))
+	for i := range *cm {
+		slice[i] = (*cm)[i].Icon
+	}
+	return slice
+}
+
 func (cm *contextMenuT) Callback(i int) { (*cm)[i].Fn() }
 
 func (sr *sdlRender) AddToContextMenu(menuItems ...types.MenuItem) {
 	sr.contextMenu = append(sr.contextMenu, menuItems...)
 }
 
-func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
+func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	if len(options) == 0 {
 		sr.DisplayNotification(types.NOTIFY_WARN, "Nothing to show in menu")
 		return
 	}
 
-	sr.DisplayMenu(title, options, highlightCallback, selectCallback, cancelCallback)
+	sr.displayMenu(title, options, icons, highlightCallback, selectCallback, cancelCallback)
+	sr.menu.icons = icons
 	x, y, _ := sdl.GetMouseState()
 	sr.menu.pos = &types.XY{X: x, Y: y}
 }
 
 func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
+	sr.displayMenu(title, options, nil, highlightCallback, selectCallback, cancelCallback)
+}
+
+func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	if len(options) == 0 {
 		sr.DisplayNotification(types.NOTIFY_WARN, "Nothing to show in menu")
 		return
@@ -83,6 +101,8 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 	sr.menu = &menuWidgetT{
 		title:             title,
 		options:           opts,
+		incIcons:          len(icons) != 0,
+		icons:             icons,
 		hidden:            make([]bool, len(options)),
 		highlightCallback: highlightCallback,
 		selectCallback:    selectCallback,
@@ -91,6 +111,9 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 	}
 
 	var crop = int(sr.winCellSize.X - 20)
+	if sr.menu.incIcons {
+		crop -= 3
+	}
 
 	for i := range sr.menu.options {
 		sr.menu.options[i] = runewidth.Truncate(sr.menu.options[i], int(crop), "…")
@@ -281,6 +304,11 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		return
 	}
 
+	var optionOffset int32
+	if sr.menu.incIcons {
+		optionOffset = 3 * sr.glyphSize.X
+	}
+
 	/*
 		FRAME
 	*/
@@ -448,6 +476,22 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			continue
 		}
 
+		if sr.menu.incIcons && sr.menu.icons[i] != 0 {
+			typeface.SetStyle(types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME)
+			rectIcon := sdl.Rect{
+				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN,
+				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
+				W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
+				H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
+			}
+			//surf, _ := typeface.RenderIcon(_MENU_ITEM_COLOR, &rectIcon, sr.menu.icons[i])
+			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: &types.Colour{}}, &rectIcon)
+			//_ = surf.Blit(nil, surface, &rectIcon)
+			//sr._renderNotificationSurface(surface, &rectIcon)
+			//defer surf.Free()
+			typeface.SetStyle(types.SGR_NORMAL)
+		}
+
 		text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(surface.W-sr.notifyIconSize.X))
 		if err != nil {
 			panic(err) // TODO: don't panic!
@@ -462,7 +506,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 		// render shadow
 		rect = sdl.Rect{
-			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 2,
+			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset + 2,
 			Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)),
 			W: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 2,
 			H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
@@ -472,7 +516,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 		// render text
 		rect = sdl.Rect{
-			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN,
+			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset,
 			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
 			W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
 			H: surface.H - (_WIDGET_OUTER_MARGIN * 2),

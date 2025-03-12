@@ -75,7 +75,7 @@ func (sr *sdlRender) PrintLigature(tile *types.Tile, cells []*types.Cell, _cellP
 		}
 	}
 
-	atlas := newFontAtlas(cellsToRunes(cells), cells[0].Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, sr.font, rune(ligId))
+	atlas := newFontAtlas(cellsToRunes(cells), cells[0].Sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, rune(ligId))
 	sr.fontCache.ligs[rune(ligId)] = append(sr.fontCache.ligs[rune(ligId)], atlas)
 	if !atlas.Render(sr, dstRect, rune(ligId), hash, hlTexture) {
 		panic("failed")

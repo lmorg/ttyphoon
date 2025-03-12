@@ -2,7 +2,6 @@ package typeface
 
 import (
 	"github.com/forPelevin/gomoji"
-	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -21,12 +20,7 @@ type typefaceRenderer interface {
 var renderer typefaceRenderer
 
 func Init() error {
-	if config.Config.TypeFace.HarfbuzzRenderer {
-		renderer = new(fontHarfbuzz)
-	} else {
-		renderer = new(fontSdl)
-	}
-
+	renderer = new(fontHarfbuzz)
 	return renderer.Init()
 }
 
