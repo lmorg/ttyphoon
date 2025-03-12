@@ -99,6 +99,7 @@ func (el *ElementImage) MouseClick(_ *types.XY, button types.MouseButtonT, _ uin
 		el.renderer.AddToContextMenu(types.MenuItem{
 			Title: "Copy image to clipboard",
 			Fn:    el.copyImageToClipboard,
+			Icon:  0xf0c5,
 		})
 		callback()
 

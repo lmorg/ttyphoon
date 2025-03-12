@@ -7,7 +7,6 @@ import (
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
-	"github.com/lmorg/mxtty/window/backend/typeface"
 	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -320,7 +319,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		maxLen = (int32(len(sr.menu.title)) + iconByGlyphs)
 	}
 	height := (sr.glyphSize.Y * int32(len(sr.menu.options))) + (_WIDGET_OUTER_MARGIN * 2) + sr.notifyIconSize.Y
-	width := (glyphX * maxLen) + (_WIDGET_OUTER_MARGIN * 3)
+	width := (glyphX * maxLen) + (_WIDGET_OUTER_MARGIN * 3) + optionOffset
 
 	var x, y int32
 	if sr.menu.pos != nil {
@@ -477,19 +476,19 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 
 		if sr.menu.incIcons && sr.menu.icons[i] != 0 {
-			typeface.SetStyle(types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME)
+			//typeface.SetStyle(types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME)
 			rectIcon := sdl.Rect{
-				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN,
+				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
 				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
-				W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
-				H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
+				W: sr.glyphSize.X*2 + dropShadowOffset,
+				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
 			}
 			//surf, _ := typeface.RenderIcon(_MENU_ITEM_COLOR, &rectIcon, sr.menu.icons[i])
-			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: &types.Colour{}}, &rectIcon)
+			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: types.SGR_DEFAULT.Bg, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 			//_ = surf.Blit(nil, surface, &rectIcon)
 			//sr._renderNotificationSurface(surface, &rectIcon)
 			//defer surf.Free()
-			typeface.SetStyle(types.SGR_NORMAL)
+			//typeface.SetStyle(types.SGR_NORMAL)
 		}
 
 		text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(surface.W-sr.notifyIconSize.X))

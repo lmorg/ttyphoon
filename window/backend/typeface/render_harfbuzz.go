@@ -183,7 +183,7 @@ func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
 	}
 
 	if style.Is(types.SGR_SPECIAL_FONT_AWESOME) {
-		f.style = _STYLE_NORMAL | _STYLE_FONT_AWESOME
+		f.style = _STYLE_FONT_AWESOME
 	}
 
 	if style.Is(types.SGR_UNDERLINE) {
@@ -199,6 +199,10 @@ func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
 
 func (f *fontHarfbuzz) getFace(ch rune) *font.Face {
 	style := f.style.TypeFace()
+
+	/*if style >= _STYLE_FONT_AWESOME || f.style >= _STYLE_FONT_AWESOME || ch == '' {
+		panic(style)
+	}*/
 
 	if f.face[style] != nil && f.glyphIsProvided(ch) {
 		return f.face[style]

@@ -138,7 +138,7 @@ func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
 
 	hash := sgr.HashValue()
 
-	ok := sr.fontCache.atlas.Render(sr, dstRect, ch, hash, hlTexture)
+	ok := sr.fontCache.atlas.RenderAsOverlay(sr, dstRect, ch, hash, hlTexture)
 	if ok {
 		return
 	}
@@ -146,7 +146,7 @@ func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
 	extAtlases, ok := sr.fontCache.extended[ch]
 	if ok {
 		for i := range extAtlases {
-			ok = extAtlases[i].Render(sr, dstRect, ch, hash, hlTexture)
+			ok = extAtlases[i].RenderAsOverlay(sr, dstRect, ch, hash, hlTexture)
 			if ok {
 				return
 			}
@@ -155,7 +155,7 @@ func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
 
 	atlas := newFontAtlas([]rune{ch}, sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, _FONT_ATLAS_NOT_LIG)
 	sr.fontCache.extended[ch] = append(sr.fontCache.extended[ch], atlas)
-	atlas.Render(sr, dstRect, ch, hash, hlTexture)
+	atlas.RenderAsOverlay(sr, dstRect, ch, hash, hlTexture)
 }
 
 func (sr *sdlRender) PrintRow(tile *types.Tile, cells []*types.Cell, _cellPos *types.XY) {

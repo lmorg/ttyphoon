@@ -28,6 +28,7 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 			el.renderer.AddToContextMenu(types.MenuItem{
 				Title: "Copy view to clipboard (CSV)",
 				Fn:    el.ExportCsv,
+				Icon:  0xf0c5,
 			})
 			callback()
 			return

@@ -163,7 +163,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 	}
 
 	if len(sr.contextMenu) > 0 {
-		menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
+		//menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
 		menu = append(menu, sr.contextMenu...)
 	}
 
@@ -171,7 +171,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		{
 			Title: MENU_SEPARATOR,
 		},
-		{
+		/*{
 			Title: "Fold on indentation",
 			Fn: func() {
 				err := sr.termWin.Active.Term.FoldAtIndent(posCell)
@@ -179,7 +179,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 					sr.DisplayNotification(types.NOTIFY_WARN, err.Error())
 				}
 			},
-		},
+		},*/
 		{
 			Title: "Find text [F3]",
 			Fn:    sr.termWin.Active.Term.Search,
@@ -195,6 +195,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 			{
 				Title: "List tmux hotkeys",
 				Fn:    sr.tmux.ListKeyBindings,
+				Icon:  0xf11c,
 			},
 		}...)
 	}

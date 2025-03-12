@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"log"
 	"strings"
 
 	"github.com/lmorg/mxtty/config"
@@ -250,6 +251,29 @@ func (fa *fontAtlasT) Render(sr *sdlRender, dstRect *sdl.Rect, r rune, hash uint
 	texture := fa.texture[hlMode]
 
 	sr.AddToElementStack(&layer.RenderStackT{texture, srcRect, dstRect, false})
+
+	return true
+}
+
+func (fa *fontAtlasT) RenderAsOverlay(sr *sdlRender, dstRect *sdl.Rect, r rune, hash uint64, hlMode int) bool {
+	if hash != fa.sgrHash {
+		//debug.Log("fontAtlasT: hash not found")
+		return false
+	}
+
+	srcRect, ok := fa.lookup[r]
+	if !ok {
+		//debug.Log("fontAtlasT: srcRect not found")
+		return false
+	}
+
+	texture := fa.texture[hlMode]
+
+	//sr.AddToOverlayStack(&layer.RenderStackT{texture, srcRect, dstRect, false})
+	err := sr.renderer.Copy(texture, srcRect, dstRect)
+	if err != nil {
+		log.Printf("ERROR: %v", err)
+	}
 
 	return true
 }
