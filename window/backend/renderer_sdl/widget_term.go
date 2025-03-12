@@ -80,9 +80,12 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 
 	switch {
-	case evt.Keysym.Sym == sdl.K_F3 && mod == 0:
+	case evt.Keysym.Sym == sdl.K_F3 && mod == codes.MOD_NONE:
+		fallthrough
+	case evt.Keysym.Sym == 'f' && mod == codes.MOD_META:
 		sr.termWin.Active.Term.Search()
 		return
+
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
 		sr.clipboardPaste()
 		return
@@ -181,7 +184,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 			},
 		},*/
 		{
-			Title: "Find text [F3]",
+			Title: "Find text [Cmd+f]",
 			Fn:    sr.termWin.Active.Term.Search,
 			Icon:  0xf002,
 		},

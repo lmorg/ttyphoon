@@ -30,6 +30,9 @@ import (
 type Modifier int
 
 const (
+	// No modifiers used
+	MOD_NONE = 0
+
 	// Shift
 	MOD_SHIFT Modifier = 1 << iota
 
