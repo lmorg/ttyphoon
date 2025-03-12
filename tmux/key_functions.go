@@ -147,6 +147,20 @@ func fnKeyTilePanes(tmux *Tmux) error {
 	return err
 }
 
+func _fnKeyResizePane(tmux *Tmux, flag string) error {
+	_, err := tmux.SendCommand([]byte("resize-pane " + flag))
+	go tmux.renderer.RefreshWindowList()
+	return err
+}
+func fnKeyResizePaneUp1(tmux *Tmux) error    { return _fnKeyResizePane(tmux, "-U 1") }
+func fnKeyResizePaneDown1(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-D 1") }
+func fnKeyResizePaneLeft1(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-L 1") }
+func fnKeyResizePaneRight1(tmux *Tmux) error { return _fnKeyResizePane(tmux, "-R 1") }
+func fnKeyResizePaneUp5(tmux *Tmux) error    { return _fnKeyResizePane(tmux, "-U 5") }
+func fnKeyResizePaneDown5(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-D 5") }
+func fnKeyResizePaneLeft5(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-L 5") }
+func fnKeyResizePaneRight5(tmux *Tmux) error { return _fnKeyResizePane(tmux, "-R 5") }
+
 func fnKeyListBindings(tmux *Tmux) error {
 	var slice []string
 	for key, fn := range tmux.keys.fnTable {

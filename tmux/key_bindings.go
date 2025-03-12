@@ -128,6 +128,14 @@ var defaultFnKeys = map[string]fnKeyT{
 	"Select the pane to the left of the active pane":  fnKeySelectPaneLeft,
 	"Select the pane to the right of the active pane": fnKeySelectPaneRight,
 	"Spread panes out evenly":                         fnKeyTilePanes,
+	"Resize the pane up by 5":                         fnKeyResizePaneUp5,
+	"Resize the pane down by 5":                       fnKeyResizePaneDown5,
+	"Resize the pane left by 5":                       fnKeyResizePaneLeft5,
+	"Resize the pane right by 5":                      fnKeyResizePaneRight5,
+	"Resize the pane up":                              fnKeyResizePaneUp1,
+	"Resize the pane down":                            fnKeyResizePaneDown1,
+	"Resize the pane left":                            fnKeyResizePaneLeft1,
+	"Resize the pane right":                           fnKeyResizePaneRight1,
 }
 
 func (tmux *Tmux) _getDefaultTmuxKeyBindings() error {
