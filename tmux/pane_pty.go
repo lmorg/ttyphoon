@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/lmorg/mxtty/debug"
@@ -57,7 +58,7 @@ func (p *PaneT) Write(b []byte) error {
 func (p *PaneT) _hotkey(b []byte) (bool, error) {
 	var key string
 	if b[0] == 0 {
-		key = string(b[1 : len(b)-1])
+		key = strings.ReplaceAll(string(b[:len(b)-1]), string(0), "")
 	} else {
 		key = string(b)
 	}

@@ -105,7 +105,7 @@ func translateModToAnsiCode(mod Modifier) []byte {
 func translateModToTmuxCode(mod Modifier) []byte {
 	b := []byte{0} // zero prefix to work around char codes vs char names!
 
-	if mod.Is(MOD_CTRL) {
+	if mod.Is(MOD_CTRL) || mod.Is(MOD_ALT) {
 		b = append(b, []byte{'C', '-'}...)
 	}
 

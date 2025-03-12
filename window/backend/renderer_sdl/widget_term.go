@@ -93,6 +93,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
+	//panic(string(b))
 	if len(b) > 0 {
 		sr.termWin.Active.Term.Reply(b)
 	}
