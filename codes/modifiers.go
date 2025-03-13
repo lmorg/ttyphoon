@@ -1,6 +1,8 @@
 package codes
 
 import (
+	"strings"
+
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -133,4 +135,12 @@ func specialCaseSequences(keySet types.KeyboardMode, keyPress KeyCode, modifier 
 	}
 
 	return nil
+}
+
+func TmuxKeySanitiser(keySeq []byte) string {
+	if keySeq[0] == 0 {
+		return strings.ReplaceAll(string(keySeq[:len(keySeq)-1]), string(0), "")
+	} else {
+		return string(keySeq)
+	}
 }

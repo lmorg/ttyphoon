@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/octal"
@@ -43,7 +43,7 @@ func (p *PaneT) Write(b []byte) error {
 
 	var flags string
 	if b[0] == 0 {
-		b = b[1:]
+		b = []byte(codes.TmuxKeySanitiser(b))
 	} else {
 		flags = "-l"
 		b = octal.Escape(b)
@@ -56,12 +56,7 @@ func (p *PaneT) Write(b []byte) error {
 }
 
 func (p *PaneT) _hotkey(b []byte) (bool, error) {
-	var key string
-	if b[0] == 0 {
-		key = strings.ReplaceAll(string(b[:len(b)-1]), string(0), "")
-	} else {
-		key = string(b)
-	}
+	key := codes.TmuxKeySanitiser(b)
 
 	if p.tmux.prefixTtl.Before(time.Now()) {
 		if key != p.tmux.keys.prefix {
