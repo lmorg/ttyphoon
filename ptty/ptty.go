@@ -42,6 +42,23 @@ func NewPty(size *types.XY) (types.Pty, error) {
 	return p, err
 }
 
+func OpenPty(path string) (types.Pty, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &Pty{
+		primary:   file,
+		secondary: file,
+		buf:       runebuf.New(),
+	}
+
+	go p.read(file)
+
+	return p, nil
+}
+
 func (p *Pty) File() *os.File {
 	return p.primary
 }

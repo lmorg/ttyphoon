@@ -314,20 +314,24 @@ func (sr *sdlRender) selectWindow(winIndex int) {
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-	go sr.RefreshWindowList()
+	go sr.ScheduleWindowListRefresh()
 	sr.TriggerRedraw()
 }
 
-func (sr *sdlRender) RefreshWindowList() {
+func (sr *sdlRender) ScheduleWindowListRefresh() {
+	go sr._scheduleWindowListRefresh()
+}
+
+func (sr *sdlRender) _scheduleWindowListRefresh() {
 	if sr.tmux == nil {
 		return
 	}
 
-	sr.limiter.Lock()
+	//sr.limiter.Lock()
 
 	sr.windowTabs = nil
 	sr.termWin = sr.tmux.ActiveWindow()
 	sr.cacheBgTexture = nil
 
-	sr.limiter.Unlock()
+	//sr.limiter.Unlock()
 }

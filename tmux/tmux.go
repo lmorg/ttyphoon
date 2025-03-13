@@ -220,7 +220,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 						return
 					}
 					pane.buf.Write(octal.Unescape(msg))
-					go renderer.RefreshWindowList()
+					renderer.ScheduleWindowListRefresh()
 				}()
 
 			case bytes.HasPrefix(b, _RESP_EXTENDED_OUTPUT):
@@ -261,13 +261,13 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 					if err != nil {
 						renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 					}
-					renderer.RefreshWindowList()
+					renderer.ScheduleWindowListRefresh()
 				}()
 
 			case bytes.HasPrefix(b, _RESP_WINDOW_RENAMED):
 				params := bytes.SplitN(b, []byte{' '}, 3)
 				tmux.win[string(params[1])].Name = string(params[2])
-				go renderer.RefreshWindowList()
+				renderer.ScheduleWindowListRefresh()
 
 			case bytes.HasPrefix(b, _RESP_WINDOW_CLOSE) || bytes.HasPrefix(b, _RESP_UNLINKED_WINDOW_CLOSE):
 				params := bytes.SplitN(b, []byte{' '}, 3)
@@ -358,7 +358,7 @@ func (tmux *Tmux) UpdateSession() {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 
-	tmux.renderer.RefreshWindowList()
+	tmux.renderer.ScheduleWindowListRefresh()
 }
 
 func ignoreResponse(b []byte) bool {

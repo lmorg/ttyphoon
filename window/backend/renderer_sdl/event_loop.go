@@ -61,12 +61,6 @@ func (sr *sdlRender) eventLoop() {
 		case size := <-sr._resize:
 			sr._resizeWindow(size)
 
-		case <-sr._redraw:
-			err := render(sr)
-			if err != nil {
-				log.Printf("ERROR: %s", err.Error())
-			}
-
 		case <-sr._redrawTimer:
 			if sr._redrawRequired.Load() {
 				sr.TriggerRedraw()
@@ -76,6 +70,12 @@ func (sr *sdlRender) eventLoop() {
 
 		case <-sr.pollEventHotkey():
 			sr.eventHotkey()
+
+		case <-sr._redraw:
+			err := render(sr)
+			if err != nil {
+				log.Printf("ERROR: %s", err.Error())
+			}
 
 		case <-sr._quit:
 			return

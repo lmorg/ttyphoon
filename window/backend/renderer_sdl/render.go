@@ -148,7 +148,11 @@ func (sr *sdlRender) isMouseInsideWindow() bool {
 }
 
 func render(sr *sdlRender) error {
-	defer sr.limiter.Unlock()
+	//if sr.termWin == nil || !sr.limiter.TryLock() {
+	//	return nil
+	//}
+	//defer sr.limiter.Unlock()
+	defer sr.renderLock.Store(false)
 
 	if sr.hidden {
 		// window hidden
