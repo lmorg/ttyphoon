@@ -9,8 +9,8 @@ Tmux:
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
-  Default:  murex
-  Fallback: $SHELL
+  Default:  [ murex  ]
+  Fallback: [ $SHELL ]
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.

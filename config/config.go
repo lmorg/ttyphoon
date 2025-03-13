@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	_ "embed"
-	"os"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,9 +31,6 @@ func Default() error {
 		return err
 	}
 
-	Config.Shell.Default = os.ExpandEnv(Config.Shell.Default)
-	Config.Shell.Fallback = os.ExpandEnv(Config.Shell.Fallback)
-
 	return nil
 }
 
@@ -46,8 +42,8 @@ type configT struct {
 	} `yaml:"Tmux"`
 
 	Shell struct {
-		Default  string `yaml:"Default"`
-		Fallback string `yaml:"Fallback"`
+		Default  []string `yaml:"Default"`
+		Fallback []string `yaml:"Fallback"`
 	} `yaml:"Shell"`
 
 	Terminal struct {

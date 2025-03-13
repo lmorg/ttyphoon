@@ -9,6 +9,7 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/utils/getshell"
 )
 
 func init() {
@@ -50,8 +51,10 @@ fallback:
 		defaultErr, fallbackErr))
 }
 
-func _exec(tty *os.File, _command string, proc **os.Process) error {
-	command := strings.Split(_command, "/")
+func _exec(tty *os.File, command []string, proc **os.Process) error {
+	if len(command) == 0 || command[0] == "" {
+		command = []string{getshell.GetShell()}
+	}
 
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Env = config.SetEnv()
