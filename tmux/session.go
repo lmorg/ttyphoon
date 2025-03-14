@@ -66,13 +66,23 @@ func (tmux *Tmux) setSessionTerminalFeatures() error {
 	for i := range sessionSetOptions {
 		command := fmt.Sprintf(_COMMAND_SET_OPTION, i, sessionSetOptions[i])
 		_, err := tmux.SendCommand([]byte(command))
-		return err
+		if err != nil {
+			return err
+		}
 	}
+
+	//_, err := tmux.SendCommand([]byte("set-window-option synchronize-panes on"))
+	//return err
 	return nil
 }
 
 func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
-	err := tmux.RefreshClient(size)
+	err := tmux.setSessionTerminalFeatures()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.RefreshClient(size)
 	if err != nil {
 		return err
 	}
@@ -93,11 +103,6 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 	}
 
 	err = tmux.setSessionHooks()
-	if err != nil {
-		return err
-	}
-
-	err = tmux.setSessionTerminalFeatures()
 	if err != nil {
 		return err
 	}

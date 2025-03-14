@@ -3,6 +3,7 @@ package tmux
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/lmorg/mxtty/codes"
@@ -72,7 +73,7 @@ type PaneT struct {
 }
 
 func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
-	v, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s")
+	v, err := tmux.SendCommandWithReflection(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s")
 	if err != nil {
 		return err
 	}
@@ -117,6 +118,7 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 
 	pane := &PaneT{
 		Id:   info.Id,
+		Pty:  info.Pty,
 		tmux: tmux,
 		tile: new(types.Tile),
 		buf:  runebuf.New(),
@@ -131,12 +133,67 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	if err != nil {
 		panic(err)
 	}*/
+	//pane.createPipe()
 
 	pane.tile.Term.Start(pane)
 
 	tmux.pane[pane.Id] = pane
 
 	return pane
+}
+
+const _READ_BUFF = 1024 * 1024
+
+func (pane *PaneT) createPipe() {
+	/*fileName := fmt.Sprintf("%s/%s_%s_%d", os.TempDir(), app.Name, pane.Id, time.Now().UnixMicro())
+
+	err := unix.Mkfifo(fileName, 0666)
+	if err != nil {
+		panic(err)
+		debug.Log(err)
+		return
+	}
+
+	command := fmt.Sprintf(`pipe-pane -O -t %s 'cat >> %s'`, pane.Id, fileName)
+	_, err = pane.tmux.SendCommand([]byte(command))
+	if err != nil {
+		panic(err)
+		debug.Log(err)
+		return
+	}
+
+	go func() {
+		for {
+			b, err := os.ReadFile(fileName)
+			if err != nil {
+				//panic(err)
+				return
+			}
+
+			pane.buf.Write(b)
+		}
+	}()*/
+
+	go func() {
+		file, err := os.OpenFile(pane.Pty, os.O_RDONLY, 0660)
+		if err != nil {
+			panic(err)
+			debug.Log(err)
+			return
+		}
+
+		for {
+			p := make([]byte, _READ_BUFF)
+			i, err := file.Read(p)
+			if err != nil {
+				panic(err)
+				debug.Log(err)
+				return
+			}
+
+			pane.buf.Write(p[:i])
+		}
+	}()
 }
 
 type paneInfo struct {
@@ -162,7 +219,7 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		filter = fmt.Sprintf("-f '#{m:#{pane_id},%s}'", paneId)
 	}
 
-	v, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s", filter)
+	v, err := tmux.SendCommandWithReflection(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s", filter)
 	if err != nil {
 		return err
 	}
@@ -215,9 +272,18 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		pane.tile.Term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 	}
 
-	tmux.win[pane.WindowId].panes[pane.Id] = pane
+	win, ok := tmux.win[pane.WindowId]
+	if !ok {
+		/*err := tmux.updateWinInfo(pane.WindowId)
+		if err != nil {
+			panic(err)
+		}
+		win = tmux.win[pane.WindowId]*/
+		panic("tmux pane created before window")
+	}
+	win.panes[pane.Id] = pane
 	if pane.Active {
-		tmux.win[pane.WindowId].activePane = pane
+		win.activePane = pane
 	}
 
 	return pane
@@ -241,7 +307,7 @@ func (tmux *Tmux) SelectPane(paneId string) error {
 }
 
 func (tmux *Tmux) paneExited() error {
-	v, err := tmux.sendCommand(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s")
+	v, err := tmux.SendCommandWithReflection(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s")
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ Tmux:
   # would prefer to use the vanilla tmux UI.
   # If `tmux` executable is not in $PATH then this terminal emulator will
   # revert to the $SHELLs defined below
-  Enabled: true
+  Enabled: false
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:

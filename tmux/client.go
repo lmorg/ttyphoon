@@ -51,7 +51,7 @@ type CLIENT_T struct {
 
 func (tmux *Tmux) RefreshClient(size *types.XY) error {
 	strSize := fmt.Sprintf("%dx%d", size.X, size.Y)
-	_, err := tmux.sendCommand(CMD_CLIENT_REFRESH, reflect.TypeOf(CLIENT_T{}), "-C", strSize)
+	_, err := tmux.SendCommandWithReflection(CMD_CLIENT_REFRESH, reflect.TypeOf(CLIENT_T{}), "-C", strSize)
 	if err != nil {
 		return err
 	}

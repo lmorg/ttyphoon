@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,61 +92,43 @@ import (
 */
 
 var (
-	_RESP_OUTPUT = []byte("%output")
-	_RESP_BEGIN  = []byte("%begin")
-	_RESP_END    = []byte("%end")
-	_RESP_ERROR  = []byte("%error")
+	_RESP_OUTPUT = "%output"
+	_RESP_BEGIN  = "%begin"
+	_RESP_END    = "%end"
+	_RESP_ERROR  = "%error"
 
-	_RESP_CLIENT_DETACHED         = []byte("%client-detached")
-	_RESP_CLIENT_SESSION_CHANGED  = []byte("%client-session-changed")
-	_RESP_CONFIG_ERROR            = []byte("%config-error")
-	_RESP_CONTINUE                = []byte("%continue")
-	_RESP_EXIT                    = []byte("%exit")
-	_RESP_EXTENDED_OUTPUT         = []byte("%extended-output")
-	_RESP_LAYOUT_CHANGE           = []byte("%layout-change")
-	_RESP_MESSAGE                 = []byte("%message")
-	_RESP_PANE_MODE_CHANGED       = []byte("%pane-mode-changed")
-	_RESP_PASTE_BUFFER_CHANGED    = []byte("%paste-buffer-changed")
-	_RESP_PASTE_BUFFER_DELETED    = []byte("%paste-buffer-deleted")
-	_RESP_PAUSE                   = []byte("%pause")
-	_RESP_SESSION_CHANGED         = []byte("%session-changed")
-	_RESP_SESSION_RENAMED         = []byte("%session-renamed")
-	_RESP_SESSION_WINDOW_CHANGED  = []byte("%session-window-changed")
-	_RESP_SESSIONS_CHANGED        = []byte("%sessions-changed")
-	_RESP_SUBSCRIPTION_CHANGED    = []byte("%subscription-changed")
-	_RESP_UNLINKED_WINDOW_ADD     = []byte("%unlinked-window-add")
-	_RESP_UNLINKED_WINDOW_CLOSE   = []byte("%unlinked-window-close")
-	_RESP_UNLINKED_WINDOW_RENAMED = []byte("%unlinked-window-renamed")
-	_RESP_WINDOW_ADD              = []byte("%window-add")
-	_RESP_WINDOW_CLOSE            = []byte("%window-close")
-	_RESP_WINDOW_PANE_CHANGED     = []byte("%window-pane-changed")
-	_RESP_WINDOW_RENAMED          = []byte("%window-renamed")
+	_RESP_CLIENT_DETACHED         = "%client-detached"
+	_RESP_CLIENT_SESSION_CHANGED  = "%client-session-changed"
+	_RESP_CONFIG_ERROR            = "%config-error"
+	_RESP_CONTINUE                = "%continue"
+	_RESP_EXIT                    = "%exit"
+	_RESP_EXTENDED_OUTPUT         = "%extended-output"
+	_RESP_LAYOUT_CHANGE           = "%layout-change"
+	_RESP_MESSAGE                 = "%message"
+	_RESP_PANE_MODE_CHANGED       = "%pane-mode-changed"
+	_RESP_PASTE_BUFFER_CHANGED    = "%paste-buffer-changed"
+	_RESP_PASTE_BUFFER_DELETED    = "%paste-buffer-deleted"
+	_RESP_PAUSE                   = "%pause"
+	_RESP_SESSION_CHANGED         = "%session-changed"
+	_RESP_SESSION_RENAMED         = "%session-renamed"
+	_RESP_SESSION_WINDOW_CHANGED  = "%session-window-changed"
+	_RESP_SESSIONS_CHANGED        = "%sessions-changed"
+	_RESP_SUBSCRIPTION_CHANGED    = "%subscription-changed"
+	_RESP_UNLINKED_WINDOW_ADD     = "%unlinked-window-add"
+	_RESP_UNLINKED_WINDOW_CLOSE   = "%unlinked-window-close"
+	_RESP_UNLINKED_WINDOW_RENAMED = "%unlinked-window-renamed"
+	_RESP_WINDOW_ADD              = "%window-add"
+	_RESP_WINDOW_CLOSE            = "%window-close"
+	_RESP_WINDOW_PANE_CHANGED     = "%window-pane-changed"
+	_RESP_WINDOW_RENAMED          = "%window-renamed"
 )
 
-var respIgnored = [][]byte{
-	_RESP_CLIENT_DETACHED,
-	_RESP_CLIENT_SESSION_CHANGED,
-	_RESP_CONFIG_ERROR,
-	_RESP_CONTINUE,
-	_RESP_LAYOUT_CHANGE,
-	_RESP_PANE_MODE_CHANGED,
-	_RESP_PASTE_BUFFER_CHANGED,
-	_RESP_PASTE_BUFFER_DELETED,
-	_RESP_PAUSE,
-	_RESP_SESSION_CHANGED,
-	_RESP_SESSION_RENAMED,
-	_RESP_SESSION_WINDOW_CHANGED,
-	_RESP_SESSIONS_CHANGED,
-	_RESP_SUBSCRIPTION_CHANGED,
-	_RESP_UNLINKED_WINDOW_ADD,
-	_RESP_UNLINKED_WINDOW_RENAMED,
-	_RESP_WINDOW_PANE_CHANGED,
-}
-
 type Tmux struct {
-	cmd       *exec.Cmd
-	tty       *os.File
+	cmd *exec.Cmd
+	tty *os.File
+	//writePipe io.WriteCloser
 	resp      chan *tmuxResponseT
+	_resp     *tmuxResponseT
 	win       map[string]*WindowT
 	pane      map[string]*PaneT
 	keys      keyBindsT
@@ -178,71 +160,50 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	}
 
 	var err error
-	resp := new(tmuxResponseT)
+	tmux._resp = new(tmuxResponseT)
 
-	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
+	tmux.cmd = exec.Command("tmux", "-C", startCommand)
 	tmux.cmd.Env = config.SetEnv()
 	tmux.tty, err = pty.Start(tmux.cmd)
 	if err != nil {
 		return nil, err
 	}
 
+	/*pipe, err := tmux.cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	tmux.writePipe, err = tmux.cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	err = tmux.cmd.Start()
+	if err != nil {
+		return nil, err
+	}*/
+
 	// Discard the following because it's just setting mode:
 	//    \u001bP1000p
 	_, _ = tmux.tty.Read(make([]byte, 7))
+
+	//bRespOutput := []byte(_RESP_OUTPUT)
 
 	go func() {
 		scanner := bufio.NewScanner(tmux.tty)
 
 		for scanner.Scan() {
 			b := scanner.Bytes()
-			//debug.Log(string(b))
-			switch {
-			case bytes.HasPrefix(b, _RESP_OUTPUT):
-				go _respOutput(tmux, b)
+			debug.Log(b)
 
-			case bytes.HasPrefix(b, _RESP_EXTENDED_OUTPUT):
-				go _respExtendedOutput(tmux, b)
+			prefix := bytes.SplitN(b, []byte{' '}, 2)
 
-			case bytes.HasPrefix(b, _RESP_BEGIN):
-				resp = new(tmuxResponseT)
-
-			case bytes.HasPrefix(b, _RESP_ERROR):
-				resp.IsErr = true
-				fallthrough
-
-			case bytes.HasPrefix(b, _RESP_END):
-				tmux.resp <- resp
-
-			case bytes.HasPrefix(b, _RESP_MESSAGE):
-				msg := string(b[len(_RESP_MESSAGE)+1:])
-				if msg == _PANE_EXITED {
-					go func() { errToNotification(renderer, tmux.paneExited()) }()
-					continue
-				}
-				renderer.DisplayNotification(types.NOTIFY_INFO, msg)
-
-			case bytes.HasPrefix(b, _RESP_WINDOW_ADD):
-				go _respWindowAdd(tmux, b)
-
-			case bytes.HasPrefix(b, _RESP_WINDOW_RENAMED):
-				go _respWindowRenamed(tmux, b)
-
-			case bytes.HasPrefix(b, _RESP_WINDOW_CLOSE) || bytes.HasPrefix(b, _RESP_UNLINKED_WINDOW_CLOSE):
-				go _respWindowClosed(tmux, b)
-
-			case bytes.HasPrefix(b, _RESP_EXIT):
-				go _respExit(tmux, b)
-
-			default:
-				// ignore anything that looks like a notification
-				if ignoreResponse(b) {
-					continue
-				}
-
-				message := make([]byte, len(b))
-				copy(message, b)
-				resp.Message = append(resp.Message, message)
+			fn, ok := tmuxCommandMap[string(prefix[0])]
+			if ok {
+				fn(tmux, b)
+			} else {
+				_respDefault(tmux, b)
 			}
 		}
 	}()
@@ -263,35 +224,81 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	return tmux, nil
 }
 
+var tmuxCommandMap = map[string]func(*Tmux, []byte){
+	_RESP_OUTPUT: _respOutput,
+	_RESP_BEGIN:  _respBegin,
+	_RESP_END:    _respEnd,
+	_RESP_ERROR:  _respError,
+
+	_RESP_CLIENT_DETACHED:         __respIgnored,
+	_RESP_CLIENT_SESSION_CHANGED:  __respIgnored,
+	_RESP_CONFIG_ERROR:            __respIgnored,
+	_RESP_CONTINUE:                __respIgnored,
+	_RESP_EXIT:                    _respExit,
+	_RESP_LAYOUT_CHANGE:           __respIgnored,
+	_RESP_EXTENDED_OUTPUT:         _respExtendedOutput,
+	_RESP_MESSAGE:                 _respMessage,
+	_RESP_PANE_MODE_CHANGED:       __respIgnored,
+	_RESP_PASTE_BUFFER_CHANGED:    __respIgnored,
+	_RESP_PASTE_BUFFER_DELETED:    __respIgnored,
+	_RESP_PAUSE:                   __respIgnored,
+	_RESP_SESSION_CHANGED:         __respIgnored,
+	_RESP_SESSION_RENAMED:         _respWindowRenamed,
+	_RESP_SESSION_WINDOW_CHANGED:  __respIgnored,
+	_RESP_SESSIONS_CHANGED:        __respIgnored,
+	_RESP_SUBSCRIPTION_CHANGED:    __respIgnored,
+	_RESP_UNLINKED_WINDOW_ADD:     __respIgnored,
+	_RESP_UNLINKED_WINDOW_CLOSE:   __respIgnored,
+	_RESP_UNLINKED_WINDOW_RENAMED: __respIgnored,
+	_RESP_WINDOW_ADD:              _respWindowAdd,
+	_RESP_WINDOW_CLOSE:            _respWindowClosed,
+	_RESP_WINDOW_PANE_CHANGED:     __respIgnored,
+	_RESP_WINDOW_RENAMED:          __respIgnored,
+}
+
 func _respOutput(tmux *Tmux, b []byte) {
-	params := bytes.SplitN(b, []byte{' '}, 3)
+	go __respOutput(tmux, string(b))
+}
+func __respOutput(tmux *Tmux, s string) {
+	params := strings.SplitN(s, " ", 3)
 	paneId := string(params[1])
 	pane, ok := tmux.pane[paneId]
 	if ok {
-		pane.buf.Write(octal.Unescape(params[2]))
-		return //continue
+		pane.buf.Write(octal.Unescape([]byte(params[2])))
+		return
 	}
-	//msg := make([]byte, len(params[2]))
-	//copy(msg, params[2])
 
-	//go func() {
-	err := tmux.updatePaneInfo(paneId)
-	if err != nil {
-		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-	pane, ok = tmux.pane[paneId]
-	if !ok {
-		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "pane not found: "+paneId)
-		return
-	}
-	//pane.buf.Write(octal.Unescape(msg))
-	pane.buf.Write(octal.Unescape(params[2]))
-	tmux.renderer.ScheduleWindowListRefresh()
+	msg := make([]byte, len(params[2]))
+	copy(msg, params[2])
+
+	go func() {
+		err := tmux.updatePaneInfo(paneId)
+		if err != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+		pane, ok = tmux.pane[paneId]
+		if !ok {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "pane not found: "+paneId)
+			return
+		}
+		pane.buf.Write(octal.Unescape(msg))
+		tmux.renderer.ScheduleWindowListRefresh()
+	}()
 }
 
 func _respExtendedOutput(tmux *Tmux, b []byte) {
 	panic(_RESP_EXTENDED_OUTPUT)
+}
+
+func _respMessage(tmux *Tmux, b []byte) {
+	msg := string(b[len(_RESP_MESSAGE)+1:])
+	if msg == _PANE_EXITED {
+		errToNotification(tmux.renderer, tmux.paneExited())
+		return
+	}
+
+	tmux.renderer.DisplayNotification(types.NOTIFY_INFO, msg)
 }
 
 func _respWindowAdd(tmux *Tmux, b []byte) {
@@ -299,21 +306,21 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 	winId := string(params[1])
 	_ = tmux.newWindow(winId)
 
-	//go func() {
-	err := tmux.updatePaneInfo("")
-	if err != nil {
-		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
-	err = tmux.updateWinInfo(winId)
-	if err != nil {
-		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
-	err = tmux.SelectAndResizeWindow(winId, tmux.renderer.GetWindowSizeCells())
-	if err != nil {
-		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
-	tmux.renderer.ScheduleWindowListRefresh()
-	//}()
+	go func() {
+		err := tmux.updatePaneInfo("")
+		if err != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+		err = tmux.updateWinInfo(winId)
+		if err != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+		err = tmux.SelectAndResizeWindow(winId, tmux.renderer.GetWindowSizeCells())
+		if err != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+		tmux.renderer.ScheduleWindowListRefresh()
+	}()
 }
 
 func _respWindowRenamed(tmux *Tmux, b []byte) {
@@ -338,36 +345,29 @@ func _respExit(tmux *Tmux, b []byte) {
 	}
 }
 
-func ignoreResponse(b []byte) bool {
-	if len(b) > 0 && b[0] == '%' {
-		for _, notification := range respIgnored {
-			if bytes.HasPrefix(b, notification) {
-				return true
-			}
-		}
-	}
-
-	return false
+func _respBegin(tmux *Tmux, b []byte) {
+	tmux._resp = new(tmuxResponseT)
 }
 
-func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
-	tmux.limiter.Lock()
+func _respEnd(tmux *Tmux, b []byte) {
+	tmux.resp <- tmux._resp
+}
 
-	_, err := tmux.tty.Write(append(b, '\n'))
-	if err != nil {
-		debug.Log(fmt.Sprintf("error (%s): %v", string(b), err))
-		return nil, err
-	}
+func _respError(tmux *Tmux, b []byte) {
+	tmux._resp.IsErr = true
+	_respEnd(tmux, b)
+}
 
-	resp := <-tmux.resp
+func _respDefault(tmux *Tmux, b []byte) {
+	message := make([]byte, len(b))
+	copy(message, b)
+	tmux._resp.Message = append(tmux._resp.Message, message)
+	//tmux._resp.Message = append(tmux._resp.Message, b)
+}
 
-	tmux.limiter.Unlock()
-
-	if resp.IsErr {
-		return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
-	}
-
-	return resp, nil
+func __respIgnored(tmux *Tmux, b []byte) {
+	// do nothing
+	debug.Log(b)
 }
 
 func errToNotification(renderer types.Renderer, err error) {

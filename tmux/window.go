@@ -61,7 +61,7 @@ type WindowT struct {
 }
 
 func (tmux *Tmux) initSessionWindows() error {
-	windows, err := tmux.sendCommand(CMD_LIST_WINDOWS, reflect.TypeOf(WindowT{}))
+	windows, err := tmux.SendCommandWithReflection(CMD_LIST_WINDOWS, reflect.TypeOf(WindowT{}))
 	if err != nil {
 		return err
 	}
@@ -106,9 +106,9 @@ func (tmux *Tmux) NewWindow() {
 }
 
 type winInfo struct {
+	Name   string `tmux:"window_name"`
 	Id     string `tmux:"window_id"`
 	Index  int    `tmux:"window_index"`
-	Name   string `tmux:"window_name"`
 	Width  int    `tmux:"window_width"`
 	Height int    `tmux:"window_height"`
 	Active bool   `tmux:"?window_active,true,false"`
@@ -121,7 +121,7 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 		filter = fmt.Sprintf("-f '#{m:#{window_id},%s}'", winId)
 	}
 
-	v, err := tmux.sendCommand(CMD_LIST_WINDOWS, reflect.TypeOf(winInfo{}), filter)
+	v, err := tmux.SendCommandWithReflection(CMD_LIST_WINDOWS, reflect.TypeOf(winInfo{}), filter)
 	if err != nil {
 		return err
 	}

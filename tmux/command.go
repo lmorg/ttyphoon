@@ -1,10 +1,13 @@
 package tmux
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/lmorg/mxtty/debug"
 )
 
 const (
@@ -14,7 +17,28 @@ const (
 
 const _SEPARATOR = `|||`
 
-func (tmux *Tmux) sendCommand(command string, t reflect.Type, parameters ...string) (any, error) {
+func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
+	//tmux.limiter.Lock()
+
+	_, err := tmux.tty.Write(append(b, '\n'))
+	//_, err := tmux.writePipe.Write(append(b, '\n'))
+	if err != nil {
+		debug.Log(fmt.Sprintf("error (%s): %v", string(b), err))
+		return nil, err
+	}
+
+	resp := <-tmux.resp
+
+	//tmux.limiter.Unlock()
+
+	if resp.IsErr {
+		return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
+	}
+
+	return resp, nil
+}
+
+func (tmux *Tmux) SendCommandWithReflection(command string, t reflect.Type, parameters ...string) (any, error) {
 	resp, err := tmux.SendCommand(mkCmdLine(command, t, parameters...))
 	if err != nil {
 		return nil, err
@@ -26,6 +50,9 @@ func (tmux *Tmux) sendCommand(command string, t reflect.Type, parameters ...stri
 		v := reflect.New(t)
 		err = parseMxttyLine(resp.Message[i], v)
 		if err != nil {
+			if debug.Enabled {
+				panic(err)
+			}
 			return nil, err
 		}
 		slice = append(slice, v.Interface())
@@ -49,7 +76,7 @@ func mkCmdLine(command string, t reflect.Type, parameters ...string) []byte {
 
 func getStructTags(t reflect.Type) [][2]string {
 	if t.Kind() != reflect.Struct {
-		panic("Provided value is not a struct")
+		panic("provided value is not a struct")
 	}
 
 	var structTags [][2]string
