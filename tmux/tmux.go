@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -257,10 +256,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 }
 
 func _respOutput(tmux *Tmux, b []byte) {
-	go __respOutput(tmux, string(b))
-}
-func __respOutput(tmux *Tmux, s string) {
-	params := strings.SplitN(s, " ", 3)
+	params := bytes.SplitN(b, []byte{' '}, 3)
 	paneId := string(params[1])
 	pane, ok := tmux.pane[paneId]
 	if ok {

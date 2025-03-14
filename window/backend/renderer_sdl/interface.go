@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,13 +30,13 @@ var ( // defined at runtime based on font size
 )
 
 type sdlRender struct {
-	window     *sdl.Window
-	renderer   *sdl.Renderer
-	fontCache  *fontCacheT
-	glyphSize  *types.XY
-	tmux       *tmux.Tmux
-	renderLock atomic.Bool
-	//limiter     sync.Mutex
+	window    *sdl.Window
+	renderer  *sdl.Renderer
+	fontCache *fontCacheT
+	glyphSize *types.XY
+	tmux      *tmux.Tmux
+	//renderLock atomic.Bool
+	limiter     sync.Mutex
 	winCellSize *types.XY
 	winTile     types.Tile
 
@@ -126,14 +127,14 @@ func (sr *sdlRender) _triggerQuit() { sr._quit <- true }
 
 func (sr *sdlRender) TriggerRedraw() { go sr._triggerRedraw() }
 func (sr *sdlRender) _triggerRedraw() {
-	//if sr.termWin != nil && sr.limiter.TryLock() {
-	if sr.termWin == nil {
+	if sr.termWin == nil || !sr.limiter.TryLock() {
+		//if sr.termWin == nil {
 		return
 	}
 
-	if sr.renderLock.Swap(true) {
+	/*if sr.renderLock.Swap(true) {
 		return
-	}
+	}*/
 
 	sr._redraw <- true
 }

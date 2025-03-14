@@ -18,7 +18,7 @@ const (
 const _SEPARATOR = `|||`
 
 func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
-	//tmux.limiter.Lock()
+	tmux.limiter.Lock()
 
 	_, err := tmux.tty.Write(append(b, '\n'))
 	//_, err := tmux.writePipe.Write(append(b, '\n'))
@@ -29,7 +29,7 @@ func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
 
 	resp := <-tmux.resp
 
-	//tmux.limiter.Unlock()
+	tmux.limiter.Unlock()
 
 	if resp.IsErr {
 		return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
@@ -98,6 +98,10 @@ func parseMxttyLine(b []byte, v reflect.Value) error {
 
 	for i := range fields {
 		values := strings.SplitN(fields[i], ":", 2)
+
+		if len(values) < 2 {
+			return fmt.Errorf("too few values: %d", len(values))
+		}
 
 		err := setFieldValue(v, values[0], values[1])
 		if err != nil {

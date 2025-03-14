@@ -151,8 +151,8 @@ func render(sr *sdlRender) error {
 	//if sr.termWin == nil || !sr.limiter.TryLock() {
 	//	return nil
 	//}
-	//defer sr.limiter.Unlock()
-	defer sr.renderLock.Store(false)
+	defer sr.limiter.Unlock()
+	//defer sr.renderLock.Store(false)
 
 	if sr.hidden {
 		// window hidden

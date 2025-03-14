@@ -327,11 +327,11 @@ func (sr *sdlRender) _scheduleWindowListRefresh() {
 		return
 	}
 
-	//sr.limiter.Lock()
+	sr.limiter.Lock()
 
 	sr.windowTabs = nil
 	sr.termWin = sr.tmux.ActiveWindow()
 	sr.cacheBgTexture = nil
 
-	//sr.limiter.Unlock()
+	sr.limiter.Unlock()
 }

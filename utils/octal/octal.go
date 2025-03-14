@@ -40,7 +40,8 @@ func Unescape(b []byte) []byte {
 
 		parseInt, err := strconv.ParseInt(string(b[i+1:i+4]), 8, 64)
 		if err != nil {
-			panic(err)
+			debug.Log(err)
+			continue
 		}
 		c[j] = byte(parseInt)
 		i += 4
