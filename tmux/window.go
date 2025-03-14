@@ -98,6 +98,13 @@ func (tmux *Tmux) newWindow(winId string) *WindowT {
 	return win
 }
 
+func (tmux *Tmux) NewWindow() {
+	_, err := tmux.SendCommand([]byte("new-window"))
+	if err != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
 type winInfo struct {
 	Id     string `tmux:"window_id"`
 	Index  int    `tmux:"window_index"`

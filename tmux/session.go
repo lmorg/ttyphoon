@@ -2,6 +2,8 @@ package tmux
 
 import (
 	"fmt"
+
+	"github.com/lmorg/mxtty/types"
 )
 
 /*
@@ -67,4 +69,53 @@ func (tmux *Tmux) setSessionTerminalFeatures() error {
 		return err
 	}
 	return nil
+}
+
+func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
+	err := tmux.RefreshClient(size)
+	if err != nil {
+		return err
+	}
+
+	err = tmux.initSessionWindows()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.initSessionPanes(renderer)
+	if err != nil {
+		return err
+	}
+
+	err = tmux._getDefaultTmuxKeyBindings()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.setSessionHooks()
+	if err != nil {
+		return err
+	}
+
+	err = tmux.setSessionTerminalFeatures()
+	if err != nil {
+		return err
+	}
+
+	tmux.ActivePane().Term().MakeVisible(true)
+	return nil
+}
+
+func (tmux *Tmux) UpdateSession() {
+	err := tmux.updateWinInfo("")
+	if err != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+
+	err = tmux.updatePaneInfo("")
+	if err != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+
+	tmux.renderer.ScheduleWindowListRefresh()
 }
