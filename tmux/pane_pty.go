@@ -14,6 +14,7 @@ import (
 
 func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
+func (p *PaneT) BufSize() int        { return p.buf.BufSize() }
 func (p *PaneT) Close()              {}
 
 func (p *PaneT) exit() {

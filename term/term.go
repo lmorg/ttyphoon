@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/lmorg/mxtty/charset"
@@ -49,6 +50,7 @@ type Term struct {
 	// smooth scroll
 	_ssCounter   int32
 	_ssFrequency int32
+	_ssLargeBuf  atomic.Int32
 
 	// tab stops
 	_tabStops []int32

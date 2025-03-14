@@ -5,10 +5,11 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (term *Term) Render() {
-	/*if !term.visible {
-		return
-	}*/
+func (term *Term) Render() bool {
+	if term.Pty.BufSize() > 0 && term._ssLargeBuf.Add(1) < 1000 {
+		return false
+	}
+	term._ssLargeBuf.Store(0)
 
 	term._mutex.Lock()
 
@@ -29,6 +30,8 @@ func (term *Term) Render() {
 	term._renderCursor()
 
 	term._mutex.Unlock()
+
+	return true
 }
 
 func (term *Term) _renderCells(screen types.Screen) {

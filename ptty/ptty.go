@@ -92,6 +92,10 @@ func (p *Pty) Resize(size *types.XY) error {
 	})
 }
 
+func (p *Pty) BufSize() int {
+	return p.buf.BufSize()
+}
+
 func (p *Pty) Close() {
 	p.buf.Close()
 	p.Close()

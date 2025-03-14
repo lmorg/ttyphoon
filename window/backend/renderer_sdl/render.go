@@ -166,7 +166,10 @@ func render(sr *sdlRender) error {
 	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
 
 	for _, tile := range sr.termWin.Tiles {
-		tile.Term.Render()
+		ok := tile.Term.Render()
+		if !ok {
+			return nil
+		}
 	}
 
 	if sr.isMouseInsideWindow() {

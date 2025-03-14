@@ -24,7 +24,7 @@ type Term interface {
 	Start(Pty)
 	GetSize() *XY
 	Resize(*XY)
-	Render()
+	Render() bool
 	CopyRange(*XY, *XY) []byte
 	CopyLines(int32, int32) []byte
 	CopySquare(*XY, *XY) []byte
@@ -49,5 +49,6 @@ type Pty interface {
 	Read() (rune, error)
 	Write([]byte) error
 	Resize(*XY) error
+	BufSize() int
 	Close()
 }
