@@ -99,12 +99,11 @@ func (buf *Buf) Write(b []byte) {
 
 func (buf *Buf) Read() (rune, error) {
 	for {
-		buf.rm.Lock()
-
 		if buf.closed.Load() {
 			return codes.AsciiEOF, io.EOF
 		}
 
+		buf.rm.Lock()
 		if len(buf.runes) == 0 {
 			buf.rm.Unlock()
 			time.Sleep(15 * time.Millisecond)

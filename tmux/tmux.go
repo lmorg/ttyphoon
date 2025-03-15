@@ -161,7 +161,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	var err error
 	tmux._resp = new(tmuxResponseT)
 
-	tmux.cmd = exec.Command("tmux", "-C", startCommand)
+	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
 	tmux.cmd.Env = config.SetEnv()
 	tmux.tty, err = pty.Start(tmux.cmd)
 	if err != nil {
@@ -224,10 +224,11 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 }
 
 var tmuxCommandMap = map[string]func(*Tmux, []byte){
-	_RESP_OUTPUT: _respOutput,
-	_RESP_BEGIN:  _respBegin,
-	_RESP_END:    _respEnd,
-	_RESP_ERROR:  _respError,
+	_RESP_OUTPUT:  _respOutput,
+	_RESP_BEGIN:   _respBegin,
+	_RESP_END:     _respEnd,
+	_RESP_ERROR:   _respError,
+	_RESP_MESSAGE: _respMessage,
 
 	_RESP_CLIENT_DETACHED:         __respIgnored,
 	_RESP_CLIENT_SESSION_CHANGED:  __respIgnored,
@@ -236,7 +237,6 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_EXIT:                    _respExit,
 	_RESP_LAYOUT_CHANGE:           __respIgnored,
 	_RESP_EXTENDED_OUTPUT:         _respExtendedOutput,
-	_RESP_MESSAGE:                 _respMessage,
 	_RESP_PANE_MODE_CHANGED:       __respIgnored,
 	_RESP_PASTE_BUFFER_CHANGED:    __respIgnored,
 	_RESP_PASTE_BUFFER_DELETED:    __respIgnored,
@@ -289,8 +289,9 @@ func _respExtendedOutput(tmux *Tmux, b []byte) {
 
 func _respMessage(tmux *Tmux, b []byte) {
 	msg := string(b[len(_RESP_MESSAGE)+1:])
+	//panic("->" + msg + "<-")
 	if msg == _PANE_EXITED {
-		errToNotification(tmux.renderer, tmux.paneExited())
+		go func() { errToNotification(tmux.renderer, tmux.paneExited()) }()
 		return
 	}
 
