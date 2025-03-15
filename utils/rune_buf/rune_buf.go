@@ -12,23 +12,25 @@ import (
 )
 
 type Buf struct {
-	bytes  []byte
-	bm     sync.Mutex
-	runes  []rune
-	rm     sync.Mutex
-	utf8   []byte
-	l      int
-	chRune chan rune
+	bytes []byte
+	bm    sync.Mutex
+	runes []rune
+	rm    sync.Mutex
+	utf8  []byte
+	l     int
+	//chRune chan rune
+	//rCopy []rune
+	rPtr   int
 	closed atomic.Bool
 }
 
 func New() *Buf {
 	buf := &Buf{
-		chRune: make(chan rune),
+		//chRune: make(chan rune),
 	}
 
 	go buf.loop()
-	go buf.read()
+	//go buf.read()
 
 	return buf
 }
@@ -95,13 +97,13 @@ func (buf *Buf) Write(b []byte) {
 	buf.bm.Unlock()
 }
 
-func (buf *Buf) read() {
+func (buf *Buf) Read() (rune, error) {
 	for {
-		if buf.closed.Load() {
-			return
-		}
-
 		buf.rm.Lock()
+
+		if buf.closed.Load() {
+			return codes.AsciiEOF, io.EOF
+		}
 
 		if len(buf.runes) == 0 {
 			buf.rm.Unlock()
@@ -109,24 +111,23 @@ func (buf *Buf) read() {
 			continue
 		}
 
-		runes := make([]rune, len(buf.runes))
-		copy(runes, buf.runes)
-		buf.runes = []rune{}
-		buf.rm.Unlock()
-
-		for _, r := range runes {
-			buf.chRune <- r
+		if buf.rPtr != 0 && buf.rPtr >= len(buf.runes) {
+			buf.runes = []rune{}
+			buf.rPtr = 0
+			buf.rm.Unlock()
+			time.Sleep(15 * time.Millisecond)
+			continue
 		}
-	}
 
-}
-
-func (buf *Buf) Read() (rune, error) {
-	r, ok := <-buf.chRune
-	if ok {
+		r := buf.runes[buf.rPtr]
+		buf.inc()
+		buf.rm.Unlock()
 		return r, nil
 	}
-	return codes.AsciiEOF, io.EOF
+}
+
+func (buf *Buf) inc() {
+	buf.rPtr++
 }
 
 func (buf *Buf) BufSize() int {
