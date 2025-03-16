@@ -228,7 +228,7 @@ eg `xterm` and similar terminal emulators
   - [ ] ReGIS graphics
 - Code folding
   - [x] alpha: available but expect changes to the API
-  - [ ] stable: available to use in Murex
+  - [x] stable: available to use in Murex
 - Table sorting
   - [x] alpha: available but expect changes to the API
   - [x] stable: available to use in Murex
@@ -253,7 +253,8 @@ eg `xterm` and similar terminal emulators
   - [x] usability hints added
 - [x] discoverability hints added
 - [x] Typeface can be changed
-- [ ] Colour scheme can be changed
+- [x] Colour scheme can be changed
+  - [x] supports iTerm2 colour themes
 - [ ] Bell can be changed
 - [x] Default term size can be changed
 - [x] Default command / shell can be changed

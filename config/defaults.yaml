@@ -15,7 +15,7 @@ Shell:
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
-  ScrollbackHistory: 1000
+  ScrollbackHistory: 10000
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view
@@ -34,6 +34,8 @@ Terminal:
 
   # LightMode is like Dark Mode but lighter
   #LightMode: true # experimental
+
+  ColorScheme: "~/Apple System Colors.itermcolors"
   
   Widgets:
     Table:
@@ -46,7 +48,7 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
-  #FontName: "Hasklig"
+  #FontName: "Fira Code"
   FontSize: 15
 
   # Enable or disable drop shadows on terminal. I personally like it because

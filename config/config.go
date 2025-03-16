@@ -3,7 +3,10 @@ package config
 import (
 	"bytes"
 	_ "embed"
+	"os"
+	"strings"
 
+	"github.com/lmorg/mxtty/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,6 +34,16 @@ func Default() error {
 		return err
 	}
 
+	if Config.Terminal.ColorScheme != "" {
+		colorScheme := os.ExpandEnv(Config.Terminal.ColorScheme)
+		home, _ := os.UserHomeDir()
+		colorScheme = strings.ReplaceAll(colorScheme, "~", home)
+		err = iterm2.GetTheme(colorScheme)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	return nil
 }
 
@@ -47,10 +60,11 @@ type configT struct {
 	} `yaml:"Shell"`
 
 	Terminal struct {
-		ScrollbackHistory       int  `yaml:"ScrollbackHistory"`
-		ScrollbackCloseKeyPress bool `yaml:"ScrollbackCloseKeyPress"`
-		JumpScrollLineCount     int  `yaml:"JumpScrollLineCount"`
-		LightMode               bool `yaml:"LightMode"`
+		ColorScheme             string `yaml:"ColorScheme"`
+		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
+		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
+		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
+		LightMode               bool   `yaml:"LightMode"`
 
 		Widgets struct {
 			Table struct {
