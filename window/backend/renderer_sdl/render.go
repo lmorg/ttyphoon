@@ -19,9 +19,6 @@ func (sr *sdlRender) drawBg() {
 		panic("cannot create bg texture")
 	}
 
-	//sr.winTile.Right = sr.winCellSize.X
-	//sr.winTile.Bottom = sr.winCellSize.Y
-
 	w, h := sr.window.GetSize()
 	canvasBg := types.SGR_COLOUR_BLACK
 	if len(sr.termWin.Tiles) <= 1 {

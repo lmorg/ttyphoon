@@ -158,15 +158,22 @@ func (sr *sdlRender) windowResized() {
 		return
 	}
 
+	err := sr.tmux.RefreshClient(size)
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to update tmux client: %v", err))
+	}
+
 	if sr.windowTabs == nil {
 		debug.Log("sr.windowTabs is unset")
 		return
 	}
 
-	err := sr.tmux.SelectAndResizeWindow((*sr.windowTabs.tabs)[sr.windowTabs.active].Id(), size)
+	err = sr.tmux.SelectAndResizeWindow((*sr.windowTabs.tabs)[sr.windowTabs.active].Id(), size)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to resize window: %v", err))
 	}
+
+	go sr.RefreshWindowList()
 }
 
 func (sr *sdlRender) ResizeWindow(size *types.XY) {
