@@ -177,5 +177,5 @@ func (sr *sdlRender) _resizeWindow(size *types.XY) {
 	w := (size.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN
 	h := ((size.Y + sr.footer) * sr.glyphSize.Y) + _PANE_TOP_MARGIN
 	sr.window.SetSize(w, h)
-	sr.ScheduleWindowListRefresh()
+	sr.RefreshWindowList()
 }

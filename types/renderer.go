@@ -25,7 +25,7 @@ type Renderer interface {
 	GetWindowTitle() string
 	SetWindowTitle(string)
 	StatusBarText(string)
-	ScheduleWindowListRefresh()
+	RefreshWindowList()
 	Bell()
 	TriggerRedraw()
 	TriggerLazyRedraw()

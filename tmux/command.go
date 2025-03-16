@@ -20,6 +20,7 @@ const _SEPARATOR = `|||`
 func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
 	tmux.limiter.Lock()
 
+	debug.Log(b)
 	_, err := tmux.tty.Write(append(b, '\n'))
 	//_, err := tmux.writePipe.Write(append(b, '\n'))
 	if err != nil {

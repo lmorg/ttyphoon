@@ -2,7 +2,6 @@ package tmux
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/lmorg/mxtty/types"
 )
@@ -36,7 +35,7 @@ import (
 
 var CMD_CLIENT_REFRESH = "refresh-client"
 
-type CLIENT_T struct {
+type clientT struct {
 	Name         string `tmux:"client_name"`
 	SessionName  string `tmux:"client_session"`
 	ControlMode  bool   `tmux:"?client_control_mode,true,false"`
@@ -50,8 +49,13 @@ type CLIENT_T struct {
 }
 
 func (tmux *Tmux) RefreshClient(size *types.XY) error {
-	strSize := fmt.Sprintf("%dx%d", size.X, size.Y)
+	/*strSize := fmt.Sprintf("%dx%d", size.X, size.Y)
 	_, err := tmux.SendCommandWithReflection(CMD_CLIENT_REFRESH, reflect.TypeOf(CLIENT_T{}), "-C", strSize)
+	if err != nil {
+		return err
+	}*/
+	strSize := fmt.Sprintf("%s -C %dx%d", CMD_CLIENT_REFRESH, size.X, size.Y)
+	_, err := tmux.SendCommand([]byte(strSize))
 	if err != nil {
 		return err
 	}

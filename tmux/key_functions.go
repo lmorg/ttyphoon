@@ -122,7 +122,7 @@ func fnKeyPreviousWindowAlert(tmux *Tmux) error {
 
 func _fnKeySplitWindow(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("split-window " + flag))
-	tmux.renderer.ScheduleWindowListRefresh()
+	go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeySplitWindowHorizontally(tmux *Tmux) error { return _fnKeySplitWindow(tmux, "-h") }
@@ -130,7 +130,7 @@ func fnKeySplitWindowVertically(tmux *Tmux) error   { return _fnKeySplitWindow(t
 
 func _fnKeySelectPane(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("select-pane " + flag))
-	tmux.renderer.ScheduleWindowListRefresh()
+	go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeySelectPaneUp(tmux *Tmux) error    { return _fnKeySelectPane(tmux, "-U") }
@@ -143,13 +143,13 @@ func fnKeyTilePanes(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("select-layout -E"))
 	//go errToNotification(tmux.renderer,
 	//	tmux.SelectAndResizeWindow(tmux.activeWindow.Id, tmux.renderer.GetWindowSizeCells()))
-	tmux.renderer.ScheduleWindowListRefresh()
+	go tmux.renderer.RefreshWindowList()
 	return err
 }
 
 func _fnKeyResizePane(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("resize-pane " + flag))
-	tmux.renderer.ScheduleWindowListRefresh()
+	go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeyResizePaneUp1(tmux *Tmux) error    { return _fnKeyResizePane(tmux, "-U 1") }

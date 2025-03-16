@@ -12,25 +12,20 @@ import (
 )
 
 type Buf struct {
-	bytes []byte
-	bm    sync.Mutex
-	runes []rune
-	rm    sync.Mutex
-	utf8  []byte
-	l     int
-	//chRune chan rune
-	//rCopy []rune
+	bytes  []byte
+	bm     sync.Mutex
+	runes  []rune
+	rm     sync.Mutex
+	utf8   []byte
+	l      int
 	rPtr   int
 	closed atomic.Bool
 }
 
 func New() *Buf {
-	buf := &Buf{
-		//chRune: make(chan rune),
-	}
+	buf := &Buf{}
 
 	go buf.loop()
-	//go buf.read()
 
 	return buf
 }

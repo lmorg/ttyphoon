@@ -122,5 +122,5 @@ func (tmux *Tmux) UpdateSession() {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 
-	tmux.renderer.ScheduleWindowListRefresh()
+	tmux.renderer.RefreshWindowList()
 }

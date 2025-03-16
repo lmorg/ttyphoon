@@ -325,7 +325,6 @@ func (tmux *Tmux) paneExited() error {
 		info, ok := panes[i].(*paneInfo)
 		if !ok {
 			return fmt.Errorf("expecting info on a pane, instead got %T", info)
-
 		}
 
 		pane, ok := tmux.pane[info.Id]
@@ -336,7 +335,7 @@ func (tmux *Tmux) paneExited() error {
 		pane.closed = false
 	}
 
-	tmux.renderer.ScheduleWindowListRefresh()
+	go tmux.renderer.RefreshWindowList()
 
 	return nil
 }

@@ -314,15 +314,11 @@ func (sr *sdlRender) selectWindow(winIndex int) {
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-	go sr.ScheduleWindowListRefresh()
+	go sr.RefreshWindowList()
 	sr.TriggerRedraw()
 }
 
-func (sr *sdlRender) ScheduleWindowListRefresh() {
-	go sr._scheduleWindowListRefresh()
-}
-
-func (sr *sdlRender) _scheduleWindowListRefresh() {
+func (sr *sdlRender) RefreshWindowList() {
 	if sr.tmux == nil {
 		return
 	}

@@ -232,7 +232,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 
 	_RESP_CLIENT_DETACHED:         __respIgnored,
 	_RESP_CLIENT_SESSION_CHANGED:  __respIgnored,
-	_RESP_CONFIG_ERROR:            __respIgnored,
+	_RESP_CONFIG_ERROR:            _respConfigError,
 	_RESP_CONTINUE:                __respIgnored,
 	_RESP_EXIT:                    _respExit,
 	_RESP_LAYOUT_CHANGE:           __respIgnored,
@@ -242,7 +242,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_PASTE_BUFFER_DELETED:    __respIgnored,
 	_RESP_PAUSE:                   __respIgnored,
 	_RESP_SESSION_CHANGED:         __respIgnored,
-	_RESP_SESSION_RENAMED:         _respWindowRenamed,
+	_RESP_SESSION_RENAMED:         __respIgnored,
 	_RESP_SESSION_WINDOW_CHANGED:  __respIgnored,
 	_RESP_SESSIONS_CHANGED:        __respIgnored,
 	_RESP_SUBSCRIPTION_CHANGED:    __respIgnored,
@@ -252,7 +252,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_WINDOW_ADD:              _respWindowAdd,
 	_RESP_WINDOW_CLOSE:            _respWindowClosed,
 	_RESP_WINDOW_PANE_CHANGED:     __respIgnored,
-	_RESP_WINDOW_RENAMED:          __respIgnored,
+	_RESP_WINDOW_RENAMED:          _respWindowRenamed,
 }
 
 func _respOutput(tmux *Tmux, b []byte) {
@@ -279,7 +279,7 @@ func _respOutput(tmux *Tmux, b []byte) {
 			return
 		}
 		pane.buf.Write(octal.Unescape(msg))
-		tmux.renderer.ScheduleWindowListRefresh()
+		tmux.renderer.RefreshWindowList()
 	}()
 }
 
@@ -289,7 +289,6 @@ func _respExtendedOutput(tmux *Tmux, b []byte) {
 
 func _respMessage(tmux *Tmux, b []byte) {
 	msg := string(b[len(_RESP_MESSAGE)+1:])
-	//panic("->" + msg + "<-")
 	if msg == _PANE_EXITED {
 		go func() { errToNotification(tmux.renderer, tmux.paneExited()) }()
 		return
@@ -316,23 +315,26 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-		tmux.renderer.ScheduleWindowListRefresh()
+		tmux.renderer.RefreshWindowList()
 	}()
 }
 
 func _respWindowRenamed(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	tmux.win[string(params[1])].Name = string(params[2])
-	tmux.renderer.ScheduleWindowListRefresh()
+	tmux.renderer.RefreshWindowList()
 }
 
 func _respWindowClosed(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	win, ok := tmux.win[string(params[1])]
+	panic("bye1")
 	if !ok {
+		panic("byeno")
 		// window doesn't exist so lets not fret about it being closed
 		return
 	}
+	panic("bye2")
 	win.Close()
 }
 
@@ -355,6 +357,10 @@ func _respError(tmux *Tmux, b []byte) {
 	_respEnd(tmux, b)
 }
 
+func _respConfigError(tmux *Tmux, b []byte) {
+	tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, string(b))
+}
+
 func _respDefault(tmux *Tmux, b []byte) {
 	message := make([]byte, len(b))
 	copy(message, b)
@@ -365,6 +371,11 @@ func _respDefault(tmux *Tmux, b []byte) {
 func __respIgnored(tmux *Tmux, b []byte) {
 	// do nothing
 	debug.Log(b)
+}
+
+func __respPanic(tmux *Tmux, b []byte) {
+	// this is used for debugging
+	panic(string(b))
 }
 
 func errToNotification(renderer types.Renderer, err error) {
