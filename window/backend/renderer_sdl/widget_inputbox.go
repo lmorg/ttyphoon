@@ -77,7 +77,10 @@ func (inputBox *inputBoxWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardE
 }
 
 func (inputBox *inputBoxWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
-	sr.closeInputBox()
+	if evt.State == sdl.PRESSED {
+		sr.closeInputBox()
+		sr.termWidget.eventMouseButton(sr, evt)
+	}
 }
 
 func (inputBox *inputBoxWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
