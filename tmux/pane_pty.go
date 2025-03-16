@@ -18,13 +18,13 @@ func (p *PaneT) BufSize() int        { return p.buf.BufSize() }
 func (p *PaneT) Close()              {}
 
 func (p *PaneT) exit() {
-	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.Id, p.Title))
+	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.id, p.title))
 
 	p.buf.Close()
-	p.tile.Term.Close()
+	p.term.Close()
 
-	delete(p.tmux.pane, p.Id)
-	delete(p.tmux.win[p.WindowId].panes, p.Id)
+	delete(p.tmux.pane, p.id)
+	delete(p.tmux.win[p.windowId].panes, p.id)
 
 	debug.Log(p)
 }
@@ -50,7 +50,7 @@ func (p *PaneT) Write(b []byte) error {
 		b = octal.Escape(b)
 	}
 
-	command := []byte(fmt.Sprintf(`send-keys %s -t %s `, flags, p.Id))
+	command := []byte(fmt.Sprintf(`send-keys %s -t %s `, flags, p.id))
 	command = append(command, b...)
 	_, err = p.tmux.SendCommand(command)
 	return err
@@ -84,10 +84,10 @@ func (p *PaneT) _hotkey(b []byte) (bool, error) {
 }
 
 func (p *PaneT) Resize(size *types.XY) error {
-	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.Id, size.X, size.Y)
+	command := fmt.Sprintf("resize-pane -t %s -x %d -y %d", p.id, size.X, size.Y)
 	_, err := p.tmux.SendCommand([]byte(command))
-	p.Width = int(size.X)
-	p.Height = int(size.Y)
+	p.width = int(size.X)
+	p.height = int(size.Y)
 
 	//if err != nil {
 	return err

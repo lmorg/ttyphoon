@@ -121,13 +121,13 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		}
 	}
 
-	sr.termWin.Active.Term.ShowCursor(false)
+	sr.termWin.Active.GetTerm().ShowCursor(false)
 	cursor.Arrow()
 }
 
 func (sr *sdlRender) closeMenu() {
 	sr.footerText = ""
-	sr.termWin.Active.Term.ShowCursor(true)
+	sr.termWin.Active.GetTerm().ShowCursor(true)
 	cursor.Arrow()
 	sr.menu = nil
 }

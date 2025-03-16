@@ -28,10 +28,10 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 					if ignore {
 						return
 					}
-					sr.termWin.Active.Term.Reply(b)
+					sr.termWin.Active.GetTerm().Reply(b)
 
 				case <-time.After(5 * time.Millisecond):
-					sr.termWin.Active.Term.Reply(b)
+					sr.termWin.Active.GetTerm().Reply(b)
 				}
 
 			}()
@@ -39,7 +39,7 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 		}
 	}
 
-	sr.termWin.Active.Term.Reply(b)
+	sr.termWin.Active.GetTerm().Reply(b)
 }
 
 func (tw *termWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
@@ -83,7 +83,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	case evt.Keysym.Sym == sdl.K_F3 && mod == codes.MOD_NONE:
 		fallthrough
 	case evt.Keysym.Sym == 'f' && mod == codes.MOD_META:
-		sr.termWin.Active.Term.Search()
+		sr.termWin.Active.GetTerm().Search()
 		return
 
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
@@ -95,7 +95,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
 	//panic(string(b))
 	if len(b) > 0 {
-		sr.termWin.Active.Term.Reply(b)
+		sr.termWin.Active.GetTerm().Reply(b)
 	}
 }
 
@@ -107,13 +107,13 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
-	sr.termWin.Active.Term.HasFocus(false)
-	tile.Term.HasFocus(true)
+	sr.termWin.Active.GetTerm().HasFocus(false)
+	tile.GetTerm().HasFocus(true)
 	sr.termWin.Active = tile
 	sr.cacheBgTexture = nil
 	if sr.tmux != nil {
 		go func() {
-			err := sr.tmux.SelectPane(tile.PaneId)
+			err := sr.tmux.SelectPane(tile.Id())
 			if err != nil {
 				sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			}
@@ -126,13 +126,13 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	state := types.ButtonStateT(evt.State)
 
 	if posCell.X == -1 {
-		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {})
+		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {})
 		return
 	}
 
 	switch types.MouseButtonT(evt.Button) {
 	case types.MOUSE_BUTTON_LEFT:
-		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {
+		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.PRESSED {
 				highlighterStart(sr, button, evt.X, evt.Y)
 				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
@@ -141,19 +141,19 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 
 	case types.MOUSE_BUTTON_MIDDLE:
 		if evt.State == sdl.PRESSED {
-			sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, sr.clipboardPaste)
+			sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, sr.clipboardPaste)
 		}
 
 	case types.MOUSE_BUTTON_RIGHT:
 		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
-		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {
+		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
 				tw._eventMouseButtonRightClick(sr, posCell)
 			}
 		})
 
 	case types.MOUSE_BUTTON_X1:
-		sr.termWin.Active.Term.MouseClick(posCell, button, evt.Clicks, state, func() {})
+		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {})
 	}
 }
 
@@ -186,7 +186,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		},*/
 		{
 			Title: "Find text [Cmd+f]",
-			Fn:    sr.termWin.Active.Term.Search,
+			Fn:    sr.termWin.Active.GetTerm().Search,
 			Icon:  0xf002,
 		},
 	}...)
@@ -210,12 +210,12 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 		},
 		{
 			Title: "Bash integration (pasted into shell)",
-			Fn:    func() { sr.termWin.Active.Term.Reply(integrations.Get("shell.bash")) },
+			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.bash")) },
 			Icon:  0xf120,
 		},
 		{
 			Title: "Zsh integration (pasted into shell)",
-			Fn:    func() { sr.termWin.Active.Term.Reply(integrations.Get("shell.zsh")) },
+			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.zsh")) },
 			Icon:  0xf120,
 		},
 	}...)
@@ -247,9 +247,9 @@ func (tw *termWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) 
 	pos := sr.convertPxToCellXYTile(tile, mouseX, mouseY)
 
 	if evt.Direction == sdl.MOUSEWHEEL_FLIPPED {
-		tile.Term.MouseWheel(pos, &types.XY{X: evt.X, Y: -evt.Y})
+		tile.GetTerm().MouseWheel(pos, &types.XY{X: evt.X, Y: -evt.Y})
 	} else {
-		tile.Term.MouseWheel(pos, &types.XY{X: evt.X, Y: evt.Y})
+		tile.GetTerm().MouseWheel(pos, &types.XY{X: evt.X, Y: evt.Y})
 	}
 }
 
@@ -263,7 +263,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 			for i := range sr.windowTabs.boundaries {
 				if x >= 0 && x < sr.windowTabs.boundaries[i] {
 					sr.windowTabs.mouseOver = i - 1
-					sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", sr.windowTabs.windows[i-1].Name, sr.windowTabs.windows[i-1].Id)
+					sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", (*sr.windowTabs.tabs)[i-1].Name, (*sr.windowTabs.tabs)[i-1].Id)
 					return
 				}
 			}
@@ -290,7 +290,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 		}
 	}
 
-	tile.Term.MouseMotion(
+	tile.GetTerm().MouseMotion(
 		pos,
 		&types.XY{
 			X: evt.XRel / sr.glyphSize.X,
@@ -305,11 +305,11 @@ func (sr *sdlRender) _termMouseMotionCallback() {
 }
 
 func (sr *sdlRender) selectWindow(winIndex int) {
-	if winIndex < 0 || winIndex >= len(sr.windowTabs.windows) {
+	if winIndex < 0 || winIndex >= len(*sr.windowTabs.tabs) {
 		return
 	}
 
-	winId := sr.windowTabs.windows[winIndex].Id
+	winId := (*sr.windowTabs.tabs)[winIndex].Id()
 	err := sr.tmux.SelectAndResizeWindow(winId, sr.winCellSize)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -326,7 +326,7 @@ func (sr *sdlRender) RefreshWindowList() {
 	sr.limiter.Lock()
 
 	sr.windowTabs = nil
-	sr.termWin = sr.tmux.ActiveWindow()
+	sr.termWin = sr.tmux.GetTermTiles()
 	sr.cacheBgTexture = nil
 
 	sr.limiter.Unlock()

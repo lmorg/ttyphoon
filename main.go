@@ -7,10 +7,7 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug/pprof"
-	"github.com/lmorg/mxtty/ptty"
-	virtualterm "github.com/lmorg/mxtty/term"
 	"github.com/lmorg/mxtty/tmux"
-	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend"
 	"github.com/lmorg/mxtty/window/backend/typeface"
 )
@@ -65,29 +62,32 @@ func tmuxSession() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.ActiveWindow(), tmuxClient)
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient)
 }
 
 func regularSession() {
-	renderer, size := backend.Initialise()
-	defer renderer.Close()
+	/*
+	   renderer, size := backend.Initialise()
+	   defer renderer.Close()
 
-	tile := &types.Tile{
-		Right:  size.X,
-		Bottom: size.Y,
-	}
+	   	tile := &types.Tile{
+	   		Right:  size.X,
+	   		Bottom: size.Y,
+	   	}
 
-	virtualterm.NewTerminal(tile, renderer, size, true)
-	pty, err := ptty.NewPty(size)
-	if err != nil {
-		panic(err)
-	}
+	   virtualterm.NewTerminal(tile, renderer, size, true)
+	   pty, err := ptty.NewPty(size)
 
-	termWin := &types.TermWindow{
-		Tiles:  []*types.Tile{tile},
-		Active: tile,
-	}
+	   	if err != nil {
+	   		panic(err)
+	   	}
 
-	tile.Term.Start(pty)
-	backend.Start(renderer, termWin, nil)
+	   	appWin := &types.AppWindowTerms{
+	   		Tiles:  []*types.Tile{tile},
+	   		Active: tile,
+	   	}
+
+	   tile.Term.Start(pty)
+	   backend.Start(renderer, appWin, nil)
+	*/
 }

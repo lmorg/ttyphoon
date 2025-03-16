@@ -107,7 +107,7 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 }
 
 func (el *ElementCsv) MouseWheel(_ *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
-	termX := el.tile.Term.GetSize().X
+	termX := el.tile.GetTerm().GetSize().X
 	width := el.boundaries[len(el.boundaries)-1]
 	mod := codes.Modifier(el.renderer.GetKeyboardModifier())
 

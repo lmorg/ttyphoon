@@ -36,10 +36,10 @@ func cellsToRunes(cells []*types.Cell) []rune {
 	return r
 }
 
-func (sr *sdlRender) PrintLigature(tile *types.Tile, cells []*types.Cell, _cellPos *types.XY, ligId int) {
+func (sr *sdlRender) PrintLigature(tile types.Tile, cells []*types.Cell, _cellPos *types.XY, ligId int) {
 	cellPos := types.XY{
-		X: _cellPos.X + tile.Left,
-		Y: _cellPos.Y + tile.Top,
+		X: _cellPos.X + tile.Left(),
+		Y: _cellPos.Y + tile.Top(),
 	}
 	glyphSizeX := sr.glyphSize.X * 2
 

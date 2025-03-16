@@ -19,13 +19,13 @@ func (sr *sdlRender) drawBg() {
 		panic("cannot create bg texture")
 	}
 
-	sr.winTile.Right = sr.winCellSize.X
-	sr.winTile.Bottom = sr.winCellSize.Y
+	//sr.winTile.Right = sr.winCellSize.X
+	//sr.winTile.Bottom = sr.winCellSize.Y
 
 	w, h := sr.window.GetSize()
 	canvasBg := types.SGR_COLOUR_BLACK
 	if len(sr.termWin.Tiles) <= 1 {
-		canvasBg = sr.termWin.Active.Term.Bg()
+		canvasBg = sr.termWin.Active.GetTerm().Bg()
 	}
 
 	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
@@ -39,12 +39,12 @@ func (sr *sdlRender) drawBg() {
 
 	for _, tile := range sr.termWin.Tiles {
 		rect := &sdl.Rect{
-			X: tile.Left*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
-			Y: (tile.Top * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
-			W: (tile.Right-tile.Left+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
-			H: (tile.Bottom+2-tile.Top)*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
+			X: tile.Left()*sr.glyphSize.X + _PANE_BLOCK_HIGHLIGHT + _PANE_LEFT_MARGIN_OUTER,
+			Y: (tile.Top() * sr.glyphSize.Y) + _PANE_TOP_MARGIN, // - _PANE_BLOCK_HIGHLIGHT,
+			W: (tile.Right()-tile.Left()+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
+			H: (tile.Bottom()+2-tile.Top())*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
-		bg := tile.Term.Bg()
+		bg := tile.GetTerm().Bg()
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
 	}
@@ -96,13 +96,13 @@ func (sr *sdlRender) restoreRendererTexture() {
 	}
 }
 
-func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
-	if tile.Term == nil {
+func (sr *sdlRender) restoreRendererTextureCrop(tile types.Tile) {
+	if tile.GetTerm() == nil {
 		sr.restoreRendererTexture()
 		return
 	}
 
-	size := tile.Term.GetSize()
+	size := tile.GetTerm().GetSize()
 
 	src := &sdl.Rect{
 		X: _PANE_LEFT_MARGIN,
@@ -112,8 +112,8 @@ func (sr *sdlRender) restoreRendererTextureCrop(tile *types.Tile) {
 	}
 
 	dst := &sdl.Rect{
-		X: tile.Left*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-		Y: tile.Top*sr.glyphSize.Y + _PANE_TOP_MARGIN,
+		X: tile.Left()*sr.glyphSize.X + _PANE_LEFT_MARGIN,
+		Y: tile.Top()*sr.glyphSize.Y + _PANE_TOP_MARGIN,
 		W: size.X * sr.glyphSize.X,
 		H: size.Y * sr.glyphSize.Y,
 	}
@@ -166,7 +166,7 @@ func render(sr *sdlRender) error {
 	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
 
 	for _, tile := range sr.termWin.Tiles {
-		ok := tile.Term.Render()
+		ok := tile.GetTerm().Render()
 		if !ok {
 			return nil
 		}
@@ -177,7 +177,7 @@ func render(sr *sdlRender) error {
 		mouseX, mouseY, _ := sdl.GetMouseState()
 		tile := sr.getTileFromPxOrActive(mouseX, mouseY)
 		posNegX := sr.convertPxToCellXYNegXTile(tile, mouseX, mouseY)
-		tile.Term.MousePosition(posNegX)
+		tile.GetTerm().MousePosition(posNegX)
 	}
 
 	sr.renderFooter()

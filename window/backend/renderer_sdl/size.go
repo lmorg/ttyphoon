@@ -10,13 +10,13 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) convertPxToCellXYTile(tile *types.Tile, x, y int32) *types.XY {
+func (sr *sdlRender) convertPxToCellXYTile(tile types.Tile, x, y int32) *types.XY {
 	xy := &types.XY{
-		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - tile.Left,
-		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.Top,
+		X: ((x - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - tile.Left(),
+		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.Top(),
 	}
 
-	termSize := tile.Term.GetSize()
+	termSize := tile.GetTerm().GetSize()
 
 	if xy.X < 0 {
 		xy.X = 0
@@ -32,13 +32,13 @@ func (sr *sdlRender) convertPxToCellXYTile(tile *types.Tile, x, y int32) *types.
 	return xy
 }
 
-func (sr *sdlRender) convertPxToCellXYNegXTile(tile *types.Tile, x, y int32) *types.XY {
+func (sr *sdlRender) convertPxToCellXYNegXTile(tile types.Tile, x, y int32) *types.XY {
 	xy := &types.XY{
-		X: ((x - _PANE_LEFT_MARGIN_OUTER) / sr.glyphSize.X) - tile.Left - 1,
-		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.Top,
+		X: ((x - _PANE_LEFT_MARGIN_OUTER) / sr.glyphSize.X) - tile.Left() - 1,
+		Y: ((y - _PANE_TOP_MARGIN) / sr.glyphSize.Y) - tile.Top(),
 	}
 
-	termSize := tile.Term.GetSize()
+	termSize := tile.GetTerm().GetSize()
 
 	if xy.X < 0 {
 		xy.X = -1
@@ -77,12 +77,12 @@ func (sr *sdlRender) rectPxToCells(rect *sdl.Rect) *sdl.Rect {
 	return newRect
 }
 
-func (sr *sdlRender) rectPxToActiveTileCells(tile *types.Tile, rect *sdl.Rect) *sdl.Rect {
+func (sr *sdlRender) rectPxToActiveTileCells(tile types.Tile, rect *sdl.Rect) *sdl.Rect {
 	newRect := &sdl.Rect{
-		X: (rect.X-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left,
-		Y: (rect.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top,
-		W: (rect.X+rect.W-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left,
-		H: (rect.Y+rect.H-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top,
+		X: (rect.X-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left(),
+		Y: (rect.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top(),
+		W: (rect.X+rect.W-_PANE_LEFT_MARGIN)/sr.glyphSize.X - tile.Left(),
+		H: (rect.Y+rect.H-_PANE_TOP_MARGIN)/sr.glyphSize.Y - tile.Top(),
 	}
 
 	if newRect.X < 0 {
@@ -93,7 +93,7 @@ func (sr *sdlRender) rectPxToActiveTileCells(tile *types.Tile, rect *sdl.Rect) *
 		newRect.Y = 0
 	}
 
-	size := tile.Term.GetSize()
+	size := tile.GetTerm().GetSize()
 
 	if newRect.W >= size.X {
 		newRect.W = size.X - 1
@@ -106,17 +106,17 @@ func (sr *sdlRender) rectPxToActiveTileCells(tile *types.Tile, rect *sdl.Rect) *
 	return newRect
 }
 
-func (sr *sdlRender) getTileFromPxOrActive(x, y int32) *types.Tile {
+func (sr *sdlRender) getTileFromPxOrActive(x, y int32) types.Tile {
 	x = (x - _PANE_LEFT_MARGIN) / sr.glyphSize.X
 	y = (y - _PANE_TOP_MARGIN) / sr.glyphSize.Y
 
 	for _, tile := range sr.termWin.Tiles {
-		if tile.Term == nil {
+		if tile.GetTerm() == nil {
 			continue
 		}
 
-		if x >= tile.Left-1 && x <= tile.Right &&
-			y >= tile.Top && y <= tile.Bottom {
+		if x >= tile.Left()-1 && x <= tile.Right() &&
+			y >= tile.Top() && y <= tile.Bottom() {
 			return tile
 		}
 	}
@@ -154,7 +154,7 @@ func (sr *sdlRender) windowResized() {
 	}
 
 	if !config.Config.Tmux.Enabled {
-		sr.termWin.Active.Term.Resize(size)
+		sr.termWin.Active.GetTerm().Resize(size)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (sr *sdlRender) windowResized() {
 		return
 	}
 
-	err := sr.tmux.SelectAndResizeWindow(sr.windowTabs.windows[sr.windowTabs.active].Id, size)
+	err := sr.tmux.SelectAndResizeWindow((*sr.windowTabs.tabs)[sr.windowTabs.active].Id(), size)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to resize window: %v", err))
 	}
@@ -177,5 +177,5 @@ func (sr *sdlRender) _resizeWindow(size *types.XY) {
 	w := (size.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN
 	h := ((size.Y + sr.footer) * sr.glyphSize.Y) + _PANE_TOP_MARGIN
 	sr.window.SetSize(w, h)
-	sr.RefreshWindowList()
+	//sr.RefreshWindowList()
 }

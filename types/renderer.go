@@ -9,19 +9,19 @@ type MenuItem struct {
 }
 
 type Renderer interface {
-	Start(*TermWindow, any)
+	Start(*AppWindowTerms, any)
 	ShowAndFocusWindow()
 	GetWindowSizeCells() *XY
 	GetGlyphSize() *XY
 	GetBlinkState() bool
 	SetBlinkState(bool)
-	PrintCell(*Tile, *Cell, *XY)
-	PrintRow(*Tile, []*Cell, *XY)
-	DrawScrollbar(*Tile, int, int)
-	DrawTable(*Tile, *XY, int32, []int32)
-	DrawHighlightRect(*Tile, *XY, *XY)
-	DrawRectWithColour(*Tile, *XY, *XY, *Colour, bool)
-	DrawOutputBlockChrome(*Tile, int32, int32, *Colour, bool)
+	PrintCell(Tile, *Cell, *XY)
+	PrintRow(Tile, []*Cell, *XY)
+	DrawScrollbar(Tile, int, int)
+	DrawTable(Tile, *XY, int32, []int32)
+	DrawHighlightRect(Tile, *XY, *XY)
+	DrawRectWithColour(Tile, *XY, *XY, *Colour, bool)
+	DrawOutputBlockChrome(Tile, int32, int32, *Colour, bool)
 	GetWindowTitle() string
 	SetWindowTitle(string)
 	StatusBarText(string)
@@ -30,7 +30,7 @@ type Renderer interface {
 	TriggerRedraw()
 	TriggerLazyRedraw()
 	TriggerQuit()
-	NewElement(*Tile, ElementID) Element
+	NewElement(Tile, ElementID) Element
 	DisplayNotification(NotificationType, string)
 	DisplaySticky(NotificationType, string) Notification
 	DisplayInputBox(string, string, func(string))

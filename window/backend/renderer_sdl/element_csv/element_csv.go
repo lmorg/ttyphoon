@@ -14,7 +14,7 @@ import (
 
 type ElementCsv struct {
 	renderer   types.Renderer
-	tile       *types.Tile
+	tile       types.Tile
 	size       types.XY
 	headings   [][]rune // columns
 	table      [][]rune // rendered rows
@@ -49,7 +49,7 @@ var arrowGlyph = map[bool]rune{
 
 const notifyLoading = "Loading CSV. Line %d..."
 
-func New(renderer types.Renderer, tile *types.Tile) *ElementCsv {
+func New(renderer types.Renderer, tile types.Tile) *ElementCsv {
 	el := &ElementCsv{renderer: renderer, tile: tile}
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines))
@@ -144,7 +144,7 @@ func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
 		return fmt.Errorf("cannot commit sqlite3 transaction: %v", err)
 	}
 
-	el.size = *el.tile.Term.GetSize()
+	el.size = *el.tile.GetTerm().GetSize()
 	if el.size.Y > 8 {
 		el.size.Y -= 5
 	}

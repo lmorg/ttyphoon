@@ -87,7 +87,7 @@ func (hl *highlightWidgetT) setMode(mode _highlightMode) {
 func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	if evt.State == sdl.RELEASED {
 		sr.StatusBarText("")
-		sr.termWin.Active.Term.MouseClick(nil, 0, 0, types.BUTTON_RELEASED, func() {})
+		sr.termWin.Active.GetTerm().MouseClick(nil, 0, 0, types.BUTTON_RELEASED, func() {})
 	}
 
 	hl.button = 0
@@ -105,7 +105,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 	case _HIGHLIGHT_MODE_FULL_LINES:
 		normaliseRect(hl.rect)
 		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
-		lines := sr.termWin.Active.Term.CopyLines(rect.Y, rect.H)
+		lines := sr.termWin.Active.GetTerm().CopyLines(rect.Y, rect.H)
 		sr.highlighter = nil
 		l := copyTextToClipboard(lines)
 		if l > 0 {
@@ -115,7 +115,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 	case _HIGHLIGHT_MODE_SQUARE:
 		normaliseRect(hl.rect)
 		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
-		lines := sr.termWin.Active.Term.CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
+		lines := sr.termWin.Active.GetTerm().CopySquare(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		sr.highlighter = nil
 		l := copyTextToClipboard(lines)
 		if l > 0 {
@@ -127,10 +127,10 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
 			sr.highlighter = nil
 			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
-			sr.termWin.Active.Term.MouseClick(pos, types.MouseButtonT(evt.Button), evt.Clicks, types.BUTTON_RELEASED, func() {})
+			sr.termWin.Active.GetTerm().MouseClick(pos, types.MouseButtonT(evt.Button), evt.Clicks, types.BUTTON_RELEASED, func() {})
 			return
 		}
-		lines := sr.termWin.Active.Term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
+		lines := sr.termWin.Active.GetTerm().CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
 		sr.highlighter = nil
 		l := copyTextToClipboard(lines)
 		if l > 0 {
@@ -187,8 +187,8 @@ func isCellHighlighted(sr *sdlRender, rect *sdl.Rect) bool {
 	runeCell := sr.rectPxToCells(rect)
 
 	if sr.termWin != nil {
-		if runeCell.X < sr.termWin.Active.Left || runeCell.X > sr.termWin.Active.Right ||
-			runeCell.Y < sr.termWin.Active.Top || runeCell.Y > sr.termWin.Active.Bottom {
+		if runeCell.X < sr.termWin.Active.Left() || runeCell.X > sr.termWin.Active.Right() ||
+			runeCell.Y < sr.termWin.Active.Top() || runeCell.Y > sr.termWin.Active.Bottom() {
 			return false
 		}
 	}

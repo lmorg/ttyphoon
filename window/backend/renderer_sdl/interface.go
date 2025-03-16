@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/tmux"
 	"github.com/lmorg/mxtty/types"
@@ -62,7 +63,7 @@ type sdlRender struct {
 	notifyIconSize *types.XY
 
 	// widgets
-	termWin     *types.TermWindow
+	termWin     *types.AppWindowTerms
 	termWidget  *termWidgetT
 	highlighter *highlightWidgetT
 	inputBox    *inputBoxWidgetT
@@ -88,14 +89,14 @@ type sdlRender struct {
 	// footer
 	footer     int32
 	footerText string
-	windowTabs *tabListT
+	windowTabs *tabListT // only a pointer so we can make it nil'able
 
 	// caching
 	cacheBgTexture *sdl.Texture
 }
 
 type tabListT struct {
-	windows    []*tmux.WindowT
+	tabs       *[]types.Tab
 	boundaries []int32
 	offset     *types.XY
 	active     int
@@ -155,3 +156,18 @@ func (sr *sdlRender) Close() {
 func (sr *sdlRender) GetGlyphSize() *types.XY {
 	return sr.glyphSize
 }
+
+type winTileT struct {
+	sr *sdlRender
+}
+
+func (t *winTileT) Left() int32   { return 0 }
+func (t *winTileT) Top() int32    { return 0 }
+func (t *winTileT) Right() int32  { return t.sr.winCellSize.X }
+func (t *winTileT) Bottom() int32 { return t.sr.winCellSize.Y }
+
+func (t *winTileT) Name() string { return app.Title }
+func (t *winTileT) Id() string   { return "" }
+
+func (t *winTileT) GetTerm() types.Term { return nil }
+func (t *winTileT) SetTerm(types.Term)  { panic("writing to a readonly interface") }

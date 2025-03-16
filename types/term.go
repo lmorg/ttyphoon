@@ -6,20 +6,6 @@ import (
 
 type EventIgnoredCallback func()
 
-type TermWindow struct {
-	Tiles  []*Tile
-	Active *Tile
-}
-
-type Tile struct {
-	Top    int32
-	Left   int32
-	Right  int32
-	Bottom int32
-	Term   Term
-	PaneId string
-}
-
 type Term interface {
 	Start(Pty)
 	GetSize() *XY

@@ -15,20 +15,20 @@ func fnKeyNewWindow(tmux *Tmux) error {
 }
 
 func fnKeyKillPane(tmux *Tmux) error {
-	command := fmt.Sprintf("kill-pane -t %s", tmux.ActivePane().Id)
+	command := fmt.Sprintf("kill-pane -t %s", tmux.ActivePane().id)
 	_, err := tmux.SendCommand([]byte(command))
 	return err
 }
 
 func fnKeyKillCurrentWindow(tmux *Tmux) error {
-	command := fmt.Sprintf("kill-window -t %s", tmux.activeWindow.Id)
+	command := fmt.Sprintf("kill-window -t %s", tmux.activeWindow.id)
 	_, err := tmux.SendCommand([]byte(command))
 	return err
 }
 
 func fnKeyRenameWindow(tmux *Tmux) error {
-	tmux.renderer.DisplayInputBox("Please enter a new name for this window", tmux.activeWindow.Name, func(name string) {
-		err := tmux.activeWindow.Rename(name)
+	tmux.renderer.DisplayInputBox("Please enter a new name for this window", tmux.activeWindow.name, func(name string) {
+		err := tmux.RenameWindow(tmux.activeWindow, name)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -37,24 +37,24 @@ func fnKeyRenameWindow(tmux *Tmux) error {
 }
 
 func fnKeyChooseWindowFromList(tmux *Tmux) error {
-	windows := tmux.RenderWindows()
-
-	windowNames := make([]string, len(windows))
-	for i := range windows {
-		windowNames[i] = windows[i].Name
+	windowNames := make([]string, len(tmux.appWindow.Tabs))
+	for i := range tmux.appWindow.Tabs {
+		windowNames[i] = tmux.appWindow.Tabs[i].Name()
 	}
 
 	_highlightCallback := func(i int) {
-		if tmux.activeWindow.Id == windows[i].Id {
+		if tmux.activeWindow.id == tmux.appWindow.Tabs[i].Id() {
 			return
 		}
 
-		oldTerm := tmux.activeWindow.activePane.Term()
-		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
+		oldTerm := tmux.activeWindow.activePane.term
+		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-		windows[i].activePane.Term().ShowCursor(false)
+
+		tmux.win[tmux.appWindow.Tabs[i].Id()].activePane.term.ShowCursor(false)
+		//windows[i].activePane.Term().ShowCursor(false)
 		go func() {
 			// this is a kludge to avoid the cursor showing as you switch windows
 			time.Sleep(500 * time.Millisecond)
@@ -63,13 +63,13 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 	}
 
 	_chooseCallback := func(i int) {
-		err := tmux.SelectAndResizeWindow(windows[i].Id, tmux.renderer.GetWindowSizeCells())
+		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 	}
 
-	activeWindow := tmux.activeWindow.Id
+	activeWindow := tmux.activeWindow.id
 	_cancelCallback := func(_ int) {
 		err := tmux.selectWindow(activeWindow)
 		if err != nil {
@@ -92,12 +92,11 @@ func fnKeySelectWindow7(tmux *Tmux) error { return _fnKeySelectWindow(tmux, 7) }
 func fnKeySelectWindow8(tmux *Tmux) error { return _fnKeySelectWindow(tmux, 8) }
 func fnKeySelectWindow9(tmux *Tmux) error { return _fnKeySelectWindow(tmux, 9) }
 func _fnKeySelectWindow(tmux *Tmux, i int) error {
-	wins := tmux.RenderWindows()
-	if i >= len(wins) {
+	if i >= len(tmux.appWindow.Tabs) {
 		return fmt.Errorf("there is not a window %d", i)
 	}
 
-	return tmux.selectWindow(wins[i].Id)
+	return tmux.selectWindow(tmux.appWindow.Tabs[i].Id())
 }
 
 func fnKeyLastPane(tmux *Tmux) error {
@@ -122,7 +121,7 @@ func fnKeyPreviousWindowAlert(tmux *Tmux) error {
 
 func _fnKeySplitWindow(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("split-window " + flag))
-	go tmux.renderer.RefreshWindowList()
+	//go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeySplitWindowHorizontally(tmux *Tmux) error { return _fnKeySplitWindow(tmux, "-h") }
@@ -130,7 +129,7 @@ func fnKeySplitWindowVertically(tmux *Tmux) error   { return _fnKeySplitWindow(t
 
 func _fnKeySelectPane(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("select-pane " + flag))
-	go tmux.renderer.RefreshWindowList()
+	//go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeySelectPaneUp(tmux *Tmux) error    { return _fnKeySelectPane(tmux, "-U") }
@@ -143,13 +142,13 @@ func fnKeyTilePanes(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("select-layout -E"))
 	//go errToNotification(tmux.renderer,
 	//	tmux.SelectAndResizeWindow(tmux.activeWindow.Id, tmux.renderer.GetWindowSizeCells()))
-	go tmux.renderer.RefreshWindowList()
+	//go tmux.renderer.RefreshWindowList()
 	return err
 }
 
 func _fnKeyResizePane(tmux *Tmux, flag string) error {
 	_, err := tmux.SendCommand([]byte("resize-pane " + flag))
-	go tmux.renderer.RefreshWindowList()
+	//go tmux.renderer.RefreshWindowList()
 	return err
 }
 func fnKeyResizePaneUp1(tmux *Tmux) error    { return _fnKeyResizePane(tmux, "-U 1") }

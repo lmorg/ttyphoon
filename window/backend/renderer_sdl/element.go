@@ -7,7 +7,7 @@ import (
 	elementSixel "github.com/lmorg/mxtty/window/backend/renderer_sdl/element_sixel"
 )
 
-func (sr *sdlRender) NewElement(tile *types.Tile, id types.ElementID) types.Element {
+func (sr *sdlRender) NewElement(tile types.Tile, id types.ElementID) types.Element {
 	switch id {
 	case types.ELEMENT_ID_IMAGE:
 		return elementImage.New(sr, tile, sr.loadImage)

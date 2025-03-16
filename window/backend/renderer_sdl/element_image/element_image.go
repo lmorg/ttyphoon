@@ -14,7 +14,7 @@ import (
 
 type ElementImage struct {
 	renderer   types.Renderer
-	tile       *types.Tile
+	tile       types.Tile
 	parameters parametersT
 	size       *types.XY
 	load       func([]byte, *types.XY) (types.Image, error)
@@ -29,7 +29,7 @@ type parametersT struct {
 	Height   int32
 }
 
-func New(renderer types.Renderer, tile *types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
+func New(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
 	return &ElementImage{renderer: renderer, tile: tile, load: loadFn}
 }
 
@@ -80,7 +80,7 @@ func (el *ElementImage) Draw(size *types.XY, pos *types.XY) {
 		size = el.size
 	}
 
-	el.image.Draw(size, &types.XY{pos.X + el.tile.Left, pos.Y + el.tile.Top})
+	el.image.Draw(size, &types.XY{pos.X + el.tile.Left(), pos.Y + el.tile.Top()})
 }
 
 func (el *ElementImage) Rune(_ *types.XY) rune {

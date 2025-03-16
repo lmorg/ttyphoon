@@ -79,6 +79,8 @@ func Initialise() (types.Renderer, *types.XY) {
 	sr.preloadNotificationGlyphs()
 	sr.fontCache = NewFontCache(sr)
 
+	sr.winTile = &winTileT{sr: sr}
+
 	return sr, sr.GetWindowSizeCells()
 }
 
@@ -157,7 +159,7 @@ func setLghtOrDarkMode() {
 	}
 }
 
-func (sr *sdlRender) Start(termWin *types.TermWindow, tmuxClient any) {
+func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 	switch tmuxClient.(type) {
 	case *tmux.Tmux:
 		sr.tmux = tmuxClient.(*tmux.Tmux)

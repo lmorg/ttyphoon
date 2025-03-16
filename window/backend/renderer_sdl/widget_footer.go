@@ -45,9 +45,7 @@ func (sr *sdlRender) renderFooter() {
 		if sr.termWin == nil || sr.tmux == nil {
 			sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
 		} else {
-			pane := sr.tmux.ActivePane()
-			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search%s", pane.Id, pane.Title, sr._footerHotkeyMessage())
-
+			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search%s", sr.termWin.Active.Id(), sr.termWin.Active.Name(), sr._footerHotkeyMessage())
 		}
 	}
 
@@ -95,7 +93,7 @@ func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {
 		footer[i].Sgr = types.SGR_DEFAULT.Copy()
 	}
 
-	sr.PrintRow(&sr.winTile, footer[:i], pos)
+	sr.PrintRow(sr.winTile, footer[:i], pos)
 }
 
 func tabListNewCell(r rune) *types.Cell {
@@ -108,7 +106,12 @@ func tabListNewCell(r rune) *types.Cell {
 func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 	tabList := &tabListT{
 		mouseOver: -1,
+		tabs:      &sr.termWin.Tabs,
 	}
+
+	/*if tabList.tabs == nil {
+		return
+	}*/
 
 	heading := []rune("Window tab list → ")
 
@@ -119,14 +122,14 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 	tabList.boundaries = []int32{0}
 	var x int32
 
-	tabList.windows = sr.tmux.RenderWindows()
-	for i, win := range tabList.windows {
-		if win.Active {
+	//tabList.windows = sr.tmux.RenderWindows()
+	for i, tab := range *tabList.tabs {
+		if tab.Active() {
 			tabList.active = i
 		}
 
 		tabList.cells = append(tabList.cells, tabListNewCell(' '))
-		for _, r := range win.Name {
+		for _, r := range tab.Name() {
 			tabList.cells = append(tabList.cells, tabListNewCell(r))
 			x++
 		}
@@ -142,8 +145,8 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 }
 
 func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
-	sr.PrintRow(&sr.winTile, sr.windowTabs.cells, pos)
-	sr.DrawTable(&sr.winTile, sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
+	sr.PrintRow(sr.winTile, sr.windowTabs.cells, pos)
+	sr.DrawTable(sr.winTile, sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
 
 	var (
 		topLeftCellX     = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.active]
@@ -204,11 +207,13 @@ func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButt
 				if i == 0 {
 					return
 				}
-				sr.DisplayInputBox("Please enter a new name for this window", sr.windowTabs.windows[i-1].Name, func(name string) {
-					err := sr.windowTabs.windows[i-1].Rename(name)
+				sr.DisplayInputBox("Please enter a new name for this window", (*sr.windowTabs.tabs)[i-1].Name(), func(name string) {
+					/*err := (*sr.windowTabs.tabs)[i-1].Rename(name)
+
 					if err != nil {
 						sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-					}
+					}*/
+					panic("TODO")
 				})
 			}
 			return

@@ -32,14 +32,14 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback
 	}
 
 	sr.footerText = fmt.Sprintf(`[Return] Ok  |  [Esc] Cancel  |  [Ctrl+u] Clear text  |  [Up] Default: "%s"`, defaultValue)
-	sr.termWin.Active.Term.ShowCursor(false)
+	sr.termWin.Active.GetTerm().ShowCursor(false)
 	cursor.Arrow()
 }
 
 func (sr *sdlRender) closeInputBox() {
 	sr.footerText = ""
 	sr.inputBox = nil
-	sr.termWin.Active.Term.ShowCursor(true)
+	sr.termWin.Active.GetTerm().ShowCursor(true)
 }
 
 func (inputBox *inputBoxWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
