@@ -25,7 +25,7 @@ func (el *ElementImage) decode() error {
 		b, err = _loadImage(el.parameters.Filename)
 	} else {
 		if el.parameters.Base64 == "" {
-			return fmt.Errorf("no image supplied in \"Base64\" nor \"Filename\" parameters")
+			return fmt.Errorf(`no image supplied in "Base64" nor "Filename" parameters`)
 		}
 		b, err = _decodeImage(el.parameters.Base64)
 	}

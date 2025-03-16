@@ -263,7 +263,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 			for i := range sr.windowTabs.boundaries {
 				if x >= 0 && x < sr.windowTabs.boundaries[i] {
 					sr.windowTabs.mouseOver = i - 1
-					sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", (*sr.windowTabs.tabs)[i-1].Name, (*sr.windowTabs.tabs)[i-1].Id)
+					sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", (*sr.windowTabs.tabs)[i-1].Name(), (*sr.windowTabs.tabs)[i-1].Id())
 					return
 				}
 			}

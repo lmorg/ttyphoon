@@ -169,26 +169,9 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		return nil, err
 	}
 
-	/*pipe, err := tmux.cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	tmux.writePipe, err = tmux.cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	err = tmux.cmd.Start()
-	if err != nil {
-		return nil, err
-	}*/
-
 	// Discard the following because it's just setting mode:
 	//    \u001bP1000p
 	_, _ = tmux.tty.Read(make([]byte, 7))
-
-	//bRespOutput := []byte(_RESP_OUTPUT)
 
 	go func() {
 		scanner := bufio.NewScanner(tmux.tty)
