@@ -47,3 +47,6 @@ func (win *WindowT) Name() string { return win.name }
 func (win *WindowT) Id() string   { return win.id }
 func (win *WindowT) Index() int   { return win.index }
 func (win *WindowT) Active() bool { return win.active }
+func (win *WindowT) Rename(name string) error {
+	return win.activePane.tmux.RenameWindow(win, name)
+}

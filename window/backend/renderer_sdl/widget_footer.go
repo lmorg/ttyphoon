@@ -208,12 +208,10 @@ func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButt
 					return
 				}
 				sr.DisplayInputBox("Please enter a new name for this window", (*sr.windowTabs.tabs)[i-1].Name(), func(name string) {
-					/*err := (*sr.windowTabs.tabs)[i-1].Rename(name)
-
+					err := (*sr.windowTabs.tabs)[i-1].Rename(name)
 					if err != nil {
 						sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-					}*/
-					panic("TODO")
+					}
 				})
 			}
 			return

@@ -8,6 +8,7 @@ type AppWindowTerms struct {
 
 type Tab interface {
 	Name() string
+	Rename(string) error
 	Id() string
 	Index() int
 	Active() bool
