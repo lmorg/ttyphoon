@@ -27,6 +27,7 @@ type Term interface {
 	ShowSearchResults()
 	Match(*XY)
 	FoldAtIndent(*XY) error
+	GetTermContents() []byte
 	Close()
 }
 

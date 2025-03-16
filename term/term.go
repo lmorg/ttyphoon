@@ -390,3 +390,23 @@ func (term *Term) _deallocateCells(cells []*types.Cell) {
 		}
 	}
 }
+
+func (term *Term) GetTermContents() []byte {
+	var b []byte
+
+	if term.IsAltBuf() {
+
+		term._mutex.Lock()
+		b = []byte(term._altBuf.String())
+		term._mutex.Unlock()
+
+	} else {
+
+		term._mutex.Lock()
+		b = append([]byte(term._scrollBuf.String()), []byte(term._normBuf.String())...)
+		term._mutex.Unlock()
+
+	}
+
+	return b
+}

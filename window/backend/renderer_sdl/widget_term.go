@@ -2,6 +2,7 @@ package rendersdl
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/lmorg/mxtty/codes"
@@ -9,6 +10,7 @@ import (
 	"github.com/lmorg/mxtty/integrations"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
+	"golang.design/x/clipboard"
 )
 
 type termWidgetT struct{}
@@ -148,7 +150,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
-				tw._eventMouseButtonRightClick(sr, posCell)
+				tw._eventMouseButtonRightClick(sr)
 			}
 		})
 
@@ -157,7 +159,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 }
 
-func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types.XY) {
+func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender) {
 	menu := contextMenuT{
 		{
 			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
@@ -188,6 +190,11 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, posCell *types
 			Title: "Find text [Cmd+f]",
 			Fn:    sr.termWin.Active.GetTerm().Search,
 			Icon:  0xf002,
+		},
+		{
+			Title: "Write output to temp file",
+			Fn:    sr.writeToTemp,
+			Icon:  0xf0c7,
 		},
 	}...)
 
@@ -330,4 +337,30 @@ func (sr *sdlRender) RefreshWindowList() {
 	sr.cacheBgTexture = nil
 
 	sr.limiter.Unlock()
+}
+
+func (sr *sdlRender) writeToTemp() {
+	file, err := os.CreateTemp("", "*.txt")
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	b := sr.termWin.Active.GetTerm().GetTermContents()
+	_, err = file.Write(b)
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	err = file.Close()
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	clipboard.Write(clipboard.FmtText, []byte(file.Name()))
+
+	msg := fmt.Sprintf("Content written to disk & path copied to clipboard:\n%s", file.Name())
+	sr.DisplayNotification(types.NOTIFY_INFO, msg)
 }
