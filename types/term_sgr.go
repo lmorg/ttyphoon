@@ -8,8 +8,8 @@ type Sgr struct {
 
 func (s *Sgr) Reset() {
 	s.Bitwise = 0
-	s.Fg = SGR_DEFAULT.Fg
-	s.Bg = SGR_DEFAULT.Bg
+	s.Fg = SGR_COLOR_FOREGROUND
+	s.Bg = SGR_COLOR_BACKGROUND
 }
 
 func (s *Sgr) Copy() *Sgr {
@@ -51,7 +51,7 @@ const (
 	// _SGR_PLACEHOLDER6
 
 	SGR_WIDE_CHAR
-	
+
 	SGR_SPECIAL_FONT_AWESOME
 )
 

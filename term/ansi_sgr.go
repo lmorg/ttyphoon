@@ -67,28 +67,28 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 		//
 
 		case 30: // fg black
-			sgr.Fg = types.SGR_COLOUR_BLACK
+			sgr.Fg = types.SGR_COLOR_BLACK
 
 		case 31: // fg red
-			sgr.Fg = types.SGR_COLOUR_RED
+			sgr.Fg = types.SGR_COLOR_RED
 
 		case 32: // fg green
-			sgr.Fg = types.SGR_COLOUR_GREEN
+			sgr.Fg = types.SGR_COLOR_GREEN
 
 		case 33: // fg yellow
-			sgr.Fg = types.SGR_COLOUR_YELLOW
+			sgr.Fg = types.SGR_COLOR_YELLOW
 
 		case 34: // fg blue
-			sgr.Fg = types.SGR_COLOUR_BLUE
+			sgr.Fg = types.SGR_COLOR_BLUE
 
 		case 35: // fg magenta
-			sgr.Fg = types.SGR_COLOUR_MAGENTA
+			sgr.Fg = types.SGR_COLOR_MAGENTA
 
 		case 36: // fg cyan
-			sgr.Fg = types.SGR_COLOUR_CYAN
+			sgr.Fg = types.SGR_COLOR_CYAN
 
 		case 37: // fg white
-			sgr.Fg = types.SGR_COLOUR_WHITE
+			sgr.Fg = types.SGR_COLOR_WHITE
 
 		case 38:
 			colour := _sgrEnhancedColour(n, stack)
@@ -98,35 +98,35 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			return
 
 		case 39: // fg default
-			sgr.Fg = types.SGR_DEFAULT.Fg
+			sgr.Fg = types.SGR_COLOR_FOREGROUND
 
 		//
 		// 3-bit background colour:
 		//
 
 		case 40: // bg black
-			sgr.Bg = types.SGR_COLOUR_BLACK
+			sgr.Bg = types.SGR_COLOR_BLACK
 
 		case 41: // bg rede
-			sgr.Bg = types.SGR_COLOUR_RED
+			sgr.Bg = types.SGR_COLOR_RED
 
 		case 42: // bg green
-			sgr.Bg = types.SGR_COLOUR_GREEN
+			sgr.Bg = types.SGR_COLOR_GREEN
 
 		case 43: // bg yellow
-			sgr.Bg = types.SGR_COLOUR_YELLOW
+			sgr.Bg = types.SGR_COLOR_YELLOW
 
 		case 44: // bg blue
-			sgr.Bg = types.SGR_COLOUR_BLUE
+			sgr.Bg = types.SGR_COLOR_BLUE
 
 		case 45: // bg magenta
-			sgr.Bg = types.SGR_COLOUR_MAGENTA
+			sgr.Bg = types.SGR_COLOR_MAGENTA
 
 		case 46: // bg cyan
-			sgr.Bg = types.SGR_COLOUR_CYAN
+			sgr.Bg = types.SGR_COLOR_CYAN
 
 		case 47: // bg white
-			sgr.Bg = types.SGR_COLOUR_WHITE
+			sgr.Bg = types.SGR_COLOR_WHITE
 
 		case 48:
 			colour := _sgrEnhancedColour(n, stack)
@@ -136,63 +136,63 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			return
 
 		case 49: // bg default
-			sgr.Bg = types.SGR_DEFAULT.Bg
+			sgr.Bg = types.SGR_COLOR_BACKGROUND
 
 		//
 		// 4-bit foreground colour:
 		//
 
 		case 90: // fg black
-			sgr.Fg = types.SGR_COLOUR_BLACK_BRIGHT
+			sgr.Fg = types.SGR_COLOR_BLACK_BRIGHT
 
 		case 91: // fg red
-			sgr.Fg = types.SGR_COLOUR_RED_BRIGHT
+			sgr.Fg = types.SGR_COLOR_RED_BRIGHT
 
 		case 92: // fg green
-			sgr.Fg = types.SGR_COLOUR_GREEN_BRIGHT
+			sgr.Fg = types.SGR_COLOR_GREEN_BRIGHT
 
 		case 93: // fg yellow
-			sgr.Fg = types.SGR_COLOUR_YELLOW_BRIGHT
+			sgr.Fg = types.SGR_COLOR_YELLOW_BRIGHT
 
 		case 94: // fg blue
-			sgr.Fg = types.SGR_COLOUR_BLUE_BRIGHT
+			sgr.Fg = types.SGR_COLOR_BLUE_BRIGHT
 
 		case 95: // fg magenta
-			sgr.Fg = types.SGR_COLOUR_MAGENTA_BRIGHT
+			sgr.Fg = types.SGR_COLOR_MAGENTA_BRIGHT
 
 		case 96: // fg cyan
-			sgr.Fg = types.SGR_COLOUR_CYAN_BRIGHT
+			sgr.Fg = types.SGR_COLOR_CYAN_BRIGHT
 
 		case 97: // fg white
-			sgr.Fg = types.SGR_COLOUR_WHITE_BRIGHT
+			sgr.Fg = types.SGR_COLOR_WHITE_BRIGHT
 
 		//
 		// 4-bit background colour:
 		//
 
 		case 100: // bg black
-			sgr.Bg = types.SGR_COLOUR_BLACK_BRIGHT
+			sgr.Bg = types.SGR_COLOR_BLACK_BRIGHT
 
 		case 101: // bg red
-			sgr.Bg = types.SGR_COLOUR_RED_BRIGHT
+			sgr.Bg = types.SGR_COLOR_RED_BRIGHT
 
 		case 102: // bg green
-			sgr.Bg = types.SGR_COLOUR_GREEN_BRIGHT
+			sgr.Bg = types.SGR_COLOR_GREEN_BRIGHT
 
 		case 103: // bg yellow
-			sgr.Bg = types.SGR_COLOUR_YELLOW_BRIGHT
+			sgr.Bg = types.SGR_COLOR_YELLOW_BRIGHT
 
 		case 104: // bg blue
-			sgr.Bg = types.SGR_COLOUR_BLUE_BRIGHT
+			sgr.Bg = types.SGR_COLOR_BLUE_BRIGHT
 
 		case 105: // bg magenta
-			sgr.Bg = types.SGR_COLOUR_MAGENTA_BRIGHT
+			sgr.Bg = types.SGR_COLOR_MAGENTA_BRIGHT
 
 		case 106: // bg cyan
-			sgr.Bg = types.SGR_COLOUR_CYAN_BRIGHT
+			sgr.Bg = types.SGR_COLOR_CYAN_BRIGHT
 
 		case 107: // bg white
-			sgr.Bg = types.SGR_COLOUR_WHITE_BRIGHT
+			sgr.Bg = types.SGR_COLOR_WHITE_BRIGHT
 
 		default:
 			log.Printf("WARNING: Unknown SGR code: %d", n)
@@ -207,7 +207,7 @@ func _sgrEnhancedColour(n int32, stack []int32) *types.Colour {
 	}
 	switch stack[1] {
 	case 5:
-		colour, ok := types.SGR_COLOUR_256[stack[2]]
+		colour, ok := types.SGR_COLOR_256[stack[2]]
 		if !ok {
 			log.Printf("WARNING: SGR error: 256 value does not exist in %d: %v", n, stack)
 			return nil

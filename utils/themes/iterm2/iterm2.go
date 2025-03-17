@@ -32,37 +32,41 @@ func convertToMxttyTheme(theme map[string]Color) error {
 		var err error
 		switch name {
 		case "Ansi 0 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_BLACK)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_BLACK)
 		case "Ansi 1 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_RED)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_RED)
 		case "Ansi 2 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_GREEN)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_GREEN)
 		case "Ansi 3 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_YELLOW)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_YELLOW)
 		case "Ansi 4 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_BLUE)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_BLUE)
 		case "Ansi 5 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_MAGENTA)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_MAGENTA)
 		case "Ansi 6 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_CYAN)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_CYAN)
 		case "Ansi 7 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_WHITE)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_WHITE)
 		case "Ansi 8 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_BLACK_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_BLACK_BRIGHT)
 		case "Ansi 9 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_RED_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_RED_BRIGHT)
 		case "Ansi 10 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_GREEN_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_GREEN_BRIGHT)
 		case "Ansi 11 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_YELLOW_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_YELLOW_BRIGHT)
 		case "Ansi 12 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_BLUE_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_BLUE_BRIGHT)
 		case "Ansi 13 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_MAGENTA_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_MAGENTA_BRIGHT)
 		case "Ansi 14 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_CYAN_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_CYAN_BRIGHT)
 		case "Ansi 15 Color":
-			err = rgbRealToByteColour(colour, types.SGR_COLOUR_WHITE_BRIGHT)
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_WHITE_BRIGHT)
+		case "Background Color":
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_BACKGROUND)
+		case "Foreground Color":
+			err = rgbRealToByteColour(colour, types.SGR_COLOR_FOREGROUND)
 		default:
 			debug.Log("skipping component: " + name)
 		}

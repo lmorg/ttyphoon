@@ -11,7 +11,7 @@ func newFontSurface(glyphSize *types.XY, nCharacters int32) *sdl.Surface {
 		panic(err) // TODO: better error handling please!
 	}
 
-	pixel := sdl.MapRGBA(surface.Format, types.SGR_DEFAULT.Bg.Red, types.SGR_DEFAULT.Bg.Green, types.SGR_DEFAULT.Bg.Blue, 255)
+	pixel := sdl.MapRGBA(surface.Format, types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
 	err = surface.FillRect(&sdl.Rect{W: surface.W, H: surface.H}, pixel)
 	if err != nil {
 		panic(err) // TODO: better error handling please!

@@ -484,7 +484,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
 			}
 			//surf, _ := typeface.RenderIcon(_MENU_ITEM_COLOR, &rectIcon, sr.menu.icons[i])
-			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: types.SGR_DEFAULT.Bg, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
+			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 			//_ = surf.Blit(nil, surface, &rectIcon)
 			//sr._renderNotificationSurface(surface, &rectIcon)
 			//defer surf.Free()

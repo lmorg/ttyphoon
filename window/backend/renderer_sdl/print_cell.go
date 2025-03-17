@@ -55,7 +55,7 @@ func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) 
 		fg, bg = sgr.Fg, sgr.Bg
 	}
 
-	if unsafe.Pointer(bg) == unsafe.Pointer(types.SGR_DEFAULT.Bg) && !forceBg {
+	if unsafe.Pointer(bg) == unsafe.Pointer(types.SGR_COLOR_BACKGROUND) && !forceBg {
 		bg = nil
 	}
 

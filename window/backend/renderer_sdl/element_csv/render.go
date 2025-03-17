@@ -1,6 +1,8 @@
 package elementCsv
 
-import "github.com/lmorg/mxtty/types"
+import (
+	"github.com/lmorg/mxtty/types"
+)
 
 func (el *ElementCsv) Draw(size *types.XY, pos *types.XY) {
 	pos.X += el.renderOffset
@@ -28,12 +30,12 @@ func (el *ElementCsv) Draw(size *types.XY, pos *types.XY) {
 	}
 
 	cell.Sgr.Bitwise.Unset(types.SGR_INVERT)
-	cell.Sgr.Fg = types.SGR_COLOUR_RED
+	cell.Sgr.Fg = types.SGR_COLOR_RED
 
 	cell.Char = arrowGlyph[el.orderDesc]
 	el.renderer.PrintCell(el.tile, cell, relPos)
 
-	cell.Sgr.Fg = types.SGR_DEFAULT.Fg
+	cell.Sgr.Fg = types.SGR_COLOR_FOREGROUND
 
 skipOrderGlyph:
 

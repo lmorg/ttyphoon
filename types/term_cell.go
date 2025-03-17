@@ -1,6 +1,8 @@
 package types
 
-import "strings"
+import (
+	"strings"
+)
 
 type Cell struct {
 	Char    rune

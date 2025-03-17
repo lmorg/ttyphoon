@@ -29,7 +29,7 @@ func (sr *sdlRender) renderFooter() {
 		H: (sr.footer * sr.glyphSize.Y) + (_PANE_TOP_MARGIN * 2),
 	}
 
-	fill := types.SGR_COLOUR_BLACK_BRIGHT
+	fill := types.COLOR_UNFOCUSED
 	_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
 	_ = sr.renderer.FillRect(rect)
 

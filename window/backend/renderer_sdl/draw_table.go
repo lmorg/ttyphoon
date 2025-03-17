@@ -9,7 +9,7 @@ import (
 func (sr *sdlRender) DrawTable(tile types.Tile, pos *types.XY, height int32, boundaries []int32) {
 	var err error
 
-	fg := types.SGR_DEFAULT.Fg
+	fg := types.SGR_COLOR_FOREGROUND
 
 	texture := sr.createRendererTexture()
 	if texture == nil {

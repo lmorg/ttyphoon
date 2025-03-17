@@ -325,7 +325,7 @@ func (term *Term) Bg() *types.Colour {
 		return types.SGR_DEFAULT.Bg
 	}
 
-	return types.BgUnfocused
+	return types.COLOR_UNFOCUSED
 }
 
 func (term *Term) visibleScreen() types.Screen {
