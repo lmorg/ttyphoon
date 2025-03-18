@@ -28,6 +28,10 @@ func (term *Term) search() {
 }
 
 func (term *Term) searchBuf(search string) {
+	if len(search) == 1 {
+		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search string too short. Minimum search length is 2")
+	}
+
 	term.searchClearResults()
 
 	if search == "" {
