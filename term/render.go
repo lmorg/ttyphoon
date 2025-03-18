@@ -113,7 +113,7 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 	for y := int32(len(screen)) - 1; y >= 0; y-- {
 		i++
 		if len(screen[y].Hidden) != 0 {
-			term.renderer.DrawOutputBlockChrome(term.tile, y, 1, types.COLOUR_FOLDED, true)
+			term.renderer.DrawOutputBlockChrome(term.tile, y, 1, types.COLOR_FOLDED, true)
 		}
 		if screen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END) {
 			i = 0
@@ -164,9 +164,9 @@ func _renderOutputBlockChrome(term *Term, start, end int32, errorBlock bool) {
 	}
 
 	if errorBlock {
-		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOUR_ERROR, false)
+		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOR_ERROR, false)
 	} else {
-		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOUR_OK, false)
+		term.renderer.DrawOutputBlockChrome(term.tile, start, end, types.COLOR_OK, false)
 	}
 	term._cacheBlock = append(term._cacheBlock, []int32{start, end})
 }

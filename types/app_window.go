@@ -21,6 +21,7 @@ type Tile interface {
 	Top() int32
 	Right() int32
 	Bottom() int32
+	AtBottom() bool
 	GetTerm() Term
 	SetTerm(Term)
 }

@@ -35,7 +35,7 @@ Terminal:
   # LightMode is like Dark Mode but lighter
   #LightMode: true # experimental
 
-  ColorScheme: "~/CGA.itermcolors"
+  #ColorScheme: "~/Ghostty Default StyleDark.itermcolors"
   
   Widgets:
     Table:

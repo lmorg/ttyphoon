@@ -67,6 +67,7 @@ type PaneT struct {
 	right    int32
 	bottom   int32
 	active   bool
+	atBottom bool
 	windowId string
 	tmux     *Tmux
 	term     types.Term
@@ -155,6 +156,7 @@ type paneInfo struct {
 	Dead      bool   `tmux:"?pane_dead,true,false"`
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
+	AtBottom  bool   `tmux:"?pane_at_bottom,true,false"`
 }
 
 // updatePaneInfo, paneId is optional. Leave blank to update all panes
@@ -210,6 +212,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	pane.top = int32(info.PosTop)
 	pane.right = int32(info.PosRight)
 	pane.bottom = int32(info.PosBottom)
+	pane.atBottom = info.AtBottom
 	if pane.term != nil {
 		pane.term.MakeVisible(info.WinActive)
 		pane.term.HasFocus(info.Active)

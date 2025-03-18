@@ -192,7 +192,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
 					&types.XY{X: term.size.X, Y: 1},
-					types.COLOUR_FOLDED, true,
+					types.COLOR_FOLDED, true,
 				)
 			})
 			return
@@ -212,19 +212,19 @@ func (term *Term) MousePosition(pos *types.XY) {
 		var colour *types.Colour
 		switch {
 		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-			colour = types.COLOUR_ERROR
+			colour = types.COLOR_ERROR
 		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-			colour = types.COLOUR_OK
+			colour = types.COLOR_OK
 		default:
 			absScreen := append(term._scrollBuf, term._normBuf...)
 			absPos := term.convertRelPosToAbsPos(pos)
 			for y := absPos.Y + 1; int(y) < len(absScreen); y++ {
 				switch {
 				case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-					colour = types.COLOUR_ERROR
+					colour = types.COLOR_ERROR
 					goto drawRect
 				case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-					colour = types.COLOUR_OK
+					colour = types.COLOR_OK
 					goto drawRect
 				default:
 					continue
@@ -258,7 +258,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: pos.X, Y: pos.Y},
 					&types.XY{X: term.size.X - pos.X, Y: h},
-					types.COLOUR_FOLDED, false,
+					types.COLOR_FOLDED, false,
 				)
 			})
 			return

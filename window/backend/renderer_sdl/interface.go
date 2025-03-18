@@ -169,5 +169,7 @@ func (t *winTileT) Bottom() int32 { return t.sr.winCellSize.Y }
 func (t *winTileT) Name() string { return app.Title }
 func (t *winTileT) Id() string   { return "" }
 
+func (t *winTileT) AtBottom() bool { return true }
+
 func (t *winTileT) GetTerm() types.Term { return nil }
 func (t *winTileT) SetTerm(types.Term)  { panic("writing to a readonly interface") }

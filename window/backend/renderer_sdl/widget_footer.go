@@ -20,8 +20,6 @@ func (sr *sdlRender) renderFooter() {
 		return
 	}
 
-	_ = sr.createRendererTexture()
-
 	rect := &sdl.Rect{
 		X: 0,
 		Y: (sr.winCellSize.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
@@ -30,10 +28,11 @@ func (sr *sdlRender) renderFooter() {
 	}
 
 	fill := types.COLOR_UNFOCUSED
+
+	/*_ = sr.createRendererTexture()
 	_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
 	_ = sr.renderer.FillRect(rect)
-
-	sr.restoreRendererTexture()
+	sr.restoreRendererTexture()*/
 
 	pos := &types.XY{Y: sr.winCellSize.Y}
 

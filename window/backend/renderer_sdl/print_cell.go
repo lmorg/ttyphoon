@@ -21,7 +21,7 @@ const (
 
 var textShadow = []*types.Colour{ // RGBA
 	_HLTEXTURE_NONE:          {0, 0, 0, 0},
-	_HLTEXTURE_SELECTION:     {64, 64, 255, 255},
+	_HLTEXTURE_SELECTION:     types.COLOR_SELECTION,
 	_HLTEXTURE_SEARCH_RESULT: {64, 64, 255, 255},
 	_HLTEXTURE_MATCH_RANGE:   {64, 255, 64, 255},
 }
@@ -29,7 +29,7 @@ var textShadow = []*types.Colour{ // RGBA
 func fontStyle(style types.SgrFlag) ttf.Style {
 	var i ttf.Style
 
-	if style.Is(types.SGR_BOLD) && !config.Config.TypeFace.Ligatures {
+	if style.Is(types.SGR_BOLD) { // && !config.Config.TypeFace.Ligatures {
 		i |= ttf.STYLE_BOLD
 	}
 
