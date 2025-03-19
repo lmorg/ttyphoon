@@ -30,6 +30,7 @@ type Color struct {
 	Red   float64
 	Green float64
 	Blue  float64
+	Alpha float64
 }
 
 func unmarshalTheme(reader io.Reader) (map[string]Color, error) {
@@ -97,6 +98,8 @@ func (d *Dict) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error 
 						currentColor.Green = value
 					case "Blue Component":
 						currentColor.Blue = value
+					case "Alpha Component":
+						currentColor.Alpha = value
 					}
 				}
 			}

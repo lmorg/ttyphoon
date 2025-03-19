@@ -102,6 +102,15 @@ func tabListNewCell(r rune) *types.Cell {
 	}
 }
 
+func tabListNewCellActive(r rune) *types.Cell {
+	cell := &types.Cell{
+		Char: r,
+		Sgr:  types.SGR_DEFAULT.Copy(),
+	}
+	cell.Sgr.Bitwise.Set(types.SGR_BOLD | types.SGR_ITALIC)
+	return cell
+}
+
 func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 	tabList := &tabListT{
 		mouseOver: -1,
@@ -121,18 +130,26 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 	tabList.boundaries = []int32{0}
 	var x int32
 
-	//tabList.windows = sr.tmux.RenderWindows()
 	for i, tab := range *tabList.tabs {
 		if tab.Active() {
 			tabList.active = i
 		}
 
-		tabList.cells = append(tabList.cells, tabListNewCell(' '))
-		for _, r := range tab.Name() {
-			tabList.cells = append(tabList.cells, tabListNewCell(r))
-			x++
+		if tab.Active() {
+			tabList.cells = append(tabList.cells, tabListNewCellActive(' '))
+			for _, r := range tab.Name() {
+				tabList.cells = append(tabList.cells, tabListNewCellActive(r))
+				x++
+			}
+			tabList.cells = append(tabList.cells, tabListNewCellActive(' '))
+		} else {
+			tabList.cells = append(tabList.cells, tabListNewCell(' '))
+			for _, r := range tab.Name() {
+				tabList.cells = append(tabList.cells, tabListNewCell(r))
+				x++
+			}
+			tabList.cells = append(tabList.cells, tabListNewCell(' '))
 		}
-		tabList.cells = append(tabList.cells, tabListNewCell(' '))
 
 		x += 2
 		tabList.boundaries = append(tabList.boundaries, x)
@@ -154,13 +171,14 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 		bottomRightCellY = int32(1)
 	)
 
-	activeRect := &sdl.Rect{
+	/*activeRect := &sdl.Rect{
 		X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN - 1,
 		Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN - 1,
 		W: (bottomRightCellX * sr.glyphSize.X) + 2,
 		H: (bottomRightCellY * sr.glyphSize.Y) + 2,
 	}
-	sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
+	//sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
+	sr._drawHighlightRect(activeRect, types.COLOR_SELECTION, types.COLOR_SELECTION, 0, 230)*/
 
 	if sr.windowTabs.mouseOver == -1 {
 		if sr.windowTabs.mouseOver != sr.windowTabs.last {
@@ -184,7 +202,8 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 		W: (bottomRightCellX * sr.glyphSize.X),
 		H: (bottomRightCellY * sr.glyphSize.Y),
 	}
-	sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
+	//sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
+	sr._drawHighlightRect(highlightRect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaFill)
 }
 
 func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButtonEvent) {
@@ -219,4 +238,20 @@ func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButt
 	if evt.Clicks == 2 {
 		sr.tmux.NewWindow()
 	}
+}
+
+func (tw *termWidgetT) _eventMouseMotionFooter(sr *sdlRender, evt *sdl.MouseMotionEvent) {
+	x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
+	for i := range sr.windowTabs.boundaries {
+		if x >= 0 && x < sr.windowTabs.boundaries[i] {
+			sr.windowTabs.mouseOver = i - 1
+			sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", (*sr.windowTabs.tabs)[i-1].Name(), (*sr.windowTabs.tabs)[i-1].Id())
+			return
+		}
+	}
+
+	sr.footerText = "[2x Click]  Start new window"
+	sr.windowTabs.mouseOver = -1
+
+	return
 }

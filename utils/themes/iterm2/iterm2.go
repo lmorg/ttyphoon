@@ -91,8 +91,13 @@ func rgbRealToByteColor(rCol Color, bCol *types.Colour) error {
 		return errors.New("rgb value < 0")
 	}
 
-	bCol.Red = byte(math.Round(rCol.Red * 256))
-	bCol.Green = byte(math.Round(rCol.Green * 256))
-	bCol.Blue = byte(math.Round(rCol.Blue * 256))
+	bCol.Red = byte(math.Round(rCol.Red * 255))
+	bCol.Green = byte(math.Round(rCol.Green * 255))
+	bCol.Blue = byte(math.Round(rCol.Blue * 255))
+	bCol.Alpha = byte(math.Round(rCol.Alpha * 255))
+	if bCol.Alpha == 0 {
+		bCol.Alpha = 255
+	}
+	
 	return nil
 }

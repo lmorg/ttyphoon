@@ -29,13 +29,17 @@ Terminal:
   # `0` updates per character, which is smooth but slow
   # `-1` updates per page, which is fast.
   # Window.RefreshInterval also affects window updates
-  # This value can also be overwritten by CSI ?4l &  CSI ?4h (DECSCLM)
+  # This value can also be overwritten by CSI ?4l and CSI ?4h (DECSCLM)
   JumpScrollLineCount: -1
 
-  # LightMode is like Dark Mode but lighter
+  # LightMode is like Dark Mode but lighter ;-)
+  # This mode is highly experimental and it's main purpose is to fix some
+  # rendering ugliness that happens when foreign themes (like itermcolors) are
+  # used. For example, drop shadow colors are undefined in itermcolors and
+  # light themes needs a lighter colored drop shadow.
   #LightMode: true # experimental
 
-  #ColorScheme: "~/Ghostty Default StyleDark.itermcolors"
+  #ColorScheme: "~/Chalk.itermcolors"
   
   Widgets:
     Table:
