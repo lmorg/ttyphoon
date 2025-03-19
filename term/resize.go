@@ -57,8 +57,14 @@ func (term *Term) _resizeFromTop(max int) {
 	}
 
 	if len(term._scrollBuf) > max {
-		term._normBuf = append(term._scrollBuf[len(term._scrollBuf)-max:], term._normBuf...)
+		newScreen := make([]*types.Row, term.size.Y)
+		copy(newScreen, term._scrollBuf[len(term._scrollBuf)-max:])
+		copy(newScreen[max:], term._normBuf)
+		term._normBuf = newScreen
+
+		//term._normBuf = append(term._scrollBuf[len(term._scrollBuf)-max:], term._normBuf...)
 		term._scrollBuf = term._scrollBuf[:len(term._scrollBuf)-max]
+
 		if !term.IsAltBuf() {
 			term._curPos.Y += int32(max)
 		}
