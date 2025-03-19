@@ -300,6 +300,11 @@ func (term *Term) getScrollingRegionExcOrigin() (top int32, bottom int32) {
 		bottom = term._scrollRegion.Bottom
 	}
 
+	// this shouldn't be needed, but it at least helps with some rogue panics
+	if int(bottom) > len(*term.screen) {
+		bottom = int32(len(*term.screen) - 1)
+	}
+
 	return
 }
 

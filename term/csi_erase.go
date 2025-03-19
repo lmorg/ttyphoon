@@ -21,6 +21,7 @@ func (term *Term) csiEraseDisplayAfter() {
 		debug.Log(fmt.Sprintf("curPos().Y[%d]>bottom[%d]", curPosY, bottom))
 		return
 	}
+	
 
 	for y := curPosY; /*+ 1*/ y <= bottom; y++ {
 		term.deallocateRows((*term.screen)[y])

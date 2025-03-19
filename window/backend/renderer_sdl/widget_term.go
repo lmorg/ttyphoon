@@ -91,6 +91,10 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
 		sr.clipboardPaste()
 		return
+
+	case evt.Keysym.Sym == 't' && mod == codes.MOD_META:
+		sr.UpdateTheme()
+		return
 	}
 
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
@@ -266,16 +270,7 @@ func (tw *termWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil {
 
 		if (evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
-			x := ((evt.X - _PANE_LEFT_MARGIN) / sr.glyphSize.X) - sr.windowTabs.offset.X
-			for i := range sr.windowTabs.boundaries {
-				if x >= 0 && x < sr.windowTabs.boundaries[i] {
-					sr.windowTabs.mouseOver = i - 1
-					sr.footerText = fmt.Sprintf("[Click]  Switch to window '%s' (%s)", (*sr.windowTabs.tabs)[i-1].Name(), (*sr.windowTabs.tabs)[i-1].Id())
-					return
-				}
-			}
-			sr.footerText = "[2x Click]  Start new window"
-			sr.windowTabs.mouseOver = -1
+			tw._eventMouseMotionFooter(sr, evt)
 			return
 		}
 
