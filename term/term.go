@@ -70,7 +70,6 @@ type Term struct {
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
-	_hasKeyPress     chan bool
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
 	_rowId           uint64 // atomic.Uint64
@@ -129,11 +128,10 @@ func (term *Term) lfRedraw() {
 // NewTerminal creates a new virtual term
 func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visible bool) {
 	term := &Term{
-		tile:         tile,
-		renderer:     renderer,
-		size:         size,
-		_hasKeyPress: make(chan bool),
-		visible:      visible,
+		tile:     tile,
+		renderer: renderer,
+		size:     size,
+		visible:  visible,
 	}
 
 	term.reset(size)
@@ -298,17 +296,11 @@ type scrollRegionT struct {
 	Bottom int32
 }
 
-func (term *Term) hasKeyPress() {
-	term._hasKeyPress <- true
-}
-
 func (term *Term) Close() {
 	term.Pty.Close()
 }
 
 func (term *Term) Reply(b []byte) {
-	go term.hasKeyPress()
-
 	if term._scrollOffset != 0 && config.Config.Terminal.ScrollbackCloseKeyPress {
 		term._scrollOffset = 0
 		term.updateScrollback()
