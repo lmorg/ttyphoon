@@ -132,7 +132,7 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 		return fmt.Errorf("expecting an array of windows, instead got %T", v)
 	}
 
-	if winId != "" {
+	if winId == "" {
 		for _, win := range tmux.win {
 			win.closed = true
 		}

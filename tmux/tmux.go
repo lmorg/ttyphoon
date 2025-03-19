@@ -123,13 +123,14 @@ var (
 )
 
 type Tmux struct {
-	cmd *exec.Cmd
-	tty *os.File
-	//writePipe io.WriteCloser
-	resp      chan *tmuxResponseT
-	_resp     *tmuxResponseT
-	win       map[string]*WindowT
-	pane      map[string]*PaneT
+	cmd   *exec.Cmd
+	tty   *os.File
+	resp  chan *tmuxResponseT
+	_resp *tmuxResponseT
+	win   map[string]*WindowT
+	pane  map[string]*PaneT
+	pp    sync.Map
+
 	keys      keyBindsT
 	allowExit bool
 
