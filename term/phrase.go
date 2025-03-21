@@ -3,10 +3,12 @@ package virtualterm
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/mattn/go-runewidth"
 )
 
 func (term *Term) phraseAppend(r rune) {
@@ -42,8 +44,15 @@ func (term *Term) autoHotlink(row *types.Row) {
 	phrase := string(*row.Phrase)
 	posUrl := rxUrl.FindStringIndex(phrase)
 	if posUrl != nil {
-		_autoHotlink(term, row, posUrl, "")
+		if posUrl[0] > int(term.size.X) || posUrl[1] > int(term.size.X) {
+			goto skipHttp // link too long
+		}
+		url := phrase[posUrl[0]:posUrl[1]]
+		_strLocToCellPos(phrase, posUrl)
+		_autoHotlink(term, row, posUrl, url)
 	}
+
+skipHttp:
 
 	posFile := rxFile.FindAllStringIndex(phrase, -1)
 	if posFile == nil {
@@ -51,7 +60,12 @@ func (term *Term) autoHotlink(row *types.Row) {
 	}
 
 	for i := range posFile {
+		if posFile[i][0] > int(term.size.X) || posFile[i][1] > int(term.size.X) {
+			break // filename too long
+		}
+
 		file := phrase[posFile[i][0]:posFile[i][1]]
+		_strLocToCellPos(phrase, posFile[i])
 		if file[0] != '/' {
 			file = fmt.Sprintf("%s/%s", term.tile.Path(), file)
 		}
@@ -65,6 +79,8 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 	if !config.Config.Terminal.AutoHotlink {
 		return
 	}
+
+	path = filepath.Clean(path)
 
 	display := string((*row.Phrase)[pos[0]:pos[1]])
 	if path == "" {
@@ -83,4 +99,12 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 		row.Cells[pos[0]+i].Element = el
 		row.Cells[pos[0]+i].Char = types.SetElementXY(&types.XY{int32(i), 0})
 	}
+}
+
+func _strLocToCellPos(s string, pos []int) {
+	if pos[0] > 0 {
+		pos[0] = runewidth.StringWidth(s[:pos[0]])
+	}
+
+	pos[1] = runewidth.StringWidth(s[:pos[1]])
 }

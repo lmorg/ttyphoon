@@ -1,6 +1,7 @@
 package elementHyperlink
 
 import (
+	"bytes"
 	"errors"
 	"os/exec"
 
@@ -74,10 +75,27 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 		return
 	}
 
-	err := exec.Command("open", el.url).Start()
+	var b []byte
+	buf := bytes.NewBuffer(b)
+
+	cmd := exec.Command("open", el.url)
+	cmd.Stderr = buf
+
+	err := cmd.Start()
 	if err != nil {
 		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
 	}
+
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			msg := buf.String()
+			if msg == "" {
+				msg = err.Error()
+			}
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
+		}
+	}()
 }
 
 func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
