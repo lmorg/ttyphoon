@@ -19,14 +19,6 @@ func (term *Term) phraseAppend(r rune) {
 	*term._rowPhrase = append(*term._rowPhrase, r)
 }
 
-/*func (term *Term) phraseErasePhrase() {
-	if term.IsAltBuf() {
-		return
-	}
-
-	term._rowPhrase = &[]rune{}
-}*/
-
 func (term *Term) phraseSetToRowPos() {
 	if term.IsAltBuf() {
 		return
@@ -37,7 +29,7 @@ func (term *Term) phraseSetToRowPos() {
 
 var (
 	rxUrl  = regexp.MustCompile(`http(|s)://[-./_%&?+=a-zA-Z0-9]+`)
-	rxFile = regexp.MustCompile(`[-./_%&?+=a-zA-Z0-9]+\.[a-zA-Z0-9]+`)
+	rxFile = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
 )
 
 func (term *Term) autoHotlink(row *types.Row) {
@@ -66,6 +58,10 @@ skipHttp:
 
 		file := phrase[posFile[i][0]:posFile[i][1]]
 		_strLocToCellPos(phrase, posFile[i])
+		if file[0] == '~' {
+			home, _ := os.UserHomeDir()
+			file = fmt.Sprintf("%s/%s", home, file[1:])
+		}
 		if file[0] != '/' {
 			file = fmt.Sprintf("%s/%s", term.tile.Path(), file)
 		}
