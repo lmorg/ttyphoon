@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/mattn/go-runewidth"
+
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
-	"github.com/mattn/go-runewidth"
 )
 
 func (term *Term) phraseAppend(r rune) {
@@ -90,7 +91,7 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 		return
 	}
 
-	length := pos[1] - pos[0] - 1
+	length := pos[1] - pos[0]
 	for i := range length {
 		row.Cells[pos[0]+i].Element = el
 		row.Cells[pos[0]+i].Char = types.SetElementXY(&types.XY{int32(i), 0})

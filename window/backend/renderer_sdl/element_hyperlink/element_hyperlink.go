@@ -5,6 +5,9 @@ import (
 	"errors"
 	"os/exec"
 
+	"golang.design/x/clipboard"
+
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 )
@@ -93,7 +96,11 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 			if msg == "" {
 				msg = err.Error()
 			}
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
+			if debug.Enabled {
+				el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
+			}
+			clipboard.Write(clipboard.FmtText, []byte(el.url))
+			el.renderer.DisplayNotification(types.NOTIFY_INFO, "Unable to launch or unknown associated application.\nPath copied to clipboard")
 		}
 	}()
 }
