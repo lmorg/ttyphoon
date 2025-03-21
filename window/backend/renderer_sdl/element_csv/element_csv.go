@@ -75,7 +75,7 @@ type parametersT struct {
 	CreateHeadings bool `json:"CreateHeadings"`
 }
 
-func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
+func (el *ElementCsv) Generate(apc *types.ApcSlice, _ *types.Sgr) error {
 	defer el.notify.Close()
 
 	buf := bytes.NewBufferString(string(el.buf))

@@ -23,7 +23,7 @@ func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlic
 }
 
 func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
-	err := el.Generate(parameters)
+	err := el.Generate(parameters, term.sgr)
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return

@@ -33,7 +33,7 @@ func New(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY
 	return &ElementImage{renderer: renderer, tile: tile, load: loadFn}
 }
 
-func (el *ElementImage) Generate(apc *types.ApcSlice) error {
+func (el *ElementImage) Generate(apc *types.ApcSlice, _ *types.Sgr) error {
 	notify := el.renderer.DisplaySticky(types.NOTIFY_DEBUG, "Importing image from ANSI escape codes....")
 	defer notify.Close()
 
@@ -125,7 +125,7 @@ func (el *ElementImage) MouseWheel(_ *types.XY, _ *types.XY, callback types.Even
 func (el *ElementImage) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Open image full screen")
 	cursor.Hand()
-	callback()
+	//callback()
 }
 
 func (el *ElementImage) MouseOut() {

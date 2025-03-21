@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -173,3 +174,8 @@ func (t *winTileT) AtBottom() bool { return true }
 
 func (t *winTileT) GetTerm() types.Term { return nil }
 func (t *winTileT) SetTerm(types.Term)  { panic("writing to a readonly interface") }
+
+func (t *winTileT) Path() string {
+	pwd, _ := os.Getwd()
+	return pwd
+}

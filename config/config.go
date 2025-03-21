@@ -65,6 +65,7 @@ type configT struct {
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
 		LightMode               bool   `yaml:"LightMode"`
+		AutoHotlink             bool   `yaml:"AutoHotlink"`
 
 		Widgets struct {
 			Table struct {

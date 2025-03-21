@@ -1,7 +1,7 @@
 package types
 
 type Element interface {
-	Generate(*ApcSlice) error
+	Generate(*ApcSlice, *Sgr) error
 	Write(rune) error
 	Rune(*XY) rune
 	Size() *XY
@@ -19,4 +19,5 @@ const (
 	ELEMENT_ID_IMAGE ElementID = iota
 	ELEMENT_ID_SIXEL
 	ELEMENT_ID_CSV
+	ELEMENT_ID_HYPERLINK
 )

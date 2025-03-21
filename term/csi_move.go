@@ -14,15 +14,12 @@ func (term *Term) carriageReturn() {
 
 func (term *Term) lineFeed() {
 	//debug.Log(term.curPos.Y)
+	//term.phraseIsClickable((*term.screen)[term._curPos.Y])
 
 	if term.csiMoveCursorDownwardsExcOrigin(1) != 0 {
 		term.appendScrollBuf(1)
 		term.csiScrollUp(1)
 		term.csiMoveCursorDownwardsExcOrigin(1)
-
-	} else { // TODO: test
-		//term.csiScrollUp(1)
-		//term.csiMoveCursorDownwards(1)
 	}
 
 	term.phraseSetToRowPos()
@@ -47,10 +44,6 @@ func (term *Term) reverseLineFeed() {
 	if term.csiMoveCursorUpwardsExcOrigin(1) != 0 {
 		term.csiScrollDown(1)
 		term.csiMoveCursorUpwardsExcOrigin(1)
-
-	} else { // TODO: test
-		//term.csiScrollDown(1)
-		//term.csiMoveCursorUpwards(1)
 	}
 
 	term.phraseSetToRowPos()
