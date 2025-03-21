@@ -14,18 +14,20 @@ func (tmux *Tmux) GetTermTiles() *types.AppWindowTerms {
 
 	aw := new(types.AppWindowTerms)
 
-	for _, pane := range tmux.activeWindow.panes {
+	//tmux.activeWindow.panes.mutex.Lock()
+	for pane := range tmux.activeWindow.panes.Each() {
 		if pane.closed {
 			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.id))
-			go pane.exit()
+			pane.exit()
 			continue
 		}
 		aw.Tiles = append(aw.Tiles, pane)
 	}
+	//tmux.activeWindow.panes.mutex.Unlock()
 
 	aw.Active = tmux.activeWindow.ActivePane()
 
-	for _, win := range tmux.win {
+	for _, win := range tmux.wins {
 		if win.closed {
 			win.close(tmux)
 			continue

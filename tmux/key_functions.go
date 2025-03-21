@@ -53,7 +53,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 
-		tmux.win[tmux.appWindow.Tabs[i].Id()].activePane.term.ShowCursor(false)
+		tmux.wins[tmux.appWindow.Tabs[i].Id()].activePane.term.ShowCursor(false)
 		//windows[i].activePane.Term().ShowCursor(false)
 		go func() {
 			// this is a kludge to avoid the cursor showing as you switch windows

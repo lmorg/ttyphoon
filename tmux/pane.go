@@ -131,15 +131,9 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
 		false)
 
-	/*pty, err := ptty.OpenPty(info.Pty)
-	if err != nil {
-		panic(err)
-	}*/
-	//pane.createPipe()
-
 	pane.term.Start(pane)
 
-	tmux.pane[pane.id] = pane
+	tmux.panes.Set(pane.id, pane)
 
 	return pane
 }
@@ -191,8 +185,8 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 }
 
 func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
-	pane, ok := tmux.pane[info.Id]
-	if !ok {
+	pane := tmux.panes.Get(info.Id)
+	if pane == nil {
 		pane = tmux.newPane(info)
 	}
 
@@ -222,7 +216,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 	}
 
-	win, ok := tmux.win[pane.windowId]
+	win, ok := tmux.wins[pane.windowId]
 	if !ok {
 		/*err := tmux.updateWinInfo(pane.WindowId)
 		if err != nil {
@@ -231,7 +225,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		win = tmux.win[pane.WindowId]*/
 		panic("tmux pane created before window")
 	}
-	win.panes[pane.id] = pane
+	win.panes.Set(pane.id, pane)
 	if pane.active {
 		win.activePane = pane
 	}
@@ -263,9 +257,13 @@ func (tmux *Tmux) paneExited() error {
 		return fmt.Errorf("expecting an array of panes, instead got %T", v)
 	}
 
-	for _, pane := range tmux.pane {
+	// start bypass the paneMap helper functions
+	//tmux.panes.mutex.Lock()
+	for pane := range tmux.panes.Each() {
 		pane.closed = true
 	}
+	//tmux.panes.mutex.Unlock()
+	// end bypass the paneMap helper functions
 
 	for i := range panes {
 		info, ok := panes[i].(*paneInfo)
@@ -273,12 +271,9 @@ func (tmux *Tmux) paneExited() error {
 			return fmt.Errorf("expecting info on a pane, instead got %T", info)
 		}
 
-		pane, ok := tmux.pane[info.Id]
-		if !ok {
-			continue // ignore new panes
+		if pane := tmux.panes.Get(info.Id); pane != nil {
+			pane.closed = false
 		}
-
-		pane.closed = false
 	}
 
 	go tmux.renderer.RefreshWindowList()

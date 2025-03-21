@@ -23,8 +23,8 @@ func (p *PaneT) exit() {
 	p.buf.Close()
 	p.term.Close()
 
-	delete(p.tmux.pane, p.id)
-	delete(p.tmux.win[p.windowId].panes, p.id)
+	p.tmux.panes.Delete(p.id)
+	p.tmux.wins[p.windowId].panes.Delete(p.id)
 
 	debug.Log(p)
 }

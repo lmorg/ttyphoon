@@ -53,7 +53,7 @@ type WindowT struct {
 	width      int
 	height     int
 	active     bool
-	panes      map[string]*PaneT
+	panes      paneMap
 	activePane *PaneT
 	closed     bool
 }
@@ -64,7 +64,7 @@ func (tmux *Tmux) initSessionWindows() error {
 	//	return err
 	//}
 
-	tmux.win = make(map[string]*WindowT)
+	tmux.wins = make(map[string]*WindowT)
 
 	return tmux.updateWinInfo("")
 
@@ -89,10 +89,10 @@ func (tmux *Tmux) NewWindow() {
 func (tmux *Tmux) newWindow(winId string, caller types.CallerT) *WindowT {
 	win := &WindowT{
 		id:    winId,
-		panes: make(map[string]*PaneT),
+		panes: newPaneMap(),
 	}
 
-	tmux.win[winId] = win
+	tmux.wins[winId] = win
 
 	if caller != types.CALLER_updateWinInfo {
 		// don't get caught in a loop!
@@ -133,7 +133,7 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 	}
 
 	if winId == "" {
-		for _, win := range tmux.win {
+		for _, win := range tmux.wins {
 			win.closed = true
 		}
 	}
@@ -144,7 +144,7 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 			return fmt.Errorf("expecting info on a window, instead got %T", info)
 		}
 
-		win, ok := tmux.win[info.Id]
+		win, ok := tmux.wins[info.Id]
 		if !ok {
 			win = tmux.newWindow(info.Id, types.CALLER_updateWinInfo)
 		}
@@ -169,12 +169,12 @@ func (tmux *Tmux) ActiveWindow() *WindowT {
 		return win
 	}
 
-	if len(tmux.win) == 0 {
+	if len(tmux.wins) == 0 {
 		panic("no open windows")
 	}
 
 	// lets just pick one at random
-	for _, win = range tmux.win {
+	for _, win = range tmux.wins {
 		break
 	}
 	return win
@@ -229,9 +229,11 @@ func (tmux *Tmux) SelectAndResizeWindow(winId string, size *types.XY) error {
 
 	tmux.selectWindow(winId)
 
-	for _, pane := range tmux.win[winId].panes {
-		_ = pane.Resize(&types.XY{X: int32(pane.width), Y: int32(pane.height)})
+	//tmux.wins[winId].panes.mutex.Lock()
+	for pane := range tmux.wins[winId].panes.Each() {
+		go pane.Resize(&types.XY{X: int32(pane.width), Y: int32(pane.height)})
 	}
+	//tmux.wins[winId].panes.mutex.Unlock()
 
 	return err
 }
@@ -244,7 +246,7 @@ func (tmux *Tmux) selectWindow(winId string) error {
 	tmux.activeWindow.active = false
 
 	// new window
-	tmux.activeWindow = tmux.win[winId]
+	tmux.activeWindow = tmux.wins[winId]
 	tmux.activeWindow.active = true
 
 	//go tmux.UpdateSession()
@@ -253,7 +255,7 @@ func (tmux *Tmux) selectWindow(winId string) error {
 }
 
 func (tmux *Tmux) CloseWindow(winId string) {
-	win, ok := tmux.win[winId]
+	win, ok := tmux.wins[winId]
 	if !ok {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Cannot find window %s to close", winId))
 		return
@@ -265,15 +267,16 @@ func (tmux *Tmux) CloseWindow(winId string) {
 
 func (win *WindowT) close(tmux *Tmux) {
 	win.closed = true
-	delete(tmux.win, win.id)
+	delete(tmux.wins, win.id)
 
 	msg := fmt.Sprintf("Closing window %s: %s", win.id, win.name)
 	tmux.renderer.DisplayNotification(types.NOTIFY_INFO, msg)
 }
 
 func (win *WindowT) closeAllPanes() {
-	//go win.activePane.tmux.UpdateSession()
-	for _, pane := range win.panes {
+	//win.panes.mutex.Lock()
+	for pane := range win.panes.Each() {
 		pane.exit()
 	}
+	//win.panes.mutex.Unlock()
 }

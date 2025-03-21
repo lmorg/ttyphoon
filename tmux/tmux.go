@@ -127,9 +127,8 @@ type Tmux struct {
 	tty   *os.File
 	resp  chan *tmuxResponseT
 	_resp *tmuxResponseT
-	win   map[string]*WindowT
-	pane  map[string]*PaneT
-	pp    sync.Map
+	wins  map[string]*WindowT
+	panes paneMap //map[string]*PaneT
 
 	keys      keyBindsT
 	allowExit bool
@@ -155,8 +154,8 @@ const (
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	tmux := &Tmux{
 		resp:     make(chan *tmuxResponseT),
-		win:      make(map[string]*WindowT),
-		pane:     make(map[string]*PaneT),
+		wins:     make(map[string]*WindowT),
+		panes:    newPaneMap(),
 		renderer: renderer,
 	}
 
@@ -243,8 +242,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 func _respOutput(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	paneId := string(params[1])
-	pane, ok := tmux.pane[paneId]
-	if ok {
+	if pane := tmux.panes.Get(paneId); pane != nil {
 		pane.buf.Write(octal.Unescape([]byte(params[2])))
 		return
 	}
@@ -258,13 +256,12 @@ func _respOutput(tmux *Tmux, b []byte) {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
-		pane, ok = tmux.pane[paneId]
-		if !ok {
+		pane := tmux.panes.Get(paneId)
+		if pane == nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "pane not found: "+paneId)
 			return
 		}
 		pane.buf.Write(octal.Unescape(msg))
-		//tmux.renderer.RefreshWindowList()
 	}()
 }
 
@@ -289,27 +286,11 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 		tmux.newWindow(winId, types.CALLER__respWindowAdd)
 		tmux.renderer.RefreshWindowList()
 	}()
-
-	/*go func() {
-		err := tmux.updatePaneInfo("")
-		if err != nil {
-			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		}
-		err = tmux.updateWinInfo(winId)
-		if err != nil {
-			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		}
-		err = tmux.SelectAndResizeWindow(winId, tmux.renderer.GetWindowSizeCells())
-		if err != nil {
-			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		}
-		tmux.renderer.RefreshWindowList()
-	}()*/
 }
 
 func _respWindowRenamed(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
-	win, ok := tmux.win[string(params[1])]
+	win, ok := tmux.wins[string(params[1])]
 	if !ok {
 		debug.Log("No window to rename with Id: " + string(params[1]))
 		return
