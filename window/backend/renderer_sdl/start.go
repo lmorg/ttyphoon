@@ -59,6 +59,7 @@ func Initialise() (types.Renderer, *types.XY) {
 	sr._quit = make(chan bool)
 	sr._redraw = make(chan bool)
 	sr._resize = make(chan *types.XY)
+	sr._deallocStack = make(chan func())
 	sr.keyIgnore = make(chan bool)
 
 	sr.font = typeface.Deprecated_GetFont()

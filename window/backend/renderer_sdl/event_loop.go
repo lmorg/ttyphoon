@@ -77,6 +77,9 @@ func (sr *sdlRender) eventLoop() {
 				log.Printf("ERROR: %s", err.Error())
 			}
 
+		case fn := <-sr._deallocStack:
+			fn()
+
 		case <-sr._quit:
 			return
 

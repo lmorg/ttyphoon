@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
+	"runtime"
 
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -57,6 +58,9 @@ func (el *ElementImage) Generate(apc *types.ApcSlice, _ *types.Sgr) error {
 	if err != nil {
 		return fmt.Errorf("cannot cache image: %s", err.Error())
 	}
+
+	// destroy image allocation upon garbage collection
+	runtime.AddCleanup(el, func(img types.Image) { el.renderer.TriggerDeallocation(img.Close) }, el.image)
 	return nil
 }
 
@@ -85,11 +89,6 @@ func (el *ElementImage) Draw(size *types.XY, pos *types.XY) {
 
 func (el *ElementImage) Rune(_ *types.XY) rune {
 	return ' '
-}
-
-func (el *ElementImage) Close() {
-	// clear memory (if required)
-	el.image.Close()
 }
 
 func (el *ElementImage) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {

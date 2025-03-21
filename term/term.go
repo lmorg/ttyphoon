@@ -150,8 +150,6 @@ func (term *Term) reset(size *types.XY) {
 	term.resizePty()
 	term._curPos = types.XY{}
 
-	term.deallocateRows(term._normBuf...)
-	term.deallocateRows(term._altBuf...)
 	term._normBuf = term.makeScreen()
 	term._altBuf = term.makeScreen()
 	term.eraseScrollBack()
@@ -357,30 +355,6 @@ func (term *Term) MakeVisible(visible bool) {
 
 func (term *Term) IsAltBuf() bool {
 	return unsafe.Pointer(term.screen) != unsafe.Pointer(&term._normBuf)
-}
-
-func (term *Term) deallocateCells(cells []*types.Cell) { go term._deallocateCells(cells) }
-
-func (term *Term) deallocateRows(rows ...*types.Row) {
-	term._deallocate(rows)
-}
-
-func (term *Term) _deallocate(screen types.Screen) {
-	for y := range screen {
-		term.deallocateCells(screen[y].Cells)
-
-		if len(screen[y].Hidden) > 0 {
-			term._deallocate(screen[y].Hidden)
-		}
-	}
-}
-
-func (term *Term) _deallocateCells(cells []*types.Cell) {
-	for x := range cells {
-		if cells[x].Element != nil {
-			cells[x].Element.Close()
-		}
-	}
 }
 
 func (term *Term) GetTermContents() []byte {

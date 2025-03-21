@@ -29,6 +29,7 @@ type Renderer interface {
 	Bell()
 	TriggerRedraw()
 	TriggerLazyRedraw()
+	TriggerDeallocation(func())
 	TriggerQuit()
 	NewElement(Tile, ElementID) Element
 	DisplayNotification(NotificationType, string)

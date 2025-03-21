@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -58,6 +59,9 @@ func New(renderer types.Renderer, tile types.Tile) *ElementCsv {
 	if err != nil {
 		panic(err)
 	}
+
+	// close DB upon deallocation and garbage collection
+	runtime.AddCleanup(el, func(db *sql.DB) { db.Close() }, el.db)
 
 	return el
 }
@@ -183,9 +187,4 @@ func (el *ElementCsv) Rune(pos *types.XY) rune {
 	}
 
 	return el.table[pos.Y-1][pos.X]
-}
-
-func (el *ElementCsv) Close() {
-	// clear memory (if required)
-	el.db.Close()
 }

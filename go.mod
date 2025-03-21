@@ -1,6 +1,6 @@
 module github.com/lmorg/mxtty
 
-go 1.23.3
+go 1.24.1
 
 require (
 	github.com/creack/pty v1.1.24

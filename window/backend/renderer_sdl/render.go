@@ -146,6 +146,7 @@ func (sr *sdlRender) renderStack(stack *[]*layer.RenderStackT) {
 		}
 		if item.Destroy {
 			_ = item.Texture.Destroy()
+			//sr.TriggerDeallocation(func() { item.Texture.Destroy() })
 		}
 	}
 	*stack = make([]*layer.RenderStackT, 0) // clear image stack

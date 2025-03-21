@@ -53,10 +53,11 @@ type sdlRender struct {
 	bell *mix.Music
 
 	// events
-	_quit        chan bool
-	_redraw      chan bool
-	_resize      chan *types.XY
-	_redrawTimer <-chan time.Time
+	_quit         chan bool
+	_redraw       chan bool
+	_resize       chan *types.XY
+	_redrawTimer  <-chan time.Time
+	_deallocStack chan func()
 
 	// notifications
 	notifications  notifyT
@@ -126,6 +127,10 @@ func (sr *sdlRender) SetKeyboardFnMode(code types.KeyboardMode) {
 
 func (sr *sdlRender) TriggerQuit()  { go sr._triggerQuit() }
 func (sr *sdlRender) _triggerQuit() { sr._quit <- true }
+
+func (sr *sdlRender) TriggerDeallocation(fn func()) {
+	go func() { sr._deallocStack <- fn }()
+}
 
 func (sr *sdlRender) TriggerRedraw() { go sr._triggerRedraw() }
 func (sr *sdlRender) _triggerRedraw() {

@@ -10,7 +10,6 @@ type Element interface {
 	MouseWheel(*XY, *XY, EventIgnoredCallback)
 	MouseMotion(*XY, *XY, EventIgnoredCallback)
 	MouseOut()
-	Close()
 }
 
 type ElementID int

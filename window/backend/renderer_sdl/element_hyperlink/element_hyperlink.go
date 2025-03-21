@@ -68,10 +68,6 @@ func (el *ElementHyperlink) Rune(pos *types.XY) rune {
 	return el.phrase[pos.X]
 }
 
-func (el *ElementHyperlink) Close() {
-	// clear memory (if required)
-}
-
 func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	if button != types.MOUSE_BUTTON_LEFT || state != types.BUTTON_RELEASED {
 		callback()
