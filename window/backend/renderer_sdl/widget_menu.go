@@ -67,10 +67,15 @@ func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, icon
 		return
 	}
 
-	sr.displayMenu(title, options, icons, highlightCallback, selectCallback, cancelCallback)
-	sr.menu.icons = icons
+	sr.displayMenuWithIcons(title, options, icons, highlightCallback, selectCallback, cancelCallback)
+
 	x, y, _ := sdl.GetMouseState()
 	sr.menu.pos = &types.XY{X: x, Y: y}
+}
+
+func (sr *sdlRender) displayMenuWithIcons(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
+	sr.displayMenu(title, options, icons, highlightCallback, selectCallback, cancelCallback)
+	sr.menu.icons = icons
 }
 
 func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {

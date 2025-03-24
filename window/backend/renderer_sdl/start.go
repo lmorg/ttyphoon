@@ -49,12 +49,7 @@ func Initialise() (types.Renderer, *types.XY) {
 		panic(err.Error())
 	}
 
-	if config.Config.Window.StatusBar {
-		sr.footer++
-	}
-	if config.Config.Tmux.Enabled {
-		sr.footer++
-	}
+	sr.initFooter()
 
 	sr._quit = make(chan bool)
 	sr._redraw = make(chan bool)
@@ -126,7 +121,6 @@ func (sr *sdlRender) createWindow(caption string) error {
 		return err
 	}
 
-	//sr.ShowAndFocusWindow()
 	return nil
 }
 
@@ -157,6 +151,20 @@ func setLghtOrDarkMode() {
 	} else {
 		highlightBlendMode = sdl.BLENDMODE_ADD
 		textShadow[_HLTEXTURE_NONE].Alpha = 255
+	}
+}
+
+func (sr *sdlRender) initFooter() {
+	sr.footer = 0
+	if config.Config.Window.StatusBar {
+		sr.footer++
+	}
+	if config.Config.Tmux.Enabled {
+		sr.footer++
+	}
+
+	if sr.windowTabs != nil {
+		sr.windowResized()
 	}
 }
 

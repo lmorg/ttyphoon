@@ -3,19 +3,23 @@ package rendersdl
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/themes/iterm2"
 )
 
-func (sr *sdlRender) UpdateTheme() {
-	path, err := os.UserHomeDir()
+const _ITERMCOLORS_EXT = ".itermcolors"
+
+func (sr *sdlRender) updateTheme() {
+	home, err := os.UserHomeDir()
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
-	files, err := filepath.Glob(path + "/*.itermcolors")
+	files, err := filepath.Glob(home + "/*" + _ITERMCOLORS_EXT)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
@@ -27,6 +31,12 @@ func (sr *sdlRender) UpdateTheme() {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 		sr.cacheBgTexture = nil
+		filename := files[i]
+		if strings.HasPrefix(files[i], home) {
+			filename = "~" + files[i][len(home):]
+		}
+		filename = strings.TrimSuffix(filename, _ITERMCOLORS_EXT)
+		config.Config.Terminal.ColorScheme = filename
 	}
 
 	sr.DisplayMenu("Select a theme", files, fnSelect, nil, nil)

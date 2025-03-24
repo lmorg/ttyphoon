@@ -49,7 +49,9 @@ func (sr *sdlRender) ShowAndFocusWindow() {
 
 	sr.window.SetPosition(posX, displayBounds.Y)
 	sr.window.SetSize(winW, winH)
-	go sr.RefreshWindowList()
+	if sr.tmux != nil {
+		go sr.tmux.RefreshClient(sr.GetWindowSizeCells())
+	}
 }
 
 func (sr *sdlRender) hideWindow() {

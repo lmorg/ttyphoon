@@ -7,7 +7,6 @@ import (
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/integrations"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
@@ -92,14 +91,17 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.clipboardPaste()
 		return
 
-	case evt.Keysym.Sym == 't' && mod == codes.MOD_META:
-		sr.UpdateTheme()
+	case evt.Keysym.Sym == 's' && mod == codes.MOD_META:
+		sr.UpdateConfig()
+		return
+
+	case evt.Keysym.Sym == sdl.K_APPLICATION:
+		tw._eventMouseButtonRightClick(sr, false)
 		return
 	}
 
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
-	//panic(string(b))
 	if len(b) > 0 {
 		sr.termWin.Active.GetTerm().Reply(b)
 	}
@@ -154,7 +156,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
-				tw._eventMouseButtonRightClick(sr)
+				tw._eventMouseButtonRightClick(sr, true)
 			}
 		})
 
@@ -163,7 +165,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 }
 
-func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender) {
+func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bool) {
 	menu := contextMenuT{
 		{
 			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
@@ -191,7 +193,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender) {
 			},
 		},*/
 		{
-			Title: "Find text [Cmd+f]",
+			Title: fmt.Sprintf("Find text [%s+f]", types.KEY_STR_META),
 			Fn:    sr.termWin.Active.GetTerm().Search,
 			Icon:  0xf002,
 		},
@@ -202,13 +204,16 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender) {
 		},
 	}...)
 
+	menu = append(menu, contextMenuT{
+		{
+			Title: MENU_SEPARATOR,
+		},
+	}...)
+
 	if sr.tmux != nil {
 		menu = append(menu, contextMenuT{
 			{
-				Title: MENU_SEPARATOR,
-			},
-			{
-				Title: "List tmux hotkeys",
+				Title: "List tmux hotkeys...",
 				Fn:    sr.tmux.ListKeyBindings,
 				Icon:  0xf11c,
 			},
@@ -217,21 +222,18 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender) {
 
 	menu = append(menu, contextMenuT{
 		{
-			Title: MENU_SEPARATOR,
-		},
-		{
-			Title: "Bash integration (pasted into shell)",
-			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.bash")) },
-			Icon:  0xf120,
-		},
-		{
-			Title: "Zsh integration (pasted into shell)",
-			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.zsh")) },
-			Icon:  0xf120,
+			Title: fmt.Sprintf("Settings [%s+s]", types.KEY_STR_META),
+			Fn:    sr.UpdateConfig,
+			Icon:  0xf013,
 		},
 	}...)
 
-	sr.DisplayMenuUnderCursor("Select an action", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
+	menuFn := sr.DisplayMenuUnderCursor
+	if !underCursor {
+		menuFn = sr.displayMenuWithIcons
+	}
+
+	menuFn("Select an action", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
 }
 
 var _highlighterStartFooterText = fmt.Sprintf(
