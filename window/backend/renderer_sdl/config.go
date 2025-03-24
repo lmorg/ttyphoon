@@ -15,7 +15,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon:  0xf0c1,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Terminal.ColorScheme", config.Config.Terminal.ColorScheme),
+			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
 			Fn:    sr.updateTheme,
 			Icon:  0xf53f,
 		},
@@ -42,7 +42,7 @@ func (sr *sdlRender) UpdateConfig() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar
 				sr.initFooter()
 			},
-			Icon: 0xf54b,
+			Icon: 0xe59a,
 		},
 
 		{

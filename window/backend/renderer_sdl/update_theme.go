@@ -36,7 +36,7 @@ func (sr *sdlRender) updateTheme() {
 			filename = "~" + files[i][len(home):]
 		}
 		filename = strings.TrimSuffix(filename, _ITERMCOLORS_EXT)
-		config.Config.Terminal.ColorScheme = filename
+		config.Config.Terminal.ColorTheme = filename
 	}
 
 	sr.DisplayMenu("Select a theme", files, fnSelect, nil, nil)

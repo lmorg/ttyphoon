@@ -34,11 +34,11 @@ func Default() error {
 		return err
 	}
 
-	if Config.Terminal.ColorScheme != "" {
-		colorScheme := os.ExpandEnv(Config.Terminal.ColorScheme)
+	if Config.Terminal.ColorTheme != "" {
+		colorTheme := os.ExpandEnv(Config.Terminal.ColorTheme)
 		home, _ := os.UserHomeDir()
-		colorScheme = strings.ReplaceAll(colorScheme, "~", home)
-		err = iterm2.GetTheme(colorScheme)
+		colorTheme = strings.ReplaceAll(colorTheme, "~", home)
+		err = iterm2.GetTheme(colorTheme)
 		if err != nil {
 			panic(err)
 		}
@@ -60,7 +60,7 @@ type configT struct {
 	} `yaml:"Shell"`
 
 	Terminal struct {
-		ColorScheme             string `yaml:"ColorScheme"`
+		ColorTheme              string `yaml:"ColorTheme"`
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
