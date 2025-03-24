@@ -252,6 +252,4 @@ func (tw *termWidgetT) _eventMouseMotionFooter(sr *sdlRender, evt *sdl.MouseMoti
 
 	sr.footerText = "[2x Click]  Start new window"
 	sr.windowTabs.mouseOver = -1
-
-	return
 }
