@@ -310,14 +310,6 @@ func (term *Term) Reply(b []byte) {
 	}
 }
 
-func (term *Term) Bg() *types.Colour {
-	if term._hasFocus {
-		return types.SGR_DEFAULT.Bg
-	}
-
-	return types.COLOR_UNFOCUSED
-}
-
 func (term *Term) visibleScreen() types.Screen {
 	if term._scrollOffset == 0 {
 		return *term.screen

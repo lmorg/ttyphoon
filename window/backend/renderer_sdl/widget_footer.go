@@ -20,14 +20,14 @@ func (sr *sdlRender) renderFooter() {
 		return
 	}
 
-	rect := &sdl.Rect{
+	/*rect := &sdl.Rect{
 		X: 0,
 		Y: (sr.winCellSize.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
 		W: (sr.winCellSize.X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
 		H: (sr.footer * sr.glyphSize.Y) + (_PANE_TOP_MARGIN * 2),
-	}
+	}*/
 
-	fill := types.COLOR_UNFOCUSED
+	//fill := types.COLOR_UNFOCUSED
 
 	/*_ = sr.createRendererTexture()
 	_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
@@ -58,11 +58,11 @@ tmuxIntegration:
 		return
 	}
 
-	_ = sr.createRendererTexture()
-	rect.Y += sr.glyphSize.Y
-	_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
-	_ = sr.renderer.FillRect(rect)
-	sr.restoreRendererTexture()
+	//_ = sr.createRendererTexture()
+	//rect.Y += sr.glyphSize.Y
+	//_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
+	//_ = sr.renderer.FillRect(rect)
+	//sr.restoreRendererTexture()
 
 	if sr.windowTabs == nil {
 		sr._footerCacheTmuxWindowTabs(pos)

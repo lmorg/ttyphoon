@@ -14,7 +14,6 @@ type Term interface {
 	CopyRange(*XY, *XY) []byte
 	CopyLines(int32, int32) []byte
 	CopySquare(*XY, *XY) []byte
-	Bg() *Colour
 	Reply([]byte)
 	MouseClick(*XY, MouseButtonT, uint8, ButtonStateT, EventIgnoredCallback)
 	MouseWheel(*XY, *XY)

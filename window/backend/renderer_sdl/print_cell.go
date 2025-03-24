@@ -20,7 +20,7 @@ const (
 )
 
 var textShadow = []*types.Colour{ // RGBA
-	_HLTEXTURE_NONE:          {0, 0, 0, 0},
+	_HLTEXTURE_NONE:          types.COLOR_TEXT_SHADOW,
 	_HLTEXTURE_SELECTION:     types.COLOR_SELECTION,
 	_HLTEXTURE_SEARCH_RESULT: {64, 64, 255, 255},
 	_HLTEXTURE_MATCH_RANGE:   {64, 255, 64, 255},

@@ -21,9 +21,9 @@ func (sr *sdlRender) drawBg() {
 
 	w, h := sr.window.GetSize()
 	canvasBg := types.SGR_COLOR_BACKGROUND
-	if len(sr.termWin.Tiles) <= 1 {
-		canvasBg = sr.termWin.Active.GetTerm().Bg()
-	}
+	//if len(sr.termWin.Tiles) <= 1 {
+	//	canvasBg = sr.termWin.Active.GetTerm().Bg()
+	//}
 
 	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
@@ -41,7 +41,8 @@ func (sr *sdlRender) drawBg() {
 			W: (tile.Right()-tile.Left()+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
 			H: (tile.Bottom()+2-tile.Top())*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
-		bg := tile.GetTerm().Bg()
+		//bg := tile.GetTerm().Bg()
+		bg := types.SGR_COLOR_BACKGROUND
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
 	}
