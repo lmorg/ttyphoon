@@ -22,7 +22,7 @@ func (term *Term) csiEraseDisplayAfter() {
 		return
 	}
 
-	for y := curPosY; /*+ 1*/ y <= bottom; y++ {
+	for y := curPosY; y <= bottom && int(y) < len(*term.screen); y++ {
 		(*term.screen)[y] = term.makeRow()
 	}
 	term.csiEraseLineAfter()
