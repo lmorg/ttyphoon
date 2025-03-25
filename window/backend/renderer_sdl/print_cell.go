@@ -6,7 +6,6 @@ import (
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 )
 
 const dropShadowOffset int32 = 1
@@ -24,28 +23,6 @@ var textShadow = []*types.Colour{ // RGBA
 	_HLTEXTURE_SELECTION:     types.COLOR_SELECTION,
 	_HLTEXTURE_SEARCH_RESULT: {64, 64, 255, 255},
 	_HLTEXTURE_MATCH_RANGE:   {64, 255, 64, 255},
-}
-
-func fontStyle(style types.SgrFlag) ttf.Style {
-	var i ttf.Style
-
-	if style.Is(types.SGR_BOLD) { // && !config.Config.TypeFace.Ligatures {
-		i |= ttf.STYLE_BOLD
-	}
-
-	if style.Is(types.SGR_ITALIC) {
-		i |= ttf.STYLE_ITALIC
-	}
-
-	if style.Is(types.SGR_UNDERLINE) {
-		i |= ttf.STYLE_UNDERLINE
-	}
-
-	if style.Is(types.SGR_STRIKETHROUGH) {
-		i |= ttf.STYLE_STRIKETHROUGH
-	}
-
-	return i
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {

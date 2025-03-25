@@ -209,6 +209,7 @@ func (fa *fontAtlasT) printCellsToSurface(sgr *types.Sgr, cellRect *sdl.Rect, su
 				W: cellRect.W,
 				H: cellRect.H,
 			}
+
 			_ = shadowText.Blit(nil, surface, shadowRect)
 		}
 	}

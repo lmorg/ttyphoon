@@ -25,7 +25,7 @@ func (sr *sdlRender) updateTheme() {
 		return
 	}
 
-	fnSelect := func(i int) {
+	fnHighlight := func(i int) {
 		err := iterm2.GetTheme(files[i])
 		if err != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -39,5 +39,13 @@ func (sr *sdlRender) updateTheme() {
 		config.Config.Terminal.ColorTheme = filename
 	}
 
-	sr.DisplayMenu("Select a theme", files, fnSelect, nil, nil)
+	fnSelect := func(int) {
+		go func() {
+			sr.limiter.Lock()
+			sr.fontCache = NewFontCache(sr)
+			sr.limiter.Unlock()
+		}()
+	}
+
+	sr.DisplayMenu("Select a theme", files, fnHighlight, fnSelect, nil)
 }

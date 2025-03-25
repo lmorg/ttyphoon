@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
@@ -431,7 +432,8 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(0, 0, 0, 150)
+	//sr.renderer.SetDrawColor(0, 0, 0, 150)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 200)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: menuRect.Y + offset + 1,
@@ -481,42 +483,38 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 
 		if sr.menu.incIcons && sr.menu.icons[i] != 0 {
-			//typeface.SetStyle(types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME)
 			rectIcon := sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
 				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
 				W: sr.glyphSize.X*2 + dropShadowOffset,
 				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
 			}
-			//surf, _ := typeface.RenderIcon(_MENU_ITEM_COLOR, &rectIcon, sr.menu.icons[i])
-			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: _MENU_ITEM_COLOR, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
-			//_ = surf.Blit(nil, surface, &rectIcon)
-			//sr._renderNotificationSurface(surface, &rectIcon)
-			//defer surf.Free()
-			//typeface.SetStyle(types.SGR_NORMAL)
+			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: types.SGR_COLOR_FOREGROUND, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 		}
 
-		text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(surface.W-sr.notifyIconSize.X))
+		text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.SGR_COLOR_FOREGROUND.Red, G: types.SGR_COLOR_FOREGROUND.Green, B: types.SGR_COLOR_FOREGROUND.Blue, A: 255}, int(surface.W-sr.notifyIconSize.X))
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
 		defer text.Free()
 
-		textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(surface.W-sr.notifyIconSize.X))
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer textShadow.Free()
+		if config.Config.TypeFace.DropShadow {
+			textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.COLOR_TEXT_SHADOW.Red, G: types.COLOR_TEXT_SHADOW.Green, B: types.COLOR_TEXT_SHADOW.Blue, A: types.COLOR_TEXT_SHADOW.Alpha}, int(surface.W-sr.notifyIconSize.X))
+			if err != nil {
+				panic(err) // TODO: don't panic!
+			}
+			defer textShadow.Free()
 
-		// render shadow
-		rect = sdl.Rect{
-			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset + 2,
-			Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)),
-			W: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 2,
-			H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
+			// render shadow
+			rect = sdl.Rect{
+				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset + 2,
+				Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)),
+				W: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 2,
+				H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
+			}
+			_ = textShadow.Blit(nil, surface, &rect)
+			sr._renderNotificationSurface(surface, &rect)
 		}
-		_ = textShadow.Blit(nil, surface, &rect)
-		sr._renderNotificationSurface(surface, &rect)
 
 		// render text
 		rect = sdl.Rect{
@@ -581,7 +579,8 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		W: width - _WIDGET_OUTER_MARGIN,
 		H: sr.glyphSize.Y,
 	}
-	sr._drawHighlightRect(&rect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaBorder-20)
+	//sr._drawHighlightRect(&rect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaBorder-20)
+	sr._drawHighlightRect(&rect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaBorder-20)
 }
 
 func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, windowRect, rect *sdl.Rect) {
