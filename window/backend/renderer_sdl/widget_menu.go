@@ -36,8 +36,6 @@ const (
 	_MENU_HIGHLIGHT_INIT   = -1
 )
 
-var _MENU_ITEM_COLOR = &types.Colour{Red: 200, Green: 200, Blue: 200, Alpha: 255}
-
 type contextMenuT []types.MenuItem
 
 func (cm *contextMenuT) Options() []string {
@@ -56,7 +54,13 @@ func (cm *contextMenuT) Icons() []rune {
 	return slice
 }
 
-func (cm *contextMenuT) Callback(i int) { (*cm)[i].Fn() }
+func (cm *contextMenuT) Callback(i int) {
+	if i < 0 || i > len(*cm) {
+		return
+	}
+
+	(*cm)[i].Fn()
+}
 
 func (sr *sdlRender) AddToContextMenu(menuItems ...types.MenuItem) {
 	sr.contextMenu = append(sr.contextMenu, menuItems...)
@@ -263,20 +267,20 @@ func (menu *menuWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent
 }
 
 func (menu *menuWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
+	sr.TriggerRedraw()
 	i := menu._mouseHover(evt.X, evt.Y, sr.glyphSize)
 	if i == -1 {
 		cursor.Arrow()
 		return
 	}
 
-	if menu.hidden[i] || menu.options[i] == MENU_SEPARATOR {
+	if menu.hidden[i] {
 		cursor.Arrow()
 		return
 	}
 
 	cursor.Hand()
 	menu.highlightIndex = i
-	sr.TriggerRedraw()
 	menu.highlightCallback(menu.highlightIndex)
 }
 
@@ -291,7 +295,12 @@ func (menu *menuWidgetT) _mouseHover(x, y int32, glyphSize *types.XY) int {
 	rel := y - menu.mouseRect.Y
 	i := int(rel / glyphSize.Y)
 
-	if i >= len(menu.options) || menu.options[i] == MENU_SEPARATOR {
+	if i >= len(menu.options) {
+		return -1
+	}
+
+	if menu.options[i] == MENU_SEPARATOR {
+		menu.highlightIndex = _MENU_HIGHLIGHT_HIDDEN
 		return -1
 	}
 
