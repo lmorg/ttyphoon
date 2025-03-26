@@ -74,6 +74,7 @@ func Initialise() (types.Renderer, *types.XY) {
 
 	sr.preloadNotificationGlyphs()
 	sr.fontCache = NewFontCache(sr)
+	updateBlendMode()
 
 	sr.winTile = &winTileT{sr: sr}
 
@@ -101,8 +102,6 @@ func (sr *sdlRender) createWindow(caption string) error {
 	}
 
 	sr.initBell()
-
-	setLghtOrDarkMode()
 
 	var renderFlags sdl.RendererFlags
 	if config.Config.Window.UseGPU {
@@ -140,17 +139,21 @@ func (sr *sdlRender) setIcon() error {
 	return nil
 }
 
-func setLghtOrDarkMode() {
-	if config.Config.Terminal.LightMode {
-		highlightBlendMode = sdl.BLENDMODE_ADD
-		textShadow[_HLTEXTURE_NONE].Alpha = 32
-		//	types.SGR_DEFAULT.Fg, types.SGR_DEFAULT.Bg = types.SGR_DEFAULT.Bg, types.SGR_DEFAULT.Fg
-		//	types.SGR_COLOUR_WHITE, types.SGR_COLOUR_BLACK = types.SGR_COLOUR_BLACK, types.SGR_COLOUR_WHITE
-		//	types.SGR_COLOUR_WHITE_BRIGHT, types.SGR_COLOUR_BLACK_BRIGHT = types.SGR_COLOUR_BLACK_BRIGHT, types.SGR_COLOUR_WHITE_BRIGHT
+func updateBlendMode() {
+	textShadow[_HLTEXTURE_NONE].Alpha = types.COLOR_TEXT_SHADOW.Alpha
+
+	if (int(types.SGR_COLOR_BACKGROUND.Red)+
+		int(types.SGR_COLOR_BACKGROUND.Green)+
+		int(types.SGR_COLOR_BACKGROUND.Blue))/3 > 128 {
+
+		highlightBlendMode = sdl.BLENDMODE_BLEND
+		notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourDark
+		questionColor, questionColorBorder = _questionColorLight, _questionColorDark
 
 	} else {
 		highlightBlendMode = sdl.BLENDMODE_ADD
-		textShadow[_HLTEXTURE_NONE].Alpha = 255
+		notifyColour, notifyBorderColour = _notifyColourDark, _notifyColourLight
+		questionColor, questionColorBorder = _questionColorDark, _questionColorLight
 	}
 }
 

@@ -40,6 +40,11 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 		}
 	}
 
+	/*sr.DisplayNotification(types.NOTIFY_DEBUG, "types.NOTIFY_DEBUG")
+	sr.DisplayNotification(types.NOTIFY_INFO, "types.NOTIFY_INFO")
+	sr.DisplayNotification(types.NOTIFY_WARN, "types.NOTIFY_WARN")
+	sr.DisplayNotification(types.NOTIFY_ERROR, "types.NOTIFY_ERROR")*/
+
 	sr.termWin.Active.GetTerm().Reply(b)
 }
 

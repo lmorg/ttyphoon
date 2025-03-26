@@ -65,7 +65,6 @@ type configT struct {
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
-		LightMode               bool   `yaml:"LightMode"`
 		AutoHotlink             bool   `yaml:"AutoHotlink"`
 
 		Widgets struct {
@@ -82,11 +81,14 @@ type configT struct {
 	} `yaml:"Terminal"`
 
 	Window struct {
-		Opacity         int  `yaml:"Opacity"`
-		InactiveOpacity int  `yaml:"InactiveOpacity"`
-		StatusBar       bool `yaml:"StatusBar"`
-		RefreshInterval int  `yaml:"RefreshInterval"`
-		UseGPU          bool `yaml:"UseGPU"`
+		Opacity               int  `yaml:"Opacity"`
+		InactiveOpacity       int  `yaml:"InactiveOpacity"`
+		StatusBar             bool `yaml:"StatusBar"`
+		TabBarFrame           bool `yaml:"TabBarFrame"`
+		TabBarActiveHighlight bool `yaml:"TabBarActiveHighlight"`
+		TabBarHoverHighlight  bool `yaml:"TabBarHoverHighlight"`
+		RefreshInterval       int  `yaml:"RefreshInterval"`
+		UseGPU                bool `yaml:"UseGPU"`
 	} `yaml:"Window"`
 
 	TypeFace struct {

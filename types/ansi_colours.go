@@ -1,5 +1,7 @@
 package types
 
+var DARK_MODE bool = true
+
 var (
 	SGR_COLOR_FOREGROUND = rgb(238, 232, 213)
 	SGR_COLOR_BACKGROUND = rgb(0, 43, 54)

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
@@ -353,7 +352,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	}
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, notificationAlpha)
+	_ = sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
 	rect := sdl.Rect{
 		X: menuRect.X - 1,
 		Y: menuRect.Y - 1,
@@ -364,7 +363,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	_ = sr.renderer.DrawRect(&menuRect)
 
 	// fill background
-	_ = sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, notificationAlpha)
+	_ = sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
 	rect = sdl.Rect{
 		X: menuRect.X + 1,
 		Y: menuRect.Y + 1,
@@ -385,7 +384,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 	sr.font.SetStyle(ttf.STYLE_BOLD)
 
-	text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.title, sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(glyphX*maxLen))
+	text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.title, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(glyphX*maxLen))
 	if err != nil {
 		panic(err) // TODO: don't panic!
 	}
@@ -423,7 +422,8 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	// draw border
 	offset := sr.notifyIconSize.Y
 	width = menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN
-	sr.renderer.SetDrawColor(255, 255, 255, 150)
+	//sr.renderer.SetDrawColor(255, 255, 255, 150)
+	sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: menuRect.Y + offset - 1,
@@ -442,7 +442,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 	// fill background
 	//sr.renderer.SetDrawColor(0, 0, 0, 150)
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 200)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: menuRect.Y + offset + 1,
@@ -476,7 +476,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			sr.menu.hidden[i] = false
 
 			// draw horizontal separator
-			sr.renderer.SetDrawColor(255, 255, 255, 50)
+			sr.renderer.SetDrawColor(255, 255, 255, 96)
 			rect = sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_OUTER_MARGIN,
 				Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)) + ((sr.glyphSize.Y / 2) - 4),
@@ -494,7 +494,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		if sr.menu.incIcons && sr.menu.icons[i] != 0 {
 			rectIcon := sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
-				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
+				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)) + 1,
 				W: sr.glyphSize.X*2 + dropShadowOffset,
 				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
 			}
@@ -507,7 +507,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 		defer text.Free()
 
-		if config.Config.TypeFace.DropShadow {
+		/*if config.Config.TypeFace.DropShadow {
 			textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.COLOR_TEXT_SHADOW.Red, G: types.COLOR_TEXT_SHADOW.Green, B: types.COLOR_TEXT_SHADOW.Blue, A: types.COLOR_TEXT_SHADOW.Alpha}, int(surface.W-sr.notifyIconSize.X))
 			if err != nil {
 				panic(err) // TODO: don't panic!
@@ -516,14 +516,14 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 			// render shadow
 			rect = sdl.Rect{
-				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset + 2,
+				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset + 1,
 				Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)),
-				W: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 2,
+				W: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + 1,
 				H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
 			}
 			_ = textShadow.Blit(nil, surface, &rect)
 			sr._renderNotificationSurface(surface, &rect)
-		}
+		}*/
 
 		// render text
 		rect = sdl.Rect{

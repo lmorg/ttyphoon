@@ -20,20 +20,6 @@ func (sr *sdlRender) renderFooter() {
 		return
 	}
 
-	/*rect := &sdl.Rect{
-		X: 0,
-		Y: (sr.winCellSize.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
-		W: (sr.winCellSize.X * sr.glyphSize.X) + (_PANE_LEFT_MARGIN * 3),
-		H: (sr.footer * sr.glyphSize.Y) + (_PANE_TOP_MARGIN * 2),
-	}*/
-
-	//fill := types.COLOR_UNFOCUSED
-
-	/*_ = sr.createRendererTexture()
-	_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
-	_ = sr.renderer.FillRect(rect)
-	sr.restoreRendererTexture()*/
-
 	pos := &types.XY{Y: sr.winCellSize.Y}
 
 	if !config.Config.Window.StatusBar {
@@ -57,12 +43,6 @@ tmuxIntegration:
 		// invoked before tmux has finished getting set up
 		return
 	}
-
-	//_ = sr.createRendererTexture()
-	//rect.Y += sr.glyphSize.Y
-	//_ = sr.renderer.SetDrawColor(fill.Red, fill.Green, fill.Blue, 255)
-	//_ = sr.renderer.FillRect(rect)
-	//sr.restoreRendererTexture()
 
 	if sr.windowTabs == nil {
 		sr._footerCacheTmuxWindowTabs(pos)
@@ -117,10 +97,6 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 		tabs:      &sr.termWin.Tabs,
 	}
 
-	/*if tabList.tabs == nil {
-		return
-	}*/
-
 	heading := []rune("Window tab list → ")
 
 	for _, r := range heading {
@@ -135,7 +111,7 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 			tabList.active = i
 		}
 
-		if tab.Active() {
+		if tab.Active() && !config.Config.Window.TabBarActiveHighlight {
 			tabList.cells = append(tabList.cells, tabListNewCellActive(' '))
 			for _, r := range tab.Name() {
 				tabList.cells = append(tabList.cells, tabListNewCellActive(r))
@@ -162,7 +138,9 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 
 func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 	sr.PrintRow(sr.winTile, sr.windowTabs.cells, pos)
-	sr.DrawTable(sr.winTile, sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
+	if config.Config.Window.TabBarFrame {
+		sr.DrawTable(sr.winTile, sr.windowTabs.offset, 0, sr.windowTabs.boundaries[1:])
+	}
 
 	var (
 		topLeftCellX     = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.active]
@@ -171,19 +149,26 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 		bottomRightCellY = int32(1)
 	)
 
-	/*activeRect := &sdl.Rect{
-		X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN - 1,
-		Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN - 1,
-		W: (bottomRightCellX * sr.glyphSize.X) + 2,
-		H: (bottomRightCellY * sr.glyphSize.Y) + 2,
+	if config.Config.Window.TabBarActiveHighlight {
+		activeRect := &sdl.Rect{
+			X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN - 1,
+			Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN - 1,
+			W: (bottomRightCellX * sr.glyphSize.X) + 2,
+			H: (bottomRightCellY * sr.glyphSize.Y) + 2,
+		}
+		//sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
+		sr._drawHighlightRect(activeRect, types.COLOR_SELECTION, types.COLOR_SELECTION, 0, 230)
 	}
-	//sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
-	sr._drawHighlightRect(activeRect, types.COLOR_SELECTION, types.COLOR_SELECTION, 0, 230)*/
 
 	if sr.windowTabs.mouseOver == -1 {
 		if sr.windowTabs.mouseOver != sr.windowTabs.last {
 			sr.windowTabs.last = sr.windowTabs.mouseOver
 			cursor.Arrow()
+		}
+		if !config.Config.Window.TabBarHoverHighlight {
+			for i := range sr.windowTabs.cells {
+				sr.windowTabs.cells[i].Sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+			}
 		}
 		return
 	}
@@ -196,14 +181,25 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 	topLeftCellX = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.mouseOver]
 	bottomRightCellX = sr.windowTabs.boundaries[sr.windowTabs.mouseOver+1] - sr.windowTabs.boundaries[sr.windowTabs.mouseOver]
 
-	highlightRect := &sdl.Rect{
-		X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN,
-		Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
-		W: (bottomRightCellX * sr.glyphSize.X),
-		H: (bottomRightCellY * sr.glyphSize.Y),
+	if config.Config.Window.TabBarHoverHighlight {
+		highlightRect := &sdl.Rect{
+			X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN,
+			Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
+			W: (bottomRightCellX * sr.glyphSize.X),
+			H: (bottomRightCellY * sr.glyphSize.Y),
+		}
+		//sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
+		sr._drawHighlightRect(highlightRect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaFill)
+	} else {
+		for i := range sr.windowTabs.cells {
+			if i > int(topLeftCellX) && i < int(topLeftCellX+bottomRightCellX-1) {
+				sr.windowTabs.cells[i].Sgr.Bitwise.Set(types.SGR_UNDERLINE)
+			} else {
+				sr.windowTabs.cells[i].Sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+			}
+		}
+		sr.TriggerRedraw()
 	}
-	//sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
-	sr._drawHighlightRect(highlightRect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaFill)
 }
 
 func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButtonEvent) {

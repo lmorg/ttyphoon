@@ -51,6 +51,30 @@ func (sr *sdlRender) UpdateConfig() {
 			},
 			Icon: 0xe59a,
 		},
+		{
+			Title: fmt.Sprintf("%s = %v", "Window.TabBarFrame", config.Config.Window.TabBarFrame),
+			Fn: func() {
+				config.Config.Window.TabBarFrame = !config.Config.Window.TabBarFrame
+				sr.initFooter()
+			},
+			//Icon: 0xe59a,
+		},
+		{
+			Title: fmt.Sprintf("%s = %v", "Window.TabBarActiveHighlight", config.Config.Window.TabBarActiveHighlight),
+			Fn: func() {
+				config.Config.Window.TabBarActiveHighlight = !config.Config.Window.TabBarActiveHighlight
+				sr.initFooter()
+			},
+			//Icon: 0xe59a,
+		},
+		{
+			Title: fmt.Sprintf("%s = %v", "Window.TabBarHoverHighlight", config.Config.Window.TabBarHoverHighlight),
+			Fn: func() {
+				config.Config.Window.TabBarHoverHighlight = !config.Config.Window.TabBarHoverHighlight
+				sr.initFooter()
+			},
+			//Icon: 0xe59a,
+		},
 
 		{
 			Title: MENU_SEPARATOR,

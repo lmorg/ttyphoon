@@ -11,9 +11,11 @@ import (
 )
 
 var (
-	questionColor       = &types.Colour{0x00, 0x77, 0x00, 0xff}
-	questionColorBorder = &types.Colour{0x00, 0xff, 0x00, 0xff}
+	_questionColorLight = &types.Colour{0x22, 0x77, 0x22, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
+	_questionColorDark  = &types.Colour{0x00, 0x55, 0x00, 196}
 )
+
+var questionColor, questionColorBorder *types.Colour
 
 type inputBoxCallbackT func(string)
 
@@ -102,7 +104,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	sr.font.SetStyle(ttf.STYLE_BOLD)
 
-	text, err := sr.font.RenderUTF8BlendedWrapped(sr.inputBox.title, sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(surface.W-sr.notifyIconSize.X))
+	text, err := sr.font.RenderUTF8BlendedWrapped(sr.inputBox.title, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(surface.W-sr.notifyIconSize.X))
 	if err != nil {
 		panic(err) // TODO: don't panic!
 	}
@@ -128,7 +130,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	offsetY := (surface.W - width) / 2
 
 	// draw border
-	sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, notificationAlpha)
+	sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
 	rect := sdl.Rect{
 		X: offsetY - 1,
 		Y: offsetH - 1,
@@ -145,7 +147,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, notificationAlpha)
+	sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
 	rect = sdl.Rect{
 		X: offsetY + 1,
 		Y: 1 + offsetH,

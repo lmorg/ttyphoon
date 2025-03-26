@@ -12,25 +12,23 @@ import (
 	"github.com/veandco/go-sdl2/ttf"
 )
 
-var notifyColour = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x1c, 0x3e, 0x64, 0xff},
-	types.NOTIFY_INFO:   {0x31, 0x6d, 0xb0, 0xff},
-	types.NOTIFY_WARN:   {0x74, 0x58, 0x10, 0xff},
-	types.NOTIFY_ERROR:  {0x66, 0x16, 0x1a, 0xff},
-	types.NOTIFY_SCROLL: {0x1c, 0x3e, 0x64, 0xff},
+var _notifyColourLight = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 223},
+	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 223},
+	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 223},
+	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 223},
+	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 223},
 }
 
-var notifyBorderColour = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 0xff},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 0xff},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 0xff},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 0xff},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 0xff},
+var _notifyColourDark = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x1c, 0x3e, 0x64, 223},
+	types.NOTIFY_INFO:   {0x31, 0x6d, 0xb0, 223},
+	types.NOTIFY_WARN:   {0x74, 0x58, 0x10, 223},
+	types.NOTIFY_ERROR:  {0x66, 0x16, 0x1a, 223},
+	types.NOTIFY_SCROLL: {0x1c, 0x3e, 0x64, 223},
 }
 
-const (
-	notificationAlpha = 190
-)
+var notifyColour, notifyBorderColour map[int]*types.Colour
 
 func (sr *sdlRender) preloadNotificationGlyphs() {
 	var err error
@@ -216,19 +214,19 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// generate text
 		s := strconv.Itoa(int(time.Until(notification.end)/time.Second) + 1)
-		countdown, err := sr.font.RenderUTF8Blended(s, sdl.Color{R: 255, G: 255, B: 255, A: 200})
+		countdown, err := sr.font.RenderUTF8Blended(s, sdl.Color{R: 0, G: 0, B: 0, A: 192})
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
 		defer countdown.Free()
 
-		text, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 200, G: 200, B: 200, A: 255}, int(surface.W-sr.notifyIconSize.X-countdown.W))
+		text, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(surface.W-sr.notifyIconSize.X-countdown.W-sr.glyphSize.X))
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
 		defer text.Free()
 
-		textShadow, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(surface.W-sr.notifyIconSize.X-countdown.W))
+		textShadow, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(surface.W-sr.notifyIconSize.X-countdown.W-sr.glyphSize.X))
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
@@ -236,7 +234,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// draw border
 		bc := notifyBorderColour[int(notification.Type)]
-		sr.renderer.SetDrawColor(bc.Red, bc.Green, bc.Blue, notificationAlpha)
+		sr.renderer.SetDrawColor(bc.Red, bc.Green, bc.Blue, bc.Alpha)
 		rect := sdl.Rect{
 			X: _WIDGET_INNER_MARGIN - 1,
 			Y: _WIDGET_INNER_MARGIN + offset - 1,
@@ -254,7 +252,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// fill background
 		c := notifyColour[int(notification.Type)]
-		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, notificationAlpha)
+		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN + 1,
 			Y: _WIDGET_INNER_MARGIN + 1 + offset,
@@ -280,7 +278,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// render shadow
 		rect = sdl.Rect{
-			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + 2,
+			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X + 2,
 			Y: _WIDGET_OUTER_MARGIN + offset + 2,
 			W: surface.W - sr.notifyIconSize.X - countdown.W,
 			H: text.H + _WIDGET_OUTER_MARGIN - 2,
@@ -290,7 +288,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// render text
 		rect = sdl.Rect{
-			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
+			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X,
 			Y: _WIDGET_OUTER_MARGIN + offset,
 			W: surface.W - sr.notifyIconSize.X - countdown.W,
 			H: text.H + _WIDGET_OUTER_MARGIN - 2,

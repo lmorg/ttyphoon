@@ -32,13 +32,6 @@ Terminal:
   # This value can also be overwritten by CSI ?4l and CSI ?4h (DECSCLM)
   JumpScrollLineCount: -1
 
-  # LightMode is like Dark Mode but lighter ;-)
-  # This mode is highly experimental and it's main purpose is to fix some
-  # rendering ugliness that happens when foreign themes (like itermcolors) are
-  # used. For example, drop shadow colors are undefined in itermcolors and
-  # light themes needs a lighter colored drop shadow.
-  #LightMode: true # experimental
-
   #ColorTheme: "~/Chalk.itermcolors"
 
   # Experimental support to turn anything that looks like a URL or file on disk
@@ -104,6 +97,9 @@ Window:
   InactiveOpacity: 80
 
   StatusBar: true
+  TabBarFrame: true
+  TabBarActiveHighlight: false
+  TabBarHoverHighlight: true
 
   # RefreshInterval is how long to wait between forced window updates.
   # Lower values produce smoother scrolling when large text is rapidly written
