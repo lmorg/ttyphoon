@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/mattn/go-runewidth"
 
@@ -29,8 +30,10 @@ func (term *Term) phraseSetToRowPos() {
 }
 
 var (
-	rxUrl  = regexp.MustCompile(`http(|s)://[-./_%&?+=a-zA-Z0-9]+`)
-	rxFile = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
+	rxUrl      = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=a-zA-Z0-9]+`)
+	rxFile     = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
+	rxFileLine = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+(:[0-9]+|)|/)`)
+	rxLineNum  = regexp.MustCompile(`:[0-9]+$`)
 )
 
 func (term *Term) autoHotlink(row *types.Row) {
@@ -47,7 +50,12 @@ func (term *Term) autoHotlink(row *types.Row) {
 
 skipHttp:
 
-	posFile := rxFile.FindAllStringIndex(phrase, -1)
+	rx := rxFile
+	if config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers {
+		rx = rxFileLine
+	}
+
+	posFile := rx.FindAllStringIndex(phrase, -1)
 	if posFile == nil {
 		return
 	}
@@ -59,6 +67,7 @@ skipHttp:
 
 		file := phrase[posFile[i][0]:posFile[i][1]]
 		_strLocToCellPos(phrase, posFile[i])
+
 		if file[0] == '~' {
 			home, _ := os.UserHomeDir()
 			file = fmt.Sprintf("%s/%s", home, file[1:])
@@ -66,8 +75,19 @@ skipHttp:
 		if file[0] != '/' {
 			file = fmt.Sprintf("%s/%s", term.tile.Path(), file)
 		}
+
 		if _, err := os.Stat(file); err == nil {
 			_autoHotlink(term, row, posFile[i], file)
+
+		} else if rxLineNum.MatchString(file) {
+			split := strings.Split(file, ":")
+			if len(split) != 2 {
+				continue
+			}
+
+			if _, err := os.Stat(split[0]); err == nil {
+				_autoHotlink(term, row, posFile[i], file)
+			}
 		}
 	}
 }

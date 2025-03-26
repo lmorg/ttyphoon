@@ -10,14 +10,21 @@ import (
 func (sr *sdlRender) UpdateConfig() {
 	menu := contextMenuT{
 		{
+			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
+			Fn:    sr.updateTheme,
+			Icon:  0xf53f,
+		},
+		{
 			Title: fmt.Sprintf("%s = %v", "Terminal.AutoHotlink", config.Config.Terminal.AutoHotlink),
 			Fn:    func() { config.Config.Terminal.AutoHotlink = !config.Config.Terminal.AutoHotlink },
 			Icon:  0xf0c1,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
-			Fn:    sr.updateTheme,
-			Icon:  0xf53f,
+			Title: fmt.Sprintf("%s = %v", "Terminal.Widgets.AutoHotlink.IncLineNumbers", config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers),
+			Fn: func() {
+				config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers = !config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers
+			},
+			//Icon: 0xf0c1,
 		},
 
 		{

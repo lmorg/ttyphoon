@@ -46,10 +46,21 @@ Terminal:
   AutoHotlink: true
   
   Widgets:
+    AutoHotlink:
+      IncLineNumbers: false
+      OpenAgents:
+        - Name: System Default
+          Command: [ open, $$ ]
+        - Name: Visual Studio Code
+          Command: [ code, $$ ]
+        - Name: Mozilla FireFox
+          Command: [ firefox, $$ ]
+        - Name: Google Chrome
+          Command: [ chrome, $$ ]
+
     Table:
       ScrollMultiplierX: 2
       ScrollMultiplierY: 2
-
 
 TypeFace:
   # FontName is the name of the primary typeface for the terminal.

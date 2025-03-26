@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/mxtty/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
@@ -72,6 +73,11 @@ type configT struct {
 				ScrollMultiplierX int32 `yaml:"ScrollMultiplierX"`
 				ScrollMultiplierY int32 `yaml:"ScrollMultiplierY"`
 			} `yaml:"Table"`
+
+			AutoHotlink struct {
+				IncLineNumbers bool        `yaml:"IncLineNumbers"`
+				OpenAgents     OpenAgentsT `yaml:"OpenAgents"`
+			} `yaml:"AutoHotlink"`
 		} `yaml:"Widgets"`
 	} `yaml:"Terminal"`
 
@@ -92,4 +98,29 @@ type configT struct {
 		AdjustCellWidth  int      `yaml:"AdjustCellWidth"`
 		AdjustCellHeight int      `yaml:"AdjustCellHeight"`
 	} `yaml:"TypeFace"`
+}
+
+type OpenAgentsT []struct {
+	Name    string   `yaml:"Name"`
+	Command []string `yaml:"Command"`
+}
+
+func (oa *OpenAgentsT) MenuItems() (apps []string, cmds [][]string) {
+	for i := range *oa {
+		if !oa.isAvail((*oa)[i].Command[0]) {
+			continue
+		}
+
+		apps = append(apps, (*oa)[i].Name)
+
+		cmd := make([]string, len((*oa)[i].Command))
+		copy(cmd, (*oa)[i].Command)
+		cmds = append(cmds, (*oa)[i].Command)
+	}
+
+	return apps, cmds
+}
+
+func (oa *OpenAgentsT) isAvail(exe string) bool {
+	return which.Which(exe) != ""
 }

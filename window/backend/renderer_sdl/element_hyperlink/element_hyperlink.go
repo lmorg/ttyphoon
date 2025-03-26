@@ -5,11 +5,10 @@ import (
 	"errors"
 	"os/exec"
 
-	"golang.design/x/clipboard"
-
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
+	"golang.design/x/clipboard"
 )
 
 type ElementHyperlink struct {
@@ -69,20 +68,64 @@ func (el *ElementHyperlink) Rune(pos *types.XY) rune {
 }
 
 func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
-	if button != types.MOUSE_BUTTON_LEFT || state != types.BUTTON_RELEASED {
+	if state != types.BUTTON_RELEASED {
 		callback()
 		return
 	}
 
+	switch button {
+	case types.MOUSE_BUTTON_LEFT:
+		copyToClipboard(el.renderer, el.url)
+		return
+
+	case types.MOUSE_BUTTON_RIGHT:
+		el.renderer.AddToContextMenu(
+			types.MenuItem{
+				Title: "Copy link to clipboard",
+				Fn:    func() { copyToClipboard(el.renderer, el.url) },
+				Icon:  0xf0c5,
+			},
+		)
+		apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems()
+		for i := range apps {
+			el.renderer.AddToContextMenu(
+				types.MenuItem{
+					Title: "Open link with " + apps[i],
+					Fn:    func() { openWith(el.renderer, cmds[i], el.url) },
+					Icon:  0xe69b,
+				},
+			)
+		}
+		callback()
+		return
+
+	default:
+		callback()
+		return
+	}
+}
+
+func copyToClipboard(renderer types.Renderer, url string) {
+	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
+	clipboard.Write(clipboard.FmtText, []byte(url))
+}
+
+func openWith(renderer types.Renderer, exe []string, url string) {
 	var b []byte
 	buf := bytes.NewBuffer(b)
 
-	cmd := exec.Command("open", el.url)
+	for param := range exe {
+		if exe[param] == "$$" {
+			exe[param] = url
+		}
+	}
+
+	cmd := exec.Command(exe[0], exe[1:]...)
 	cmd.Stderr = buf
 
 	err := cmd.Start()
 	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
@@ -92,11 +135,10 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 			if msg == "" {
 				msg = err.Error()
 			}
-			if debug.Enabled {
-				el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
-			}
-			clipboard.Write(clipboard.FmtText, []byte(el.url))
-			el.renderer.DisplayNotification(types.NOTIFY_INFO, "Unable to launch or unknown associated application.\nPath copied to clipboard")
+			//if debug.Enabled {
+			renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
+			//}
+			//el.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Unable to launch `%s`", cmds[i-2][0]))
 		}
 	}()
 }
