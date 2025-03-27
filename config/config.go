@@ -117,7 +117,7 @@ func (oa *OpenAgentsT) MenuItems() (apps []string, cmds [][]string) {
 
 		cmd := make([]string, len((*oa)[i].Command))
 		copy(cmd, (*oa)[i].Command)
-		cmds = append(cmds, (*oa)[i].Command)
+		cmds = append(cmds, cmd)
 	}
 
 	return apps, cmds

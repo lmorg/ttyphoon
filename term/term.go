@@ -72,9 +72,8 @@ type Term struct {
 	_mouseButtonDown bool
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
-	_rowId           uint64 // atomic.Uint64
-	_pwd             string
-	_host            string
+	_rowId           uint64
+	_rowSource       *types.RowSource
 
 	// search
 	_searchHighlight  bool
@@ -134,6 +133,21 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 		renderer: renderer,
 		size:     size,
 		visible:  visible,
+	}
+
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
+	pwd, err := os.Getwd()
+	if err != nil {
+		pwd = tile.Pwd()
+	}
+
+	term._rowSource = &types.RowSource{
+		Host: host,
+		Pwd:  pwd,
 	}
 
 	term.reset(size)
@@ -371,10 +385,20 @@ func (term *Term) GetTermContents() []byte {
 	return b
 }
 
-func (term *Term) Host() string { return term._host }
-func (term *Term) Pwd() string {
-	if term._pwd == "" {
-		term.tile.Pwd()
+func (term *Term) Host(pos *types.XY) string {
+	src := term.visibleScreen()[pos.Y].Source
+	if src != nil {
+		return src.Host
 	}
-	return term._pwd
+
+	return "localhost"
+}
+
+func (term *Term) Pwd(pos *types.XY) string {
+	src := term.visibleScreen()[pos.Y].Source
+	if src != nil {
+		return src.Pwd
+	}
+
+	return term.tile.Pwd()
 }

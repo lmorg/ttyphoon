@@ -1,5 +1,7 @@
 package virtualterm
 
+import "github.com/lmorg/mxtty/types"
+
 func (term *Term) osc7UpdatePath(params []string) {
 	if len(params[0]) <= 7 { // "file://" {
 		return
@@ -15,6 +17,10 @@ func (term *Term) osc7UpdatePath(params []string) {
 		}
 		*ptr = append(*ptr, r)
 	}
-	term._host = string(host)
-	term._pwd = string(pwd)
+	rowSrc := types.RowSource{
+		Host: string(host),
+		Pwd:  string(pwd),
+	}
+	term._rowSource = &rowSrc
+	(*term.screen)[term.curPos().Y].Source = term._rowSource
 }

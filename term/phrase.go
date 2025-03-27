@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/mattn/go-runewidth"
 
@@ -27,13 +26,12 @@ func (term *Term) phraseSetToRowPos() {
 	}
 
 	term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
+	(*term.screen)[term.curPos().Y].Source = term._rowSource
 }
 
 var (
-	rxUrl      = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=a-zA-Z0-9]+`)
-	rxFile     = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
-	rxFileLine = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+(:[0-9]+|)|/)`)
-	rxLineNum  = regexp.MustCompile(`:[0-9]+$`)
+	rxUrl  = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=a-zA-Z0-9]+`)
+	rxFile = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
 )
 
 func (term *Term) autoHotlink(row *types.Row) {
@@ -51,9 +49,6 @@ func (term *Term) autoHotlink(row *types.Row) {
 skipHttp:
 
 	rx := rxFile
-	if config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers {
-		rx = rxFileLine
-	}
 
 	posFile := rx.FindAllStringIndex(phrase, -1)
 	if posFile == nil {
@@ -73,21 +68,11 @@ skipHttp:
 			file = fmt.Sprintf("%s/%s", home, file[1:])
 		}
 		if file[0] != '/' {
-			file = fmt.Sprintf("%s/%s", term.Pwd(), file)
+			file = fmt.Sprintf("%s/%s", row.Source.Pwd, file)
 		}
 
 		if _, err := os.Stat(file); err == nil {
 			_autoHotlink(term, row, posFile[i], file)
-
-		} else if rxLineNum.MatchString(file) {
-			split := strings.Split(file, ":")
-			if len(split) != 2 {
-				continue
-			}
-
-			if _, err := os.Stat(split[0]); err == nil {
-				_autoHotlink(term, row, posFile[i], file)
-			}
 		}
 	}
 }

@@ -59,6 +59,12 @@ type Row struct {
 	Meta   RowMetaFlag
 	Hidden Screen
 	Phrase *[]rune
+	Source *RowSource
+}
+
+type RowSource struct {
+	Host string
+	Pwd  string
 }
 
 type RowMetaFlag uint16

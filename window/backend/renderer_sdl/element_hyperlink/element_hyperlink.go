@@ -18,7 +18,6 @@ type ElementHyperlink struct {
 	url      string
 	size     *types.XY
 	sgr      *types.Sgr
-	//fgCol    types.Colour
 }
 
 func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
