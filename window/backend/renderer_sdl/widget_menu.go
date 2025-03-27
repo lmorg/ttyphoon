@@ -507,11 +507,17 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: types.SGR_COLOR_FOREGROUND, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 		}
 
-		text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.SGR_COLOR_FOREGROUND.Red, G: types.SGR_COLOR_FOREGROUND.Green, B: types.SGR_COLOR_FOREGROUND.Blue, A: 255}, int(surface.W-sr.notifyIconSize.X))
+		/*text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.SGR_COLOR_FOREGROUND.Red, G: types.SGR_COLOR_FOREGROUND.Green, B: types.SGR_COLOR_FOREGROUND.Blue, A: 255}, int(surface.W-sr.notifyIconSize.X))
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
-		defer text.Free()
+		defer text.Free()*/
+
+		pos := &types.XY{
+			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset,
+			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
+		}
+		sr.printString(sr.menu.options[i], types.SGR_DEFAULT, pos)
 
 		/*if config.Config.TypeFace.DropShadow {
 			textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.options[i], sdl.Color{R: types.COLOR_TEXT_SHADOW.Red, G: types.COLOR_TEXT_SHADOW.Green, B: types.COLOR_TEXT_SHADOW.Blue, A: types.COLOR_TEXT_SHADOW.Alpha}, int(surface.W-sr.notifyIconSize.X))
@@ -532,7 +538,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}*/
 
 		// render text
-		rect = sdl.Rect{
+		/*rect = sdl.Rect{
 			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset,
 			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
 			W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
@@ -542,7 +548,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
-		sr._renderNotificationSurface(surface, &rect)
+		sr._renderNotificationSurface(surface, &rect)*/
 	}
 
 	if surface, ok := sr.notifyIcon[types.NOTIFY_QUESTION].Asset().(*sdl.Surface); ok {

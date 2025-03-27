@@ -38,6 +38,7 @@ func (sr *sdlRender) updateThemeMenu() {
 		filename = strings.TrimSuffix(filename, _ITERMCOLORS_EXT)
 		config.Config.Terminal.ColorTheme = filename
 		updateBlendMode()
+		go sr.fontCache.Reallocate()
 	}
 
 	fnSelect := func(int) {

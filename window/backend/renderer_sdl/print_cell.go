@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -133,6 +134,20 @@ func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
 	atlas := newFontAtlas([]rune{ch}, sgr, &types.XY{X: glyphSizeX, Y: sr.glyphSize.Y}, sr.renderer, _FONT_ATLAS_NOT_LIG)
 	sr.fontCache.extended[ch] = append(sr.fontCache.extended[ch], atlas)
 	atlas.RenderAsOverlay(sr, dstRect, ch, hash, hlTexture)
+}
+
+func (sr *sdlRender) printString(s string, sgr *types.Sgr, pos *types.XY) {
+	rect := &sdl.Rect{
+		X: pos.X,
+		Y: pos.Y,
+		W: sr.glyphSize.X + dropShadowOffset,
+		H: sr.glyphSize.Y + dropShadowOffset,
+	}
+
+	for _, r := range s {
+		sr.printCellRect(r, sgr, rect)
+		rect.X += int32(runewidth.RuneWidth(r))*sr.glyphSize.X + dropShadowOffset
+	}
 }
 
 func (sr *sdlRender) PrintRow(tile types.Tile, cells []*types.Cell, _cellPos *types.XY) {
