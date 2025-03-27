@@ -73,7 +73,7 @@ skipHttp:
 			file = fmt.Sprintf("%s/%s", home, file[1:])
 		}
 		if file[0] != '/' {
-			file = fmt.Sprintf("%s/%s", term.tile.Path(), file)
+			file = fmt.Sprintf("%s/%s", term.Pwd(), file)
 		}
 
 		if _, err := os.Stat(file); err == nil {

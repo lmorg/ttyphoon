@@ -27,6 +27,8 @@ type Term interface {
 	Match(*XY)
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte
+	Host() string
+	Pwd() string
 	Close()
 }
 

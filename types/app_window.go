@@ -24,5 +24,5 @@ type Tile interface {
 	AtBottom() bool
 	GetTerm() Term
 	SetTerm(Term)
-	Path() string
+	Pwd() string
 }

@@ -59,6 +59,10 @@ parsed:
 		// change window title
 		term.renderer.SetWindowTitle(stack[1])
 
+	case "7":
+		// update path
+		term.osc7UpdatePath(stack[1:])
+
 	case "1337":
 		//$(osc)1337;File=inline=1:${base64 -i $file -o -}
 

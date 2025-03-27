@@ -73,6 +73,8 @@ type Term struct {
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
 	_rowId           uint64 // atomic.Uint64
+	_pwd             string
+	_host            string
 
 	// search
 	_searchHighlight  bool
@@ -367,4 +369,12 @@ func (term *Term) GetTermContents() []byte {
 	}
 
 	return b
+}
+
+func (term *Term) Host() string { return term._host }
+func (term *Term) Pwd() string {
+	if term._pwd == "" {
+		term.tile.Pwd()
+	}
+	return term._pwd
 }

@@ -12,4 +12,4 @@ func (p *PaneT) AtBottom() bool { return p.atBottom }
 
 func (p *PaneT) GetTerm() types.Term     { return p.term }
 func (p *PaneT) SetTerm(term types.Term) { p.term = term }
-func (p *PaneT) Path() string            { return p.curPath }
+func (p *PaneT) Pwd() string             { return p.curPath }
