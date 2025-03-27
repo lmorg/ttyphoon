@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	_questionColorLight = &types.Colour{0x22, 0x77, 0x22, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
+	_questionColorLight = &types.Colour{0xf0, 0xff, 0xf0, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
 	_questionColorDark  = &types.Colour{0x00, 0x55, 0x00, 196}
 )
 

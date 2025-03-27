@@ -139,21 +139,6 @@ func (sr *sdlRender) setIcon() error {
 	return nil
 }
 
-func updateBlendMode() {
-	//textShadow[_HLTEXTURE_NONE].Alpha = types.COLOR_TEXT_SHADOW.Alpha
-
-	if types.THEME_LIGHT {
-		highlightBlendMode = sdl.BLENDMODE_BLEND
-		notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourDark
-		questionColor, questionColorBorder = _questionColorLight, _questionColorDark
-
-	} else {
-		highlightBlendMode = sdl.BLENDMODE_ADD
-		notifyColour, notifyBorderColour = _notifyColourDark, _notifyColourLight
-		questionColor, questionColorBorder = _questionColorDark, _questionColorLight
-	}
-}
-
 func (sr *sdlRender) initFooter() {
 	sr.footer = 0
 	if config.Config.Window.StatusBar {

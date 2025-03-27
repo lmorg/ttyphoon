@@ -104,7 +104,10 @@ func (sr *sdlRender) printCell(tile types.Tile, cell *types.Cell, _cellPos *type
 }
 
 func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
-	glyphSizeX := sr.glyphSize.X * 2
+	glyphSizeX := sr.glyphSize.X * int32(runewidth.RuneWidth(ch))
+	if sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {
+		glyphSizeX *= 2
+	}
 
 	hlTexture := _HLTEXTURE_NONE
 	if sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT) {
@@ -140,13 +143,14 @@ func (sr *sdlRender) printString(s string, sgr *types.Sgr, pos *types.XY) {
 	rect := &sdl.Rect{
 		X: pos.X,
 		Y: pos.Y,
-		W: sr.glyphSize.X + dropShadowOffset,
+		//W: sr.glyphSize.X + dropShadowOffset,
 		H: sr.glyphSize.Y + dropShadowOffset,
 	}
 
 	for _, r := range s {
+		rect.W = int32(runewidth.RuneWidth(r)) * (sr.glyphSize.X + dropShadowOffset)
 		sr.printCellRect(r, sgr, rect)
-		rect.X += int32(runewidth.RuneWidth(r))*sr.glyphSize.X + dropShadowOffset
+		rect.X += rect.W
 	}
 }
 
