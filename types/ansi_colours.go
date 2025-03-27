@@ -1,6 +1,6 @@
 package types
 
-var DARK_MODE bool = true
+var THEME_LIGHT bool
 
 var (
 	SGR_COLOR_FOREGROUND = rgb(238, 232, 213)
@@ -32,8 +32,9 @@ var SGR_DEFAULT = &Sgr{
 }
 
 var (
-	COLOR_SELECTION   = rgb(64, 64, 255)
-	COLOR_TEXT_SHADOW = rgb(0, 0, 0)
+	COLOR_TEXT_SHADOW   = rgb(0, 0, 0)
+	COLOR_SELECTION     = rgb(64, 64, 255)
+	COLOR_SEARCH_RESULT = rgb(64, 64, 255)
 )
 
 var (

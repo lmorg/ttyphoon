@@ -97,8 +97,8 @@ Window:
   InactiveOpacity: 80
 
   StatusBar: true
-  TabBarFrame: true
-  TabBarActiveHighlight: false
+  TabBarFrame: false
+  TabBarActiveHighlight: true
   TabBarHoverHighlight: true
 
   # RefreshInterval is how long to wait between forced window updates.

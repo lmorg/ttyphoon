@@ -79,13 +79,22 @@ func convertToMxttyTheme(theme map[string]Color) error {
 		}
 	}
 
-	types.COLOR_TEXT_SHADOW = &types.Colour{
-		Red:   types.SGR_COLOR_BACKGROUND.Red / 3,
-		Green: types.SGR_COLOR_BACKGROUND.Green / 3,
-		Blue:  types.SGR_COLOR_BACKGROUND.Blue / 3,
-		// I'm not really sure this alpha blending does anything with harfbuzz
-		Alpha: byte((int(types.SGR_COLOR_FOREGROUND.Red) + int(types.SGR_COLOR_FOREGROUND.Green) + int(types.SGR_COLOR_FOREGROUND.Blue)) / 3),
+	types.THEME_LIGHT = (float64(types.SGR_COLOR_BACKGROUND.Red)+
+		float64(types.SGR_COLOR_BACKGROUND.Green)+
+		float64(types.SGR_COLOR_BACKGROUND.Blue))/3 > 128
+
+	var shadowMod float64 = 3
+	if types.THEME_LIGHT {
+		shadowMod = 2
+		types.COLOR_TEXT_SHADOW.Alpha = 192
+	} else {
+		types.COLOR_TEXT_SHADOW.Alpha = 255
 	}
+	types.COLOR_TEXT_SHADOW.Red = byte(float64(types.SGR_COLOR_BACKGROUND.Red) / shadowMod)
+	types.COLOR_TEXT_SHADOW.Green = byte(float64(types.SGR_COLOR_BACKGROUND.Green) / shadowMod)
+	types.COLOR_TEXT_SHADOW.Blue = byte(float64(types.SGR_COLOR_BACKGROUND.Blue) / shadowMod)
+
+	//types.COLOR_SEARCH_RESULT.Alpha = 128
 
 	return nil
 }
