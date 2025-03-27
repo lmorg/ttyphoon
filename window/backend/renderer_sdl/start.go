@@ -140,12 +140,9 @@ func (sr *sdlRender) setIcon() error {
 }
 
 func updateBlendMode() {
-	textShadow[_HLTEXTURE_NONE].Alpha = types.COLOR_TEXT_SHADOW.Alpha
+	//textShadow[_HLTEXTURE_NONE].Alpha = types.COLOR_TEXT_SHADOW.Alpha
 
-	if (int(types.SGR_COLOR_BACKGROUND.Red)+
-		int(types.SGR_COLOR_BACKGROUND.Green)+
-		int(types.SGR_COLOR_BACKGROUND.Blue))/3 > 128 {
-
+	if types.THEME_LIGHT {
 		highlightBlendMode = sdl.BLENDMODE_BLEND
 		notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourDark
 		questionColor, questionColorBorder = _questionColorLight, _questionColorDark

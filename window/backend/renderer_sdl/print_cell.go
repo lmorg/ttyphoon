@@ -11,17 +11,17 @@ import (
 const dropShadowOffset int32 = 1
 
 const (
-	_HLTEXTURE_NONE      = iota
-	_HLTEXTURE_SELECTION // should always be first non-zero value
-	_HLTEXTURE_SEARCH_RESULT
-	_HLTEXTURE_MATCH_RANGE
-	_HLTEXTURE_LAST // placeholder for rect calculations. Must always come last
+	_HLTEXTURE_NONE          = iota
+	_HLTEXTURE_SELECTION     // should always be first non-zero value
+	_HLTEXTURE_SEARCH_RESULT //
+	_HLTEXTURE_MATCH_RANGE   //
+	_HLTEXTURE_LAST          // placeholder for rect calculations. Must always come last
 )
 
 var textShadow = []*types.Colour{ // RGBA
 	_HLTEXTURE_NONE:          types.COLOR_TEXT_SHADOW,
 	_HLTEXTURE_SELECTION:     types.COLOR_SELECTION,
-	_HLTEXTURE_SEARCH_RESULT: {64, 64, 255, 255},
+	_HLTEXTURE_SEARCH_RESULT: types.COLOR_SEARCH_RESULT,
 	_HLTEXTURE_MATCH_RANGE:   {64, 255, 64, 255},
 }
 

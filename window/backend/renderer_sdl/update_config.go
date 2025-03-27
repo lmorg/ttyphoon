@@ -11,36 +11,42 @@ func (sr *sdlRender) UpdateConfig() {
 	menu := contextMenuT{
 		{
 			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
-			Fn:    sr.updateTheme,
+			Fn:    sr.updateThemeMenu,
 			Icon:  0xf53f,
 		},
 		{
 			Title: fmt.Sprintf("%s = %v", "Terminal.AutoHotlink", config.Config.Terminal.AutoHotlink),
-			Fn:    func() { config.Config.Terminal.AutoHotlink = !config.Config.Terminal.AutoHotlink },
-			Icon:  0xf0c1,
+			Fn: func() {
+				config.Config.Terminal.AutoHotlink = !config.Config.Terminal.AutoHotlink
+				sr.UpdateConfig()
+			},
+			Icon: 0xf0c1,
 		},
-		{
+		/*{
 			Title: fmt.Sprintf("%s = %v", "Terminal.Widgets.AutoHotlink.IncLineNumbers", config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers),
 			Fn: func() {
 				config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers = !config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers
+				sr.UpdateConfig()
 			},
 			//Icon: 0xf0c1,
-		},
+		},*/
 
 		{
 			Title: fmt.Sprintf("%s = %v", "TypeFace.DropShadow", config.Config.TypeFace.DropShadow),
 			Fn: func() {
 				config.Config.TypeFace.DropShadow = !config.Config.TypeFace.DropShadow
-				sr.limiter.Lock()
-				sr.fontCache = NewFontCache(sr)
-				sr.limiter.Unlock()
+				sr.fontCache.Reallocate()
+				sr.UpdateConfig()
 			},
 			Icon: 0xf12c,
 		},
 		{
 			Title: fmt.Sprintf("%s = %v", "TypeFace.Ligatures", config.Config.TypeFace.Ligatures),
-			Fn:    func() { config.Config.TypeFace.Ligatures = !config.Config.TypeFace.Ligatures },
-			Icon:  0xf035,
+			Fn: func() {
+				config.Config.TypeFace.Ligatures = !config.Config.TypeFace.Ligatures
+				sr.UpdateConfig()
+			},
+			Icon: 0xf035,
 		},
 
 		{
@@ -48,6 +54,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Fn: func() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar
 				sr.initFooter()
+				sr.UpdateConfig()
 			},
 			Icon: 0xe59a,
 		},
@@ -56,6 +63,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Fn: func() {
 				config.Config.Window.TabBarFrame = !config.Config.Window.TabBarFrame
 				sr.initFooter()
+				sr.UpdateConfig()
 			},
 			//Icon: 0xe59a,
 		},
@@ -64,6 +72,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Fn: func() {
 				config.Config.Window.TabBarActiveHighlight = !config.Config.Window.TabBarActiveHighlight
 				sr.initFooter()
+				sr.UpdateConfig()
 			},
 			//Icon: 0xe59a,
 		},
@@ -72,6 +81,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Fn: func() {
 				config.Config.Window.TabBarHoverHighlight = !config.Config.Window.TabBarHoverHighlight
 				sr.initFooter()
+				sr.UpdateConfig()
 			},
 			//Icon: 0xe59a,
 		},
@@ -90,5 +100,6 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon:  0xf120,
 		},
 	}
+
 	sr.displayMenuWithIcons("Settings", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
 }

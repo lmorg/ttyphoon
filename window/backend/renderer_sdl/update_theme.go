@@ -12,7 +12,7 @@ import (
 
 const _ITERMCOLORS_EXT = ".itermcolors"
 
-func (sr *sdlRender) updateTheme() {
+func (sr *sdlRender) updateThemeMenu() {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -30,7 +30,7 @@ func (sr *sdlRender) updateTheme() {
 		if err != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-		sr.cacheBgTexture = nil
+		sr.cacheBgTexture.Destroy(sr)
 		filename := files[i]
 		if strings.HasPrefix(files[i], home) {
 			filename = "~" + files[i][len(home):]
@@ -41,12 +41,9 @@ func (sr *sdlRender) updateTheme() {
 	}
 
 	fnSelect := func(int) {
-		go func() {
-			sr.limiter.Lock()
-			sr.fontCache = NewFontCache(sr)
-			sr.limiter.Unlock()
-		}()
+		sr.fontCache.Reallocate()
+		sr.UpdateConfig()
 	}
 
-	sr.DisplayMenu("Select a theme", files, fnHighlight, fnSelect, nil)
+	sr.DisplayMenu("Settings > Select a theme", files, fnHighlight, fnSelect, fnSelect)
 }

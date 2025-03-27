@@ -2,6 +2,7 @@ package rendersdl
 
 import (
 	"log"
+	godebug "runtime/debug"
 	"sync/atomic"
 
 	"github.com/lmorg/mxtty/types"
@@ -9,13 +10,28 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+type bgT struct {
+	_texture *sdl.Texture
+}
+
+func (bg *bgT) IsSet() bool              { return bg._texture != nil }
+func (bg *bgT) Set(texture *sdl.Texture) { bg._texture = texture }
+func (bg *bgT) Destroy(sr *sdlRender) {
+	destroy := func() {
+		bg._texture.Destroy()
+		bg._texture = nil
+		go godebug.FreeOSMemory()
+	}
+	go func() { sr._deallocStack <- destroy }()
+}
+
 func (sr *sdlRender) drawBg() {
-	if sr.cacheBgTexture != nil {
+	if sr.cacheBgTexture.IsSet() {
 		return
 	}
 
-	sr.cacheBgTexture = sr.createRendererTexture()
-	if sr.cacheBgTexture == nil {
+	sr.cacheBgTexture.Set(sr.createRendererTexture())
+	if !sr.cacheBgTexture.IsSet() {
 		panic("cannot create bg texture")
 	}
 
@@ -176,7 +192,7 @@ func render(sr *sdlRender) error {
 	rect := &sdl.Rect{W: x, H: y}
 
 	sr.drawBg()
-	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture, nil, nil, false})
+	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture._texture, nil, nil, false})
 
 	for _, tile := range sr.termWin.Tiles {
 		ok := tile.GetTerm().Render()

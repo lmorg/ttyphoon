@@ -94,7 +94,7 @@ type sdlRender struct {
 	windowTabs *tabListT // only a pointer so we can make it nil'able
 
 	// caching
-	cacheBgTexture *sdl.Texture
+	cacheBgTexture bgT
 }
 
 type tabListT struct {
@@ -180,7 +180,7 @@ func (t *winTileT) AtBottom() bool { return true }
 func (t *winTileT) GetTerm() types.Term { return nil }
 func (t *winTileT) SetTerm(types.Term)  { panic("writing to a readonly interface") }
 
-func (t *winTileT) Path() string {
+func (t *winTileT) Pwd() string {
 	pwd, _ := os.Getwd()
 	return pwd
 }

@@ -251,6 +251,7 @@ func (menu *menuWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEve
 	}
 
 	i := menu._mouseHover(evt.X, evt.Y, sr.glyphSize)
+	menu._mouseMotion(evt.X, evt.Y, sr)
 	if i == -1 {
 		sr.closeMenu()
 		menu.cancelCallback(menu.highlightIndex)
@@ -267,7 +268,12 @@ func (menu *menuWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent
 
 func (menu *menuWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
 	sr.TriggerRedraw()
-	i := menu._mouseHover(evt.X, evt.Y, sr.glyphSize)
+	menu._mouseMotion(evt.X, evt.Y, sr)
+}
+
+func (menu *menuWidgetT) _mouseMotion(x, y int32, sr *sdlRender) {
+	sr.TriggerRedraw()
+	i := menu._mouseHover(x, y, sr.glyphSize)
 	if i == -1 {
 		cursor.Arrow()
 		return

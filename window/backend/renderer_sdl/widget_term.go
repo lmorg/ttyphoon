@@ -123,7 +123,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	sr.termWin.Active.GetTerm().HasFocus(false)
 	tile.GetTerm().HasFocus(true)
 	sr.termWin.Active = tile
-	sr.cacheBgTexture = nil
+	sr.cacheBgTexture.Destroy(sr)
 	if sr.tmux != nil {
 		go func() {
 			err := sr.tmux.SelectPane(tile.Id())
@@ -336,7 +336,7 @@ func (sr *sdlRender) RefreshWindowList() {
 
 	sr.windowTabs = nil
 	sr.termWin = sr.tmux.GetTermTiles()
-	sr.cacheBgTexture = nil
+	sr.cacheBgTexture.Destroy(sr)
 
 	sr.limiter.Unlock()
 }

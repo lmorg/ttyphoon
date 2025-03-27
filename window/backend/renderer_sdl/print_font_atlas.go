@@ -1,10 +1,14 @@
 package rendersdl
 
 import (
+	"fmt"
 	"log"
+	"runtime"
+	godebug "runtime/debug"
 	"strings"
 
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/lmorg/mxtty/window/backend/typeface"
@@ -32,11 +36,25 @@ type fontAtlasT struct {
 	lookup  fontCacheDefaultLookupT
 	texture []*sdl.Texture
 }
+
 type fontTextureLookupTableT map[rune][]*fontAtlasT
+
+func (ftlt *fontTextureLookupTableT) Destroy() {
+	for r := range *ftlt {
+		for i := range (*ftlt)[r] {
+			(*ftlt)[r][i].Destroy()
+		}
+		(*ftlt)[r] = nil
+	}
+	*ftlt = nil
+	//runtime.GC()
+}
+
 type fontCacheT struct {
 	atlas    *fontAtlasT
 	extended fontTextureLookupTableT
 	ligs     fontTextureLookupTableT
+	sr       *sdlRender
 }
 
 func NewFontCache(sr *sdlRender) *fontCacheT {
@@ -46,9 +64,24 @@ func NewFontCache(sr *sdlRender) *fontCacheT {
 		atlas:    newFontAtlas(chars, types.SGR_DEFAULT, sr.glyphSize, sr.renderer, _FONT_ATLAS_NOT_LIG),
 		extended: make(fontTextureLookupTableT),
 		ligs:     make(fontTextureLookupTableT),
+		sr:       sr,
 	}
 
 	return fc
+}
+
+func (fc *fontCacheT) Reallocate() {
+	go func() {
+		fc.sr._deallocStack <- fc._reallocate
+	}()
+}
+
+func (fc *fontCacheT) _reallocate() {
+	fc.atlas.Destroy()
+	fc.extended.Destroy()
+	fc.ligs.Destroy()
+	fc.sr.fontCache = NewFontCache(fc.sr)
+	godebug.FreeOSMemory()
 }
 
 const _FONT_ATLAS_NOT_LIG = -1
@@ -78,7 +111,16 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 		}
 	}
 
+	runtime.AddCleanup(fa, func(any) { fa.Destroy() }, true)
+
 	return fa
+}
+
+func (fa *fontAtlasT) Destroy() {
+	for i := range fa.texture {
+		debug.Log(fmt.Sprintf("freeing texture: %v", fa.texture[i]))
+		fa.texture[i].Destroy()
+	}
 }
 
 func (fa *fontAtlasT) newFontCacheDefaultLookup(chars []rune, glyphSize *types.XY) {
@@ -95,6 +137,7 @@ func (fa *fontAtlasT) newFontCacheDefaultLookup(chars []rune, glyphSize *types.X
 }
 
 func (fa *fontAtlasT) newFontTexture(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *sdl.Renderer, hlTexture int) *sdl.Texture {
+	//debug.Log(chars)
 	surface := newFontSurface(glyphSize, int32(len(chars)))
 	defer surface.Free()
 
@@ -180,6 +223,8 @@ func (fa *fontAtlasT) printCellsToSurface(sgr *types.Sgr, cellRect *sdl.Rect, su
 		}
 		defer shadowText.Free()
 
+		_ = shadowText.SetAlphaMod(textShadow[hlTexture].Alpha)
+
 		shadowRect := &sdl.Rect{
 			X: cellRect.X + dropShadowOffset,
 			Y: cellRect.Y + dropShadowOffset,
@@ -229,10 +274,6 @@ func (fa *fontAtlasT) printCellsToSurface(sgr *types.Sgr, cellRect *sdl.Rect, su
 	if err != nil {
 		return err
 	}
-	/*if config.Config.TypeFace.Ligatures && cell.Sgr.Bitwise.Is(types.SGR_BOLD) {
-		_ = text.SetBlendMode(sdl.BLENDMODE_ADD)
-		_ = text.Blit(nil, surface, cellRect)
-	}*/
 
 	return nil
 }
