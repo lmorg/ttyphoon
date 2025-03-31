@@ -60,7 +60,7 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
-  #FontName: "Fira Code"
+  #FontName: "Hack"
   FontSize: 15
 
   # Enable or disable drop shadows on terminal. I personally like it because
@@ -73,10 +73,12 @@ TypeFace:
   Ligatures: true
   LigaturePairs:
     - "->"
-    - ">>"
+    #- ">>"
     - "|>"
     - "=>"
     - "=="
+    - ">="
+    - "<="
     - "!="
     - "||"
     - "&&"
