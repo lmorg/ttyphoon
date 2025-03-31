@@ -6,16 +6,10 @@ import (
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
+	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
-
-var (
-	_questionColorLight = &types.Colour{0xf0, 0xff, 0xf0, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
-	_questionColorDark  = &types.Colour{0x00, 0x55, 0x00, 196}
-)
-
-var questionColor, questionColorBorder *types.Colour
 
 type inputBoxCallbackT func(string)
 
@@ -130,7 +124,8 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	offsetY := (surface.W - width) / 2
 
 	// draw border
-	sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
+	//sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect := sdl.Rect{
 		X: offsetY - 1,
 		Y: offsetH - 1,
@@ -147,7 +142,8 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
+	//sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
+	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect = sdl.Rect{
 		X: offsetY + 1,
 		Y: 1 + offsetH,
@@ -185,10 +181,11 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	height = sr.glyphSize.Y + _WIDGET_OUTER_MARGIN
 	offsetH += text.H + _WIDGET_OUTER_MARGIN
-	var textWidth int32
+	//var textWidth int32
 
 	// draw border
-	sr.renderer.SetDrawColor(255, 255, 255, 150)
+	//sr.renderer.SetDrawColor(255, 255, 255, 150)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: offsetH - 1,
@@ -205,7 +202,8 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(0, 0, 0, 150)
+	//sr.renderer.SetDrawColor(0, 0, 0, 200)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: 1 + offsetH,
@@ -216,11 +214,12 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	// value
 	if len(sr.inputBox.value) > 0 {
-		textValue, err := sr.font.RenderUTF8Blended(sr.inputBox.value, sdl.Color{R: 255, G: 255, B: 255, A: 255})
+		/*textValue, err := sr.font.RenderUTF8Blended(sr.inputBox.value, sdl.Color{R: 255, G: 255, B: 255, A: 255})
 		if err != nil {
 			panic(err) // TODO: don't panic!
 		}
 		defer textValue.Free()
+
 
 		rect = sdl.Rect{
 			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN,
@@ -233,7 +232,13 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 			panic(err) // TODO: don't panic!
 		}
 		sr._renderNotificationSurface(surface, &rect)
-		textWidth = textValue.W
+		textWidth = textValue.W*/
+		pos := &types.XY{
+			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN,
+			Y: _WIDGET_INNER_MARGIN + offsetH,
+		}
+
+		sr.printString(sr.inputBox.value, types.SGR_DEFAULT, pos)
 	}
 
 	if surface, ok := sr.notifyIcon[types.NOTIFY_QUESTION].Asset().(*sdl.Surface); ok {
@@ -263,6 +268,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 		}
 	}
 
+	textWidth := int32(runewidth.StringWidth(sr.inputBox.value)) * (sr.glyphSize.X + dropShadowOffset)
 	if sr.GetBlinkState() {
 		rect = sdl.Rect{
 			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN + textWidth,

@@ -19,12 +19,12 @@ func updateBlendMode() {
 	if types.THEME_LIGHT {
 		highlightBlendMode = sdl.BLENDMODE_BLEND
 		notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourDark
-		questionColor, questionColorBorder = _questionColorLight, types.SGR_COLOR_BLACK //_questionColorDark
+		//questionColor, questionColorBorder = _questionColorLight, types.SGR_COLOR_BLACK //_questionColorDark
 
 	} else {
 		highlightBlendMode = sdl.BLENDMODE_ADD
 		notifyColour, notifyBorderColour = _notifyColourDark, _notifyColourLight
-		questionColor, questionColorBorder = _questionColorDark, types.SGR_COLOR_BLACK //_questionColorLight
+		//questionColor, questionColorBorder = _questionColorDark, types.SGR_COLOR_BLACK //_questionColorLight
 	}
 }
 

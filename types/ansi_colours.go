@@ -43,6 +43,15 @@ var (
 	COLOR_FOLDED = SGR_COLOR_YELLOW
 )
 
+/*
+	_questionColorLight = &types.Colour{0xf0, 0xff, 0xf0, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
+	_questionColorDark  = &types.Colour{0x00, 0x55, 0x00, 196}
+*/
+
+var (
+	COLOR_WIDGET_INPUT = &Colour{0x00, 0x55, 0x00, 196}
+)
+
 // SGR_COLOR_256 colours are a copy of xterm 256 colour values.
 // source: https://vim.fandom.com/wiki/Xterm256_color_names_for_console_Vim
 var SGR_COLOR_256 = map[int32]*Colour{

@@ -357,7 +357,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	}
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect := sdl.Rect{
 		X: menuRect.X - 1,
 		Y: menuRect.Y - 1,
@@ -368,7 +368,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	_ = sr.renderer.DrawRect(&menuRect)
 
 	// fill background
-	_ = sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
+	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect = sdl.Rect{
 		X: menuRect.X + 1,
 		Y: menuRect.Y + 1,
@@ -381,63 +381,18 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		TITLE
 	*/
 
-	/*surface, err := sdl.CreateRGBSurfaceWithFormat(0, windowRect.W, windowRect.H, 32, uint32(sdl.PIXELFORMAT_RGBA32))
-	if err != nil {
-		panic(err) //TODO: don't panic!
-	}
-	defer surface.Free()*/
-
-	/*sr.font.SetStyle(ttf.STYLE_BOLD)
-
-	text, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.title, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(glyphX*maxLen))
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	defer text.Free()
-
-	textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.menu.title, sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(glyphX*maxLen))
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	defer textShadow.Free()
-
-	// render shadow
-	rect = sdl.Rect{
-		X: menuRect.X + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + 2,
-		Y: menuRect.Y + _WIDGET_OUTER_MARGIN + 2,
-		W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
-		H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
-	}
-	_ = textShadow.Blit(nil, surface, &rect)
-	sr._renderNotificationSurface(surface, &rect)
-
-	// render text
-	rect = sdl.Rect{
-		X: menuRect.X + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
-		Y: menuRect.Y + _WIDGET_OUTER_MARGIN,
-		W: surface.W - (_WIDGET_OUTER_MARGIN * 2),
-		H: surface.H - (_WIDGET_OUTER_MARGIN * 2),
-	}
-	err = text.Blit(nil, surface, &rect)
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	sr._renderNotificationSurface(surface, &rect)*/
-
 	pos := &types.XY{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
 		Y: menuRect.Y + _WIDGET_OUTER_MARGIN,
 	}
 	sgr := types.SGR_DEFAULT.Copy()
 	sgr.Bitwise.Set(types.SGR_BOLD)
-	//sgr.Fg = &types.Colour{255, 255, 255, 255}
-	//sgr.Bg = questionColor
 	sr.printString(sr.menu.title, sgr, pos)
 
 	// draw border
 	offset := sr.notifyIconSize.Y
 	width = menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN
-	sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: menuRect.Y + offset - 1,
@@ -489,7 +444,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			sr.menu.hidden[i] = false
 
 			// draw horizontal separator
-			sr.renderer.SetDrawColor(255, 255, 255, 96)
+			sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, 96)
 			rect = sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_OUTER_MARGIN,
 				Y: menuRect.Y + offset + 2 + (sr.glyphSize.Y * int32(i)) + ((sr.glyphSize.Y / 2) - 4),
