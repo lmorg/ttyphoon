@@ -9,7 +9,6 @@ import (
 	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 )
 
 var _notifyColourLight = map[int]*types.Colour{
@@ -204,7 +203,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 	}
 	defer surface.Free()
 
-	sr.font.SetStyle(ttf.STYLE_BOLD)
+	//sr.font.SetStyle(ttf.STYLE_BOLD)
 
 	var offset int32
 	for _, notification := range notifications {
@@ -212,25 +211,8 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		//	continue
 		//}
 
-		// generate text
-		s := strconv.Itoa(int(time.Until(notification.end)/time.Second) + 1)
-		countdown, err := sr.font.RenderUTF8Blended(s, sdl.Color{R: 0, G: 0, B: 0, A: 192})
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer countdown.Free()
-
-		text, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(surface.W-sr.notifyIconSize.X-countdown.W-sr.glyphSize.X))
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer text.Free()
-
-		textShadow, err := sr.font.RenderUTF8BlendedWrapped(notification.Message, sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(surface.W-sr.notifyIconSize.X-countdown.W-sr.glyphSize.X))
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer textShadow.Free()
+		textHeight := sr.glyphSize.Y
+		countdownW := sr.glyphSize.X
 
 		// draw border
 		bc := notifyBorderColour[int(notification.Type)]
@@ -239,14 +221,14 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 			X: _WIDGET_INNER_MARGIN - 1,
 			Y: _WIDGET_INNER_MARGIN + offset - 1,
 			W: windowRect.W - _WIDGET_OUTER_MARGIN + 2,
-			H: text.H + _WIDGET_OUTER_MARGIN + 2,
+			H: textHeight + _WIDGET_OUTER_MARGIN + 2,
 		}
 		sr.renderer.DrawRect(&rect)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN,
 			Y: _WIDGET_INNER_MARGIN + offset,
 			W: windowRect.W - _WIDGET_OUTER_MARGIN,
-			H: text.H + _WIDGET_OUTER_MARGIN,
+			H: textHeight + _WIDGET_OUTER_MARGIN,
 		}
 		sr.renderer.DrawRect(&rect)
 
@@ -257,47 +239,24 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 			X: _WIDGET_INNER_MARGIN + 1,
 			Y: _WIDGET_INNER_MARGIN + 1 + offset,
 			W: surface.W - _WIDGET_OUTER_MARGIN - 2,
-			H: text.H + _WIDGET_OUTER_MARGIN - 2,
+			H: textHeight + _WIDGET_OUTER_MARGIN - 2,
 		}
 		sr.renderer.FillRect(&rect)
 
 		// render countdown
 		if notification.close == nil {
-			rect = sdl.Rect{
-				X: windowRect.W - _WIDGET_OUTER_MARGIN - countdown.W,
+			s := strconv.Itoa(int(time.Until(notification.end)/time.Second) + 1)
+			sr.printString(s, types.SGR_HEADING, &types.XY{
+				X: windowRect.W - _WIDGET_OUTER_MARGIN - countdownW,
 				Y: _WIDGET_OUTER_MARGIN + offset,
-				W: countdown.W,
-				H: countdown.H,
-			}
-			err = countdown.Blit(nil, surface, &rect)
-			if err != nil {
-				panic(err) // TODO: don't panic!
-			}
-			sr._renderNotificationSurface(surface, &rect)
+			})
 		}
-
-		// render shadow
-		rect = sdl.Rect{
-			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X + 2,
-			Y: _WIDGET_OUTER_MARGIN + offset + 2,
-			W: surface.W - sr.notifyIconSize.X - countdown.W,
-			H: text.H + _WIDGET_OUTER_MARGIN - 2,
-		}
-		_ = textShadow.Blit(nil, surface, &rect)
-		sr._renderNotificationSurface(surface, &rect)
 
 		// render text
-		rect = sdl.Rect{
+		sr.printString(notification.Message, types.SGR_HEADING, &types.XY{
 			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X,
 			Y: _WIDGET_OUTER_MARGIN + offset,
-			W: surface.W - sr.notifyIconSize.X - countdown.W,
-			H: text.H + _WIDGET_OUTER_MARGIN - 2,
-		}
-		err = text.Blit(nil, surface, &rect)
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		sr._renderNotificationSurface(surface, &rect)
+		})
 
 		if surface, ok := sr.notifyIcon[int(notification.Type)].Asset().(*sdl.Surface); ok {
 			srcRect := &sdl.Rect{
@@ -309,7 +268,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 			dstRect := &sdl.Rect{
 				X: _WIDGET_INNER_MARGIN * 2,
-				Y: offset + ((text.H + _WIDGET_OUTER_MARGIN + _WIDGET_OUTER_MARGIN + 2) / 2) - (sr.notifyIconSize.Y / 2),
+				Y: offset + ((textHeight + _WIDGET_OUTER_MARGIN + _WIDGET_OUTER_MARGIN + 2) / 2) - (sr.notifyIconSize.Y / 2),
 				W: sr.notifyIconSize.X,
 				H: sr.notifyIconSize.X,
 			}
@@ -326,7 +285,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 			}
 		}
 
-		offset += text.H + (_WIDGET_INNER_MARGIN * 3)
+		offset += textHeight + (_WIDGET_INNER_MARGIN * 3)
 	}
 }
 

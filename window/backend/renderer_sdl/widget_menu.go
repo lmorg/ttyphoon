@@ -386,9 +386,9 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
 		Y: menuRect.Y + _WIDGET_OUTER_MARGIN,
 	}
-	sgr := types.SGR_DEFAULT.Copy()
-	sgr.Bitwise.Set(types.SGR_BOLD)
-	sr.printString(sr.menu.title, sgr, pos)
+	//sgr := types.SGR_DEFAULT.Copy()
+	//sgr.Bitwise.Set(types.SGR_BOLD)
+	sr.printString(sr.menu.title, types.SGR_HEADING, pos)
 
 	// draw border
 	offset := sr.notifyIconSize.Y
@@ -571,28 +571,36 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 
 	// value
 
-	textRect := sdl.Rect{
+	/*textRect := sdl.Rect{
 		X: rect.X + _WIDGET_INNER_MARGIN,
 		Y: rect.Y + _WIDGET_INNER_MARGIN,
 		W: rect.W,
 		H: rect.H,
+	}*/
+
+	textPos := &types.XY{
+		X: rect.X + _WIDGET_INNER_MARGIN,
+		Y: rect.Y + _WIDGET_INNER_MARGIN,
 	}
 
 	var width int32
 
 	if len(sr.menu.filter) > 0 {
-		textValue, err := sr.font.RenderUTF8Blended(sr.menu.filter, sdl.Color{R: 255, G: 255, B: 255, A: 255})
+		/*textValue, err := sr.font.RenderUTF8Blended(sr.menu.filter, sdl.Color{R: 255, G: 255, B: 255, A: 255})
 		if err != nil {
 			panic(err) // TODO: don't panic!
-		}
-		defer textValue.Free()
+		}*/
+		//textValue := printHeading(sr, sr.menu.filter)
+		//defer textValue.Free()
+		sr.printString(sr.menu.filter, types.SGR_HEADING, textPos)
 
-		err = textValue.Blit(nil, surface, &textRect)
+		/*err := textValue.Blit(nil, surface, &textRect)
 		if err != nil {
 			panic(err) // TODO: don't panic!
-		}
+		}*/
+
 		sr._renderNotificationSurface(surface, rect)
-		width = textValue.W
+		width = int32(runewidth.StringWidth(sr.menu.filter)) * sr.glyphSize.X
 	}
 
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
@@ -600,8 +608,8 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 
 	if sr.GetBlinkState() {
 		cursorRect := sdl.Rect{
-			X: textRect.X + width,
-			Y: textRect.Y,
+			X: textPos.X + width,
+			Y: textPos.Y,
 			W: sr.glyphSize.X,
 			H: sr.glyphSize.Y,
 		}

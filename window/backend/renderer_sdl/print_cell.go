@@ -15,6 +15,7 @@ const (
 	_HLTEXTURE_NONE          = iota
 	_HLTEXTURE_SELECTION     // should always be first non-zero value
 	_HLTEXTURE_SEARCH_RESULT //
+	_HLTEXTURE_HEADING       //
 	_HLTEXTURE_MATCH_RANGE   //
 	_HLTEXTURE_LAST          // placeholder for rect calculations. Must always come last
 )
@@ -23,6 +24,7 @@ var textShadow = []*types.Colour{ // RGBA
 	_HLTEXTURE_NONE:          types.COLOR_TEXT_SHADOW,
 	_HLTEXTURE_SELECTION:     types.COLOR_SELECTION,
 	_HLTEXTURE_SEARCH_RESULT: types.COLOR_SEARCH_RESULT,
+	_HLTEXTURE_HEADING:       {255, 0, 0, 128},
 	_HLTEXTURE_MATCH_RANGE:   {64, 255, 64, 255},
 }
 
@@ -110,11 +112,15 @@ func (sr *sdlRender) printCellRect(ch rune, sgr *types.Sgr, dstRect *sdl.Rect) {
 	}
 
 	hlTexture := _HLTEXTURE_NONE
-	if sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT) {
-		hlTexture = _HLTEXTURE_SEARCH_RESULT
-	}
-	if isCellHighlighted(sr, dstRect) {
+	switch {
+	case sgr.Bitwise.Is(types.SGR_HIGHLIGHT_HEADING):
+		hlTexture = _HLTEXTURE_HEADING
+
+	case isCellHighlighted(sr, dstRect):
 		hlTexture = _HLTEXTURE_SELECTION
+
+	case sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT):
+		hlTexture = _HLTEXTURE_SEARCH_RESULT
 	}
 
 	hash := sgr.HashValue()

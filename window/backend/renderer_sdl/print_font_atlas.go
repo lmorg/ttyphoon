@@ -100,6 +100,7 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 			_HLTEXTURE_NONE:          fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_NONE),
 			_HLTEXTURE_SELECTION:     fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SELECTION),
 			_HLTEXTURE_SEARCH_RESULT: fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
+			_HLTEXTURE_HEADING:       fa.newFontTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
 		}
 
 	} else {
@@ -108,6 +109,7 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 			_HLTEXTURE_NONE:          fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_NONE),
 			_HLTEXTURE_SELECTION:     fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SELECTION),
 			_HLTEXTURE_SEARCH_RESULT: fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
+			_HLTEXTURE_HEADING:       fa.newLigTexture(chars, sgr, glyphSizePlusShadow, renderer, _HLTEXTURE_SEARCH_RESULT),
 		}
 	}
 
@@ -195,7 +197,7 @@ func (fa *fontAtlasT) printCellsToSurface(sgr *types.Sgr, cellRect *sdl.Rect, su
 
 	if bg != nil {
 		var pixel uint32
-		if hlTexture != 0 {
+		if hlTexture != _HLTEXTURE_NONE {
 			pixel = sdl.MapRGBA(surface.Format, textShadow[hlTexture].Red, textShadow[hlTexture].Green, textShadow[hlTexture].Blue, 255)
 		} else {
 			pixel = sdl.MapRGBA(surface.Format, bg.Red, bg.Green, bg.Blue, 255)
@@ -266,9 +268,9 @@ func (fa *fontAtlasT) printCellsToSurface(sgr *types.Sgr, cellRect *sdl.Rect, su
 	}
 	defer text.Free()
 
-	if hlTexture != 0 {
+	/*if hlTexture != _HLTEXTURE_NONE  {
 		_ = text.SetBlendMode(sdl.BLENDMODE_ADD)
-	}
+	}*/
 
 	err = text.Blit(nil, surface, cellRect)
 	if err != nil {

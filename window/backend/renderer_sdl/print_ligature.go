@@ -51,11 +51,15 @@ func (sr *sdlRender) PrintLigature(tile types.Tile, cells []*types.Cell, _cellPo
 	}
 
 	hlTexture := _HLTEXTURE_NONE
-	if cells[0].Sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT) {
-		hlTexture = _HLTEXTURE_SEARCH_RESULT
-	}
-	if isCellHighlighted(sr, dstRect) {
+	switch {
+	case cells[0].Sgr.Bitwise.Is(types.SGR_HIGHLIGHT_HEADING):
+		hlTexture = _HLTEXTURE_HEADING
+
+	case isCellHighlighted(sr, dstRect):
 		hlTexture = _HLTEXTURE_SELECTION
+
+	case cells[0].Sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT):
+		hlTexture = _HLTEXTURE_SEARCH_RESULT
 	}
 
 	hash := cells[0].Sgr.HashValue()

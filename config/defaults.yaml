@@ -60,8 +60,14 @@ TypeFace:
   # If this is commented out then the terminal will use a font compiled
   # into this executable, which is Hasklig - a typeface based on
   # Source Code Pro.
+  #FontName: "Fira Code"
   #FontName: "Hack"
   FontSize: 15
+
+  # Cell padding. Some people prefer high density while others find that harder
+  # to read
+  #AdjustCellWidth:  1
+  #AdjustCellHeight: 1
 
   # Enable or disable drop shadows on terminal. I personally like it because
   # it makes the text pop. YMMV
@@ -85,11 +91,6 @@ TypeFace:
     - "?:"
     - ".."
     - "::"
-
-  # Cell padding. Some people prefer high density while others find that harder
-  # to read
-  AdjustCellWidth:  0
-  AdjustCellHeight: 0
 
 Window:
   # Window transparency. Some people like it, others do not.

@@ -8,7 +8,6 @@ import (
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 )
 
 type inputBoxCallbackT func(string)
@@ -96,25 +95,12 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	}
 	defer surface.Free()
 
-	sr.font.SetStyle(ttf.STYLE_BOLD)
-
-	text, err := sr.font.RenderUTF8BlendedWrapped(sr.inputBox.title, sdl.Color{R: 255, G: 255, B: 255, A: 255}, int(surface.W-sr.notifyIconSize.X))
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	defer text.Free()
-
-	textShadow, err := sr.font.RenderUTF8BlendedWrapped(sr.inputBox.title, sdl.Color{R: 0, G: 0, B: 0, A: 150}, int(surface.W-sr.notifyIconSize.X))
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	defer textShadow.Free()
-
 	/*
 		FRAME
 	*/
 
-	height := text.H + (_WIDGET_OUTER_MARGIN * 3) + sr.glyphSize.Y
+	textHeight := sr.glyphSize.Y
+	height := textHeight + (_WIDGET_OUTER_MARGIN * 3) + sr.glyphSize.Y
 	maxLen := int32(len(sr.inputBox.title))
 	if maxLen < _INPUTBOX_MAX_CHARS {
 		maxLen = _INPUTBOX_MAX_CHARS
@@ -124,7 +110,6 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	offsetY := (surface.W - width) / 2
 
 	// draw border
-	//sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
 	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect := sdl.Rect{
 		X: offsetY - 1,
@@ -142,7 +127,6 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	//sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
 	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: offsetY + 1,
@@ -152,39 +136,19 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	}
 	sr.renderer.FillRect(&rect)
 
-	// render shadow
-	rect = sdl.Rect{
-		X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + 2,
-		Y: _WIDGET_INNER_MARGIN + offsetH + 2,
-		W: width - sr.notifyIconSize.X,
-		H: text.H + _WIDGET_OUTER_MARGIN - 2,
-	}
-	_ = textShadow.Blit(nil, surface, &rect)
-	sr._renderNotificationSurface(surface, &rect)
-
-	// render text
-	rect = sdl.Rect{
-		X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
-		Y: _WIDGET_INNER_MARGIN + offsetH,
-		W: width - sr.notifyIconSize.X,
-		H: text.H + _WIDGET_OUTER_MARGIN - 2,
-	}
-	err = text.Blit(nil, surface, &rect)
-	if err != nil {
-		panic(err) // TODO: don't panic!
-	}
-	sr._renderNotificationSurface(surface, &rect)
-
 	/*
 		TEXT FIELD
 	*/
 
+	sr.printString(sr.inputBox.title, types.SGR_HEADING, &types.XY{
+		X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
+		Y: _WIDGET_INNER_MARGIN + offsetH,
+	})
+
 	height = sr.glyphSize.Y + _WIDGET_OUTER_MARGIN
-	offsetH += text.H + _WIDGET_OUTER_MARGIN
-	//var textWidth int32
+	offsetH += textHeight + _WIDGET_OUTER_MARGIN
 
 	// draw border
-	//sr.renderer.SetDrawColor(255, 255, 255, 150)
 	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN - 1,
@@ -202,7 +166,6 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	//sr.renderer.SetDrawColor(0, 0, 0, 200)
 	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN + 1,
@@ -214,25 +177,6 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	// value
 	if len(sr.inputBox.value) > 0 {
-		/*textValue, err := sr.font.RenderUTF8Blended(sr.inputBox.value, sdl.Color{R: 255, G: 255, B: 255, A: 255})
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer textValue.Free()
-
-
-		rect = sdl.Rect{
-			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN,
-			Y: _WIDGET_INNER_MARGIN + offsetH,
-			W: surface.W - sr.notifyIconSize.X,
-			H: textValue.H + _WIDGET_OUTER_MARGIN - 2,
-		}
-		err = textValue.Blit(nil, surface, &rect)
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		sr._renderNotificationSurface(surface, &rect)
-		textWidth = textValue.W*/
 		pos := &types.XY{
 			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN,
 			Y: _WIDGET_INNER_MARGIN + offsetH,
@@ -251,7 +195,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 		dstRect := &sdl.Rect{
 			X: offsetY + (_WIDGET_OUTER_MARGIN / 2),
-			Y: offsetH + text.H - sr.notifyIconSize.Y,
+			Y: offsetH + textHeight - sr.notifyIconSize.Y,
 			W: sr.notifyIconSize.X,
 			H: sr.notifyIconSize.X,
 		}

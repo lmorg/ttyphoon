@@ -14,7 +14,6 @@ import (
 	"github.com/lmorg/mxtty/window/backend/typeface"
 	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 	"golang.design/x/hotkey"
 )
 
@@ -32,18 +31,14 @@ var ( // defined at runtime based on font size
 )
 
 type sdlRender struct {
-	window    *sdl.Window
-	renderer  *sdl.Renderer
-	fontCache *fontCacheT
-	glyphSize *types.XY
-	tmux      *tmux.Tmux
-	//renderLock atomic.Bool
+	window      *sdl.Window
+	renderer    *sdl.Renderer
+	fontCache   *fontCacheT
+	glyphSize   *types.XY
+	tmux        *tmux.Tmux
 	limiter     sync.Mutex
 	winCellSize *types.XY
 	winTile     types.Tile
-
-	// deprecated
-	font *ttf.Font
 
 	// title
 	title       string

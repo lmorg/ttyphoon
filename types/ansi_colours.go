@@ -43,10 +43,11 @@ var (
 	COLOR_FOLDED = SGR_COLOR_YELLOW
 )
 
-/*
-	_questionColorLight = &types.Colour{0xf0, 0xff, 0xf0, 196} // &types.Colour{0x00, 0xff, 0x00, 233}
-	_questionColorDark  = &types.Colour{0x00, 0x55, 0x00, 196}
-*/
+var SGR_HEADING = &Sgr{
+	Fg:      rgb(255, 255, 255),
+	Bg:      SGR_DEFAULT.Bg,
+	Bitwise: SGR_BOLD | SGR_HIGHLIGHT_HEADING,
+}
 
 var (
 	COLOR_WIDGET_INPUT = &Colour{0x00, 0x55, 0x00, 196}

@@ -10,9 +10,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-type bgT struct {
-	_texture *sdl.Texture
-}
+type bgT struct{ _texture *sdl.Texture }
 
 func (bg *bgT) IsSet() bool              { return bg._texture != nil }
 func (bg *bgT) Set(texture *sdl.Texture) { bg._texture = texture }

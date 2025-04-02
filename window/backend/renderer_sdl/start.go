@@ -57,7 +57,6 @@ func Initialise() (types.Renderer, *types.XY) {
 	sr._deallocStack = make(chan func())
 	sr.keyIgnore = make(chan bool)
 
-	sr.font = typeface.Deprecated_GetFont()
 	sr.glyphSize = typeface.GetSize()
 	_PANE_BLOCK_HIGHLIGHT = sr.glyphSize.X / 2
 	_PANE_BLOCK_FOLDED = sr.glyphSize.X
