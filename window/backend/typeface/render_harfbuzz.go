@@ -69,6 +69,8 @@ func (f *fontHarfbuzz) Init() error {
 }
 
 func (f *fontHarfbuzz) Open(name string, size int) (err error) {
+	f.openAsset(assets.FONT_AWESOME, _STYLE_FONT_AWESOME)
+
 	if name != "" {
 		_FONT_FAMILIES = append([]string{name}, _FONT_FAMILIES...)
 		f.setSize()
@@ -82,8 +84,6 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	f.openAsset(assets.TYPEFACE_BI, _STYLE_BOLD|_STYLE_ITALIC)
 	f.openAsset(assets.TYPEFACE_L, _STYLE_FAINT)
 	f.openAsset(assets.TYPEFACE_LI, _STYLE_FAINT|_STYLE_ITALIC)
-
-	f.openAsset(assets.FONT_AWESOME, _STYLE_FONT_AWESOME)
 
 	rx := regexp.MustCompile(`[-.]`)
 	fontName := rx.Split(assets.TYPEFACE, 2)
@@ -110,6 +110,7 @@ func (f *fontHarfbuzz) openAsset(name string, style styleT) {
 }
 
 func (f *fontHarfbuzz) setSize() {
+	return
 	var shaper shaping.HarfbuzzShaper
 	/*ddpi, hdpi, vdpi, err := sdl.GetDisplayDPI(0)
 	if err != nil {
@@ -133,8 +134,7 @@ func (f *fontHarfbuzz) setSize() {
 
 	size := fixed.Int26_6(int(math.Round((float64(config.Config.TypeFace.FontSize) * float64(ddpi) / 72.0) * 64)))
 	input := shaping.Input{
-		Size: fixed.Int26_6(size),
-		//Size:      1,
+		Size:      fixed.Int26_6(size),
 		Face:      f.getFace('W'),
 		Text:      []rune{'W'},
 		RunStart:  0,
@@ -145,8 +145,8 @@ func (f *fontHarfbuzz) setSize() {
 	output := shaper.Shape(input)
 
 	f.size = &types.XY{
-		X: int32(output.Glyphs[0].Width.Ceil()),
-		Y: -int32(output.Glyphs[0].Height.Round()) + 4,
+		X: int32(output.Glyphs[0].Width.Round()) + int32(output.Glyphs[0].Width.Round()/2) + int32(config.Config.TypeFace.AdjustCellWidth),
+		Y: int32(output.Glyphs[0].YBearing.Round()) + int32(output.Glyphs[0].YBearing.Round()/2) + int32(config.Config.TypeFace.AdjustCellHeight),
 	}
 
 	/*f.size = &types.XY{
@@ -155,7 +155,11 @@ func (f *fontHarfbuzz) setSize() {
 	}*/
 
 	debug.Log(f.size)
-	//panic("break")
+	//panic(fmt.Sprintf("%d, %d, %d, %d",
+	//	output.Glyphs[0].YAdvance.Round(),
+	//	output.Glyphs[0].YBearing.Round(),
+	//	output.Glyphs[0].YOffset.Round(),
+	//	output.Glyphs[0].Height.Round()))
 }
 
 func (f *fontHarfbuzz) GetSize() *types.XY {

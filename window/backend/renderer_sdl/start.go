@@ -88,7 +88,7 @@ func (sr *sdlRender) createWindow(caption string) error {
 	sr.window, err = sdl.CreateWindow(
 		caption,             // window title
 		X, Y, width, height, // window position & dimensions
-		sdl.WINDOW_SHOWN|sdl.WINDOW_RESIZABLE|sdl.WINDOW_ALWAYS_ON_TOP|sdl.WINDOW_SHOWN, //|sdl.WINDOW_HIDDEN, // window properties
+		sdl.WINDOW_SHOWN|sdl.WINDOW_RESIZABLE|sdl.WINDOW_ALWAYS_ON_TOP,
 	)
 	if err != nil {
 		return err

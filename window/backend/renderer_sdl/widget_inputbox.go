@@ -125,7 +125,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	// draw border
 	//sr.renderer.SetDrawColor(questionColorBorder.Red, questionColorBorder.Green, questionColorBorder.Blue, questionColorBorder.Alpha)
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect := sdl.Rect{
 		X: offsetY - 1,
 		Y: offsetH - 1,
@@ -143,7 +143,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	// fill background
 	//sr.renderer.SetDrawColor(questionColor.Red, questionColor.Green, questionColor.Blue, questionColor.Alpha)
-	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: offsetY + 1,
 		Y: 1 + offsetH,
@@ -185,7 +185,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 
 	// draw border
 	//sr.renderer.SetDrawColor(255, 255, 255, 150)
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: offsetH - 1,

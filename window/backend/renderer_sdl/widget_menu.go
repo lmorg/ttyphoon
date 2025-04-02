@@ -12,6 +12,7 @@ import (
 )
 
 const MENU_SEPARATOR = "-"
+const _INPUT_ALPHA = 196
 
 type menuWidgetT struct {
 	title             string
@@ -357,7 +358,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	}
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect := sdl.Rect{
 		X: menuRect.X - 1,
 		Y: menuRect.Y - 1,
@@ -368,7 +369,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	_ = sr.renderer.DrawRect(&menuRect)
 
 	// fill background
-	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.COLOR_WIDGET_INPUT.Red, types.COLOR_WIDGET_INPUT.Green, types.COLOR_WIDGET_INPUT.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: menuRect.X + 1,
 		Y: menuRect.Y + 1,
@@ -392,7 +393,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	// draw border
 	offset := sr.notifyIconSize.Y
 	width = menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, types.COLOR_WIDGET_INPUT.Alpha)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: menuRect.Y + offset - 1,
