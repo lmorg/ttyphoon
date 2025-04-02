@@ -3,22 +3,16 @@ package typeface
 import (
 	"image"
 	"log"
-	"math"
 	"regexp"
 	"unsafe"
 
 	"github.com/go-text/render"
-	"github.com/go-text/typesetting/di"
 	"github.com/go-text/typesetting/font"
 	"github.com/go-text/typesetting/fontscan"
-	"github.com/go-text/typesetting/shaping"
 	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
-	"golang.org/x/image/math/fixed"
 )
 
 var _FONT_FAMILIES = []string{"monospace", "emoji", "math", "fantasy"}
@@ -65,7 +59,7 @@ func (f *fontHarfbuzz) Init() error {
 	f.fmap.SetQuery(fontscan.Query{Families: _FONT_FAMILIES})
 
 	f.sdl = new(fontSdl)
-	return f.sdl.Init()
+	return err
 }
 
 func (f *fontHarfbuzz) Open(name string, size int) (err error) {
@@ -73,7 +67,6 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 
 	if name != "" {
 		_FONT_FAMILIES = append([]string{name}, _FONT_FAMILIES...)
-		f.setSize()
 		name = f.fmap.FontLocation(f.getFace('W').Font).File
 		return f.sdl.Open(name, size)
 	}
@@ -88,8 +81,6 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	rx := regexp.MustCompile(`[-.]`)
 	fontName := rx.Split(assets.TYPEFACE, 2)
 	_FONT_FAMILIES = append(fontName[:1], _FONT_FAMILIES...)
-
-	f.setSize()
 
 	return f.sdl.Open("", size)
 }
@@ -109,61 +100,7 @@ func (f *fontHarfbuzz) openAsset(name string, style styleT) {
 	f.fmap.AddFace(f.face[style], fontscan.Location{}, f.face[style].Describe())
 }
 
-func (f *fontHarfbuzz) setSize() {
-	return
-	var shaper shaping.HarfbuzzShaper
-	/*ddpi, hdpi, vdpi, err := sdl.GetDisplayDPI(0)
-	if err != nil {
-		panic(err)
-	}
-	debug.Log(fmt.Sprintf("DPIs: ddpi(%f), hdpi(%f), vdpi(%f)", ddpi, hdpi, vdpi))
-
-	ddpi, hdpi, vdpi, err = sdl.GetDisplayDPI(1)
-	if err != nil {
-		panic(err)
-	}
-	debug.Log(fmt.Sprintf("DPIs: ddpi(%f), hdpi(%f), vdpi(%f)", ddpi, hdpi, vdpi))
-
-	ddpi, hdpi, vdpi, err = sdl.GetDisplayDPI(2)
-	if err != nil {
-		panic(err)
-	}
-	debug.Log(fmt.Sprintf("DPIs: ddpi(%f), hdpi(%f), vdpi(%f)", ddpi, hdpi, vdpi))*/
-
-	ddpi := 96
-
-	size := fixed.Int26_6(int(math.Round((float64(config.Config.TypeFace.FontSize) * float64(ddpi) / 72.0) * 64)))
-	input := shaping.Input{
-		Size:      fixed.Int26_6(size),
-		Face:      f.getFace('W'),
-		Text:      []rune{'W'},
-		RunStart:  0,
-		RunEnd:    1,
-		Direction: di.DirectionLTR,
-	}
-
-	output := shaper.Shape(input)
-
-	f.size = &types.XY{
-		X: int32(output.Glyphs[0].Width.Round()) + int32(output.Glyphs[0].Width.Round()/2) + int32(config.Config.TypeFace.AdjustCellWidth),
-		Y: int32(output.Glyphs[0].YBearing.Round()) + int32(output.Glyphs[0].YBearing.Round()/2) + int32(config.Config.TypeFace.AdjustCellHeight),
-	}
-
-	/*f.size = &types.XY{
-		X: int32(float32(output.Glyphs[0].Width) / 96 * 72),
-		Y: -int32(float32(output.Glyphs[0].Height) / 96 * 72),
-	}*/
-
-	debug.Log(f.size)
-	//panic(fmt.Sprintf("%d, %d, %d, %d",
-	//	output.Glyphs[0].YAdvance.Round(),
-	//	output.Glyphs[0].YBearing.Round(),
-	//	output.Glyphs[0].YOffset.Round(),
-	//	output.Glyphs[0].Height.Round()))
-}
-
-func (f *fontHarfbuzz) GetSize() *types.XY {
-	//return f.size
+func (f *fontHarfbuzz) getSize() *types.XY {
 	return f.sdl.size
 }
 
@@ -243,7 +180,7 @@ func (f *fontHarfbuzz) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...
 		return nil, err
 	}
 
-	size := f.GetSize()
+	size := f.getSize()
 	y := size.Y - 1
 
 	if f.style.Is(_STYLE_UNDERLINE) {
@@ -263,12 +200,4 @@ func (f *fontHarfbuzz) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...
 func (f *fontHarfbuzz) glyphIsProvided(r rune) bool {
 	_, found := f.face[f.style.TypeFace()].NominalGlyph(r)
 	return found
-}
-
-func (f *fontHarfbuzz) Close() {
-	f.sdl.Close()
-}
-
-func (f *fontHarfbuzz) Deprecated_GetFont() *ttf.Font {
-	return f.sdl.Deprecated_GetFont()
 }

@@ -19,13 +19,6 @@ func main() {
 	getFlags()
 
 	typeface.Init()
-	err := typeface.Open(
-		config.Config.TypeFace.FontName,
-		config.Config.TypeFace.FontSize,
-	)
-	if err != nil {
-		panic(err.Error())
-	}
 
 	if config.Config.Tmux.Enabled && tmuxInstalled() {
 		tmuxSession()
