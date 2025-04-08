@@ -149,7 +149,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	offsetH += textHeight + _WIDGET_OUTER_MARGIN
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BLACK.Red, types.SGR_COLOR_BLACK.Green, types.SGR_COLOR_BLACK.Blue, _INPUT_ALPHA)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, _INPUT_ALPHA)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: offsetH - 1,
@@ -166,7 +166,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, _INPUT_ALPHA_BG)
 	rect = sdl.Rect{
 		X: offsetY + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: 1 + offsetH,

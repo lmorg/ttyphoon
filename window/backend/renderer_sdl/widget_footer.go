@@ -97,7 +97,10 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 		tabs:      &sr.termWin.Tabs,
 	}
 
-	heading := []rune("Window tab list → ")
+	var heading []rune
+	if config.Config.Window.StatusBar {
+		heading = []rune("Window tab list → ")
+	}
 
 	for _, r := range heading {
 		tabList.cells = append(tabList.cells, tabListNewCell(r))

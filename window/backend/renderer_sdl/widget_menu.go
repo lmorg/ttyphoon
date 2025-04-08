@@ -12,7 +12,11 @@ import (
 )
 
 const MENU_SEPARATOR = "-"
-const _INPUT_ALPHA = 196
+
+const (
+	_INPUT_ALPHA    = 196
+	_INPUT_ALPHA_BG = 225
+)
 
 type menuWidgetT struct {
 	title             string
@@ -411,7 +415,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, _INPUT_ALPHA_BG)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: menuRect.Y + offset + 1,
@@ -543,7 +547,7 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 	}
 
 	// draw border
-	sr.renderer.SetDrawColor(255, 255, 255, 150)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, _INPUT_ALPHA)
 	borderRect := sdl.Rect{
 		X: rect.X - 1,
 		Y: rect.Y - 1,
@@ -560,7 +564,7 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 	sr.renderer.DrawRect(&borderRect)
 
 	// fill background
-	sr.renderer.SetDrawColor(0, 0, 0, 200)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, _INPUT_ALPHA_BG)
 	borderRect = sdl.Rect{
 		X: rect.X + 1,
 		Y: rect.Y + 1,
@@ -571,13 +575,6 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 
 	// value
 
-	/*textRect := sdl.Rect{
-		X: rect.X + _WIDGET_INNER_MARGIN,
-		Y: rect.Y + _WIDGET_INNER_MARGIN,
-		W: rect.W,
-		H: rect.H,
-	}*/
-
 	textPos := &types.XY{
 		X: rect.X + _WIDGET_INNER_MARGIN,
 		Y: rect.Y + _WIDGET_INNER_MARGIN,
@@ -586,21 +583,10 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 	var width int32
 
 	if len(sr.menu.filter) > 0 {
-		/*textValue, err := sr.font.RenderUTF8Blended(sr.menu.filter, sdl.Color{R: 255, G: 255, B: 255, A: 255})
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}*/
-		//textValue := printHeading(sr, sr.menu.filter)
-		//defer textValue.Free()
-		sr.printString(sr.menu.filter, types.SGR_HEADING, textPos)
-
-		/*err := textValue.Blit(nil, surface, &textRect)
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}*/
+		sr.printString(sr.menu.filter, types.SGR_DEFAULT, textPos)
 
 		sr._renderNotificationSurface(surface, rect)
-		width = int32(runewidth.StringWidth(sr.menu.filter)) * sr.glyphSize.X
+		width = int32(runewidth.StringWidth(sr.menu.filter)) * (sr.glyphSize.X + dropShadowOffset)
 	}
 
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
