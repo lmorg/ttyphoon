@@ -8,16 +8,16 @@ import (
 	"github.com/lmorg/murex/utils/json"
 )
 
-//go:embed Afterglow.itermcolors
+//go:embed test_files/Afterglow.itermcolors
 var AfterglowItermcolors []byte
 
-//go:embed Afterglow.expected.json
+//go:embed test_files/Afterglow.expected.json
 var AfterglowExpected string
 
-//go:embed CGA.itermcolors
+//go:embed test_files/CGA.itermcolors
 var CgaItermcolors []byte
 
-//go:embed CGA.expected.json
+//go:embed test_files/CGA.expected.json
 var CgaExpected string
 
 func TestUnmarshalThemeAfterglow(t *testing.T) {

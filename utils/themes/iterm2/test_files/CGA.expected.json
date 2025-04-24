@@ -2,131 +2,157 @@
     "Ansi 0 Color": {
         "Red": 0,
         "Green": 0,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Ansi 1 Color": {
         "Red": 0.6666666865348816,
         "Green": 0,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Ansi 10 Color": {
         "Red": 0.3333333432674408,
         "Green": 1,
-        "Blue": 0.3333333432674408
+        "Blue": 0.3333333432674408,
+        "Alpha": 1
     },
     "Ansi 11 Color": {
         "Red": 1,
         "Green": 1,
-        "Blue": 0.3333333432674408
+        "Blue": 0.3333333432674408,
+        "Alpha": 1
     },
     "Ansi 12 Color": {
         "Red": 0.3333333432674408,
         "Green": 0.3333333432674408,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Ansi 13 Color": {
         "Red": 1,
         "Green": 0.3333333432674408,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Ansi 14 Color": {
         "Red": 0.3333333432674408,
         "Green": 1,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Ansi 15 Color": {
         "Red": 0.9999960064888,
         "Green": 1,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Ansi 2 Color": {
         "Red": 0,
         "Green": 0.6666666865348816,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Ansi 3 Color": {
         "Red": 0.6666666865348816,
         "Green": 0.3333333432674408,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Ansi 4 Color": {
         "Red": 0,
         "Green": 0,
-        "Blue": 0.6666666865348816
+        "Blue": 0.6666666865348816,
+        "Alpha": 1
     },
     "Ansi 5 Color": {
         "Red": 0.6666666865348816,
         "Green": 0,
-        "Blue": 0.6666666865348816
+        "Blue": 0.6666666865348816,
+        "Alpha": 1
     },
     "Ansi 6 Color": {
         "Red": 0,
         "Green": 0.6666666865348816,
-        "Blue": 0.6666666865348816
+        "Blue": 0.6666666865348816,
+        "Alpha": 1
     },
     "Ansi 7 Color": {
         "Red": 0.6666666865348816,
         "Green": 0.6666666865348816,
-        "Blue": 0.6666666865348816
+        "Blue": 0.6666666865348816,
+        "Alpha": 1
     },
     "Ansi 8 Color": {
         "Red": 0.3333333432674408,
         "Green": 0.3333333432674408,
-        "Blue": 0.3333333432674408
+        "Blue": 0.3333333432674408,
+        "Alpha": 1
     },
     "Ansi 9 Color": {
         "Red": 1,
         "Green": 0.3333333432674408,
-        "Blue": 0.3333333432674408
+        "Blue": 0.3333333432674408,
+        "Alpha": 1
     },
     "Background Color": {
         "Red": 0,
         "Green": 0,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Badge Color": {
         "Red": 1,
         "Green": 0.1491314172744751,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 0.5
     },
     "Bold Color": {
         "Red": 0.9999960064888,
         "Green": 1,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Cursor Color": {
         "Red": 0.72336345911026,
         "Green": 0.7233806252479553,
-        "Blue": 0.7233713269233704
+        "Blue": 0.7233713269233704,
+        "Alpha": 1
     },
     "Cursor Guide Color": {
         "Red": 0.7021318674087524,
         "Green": 0.9268307089805603,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 0.25
     },
     "Cursor Text Color": {
         "Red": 0.9999960064888,
         "Green": 1,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Foreground Color": {
         "Red": 0.6666666865348816,
         "Green": 0.6666666865348816,
-        "Blue": 0.6666666865348816
+        "Blue": 0.6666666865348816,
+        "Alpha": 1
     },
     "Link Color": {
         "Red": 0.3333333432674408,
         "Green": 0.3333333432674408,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     },
     "Selected Text Color": {
         "Red": 0,
         "Green": 0,
-        "Blue": 0
+        "Blue": 0,
+        "Alpha": 1
     },
     "Selection Color": {
         "Red": 0.7581323981285095,
         "Green": 0.8697010278701782,
-        "Blue": 1
+        "Blue": 1,
+        "Alpha": 1
     }
 }
