@@ -5,6 +5,7 @@ import (
 	godebug "runtime/debug"
 	"sync/atomic"
 
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
@@ -42,7 +43,7 @@ func (sr *sdlRender) drawBg() {
 	_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 255)
 	_ = sr.renderer.FillRect(&sdl.Rect{W: w, H: h})
 
-	if len(sr.termWin.Tiles) > 1 {
+	if len(sr.termWin.Tiles) > 1 && !config.Config.Window.TileHighlightFill {
 		canvasBg := types.SGR_COLOR_FOREGROUND
 		_ = sr.renderer.SetDrawColor(canvasBg.Red, canvasBg.Green, canvasBg.Blue, 16)
 		_ = sr.renderer.FillRect(&sdl.Rect{X: _PANE_LEFT_MARGIN_OUTER + sr.glyphSize.X, Y: _PANE_TOP_MARGIN, W: sr.winCellSize.X * sr.glyphSize.X, H: sr.winCellSize.Y * sr.glyphSize.Y})
@@ -71,8 +72,14 @@ func (sr *sdlRender) drawBg() {
 		if tile.AtBottom() {
 			rect.H -= sr.glyphSize.Y/2 + _PANE_BLOCK_HIGHLIGHT
 		}
-		_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, highlightAlphaBorder)
-		_ = sr.renderer.DrawRect(rect)
+
+		if config.Config.Window.TileHighlightFill {
+			_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, 64)
+			_ = sr.renderer.FillRect(rect)
+		} else {
+			_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, highlightAlphaBorder)
+			_ = sr.renderer.DrawRect(rect)
+		}
 	}
 
 	err := sr.renderer.SetRenderTarget(nil)

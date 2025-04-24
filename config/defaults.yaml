@@ -103,6 +103,7 @@ Window:
   TabBarFrame: false
   TabBarActiveHighlight: true
   TabBarHoverHighlight: true
+  TileHighlightFill: false
 
   # RefreshInterval is how long to wait between forced window updates.
   # Lower values produce smoother scrolling when large text is rapidly written

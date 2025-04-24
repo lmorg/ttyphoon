@@ -85,6 +85,15 @@ func (sr *sdlRender) UpdateConfig() {
 			},
 			//Icon: 0xe59a,
 		},
+		{
+			Title: fmt.Sprintf("%s = %v", "Window.TileHighlightFill", config.Config.Window.TileHighlightFill),
+			Fn: func() {
+				config.Config.Window.TileHighlightFill = !config.Config.Window.TileHighlightFill
+				sr.initFooter()
+				sr.UpdateConfig()
+			},
+			//Icon: 0xe59a,
+		},
 
 		{
 			Title: MENU_SEPARATOR,
