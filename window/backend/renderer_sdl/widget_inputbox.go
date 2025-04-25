@@ -31,7 +31,9 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback
 
 	sr.inputBox.readline.Readline(sr, func(s string, e error) {
 		sr.closeInputBox()
-		callback(s)
+		if e == nil {
+			callback(s)
+		}
 	})
 }
 
