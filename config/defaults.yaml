@@ -9,8 +9,8 @@ Tmux:
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
-  Default:  [ murex  ]
-  Fallback: [ $SHELL ]
+  Default: [murex]
+  Fallback: [$SHELL]
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
@@ -37,19 +37,21 @@ Terminal:
   # Experimental support to turn anything that looks like a URL or file on disk
   # into a hotlink that can be clicked.
   AutoHotlink: true
-  
+
   Widgets:
     AutoHotlink:
       IncLineNumbers: false
       OpenAgents:
         - Name: System Default
-          Command: [ open, $$ ]
+          Command: [open, $$]
+        - Name: Zed
+          Command: [zed, $$]
         - Name: Visual Studio Code
-          Command: [ code, $$ ]
+          Command: [code, $$]
         - Name: Mozilla FireFox
-          Command: [ firefox, $$ ]
+          Command: [firefox, $$]
         - Name: Google Chrome
-          Command: [ chrome, $$ ]
+          Command: [chrome, $$]
 
     Table:
       ScrollMultiplierX: 2
@@ -66,8 +68,8 @@ TypeFace:
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
-  #AdjustCellWidth:  1
-  #AdjustCellHeight: 1
+  AdjustCellWidth: 0
+  AdjustCellHeight: 0
 
   # Enable or disable drop shadows on terminal. I personally like it because
   # it makes the text pop. YMMV
@@ -114,6 +116,7 @@ Window:
   # Terminal.JumpScrollLineCount also affects the window updates
   RefreshInterval: 200
 
-  # Set this to `false` to switch to software rendering
-  # most systems except 
+  # Set this to `false` to switch to software rendering.
+  # Disabling GPU will run slower and consume more system resources, so it is
+  # recommended to leave this set to `true`
   UseGPU: true
