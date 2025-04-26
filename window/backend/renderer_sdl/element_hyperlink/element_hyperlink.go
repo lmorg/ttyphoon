@@ -91,7 +91,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 				types.MenuItem{
 					Title: "Open link with " + apps[i],
 					Fn:    func() { openWith(el.renderer, cmds[i], el.url) },
-					Icon:  0xe69b,
+					Icon:  0xf08e,
 				},
 			)
 		}
