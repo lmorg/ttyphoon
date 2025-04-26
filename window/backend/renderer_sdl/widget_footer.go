@@ -10,6 +10,8 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const _HEADING_WINDOW_TAB_LIST = "" // "Window tab list → "
+
 func (sr *sdlRender) StatusBarText(s string) {
 	sr.footerText = s
 	sr.TriggerRedraw()
@@ -99,7 +101,7 @@ func (sr *sdlRender) _footerCacheTmuxWindowTabs(pos *types.XY) {
 
 	var heading []rune
 	if config.Config.Window.StatusBar {
-		heading = []rune("Window tab list → ")
+		heading = []rune(_HEADING_WINDOW_TAB_LIST)
 	}
 
 	for _, r := range heading {
