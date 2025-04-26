@@ -40,7 +40,7 @@ func (f *fontSdl) setSize() error {
 	x, y, err := f.font.SizeUTF8("W")
 	f.size = &types.XY{
 		X: int32(x + config.Config.TypeFace.AdjustCellWidth),
-		Y: int32(y + config.Config.TypeFace.AdjustCellWidth),
+		Y: int32(y + config.Config.TypeFace.AdjustCellHeight),
 	}
 	return err
 }
