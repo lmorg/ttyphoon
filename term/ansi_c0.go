@@ -64,6 +64,7 @@ func (term *Term) readChar(r rune) {
 		if term.writeToElement(r) {
 			return
 		}
+		term.phraseAppend(r)
 		term.lineFeed()
 
 	case 11:

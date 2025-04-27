@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/lmorg/mxtty/types"
+	"golang.design/x/clipboard"
 )
 
 func clone[T any](src []T) []T {
@@ -142,4 +143,18 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 		return b[:len(b)-1]
 	}
 	return b
+}
+
+func (term *Term) CopyOutputBlock(blockPos [2]int32) {
+	var block []rune
+
+	for i := int(blockPos[0]); i <= int(blockPos[1]); i++ {
+		if i < len(term._scrollBuf) {
+			block = append(block, *term._scrollBuf[i].Phrase...)
+		} else {
+			block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
+		}
+	}
+
+	clipboard.Write(clipboard.FmtText, []byte(string(block)))
 }

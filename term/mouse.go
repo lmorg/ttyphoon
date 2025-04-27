@@ -27,16 +27,27 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 		return
 	}
 
+	absPosY := int32(len(term._scrollBuf)) - int32(term._scrollOffset) + pos.Y
+
+	if button == types.MOUSE_BUTTON_RIGHT && !term.IsAltBuf() {
+		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
+		if err == nil {
+			term.renderer.AddToContextMenu(types.MenuItem{
+				Title: "Copy output block to clipboard",
+				Fn:    func() { term.CopyOutputBlock(blockPos) },
+				Icon:  0xf0c5,
+			})
+		}
+	}
+
 	if pos.X < 0 {
-		if button != 1 {
+		if button != types.MOUSE_BUTTON_LEFT {
 			callback()
 			return
 		}
 
-		absPos := int32(len(term._scrollBuf)) - int32(term._scrollOffset) + pos.Y
-
 		if len(screen[pos.Y].Hidden) > 0 {
-			err := term.UnhideRows(absPos)
+			err := term.UnhideRows(absPosY)
 			if err != nil {
 				term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 			}
@@ -55,7 +66,7 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 
 	isOutputBlock:
 
-		blockPos, _, err := term.outputBlocksFindStartEnd(absPos)
+		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
 		debug.Log(blockPos)
 		if err != nil {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
