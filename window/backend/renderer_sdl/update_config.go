@@ -92,7 +92,7 @@ func (sr *sdlRender) UpdateConfig() {
 				sr.initFooter()
 				sr.UpdateConfig()
 			},
-			//Icon: 0xe59a,
+			Icon: 0xf009,
 		},
 
 		{
