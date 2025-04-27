@@ -354,6 +354,16 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	if sr.menu.pos != nil {
 		x = sr.menu.pos.X
 		y = sr.menu.pos.Y
+
+		winX, winY, err := sr.renderer.GetOutputSize()
+		if err == nil {
+			if sr.menu.pos.X+width > winX {
+				x = winX - width
+			}
+			if sr.menu.pos.Y+height > winY {
+				y = winY - height
+			}
+		}
 	} else {
 		x = (windowRect.W - width) / 2
 		y = (windowRect.H - height) / 2
