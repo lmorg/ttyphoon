@@ -44,14 +44,10 @@ var (
 )
 
 var SGR_HEADING = &Sgr{
-	Fg:      rgb(255, 255, 255),
+	Fg:      SGR_DEFAULT.Fg,
 	Bg:      SGR_DEFAULT.Bg,
-	Bitwise: SGR_BOLD | SGR_HIGHLIGHT_HEADING,
+	Bitwise: SGR_BOLD, //| SGR_HIGHLIGHT_SEARCH_RESULT,
 }
-
-var (
-	COLOR_WIDGET_INPUT = &Colour{0x00, 0x55, 0x00, 196}
-)
 
 // SGR_COLOR_256 colours are a copy of xterm 256 colour values.
 // source: https://vim.fandom.com/wiki/Xterm256_color_names_for_console_Vim

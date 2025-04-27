@@ -11,7 +11,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-var _notifyColourLight = map[int]*types.Colour{
+var _notifyColourScheme = map[int]*types.Colour{
 	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 223},
 	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 223},
 	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 223},
@@ -19,13 +19,23 @@ var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 223},
 }
 
-var _notifyColourDark = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x1c, 0x3e, 0x64, 223},
-	types.NOTIFY_INFO:   {0x31, 0x6d, 0xb0, 223},
-	types.NOTIFY_WARN:   {0x74, 0x58, 0x10, 223},
-	types.NOTIFY_ERROR:  {0x66, 0x16, 0x1a, 223},
-	types.NOTIFY_SCROLL: {0x1c, 0x3e, 0x64, 223},
+var _notifyColourLight = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_INFO:   types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_ERROR:  types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
 }
+
+var _notifyColourDark = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_INFO:   types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_ERROR:  types.SGR_COLOR_BACKGROUND,
+	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
+}
+
+const _NOTIFY_ALPHA_BLEND = 215
 
 var notifyColour, notifyBorderColour map[int]*types.Colour
 
@@ -234,7 +244,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// fill background
 		c := notifyColour[int(notification.Type)]
-		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
+		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, _NOTIFY_ALPHA_BLEND)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN + 1,
 			Y: _WIDGET_INNER_MARGIN + 1 + offset,

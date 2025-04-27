@@ -37,7 +37,6 @@ func convertToMxttyTheme(theme map[string]Color) error {
 			err = rgbRealToByteColor(color, types.SGR_COLOR_RED, 255)
 		case "Ansi 2 Color":
 			err = rgbRealToByteColor(color, types.SGR_COLOR_GREEN, 255)
-			_ = rgbRealToByteColor(color, types.COLOR_WIDGET_INPUT, 255)
 		case "Ansi 3 Color":
 			err = rgbRealToByteColor(color, types.SGR_COLOR_YELLOW, 255)
 		case "Ansi 4 Color":
