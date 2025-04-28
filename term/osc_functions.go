@@ -112,5 +112,5 @@ func _osc7UpdatePath(term *Term, host, pwd string) {
 
 func (term *Term) osc9PostNotification(params []string) {
 	// OSC 9 ; [Message content goes here] ST
-	term.renderer.DisplayNotification(types.NOTIFY_WARN, strings.Join(params, ";"))
+	term.renderer.DisplayNotification(types.NOTIFY_INFO, strings.Join(params, ";"))
 }

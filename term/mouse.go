@@ -34,8 +34,27 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 		if err == nil {
 			term.renderer.AddToContextMenu(types.MenuItem{
 				Title: "Copy output block to clipboard",
-				Fn:    func() { term.CopyOutputBlock(blockPos) },
-				Icon:  0xf0c5,
+				Highlight: func() func() {
+					var block []int32
+					for _, block = range term._cacheBlock {
+						if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
+							goto isOutputBlock
+						}
+					}
+					return nil
+
+				isOutputBlock:
+					return func() {
+						term.renderer.DrawRectWithColour(term.tile,
+							&types.XY{X: 0, Y: block[0]},
+							&types.XY{X: term.size.X, Y: block[1]},
+							types.COLOR_SELECTION, true,
+						)
+					}
+
+				},
+				Fn:   func() { term.CopyOutputBlock(blockPos) },
+				Icon: 0xf0c5,
 			})
 		}
 	}

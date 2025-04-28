@@ -3,9 +3,10 @@ package types
 type MenuCallbackT func(int)
 
 type MenuItem struct {
-	Title string
-	Fn    func()
-	Icon  rune
+	Title     string
+	Fn        func()
+	Highlight func() func()
+	Icon      rune
 }
 
 type Renderer interface {

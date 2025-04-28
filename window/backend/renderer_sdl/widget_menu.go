@@ -37,6 +37,7 @@ type menuWidgetT struct {
 	maxLen            int32
 	filter            string
 	hidden            []bool
+	_hoverFn          func()
 }
 
 const (
@@ -44,34 +45,71 @@ const (
 	_MENU_HIGHLIGHT_INIT   = -1
 )
 
-type contextMenuT []types.MenuItem
+type contextMenuT struct {
+	items    []types.MenuItem
+	renderer *sdlRender
+}
+
+func newContextMenu(renderer *sdlRender) *contextMenuT {
+	return &contextMenuT{renderer: renderer}
+}
 
 func (cm *contextMenuT) Options() []string {
-	slice := make([]string, len(*cm))
-	for i := range *cm {
-		slice[i] = (*cm)[i].Title
+	slice := make([]string, len(cm.items))
+	for i := range cm.items {
+		slice[i] = cm.items[i].Title
 	}
 	return slice
 }
 
 func (cm *contextMenuT) Icons() []rune {
-	slice := make([]rune, len(*cm))
-	for i := range *cm {
-		slice[i] = (*cm)[i].Icon
+	slice := make([]rune, len(cm.items))
+	for i := range cm.items {
+		slice[i] = cm.items[i].Icon
 	}
 	return slice
 }
 
-func (cm *contextMenuT) Callback(i int) {
-	if i < 0 || i > len(*cm) {
+func (cm *contextMenuT) Highlight(i int) {
+	if i < 0 || i > len(cm.items) {
+		cm.renderer.menu._hoverFn = nil
 		return
 	}
 
-	(*cm)[i].Fn()
+	if cm.items[i].Highlight == nil {
+		cm.renderer.menu._hoverFn = nil
+		return
+	}
+
+	cm.renderer.menu._hoverFn = cm.items[i].Highlight()
+}
+
+func (cm *contextMenuT) Callback(i int) {
+	cm._clearHoverFn()
+
+	if i < 0 || i > len(cm.items) {
+		return
+	}
+
+	cm.items[i].Fn()
+}
+
+func (cm *contextMenuT) Cancel(i int) {
+	cm._clearHoverFn()
+}
+
+func (cm *contextMenuT) _clearHoverFn() {
+	if cm.renderer.menu != nil {
+		cm.renderer.menu._hoverFn = nil
+	}
+}
+
+func (cm *contextMenuT) Append(menuItems ...types.MenuItem) {
+	cm.items = append(cm.items, menuItems...)
 }
 
 func (sr *sdlRender) AddToContextMenu(menuItems ...types.MenuItem) {
-	sr.contextMenu = append(sr.contextMenu, menuItems...)
+	sr.contextMenu.Append(menuItems...)
 }
 
 func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
@@ -322,6 +360,14 @@ func (menu *menuWidgetT) _mouseHover(x, y int32, glyphSize *types.XY) int {
 }
 
 func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
+	if sr.menu.highlightIndex < 0 {
+		sr.menu._hoverFn = nil
+	}
+
+	if sr.menu._hoverFn != nil {
+		sr.menu._hoverFn()
+	}
+
 	if sr.menu.highlightIndex == _MENU_HIGHLIGHT_INIT {
 		sr.menu.highlightIndex = 0
 		sr.menu.highlightCallback(0)
@@ -360,8 +406,10 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			if sr.menu.pos.X+width > winX {
 				x = winX - width
 			}
-			if sr.menu.pos.Y+height > winY {
-				y = winY - height
+
+			fullHeight := height + (_WIDGET_INNER_MARGIN * 4) + sr.glyphSize.Y
+			if sr.menu.pos.Y+fullHeight > winY {
+				y = winY - fullHeight
 			}
 		}
 	} else {

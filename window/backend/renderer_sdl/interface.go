@@ -69,7 +69,7 @@ type sdlRender struct {
 	// render function stacks
 	_elementStack []*layer.RenderStackT
 	_overlayStack []*layer.RenderStackT
-	contextMenu   contextMenuT
+	contextMenu   *contextMenuT
 
 	// state
 	keyboardMode    keyboardModeT

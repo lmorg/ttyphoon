@@ -207,7 +207,7 @@ Some compatibility already exists. Detailed breakdown coming...
 
 - [ ] graphics plotting
 - [ ] text rendering
-  
+
 #### Window management codes
 
 eg `xterm` and similar terminal emulators
@@ -219,6 +219,9 @@ eg `xterm` and similar terminal emulators
 #### Extended features
 
 - [ ] Hyperlink support
+  - [x] Auto-hyperlink files
+  - [x] Auto-hyperlink URLs
+  - [ ] ANSI escape sequence supported
 - [ ] Bracketed paste mode
 - Inlining images
   - [x] Ttyphoon codes
@@ -324,4 +327,3 @@ this project:
   would be good to see some of these extensions expanded out further. Maybe
   even to a point where this terminal emulator isn't required any more than a
   place to beta test future proposed escape sequences.
-

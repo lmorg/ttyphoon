@@ -153,7 +153,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		}
 
 	case types.MOUSE_BUTTON_RIGHT:
-		sr.contextMenu = make(contextMenuT, 0) // empty the context menu
+		sr.contextMenu = newContextMenu(sr) // empty the context menu
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
 				tw._eventMouseButtonRightClick(sr, true)
@@ -166,20 +166,19 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 }
 
 func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bool) {
-	menu := contextMenuT{
-		{
-			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
-			Fn:    sr.clipboardPaste,
-			Icon:  0xf0ea,
-		},
-	}
+	menu := newContextMenu(sr)
+	menu.Append(types.MenuItem{
+		Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
+		Fn:    sr.clipboardPaste,
+		Icon:  0xf0ea,
+	})
 
-	if len(sr.contextMenu) > 0 {
+	if sr.contextMenu != nil && len(sr.contextMenu.items) > 0 {
 		//menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
-		menu = append(menu, sr.contextMenu...)
+		menu.Append(sr.contextMenu.items...)
 	}
 
-	menu = append(menu, contextMenuT{
+	menu.Append([]types.MenuItem{
 		{
 			Title: MENU_SEPARATOR,
 		},
@@ -202,38 +201,31 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bo
 			Fn:    sr.writeToTemp,
 			Icon:  0xf0c7,
 		},
-	}...)
-
-	menu = append(menu, contextMenuT{
 		{
 			Title: MENU_SEPARATOR,
 		},
 	}...)
 
 	if sr.tmux != nil {
-		menu = append(menu, contextMenuT{
-			{
-				Title: "List tmux hotkeys...",
-				Fn:    sr.tmux.ListKeyBindings,
-				Icon:  0xf11c,
-			},
-		}...)
+		menu.Append(types.MenuItem{
+			Title: "List tmux hotkeys...",
+			Fn:    sr.tmux.ListKeyBindings,
+			Icon:  0xf11c,
+		})
 	}
 
-	menu = append(menu, contextMenuT{
-		{
-			Title: fmt.Sprintf("Settings [%s+s]", types.KEY_STR_META),
-			Fn:    sr.UpdateConfig,
-			Icon:  0xf013,
-		},
-	}...)
+	menu.Append(types.MenuItem{
+		Title: fmt.Sprintf("Settings [%s+s]", types.KEY_STR_META),
+		Fn:    sr.UpdateConfig,
+		Icon:  0xf013,
+	})
 
 	menuFn := sr.DisplayMenuUnderCursor
 	if !underCursor {
 		menuFn = sr.displayMenuWithIcons
 	}
 
-	menuFn("Select an action", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
+	menuFn("Select an action", menu.Options(), menu.Icons(), menu.Highlight, menu.Callback, menu.Cancel)
 }
 
 var _highlighterStartFooterText = fmt.Sprintf(

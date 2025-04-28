@@ -5,10 +5,12 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/integrations"
+	"github.com/lmorg/mxtty/types"
 )
 
 func (sr *sdlRender) UpdateConfig() {
-	menu := contextMenuT{
+	menu := newContextMenu(sr)
+	menu.Append([]types.MenuItem{
 		{
 			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
 			Fn:    sr.updateThemeMenu,
@@ -108,7 +110,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.zsh")) },
 			Icon:  0xf120,
 		},
-	}
+	}...)
 
 	sr.displayMenuWithIcons("Settings", menu.Options(), menu.Icons(), nil, menu.Callback, nil)
 }
