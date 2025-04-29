@@ -7,6 +7,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/readline/v4"
 	"github.com/veandco/go-sdl2/sdl"
+	"golang.design/x/clipboard"
 )
 
 type widgetReadlineT struct {
@@ -73,9 +74,17 @@ func (rl *widgetReadlineT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) 
 	mod := keyEventModToCodesModifier(evt.Keysym.Mod)
 
 	if (evt.Keysym.Sym > ' ' && evt.Keysym.Sym < 127) &&
-		(mod == 0 || mod == codes.MOD_SHIFT) {
+		(mod == codes.MOD_NONE || mod == codes.MOD_SHIFT) {
 		// lets let eventTextInput() handle this so we don't need to think about
 		// keyboard layouts and shift chars like whether shift+'2' == '@' or '"'
+		return
+	}
+
+	if evt.Keysym.Sym == 'v' && (mod == codes.MOD_META || mod == codes.MOD_CTRL|codes.MOD_SHIFT) {
+		b := clipboard.Read(clipboard.FmtText)
+		if len(b) > 0 {
+			rl._instance.KeyPress(b)
+		}
 		return
 	}
 
