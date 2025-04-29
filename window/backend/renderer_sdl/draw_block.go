@@ -14,7 +14,7 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 		return
 	}
 	defer sr.renderer.SetRenderTarget(nil)
-	defer sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
+	defer sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
 
 	rect := &sdl.Rect{
 		X: (tile.Left() * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
