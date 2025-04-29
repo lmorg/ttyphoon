@@ -99,7 +99,7 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 	length := pos[1] - pos[0]
 	for i := range length {
 		row.Cells[pos[0]+i].Element = el
-		row.Cells[pos[0]+i].Char = types.SetElementXY(&types.XY{int32(i), 0})
+		row.Cells[pos[0]+i].Char = types.SetElementXY(&types.XY{X: int32(i), Y: 0})
 	}
 }
 

@@ -223,16 +223,14 @@ eg `xterm` and similar terminal emulators
   - [x] Auto-hyperlink URLs
   - [ ] ANSI escape sequence supported
 - [ ] Bracketed paste mode
-- Inlining images
+- [ ] Inlining images
   - [x] Ttyphoon codes
   - [ ] iterm2 compatible
   - [ ] Kitty compatible
   - [x] sixel graphics
   - [ ] ReGIS graphics
-- Code folding
-  - [x] alpha: available but expect changes to the API
-  - [x] stable: available to use in Murex
-- Table sorting
+- [x] Code folding
+- [x] Table sorting
   - [x] alpha: available but expect changes to the API
   - [x] stable: available to use in Murex
 

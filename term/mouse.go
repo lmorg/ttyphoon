@@ -283,10 +283,11 @@ func (term *Term) MousePosition(pos *types.XY) {
 			cursor.Hand()
 			term.renderer.StatusBarText("[Click] Fold branch")
 			term._mousePosRenderer.Set(func() {
-				h := height - pos.Y
+				h := min(height-pos.Y, term.size.Y-pos.Y)
+				/*h := height - pos.Y
 				if h > term.size.Y-pos.Y {
-					h = term.size.Y - pos.Y
-				}
+				h = term.size.Y - pos.Y
+				}*/
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: pos.X, Y: pos.Y},
 					&types.XY{X: term.size.X - pos.X, Y: h},
