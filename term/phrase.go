@@ -72,6 +72,7 @@ skipHttp:
 		}
 
 		if _, err := os.Stat(file); err == nil {
+			file = filepath.Clean(file)
 			_autoHotlink(term, row, posFile[i], file)
 		}
 	}
@@ -81,8 +82,6 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 	if !config.Config.Terminal.AutoHotlink {
 		return
 	}
-
-	path = filepath.Clean(path)
 
 	display := string((*row.Phrase)[pos[0]:pos[1]])
 	if path == "" {
