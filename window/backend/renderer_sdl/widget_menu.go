@@ -3,7 +3,6 @@ package rendersdl
 import (
 	"strings"
 
-	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
@@ -35,9 +34,10 @@ type menuWidgetT struct {
 	mouseRect         sdl.Rect
 	pos               *types.XY
 	maxLen            int32
-	filter            string
-	hidden            []bool
-	_hoverFn          func()
+	//filter            string
+	readline *widgetReadlineT
+	hidden   []bool
+	_hoverFn func()
 }
 
 const (
@@ -152,7 +152,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 	opts := make([]string, len(options))
 	copy(opts, options)
 
-	sr.footerText = "[Up/Down] Highlight  |  [Return] Choose  |  [Esc] Cancel"
+	//sr.footerText = "[Up/Down] Highlight  |  [Return] Choose  |  [Esc] Cancel"
 	sr.menu = &menuWidgetT{
 		title:             title,
 		options:           opts,
@@ -163,6 +163,22 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		selectCallback:    selectCallback,
 		cancelCallback:    cancelCallback,
 		highlightIndex:    _MENU_HIGHLIGHT_INIT,
+		readline:          sr.NewReadline("", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)"),
+	}
+
+	sr.menu.readline.Readline(sr, func(s string, e error) {
+		i := sr.menu.highlightIndex
+		sr.closeMenu()
+		if e != nil {
+			cancelCallback(i)
+		} else {
+			selectCallback(i)
+		}
+	})
+
+	sr.menu.readline.Hook = func() {
+		sr.menu.updateHidden()
+		sr.menu.updateHighlight(0)
 	}
 
 	var crop = int(sr.winCellSize.X - 20)
@@ -189,14 +205,15 @@ func (sr *sdlRender) closeMenu() {
 }
 
 func (menu *menuWidgetT) updateHidden() {
-	if menu.filter == "" {
+	filter := menu.readline.Value()
+	if filter == "" {
 		for i := range menu.hidden {
 			menu.hidden[i] = false
 		}
 		return
 	}
 
-	filter := strings.ToLower(menu.filter)
+	filter = strings.ToLower(filter)
 	for i := range menu.options {
 		menu.hidden[i] = !strings.Contains(strings.ToLower(menu.options[i]), filter)
 	}
@@ -241,15 +258,13 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 	menu.highlightCallback(menu.highlightIndex)
 }
 
-func (menu *menuWidgetT) eventTextInput(_ *sdlRender, evt *sdl.TextInputEvent) {
-	menu.filter += evt.GetText()
-
-	menu.updateHidden()
-	menu.updateHighlight(0)
+func (menu *menuWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
+	//menu.filter += evt.GetText()
+	menu.readline.eventTextInput(sr, evt)
 }
 
 func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
-	mod := keyEventModToCodesModifier(evt.Keysym.Mod)
+	//mod := keyEventModToCodesModifier(evt.Keysym.Mod)
 
 	switch evt.Keysym.Sym {
 	case sdl.K_RETURN, sdl.K_RETURN2, sdl.K_KP_ENTER:
@@ -259,10 +274,10 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.closeMenu()
 		menu.selectCallback(menu.highlightIndex)
 		return
-	case sdl.K_ESCAPE:
-		sr.closeMenu()
-		menu.cancelCallback(menu.highlightIndex)
-		return
+	/*case sdl.K_ESCAPE:
+	sr.closeMenu()
+	menu.cancelCallback(menu.highlightIndex)
+	return
 
 	case sdl.K_BACKSPACE:
 		if menu.filter == "" {
@@ -277,14 +292,18 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		if mod == codes.MOD_CTRL {
 			menu.filter = ""
 		}
-		menu.updateHidden()
+		menu.updateHidden()*/
 
 	case sdl.K_UP:
 		menu.updateHighlight(-1)
+		return
+
 	case sdl.K_DOWN:
 		menu.updateHighlight(1)
-
+		return
 	}
+
+	menu.readline.eventKeyPress(sr, evt)
 }
 
 func (menu *menuWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
@@ -502,10 +521,13 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		OPTIONS
 	*/
 
+	filter := sr.menu.readline.Value()
+	curPos := sr.menu.readline.CursorPosition()
+
 	offset += _WIDGET_INNER_MARGIN
 	for i := range sr.menu.options {
 		if sr.menu.options[i] == MENU_SEPARATOR {
-			if sr.menu.filter != "" {
+			if filter != "" {
 				sr.menu.hidden[i] = true
 				continue
 			}
@@ -575,14 +597,14 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
 
-	if sr.menu.filter != "" {
+	if filter != "" {
 		surface, err := sdl.CreateRGBSurfaceWithFormat(0, windowRect.W, windowRect.H, 32, uint32(sdl.PIXELFORMAT_RGBA32))
 		if err != nil {
 			panic(err) //TODO: don't panic!
 		}
 		defer surface.Free()
 
-		sr.menu._renderInputBox(sr, surface, windowRect, &sdl.Rect{
+		sr.menu._renderInputBox(filter, curPos, sr, surface, windowRect, &sdl.Rect{
 			X: sr.menu.mouseRect.X,
 			Y: sr.menu.mouseRect.Y + sr.menu.mouseRect.H + _WIDGET_OUTER_MARGIN,
 			W: sr.menu.mouseRect.W,
@@ -603,7 +625,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	sr._drawHighlightRect(&rect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaBorder-20)
 }
 
-func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, windowRect, rect *sdl.Rect) {
+func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRender, surface *sdl.Surface, windowRect, rect *sdl.Rect) {
 	texture := sr.createRendererTexture()
 	if texture == nil {
 		return
@@ -643,21 +665,17 @@ func (menu *menuWidgetT) _renderInputBox(sr *sdlRender, surface *sdl.Surface, wi
 		Y: rect.Y + _WIDGET_INNER_MARGIN,
 	}
 
-	var width int32
+	sr.printString(filter, types.SGR_DEFAULT, textPos)
 
-	if len(sr.menu.filter) > 0 {
-		sr.printString(sr.menu.filter, types.SGR_DEFAULT, textPos)
-
-		sr._renderNotificationSurface(surface, rect)
-		width = int32(runewidth.StringWidth(sr.menu.filter)) * (sr.glyphSize.X + dropShadowOffset)
-	}
+	sr._renderNotificationSurface(surface, rect)
+	//width = int32(runewidth.StringWidth(sr.menu.filter)) * (sr.glyphSize.X + dropShadowOffset)
 
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
 
 	if sr.GetBlinkState() {
 		cursorRect := sdl.Rect{
-			X: textPos.X + width,
+			X: textPos.X + curPos,
 			Y: textPos.Y,
 			W: sr.glyphSize.X,
 			H: sr.glyphSize.Y,

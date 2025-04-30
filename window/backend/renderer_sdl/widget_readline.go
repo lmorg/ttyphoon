@@ -17,6 +17,7 @@ type widgetReadlineT struct {
 	_value         string
 	_defaultStatus string
 	_mutex         sync.RWMutex
+	Hook           func()
 }
 
 func (sr *sdlRender) NewReadline(defaultValue, defaultStatus string) *widgetReadlineT {
@@ -53,6 +54,9 @@ func (rl *widgetReadlineT) _reader(sr *sdlRender) {
 
 		rl._mutex.Unlock()
 
+		if rl.Hook != nil {
+			rl.Hook()
+		}
 		sr.TriggerRedraw()
 	}
 }
