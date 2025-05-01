@@ -87,12 +87,20 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.termWin.Active.GetTerm().Search()
 		return
 
-	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META:
+	case evt.Keysym.Sym == 'v' && (mod == codes.MOD_META || mod == codes.MOD_CTRL|codes.MOD_SHIFT):
 		sr.clipboardPaste()
 		return
 
 	case evt.Keysym.Sym == 's' && mod == codes.MOD_META:
 		sr.UpdateConfig()
+		return
+
+	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META|codes.MOD_SHIFT:
+		sr.DisplayInputBox("Visual editor", "", func(s string) {
+			if s != "" {
+				sr.termWin.Active.GetTerm().Reply([]byte(s))
+			}
+		})
 		return
 
 	case evt.Keysym.Sym == sdl.K_APPLICATION:
