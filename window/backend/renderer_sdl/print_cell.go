@@ -156,7 +156,7 @@ func (sr *sdlRender) printString(s string, sgr *types.Sgr, pos *types.XY) {
 	for _, r := range s {
 		rect.W = int32(runewidth.RuneWidth(r)) * (sr.glyphSize.X + dropShadowOffset)
 		sr.printCellRect(r, sgr, rect)
-		rect.X += rect.W
+		rect.X += rect.W - 1
 	}
 }
 

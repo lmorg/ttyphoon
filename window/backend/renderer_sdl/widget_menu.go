@@ -34,10 +34,9 @@ type menuWidgetT struct {
 	mouseRect         sdl.Rect
 	pos               *types.XY
 	maxLen            int32
-	//filter            string
-	readline *widgetReadlineT
-	hidden   []bool
-	_hoverFn func()
+	readline          *widgetReadlineT
+	hidden            []bool
+	_hoverFn          func()
 }
 
 const (
@@ -181,7 +180,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		sr.menu.updateHighlight(0)
 	}
 
-	var crop = int(sr.winCellSize.X - 20)
+	var crop = int(sr.winCellSize.X - 10)
 	if sr.menu.incIcons {
 		crop -= 3
 	}
@@ -274,25 +273,6 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.closeMenu()
 		menu.selectCallback(menu.highlightIndex)
 		return
-	/*case sdl.K_ESCAPE:
-	sr.closeMenu()
-	menu.cancelCallback(menu.highlightIndex)
-	return
-
-	case sdl.K_BACKSPACE:
-		if menu.filter == "" {
-			sr.Bell()
-			return
-		}
-		menu.filter = menu.filter[:len(menu.filter)-1]
-		menu.updateHidden()
-		menu.updateHighlight(0)
-
-	case sdl.K_u:
-		if mod == codes.MOD_CTRL {
-			menu.filter = ""
-		}
-		menu.updateHidden()*/
 
 	case sdl.K_UP:
 		menu.updateHighlight(-1)
@@ -406,14 +386,13 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		FRAME
 	*/
 
-	glyphX := sr.glyphSize.X + 1
-	iconByGlyphs := (sr.notifyIconSize.X / glyphX) + 1
+	iconByGlyphs := (sr.notifyIconSize.X / sr.glyphSize.X) + 1
 	maxLen := sr.menu.maxLen
 	if int32(len(sr.menu.title))+iconByGlyphs > maxLen {
 		maxLen = (int32(len(sr.menu.title)) + iconByGlyphs)
 	}
 	height := (sr.glyphSize.Y * int32(len(sr.menu.options))) + (_WIDGET_OUTER_MARGIN * 2) + sr.notifyIconSize.Y
-	width := (glyphX * maxLen) + (_WIDGET_OUTER_MARGIN * 3) + optionOffset
+	width := (sr.glyphSize.X * maxLen) + (_WIDGET_OUTER_MARGIN * 3) + optionOffset
 
 	var x, y int32
 	if sr.menu.pos != nil {

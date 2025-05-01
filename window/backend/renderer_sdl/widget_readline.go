@@ -45,7 +45,7 @@ func (rl *widgetReadlineT) _reader(sr *sdlRender) {
 		rl._mutex.Lock()
 
 		rl._value = cb.Line.String()
-		rl._curPos = int32(cb.Line.CellPos()) * (sr.glyphSize.X + dropShadowOffset)
+		rl._curPos = int32(cb.Line.CellPos()) * sr.glyphSize.X
 		if cb.Hint == "" {
 			sr.footerText = rl._defaultStatus
 		} else {
@@ -61,7 +61,7 @@ func (rl *widgetReadlineT) _reader(sr *sdlRender) {
 	}
 }
 
-func (rl *widgetReadlineT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
+func (rl *widgetReadlineT) eventTextInput(_ *sdlRender, evt *sdl.TextInputEvent) {
 	rl._instance.KeyPress([]byte(evt.GetText()))
 }
 
