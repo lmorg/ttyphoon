@@ -12,21 +12,24 @@ import (
 
 type widgetReadlineT struct {
 	_instance      *readline.Instance
+	_termWidth     int
 	_callback      chan *readline.NoTtyCallbackT
-	_curPos        int32
+	_curPos        *types.XY
 	_value         string
 	_defaultStatus string
 	_mutex         sync.RWMutex
 	Hook           func()
 }
 
-func (sr *sdlRender) NewReadline(defaultValue, defaultStatus string) *widgetReadlineT {
+func (sr *sdlRender) NewReadline(termWidth int32, defaultValue, defaultStatus string) *widgetReadlineT {
 	rl := &widgetReadlineT{
 		_instance:      readline.NewInstance(),
 		_defaultStatus: defaultStatus,
+		_curPos:        &types.XY{},
+		_termWidth:     int(termWidth),
 	}
 
-	rl._callback = rl._instance.MakeNoTtyChan()
+	rl._callback = rl._instance.MakeNoTtyChan(int(termWidth))
 	rl._instance.History.Write(defaultValue)
 	rl._instance.HintText = func([]rune, int) []rune { return []rune(defaultStatus) }
 
@@ -45,7 +48,8 @@ func (rl *widgetReadlineT) _reader(sr *sdlRender) {
 		rl._mutex.Lock()
 
 		rl._value = cb.Line.String()
-		rl._curPos = int32(cb.Line.CellPos()) * sr.glyphSize.X
+		x, y := readline.LineWrappedCellPos(0, cb.Line.Runes()[:cb.Line.RunePos()], rl._termWidth)
+		rl._curPos = &types.XY{X: int32(x) * sr.glyphSize.X, Y: int32(y) * sr.glyphSize.Y}
 		if cb.Hint == "" {
 			sr.footerText = rl._defaultStatus
 		} else {
@@ -96,12 +100,12 @@ func (rl *widgetReadlineT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) 
 	rl._instance.KeyPress(b)
 }
 
-func (rl *widgetReadlineT) CursorPosition() int32 {
+func (rl *widgetReadlineT) CursorPosition() *types.XY {
 	rl._mutex.RLock()
-	i := rl._curPos
+	ptr := rl._curPos
 	rl._mutex.RUnlock()
 
-	return i
+	return ptr
 }
 
 func (rl *widgetReadlineT) Value() string {

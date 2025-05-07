@@ -2,28 +2,36 @@ package rendersdl
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
+	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 type inputBoxCallbackT func(string)
 
 type inputBoxWidgetT struct {
-	title    string
-	callback inputBoxCallbackT
-	readline *widgetReadlineT
+	title      string
+	callback   inputBoxCallbackT
+	readline   *widgetReadlineT
+	_maxChars  int32
+	_lineWidth int32
 }
 
+const _INPUT_MAX_CHAR_WIDTH = 80
+
 func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback func(string)) {
+	maxChars := min(sr.winCellSize.X-15, _INPUT_MAX_CHAR_WIDTH)
+
 	sr.inputBox = &inputBoxWidgetT{
 		title: title,
-		readline: sr.NewReadline(
-			defaultValue,
+		readline: sr.NewReadline(maxChars, defaultValue,
 			fmt.Sprintf(`[Return] Ok  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode  |  [Up] Default: "%s"`, defaultValue),
 		),
-		callback: callback,
+		callback:  callback,
+		_maxChars: maxChars,
 	}
 
 	sr.termWin.Active.GetTerm().ShowCursor(false)
@@ -58,15 +66,13 @@ func (inputBox *inputBoxWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseB
 	}
 }
 
-func (inputBox *inputBoxWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
+/*func (inputBox *inputBoxWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
 	// do nothing
-}
+}*/
 
 func (inputBox *inputBoxWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
 	// do nothing
 }
-
-const _INPUTBOX_MAX_CHARS = int32(75)
 
 func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	surface, err := sdl.CreateRGBSurfaceWithFormat(0, windowRect.W, windowRect.H, 32, uint32(sdl.PIXELFORMAT_RGBA32))
@@ -75,17 +81,16 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	}
 	defer surface.Free()
 
+	value := sr.inputBox.readline.Value()
+	nLines := max(1, int32(math.Ceil(float64(runewidth.StringWidth(value))/float64(sr.inputBox._maxChars))))
+
 	/*
 		FRAME
 	*/
 
 	textHeight := sr.glyphSize.Y
-	height := textHeight + (_WIDGET_OUTER_MARGIN * 3) + sr.glyphSize.Y
-	maxLen := int32(len(sr.inputBox.title))
-	if maxLen < _INPUTBOX_MAX_CHARS {
-		maxLen = _INPUTBOX_MAX_CHARS
-	}
-	width := sr.glyphSize.X*maxLen + sr.notifyIconSize.X + _WIDGET_OUTER_MARGIN
+	height := textHeight + (_WIDGET_OUTER_MARGIN * 3) + (sr.glyphSize.Y * nLines)
+	width := sr.glyphSize.X*sr.inputBox._maxChars + sr.notifyIconSize.X + (_WIDGET_OUTER_MARGIN * 3)
 	offsetH := (surface.H / 2) - (height / 2)
 	offsetY := (surface.W - width) / 2
 
@@ -125,7 +130,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 		Y: _WIDGET_INNER_MARGIN + offsetH,
 	})
 
-	height = sr.glyphSize.Y + _WIDGET_OUTER_MARGIN
+	height = (sr.glyphSize.Y * nLines) + _WIDGET_OUTER_MARGIN
 	offsetH += textHeight + _WIDGET_OUTER_MARGIN
 
 	// draw border
@@ -156,14 +161,29 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.FillRect(&rect)
 
 	// value
-	value := sr.inputBox.readline.Value()
 	if len(value) > 0 {
 		pos := &types.XY{
 			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN,
 			Y: _WIDGET_INNER_MARGIN + offsetH,
 		}
 
-		sr.printString(value, types.SGR_DEFAULT, pos)
+		var (
+			lineSlice []rune
+			lineWidth int
+		)
+		for _, r := range value {
+			w := runewidth.RuneWidth(r)
+			if lineWidth+w > int(sr.inputBox._maxChars) {
+				sr.printString(string(lineSlice), types.SGR_DEFAULT, pos)
+				pos.Y += sr.glyphSize.Y
+				lineSlice = []rune{r}
+				lineWidth = w
+			} else {
+				lineSlice = append(lineSlice, r)
+				lineWidth += runewidth.RuneWidth(r)
+			}
+		}
+		sr.printString(string(lineSlice), types.SGR_DEFAULT, pos)
 	}
 
 	if surface, ok := sr.notifyIcon[types.NOTIFY_QUESTION].Asset().(*sdl.Surface); ok {
@@ -193,11 +213,11 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 		}
 	}
 
-	//textWidth := int32(runewidth.StringWidth(sr.inputBox.value)) * (sr.glyphSize.X + dropShadowOffset)
 	if sr.GetBlinkState() {
+		curPos := sr.inputBox.readline.CursorPosition()
 		rect = sdl.Rect{
-			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN + sr.inputBox.readline.CursorPosition(),
-			Y: _WIDGET_INNER_MARGIN + offsetH,
+			X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + _WIDGET_INNER_MARGIN + curPos.X,
+			Y: _WIDGET_INNER_MARGIN + offsetH + curPos.Y,
 			W: sr.glyphSize.X,
 			H: sr.glyphSize.Y,
 		}

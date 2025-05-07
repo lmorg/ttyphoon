@@ -162,22 +162,6 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		selectCallback:    selectCallback,
 		cancelCallback:    cancelCallback,
 		highlightIndex:    _MENU_HIGHLIGHT_INIT,
-		readline:          sr.NewReadline("", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)"),
-	}
-
-	sr.menu.readline.Readline(sr, func(s string, e error) {
-		i := sr.menu.highlightIndex
-		sr.closeMenu()
-		if e != nil {
-			cancelCallback(i)
-		} else {
-			selectCallback(i)
-		}
-	})
-
-	sr.menu.readline.Hook = func() {
-		sr.menu.updateHidden()
-		sr.menu.updateHighlight(0)
 	}
 
 	var crop = int(sr.winCellSize.X - 10)
@@ -191,6 +175,23 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 			sr.menu.maxLen = int32(runewidth.StringWidth(sr.menu.options[i]))
 		}
 	}
+
+	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
+
+	sr.menu.readline.Hook = func() {
+		sr.menu.updateHidden()
+		sr.menu.updateHighlight(0)
+	}
+
+	sr.menu.readline.Readline(sr, func(s string, e error) {
+		i := sr.menu.highlightIndex
+		sr.closeMenu()
+		if e != nil {
+			cancelCallback(i)
+		} else {
+			selectCallback(i)
+		}
+	})
 
 	sr.termWin.Active.GetTerm().ShowCursor(false)
 	cursor.Arrow()
@@ -583,7 +584,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 		defer surface.Free()
 
-		sr.menu._renderInputBox(filter, curPos, sr, surface, windowRect, &sdl.Rect{
+		sr.menu._renderInputBox(filter, curPos.X, sr, surface, windowRect, &sdl.Rect{
 			X: sr.menu.mouseRect.X,
 			Y: sr.menu.mouseRect.Y + sr.menu.mouseRect.H + _WIDGET_OUTER_MARGIN,
 			W: sr.menu.mouseRect.W,
