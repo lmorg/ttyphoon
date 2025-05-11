@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"strings"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -32,30 +33,55 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	if button == types.MOUSE_BUTTON_RIGHT && !term.IsAltBuf() {
 		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
 		if err == nil {
-			term.renderer.AddToContextMenu(types.MenuItem{
-				Title: "Copy output block to clipboard",
-				Highlight: func() func() {
-					var block []int32
-					for _, block = range term._cacheBlock {
-						if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-							goto isOutputBlock
-						}
-					}
-					return nil
+			term.renderer.AddToContextMenu(
+				[]types.MenuItem{
+					{
+						Title: "Copy output block to clipboard",
+						Highlight: func() func() {
+							var block []int32
+							for _, block = range term._cacheBlock {
+								if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
+									goto isOutputBlock
+								}
+							}
+							return nil
 
-				isOutputBlock:
-					return func() {
-						term.renderer.DrawRectWithColour(term.tile,
-							&types.XY{X: 0, Y: block[0]},
-							&types.XY{X: term.size.X, Y: block[1]},
-							types.COLOR_SELECTION, true,
-						)
-					}
+						isOutputBlock:
+							return func() {
+								term.renderer.DrawRectWithColour(term.tile,
+									&types.XY{X: 0, Y: block[0]},
+									&types.XY{X: term.size.X, Y: block[1]},
+									types.COLOR_SELECTION, true,
+								)
+							}
 
-				},
-				Fn:   func() { term.CopyOutputBlock(blockPos) },
-				Icon: 0xf0c5,
-			})
+						},
+						Fn:   func() { term.copyOutputBlockToClipboard(blockPos) },
+						Icon: 0xf0c5,
+					},
+					{
+						Title: "Explain output block (OpenAI)",
+						Fn: func() {
+							term.renderer.DisplayNotification(types.NOTIFY_INFO, "Request sent to OpenAI")
+							runes := term.copyOutputBlock(blockPos)
+							reader := strings.NewReader(string(runes))
+							go func() {
+								s, err := ai.OpenAI(reader)
+								if err != nil {
+									term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+									return
+								}
+								s = "\r\n\n" + s + "\r\n\n"
+								for _, r := range s {
+									if r == '\n' {
+										term.readChar('\r')
+									}
+									term.readChar(r)
+								}
+							}()
+						},
+					},
+				}...)
 		}
 	}
 

@@ -145,7 +145,7 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	return b
 }
 
-func (term *Term) CopyOutputBlock(blockPos [2]int32) {
+func (term *Term) copyOutputBlock(blockPos [2]int32) []rune {
 	var block []rune
 
 	for i := int(blockPos[0]); i <= int(blockPos[1]); i++ {
@@ -156,5 +156,9 @@ func (term *Term) CopyOutputBlock(blockPos [2]int32) {
 		}
 	}
 
-	clipboard.Write(clipboard.FmtText, []byte(string(block)))
+	return block
+}
+
+func (term *Term) copyOutputBlockToClipboard(blockPos [2]int32) {
+	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(blockPos))))
 }
