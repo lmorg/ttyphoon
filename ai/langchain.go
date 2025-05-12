@@ -3,15 +3,25 @@ package ai
 import (
 	"context"
 	"fmt"
-	"io"
 
-	"github.com/tmc/langchaingo/documentloaders"
+	"github.com/pkoukk/tiktoken-go"
+	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
-func OpenAI(r io.Reader) (string, error) {
+const _OPENAI_MODEL = "o4-mini"
+
+const _OPENAI_QUERY = `A command line application has been executed. Can you explain its output?
+If it is an error, you should focus more on how to fix the error rather than an explanation.
+If it is not an error, you should keep the answer as succinct as possible.`
+
+//Output has been uploaded as "output"`
+
+func OpenAI(termOutput []rune) (string, error) {
+	query := fmt.Sprintf("%s\nCommand line output:\n%s", _OPENAI_QUERY, string(termOutput))
+
 	// Initialize OpenAI LLM and embedder
-	llm, err := openai.New()
+	llm, err := openai.New(openai.WithModel(_OPENAI_MODEL))
 	if err != nil {
 		return "", fmt.Errorf("failed to create OpenAI client: %v", err)
 	}
@@ -25,6 +35,11 @@ func OpenAI(r io.Reader) (string, error) {
 	/*store, err := chroma.New(chroma.WithEmbedder(embedder))
 	if err != nil {
 		return "", fmt.Errorf("failed to create Chroma store: %v", err)
+	}*/
+
+	/*store, err := redisvector.New(context.Background(), redisvector.WithEmbedder(embedder))
+	if err != nil {
+		return "", fmt.Errorf("failed to create Redis vector store: %v", err)
 	}*/
 
 	// Load and process files
@@ -58,23 +73,25 @@ func OpenAI(r io.Reader) (string, error) {
 		log.Fatalf("Failed to process files: %v", err)
 	}*/
 
-	outputBlock, err := documentloaders.NewText(r).Load(context.Background())
+	enc, err := tiktoken.EncodingForModel("gpt-4")
 	if err != nil {
-		return "", fmt.Errorf("failed to create document: %v", err)
+		return "", fmt.Errorf("unable to create token encoder: %v", err)
 	}
 
-	/*_, err = store.AddDocuments(context.Background(), outputBlock)
+	tokens := enc.Encode(query, nil, nil)
+	if len(tokens) >= 200_000 {
+		return "", fmt.Errorf("output contains too many tokens")
+	}
+
+	/*outputBlock, err := documentloaders.NewText(termOutput).Load(context.Background())
 	if err != nil {
-		return "", fmt.Errorf("failed to store terminal output into Chroma store: %v", err)
+		return "", fmt.Errorf("failed to create document: %v", err)
 	}*/
 
-	// User query
-	//query := "Explain this command line output"
-
-	// Perform semantic search
-	/*results, err := store.SimilaritySearch(context.Background(), query, 5)
+	/*// Perform semantic search
+	results, err := store.SimilaritySearch(context.Background(), query, 5)
 	if err != nil {
-		log.Fatalf("Failed to perform similarity search: %v", err)
+		fmt.Errorf("failed to perform similarity search: %v", err)
 	}*/
 
 	// Prepare prompt with retrieved documents
@@ -86,13 +103,13 @@ func OpenAI(r io.Reader) (string, error) {
 	//promptBuilder.WriteString(fmt.Sprintf("Question: %s", query))
 	//promptBuilder.WriteString("Output:\n%s\n\n")
 
-	query := "A command line application has been executed. Can you explain its output? If it is an error, you should focus more on how to fix the error rather than an explanation.\n\nOutput:\n"
+	/*query := "A command line application has been executed. Can you explain its output? If it is an error, you should focus more on how to fix the error rather than an explanation.\n\nOutput:\n"
 	for i := range outputBlock {
 		query += outputBlock[i].PageContent
-	}
+	}*/
 
 	// Get answer from LLM
-	answer, err := llm.Call(context.Background(), query)
+	answer, err := llm.Call(context.Background(), query, llms.WithTemperature(1))
 	if err != nil {
 		return "", fmt.Errorf("failed to get response from LLM: %v", err)
 	}

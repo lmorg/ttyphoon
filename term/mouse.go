@@ -33,55 +33,21 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	if button == types.MOUSE_BUTTON_RIGHT && !term.IsAltBuf() {
 		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
 		if err == nil {
-			term.renderer.AddToContextMenu(
-				[]types.MenuItem{
-					{
-						Title: "Copy output block to clipboard",
-						Highlight: func() func() {
-							var block []int32
-							for _, block = range term._cacheBlock {
-								if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-									goto isOutputBlock
-								}
-							}
-							return nil
 
-						isOutputBlock:
-							return func() {
-								term.renderer.DrawRectWithColour(term.tile,
-									&types.XY{X: 0, Y: block[0]},
-									&types.XY{X: term.size.X, Y: block[1]},
-									types.COLOR_SELECTION, true,
-								)
-							}
+			var (
+				block         []int32
+				isOutputBlock bool
+			)
+			for _, block = range term._cacheBlock {
+				if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
+					isOutputBlock = true
+					break
+				}
+			}
 
-						},
-						Fn:   func() { term.copyOutputBlockToClipboard(blockPos) },
-						Icon: 0xf0c5,
-					},
-					{
-						Title: "Explain output block (OpenAI)",
-						Fn: func() {
-							term.renderer.DisplayNotification(types.NOTIFY_INFO, "Request sent to OpenAI")
-							runes := term.copyOutputBlock(blockPos)
-							reader := strings.NewReader(string(runes))
-							go func() {
-								s, err := ai.OpenAI(reader)
-								if err != nil {
-									term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-									return
-								}
-								s = "\r\n\n" + s + "\r\n\n"
-								for _, r := range s {
-									if r == '\n' {
-										term.readChar('\r')
-									}
-									term.readChar(r)
-								}
-							}()
-						},
-					},
-				}...)
+			if isOutputBlock {
+				term._mouseClickContextMenuOutputBlock(blockPos, block)
+			}
 		}
 	}
 
@@ -142,6 +108,49 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	}
 
 	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, state, callback)
+}
+
+func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []int32) {
+	term.renderer.AddToContextMenu(
+		[]types.MenuItem{
+			{
+				Title: "Copy output block to clipboard",
+				Icon:  0xf0c5,
+				Highlight: func() func() {
+					return func() {
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
+					}
+				},
+				Fn: func() { term.copyOutputBlockToClipboard(blockPos) },
+			},
+			{
+				Title: "Explain output block (OpenAI)",
+				Icon:  0xf544,
+				Highlight: func() func() {
+					return func() {
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
+					}
+				},
+				Fn: func() {
+					sticky := term.renderer.DisplaySticky(types.NOTIFY_INFO, "Generating AI-powered explanation...")
+					go func() {
+						defer sticky.Close()
+						s, err := ai.OpenAI(term.copyOutputBlock(blockPos))
+						if err != nil {
+							term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+							return
+						}
+						s = "\r\n\n" + s + "\r\n\n"
+						for _, r := range s {
+							if r == '\n' {
+								term.readChar('\r')
+							}
+							term.readChar(r)
+						}
+					}()
+				},
+			},
+		}...)
 }
 
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {

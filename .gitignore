@@ -3,3 +3,4 @@ sdl-examples/
 mxtty
 mxtty.exe
 *.pprof
+.env
