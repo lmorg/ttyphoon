@@ -2,8 +2,6 @@ package ai
 
 import "fmt"
 
-const _OPENAI_MODEL = "o4-mini"
-
 const _OPENAI_QUERY = `
 You are a non-interactive agent responding to a developer or DevOps engineer's query.
 A command line application has been executed. Can you explain its output?

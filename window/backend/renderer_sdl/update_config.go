@@ -102,7 +102,22 @@ func (sr *sdlRender) UpdateConfig() {
 			Title: MENU_SEPARATOR,
 		},
 		{
-			Title: "Set OpenAI API Key",
+			Title: "Use Claude",
+			Fn:    func() { ai.UseService = ai.LLM_ANTHROPIC },
+			Icon:  0xf544,
+		},
+		{
+			Title: "Use ChatGPT",
+			Fn:    func() { ai.UseService = ai.LLM_OPENAI },
+			Icon:  0xf544,
+		},
+		{
+			Title: "Set Anthropic (Claude) API Key",
+			Fn:    func() { ai.EnvAnthropic(sr) },
+			Icon:  0xf544,
+		},
+		{
+			Title: "Set OpenAI (ChatGPT) API Key",
 			Fn:    func() { ai.EnvOpenAi(sr) },
 			Icon:  0xf544,
 		},

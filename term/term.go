@@ -404,3 +404,17 @@ func (term *Term) Pwd(pos *types.XY) string {
 
 	return term.tile.Pwd()
 }
+
+func (term *Term) RowSrcFromScrollBack(y int32) (src *types.RowSource) {
+	if int(y) < len(term._scrollBuf) {
+		src = term._scrollBuf[y].Source
+	} else {
+		src = term._normBuf[int(y)-len(term._scrollBuf)].Source
+	}
+
+	if src == nil {
+		return &types.RowSource{}
+	}
+
+	return src
+}

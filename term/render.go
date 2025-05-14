@@ -159,16 +159,6 @@ func _renderOutputBlockChrome(term *Term, start, end int32, meta types.RowMetaFl
 		end = term.size.Y - start
 	}
 
-	/*var c *types.Colour
-	switch {
-	case meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-		c = types.COLOR_ERROR
-	case meta.Is(types.ROW_OUTPUT_BLOCK_AI):
-		c = types.COLOR_AI
-	case meta.Is(types.ROW_OUTPUT_BLOCK_END):
-		c = types.COLOR_OK
-	}*/
-
 	term.renderer.DrawOutputBlockChrome(term.tile, start, end, _outputBlockChromeColour(meta), false)
 	term._cacheBlock = append(term._cacheBlock, []int32{start, end})
 }

@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/lmorg/mxtty/ai"
@@ -111,6 +112,15 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 }
 
 func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []int32) {
+	meta := &ai.Meta{
+		Term:         term,
+		Renderer:     term.renderer,
+		CmdLine:      string(term.getCmdLine(blockPos[0])),
+		Pwd:          term.RowSrcFromScrollBack(blockPos[0]).Pwd,
+		OutputBlock:  string(term.copyOutputBlock(blockPos)),
+		InsertRowPos: blockPos[1],
+	}
+
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
 			{
@@ -124,28 +134,24 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 				Fn: func() { term.copyOutputBlockToClipboard(blockPos) },
 			},
 			{
-				Title: "Explain output block (OpenAI)",
+				Title: fmt.Sprintf("Explain output block (%s)", ai.UseService),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() {
-					ai.Explain(term, term.renderer, string(term.getCmdLine(blockPos[0])), string(term.copyOutputBlock(blockPos)), blockPos[1], false)
-				},
+				Fn: func() { ai.Explain(meta, false) },
 			},
 			{
-				Title: "Explain with custom prompt (OpenAI)",
+				Title: fmt.Sprintf("Explain with custom prompt (%s)", ai.UseService),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() {
-					ai.Explain(term, term.renderer, string(term.getCmdLine(blockPos[0])), string(term.copyOutputBlock(blockPos)), blockPos[1], true)
-				},
+				Fn: func() { ai.Explain(meta, true) },
 			},
 		}...)
 }
@@ -250,18 +256,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 	if pos.X < 0 {
 
 		if len(screen[pos.Y].Hidden) > 0 {
-			/*switch {
-			case screen[pos.Y].Hidden[0].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
-				colour = types.COLOR_AI
-			case screen[pos.Y].Hidden[last].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-				colour = types.COLOR_ERROR
-			case screen[pos.Y].Hidden[last].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-				colour = types.COLOR_OK
-			default:
-				colour = types.COLOR_FOLDED
-			}*/
 			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Meta)
-
 			term._mousePosRenderer.Set(func() {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},

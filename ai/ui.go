@@ -7,19 +7,36 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/lmorg/mxtty/types"
+	"github.com/tmc/langchaingo/llms"
 )
 
-func Explain(term types.Term, renderer types.Renderer, cmdLine, outputBlock string, insertAtCellY int32, promptDialogue bool) {
+const (
+	LLM_OPENAI    = "ChatGPT"
+	LLM_ANTHROPIC = "Claude"
+)
+
+var UseService = LLM_ANTHROPIC
+
+type Meta struct {
+	Term         types.Term
+	Renderer     types.Renderer
+	CmdLine      string
+	Pwd          string
+	OutputBlock  string
+	InsertRowPos int32
+}
+
+func Explain(meta *Meta, promptDialogue bool) {
 	if !promptDialogue {
-		explain(term, renderer, cmdLine, outputBlock, insertAtCellY, "")
+		explain(meta, "")
 		return
 	}
 
 	fn := func(userPrompt string) {
-		explain(term, renderer, cmdLine, outputBlock, insertAtCellY, userPrompt)
+		explain(meta, userPrompt)
 	}
 
-	renderer.DisplayInputBox("Custom prompt", "", fn)
+	meta.Renderer.DisplayInputBox("Custom prompt", "", fn)
 }
 
 const _STICKY_MESSAGE = "Generating AI-powered explanation.... (this can take up to a minute)"
@@ -28,8 +45,8 @@ var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func explain(term types.Term, renderer types.Renderer, cmdLine, outputBlock string, insertAtCellY int32, userPrompt string) {
-	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, _STICKY_MESSAGE)
+func explain(meta *Meta, userPrompt string) {
+	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, _STICKY_MESSAGE)
 	fin := make(chan struct{})
 	var i int
 
@@ -41,7 +58,7 @@ func explain(term types.Term, renderer types.Renderer, cmdLine, outputBlock stri
 				return
 			case <-time.After(500 * time.Millisecond):
 				sticky.SetMessage(fmt.Sprintf("%s %s", _STICKY_MESSAGE, _STICKY_SPINNER[i]))
-				renderer.TriggerRedraw()
+				meta.Renderer.TriggerRedraw()
 				i++
 				if i >= len(_STICKY_SPINNER) {
 					i = 0
@@ -53,17 +70,35 @@ func explain(term types.Term, renderer types.Renderer, cmdLine, outputBlock stri
 	go func() {
 		defer sticky.Close()
 
-		result, err := OpenAI(cmdLine, outputBlock, userPrompt)
+		var (
+			model llms.Model
+			err   error
+		)
+
+		switch UseService {
+		case LLM_ANTHROPIC:
+			model, err = llmAnthropic()
+		case LLM_OPENAI:
+			model, err = llmOpenAI()
+		default:
+			panic("unexpected branch")
+		}
+		if err != nil {
+			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+
+		result, err := RunLLM(model, meta, userPrompt)
 		fin <- struct{}{}
 		if err != nil {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
 
 		if userPrompt == "" {
-			result = fmt.Sprintf("# AI Explanation:\n```\n%s\n```\n%s", cmdLine, result)
+			result = fmt.Sprintf("# %s's Explanation:\n```\n%s\n```\n%s", UseService, meta.CmdLine, result)
 		} else {
-			result = fmt.Sprintf("# AI Explanation:\n```\n%s\n```\n# %s\n%s", cmdLine, userPrompt, result)
+			result = fmt.Sprintf("# %s's Explanation:\n```\n%s\n```\n# %s\n%s", UseService, meta.CmdLine, userPrompt, result)
 		}
 
 		theme := "dark"
@@ -76,21 +111,27 @@ func explain(term types.Term, renderer types.Renderer, cmdLine, outputBlock stri
 			markdown = result
 		}
 
-		//markdown = strings.TrimSpace(markdown)
-		//markdown = strings.ReplaceAll(markdown, "\n  ", "\n")
-
-		err = term.InsertSubTerm(markdown, insertAtCellY, types.ROW_OUTPUT_BLOCK_AI)
+		err = meta.Term.InsertSubTerm(markdown, meta.InsertRowPos, types.ROW_OUTPUT_BLOCK_AI)
 		if err != nil {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
 	}()
 }
 
-const _OPENAI_ENV_VAR = "OPENAI_API_KEY"
+const (
+	_ANTHROPIC_ENV_VAR = "ANTHROPIC_API_KEY"
+	_OPENAI_ENV_VAR    = "OPENAI_API_KEY"
+)
 
 func EnvOpenAi(renderer types.Renderer) {
-	renderer.DisplayInputBox("OpenAI API Key", "", func(s string) {
+	renderer.DisplayInputBox("OpenAI (ChatGPT) API Key", "", func(s string) {
 		_ = os.Setenv(_OPENAI_ENV_VAR, s)
+	})
+}
+
+func EnvAnthropic(renderer types.Renderer) {
+	renderer.DisplayInputBox("Anthropic (Claude) API Key", "", func(s string) {
+		_ = os.Setenv(_ANTHROPIC_ENV_VAR, s)
 	})
 }
