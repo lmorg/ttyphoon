@@ -56,8 +56,13 @@ func (sr *sdlRender) drawBg() {
 			W: (tile.Right()-tile.Left()+2)*sr.glyphSize.X - _PANE_BLOCK_HIGHLIGHT,
 			H: (tile.Bottom()+2-tile.Top())*sr.glyphSize.Y - _PANE_BLOCK_HIGHLIGHT}
 
-		//bg := tile.GetTerm().Bg()
+		if tile.AtBottom() {
+			rect.H -= sr.glyphSize.Y
+		}
 		bg := types.SGR_COLOR_BACKGROUND
+		if config.Config.Window.TileHighlightFill && tile.Id() != sr.termWin.Active.Id() {
+			bg = types.SGR_COLOR_BLACK
+		}
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
 	}
@@ -74,8 +79,8 @@ func (sr *sdlRender) drawBg() {
 		}
 
 		if config.Config.Window.TileHighlightFill {
-			_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, 64)
-			_ = sr.renderer.FillRect(rect)
+			//_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, 64)
+			//_ = sr.renderer.FillRect(rect)
 		} else {
 			_ = sr.renderer.SetDrawColor(types.COLOR_SELECTION.Red, types.COLOR_SELECTION.Blue, types.COLOR_SELECTION.Blue, highlightAlphaBorder)
 			_ = sr.renderer.DrawRect(rect)
