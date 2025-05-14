@@ -25,6 +25,7 @@ type Term interface {
 	Search()
 	ShowSearchResults()
 	Match(*XY)
+	InsertSubTerm(string, int32, RowMetaFlag) error
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte
 	Host(*XY) string

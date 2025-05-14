@@ -132,22 +132,19 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 					}
 				},
 				Fn: func() {
-					sticky := term.renderer.DisplaySticky(types.NOTIFY_INFO, "Generating AI-powered explanation...")
-					go func() {
-						defer sticky.Close()
-						s, err := ai.OpenAI(term.copyOutputBlock(blockPos))
-						if err != nil {
-							term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-							return
-						}
-						s = "\r\n\n" + s + "\r\n\n"
-						for _, r := range s {
-							if r == '\n' {
-								term.readChar('\r')
-							}
-							term.readChar(r)
-						}
-					}()
+					ai.Explain(term, term.renderer, string(term.getCmdLine(blockPos[0])), string(term.copyOutputBlock(blockPos)), blockPos[1], false)
+				},
+			},
+			{
+				Title: "Explain with custom prompt (OpenAI)",
+				Icon:  0xf544,
+				Highlight: func() func() {
+					return func() {
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
+					}
+				},
+				Fn: func() {
+					ai.Explain(term, term.renderer, string(term.getCmdLine(blockPos[0])), string(term.copyOutputBlock(blockPos)), blockPos[1], true)
 				},
 			},
 		}...)
@@ -252,14 +249,24 @@ func (term *Term) MousePosition(pos *types.XY) {
 
 	if pos.X < 0 {
 
-		//absPos := int32(len(term._scrollBuf)) - int32(term._scrollOffset) + pos.Y
-
 		if len(screen[pos.Y].Hidden) > 0 {
+			/*switch {
+			case screen[pos.Y].Hidden[0].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
+				colour = types.COLOR_AI
+			case screen[pos.Y].Hidden[last].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
+				colour = types.COLOR_ERROR
+			case screen[pos.Y].Hidden[last].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
+				colour = types.COLOR_OK
+			default:
+				colour = types.COLOR_FOLDED
+			}*/
+			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Meta)
+
 			term._mousePosRenderer.Set(func() {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
 					&types.XY{X: term.size.X, Y: 1},
-					types.COLOR_FOLDED, true,
+					colour, true,
 				)
 			})
 			return
@@ -278,6 +285,8 @@ func (term *Term) MousePosition(pos *types.XY) {
 	isOutputBlock:
 		var colour *types.Colour
 		switch {
+		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
+			colour = types.COLOR_AI
 		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
 			colour = types.COLOR_ERROR
 		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_END):

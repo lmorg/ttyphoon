@@ -205,7 +205,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bo
 			Icon:  0xf002,
 		},
 		{
-			Title: "Write output to temp file",
+			Title: "Write all output to temp file",
 			Fn:    sr.writeToTemp,
 			Icon:  0xf0c7,
 		},

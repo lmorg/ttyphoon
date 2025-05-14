@@ -50,22 +50,41 @@ func (term *Term) UnhideRows(pos int32) error {
 		return errors.New("this feature is not supported in alt buffer")
 	}
 
+	var row *types.Row
+
+	if int(pos) < len(term._scrollBuf) {
+		row = term._scrollBuf[pos]
+	} else {
+		row = term._normBuf[int(pos)-len(term._scrollBuf)]
+	}
+
+	term.insertRows(pos, row.Hidden)
+
+	length := len(row.Hidden)
+	row.Hidden = nil
+	term.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d rows have been unhidden", length))
+
+	return nil
+}
+
+func (term *Term) insertRows(pos int32, rows types.Screen) error {
+	if term.IsAltBuf() {
+		return errors.New("this feature is not supported in alt buffer")
+	}
+
+	debug.Log(rows.String())
+
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
 
 	tmp := term._scrollBuf
 	tmp = append(tmp, term._normBuf...)
 
-	length := len(tmp[pos].Hidden)
-	debug.Log(tmp[pos].Hidden.String())
-	newBuf := append(clone(tmp[:pos+1]), tmp[pos].Hidden...)
-	tmp[pos].Hidden = nil
+	newBuf := append(clone(tmp[:pos+1]), rows...)
 	newBuf = clone(append(newBuf, tmp[pos+1:]...))
 
 	term._normBuf = clone(newBuf[len(newBuf)-int(term.size.Y):])
 	term._scrollBuf = clone(newBuf[:len(newBuf)-int(term.size.Y)])
-
-	term.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d rows have been unhidden", length))
 
 	return nil
 }

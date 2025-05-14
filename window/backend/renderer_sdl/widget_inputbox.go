@@ -17,13 +17,16 @@ type inputBoxWidgetT struct {
 	callback   inputBoxCallbackT
 	readline   *widgetReadlineT
 	_maxChars  int32
-	_lineWidth int32
 }
 
 const _INPUT_MAX_CHAR_WIDTH = 80
 
 func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback func(string)) {
 	maxChars := min(sr.winCellSize.X-15, _INPUT_MAX_CHAR_WIDTH)
+
+	if callback == nil {
+		callback = func(string) {}
+	}
 
 	sr.inputBox = &inputBoxWidgetT{
 		title: title,

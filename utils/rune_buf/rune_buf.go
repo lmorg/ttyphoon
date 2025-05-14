@@ -126,7 +126,7 @@ func (buf *Buf) inc() {
 
 func (buf *Buf) BufSize() int {
 	buf.rm.Lock()
-	size := len(buf.runes)
+	size := len(buf.runes) + len(buf.bytes)
 	buf.rm.Unlock()
 	return size
 }

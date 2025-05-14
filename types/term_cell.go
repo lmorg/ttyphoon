@@ -54,12 +54,13 @@ func (c *Cell) GetElementXY() *XY {
 */
 
 type Row struct {
-	Id     uint64
-	Cells  []*Cell
-	Meta   RowMetaFlag
-	Hidden Screen
-	Phrase *[]rune
-	Source *RowSource
+	Id      uint64
+	Cells   []*Cell
+	Meta    RowMetaFlag
+	Hidden  Screen
+	Phrase  *[]rune
+	Source  *RowSource
+	CmdLine []rune
 }
 
 type RowSource struct {
@@ -75,6 +76,7 @@ const (
 	ROW_OUTPUT_BLOCK_BEGIN RowMetaFlag = 1 << iota
 	ROW_OUTPUT_BLOCK_END
 	ROW_OUTPUT_BLOCK_ERROR
+	ROW_OUTPUT_BLOCK_AI
 	ROW_META_COLLAPSED
 )
 

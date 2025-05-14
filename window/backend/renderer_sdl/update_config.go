@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/integrations"
 	"github.com/lmorg/mxtty/types"
@@ -95,6 +96,15 @@ func (sr *sdlRender) UpdateConfig() {
 				sr.UpdateConfig()
 			},
 			Icon: 0xf009,
+		},
+
+		{
+			Title: MENU_SEPARATOR,
+		},
+		{
+			Title: "Set OpenAI API Key",
+			Fn:    func() { ai.EnvOpenAi(sr) },
+			Icon:  0xf544,
 		},
 
 		{

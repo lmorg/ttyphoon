@@ -12,7 +12,7 @@ func (sr *sdlRender) setRefreshInterval() {
 	d := time.Duration(config.Config.Window.RefreshInterval) * time.Millisecond
 
 	if config.Config.Window.RefreshInterval == 0 {
-		d = 24 * time.Hour // bit of a hack, but we set it to once a day
+		d = 24 * time.Hour // bit of a hack, but we set it to once a day rather than disabling
 	}
 
 	sr._redrawTimer = time.After(d)

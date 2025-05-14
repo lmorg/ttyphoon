@@ -162,3 +162,21 @@ func (term *Term) copyOutputBlock(blockPos [2]int32) []rune {
 func (term *Term) copyOutputBlockToClipboard(blockPos [2]int32) {
 	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(blockPos))))
 }
+
+func (term *Term) getCmdLine(pos int32) []rune {
+	for i := int(pos); i <= int(pos); i-- {
+		if i < len(term._scrollBuf) {
+			if term._scrollBuf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
+				return term._scrollBuf[i].CmdLine
+			}
+
+		} else {
+			if term._normBuf[i-len(term._scrollBuf)].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
+				return term._normBuf[i-len(term._scrollBuf)].CmdLine
+			}
+
+		}
+	}
+
+	return nil
+}

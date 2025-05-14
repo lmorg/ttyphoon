@@ -127,7 +127,7 @@ func (term *Term) lfRedraw() {
 }
 
 // NewTerminal creates a new virtual term
-func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visible bool) {
+func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visible bool) *Term {
 	term := &Term{
 		tile:     tile,
 		renderer: renderer,
@@ -152,6 +152,8 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 
 	term.reset(size)
 	tile.SetTerm(term)
+
+	return term
 }
 
 func (term *Term) Start(pty types.Pty) {
