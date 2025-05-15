@@ -13,12 +13,12 @@ func (sr *sdlRender) UpdateConfig() {
 	menu := newContextMenu(sr)
 	menu.Append([]types.MenuItem{
 		{
-			Title: fmt.Sprintf("%s = %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
+			Title: fmt.Sprintf("%s == %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),
 			Fn:    sr.updateThemeMenu,
 			Icon:  0xf53f,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Terminal.AutoHotlink", config.Config.Terminal.AutoHotlink),
+			Title: fmt.Sprintf("%s == %v", "Terminal.AutoHotlink", config.Config.Terminal.AutoHotlink),
 			Fn: func() {
 				config.Config.Terminal.AutoHotlink = !config.Config.Terminal.AutoHotlink
 				sr.UpdateConfig()
@@ -35,7 +35,7 @@ func (sr *sdlRender) UpdateConfig() {
 		},*/
 
 		{
-			Title: fmt.Sprintf("%s = %v", "TypeFace.DropShadow", config.Config.TypeFace.DropShadow),
+			Title: fmt.Sprintf("%s == %v", "TypeFace.DropShadow", config.Config.TypeFace.DropShadow),
 			Fn: func() {
 				config.Config.TypeFace.DropShadow = !config.Config.TypeFace.DropShadow
 				sr.fontCache.Reallocate()
@@ -44,7 +44,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon: 0xf12c,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "TypeFace.Ligatures", config.Config.TypeFace.Ligatures),
+			Title: fmt.Sprintf("%s == %v", "TypeFace.Ligatures", config.Config.TypeFace.Ligatures),
 			Fn: func() {
 				config.Config.TypeFace.Ligatures = !config.Config.TypeFace.Ligatures
 				sr.UpdateConfig()
@@ -53,7 +53,7 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 
 		{
-			Title: fmt.Sprintf("%s = %v", "Window.StatusBar", config.Config.Window.StatusBar),
+			Title: fmt.Sprintf("%s == %v", "Window.StatusBar", config.Config.Window.StatusBar),
 			Fn: func() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar
 				sr.initFooter()
@@ -62,7 +62,7 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon: 0xe59a,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Window.TabBarFrame", config.Config.Window.TabBarFrame),
+			Title: fmt.Sprintf("%s == %v", "Window.TabBarFrame", config.Config.Window.TabBarFrame),
 			Fn: func() {
 				config.Config.Window.TabBarFrame = !config.Config.Window.TabBarFrame
 				sr.initFooter()
@@ -71,7 +71,7 @@ func (sr *sdlRender) UpdateConfig() {
 			//Icon: 0xe59a,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Window.TabBarActiveHighlight", config.Config.Window.TabBarActiveHighlight),
+			Title: fmt.Sprintf("%s == %v", "Window.TabBarActiveHighlight", config.Config.Window.TabBarActiveHighlight),
 			Fn: func() {
 				config.Config.Window.TabBarActiveHighlight = !config.Config.Window.TabBarActiveHighlight
 				sr.initFooter()
@@ -80,7 +80,7 @@ func (sr *sdlRender) UpdateConfig() {
 			//Icon: 0xe59a,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Window.TabBarHoverHighlight", config.Config.Window.TabBarHoverHighlight),
+			Title: fmt.Sprintf("%s == %v", "Window.TabBarHoverHighlight", config.Config.Window.TabBarHoverHighlight),
 			Fn: func() {
 				config.Config.Window.TabBarHoverHighlight = !config.Config.Window.TabBarHoverHighlight
 				sr.initFooter()
@@ -89,7 +89,7 @@ func (sr *sdlRender) UpdateConfig() {
 			//Icon: 0xe59a,
 		},
 		{
-			Title: fmt.Sprintf("%s = %v", "Window.TileHighlightFill", config.Config.Window.TileHighlightFill),
+			Title: fmt.Sprintf("%s == %v", "Window.TileHighlightFill", config.Config.Window.TileHighlightFill),
 			Fn: func() {
 				config.Config.Window.TileHighlightFill = !config.Config.Window.TileHighlightFill
 				sr.initFooter()
@@ -102,24 +102,24 @@ func (sr *sdlRender) UpdateConfig() {
 			Title: MENU_SEPARATOR,
 		},
 		{
-			Title: "Use Claude",
-			Fn:    func() { ai.UseService = ai.LLM_ANTHROPIC },
-			Icon:  0xf544,
+			Title: fmt.Sprintf("AI service == %s", ai.Service()),
+			Fn:    func() { ai.NextService(); sr.UpdateConfig() },
+			Icon:  0xe4f6,
 		},
 		{
-			Title: "Use ChatGPT",
-			Fn:    func() { ai.UseService = ai.LLM_OPENAI },
-			Icon:  0xf544,
+			Title: fmt.Sprintf("Model == %s", ai.Model()),
+			Fn:    func() { ai.NextModel(); sr.UpdateConfig() },
+			Icon:  0xe699,
 		},
 		{
 			Title: "Set Anthropic (Claude) API Key",
-			Fn:    func() { ai.EnvAnthropic(sr) },
-			Icon:  0xf544,
+			Fn:    func() { ai.EnvAnthropic(sr); sr.UpdateConfig() },
+			Icon:  0xf084,
 		},
 		{
 			Title: "Set OpenAI (ChatGPT) API Key",
-			Fn:    func() { ai.EnvOpenAi(sr) },
-			Icon:  0xf544,
+			Fn:    func() { ai.EnvOpenAi(sr); sr.UpdateConfig() },
+			Icon:  0xf084,
 		},
 
 		{

@@ -63,6 +63,7 @@ type sdlRender struct {
 	termWin     *types.AppWindowTerms
 	termWidget  *termWidgetT
 	highlighter *highlightWidgetT
+	highlightAi bool
 	inputBox    *inputBoxWidgetT
 	menu        *menuWidgetT
 

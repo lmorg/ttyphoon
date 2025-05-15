@@ -134,7 +134,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 				Fn: func() { term.copyOutputBlockToClipboard(blockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Explain output block (%s)", ai.UseService),
+				Title: fmt.Sprintf("Explain output block (%s)", ai.Service()),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
@@ -144,8 +144,8 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 				Fn: func() { ai.Explain(meta, false) },
 			},
 			{
-				Title: fmt.Sprintf("Explain with custom prompt (%s)", ai.UseService),
-				Icon:  0xf544,
+				Title: fmt.Sprintf("Explain with custom prompt (%s)", ai.Service()),
+				Icon:  0xf6e8,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)

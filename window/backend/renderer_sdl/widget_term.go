@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
@@ -44,6 +45,8 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 }
 
 func (tw *termWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
+	sr.highlightAi = false
+
 	go func() {
 		// basically this just tells tw.eventTextInput() to ignore input
 		if (evt.Keysym.Sym >= sdl.K_KP_DIVIDE && evt.Keysym.Sym <= sdl.K_KP_PERIOD) ||
@@ -104,7 +107,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		return
 
 	case evt.Keysym.Sym == sdl.K_APPLICATION:
-		tw._eventMouseButtonRightClick(sr, false)
+		tw._eventMouseButtonRightClick(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}, false)
 		return
 	}
 
@@ -116,6 +119,10 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 }
 
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
+	if evt.Button != sdl.Button(types.MOUSE_BUTTON_LEFT) {
+		sr.highlightAi = false
+	}
+
 	if config.Config.Tmux.Enabled && sr.windowTabs != nil &&
 		(evt.Y-_PANE_TOP_MARGIN)/sr.glyphSize.Y == sr.winCellSize.Y+sr.footer-1 {
 		tw._eventMouseButtonFooter(sr, evt)
@@ -151,7 +158,11 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.PRESSED {
 				highlighterStart(sr, button, evt.X, evt.Y)
-				sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
+				if sr.highlightAi {
+					sr.highlighter.setMode(_HIGHLIGHT_MODE_AI)
+				} else {
+					sr.highlighter.setMode(_HIGHLIGHT_MODE_LINE_RANGE)
+				}
 			}
 		})
 
@@ -164,7 +175,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		sr.contextMenu = newContextMenu(sr) // empty the context menu
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
-				tw._eventMouseButtonRightClick(sr, true)
+				tw._eventMouseButtonRightClick(sr, sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y), true)
 			}
 		})
 
@@ -173,7 +184,9 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 }
 
-func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bool) {
+func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY, underCursor bool) {
+	term := sr.termWin.Active.GetTerm()
+
 	menu := newContextMenu(sr)
 	menu.Append(types.MenuItem{
 		Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
@@ -200,8 +213,30 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, underCursor bo
 			},
 		},*/
 		{
+			Title: fmt.Sprintf("Highlight and explain (%s)", ai.Service()),
+			Fn:    func() { sr.highlightAi = true },
+			Icon:  0xf72b,
+		},
+		{
+			Title: fmt.Sprintf("Ask AI (%s)", ai.Service()),
+			Fn: func() {
+				meta := &ai.Meta{
+					Term:         term,
+					Renderer:     sr,
+					CmdLine:      term.CmdLine(pos),
+					Pwd:          term.Pwd(pos),
+					OutputBlock:  "",
+					InsertRowPos: term.ConvertRelativeToAbsoluteY(term.GetSize()) - 1,
+				}
+				sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", ai.Service()), "", func(prompt string) {
+					ai.AskAI(meta, prompt)
+				})
+			},
+			Icon: 0xe05d,
+		},
+		{
 			Title: fmt.Sprintf("Find text [%s+f]", types.KEY_STR_META),
-			Fn:    sr.termWin.Active.GetTerm().Search,
+			Fn:    term.Search,
 			Icon:  0xf002,
 		},
 		{

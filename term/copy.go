@@ -164,7 +164,7 @@ func (term *Term) copyOutputBlockToClipboard(blockPos [2]int32) {
 }
 
 func (term *Term) getCmdLine(pos int32) []rune {
-	for i := int(pos); i <= int(pos); i-- {
+	for i := int(pos); i > -1; i-- {
 		if i < len(term._scrollBuf) {
 			if term._scrollBuf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
 				return term._scrollBuf[i].CmdLine
@@ -179,4 +179,9 @@ func (term *Term) getCmdLine(pos int32) []rune {
 	}
 
 	return nil
+}
+
+func (term *Term) CmdLine(pos *types.XY) string {
+	y := term.ConvertRelativeToAbsoluteY(pos)
+	return string(term.getCmdLine(y))
 }

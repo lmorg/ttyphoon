@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
@@ -20,6 +21,7 @@ const (
 	_HIGHLIGHT_MODE_SQUARE
 	_HIGHLIGHT_MODE_FULL_LINES
 	_HIGHLIGHT_MODE_LINE_RANGE
+	_HIGHLIGHT_MODE_AI
 )
 
 type highlightWidgetT struct {
@@ -122,19 +124,35 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%dx%d grid has been copied to clipboard", rect.W-rect.X+1, l)) //rect.H-rect.Y+1))
 		}
 
-	case _HIGHLIGHT_MODE_LINE_RANGE:
+	case _HIGHLIGHT_MODE_LINE_RANGE, _HIGHLIGHT_MODE_AI:
 		rect := sr.rectPxToActiveTileCells(sr.termWin.Active, hl.rect)
+		pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
+		term := sr.termWin.Active.GetTerm()
+		lines := term.CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
+		sr.highlighter = nil
+		//if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H == 0 {
 		if rect.X-rect.W < 2 && rect.X-rect.W > -2 && rect.Y-rect.H < 2 && rect.Y-rect.H > -2 {
-			sr.highlighter = nil
-			pos := sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y)
-			sr.termWin.Active.GetTerm().MouseClick(pos, types.MouseButtonT(evt.Button), evt.Clicks, types.BUTTON_RELEASED, func() {})
+			term.MouseClick(pos, types.MouseButtonT(evt.Button), evt.Clicks, types.BUTTON_RELEASED, func() {})
 			return
 		}
-		lines := sr.termWin.Active.GetTerm().CopyRange(&types.XY{X: rect.X, Y: rect.Y}, &types.XY{X: rect.W, Y: rect.H})
-		sr.highlighter = nil
-		l := copyTextToClipboard(lines)
-		if l > 0 {
-			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
+		switch hl.mode {
+		case _HIGHLIGHT_MODE_LINE_RANGE:
+			l := copyTextToClipboard(lines)
+			if l > 0 {
+				sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
+			}
+		case _HIGHLIGHT_MODE_AI:
+			meta := &ai.Meta{
+				Term:         term,
+				Renderer:     sr,
+				CmdLine:      term.CmdLine(pos),
+				Pwd:          term.Pwd(pos),
+				OutputBlock:  string(lines),
+				InsertRowPos: term.ConvertRelativeToAbsoluteY(pos),
+			}
+			ai.Explain(meta, true)
+		default:
+			panic(fmt.Sprintf("TODO: unmet conditional '%d'", hl.mode))
 		}
 
 	default:
@@ -169,11 +187,11 @@ func (sr *sdlRender) selectionHighlighter() {
 		alphaBorder, alphaFill = 64, 0
 		rect = &sdl.Rect{X: sr.highlighter.rect.X, Y: sr.highlighter.rect.Y, W: sr.highlighter.rect.W, H: sr.highlighter.rect.H}
 
-	case _HIGHLIGHT_MODE_LINE_RANGE, _HIGHLIGHT_MODE_FULL_LINES:
+	case _HIGHLIGHT_MODE_LINE_RANGE, _HIGHLIGHT_MODE_FULL_LINES, _HIGHLIGHT_MODE_AI:
 		return
 
 	default:
-
+		panic(fmt.Sprintf("TODO: unmet conditional '%d'", sr.highlighter.mode))
 	}
 
 	sr._drawHighlightRect(rect, highlightBorder, highlightFill, alphaBorder, alphaFill)
@@ -203,7 +221,7 @@ func isCellHighlighted(sr *sdlRender, rect *sdl.Rect) bool {
 	case _HIGHLIGHT_MODE_FULL_LINES:
 		return runeCell.Y >= hlCell.Y && runeCell.Y <= hlCell.H
 
-	case _HIGHLIGHT_MODE_LINE_RANGE:
+	case _HIGHLIGHT_MODE_LINE_RANGE, _HIGHLIGHT_MODE_AI:
 		switch {
 		case hlCell.H < hlCell.Y: // select up
 			// start multiline
@@ -234,7 +252,10 @@ func isCellHighlighted(sr *sdlRender, rect *sdl.Rect) bool {
 		return runeCell.X >= hlCell.X && runeCell.X <= hlCell.W &&
 			runeCell.Y >= hlCell.Y && runeCell.Y <= hlCell.H
 
-	default:
+	case _HIGHLIGHT_MODE_PNG:
 		return false
+
+	default:
+		panic(fmt.Sprintf("TODO: unmet conditional '%d'", sr.highlighter.mode))
 	}
 }

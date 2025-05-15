@@ -17,10 +17,7 @@ type LocalFile struct {
 
 func (f LocalFile) Description() string {
 	return `Open a local file and return its contents.
-		Useful for debugging output that references local files.
-		Any errors accessing the file will be shown as "ERROR" instead of the file contents.
-		Can only return files that are with the same path which the executable was ran, or a sub-directory within it.
-		Files prefixed with a dot are unavailable.`
+Useful for debugging output that references local files.`
 }
 
 func (f LocalFile) Name() string {
@@ -37,7 +34,7 @@ func (f LocalFile) Call(ctx context.Context, input string) (string, error) {
 	var result string
 	var b []byte
 
-	f.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, UseService+" requesting file: "+filename)
+	f.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, service+" requesting file: "+filename)
 
 	info, err := os.Stat(filename)
 	if err != nil {

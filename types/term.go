@@ -26,10 +26,12 @@ type Term interface {
 	ShowSearchResults()
 	Match(*XY)
 	InsertSubTerm(string, int32, RowMetaFlag) error
+	ConvertRelativeToAbsoluteY(*XY) int32
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte
 	Host(*XY) string
 	Pwd(*XY) string
+	CmdLine(*XY) string
 	Close()
 }
 

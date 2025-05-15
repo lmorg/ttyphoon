@@ -1,8 +1,11 @@
 package ai
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
-const _OPENAI_QUERY = `
+const _EXPLAIN_PROMPT = `
 You are a non-interactive agent responding to a developer or DevOps engineer's query.
 A command line application has been executed. Can you explain its output?
 If it is an error, you should focus on how to fix the error.
@@ -12,12 +15,27 @@ Do not explain what the command line does, we already know this. Only explain th
 Output needs to be strictly formatted as markdown.
 Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
 Bullet points and numbered lists should be indented.
+You can use tools to read file contents and search the web.
 `
 
-func getPrompt(cmdLine, termOutput, userPrompt string) string {
+const _ASK_PROMPT = `
+You are a helpful non-interactive agent responding to a developer or DevOps engineer's question.
+You should keep the answer as succinct as possible.
+Do not quote the question verbatim in your response.
+Output needs to be strictly formatted as markdown.
+Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
+Bullet points and numbered lists should be indented.
+You are allowed to check online.
+`
+
+func explainPrompt(cmdLine, termOutput, userPrompt string) string {
 	return fmt.Sprintf(
-		"%s\n%s\nCommand line executed: %s\nCommand line output below:\n%s",
-		_OPENAI_QUERY, userPrompt, cmdLine, termOutput)
+		"%s\nOperating system: %s, CPU: %s.\n%s\nCommand line executed: %s\nCommand line output below:\n%s",
+		_EXPLAIN_PROMPT, runtime.GOOS, runtime.GOARCH, userPrompt, cmdLine, termOutput)
 }
 
-// Code blocks should not include the language nor any text after ` + "```" + `.
+func askPrompt(userPrompt string) string {
+	return fmt.Sprintf(
+		"%sOperating system: %s, CPU: %s.\n%s",
+		_ASK_PROMPT, runtime.GOOS, runtime.GOARCH, userPrompt)
+}

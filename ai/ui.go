@@ -10,13 +10,6 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
-const (
-	LLM_OPENAI    = "ChatGPT"
-	LLM_ANTHROPIC = "Claude"
-)
-
-var UseService = LLM_ANTHROPIC
-
 type Meta struct {
 	Term         types.Term
 	Renderer     types.Renderer
@@ -28,25 +21,30 @@ type Meta struct {
 
 func Explain(meta *Meta, promptDialogue bool) {
 	if !promptDialogue {
-		explain(meta, "")
+		askAI(meta, explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine))
 		return
 	}
 
 	fn := func(userPrompt string) {
-		explain(meta, userPrompt)
+		askAI(meta, explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt)
 	}
 
-	meta.Renderer.DisplayInputBox("Custom prompt", "", fn)
+	meta.Renderer.DisplayInputBox("Add to prompt", "", fn)
 }
 
-const _STICKY_MESSAGE = "Generating AI-powered explanation.... (this can take up to a minute)"
+const _STICKY_MESSAGE = "Asking %s.... (this can take up to a minute)"
 
 var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func explain(meta *Meta, userPrompt string) {
-	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, _STICKY_MESSAGE)
+func AskAI(meta *Meta, prompt string) {
+	askAI(meta, askPrompt(prompt), "> "+prompt)
+}
+
+func askAI(meta *Meta, prompt string, title string) {
+	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, service)
+	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
 	fin := make(chan struct{})
 	var i int
 
@@ -57,7 +55,7 @@ func explain(meta *Meta, userPrompt string) {
 				sticky.SetMessage("Formatting output....")
 				return
 			case <-time.After(500 * time.Millisecond):
-				sticky.SetMessage(fmt.Sprintf("%s %s", _STICKY_MESSAGE, _STICKY_SPINNER[i]))
+				sticky.SetMessage(fmt.Sprintf("%s %s", stickyMessage, _STICKY_SPINNER[i]))
 				meta.Renderer.TriggerRedraw()
 				i++
 				if i >= len(_STICKY_SPINNER) {
@@ -75,7 +73,7 @@ func explain(meta *Meta, userPrompt string) {
 			err   error
 		)
 
-		switch UseService {
+		switch service {
 		case LLM_ANTHROPIC:
 			model, err = llmAnthropic()
 		case LLM_OPENAI:
@@ -88,18 +86,14 @@ func explain(meta *Meta, userPrompt string) {
 			return
 		}
 
-		result, err := RunLLM(model, meta, userPrompt)
+		result, err := runLLM(model, meta, prompt)
 		fin <- struct{}{}
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
 
-		if userPrompt == "" {
-			result = fmt.Sprintf("# %s's Explanation:\n```\n%s\n```\n%s", UseService, meta.CmdLine, result)
-		} else {
-			result = fmt.Sprintf("# %s's Explanation:\n```\n%s\n```\n# %s\n%s", UseService, meta.CmdLine, userPrompt, result)
-		}
+		result = fmt.Sprintf("# %s's Explanation:\n\n%s\n\n%s", service, title, result)
 
 		theme := "dark"
 		if types.THEME_LIGHT {
