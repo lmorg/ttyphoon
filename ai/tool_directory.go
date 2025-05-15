@@ -19,7 +19,8 @@ type Directory struct {
 
 func (d Directory) Description() string {
 	return `Check the contents of a directory. 
-		Returns a bullet point list of all files and directories found inside a directory.`
+		Returns a bullet point list of all files and directories found inside a directory.
+		Files and directories prefixed with a dot or period will be ignored.`
 }
 
 func (d Directory) Name() string {
@@ -38,6 +39,10 @@ func (d Directory) Call(ctx context.Context, input string) (string, error) {
 	d.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, UseService+" is querying directory: "+pathname)
 
 	err := filepath.Walk(pathname, func(path string, info os.FileInfo, err error) error {
+		if info.Name()[0] == '.' {
+			return fmt.Errorf("ignoring %s", info.Name())
+		}
+
 		if info.IsDir() {
 			result.WriteString(fmt.Sprintf("- Directory: '%s'\n", path))
 		} else {
