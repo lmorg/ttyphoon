@@ -2,13 +2,17 @@ package ai
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/lmorg/mxtty/app"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/tools"
+	"github.com/tmc/langchaingo/tools/duckduckgo"
+	"github.com/tmc/langchaingo/tools/scraper"
 )
 
 const _OPENAI_MODEL = "gpt-4" //"o4-mini"
@@ -25,9 +29,21 @@ func llmAnthropic() (llms.Model, error) {
 func RunLLM(model llms.Model, meta *Meta, userPrompt string) (string, error) {
 	query := getPrompt(meta.CmdLine, meta.OutputBlock, userPrompt)
 
+	webscraper, err := scraper.New()
+	if err != nil {
+		return "", err
+	}
+
+	ddg, err := duckduckgo.New(5, fmt.Sprintf("%s/%s", app.Name, app.Version()))
+	if err != nil {
+		return "", err
+	}
+
 	agentTools := []tools.Tool{
 		LocalFile{meta: meta},
 		Directory{meta: meta},
+		webscraper,
+		ddg,
 	}
 
 	errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
