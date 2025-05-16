@@ -32,13 +32,25 @@ func (d Directory) Call(ctx context.Context, input string) (string, error) {
 	}
 
 	debug.Log(input)
-	pathname := d.meta.Pwd + "/" + input
+
+	var pathname string
+	if strings.HasPrefix(input, d.meta.Pwd) {
+		pathname = input
+	} else {
+		pathname = d.meta.Pwd + "/" + input
+	}
+
 	var result strings.Builder
 
 	d.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, service+" is querying directory: "+pathname)
 
 	err := filepath.Walk(pathname, func(path string, info os.FileInfo, err error) error {
-		if info.Name()[0] == '.' {
+		if err != nil {
+			result.WriteString(fmt.Sprintf("- Error accessing '%s': %v\n", path, err))
+			return err
+		}
+
+		if info.Name()[0] == '.' && len(info.Name()) > 1 {
 			return fmt.Errorf("ignoring %s", info.Name())
 		}
 
@@ -46,10 +58,6 @@ func (d Directory) Call(ctx context.Context, input string) (string, error) {
 			result.WriteString(fmt.Sprintf("- Directory: '%s'\n", path))
 		} else {
 			result.WriteString(fmt.Sprintf("- File: '%s'\n", path))
-		}
-
-		if err != nil {
-			result.WriteString(fmt.Sprintf("- Error accessing '%s': %v\n", path, err))
 		}
 
 		return nil
