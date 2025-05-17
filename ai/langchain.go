@@ -44,8 +44,8 @@ func runLLM(model llms.Model, meta *Meta, prompt string) (string, error) {
 
 	errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
 
-	//agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
-	agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
+	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
+	//agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
 	executor := agents.NewExecutor(agent)
 
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)

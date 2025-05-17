@@ -98,7 +98,11 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.UpdateConfig()
 		return
 
-	case evt.Keysym.Sym == 'v' && mod == codes.MOD_META|codes.MOD_SHIFT:
+	case evt.Keysym.Sym == 'a' && mod == codes.MOD_META:
+		askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1})
+		return
+
+	case evt.Keysym.Sym == 'e' && mod == codes.MOD_META:
 		sr.DisplayInputBox("Visual editor", "", func(s string) {
 			if s != "" {
 				sr.termWin.Active.GetTerm().Reply([]byte(s))
@@ -218,21 +222,9 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Icon:  0xf72b,
 		},
 		{
-			Title: fmt.Sprintf("Ask AI (%s)", ai.Service()),
-			Fn: func() {
-				meta := &ai.Meta{
-					Term:         term,
-					Renderer:     sr,
-					CmdLine:      term.CmdLine(pos),
-					Pwd:          term.Pwd(pos),
-					OutputBlock:  "",
-					InsertRowPos: term.ConvertRelativeToAbsoluteY(term.GetSize()) - 1,
-				}
-				sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", ai.Service()), "", func(prompt string) {
-					ai.AskAI(meta, prompt)
-				})
-			},
-			Icon: 0xe05d,
+			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", ai.Service(), types.KEY_STR_META),
+			Fn:    func() { askAi(sr, pos) },
+			Icon:  0xe05d,
 		},
 		{
 			Title: fmt.Sprintf("Find text [%s+f]", types.KEY_STR_META),
