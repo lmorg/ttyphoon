@@ -12,14 +12,30 @@ import (
 )
 
 var _notifyColourScheme = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 223},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 223},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 223},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 223},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 223},
+	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
+	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
+	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
+	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
+	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
 }
 
 var _notifyColourLight = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x00, 0x00, 0x00, 223},
+	types.NOTIFY_INFO:   {0x00, 0x00, 0x00, 223},
+	types.NOTIFY_WARN:   {0x00, 0x00, 0x00, 223},
+	types.NOTIFY_ERROR:  {0x00, 0x00, 0x00, 223},
+	types.NOTIFY_SCROLL: {0x00, 0x00, 0x00, 223},
+}
+
+var _notifyColourDark = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0xff, 0xff, 0xff, 223},
+	types.NOTIFY_INFO:   {0xff, 0xff, 0xff, 223},
+	types.NOTIFY_WARN:   {0xff, 0xff, 0xff, 223},
+	types.NOTIFY_ERROR:  {0xff, 0xff, 0xff, 223},
+	types.NOTIFY_SCROLL: {0xff, 0xff, 0xff, 223},
+}
+
+/*var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
 	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
 	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
@@ -33,7 +49,7 @@ var _notifyColourDark = map[int]*types.Colour{
 	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
 	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
 	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
-}
+}*/
 
 /*var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
