@@ -20,6 +20,22 @@ var _notifyColourScheme = map[int]*types.Colour{
 }
 
 var _notifyColourLight = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
+	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
+	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
+	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
+	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
+}
+
+var _notifyColourDark = map[int]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
+	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
+	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
+	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
+	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
+}
+
+/*var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
 	types.NOTIFY_INFO:   types.SGR_COLOR_BACKGROUND,
 	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
@@ -33,7 +49,7 @@ var _notifyColourDark = map[int]*types.Colour{
 	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
 	types.NOTIFY_ERROR:  types.SGR_COLOR_BACKGROUND,
 	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
-}
+}*/
 
 const _NOTIFY_ALPHA_BLEND = 215
 
@@ -244,7 +260,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 		// fill background
 		c := notifyColour[int(notification.Type)]
-		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, _NOTIFY_ALPHA_BLEND)
+		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN + 1,
 			Y: _WIDGET_INNER_MARGIN + 1 + offset,
