@@ -7,43 +7,33 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/lmorg/mxtty/types"
-	"github.com/tmc/langchaingo/llms"
 )
 
-type Meta struct {
-	Term         types.Term
-	Renderer     types.Renderer
-	CmdLine      string
-	Pwd          string
-	OutputBlock  string
-	InsertRowPos int32
-}
-
-func Explain(meta *Meta, promptDialogue bool) {
+func (meta *AgentMeta) Explain(promptDialogue bool) {
 	if !promptDialogue {
-		askAI(meta, explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine))
+		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine))
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(meta, explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt)
+		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt)
 	}
 
 	meta.Renderer.DisplayInputBox("Add to prompt", "", fn)
 }
 
-const _STICKY_MESSAGE = "Asking %s.... (this can take up to a minute)"
+const _STICKY_MESSAGE = "Asking %s.... "
 
 var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func AskAI(meta *Meta, prompt string) {
-	askAI(meta, askPrompt(prompt), "> "+prompt)
+func (meta *AgentMeta) AskAI(prompt string) {
+	askAI(meta, meta.askPrompt(prompt), "> "+prompt)
 }
 
-func askAI(meta *Meta, prompt string, title string) {
-	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, service)
+func askAI(meta *AgentMeta, prompt string, title string) {
+	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
 	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
 	fin := make(chan struct{})
 	var i int
@@ -68,32 +58,17 @@ func askAI(meta *Meta, prompt string, title string) {
 	go func() {
 		defer sticky.Close()
 
-		var (
-			model llms.Model
-			err   error
-		)
-
-		switch service {
-		case LLM_ANTHROPIC:
-			model, err = llmAnthropic()
-		case LLM_OPENAI:
-			model, err = llmOpenAI()
-		default:
-			panic("unexpected branch")
-		}
-		if err != nil {
-			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			return
-		}
-
-		result, err := runLLM(model, meta, prompt)
+		result, err := meta.runLLM(prompt)
 		fin <- struct{}{}
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			return
+			//return
+			result = err.Error()
 		}
 
-		result = fmt.Sprintf("# %s's Explanation:\n\n%s\n\n%s", service, title, result)
+		meta.AddHistory(title, result)
+
+		result = fmt.Sprintf("# %s's Explanation:\n\n%s\n\n%s", meta.ServiceName(), title, result)
 
 		theme := "dark"
 		if types.THEME_LIGHT {

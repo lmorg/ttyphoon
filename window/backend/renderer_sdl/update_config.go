@@ -102,13 +102,13 @@ func (sr *sdlRender) UpdateConfig() {
 			Title: MENU_SEPARATOR,
 		},
 		{
-			Title: fmt.Sprintf("AI service == %s", ai.Service()),
-			Fn:    func() { ai.NextService(); sr.UpdateConfig() },
+			Title: fmt.Sprintf("AI service == %s", ai.Agent(sr.termWin.Active.Id()).ServiceName()),
+			Fn:    func() { ai.Agent(sr.termWin.Active.Id()).ServiceNext(); sr.UpdateConfig() },
 			Icon:  0xe4f6,
 		},
 		{
-			Title: fmt.Sprintf("Model == %s", ai.Model()),
-			Fn:    func() { ai.NextModel(); sr.UpdateConfig() },
+			Title: fmt.Sprintf("Model == %s", ai.Agent(sr.termWin.Active.Id()).ModelName()),
+			Fn:    func() { ai.Agent(sr.termWin.Active.Id()).ModelNext(); sr.UpdateConfig() },
 			Icon:  0xe699,
 		},
 		{

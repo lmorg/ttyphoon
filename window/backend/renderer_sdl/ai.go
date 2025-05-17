@@ -9,15 +9,15 @@ import (
 
 func askAi(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
-	meta := &ai.Meta{
-		Term:         term,
-		Renderer:     sr,
-		CmdLine:      term.CmdLine(pos),
-		Pwd:          term.Pwd(pos),
-		OutputBlock:  "",
-		InsertRowPos: term.ConvertRelativeToAbsoluteY(term.GetSize()) - 1,
-	}
-	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", ai.Service()), "", func(prompt string) {
-		ai.AskAI(meta, prompt)
+	meta := ai.Agent(sr.termWin.Active.Id())
+	meta.Term = term
+	meta.Renderer = sr
+	meta.CmdLine = term.CmdLine(pos)
+	meta.Pwd = term.Pwd(pos)
+	meta.OutputBlock = ""
+	meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(term.GetSize()) - 1
+
+	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", meta.ServiceName()), "", func(prompt string) {
+		meta.AskAI(prompt)
 	})
 }

@@ -6,11 +6,9 @@ const (
 )
 
 var services = []string{
-	LLM_OPENAI,
 	LLM_ANTHROPIC,
+	LLM_OPENAI,
 }
-
-var service = LLM_ANTHROPIC
 
 var models = map[string][]string{
 	LLM_OPENAI: {
@@ -25,57 +23,38 @@ var models = map[string][]string{
 	},
 }
 
-var model = map[string]string{
-	LLM_OPENAI:    "gpt-4.1",
-	LLM_ANTHROPIC: "claude-3-5-haiku-latest",
+func (meta *AgentMeta) ServiceName() string {
+	return services[meta.service]
 }
 
-func Service() string {
-	return service
+func (meta *AgentMeta) ServiceNext() {
+	meta.service++
+	if meta.service >= len(services) {
+		meta.service = 0
+	}
 }
 
-func NextService() {
-	service = nextService()
+func (meta *AgentMeta) ModelName() string {
+	return meta.model[meta.ServiceName()]
 }
 
-func nextService() string {
-	for i := range services {
-		if services[i] != service {
+func (meta *AgentMeta) ModelNext() {
+	meta.model[meta.ServiceName()] = meta.modelNext()
+}
+
+func (meta *AgentMeta) modelNext() string {
+	for i := range models[meta.ServiceName()] {
+		if models[meta.ServiceName()][i] != meta.ModelName() {
 			continue
 		}
 
 		i++
-		if i == len(services) {
-			return services[0]
+		if i == len(models[meta.ServiceName()]) {
+			return models[meta.ServiceName()][0]
 		}
 
-		return services[i]
+		return models[meta.ServiceName()][i]
 	}
 
-	return services[0]
-}
-
-func Model() string {
-	return model[service]
-}
-
-func NextModel() {
-	model[service] = nextModel()
-}
-
-func nextModel() string {
-	for i := range models[service] {
-		if models[service][i] != model[service] {
-			continue
-		}
-
-		i++
-		if i == len(models[service]) {
-			return models[service][0]
-		}
-
-		return models[service][i]
-	}
-
-	return models[service][0]
+	return models[meta.ServiceName()][0]
 }

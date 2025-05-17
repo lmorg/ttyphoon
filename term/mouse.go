@@ -112,14 +112,13 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 }
 
 func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []int32) {
-	meta := &ai.Meta{
-		Term:         term,
-		Renderer:     term.renderer,
-		CmdLine:      string(term.getCmdLine(blockPos[0])),
-		Pwd:          term.RowSrcFromScrollBack(blockPos[0]).Pwd,
-		OutputBlock:  string(term.copyOutputBlock(blockPos)),
-		InsertRowPos: blockPos[1],
-	}
+	meta := ai.Agent(term.tile.Id())
+	meta.Term = term
+	meta.Renderer = term.renderer
+	meta.CmdLine = string(term.getCmdLine(blockPos[0]))
+	meta.Pwd = term.RowSrcFromScrollBack(blockPos[0]).Pwd
+	meta.OutputBlock = string(term.copyOutputBlock(blockPos))
+	meta.InsertRowPos = blockPos[1]
 
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
@@ -134,24 +133,24 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 				Fn: func() { term.copyOutputBlockToClipboard(blockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Explain output block (%s)", ai.Service()),
+				Title: fmt.Sprintf("Explain output block (%s)", meta.ServiceName()),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { ai.Explain(meta, false) },
+				Fn: func() { meta.Explain(false) },
 			},
 			{
-				Title: fmt.Sprintf("Explain with custom prompt (%s)", ai.Service()),
+				Title: fmt.Sprintf("Explain with custom prompt (%s)", meta.ServiceName()),
 				Icon:  0xf6e8,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { ai.Explain(meta, true) },
+				Fn: func() { meta.Explain(true) },
 			},
 		}...)
 }

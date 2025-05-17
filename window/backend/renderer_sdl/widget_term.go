@@ -217,12 +217,12 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			},
 		},*/
 		{
-			Title: fmt.Sprintf("Highlight and explain (%s)", ai.Service()),
+			Title: fmt.Sprintf("Highlight and explain (%s)", ai.Agent(sr.termWin.Active.Id()).ServiceName()),
 			Fn:    func() { sr.highlightAi = true },
 			Icon:  0xf72b,
 		},
 		{
-			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", ai.Service(), types.KEY_STR_META),
+			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", ai.Agent(sr.termWin.Active.Id()).ServiceName(), types.KEY_STR_META),
 			Fn:    func() { askAi(sr, pos) },
 			Icon:  0xe05d,
 		},

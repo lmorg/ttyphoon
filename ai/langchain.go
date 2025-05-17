@@ -16,68 +16,69 @@ import (
 	"github.com/tmc/langchaingo/tools/scraper"
 )
 
-func llmOpenAI() (llms.Model, error) {
-	return openai.New(openai.WithModel(Model()))
+func llmOpenAI(meta *AgentMeta) (llms.Model, error) {
+	return openai.New(openai.WithModel(meta.ModelName()))
 }
 
-func llmAnthropic() (llms.Model, error) {
-	return anthropic.New(anthropic.WithModel(Model()))
+func llmAnthropic(meta *AgentMeta) (llms.Model, error) {
+	return anthropic.New(anthropic.WithModel(meta.ModelName()))
 }
 
-func runLLM(model llms.Model, meta *Meta, prompt string) (string, error) {
+func (meta *AgentMeta) initLLM() error {
+	var (
+		model llms.Model
+		err   error
+	)
+
+	switch meta.ServiceName() {
+	case LLM_ANTHROPIC:
+		model, err = llmAnthropic(meta)
+	case LLM_OPENAI:
+		model, err = llmOpenAI(meta)
+	default:
+		panic("unexpected branch")
+	}
+	if err != nil {
+		return err
+	}
+
 	webscraper, err := scraper.New()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	ddg, err := duckduckgo.New(5, fmt.Sprintf("%s/%s", app.Name, app.Version()))
 	if err != nil {
-		return "", err
+		return err
 	}
+
+	//history := memory.NewSimple()
 
 	agentTools := []tools.Tool{
 		LocalFile{meta: meta},
 		Directory{meta: meta},
+		ChatHistoryDetail{meta: meta},
 		Wrapper{meta, webscraper},
 		Wrapper{meta, ddg},
 	}
 
-	errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
+	//errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
 
-	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
-	//agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
-	executor := agents.NewExecutor(agent)
+	//agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
+	agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3))
+	meta.executor = agents.NewExecutor(agent)
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)
-	return chains.Run(ctx, executor, prompt, chains.WithTemperature(1))
-	//return := model.Call(context.Background(), prompt, llms.WithTemperature(1))
+	return nil
 }
 
-/*func runLLM(model llms.Model, meta *Meta, prompt string) (string, error) {
-	webscraper, err := scraper.New()
-	if err != nil {
-		return "", err
+func (meta *AgentMeta) runLLM(prompt string) (string, error) {
+	if meta.executor == nil {
+		err := meta.initLLM()
+		if err != nil {
+			return "", nil
+		}
 	}
-
-	ddg, err := duckduckgo.New(5, fmt.Sprintf("%s/%s", app.Name, app.Version()))
-	if err != nil {
-		return "", err
-	}
-
-	agentTools := []tools.Tool{
-		LocalFile{meta: meta},
-		Directory{meta: meta},
-		Wrapper{meta, webscraper},
-		Wrapper{meta, ddg},
-	}
-
-	errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
-
-	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
-	executor := agents.NewExecutor(agent)
 
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)
-	return chains.Run(ctx, executor, prompt, chains.WithTemperature(1))
-	//return := model.Call(context.Background(), prompt, llms.WithTemperature(1))
+	return chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
 }
-*/

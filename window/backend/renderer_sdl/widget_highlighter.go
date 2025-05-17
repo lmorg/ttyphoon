@@ -142,15 +142,14 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 				sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
 			}
 		case _HIGHLIGHT_MODE_AI:
-			meta := &ai.Meta{
-				Term:         term,
-				Renderer:     sr,
-				CmdLine:      term.CmdLine(pos),
-				Pwd:          term.Pwd(pos),
-				OutputBlock:  string(lines),
-				InsertRowPos: term.ConvertRelativeToAbsoluteY(pos),
-			}
-			ai.Explain(meta, true)
+			meta := ai.Agent(sr.termWin.Active.Id())
+			meta.Term = term
+			meta.Renderer = sr
+			meta.CmdLine = term.CmdLine(pos)
+			meta.Pwd = term.Pwd(pos)
+			meta.OutputBlock = string(lines)
+			meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(pos)
+			meta.Explain(true)
 		default:
 			panic(fmt.Sprintf("TODO: unmet conditional '%d'", hl.mode))
 		}

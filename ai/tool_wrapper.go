@@ -9,7 +9,7 @@ import (
 )
 
 type Wrapper struct {
-	meta *Meta
+	meta *AgentMeta
 	tool tools.Tool
 }
 
@@ -23,6 +23,6 @@ func (wrapper Wrapper) Name() string {
 
 func (wrapper Wrapper) Call(ctx context.Context, input string) (string, error) {
 	wrapper.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
-		fmt.Sprintf("%s is running a %s: %s", service, wrapper.Name(), input))
+		fmt.Sprintf("%s is running a %s: %s", wrapper.meta.ServiceName(), wrapper.Name(), input))
 	return wrapper.tool.Call(ctx, input)
 }

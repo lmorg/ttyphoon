@@ -12,7 +12,7 @@ import (
 
 type LocalFile struct {
 	CallbacksHandler callbacks.Handler
-	meta             *Meta
+	meta             *AgentMeta
 }
 
 func (f LocalFile) Description() string {
@@ -34,7 +34,7 @@ func (f LocalFile) Call(ctx context.Context, input string) (string, error) {
 	var result string
 	var b []byte
 
-	f.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, service+" requesting file: "+filename)
+	f.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, f.meta.ServiceName()+" requesting file: "+filename)
 
 	info, err := os.Stat(filename)
 	if err != nil {

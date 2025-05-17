@@ -14,7 +14,7 @@ import (
 
 type Directory struct {
 	CallbacksHandler callbacks.Handler
-	meta             *Meta
+	meta             *AgentMeta
 }
 
 func (d Directory) Description() string {
@@ -42,7 +42,7 @@ func (d Directory) Call(ctx context.Context, input string) (string, error) {
 
 	var result strings.Builder
 
-	d.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, service+" is querying directory: "+pathname)
+	d.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, d.meta.ServiceName()+" is querying directory: "+pathname)
 
 	err := filepath.Walk(pathname, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
