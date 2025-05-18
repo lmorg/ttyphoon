@@ -61,7 +61,7 @@ func (meta *AgentMeta) initLLM() error {
 		ChatHistoryDetail{meta: meta},
 		Wrapper{meta, webscraper},
 		Wrapper{meta, ddg},
-		Write{meta: meta},
+		//Write{meta: meta},
 	}
 
 	//errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })

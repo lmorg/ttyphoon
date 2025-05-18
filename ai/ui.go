@@ -68,7 +68,7 @@ func askAI(meta *AgentMeta, prompt string, title string) {
 
 		meta.AddHistory(title, result)
 
-		result = fmt.Sprintf("# %s's Explanation:\n\n%s\n\n%s", meta.ServiceName(), title, result)
+		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Explanation:\n\n%s", title, meta.ServiceName(), result)
 
 		theme := "dark"
 		if types.THEME_LIGHT {
