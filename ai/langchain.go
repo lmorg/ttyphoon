@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lmorg/mxtty/app"
@@ -60,16 +61,19 @@ func (meta *AgentMeta) initLLM() error {
 		ChatHistoryDetail{meta: meta},
 		Wrapper{meta, webscraper},
 		Wrapper{meta, ddg},
+		Write{meta: meta},
 	}
 
 	//errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
 
-	//agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(3), agents.WithParserErrorHandler(errHandler))
-	agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3))
+	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(50)) //, agents.WithParserErrorHandler(errHandler))
+	//agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3))
 	meta.executor = agents.NewExecutor(agent)
 
 	return nil
 }
+
+const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
 func (meta *AgentMeta) runLLM(prompt string) (string, error) {
 	if meta.executor == nil {
@@ -80,5 +84,13 @@ func (meta *AgentMeta) runLLM(prompt string) (string, error) {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)
-	return chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
+	result, err := chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
+	if err == nil {
+		return result, nil
+	}
+
+	if strings.HasPrefix(err.Error(), _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT) {
+		return err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):], nil
+	}
+	return result, err
 }

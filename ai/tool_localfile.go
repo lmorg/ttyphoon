@@ -21,7 +21,7 @@ Useful for debugging output that references local files.`
 }
 
 func (f LocalFile) Name() string {
-	return "file"
+	return "Read File"
 }
 
 func (f LocalFile) Call(ctx context.Context, input string) (string, error) {

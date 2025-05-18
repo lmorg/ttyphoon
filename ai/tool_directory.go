@@ -23,7 +23,7 @@ Returns a bullet point list of all files and directories found inside a director
 }
 
 func (d Directory) Name() string {
-	return "directory"
+	return "Read Directory"
 }
 
 func (d Directory) Call(ctx context.Context, input string) (string, error) {
