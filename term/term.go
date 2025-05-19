@@ -422,3 +422,7 @@ func (term *Term) RowSrcFromScrollBack(y int32) (src *types.RowSource) {
 func (term *Term) ConvertRelativeToAbsoluteY(pos *types.XY) int32 {
 	return int32(len(term._scrollBuf) + int(pos.Y) - term._scrollOffset)
 }
+
+func (term *Term) GetCursorPosition() *types.XY {
+	return term.curPos()
+}

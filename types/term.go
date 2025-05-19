@@ -11,6 +11,7 @@ type Term interface {
 	GetSize() *XY
 	Resize(*XY)
 	Render() bool
+	GetCursorPosition() *XY
 	CopyRange(*XY, *XY) []byte
 	CopyLines(int32, int32) []byte
 	CopySquare(*XY, *XY) []byte
