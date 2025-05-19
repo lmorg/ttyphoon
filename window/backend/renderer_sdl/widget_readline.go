@@ -91,6 +91,11 @@ func (rl *widgetReadlineT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) 
 	if evt.Keysym.Sym == 'v' && (mod == codes.MOD_META || mod == codes.MOD_CTRL|codes.MOD_SHIFT) {
 		b := clipboard.Read(clipboard.FmtText)
 		if len(b) > 0 {
+			for i := range b {
+				if b[i] < ' ' {
+					b[i] = ' '
+				}
+			}
 			rl._instance.KeyPress(b)
 		}
 		return
