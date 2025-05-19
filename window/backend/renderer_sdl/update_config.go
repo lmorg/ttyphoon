@@ -113,12 +113,12 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Set Anthropic (Claude) API Key",
-			Fn:    func() { ai.EnvAnthropic(sr); sr.UpdateConfig() },
+			Fn:    func() { ai.EnvAnthropic(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 		{
 			Title: "Set OpenAI (ChatGPT) API Key",
-			Fn:    func() { ai.EnvOpenAi(sr); sr.UpdateConfig() },
+			Fn:    func() { ai.EnvOpenAi(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 
