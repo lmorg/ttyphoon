@@ -11,15 +11,15 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-var _notifyColourScheme = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
+var _notifyColourScheme = map[types.NotificationType]*types.Colour{
+	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 255},
+	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 255},
+	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 255},
+	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 255},
+	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 255},
 }
 
-var _notifyColourLight = map[int]*types.Colour{
+var _notifyColourLight = map[types.NotificationType]*types.Colour{
 	types.NOTIFY_DEBUG:  {0x00, 0x00, 0x00, 223},
 	types.NOTIFY_INFO:   {0x00, 0x00, 0x00, 223},
 	types.NOTIFY_WARN:   {0x00, 0x00, 0x00, 223},
@@ -27,7 +27,7 @@ var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_SCROLL: {0x00, 0x00, 0x00, 223},
 }
 
-var _notifyColourDark = map[int]*types.Colour{
+var _notifyColourDark = map[types.NotificationType]*types.Colour{
 	types.NOTIFY_DEBUG:  {0xff, 0xff, 0xff, 223},
 	types.NOTIFY_INFO:   {0xff, 0xff, 0xff, 223},
 	types.NOTIFY_WARN:   {0xff, 0xff, 0xff, 223},
@@ -35,6 +35,34 @@ var _notifyColourDark = map[int]*types.Colour{
 	types.NOTIFY_SCROLL: {0xff, 0xff, 0xff, 223},
 }
 
+var _notifyColourSgr = map[types.NotificationType]*types.Sgr{
+	types.NOTIFY_DEBUG: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_INFO: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0x99, 0xc0, 0xd3, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_WARN: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0xf2, 0xb7, 0x1f, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_ERROR: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0xde, 0x33, 0x3b, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_SCROLL: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+}
+
 /*var _notifyColourLight = map[int]*types.Colour{
 	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
 	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
@@ -67,9 +95,37 @@ var _notifyColourDark = map[int]*types.Colour{
 	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
 }*/
 
-const _NOTIFY_ALPHA_BLEND = 215
+//const _NOTIFY_ALPHA_BLEND = 215
 
-var notifyColour, notifyBorderColour map[int]*types.Colour
+var _notifyCountdownSgr = map[types.NotificationType]*types.Sgr{
+	types.NOTIFY_DEBUG: {
+		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
+		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_INFO: {
+		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
+		Bg:      &types.Colour{0x99, 0xc0, 0xd3, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_WARN: {
+		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
+		Bg:      &types.Colour{0xf2, 0xb7, 0x1f, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_ERROR: {
+		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
+		Bg:      &types.Colour{0xde, 0x33, 0x3b, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_SCROLL: {
+		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
+		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
+		Bitwise: types.SGR_BOLD,
+	},
+}
+
+var notifyColour, notifyBorderColour map[types.NotificationType]*types.Colour
 
 func (sr *sdlRender) preloadNotificationGlyphs() {
 	var err error
@@ -257,7 +313,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		countdownW := sr.glyphSize.X
 
 		// draw border
-		bc := notifyBorderColour[int(notification.Type)]
+		bc := notifyBorderColour[notification.Type]
 		sr.renderer.SetDrawColor(bc.Red, bc.Green, bc.Blue, bc.Alpha)
 		rect := sdl.Rect{
 			X: _WIDGET_INNER_MARGIN - 1,
@@ -275,7 +331,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		sr.renderer.DrawRect(&rect)
 
 		// fill background
-		c := notifyColour[int(notification.Type)]
+		c := notifyColour[notification.Type]
 		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN + 1,
@@ -288,14 +344,14 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		// render countdown
 		if notification.close == nil {
 			s := strconv.Itoa(int(time.Until(notification.end)/time.Second) + 1)
-			sr.printString(s, types.SGR_HEADING, &types.XY{
+			sr.printString(s, _notifyCountdownSgr[notification.Type], &types.XY{
 				X: windowRect.W - _WIDGET_OUTER_MARGIN - countdownW,
 				Y: _WIDGET_OUTER_MARGIN + offset,
 			})
 		}
 
 		// render text
-		sr.printString(notification.Message, types.SGR_HEADING, &types.XY{
+		sr.printString(notification.Message, _notifyColourSgr[notification.Type], &types.XY{
 			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X,
 			Y: _WIDGET_OUTER_MARGIN + offset,
 		})
