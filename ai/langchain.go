@@ -79,7 +79,7 @@ func (meta *AgentMeta) runLLM(prompt string) (string, error) {
 	if meta.executor == nil {
 		err := meta.initLLM()
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 	}
 

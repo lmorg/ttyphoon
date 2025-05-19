@@ -64,9 +64,10 @@ func askAI(meta *AgentMeta, prompt string, title string) {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			//return
 			result = err.Error()
-		}
 
-		meta.AddHistory(title, result)
+		} else {
+			meta.AddHistory(title, result)
+		}
 
 		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Explanation:\n\n%s", title, meta.ServiceName(), result)
 
