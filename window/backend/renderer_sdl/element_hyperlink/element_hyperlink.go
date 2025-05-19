@@ -78,13 +78,16 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:
-		el.renderer.AddToContextMenu(
-			types.MenuItem{
+		el.renderer.AddToContextMenu([]types.MenuItem{
+			{
+				Title: types.MENU_SEPARATOR,
+			},
+			{
 				Title: "Copy link to clipboard",
 				Fn:    func() { copyToClipboard(el.renderer, el.url) },
 				Icon:  0xf0c5,
 			},
-		)
+		}...)
 		apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems()
 		for i := range apps {
 			el.renderer.AddToContextMenu(

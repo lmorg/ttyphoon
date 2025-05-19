@@ -99,7 +99,7 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 
 		{
-			Title: MENU_SEPARATOR,
+			Title: types.MENU_SEPARATOR,
 		},
 		{
 			Title: fmt.Sprintf("AI service == %s", ai.Agent(sr.termWin.Active.Id()).ServiceName()),
@@ -123,7 +123,7 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 
 		{
-			Title: MENU_SEPARATOR,
+			Title: types.MENU_SEPARATOR,
 		},
 		{
 			Title: "Bash integration (written to shell)",

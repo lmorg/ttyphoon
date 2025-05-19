@@ -13,10 +13,10 @@ import (
 type inputBoxCallbackT func(string)
 
 type inputBoxWidgetT struct {
-	title      string
-	callback   inputBoxCallbackT
-	readline   *widgetReadlineT
-	_maxChars  int32
+	title     string
+	callback  inputBoxCallbackT
+	readline  *widgetReadlineT
+	_maxChars int32
 }
 
 const _INPUT_MAX_CHAR_WIDTH = 80
@@ -98,7 +98,7 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	offsetY := (surface.W - width) / 2
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(_INPUT_BOARDER_COLOUR.Red, _INPUT_BOARDER_COLOUR.Green, _INPUT_BOARDER_COLOUR.Blue, _INPUT_ALPHA)
+	_ = sr.renderer.SetDrawColor(notifyBorderColour[types.NOTIFY_QUESTION].Red, notifyBorderColour[types.NOTIFY_QUESTION].Green, notifyBorderColour[types.NOTIFY_QUESTION].Blue, notifyBorderColour[types.NOTIFY_QUESTION].Alpha)
 	rect := sdl.Rect{
 		X: offsetY - 1,
 		Y: offsetH - 1,
@@ -115,20 +115,24 @@ func (sr *sdlRender) renderInputBox(windowRect *sdl.Rect) {
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	_ = sr.renderer.SetDrawColor(_INPUT_BACKGROUND.Red, _INPUT_BACKGROUND.Green, _INPUT_BACKGROUND.Blue, _INPUT_ALPHA_BG)
+	//_ = sr.renderer.SetDrawColor(_INPUT_BACKGROUND.Red, _INPUT_BACKGROUND.Green, _INPUT_BACKGROUND.Blue, _INPUT_ALPHA_BG)
 	rect = sdl.Rect{
 		X: offsetY + 1,
 		Y: 1 + offsetH,
 		W: width - 2,
 		H: height - 2,
 	}
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
+	sr.renderer.FillRect(&rect)
+	_ = sr.renderer.SetDrawColor(notifyColour[types.NOTIFY_QUESTION].Red, notifyColour[types.NOTIFY_QUESTION].Green, notifyColour[types.NOTIFY_QUESTION].Blue, notifyColour[types.NOTIFY_QUESTION].Alpha)
 	sr.renderer.FillRect(&rect)
 
 	/*
 		TEXT FIELD
 	*/
 
-	sr.printString(sr.inputBox.title, types.SGR_HEADING, &types.XY{
+	// title
+	sr.printString(sr.inputBox.title, notifyColourSgr[types.NOTIFY_QUESTION], &types.XY{
 		X: offsetY + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
 		Y: _WIDGET_INNER_MARGIN + offsetH,
 	})

@@ -9,6 +9,8 @@ type MenuItem struct {
 	Icon      rune
 }
 
+const MENU_SEPARATOR = "-"
+
 type Renderer interface {
 	Start(*AppWindowTerms, any)
 	ShowAndFocusWindow()

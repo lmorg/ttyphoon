@@ -11,31 +11,43 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-var _notifyColourScheme = map[types.NotificationType]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 255},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 255},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 255},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 255},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 255},
+var _notifyColourSchemeLight = map[types.NotificationType]*types.Colour{
+	types.NOTIFY_DEBUG:    {0x31, 0x6d, 0xb0, 255},
+	types.NOTIFY_INFO:     {0x99, 0xc0, 0xd3, 255},
+	types.NOTIFY_WARN:     {0xf2, 0xb7, 0x1f, 255},
+	types.NOTIFY_ERROR:    {0xde, 0x33, 0x3b, 255},
+	types.NOTIFY_SCROLL:   {0x31, 0x6d, 0xb0, 255},
+	types.NOTIFY_QUESTION: {0x74, 0x95, 0x3c, 255},
+}
+
+var _notifyColourSchemeDark = map[types.NotificationType]*types.Colour{
+	types.NOTIFY_DEBUG:    {0x31, 0x6d, 0xb0, 92},
+	types.NOTIFY_INFO:     {0x99, 0xc0, 0xd3, 92},
+	types.NOTIFY_WARN:     {0xf2, 0xb7, 0x1f, 92},
+	types.NOTIFY_ERROR:    {0xde, 0x33, 0x3b, 92},
+	types.NOTIFY_SCROLL:   {0x31, 0x6d, 0xb0, 92},
+	types.NOTIFY_QUESTION: {0x74, 0x95, 0x3c, 92},
 }
 
 var _notifyColourLight = map[types.NotificationType]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x00, 0x00, 0x00, 223},
-	types.NOTIFY_INFO:   {0x00, 0x00, 0x00, 223},
-	types.NOTIFY_WARN:   {0x00, 0x00, 0x00, 223},
-	types.NOTIFY_ERROR:  {0x00, 0x00, 0x00, 223},
-	types.NOTIFY_SCROLL: {0x00, 0x00, 0x00, 223},
+	types.NOTIFY_DEBUG:    {0x00, 0x00, 0x00, 255},
+	types.NOTIFY_INFO:     {0x00, 0x00, 0x00, 255},
+	types.NOTIFY_WARN:     {0x00, 0x00, 0x00, 255},
+	types.NOTIFY_ERROR:    {0x00, 0x00, 0x00, 255},
+	types.NOTIFY_SCROLL:   {0x00, 0x00, 0x00, 255},
+	types.NOTIFY_QUESTION: {0x00, 0x00, 0x00, 255},
 }
 
 var _notifyColourDark = map[types.NotificationType]*types.Colour{
-	types.NOTIFY_DEBUG:  {0xff, 0xff, 0xff, 223},
-	types.NOTIFY_INFO:   {0xff, 0xff, 0xff, 223},
-	types.NOTIFY_WARN:   {0xff, 0xff, 0xff, 223},
-	types.NOTIFY_ERROR:  {0xff, 0xff, 0xff, 223},
-	types.NOTIFY_SCROLL: {0xff, 0xff, 0xff, 223},
+	types.NOTIFY_DEBUG:    {0x31, 0x6d, 0xb0, 255},
+	types.NOTIFY_INFO:     {0x99, 0xc0, 0xd3, 255},
+	types.NOTIFY_WARN:     {0xf2, 0xb7, 0x1f, 255},
+	types.NOTIFY_ERROR:    {0xde, 0x33, 0x3b, 255},
+	types.NOTIFY_SCROLL:   {0x31, 0x6d, 0xb0, 255},
+	types.NOTIFY_QUESTION: {0x74, 0x95, 0x3c, 255},
 }
 
-var _notifyColourSgr = map[types.NotificationType]*types.Sgr{
+var _notifyColourSgrLight = map[types.NotificationType]*types.Sgr{
 	types.NOTIFY_DEBUG: {
 		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
 		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
@@ -61,71 +73,81 @@ var _notifyColourSgr = map[types.NotificationType]*types.Sgr{
 		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
 		Bitwise: types.SGR_BOLD,
 	},
+	types.NOTIFY_QUESTION: {
+		Fg:      &types.Colour{0x00, 0x00, 0x00, 255},
+		Bg:      &types.Colour{0x74, 0x95, 0x3c, 192},
+		Bitwise: types.SGR_BOLD,
+	},
 }
 
-/*var _notifyColourLight = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
+var _notifyColourSgrDark = map[types.NotificationType]*types.Sgr{
+	types.NOTIFY_DEBUG: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_INFO: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_WARN: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_ERROR: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_SCROLL: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
+	types.NOTIFY_QUESTION: {
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_BOLD,
+	},
 }
-
-var _notifyColourDark = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  {0x31, 0x6d, 0xb0, 192},
-	types.NOTIFY_INFO:   {0x99, 0xc0, 0xd3, 192},
-	types.NOTIFY_WARN:   {0xf2, 0xb7, 0x1f, 192},
-	types.NOTIFY_ERROR:  {0xde, 0x33, 0x3b, 192},
-	types.NOTIFY_SCROLL: {0x31, 0x6d, 0xb0, 192},
-}*/
-
-/*var _notifyColourLight = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_INFO:   types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_ERROR:  types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
-}
-
-var _notifyColourDark = map[int]*types.Colour{
-	types.NOTIFY_DEBUG:  types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_INFO:   types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_WARN:   types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_ERROR:  types.SGR_COLOR_BACKGROUND,
-	types.NOTIFY_SCROLL: types.SGR_COLOR_BACKGROUND,
-}*/
 
 //const _NOTIFY_ALPHA_BLEND = 215
 
 var _notifyCountdownSgr = map[types.NotificationType]*types.Sgr{
 	types.NOTIFY_DEBUG: {
-		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
-		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
-		Bitwise: types.SGR_BOLD,
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_FAINT,
 	},
 	types.NOTIFY_INFO: {
-		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
-		Bg:      &types.Colour{0x99, 0xc0, 0xd3, 192},
-		Bitwise: types.SGR_BOLD,
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_FAINT,
 	},
 	types.NOTIFY_WARN: {
-		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
-		Bg:      &types.Colour{0xf2, 0xb7, 0x1f, 192},
-		Bitwise: types.SGR_BOLD,
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_FAINT,
 	},
 	types.NOTIFY_ERROR: {
-		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
-		Bg:      &types.Colour{0xde, 0x33, 0x3b, 192},
-		Bitwise: types.SGR_BOLD,
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_FAINT,
 	},
 	types.NOTIFY_SCROLL: {
-		Fg:      &types.Colour{0xff, 0xff, 0xff, 255},
-		Bg:      &types.Colour{0x31, 0x6d, 0xb0, 192},
-		Bitwise: types.SGR_BOLD,
+		Fg:      types.SGR_DEFAULT.Fg,
+		Bg:      types.SGR_DEFAULT.Bg,
+		Bitwise: types.SGR_FAINT,
 	},
 }
 
-var notifyColour, notifyBorderColour map[types.NotificationType]*types.Colour
+var (
+	notifyColour       map[types.NotificationType]*types.Colour
+	notifyBorderColour map[types.NotificationType]*types.Colour
+	notifyColourSgr    map[types.NotificationType]*types.Sgr
+)
 
 func (sr *sdlRender) preloadNotificationGlyphs() {
 	var err error
@@ -331,14 +353,17 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		sr.renderer.DrawRect(&rect)
 
 		// fill background
-		c := notifyColour[notification.Type]
-		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
 		rect = sdl.Rect{
 			X: _WIDGET_INNER_MARGIN + 1,
 			Y: _WIDGET_INNER_MARGIN + 1 + offset,
 			W: surface.W - _WIDGET_OUTER_MARGIN - 2,
 			H: textHeight + _WIDGET_OUTER_MARGIN - 2,
 		}
+		c := types.SGR_COLOR_BACKGROUND
+		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, 255)
+		sr.renderer.FillRect(&rect)
+		c = notifyColour[notification.Type]
+		sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, c.Alpha)
 		sr.renderer.FillRect(&rect)
 
 		// render countdown
@@ -351,7 +376,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		}
 
 		// render text
-		sr.printString(notification.Message, _notifyColourSgr[notification.Type], &types.XY{
+		sr.printString(notification.Message, notifyColourSgr[notification.Type], &types.XY{
 			X: _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X + sr.glyphSize.X,
 			Y: _WIDGET_OUTER_MARGIN + offset,
 		})

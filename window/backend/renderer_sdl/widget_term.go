@@ -205,7 +205,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 
 	menu.Append([]types.MenuItem{
 		{
-			Title: MENU_SEPARATOR,
+			Title: types.MENU_SEPARATOR,
 		},
 		/*{
 			Title: "Fold on indentation",
@@ -237,7 +237,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Icon:  0xf0c7,
 		},
 		{
-			Title: MENU_SEPARATOR,
+			Title: types.MENU_SEPARATOR,
 		},
 	}...)
 

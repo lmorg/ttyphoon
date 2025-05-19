@@ -18,19 +18,15 @@ func updateBlendMode() {
 
 	if types.THEME_LIGHT {
 		highlightBlendMode = sdl.BLENDMODE_BLEND
-		//notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourDark
-		//notifyColour, notifyBorderColour = _notifyColourLight, _notifyColourScheme
-		notifyColour, notifyBorderColour = _notifyColourScheme, _notifyColourLight
-		//questionColor, questionColorBorder = _questionColorLight, types.SGR_COLOR_BLACK //_questionColorDark
-		_INPUT_BACKGROUND = types.SGR_COLOR_WHITE_BRIGHT
+		notifyColour, notifyBorderColour = _notifyColourSchemeLight, _notifyColourLight
+		notifyColourSgr = _notifyColourSgrLight
+		//_INPUT_BACKGROUND = types.SGR_COLOR_WHITE_BRIGHT
 
 	} else {
 		highlightBlendMode = sdl.BLENDMODE_ADD
-		//notifyColour, notifyBorderColour = _notifyColourDark, _notifyColourLight
-		//notifyColour, notifyBorderColour = _notifyColourDark, _notifyColourScheme
-		notifyColour, notifyBorderColour = _notifyColourScheme, _notifyColourDark
-		//questionColor, questionColorBorder = _questionColorDark, types.SGR_COLOR_BLACK //_questionColorLight
-		_INPUT_BACKGROUND = types.SGR_COLOR_BLACK_BRIGHT
+		notifyColour, notifyBorderColour = _notifyColourSchemeDark, _notifyColourDark
+		notifyColourSgr = _notifyColourSgrDark
+		//_INPUT_BACKGROUND = types.SGR_COLOR_BLACK_BRIGHT
 
 	}
 }

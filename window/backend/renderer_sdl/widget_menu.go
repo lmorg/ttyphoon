@@ -10,17 +10,15 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const MENU_SEPARATOR = "-"
-
 const (
 	_INPUT_ALPHA    = 255
-	_INPUT_ALPHA_BG = 225
+	_INPUT_ALPHA_BG = 255
 )
 
-var (
+/*var (
 	_INPUT_BOARDER_COLOUR = types.SGR_COLOR_FOREGROUND
 	_INPUT_BACKGROUND     = types.SGR_COLOR_BLACK_BRIGHT
-)
+)*/
 
 type menuWidgetT struct {
 	title             string
@@ -250,7 +248,7 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 			continue
 		}
 
-		if menu.options[menu.highlightIndex] != MENU_SEPARATOR {
+		if menu.options[menu.highlightIndex] != types.MENU_SEPARATOR {
 			break
 		}
 	}
@@ -351,7 +349,7 @@ func (menu *menuWidgetT) _mouseHover(x, y int32, glyphSize *types.XY) int {
 		return -1
 	}
 
-	if menu.options[i] == MENU_SEPARATOR {
+	if menu.options[i] == types.MENU_SEPARATOR {
 		menu.highlightIndex = _MENU_HIGHLIGHT_HIDDEN
 		return -1
 	}
@@ -424,7 +422,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	}
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(_INPUT_BOARDER_COLOUR.Red, _INPUT_BOARDER_COLOUR.Green, _INPUT_BOARDER_COLOUR.Blue, _INPUT_ALPHA)
+	_ = sr.renderer.SetDrawColor(notifyBorderColour[types.NOTIFY_QUESTION].Red, notifyBorderColour[types.NOTIFY_QUESTION].Green, notifyBorderColour[types.NOTIFY_QUESTION].Blue, notifyBorderColour[types.NOTIFY_QUESTION].Alpha)
 	rect := sdl.Rect{
 		X: menuRect.X - 1,
 		Y: menuRect.Y - 1,
@@ -435,13 +433,15 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	_ = sr.renderer.DrawRect(&menuRect)
 
 	// fill background
-	_ = sr.renderer.SetDrawColor(_INPUT_BACKGROUND.Red, _INPUT_BACKGROUND.Green, _INPUT_BACKGROUND.Blue, _INPUT_ALPHA_BG)
 	rect = sdl.Rect{
 		X: menuRect.X + 1,
 		Y: menuRect.Y + 1,
 		W: menuRect.W - 2,
 		H: menuRect.H - 2,
 	}
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
+	_ = sr.renderer.FillRect(&rect)
+	_ = sr.renderer.SetDrawColor(notifyColour[types.NOTIFY_QUESTION].Red, notifyColour[types.NOTIFY_QUESTION].Green, notifyColour[types.NOTIFY_QUESTION].Blue, notifyColour[types.NOTIFY_QUESTION].Alpha)
 	_ = sr.renderer.FillRect(&rect)
 
 	/*
@@ -452,9 +452,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + sr.notifyIconSize.X,
 		Y: menuRect.Y + _WIDGET_OUTER_MARGIN,
 	}
-	//sgr := types.SGR_DEFAULT.Copy()
-	//sgr.Bitwise.Set(types.SGR_BOLD)
-	sr.printString(sr.menu.title, types.SGR_HEADING, pos)
+	sr.printString(sr.menu.title, notifyColourSgr[types.NOTIFY_QUESTION], pos)
 
 	// draw border
 	offset := sr.notifyIconSize.Y
@@ -506,7 +504,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 
 	offset += _WIDGET_INNER_MARGIN
 	for i := range sr.menu.options {
-		if sr.menu.options[i] == MENU_SEPARATOR {
+		if sr.menu.options[i] == types.MENU_SEPARATOR {
 			if filter != "" {
 				sr.menu.hidden[i] = true
 				continue
