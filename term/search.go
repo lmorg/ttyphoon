@@ -30,6 +30,7 @@ func (term *Term) search() {
 func (term *Term) searchBuf(search string) {
 	if len(search) == 1 {
 		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search string too short. Minimum search length is 2")
+		return
 	}
 
 	term.searchClearResults()
@@ -147,4 +148,148 @@ func (term *Term) ShowSearchResults() {
 	}
 	cbSelect := func(int) {}
 	term.renderer.DisplayMenu("Search results", results, cbHighlight, cbSelect, cbCancel)
+}
+
+///// Command lines
+
+type rowTupleT struct {
+	rowId   uint64
+	query   string
+	exitNum int
+}
+
+type rowTuplesT []rowTupleT
+
+func (term *Term) SearchCmdLines() {
+	if term.IsAltBuf() {
+		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search is not supported in alt buffer")
+		return
+	}
+
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
+	offset := term._scrollOffset
+
+	tuples := _searchCmdLinesBuf(term._normBuf)
+	tuples = append(tuples, _searchCmdLinesBuf(term._scrollBuf)...)
+
+	fnHighlight := func(i int) {
+		term.scrollToRowId(tuples[i].rowId, _SEARCH_OFFSET)
+	}
+
+	fnOk := func(int) {
+		// do nothing
+	}
+
+	fnCancel := func(int) {
+		term._scrollOffset = offset
+		term.updateScrollback()
+	}
+
+	term.renderer.DisplayMenu("Commands", tuples.SliceCheck(), fnHighlight, fnOk, fnCancel)
+}
+
+func (t *rowTuplesT) SliceCheck() []string {
+	check := func(exitNum int) string {
+		switch exitNum {
+		case 0:
+			return "✔"
+		default:
+			return "✖"
+		}
+	}
+	var s []string
+	for i := range *t {
+		s = append(s, fmt.Sprintf("%s %s", check((*t)[i].exitNum), (*t)[i].query))
+	}
+	return s
+}
+
+func _searchCmdLinesBuf(buf types.Screen) rowTuplesT {
+	var (
+		tuples      rowTuplesT
+		lastExitNum int
+		ai          bool
+	)
+
+	for i := len(buf) - 1; i >= 0; i-- {
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_END) {
+			lastExitNum = 0
+		}
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR) {
+			lastExitNum = 1
+		}
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_AI) {
+			ai = true
+		}
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
+			if ai {
+				ai = false
+				continue
+			}
+			tuples = append(tuples, rowTupleT{
+				rowId:   buf[i].Id,
+				query:   string(buf[i].CmdLine),
+				exitNum: lastExitNum,
+			})
+		}
+	}
+
+	return tuples
+}
+
+///// AI
+
+func (term *Term) SearchAiPrompts() {
+	if term.IsAltBuf() {
+		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search is not supported in alt buffer")
+		return
+	}
+
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
+	offset := term._scrollOffset
+
+	tuples := _searchAiBuf(term._normBuf)
+	tuples = append(tuples, _searchAiBuf(term._scrollBuf)...)
+
+	fnHighlight := func(i int) {
+		term.scrollToRowId(tuples[i].rowId, _SEARCH_OFFSET)
+	}
+
+	fnOk := func(int) {
+		// do nothing
+	}
+
+	fnCancel := func(int) {
+		term._scrollOffset = offset
+		term.updateScrollback()
+	}
+
+	term.renderer.DisplayMenu("AI Queries", tuples.Slice(), fnHighlight, fnOk, fnCancel)
+}
+
+func (t *rowTuplesT) Slice() []string {
+	var s []string
+	for i := range *t {
+		s = append(s, (*t)[i].query)
+	}
+	return s
+}
+
+func _searchAiBuf(buf types.Screen) rowTuplesT {
+	var tuples rowTuplesT
+
+	for i := len(buf) - 1; i >= 0; i-- {
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_AI) {
+			tuples = append(tuples, rowTupleT{
+				rowId: buf[i].Id,
+				query: "AI " + string(buf[i].CmdLine),
+			})
+		}
+	}
+
+	return tuples
 }

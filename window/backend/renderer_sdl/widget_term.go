@@ -227,9 +227,22 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Icon:  0xe05d,
 		},
 		{
+			Title: types.MENU_SEPARATOR,
+		},
+		{
 			Title: fmt.Sprintf("Find text [%s+f]", types.KEY_STR_META),
 			Fn:    term.Search,
 			Icon:  0xf002,
+		},
+		{
+			Title: "List command lines",
+			Fn:    term.SearchCmdLines,
+			Icon:  0xf0ae,
+		},
+		{
+			Title: "List AI Queries",
+			Fn:    term.SearchAiPrompts,
+			Icon:  0xf0ca,
 		},
 		{
 			Title: "Write all output to temp file",

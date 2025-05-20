@@ -25,8 +25,10 @@ type Term interface {
 	MakeVisible(bool)
 	Search()
 	ShowSearchResults()
+	SearchCmdLines()
+	SearchAiPrompts()
 	Match(*XY)
-	InsertSubTerm(string, int32, RowMetaFlag) error
+	InsertSubTerm(string, string, int32, RowMetaFlag) error
 	ConvertRelativeToAbsoluteY(*XY) int32
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte

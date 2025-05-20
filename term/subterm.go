@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	_SUBTERM_META_BEGIN = "\x1b_begin;output-block\x1b\\"
+	_SUBTERM_META_BEGIN = "\x1b_begin;output-block;%s\x1b\\"
 	_SUBTERM_META_END   = "\x1b_end;output-block;{\"MetaFlag\":%d}\x1b\\"
 )
 
@@ -33,7 +34,7 @@ func (stt *subTermTileT) GetTerm() types.Term     { return stt.parentTerm }
 func (stt *subTermTileT) SetTerm(term types.Term) { stt.parentTerm = term }
 func (stt *subTermTileT) Pwd() string             { return stt.curPath }
 
-func (term *Term) newSubTerm(content string, meta types.RowMetaFlag) types.Screen {
+func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) types.Screen {
 	debug.Log(content)
 
 	tile := subTermTileT{
@@ -42,13 +43,19 @@ func (term *Term) newSubTerm(content string, meta types.RowMetaFlag) types.Scree
 		curPath:    term.tile.Pwd(),
 	}
 
+	beginPayloadMap := map[string]string{
+		"CmdLine": query,
+	}
+	beginPayloadBytes, _ := json.Marshal(beginPayloadMap)
+
 	content = strings.ReplaceAll(content, "\n", "\r\n")
 	pty := ptty.NewMock()
 
 	subTerm := NewTerminal(&tile, term.renderer, &types.XY{X: term.size.X, Y: 10000}, false)
 	subTerm.Start(pty)
 
-	b := append([]byte(_SUBTERM_META_BEGIN), []byte(content)...)
+	b := fmt.Appendf(nil, _SUBTERM_META_BEGIN, beginPayloadBytes)
+	b = append(b, []byte(content)...)
 	err := pty.Write(fmt.Appendf(b, _SUBTERM_META_END, meta))
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("unable to write content to sub-term: %v", err))
@@ -66,7 +73,7 @@ func (term *Term) newSubTerm(content string, meta types.RowMetaFlag) types.Scree
 	return subTerm._normBuf[0:subTerm.curPos().Y]
 }
 
-func (term *Term) InsertSubTerm(content string, cellY int32, meta types.RowMetaFlag) error {
-	rows := term.newSubTerm(content, meta)
+func (term *Term) InsertSubTerm(query, content string, cellY int32, meta types.RowMetaFlag) error {
+	rows := term.newSubTerm(query, content, meta)
 	return term.insertRows(cellY, rows)
 }

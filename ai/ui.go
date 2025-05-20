@@ -11,12 +11,12 @@ import (
 
 func (meta *AgentMeta) Explain(promptDialogue bool) {
 	if !promptDialogue {
-		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine))
+		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine)
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt)
+		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
 	meta.Renderer.DisplayInputBox("Add to prompt", "", fn)
@@ -29,10 +29,10 @@ var _STICKY_SPINNER = []string{
 }
 
 func (meta *AgentMeta) AskAI(prompt string) {
-	askAI(meta, meta.askPrompt(prompt), "> "+prompt)
+	askAI(meta, meta.askPrompt(prompt), "> "+prompt, prompt)
 }
 
-func askAI(meta *AgentMeta, prompt string, title string) {
+func askAI(meta *AgentMeta, prompt string, title string, query string) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
 	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
 	fin := make(chan struct{})
@@ -81,7 +81,7 @@ func askAI(meta *AgentMeta, prompt string, title string) {
 			markdown = result
 		}
 
-		err = meta.Term.InsertSubTerm(markdown, meta.InsertRowPos, types.ROW_OUTPUT_BLOCK_AI)
+		err = meta.Term.InsertSubTerm(query, markdown, meta.InsertRowPos, types.ROW_OUTPUT_BLOCK_AI)
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
