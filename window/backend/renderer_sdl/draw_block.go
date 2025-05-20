@@ -30,6 +30,11 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 	_ = sr.renderer.SetDrawColor(c.Red, c.Green, c.Blue, 192)
 	//_ = texture.SetBlendMode(sdl.BLENDMODE_ADD)
 	_ = sr.renderer.FillRect(rect)
+
+	if !folded {
+		x2 := (tile.Right()+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER
+		_ = sr.renderer.DrawLine(rect.X, rect.Y+rect.H, x2, rect.Y+rect.H)
+	}
 }
 
 func (sr *sdlRender) DrawScrollbar(tile types.Tile, value, max int) {
