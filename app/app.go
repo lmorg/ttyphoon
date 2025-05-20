@@ -15,7 +15,7 @@ const (
 	version  = "%d.%d.%d"
 	Major    = 0
 	Minor    = 10
-	Revision = 4900
+	Revision = 5000
 )
 
 const Title = "Ttyphoon - Multimedia Terminal Emulator"

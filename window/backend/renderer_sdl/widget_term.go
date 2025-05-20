@@ -102,6 +102,14 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1})
 		return
 
+	case evt.Keysym.Sym == 'c' && mod == codes.MOD_META:
+		sr.termWin.Active.GetTerm().SearchCmdLines()
+		return
+
+	case evt.Keysym.Sym == 'p' && mod == codes.MOD_META:
+		sr.termWin.Active.GetTerm().SearchAiPrompts()
+		return
+
 	case evt.Keysym.Sym == 'e' && mod == codes.MOD_META:
 		sr.DisplayInputBox("Visual editor", "", func(s string) {
 			if s != "" {
@@ -235,12 +243,12 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Icon:  0xf002,
 		},
 		{
-			Title: "List command lines",
+			Title: fmt.Sprintf("List command line prompts [%s+c]", types.KEY_STR_META),
 			Fn:    term.SearchCmdLines,
 			Icon:  0xf0ae,
 		},
 		{
-			Title: "List AI Queries",
+			Title: fmt.Sprintf("Jump to AI prompts [%s+p]", types.KEY_STR_META),
 			Fn:    term.SearchAiPrompts,
 			Icon:  0xf0ca,
 		},

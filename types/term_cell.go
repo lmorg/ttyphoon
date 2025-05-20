@@ -54,18 +54,23 @@ func (c *Cell) GetElementXY() *XY {
 */
 
 type Row struct {
-	Id      uint64
-	Cells   []*Cell
-	Meta    RowMetaFlag
-	Hidden  Screen
-	Phrase  *[]rune
-	Source  *RowSource
-	CmdLine []rune
+	Id     uint64
+	Cells  []*Cell
+	Meta   RowMetaFlag
+	Hidden Screen
+	Phrase *[]rune
+	Source *RowSource
+	Block  *BlockMeta
 }
 
 type RowSource struct {
 	Host string
 	Pwd  string
+}
+
+type BlockMeta struct {
+	Query   []rune // typically command line
+	ExitNum int
 }
 
 type RowMetaFlag uint16

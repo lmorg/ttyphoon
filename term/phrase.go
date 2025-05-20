@@ -27,6 +27,8 @@ func (term *Term) phraseSetToRowPos() {
 
 	term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
+
+	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 }
 
 var (

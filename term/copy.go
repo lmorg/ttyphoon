@@ -167,12 +167,12 @@ func (term *Term) getCmdLine(pos int32) []rune {
 	for i := int(pos); i > -1; i-- {
 		if i < len(term._scrollBuf) {
 			if term._scrollBuf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
-				return term._scrollBuf[i].CmdLine
+				return term._scrollBuf[i].Block.Query
 			}
 
 		} else {
 			if term._normBuf[i-len(term._scrollBuf)].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
-				return term._normBuf[i-len(term._scrollBuf)].CmdLine
+				return term._normBuf[i-len(term._scrollBuf)].Block.Query
 			}
 
 		}

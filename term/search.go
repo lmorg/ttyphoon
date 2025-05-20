@@ -187,39 +187,24 @@ func (term *Term) SearchCmdLines() {
 		term.updateScrollback()
 	}
 
-	term.renderer.DisplayMenu("Commands", tuples.SliceCheck(), fnHighlight, fnOk, fnCancel)
+	term.renderer.DisplayMenu("Commands", tuples.SliceWithExitNum(), fnHighlight, fnOk, fnCancel)
 }
 
-func (t *rowTuplesT) SliceCheck() []string {
-	check := func(exitNum int) string {
-		switch exitNum {
-		case 0:
-			return "✔"
-		default:
-			return "✖"
-		}
-	}
+func (t *rowTuplesT) SliceWithExitNum() []string {
 	var s []string
 	for i := range *t {
-		s = append(s, fmt.Sprintf("%s %s", check((*t)[i].exitNum), (*t)[i].query))
+		s = append(s, fmt.Sprintf("%-3d: %s", (*t)[i].exitNum, (*t)[i].query))
 	}
 	return s
 }
 
 func _searchCmdLinesBuf(buf types.Screen) rowTuplesT {
 	var (
-		tuples      rowTuplesT
-		lastExitNum int
-		ai          bool
+		tuples rowTuplesT
+		ai     bool
 	)
 
 	for i := len(buf) - 1; i >= 0; i-- {
-		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_END) {
-			lastExitNum = 0
-		}
-		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR) {
-			lastExitNum = 1
-		}
 		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_AI) {
 			ai = true
 		}
@@ -230,8 +215,8 @@ func _searchCmdLinesBuf(buf types.Screen) rowTuplesT {
 			}
 			tuples = append(tuples, rowTupleT{
 				rowId:   buf[i].Id,
-				query:   string(buf[i].CmdLine),
-				exitNum: lastExitNum,
+				query:   string(buf[i].Block.Query),
+				exitNum: buf[i].Block.ExitNum,
 			})
 		}
 	}
@@ -280,14 +265,25 @@ func (t *rowTuplesT) Slice() []string {
 }
 
 func _searchAiBuf(buf types.Screen) rowTuplesT {
-	var tuples rowTuplesT
+	var (
+		tuples rowTuplesT
+		isAi   bool
+	)
 
 	for i := len(buf) - 1; i >= 0; i-- {
 		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_AI) {
-			tuples = append(tuples, rowTupleT{
+			isAi = true
+		}
+		if buf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) && isAi {
+			block := rowTupleT{
 				rowId: buf[i].Id,
-				query: "AI " + string(buf[i].CmdLine),
-			})
+				query: string(buf[i].Block.Query),
+			}
+			if len(block.query) < 3 {
+				block.query += "   "
+			}
+			tuples = append(tuples, block)
+			isAi = false
 		}
 	}
 
