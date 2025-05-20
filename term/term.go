@@ -72,8 +72,8 @@ type Term struct {
 	_mouseButtonDown bool
 	_phrase          *[]rune
 	_rowPhrase       *[]rune
-	_rowId           uint64
 	_rowSource       *types.RowSource
+	_blockMeta       *types.BlockMeta
 
 	// search
 	_searchHighlight  bool
@@ -187,6 +187,8 @@ func (term *Term) reset(size *types.XY) {
 	if config.Config.Tmux.Enabled {
 		term.renderer.SetKeyboardFnMode(types.KeysTmuxClient)
 	}
+
+	term._blockMeta = new(types.BlockMeta)
 }
 
 func (term *Term) makeScreen() types.Screen {
@@ -197,21 +199,9 @@ func (term *Term) makeScreen() types.Screen {
 	return screen
 }
 
-const UINT64_CAP = ^uint64(0)
-
-func (term *Term) _nextRowId() uint64 {
-	if term._rowId == UINT64_CAP {
-		term._rowId = 0
-	} else {
-		term._rowId++
-	}
-
-	return term._rowId
-}
-
 func (term *Term) makeRow() *types.Row {
 	row := &types.Row{
-		Id:     term._nextRowId(),
+		Id:     nextRowId(),
 		Cells:  term.makeCells(term.size.X),
 		Phrase: new([]rune),
 	}
