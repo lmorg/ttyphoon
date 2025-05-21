@@ -83,7 +83,6 @@ func (term *Term) searchClearResults() {
 	term._searchResults = nil
 	term._scrollOffset = 0
 	term.updateScrollback()
-	return
 }
 
 func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) bool) bool {
