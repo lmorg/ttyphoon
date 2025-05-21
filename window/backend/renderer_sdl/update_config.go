@@ -112,6 +112,15 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon:  0xe699,
 		},
 		{
+			Title: "Enable or disable specific AI tools...",
+			Fn: func() {
+				meta := ai.Agent(sr.termWin.Active.Id())
+				meta.Renderer = sr
+				meta.ChooseTools()
+			},
+			Icon: 0xf7d9,
+		},
+		{
 			Title: "Set Anthropic (Claude) API Key",
 			Fn:    func() { ai.EnvAnthropic(sr, sr.UpdateConfig) },
 			Icon:  0xf084,

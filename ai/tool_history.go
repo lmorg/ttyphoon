@@ -23,18 +23,30 @@ const _HISTORY_DETAILED = `
 type ChatHistoryDetail struct {
 	CallbacksHandler callbacks.Handler
 	meta             *AgentMeta
+	enabled          bool
 }
 
-func (h ChatHistoryDetail) Description() string {
+func init() {
+	ToolsAdd(&ChatHistoryDetail{})
+}
+
+func (h *ChatHistoryDetail) New(meta *AgentMeta) (tool, error) {
+	return &ChatHistoryDetail{meta: meta, enabled: true}, nil
+}
+
+func (h *ChatHistoryDetail) Enabled() bool { return h.enabled }
+func (h *ChatHistoryDetail) Toggle()       { h.enabled = !h.enabled }
+
+func (h *ChatHistoryDetail) Description() string {
 	return `Returns the the full prompt for a specific chat history index.
 Input should be an integer.`
 }
 
-func (h ChatHistoryDetail) Name() string {
+func (h *ChatHistoryDetail) Name() string {
 	return "Chat History"
 }
 
-func (h ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
+func (h *ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
 	if h.CallbacksHandler != nil {
 		h.CallbacksHandler.HandleToolStart(ctx, input)
 	}

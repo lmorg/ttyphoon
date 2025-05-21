@@ -15,10 +15,26 @@ import (
 type Write struct {
 	CallbacksHandler callbacks.Handler
 	meta             *AgentMeta
+	enabled          bool
 }
 
-func (w Write) Description() string {
-	return `Writes a new file or overwrites an existing file, to local disk.
+func init() {
+	ToolsAdd(&Write{})
+}
+
+func (w *Write) New(meta *AgentMeta) (tool, error) {
+	return &Write{meta: meta, enabled: false}, nil
+}
+
+func (w *Write) Enabled() bool { return w.enabled }
+func (w *Write) Toggle()       { w.enabled = !w.enabled }
+
+func (w *Write) Name() string {
+	return "Write File"
+}
+
+func (w *Write) Description() string {
+	return `Writes a new file or overwrites an existing file.
 Useful for making changes, correcting my mistakes, and writing new code and configuration.
 You should only use this if told to write or update a file, or if you have asked for permission and I have consented.
 File contents should contain the entire file, including parts of the file that are not changing.
@@ -26,11 +42,7 @@ The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
 `
 }
 
-func (w Write) Name() string {
-	return "Write File"
-}
-
-func (w Write) Call(ctx context.Context, input string) (string, error) {
+func (w *Write) Call(ctx context.Context, input string) (string, error) {
 	if w.CallbacksHandler != nil {
 		w.CallbacksHandler.HandleToolStart(ctx, input)
 	}

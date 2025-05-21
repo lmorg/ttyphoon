@@ -18,15 +18,21 @@ type AgentMeta struct {
 	Pwd          string
 	OutputBlock  string
 	InsertRowPos int32
+
+	_tools []tool
 }
 
 func NewAgentMeta() *AgentMeta {
-	return &AgentMeta{
+	meta := &AgentMeta{
 		model: map[string]string{
 			LLM_OPENAI:    "gpt-4.1",
 			LLM_ANTHROPIC: "claude-3-5-haiku-latest",
 		},
 	}
+
+	meta.toolsInit()
+
+	return meta
 }
 
 var allTheAgents = map[string]*AgentMeta{}

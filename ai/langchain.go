@@ -2,19 +2,15 @@ package ai
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
-	"github.com/lmorg/mxtty/app"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/tools"
-	"github.com/tmc/langchaingo/tools/duckduckgo"
-	"github.com/tmc/langchaingo/tools/scraper"
 )
 
 func llmOpenAI(meta *AgentMeta) (llms.Model, error) {
@@ -43,31 +39,23 @@ func (meta *AgentMeta) initLLM() error {
 		return err
 	}
 
-	webscraper, err := scraper.New()
-	if err != nil {
-		return err
+	var agentTools []tools.Tool
+	for _, tool := range meta._tools {
+		if tool.Enabled() {
+			agentTools = append(agentTools, tool)
+		}
 	}
 
-	ddg, err := duckduckgo.New(5, fmt.Sprintf("%s/%s", app.Name, app.Version()))
-	if err != nil {
-		return err
-	}
+	/* 	ReadFile{meta: meta},
+	   		Directory{meta: meta},
+	   		ChatHistoryDetail{meta: meta},
+	   		Wrapper{meta, webscraper},
+	   		Wrapper{meta, ddg},
+	   		Write{meta: meta},
+	   	}
+	*/
 
-	//history := memory.NewSimple()
-
-	agentTools := []tools.Tool{
-		LocalFile{meta: meta},
-		Directory{meta: meta},
-		ChatHistoryDetail{meta: meta},
-		Wrapper{meta, webscraper},
-		Wrapper{meta, ddg},
-		//Write{meta: meta},
-	}
-
-	//errHandler := agents.NewParserErrorHandler(func(s string) string { return "TODO" })
-
-	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(50)) //, agents.WithParserErrorHandler(errHandler))
-	//agent := agents.NewConversationalAgent(model, agentTools, agents.WithMaxIterations(3))
+	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(50))
 	meta.executor = agents.NewExecutor(agent)
 
 	return nil

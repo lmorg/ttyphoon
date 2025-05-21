@@ -15,18 +15,30 @@ import (
 type Directory struct {
 	CallbacksHandler callbacks.Handler
 	meta             *AgentMeta
+	enabled          bool
 }
 
-func (d Directory) Description() string {
-	return `Check the contents of a directory. 
+func init() {
+	ToolsAdd(&Directory{})
+}
+
+func (d Directory) New(meta *AgentMeta) (tool, error) {
+	return &Directory{meta: meta, enabled: true}, nil
+}
+
+func (d *Directory) Enabled() bool { return d.enabled }
+func (d *Directory) Toggle()       { d.enabled = !d.enabled }
+
+func (d *Directory) Description() string {
+	return `Check the contents of a directory.
 Returns a bullet point list of all files and directories found inside a directory.`
 }
 
-func (d Directory) Name() string {
+func (d *Directory) Name() string {
 	return "Read Directory"
 }
 
-func (d Directory) Call(ctx context.Context, input string) (string, error) {
+func (d *Directory) Call(ctx context.Context, input string) (string, error) {
 	if d.CallbacksHandler != nil {
 		d.CallbacksHandler.HandleToolStart(ctx, input)
 	}

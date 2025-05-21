@@ -10,21 +10,33 @@ import (
 	"github.com/tmc/langchaingo/callbacks"
 )
 
-type LocalFile struct {
+type ReadFile struct {
 	CallbacksHandler callbacks.Handler
 	meta             *AgentMeta
+	enabled          bool
 }
 
-func (f LocalFile) Description() string {
-	return `Open a local file and return its contents.
+func init() {
+	ToolsAdd(&ReadFile{})
+}
+
+func (f *ReadFile) New(meta *AgentMeta) (tool, error) {
+	return &ReadFile{meta: meta, enabled: true}, nil
+}
+
+func (f *ReadFile) Enabled() bool { return f.enabled }
+func (f *ReadFile) Toggle()       { f.enabled = !f.enabled }
+
+func (f *ReadFile) Description() string {
+	return `Open a local file for reading and return its contents.
 Useful for debugging output that references local files.`
 }
 
-func (f LocalFile) Name() string {
+func (f *ReadFile) Name() string {
 	return "Read File"
 }
 
-func (f LocalFile) Call(ctx context.Context, input string) (string, error) {
+func (f *ReadFile) Call(ctx context.Context, input string) (string, error) {
 	if f.CallbacksHandler != nil {
 		f.CallbacksHandler.HandleToolStart(ctx, input)
 	}

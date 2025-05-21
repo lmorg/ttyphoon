@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -104,4 +105,21 @@ func EnvAnthropic(renderer types.Renderer, callback func()) {
 	renderer.DisplayInputBox("Anthropic (Claude) API Key", "", func(s string) {
 		_ = os.Setenv(_ANTHROPIC_ENV_VAR, s)
 	})
+}
+
+func (meta *AgentMeta) ChooseTools() {
+	s := make([]string, len(meta._tools))
+	for i, tool := range meta._tools {
+		s[i] = fmt.Sprintf("%s == %v", tool.Name(), tool.Enabled())
+	}
+
+	fnOk := func(i int) {
+		meta._tools[i].Toggle()
+		meta.executor = nil
+		meta.ChooseTools()
+	}
+
+	debug.Log(s)
+
+	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, nil)
 }
