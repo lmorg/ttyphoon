@@ -3,7 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
@@ -142,7 +142,7 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 				sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%d lines have been copied to clipboard", l))
 			}
 		case _HIGHLIGHT_MODE_AI:
-			meta := ai.Agent(sr.termWin.Active.Id())
+			meta := agent.Get(sr.termWin.Active.Id())
 			meta.Term = term
 			meta.Renderer = sr
 			meta.CmdLine = term.CmdLine(pos)

@@ -1,10 +1,11 @@
-package ai
+package tools
 
 import (
 	"context"
 	"fmt"
 	"strconv"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/callbacks"
 )
@@ -22,15 +23,15 @@ const _HISTORY_DETAILED = `
 
 type ChatHistoryDetail struct {
 	CallbacksHandler callbacks.Handler
-	meta             *AgentMeta
+	meta             *agent.Meta
 	enabled          bool
 }
 
 func init() {
-	ToolsAdd(&ChatHistoryDetail{})
+	agent.ToolsAdd(&ChatHistoryDetail{})
 }
 
-func (h *ChatHistoryDetail) New(meta *AgentMeta) (tool, error) {
+func (h *ChatHistoryDetail) New(meta *agent.Meta) (agent.Tool, error) {
 	return &ChatHistoryDetail{meta: meta, enabled: true}, nil
 }
 
@@ -63,15 +64,15 @@ func (h *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 	case i < 0:
 		result = "ERROR: you cannot have negative indexes."
 		goto fin
-	case i >= len(h.meta.history):
+	case i >= len(h.meta.History):
 		result = "ERROR: index doesn't match a chat."
 		goto fin
 	}
 
 	result = fmt.Sprintf(_HISTORY_DETAILED,
-		h.meta.history[i].Title,
-		h.meta.history[i].OutputBlock,
-		h.meta.history[i].Response,
+		h.meta.History[i].Title,
+		h.meta.History[i].OutputBlock,
+		h.meta.History[i].Response,
 	)
 
 fin:

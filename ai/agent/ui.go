@@ -1,4 +1,4 @@
-package ai
+package agent
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (meta *AgentMeta) Explain(promptDialogue bool) {
+func (meta *Meta) Explain(promptDialogue bool) {
 	if !promptDialogue {
 		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine)
 		return
@@ -29,11 +29,11 @@ var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func (meta *AgentMeta) AskAI(prompt string) {
+func (meta *Meta) AskAI(prompt string) {
 	askAI(meta, meta.askPrompt(prompt), "> "+prompt, prompt)
 }
 
-func askAI(meta *AgentMeta, prompt string, title string, query string) {
+func askAI(meta *Meta, prompt string, title string, query string) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
 	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
 	fin := make(chan struct{})
@@ -107,7 +107,7 @@ func EnvAnthropic(renderer types.Renderer, callback func()) {
 	})
 }
 
-func (meta *AgentMeta) ChooseTools() {
+func (meta *Meta) ChooseTools() {
 	s := make([]string, len(meta._tools))
 	for i, tool := range meta._tools {
 		s[i] = fmt.Sprintf("%s == %v", tool.Name(), tool.Enabled())

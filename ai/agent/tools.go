@@ -1,4 +1,4 @@
-package ai
+package agent
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-type tool interface {
-	New(*AgentMeta) (tool, error)
+type Tool interface {
+	New(*Meta) (Tool, error)
 	Enabled() bool
 	Toggle()
 	Name() string
@@ -15,13 +15,13 @@ type tool interface {
 	Call(context.Context, string) (string, error)
 }
 
-var _tools []tool
+var _tools []Tool
 
-func ToolsAdd(t tool) {
+func ToolsAdd(t Tool) {
 	_tools = append(_tools, t)
 }
 
-func (meta *AgentMeta) toolsInit() {
+func (meta *Meta) toolsInit() {
 	for i := range _tools {
 		newTool, err := _tools[i].New(meta)
 		if err != nil {

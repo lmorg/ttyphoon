@@ -1,4 +1,4 @@
-package ai
+package agent
 
 import (
 	"fmt"
@@ -6,17 +6,17 @@ import (
 	"github.com/lmorg/mxtty/debug"
 )
 
-type historyItemT struct {
+type HistoryItemT struct {
 	Title       string
 	CmdLine     string
 	OutputBlock string
 	Response    string
 }
 
-type historyT []historyItemT
+type HistoryT []HistoryItemT
 
-func (meta *AgentMeta) AddHistory(title string, response string) {
-	meta.history = append(meta.history, historyItemT{
+func (meta *Meta) AddHistory(title string, response string) {
+	meta.History = append(meta.History, HistoryItemT{
 		Title:       title,
 		CmdLine:     meta.CmdLine,
 		OutputBlock: meta.OutputBlock,
@@ -34,16 +34,16 @@ const _HISTORY_META = `
 ---
 `
 
-func (meta *AgentMeta) History() string {
-	if len(meta.history) == 0 {
+func (h HistoryT) String() string {
+	if len(h) == 0 {
 		return ""
 	}
 	result := "---\n# Chat history:"
-	for i := range meta.history {
+	for i := range h {
 		result += fmt.Sprintf(_HISTORY_META,
 			i,
-			meta.history[i].Title,
-			meta.history[i].Response,
+			h[i].Title,
+			h[i].Response,
 		)
 	}
 	debug.Log(result)

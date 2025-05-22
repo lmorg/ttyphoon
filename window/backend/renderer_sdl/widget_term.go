@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
@@ -225,12 +225,12 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			},
 		},*/
 		{
-			Title: fmt.Sprintf("Highlight and explain (%s)", ai.Agent(sr.termWin.Active.Id()).ServiceName()),
+			Title: fmt.Sprintf("Highlight and explain (%s)", agent.Get(sr.termWin.Active.Id()).ServiceName()),
 			Fn:    func() { sr.highlightAi = true },
 			Icon:  0xf72b,
 		},
 		{
-			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", ai.Agent(sr.termWin.Active.Id()).ServiceName(), types.KEY_STR_META),
+			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", agent.Get(sr.termWin.Active.Id()).ServiceName(), types.KEY_STR_META),
 			Fn:    func() { askAi(sr, pos) },
 			Icon:  0xe05d,
 		},

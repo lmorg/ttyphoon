@@ -3,7 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/integrations"
 	"github.com/lmorg/mxtty/types"
@@ -102,19 +102,19 @@ func (sr *sdlRender) UpdateConfig() {
 			Title: types.MENU_SEPARATOR,
 		},
 		{
-			Title: fmt.Sprintf("AI service == %s", ai.Agent(sr.termWin.Active.Id()).ServiceName()),
-			Fn:    func() { ai.Agent(sr.termWin.Active.Id()).ServiceNext(); sr.UpdateConfig() },
+			Title: fmt.Sprintf("AI service == %s", agent.Get(sr.termWin.Active.Id()).ServiceName()),
+			Fn:    func() { agent.Get(sr.termWin.Active.Id()).ServiceNext(); sr.UpdateConfig() },
 			Icon:  0xe4f6,
 		},
 		{
-			Title: fmt.Sprintf("Model == %s", ai.Agent(sr.termWin.Active.Id()).ModelName()),
-			Fn:    func() { ai.Agent(sr.termWin.Active.Id()).ModelNext(); sr.UpdateConfig() },
+			Title: fmt.Sprintf("Model == %s", agent.Get(sr.termWin.Active.Id()).ModelName()),
+			Fn:    func() { agent.Get(sr.termWin.Active.Id()).ModelNext(); sr.UpdateConfig() },
 			Icon:  0xe699,
 		},
 		{
 			Title: "Enable or disable specific AI tools...",
 			Fn: func() {
-				meta := ai.Agent(sr.termWin.Active.Id())
+				meta := agent.Get(sr.termWin.Active.Id())
 				meta.Renderer = sr
 				meta.ChooseTools()
 			},
@@ -122,12 +122,12 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Set Anthropic (Claude) API Key",
-			Fn:    func() { ai.EnvAnthropic(sr, sr.UpdateConfig) },
+			Fn:    func() { agent.EnvAnthropic(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 		{
 			Title: "Set OpenAI (ChatGPT) API Key",
-			Fn:    func() { ai.EnvOpenAi(sr, sr.UpdateConfig) },
+			Fn:    func() { agent.EnvOpenAi(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 

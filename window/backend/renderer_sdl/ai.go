@@ -3,13 +3,13 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/types"
 )
 
 func askAi(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
-	meta := ai.Agent(sr.termWin.Active.Id())
+	meta := agent.Get(sr.termWin.Active.Id())
 	meta.Term = term
 	meta.Renderer = sr
 	meta.CmdLine = term.CmdLine(pos)

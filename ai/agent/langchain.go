@@ -1,4 +1,4 @@
-package ai
+package agent
 
 import (
 	"context"
@@ -13,15 +13,15 @@ import (
 	"github.com/tmc/langchaingo/tools"
 )
 
-func llmOpenAI(meta *AgentMeta) (llms.Model, error) {
+func llmOpenAI(meta *Meta) (llms.Model, error) {
 	return openai.New(openai.WithModel(meta.ModelName()))
 }
 
-func llmAnthropic(meta *AgentMeta) (llms.Model, error) {
+func llmAnthropic(meta *Meta) (llms.Model, error) {
 	return anthropic.New(anthropic.WithModel(meta.ModelName()))
 }
 
-func (meta *AgentMeta) initLLM() error {
+func (meta *Meta) initLLM() error {
 	var (
 		model llms.Model
 		err   error
@@ -46,15 +46,6 @@ func (meta *AgentMeta) initLLM() error {
 		}
 	}
 
-	/* 	ReadFile{meta: meta},
-	   		Directory{meta: meta},
-	   		ChatHistoryDetail{meta: meta},
-	   		Wrapper{meta, webscraper},
-	   		Wrapper{meta, ddg},
-	   		Write{meta: meta},
-	   	}
-	*/
-
 	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(50))
 	meta.executor = agents.NewExecutor(agent)
 
@@ -63,7 +54,7 @@ func (meta *AgentMeta) initLLM() error {
 
 const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
-func (meta *AgentMeta) runLLM(prompt string) (string, error) {
+func (meta *Meta) runLLM(prompt string) (string, error) {
 	if meta.executor == nil {
 		err := meta.initLLM()
 		if err != nil {

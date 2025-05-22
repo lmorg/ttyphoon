@@ -1,4 +1,4 @@
-package ai
+package tools
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/callbacks"
@@ -14,15 +15,15 @@ import (
 
 type Directory struct {
 	CallbacksHandler callbacks.Handler
-	meta             *AgentMeta
+	meta             *agent.Meta
 	enabled          bool
 }
 
 func init() {
-	ToolsAdd(&Directory{})
+	agent.ToolsAdd(&Directory{})
 }
 
-func (d Directory) New(meta *AgentMeta) (tool, error) {
+func (d Directory) New(meta *agent.Meta) (agent.Tool, error) {
 	return &Directory{meta: meta, enabled: true}, nil
 }
 

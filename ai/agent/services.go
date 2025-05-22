@@ -1,4 +1,4 @@
-package ai
+package agent
 
 const (
 	LLM_OPENAI    = "ChatGPT"
@@ -23,11 +23,11 @@ var models = map[string][]string{
 	},
 }
 
-func (meta *AgentMeta) ServiceName() string {
+func (meta *Meta) ServiceName() string {
 	return services[meta.service]
 }
 
-func (meta *AgentMeta) ServiceNext() {
+func (meta *Meta) ServiceNext() {
 	meta.executor = nil
 	meta.service++
 	if meta.service >= len(services) {
@@ -35,16 +35,16 @@ func (meta *AgentMeta) ServiceNext() {
 	}
 }
 
-func (meta *AgentMeta) ModelName() string {
+func (meta *Meta) ModelName() string {
 	return meta.model[meta.ServiceName()]
 }
 
-func (meta *AgentMeta) ModelNext() {
+func (meta *Meta) ModelNext() {
 	meta.executor = nil
 	meta.model[meta.ServiceName()] = meta._modelNext()
 }
 
-func (meta *AgentMeta) _modelNext() string {
+func (meta *Meta) _modelNext() string {
 	for i := range models[meta.ServiceName()] {
 		if models[meta.ServiceName()][i] != meta.ModelName() {
 			continue

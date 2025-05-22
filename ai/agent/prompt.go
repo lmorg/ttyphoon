@@ -1,4 +1,4 @@
-package ai
+package agent
 
 import (
 	"fmt"
@@ -28,14 +28,14 @@ Bullet points and numbered lists should be indented.
 You are allowed to check online.
 `
 
-func (meta *AgentMeta) explainPrompt(cmdLine, termOutput, userPrompt string) string {
+func (meta *Meta) explainPrompt(cmdLine, termOutput, userPrompt string) string {
 	return fmt.Sprintf(
 		"%s\nOperating system: %s, CPU: %s.\n%s\n%s\nCommand line executed: %s\nCommand line output below:\n%s",
-		_EXPLAIN_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History(), userPrompt, cmdLine, termOutput)
+		_EXPLAIN_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt, cmdLine, termOutput)
 }
 
-func (meta *AgentMeta) askPrompt(userPrompt string) string {
+func (meta *Meta) askPrompt(userPrompt string) string {
 	return fmt.Sprintf(
 		"%sOperating system: %s, CPU: %s.\n%s\n%s",
-		_ASK_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History(), userPrompt)
+		_ASK_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt)
 }

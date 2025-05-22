@@ -1,9 +1,10 @@
-package ai
+package tools
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/tools"
@@ -12,18 +13,18 @@ import (
 )
 
 type Wrapper struct {
-	meta    *AgentMeta
+	meta    *agent.Meta
 	tool    tools.Tool
 	invoker func() (tools.Tool, error)
 	enabled bool
 }
 
 func init() {
-	ToolsAdd(&Wrapper{invoker: invokeDDG})
-	ToolsAdd(&Wrapper{invoker: invokeScaper})
+	agent.ToolsAdd(&Wrapper{invoker: invokeDDG})
+	agent.ToolsAdd(&Wrapper{invoker: invokeScaper})
 }
 
-func (wrapper *Wrapper) New(meta *AgentMeta) (tool, error) {
+func (wrapper *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
 	tool, err := wrapper.invoker()
 	if err != nil {
 		return nil, err

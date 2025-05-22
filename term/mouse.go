@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -112,7 +112,7 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 }
 
 func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []int32) {
-	meta := ai.Agent(term.tile.Id())
+	meta := agent.Get(term.tile.Id())
 	meta.Term = term
 	meta.Renderer = term.renderer
 	meta.CmdLine = string(term.getCmdLine(blockPos[0]))

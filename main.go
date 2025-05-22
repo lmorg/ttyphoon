@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	_ "github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug/pprof"
 	"github.com/lmorg/mxtty/tmux"

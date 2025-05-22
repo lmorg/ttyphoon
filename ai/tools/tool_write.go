@@ -1,4 +1,4 @@
-package ai
+package tools
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/callbacks"
@@ -14,15 +15,15 @@ import (
 
 type Write struct {
 	CallbacksHandler callbacks.Handler
-	meta             *AgentMeta
+	meta             *agent.Meta
 	enabled          bool
 }
 
 func init() {
-	ToolsAdd(&Write{})
+	agent.ToolsAdd(&Write{})
 }
 
-func (w *Write) New(meta *AgentMeta) (tool, error) {
+func (w *Write) New(meta *agent.Meta) (agent.Tool, error) {
 	return &Write{meta: meta, enabled: false}, nil
 }
 

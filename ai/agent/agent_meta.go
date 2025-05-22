@@ -1,15 +1,15 @@
-package ai
+package agent
 
 import (
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/agents"
 )
 
-type AgentMeta struct {
+type Meta struct {
 	executor *agents.Executor
 	service  int
 	model    map[string]string
-	history  historyT
+	History  HistoryT
 
 	Term     types.Term
 	Renderer types.Renderer
@@ -19,11 +19,11 @@ type AgentMeta struct {
 	OutputBlock  string
 	InsertRowPos int32
 
-	_tools []tool
+	_tools []Tool
 }
 
-func NewAgentMeta() *AgentMeta {
-	meta := &AgentMeta{
+func NewAgentMeta() *Meta {
+	meta := &Meta{
 		model: map[string]string{
 			LLM_OPENAI:    "gpt-4.1",
 			LLM_ANTHROPIC: "claude-3-5-haiku-latest",
@@ -35,9 +35,9 @@ func NewAgentMeta() *AgentMeta {
 	return meta
 }
 
-var allTheAgents = map[string]*AgentMeta{}
+var allTheAgents = map[string]*Meta{}
 
-func Agent(tileId string) *AgentMeta {
+func Get(tileId string) *Meta {
 	meta, ok := allTheAgents[tileId]
 	if !ok {
 		meta = NewAgentMeta()

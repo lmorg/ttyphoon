@@ -1,10 +1,11 @@
-package ai
+package tools
 
 import (
 	"context"
 	"fmt"
 	"os"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/callbacks"
@@ -12,15 +13,15 @@ import (
 
 type ReadFile struct {
 	CallbacksHandler callbacks.Handler
-	meta             *AgentMeta
+	meta             *agent.Meta
 	enabled          bool
 }
 
 func init() {
-	ToolsAdd(&ReadFile{})
+	agent.ToolsAdd(&ReadFile{})
 }
 
-func (f *ReadFile) New(meta *AgentMeta) (tool, error) {
+func (f *ReadFile) New(meta *agent.Meta) (agent.Tool, error) {
 	return &ReadFile{meta: meta, enabled: true}, nil
 }
 
