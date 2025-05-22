@@ -35,9 +35,8 @@ func (w *Write) Name() string {
 }
 
 func (w *Write) Description() string {
-	return `Writes a new file or overwrites an existing file.
-Useful for making changes, correcting my mistakes, and writing new code and configuration.
-You should only use this if told to write or update a file, or if you have asked for permission and I have consented.
+	return `Writes new files, overwrites an existing files.
+Useful for making changes, correcting mistakes, and writing new code and configuration.
 File contents should contain the entire file, including parts of the file that are not changing.
 The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
 `

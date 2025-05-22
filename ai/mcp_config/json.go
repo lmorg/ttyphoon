@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	mcp "github.com/lmorg/mxtty/ai/mcp2"
+	"github.com/lmorg/mxtty/ai/mcp"
 )
 
 type ServerT struct {

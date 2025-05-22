@@ -15,6 +15,7 @@ type tool struct {
 	server      string
 	name        string
 	description string
+	schema      string
 	enabled     bool
 }
 

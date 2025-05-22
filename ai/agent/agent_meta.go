@@ -25,8 +25,8 @@ type Meta struct {
 func NewAgentMeta() *Meta {
 	meta := &Meta{
 		model: map[string]string{
-			LLM_OPENAI:    "gpt-4.1",
-			LLM_ANTHROPIC: "claude-3-5-haiku-latest",
+			LLM_OPENAI:    models[LLM_OPENAI][0],
+			LLM_ANTHROPIC: models[LLM_ANTHROPIC][0],
 		},
 	}
 
