@@ -28,6 +28,7 @@ func (meta *AgentMeta) ServiceName() string {
 }
 
 func (meta *AgentMeta) ServiceNext() {
+	meta.executor = nil
 	meta.service++
 	if meta.service >= len(services) {
 		meta.service = 0
@@ -39,10 +40,11 @@ func (meta *AgentMeta) ModelName() string {
 }
 
 func (meta *AgentMeta) ModelNext() {
-	meta.model[meta.ServiceName()] = meta.modelNext()
+	meta.executor = nil
+	meta.model[meta.ServiceName()] = meta._modelNext()
 }
 
-func (meta *AgentMeta) modelNext() string {
+func (meta *AgentMeta) _modelNext() string {
 	for i := range models[meta.ServiceName()] {
 		if models[meta.ServiceName()][i] != meta.ModelName() {
 			continue
