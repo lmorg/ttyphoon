@@ -8,16 +8,21 @@ import (
 	"github.com/lmorg/mxtty/ai/mcp"
 )
 
-type ServerT struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
+type config struct {
+	Mcp struct {
+		Servers Servers `json:"servers"`
+	} `json:"mcp"`
 }
 
-type Servers struct {
-	Servers map[string]ServerT `json:"servers"`
+type Servers map[string]Server
+
+type Server struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
 }
 
-func readJson(filename string) (*Servers, error) {
+func readJson(filename string) (*config, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -28,19 +33,18 @@ func readJson(filename string) (*Servers, error) {
 		return nil, err
 	}
 
-	servers := new(Servers)
-
-	err = json.Unmarshal(b, servers)
-	return servers, err
+	config := new(config)
+	err = json.Unmarshal(b, config)
+	return config, err
 }
 
 func StartServersFromJson(filename string) error {
-	servers, err := readJson(filename)
+	config, err := readJson(filename)
 	if err != nil {
 		return err
 	}
 
-	for name, svr := range servers.Servers {
+	for name, svr := range config.Mcp.Servers {
 		err = mcp.StartServerCmdLine(name, svr.Command, svr.Args...)
 		if err != nil {
 			return err

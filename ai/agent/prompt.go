@@ -16,16 +16,17 @@ Output needs to be strictly formatted as markdown.
 Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
 Bullet points and numbered lists should be indented.
 You can use tools to read file contents and search the web.
+You can read files from disk to gain more context.
 `
 
 const _ASK_PROMPT = `
 You are a helpful non-interactive agent responding to a developer or DevOps engineer's question.
-You should keep the answer as succinct as possible.
 Do not quote the question verbatim in your response.
 Output needs to be strictly formatted as markdown.
 Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
 Bullet points and numbered lists should be indented.
 You are allowed to check online.
+You are allowed to write files to disk.
 `
 
 func (meta *Meta) explainPrompt(cmdLine, termOutput, userPrompt string) string {

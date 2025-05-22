@@ -1,27 +1,41 @@
 package ai
 
 import (
-	"os"
+	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
 
+	"github.com/adrg/xdg"
 	"github.com/lmorg/mxtty/ai/mcp_config"
 	_ "github.com/lmorg/mxtty/ai/tools"
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/app"
 )
 
 func init() {
-	err := mcp_config.StartServersFromJson("mcp.json")
+	/*err := mcp_config.StartServersFromJson("./mcp.json")
 	if err != nil {
-		debug.Log(err)
-	}
+		log.Println(err)
+	}*/
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		debug.Log(err)
-		return
-	}
+	for _, dir := range xdg.ConfigDirs {
 
-	err = mcp_config.StartServersFromJson(home + "/mcp.json")
-	if err != nil {
-		debug.Log(err)
+		configPath := fmt.Sprintf("%s/%s/*.json", dir, strings.ToLower(app.Name))
+		log.Println(configPath)
+
+		files, err := filepath.Glob(configPath)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		log.Println(files)
+
+		for i := range files {
+			log.Println(files[i])
+			err = mcp_config.StartServersFromJson(files[i])
+			if err != nil {
+				log.Println(err)
+			}
+		}
 	}
 }
