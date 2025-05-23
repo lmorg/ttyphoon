@@ -13,11 +13,6 @@ import (
 )
 
 func init() {
-	/*err := mcp_config.StartServersFromJson("./mcp.json")
-	if err != nil {
-		log.Println(err)
-	}*/
-
 	for _, dir := range xdg.ConfigDirs {
 
 		configPath := fmt.Sprintf("%s/%s/*.json", dir, strings.ToLower(app.Name))

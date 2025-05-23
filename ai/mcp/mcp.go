@@ -6,8 +6,8 @@ import (
 	"github.com/lmorg/mxtty/ai/agent"
 )
 
-func StartServerCmdLine(server, command string, params ...string) error {
-	c, err := connectCmdLine(command, params...)
+func StartServerCmdLine(envvars []string, server, command string, args ...string) error {
+	c, err := connectCmdLine(envvars, command, args...)
 	if err != nil {
 		return err
 	}

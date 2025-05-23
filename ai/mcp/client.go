@@ -16,8 +16,8 @@ type Client struct {
 	tools      *mcp.ListToolsResult
 }
 
-func connectCmdLine(command string, params ...string) (*Client, error) {
-	c, err := client.NewStdioMCPClient(command, nil, params...)
+func connectCmdLine(envvars []string, command string, args ...string) (*Client, error) {
+	c, err := client.NewStdioMCPClient(command, envvars, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %v", err)
 	}

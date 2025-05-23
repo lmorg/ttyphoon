@@ -2,6 +2,7 @@ package mcp_config
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 
@@ -17,9 +18,19 @@ type config struct {
 type Servers map[string]Server
 
 type Server struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Env     envT     `json:"env"`
+}
+
+type envT map[string]string
+
+func (env envT) Slice() []string {
+	var envvars []string
+	for k, v := range env {
+		envvars = append(envvars, fmt.Sprintf("%s=%s", k, v))
+	}
+	return envvars
 }
 
 func readJson(filename string) (*config, error) {
@@ -45,7 +56,7 @@ func StartServersFromJson(filename string) error {
 	}
 
 	for name, svr := range config.Mcp.Servers {
-		err = mcp.StartServerCmdLine(name, svr.Command, svr.Args...)
+		err = mcp.StartServerCmdLine(svr.Env.Slice(), name, svr.Command, svr.Args...)
 		if err != nil {
 			return err
 		}
