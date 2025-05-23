@@ -11,7 +11,7 @@ require (
 	github.com/go-text/render v0.2.0
 	github.com/go-text/typesetting v0.3.0
 	github.com/lmorg/murex v0.0.0-20250115225944-b4c429617fd4
-	github.com/lmorg/readline/v4 v4.1.0
+	github.com/lmorg/readline/v4 v4.1.1
 	github.com/mark3labs/mcp-go v0.29.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/mattn/go-sixel v0.0.5
@@ -96,5 +96,3 @@ require (
 	google.golang.org/protobuf v1.36.3 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
-
-replace github.com/lmorg/readline/v4 => ../readline

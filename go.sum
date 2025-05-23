@@ -195,6 +195,8 @@ github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80 h1:6Yzfa6GP0rIo/kUL
 github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80/go.mod h1:imJHygn/1yfhB7XSJJKlFZKl/J+dCPAknuiaGOshXAs=
 github.com/lmorg/murex v0.0.0-20250115225944-b4c429617fd4 h1:JCEM0M0HAN8m1T7GeNjIaJJUyBR/ykRvGR15/aZcK7s=
 github.com/lmorg/murex v0.0.0-20250115225944-b4c429617fd4/go.mod h1:flXYnXpFa6j4keWDv0plQDvy5gfyw0ifSa28IT95cZA=
+github.com/lmorg/readline/v4 v4.1.1 h1:2EZddEoICN4XXlD4BuWdkdnjCGJqTZivIYi79MOg7I8=
+github.com/lmorg/readline/v4 v4.1.1/go.mod h1:Zdp/tnRZl0eTssyikMGSp61wOZwxJLw/CtK2sE2f9e8=
 github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69Aj6K7nkY=
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/mark3labs/mcp-go v0.29.0 h1:sH1NBcumKskhxqYzhXfGc201D7P76TVXiT0fGVhabeI=
