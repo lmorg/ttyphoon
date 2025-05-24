@@ -10,30 +10,36 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-type inputBoxCallbackT func(string)
-
 type inputBoxWidgetT struct {
 	title     string
-	callback  inputBoxCallbackT
+	_ok       types.InputBoxCallbackT
+	_cancel   types.InputBoxCallbackT
 	readline  *widgetReadlineT
 	_maxChars int32
+	sr        *sdlRender
 }
 
 const _INPUT_MAX_CHAR_WIDTH = 80
 
-func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback func(string)) {
+func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, ok types.InputBoxCallbackT, cancel types.InputBoxCallbackT) {
 	maxChars := min(sr.winCellSize.X-15, _INPUT_MAX_CHAR_WIDTH)
 
-	if callback == nil {
-		callback = func(string) {}
+	if ok == nil {
+		ok = func(string) {}
+	}
+
+	if cancel == nil {
+		cancel = func(string) {}
 	}
 
 	sr.inputBox = &inputBoxWidgetT{
-		title: title,
 		readline: sr.NewReadline(maxChars, defaultValue,
 			fmt.Sprintf(`[Return] Ok  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode  |  [Up] Default: "%s"`, defaultValue),
 		),
-		callback:  callback,
+		sr:        sr,
+		title:     title,
+		_ok:       ok,
+		_cancel:   cancel,
 		_maxChars: maxChars,
 	}
 
@@ -41,14 +47,25 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, callback
 	cursor.Arrow()
 
 	sr.inputBox.readline.Readline(sr, func(s string, e error) {
-		sr.closeInputBox()
-		if e == nil {
-			callback(s)
+		if e != nil {
+			sr.inputBox.Cancel(s)
+		} else {
+			sr.inputBox.Ok(s)
 		}
 	})
 }
 
-func (sr *sdlRender) closeInputBox() {
+func (inputBox *inputBoxWidgetT) Ok(s string) {
+	inputBox.sr._closeInputBox()
+	inputBox._ok(s)
+}
+
+func (inputBox *inputBoxWidgetT) Cancel(s string) {
+	inputBox.sr._closeInputBox()
+	inputBox._cancel(s)
+}
+
+func (sr *sdlRender) _closeInputBox() {
 	sr.footerText = ""
 	sr.inputBox = nil
 	sr.termWin.Active.GetTerm().ShowCursor(true)
@@ -64,7 +81,7 @@ func (inputBox *inputBoxWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardE
 
 func (inputBox *inputBoxWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {
 	if evt.State == sdl.PRESSED {
-		sr.closeInputBox()
+		inputBox.Cancel(inputBox.readline.Value())
 		sr.termWidget.eventMouseButton(sr, evt)
 	}
 }

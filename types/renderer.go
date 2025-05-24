@@ -11,6 +11,8 @@ type MenuItem struct {
 
 const MENU_SEPARATOR = "-"
 
+type InputBoxCallbackT func(string)
+
 type Renderer interface {
 	Start(*AppWindowTerms, any)
 	ShowAndFocusWindow()
@@ -37,7 +39,7 @@ type Renderer interface {
 	NewElement(Tile, ElementID) Element
 	DisplayNotification(NotificationType, string)
 	DisplaySticky(NotificationType, string) Notification
-	DisplayInputBox(string, string, func(string))
+	DisplayInputBox(string, string, InputBoxCallbackT, InputBoxCallbackT)
 	AddToContextMenu(...MenuItem)
 	DisplayMenu(string, []string, MenuCallbackT, MenuCallbackT, MenuCallbackT)
 	GetWindowMeta() any

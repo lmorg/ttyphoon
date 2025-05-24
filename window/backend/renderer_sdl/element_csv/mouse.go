@@ -68,7 +68,7 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 				if err != nil {
 					el.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot sort table: "+err.Error())
 				}
-			})
+			}, nil)
 
 		default:
 			callback()

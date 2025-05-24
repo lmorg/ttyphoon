@@ -21,5 +21,5 @@ func askAi(sr *sdlRender, pos *types.XY) {
 
 	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", meta.ServiceName()), "", func(prompt string) {
 		ai.AskAI(meta, prompt)
-	})
+	}, nil)
 }

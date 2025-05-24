@@ -29,19 +29,19 @@ type InputsT map[string]InputT
 func (inputs InputsT) Get(renderer types.Renderer, id string) (string, error) {
 	input, ok := inputs[id]
 	if !ok {
-		return "", fmt.Errorf("missing input schema for `%s`, id")
+		return "", fmt.Errorf("missing input schema for `%s`", id)
 	}
 
 	if input.Type != _INPUT_SCHEMA_TYPE_PROMPT_STRING {
-		return "", fmt.Errorf("input schema for `%s` is '%s', expecting '%s', id", input.Type, _INPUT_SCHEMA_TYPE_PROMPT_STRING)
+		return "", fmt.Errorf("input schema for `%s` is '%s', expecting '%s'", id, input.Type, _INPUT_SCHEMA_TYPE_PROMPT_STRING)
 	}
 
 	ch := make(chan string)
 
 	renderer.DisplayInputBox(input.Description, "", func(s string) {
 		ch <- s
-	})
+	}, nil)
 
 	val := <-ch
-	return val
+	return val, nil
 }

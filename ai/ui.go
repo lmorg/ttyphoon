@@ -20,7 +20,7 @@ func Explain(meta *agent.Meta, promptDialogue bool) {
 		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
-	meta.Renderer.DisplayInputBox("Add to prompt", "", fn)
+	meta.Renderer.DisplayInputBox("Add to prompt", "", fn, nil)
 }
 
 const _STICKY_MESSAGE = "Asking %s.... "

@@ -32,7 +32,7 @@ func fnKeyRenameWindow(tmux *Tmux) error {
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-	})
+	}, nil)
 	return nil
 }
 

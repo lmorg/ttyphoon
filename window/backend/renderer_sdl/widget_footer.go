@@ -231,7 +231,7 @@ func (tw *termWidgetT) _eventMouseButtonFooter(sr *sdlRender, evt *sdl.MouseButt
 					if err != nil {
 						sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 					}
-				})
+				}, nil)
 			}
 			return
 		}

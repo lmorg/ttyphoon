@@ -24,7 +24,7 @@ func (term *Term) Search() {
 }
 
 func (term *Term) search() {
-	term.renderer.DisplayInputBox("Value to search for", term._searchLastString, term.searchBuf)
+	term.renderer.DisplayInputBox("Value to search for", term._searchLastString, term.searchBuf, nil)
 }
 
 func (term *Term) searchBuf(search string) {

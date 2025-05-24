@@ -115,7 +115,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 			if s != "" {
 				sr.termWin.Active.GetTerm().Reply([]byte(s))
 			}
-		})
+		}, nil)
 		return
 
 	case evt.Keysym.Sym == sdl.K_APPLICATION:
