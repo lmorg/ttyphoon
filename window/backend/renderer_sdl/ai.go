@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/types"
 )
@@ -19,6 +20,6 @@ func askAi(sr *sdlRender, pos *types.XY) {
 	meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(term.GetCursorPosition()) - 1
 
 	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", meta.ServiceName()), "", func(prompt string) {
-		meta.AskAI(prompt)
+		ai.AskAI(meta, prompt)
 	})
 }

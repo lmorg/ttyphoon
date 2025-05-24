@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/integrations"
@@ -122,12 +123,12 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Set Anthropic (Claude) API Key",
-			Fn:    func() { agent.EnvAnthropic(sr, sr.UpdateConfig) },
+			Fn:    func() { ai.EnvAnthropic(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 		{
 			Title: "Set OpenAI (ChatGPT) API Key",
-			Fn:    func() { agent.EnvOpenAi(sr, sr.UpdateConfig) },
+			Fn:    func() { ai.EnvOpenAi(sr, sr.UpdateConfig) },
 			Icon:  0xf084,
 		},
 

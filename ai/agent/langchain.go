@@ -21,7 +21,7 @@ func llmAnthropic(meta *Meta) (llms.Model, error) {
 	return anthropic.New(anthropic.WithModel(meta.ModelName()))
 }
 
-func (meta *Meta) initLLM() error {
+func initLLM(meta *Meta) error {
 	var (
 		model llms.Model
 		err   error
@@ -54,9 +54,11 @@ func (meta *Meta) initLLM() error {
 
 const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
-func (meta *Meta) runLLM(prompt string) (string, error) {
+// RunLLM calls the LLM with the prompt string.
+// Use `ai` package to create specific prompts.
+func (meta *Meta) RunLLM(prompt string) (string, error) {
 	if meta.executor == nil {
-		err := meta.initLLM()
+		err := initLLM(meta)
 		if err != nil {
 			return "", err
 		}

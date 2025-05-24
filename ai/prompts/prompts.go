@@ -1,11 +1,13 @@
-package agent
+package prompts
 
 import (
 	"fmt"
 	"runtime"
+
+	"github.com/lmorg/mxtty/ai/agent"
 )
 
-const _EXPLAIN_PROMPT = `
+const _PROMPT_EXPLAIN = `
 You are a non-interactive agent responding to a developer or DevOps engineer's query.
 A command line application has been executed. Can you explain its output?
 If it is an error, you should focus on how to fix the error.
@@ -19,7 +21,7 @@ You can use tools to read file contents and search the web.
 You can read files from disk to gain more context.
 `
 
-const _ASK_PROMPT = `
+const _PROMPT_ASK = `
 You are a helpful non-interactive agent responding to a developer or DevOps engineer's question.
 Do not quote the question verbatim in your response.
 Output needs to be strictly formatted as markdown.
@@ -29,14 +31,14 @@ You are allowed to check online.
 You are allowed to write files to disk.
 `
 
-func (meta *Meta) explainPrompt(cmdLine, termOutput, userPrompt string) string {
+func GetExplain(meta *agent.Meta, userPrompt string) string {
 	return fmt.Sprintf(
 		"%s\nOperating system: %s, CPU: %s.\n%s\n%s\nCommand line executed: %s\nCommand line output below:\n%s",
-		_EXPLAIN_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt, cmdLine, termOutput)
+		_PROMPT_EXPLAIN, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt, meta.CmdLine, meta.OutputBlock)
 }
 
-func (meta *Meta) askPrompt(userPrompt string) string {
+func GetAsk(meta *agent.Meta, userPrompt string) string {
 	return fmt.Sprintf(
 		"%sOperating system: %s, CPU: %s.\n%s\n%s",
-		_ASK_PROMPT, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt)
+		_PROMPT_ASK, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt)
 }

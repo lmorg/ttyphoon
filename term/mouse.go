@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
@@ -140,7 +141,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { meta.Explain(false) },
+				Fn: func() { ai.Explain(meta, false) },
 			},
 			{
 				Title: fmt.Sprintf("Explain with custom prompt (%s)", meta.ServiceName()),
@@ -150,7 +151,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { meta.Explain(true) },
+				Fn: func() { ai.Explain(meta, true) },
 			},
 		}...)
 }

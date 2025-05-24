@@ -5,27 +5,26 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/lmorg/mxtty/ai/mcp"
 )
 
 type config struct {
 	Mcp struct {
-		Servers Servers `json:"servers"`
+		Servers ServersT `json:"servers"`
+		Inputs  ServersT `json:"inputs"`
 	} `json:"mcp"`
 }
 
-type Servers map[string]Server
+type ServersT map[string]ServerT
 
-type Server struct {
+type ServerT struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	Env     envT     `json:"env"`
+	Env     EnvVarsT `json:"env"`
 }
 
-type envT map[string]string
+type EnvVarsT map[string]string
 
-func (env envT) Slice() []string {
+func (env EnvVarsT) Slice() []string {
 	var envvars []string
 	for k, v := range env {
 		envvars = append(envvars, fmt.Sprintf("%s=%s", k, v))
@@ -33,7 +32,7 @@ func (env envT) Slice() []string {
 	return envvars
 }
 
-func readJson(filename string) (*config, error) {
+func ReadJson(filename string) (*config, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -49,18 +48,3 @@ func readJson(filename string) (*config, error) {
 	return config, err
 }
 
-func StartServersFromJson(filename string) error {
-	config, err := readJson(filename)
-	if err != nil {
-		return err
-	}
-
-	for name, svr := range config.Mcp.Servers {
-		err = mcp.StartServerCmdLine(svr.Env.Slice(), name, svr.Command, svr.Args...)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}

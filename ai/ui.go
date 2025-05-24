@@ -1,23 +1,23 @@
-package agent
+package ai
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/mxtty/ai/prompts"
 	"github.com/lmorg/mxtty/types"
 )
 
-func (meta *Meta) Explain(promptDialogue bool) {
+func Explain(meta *agent.Meta, promptDialogue bool) {
 	if !promptDialogue {
-		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine)
+		askAI(meta, prompts.GetExplain(meta, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine)
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(meta, meta.explainPrompt(meta.CmdLine, meta.OutputBlock, userPrompt), "> "+userPrompt, userPrompt)
+		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
 	meta.Renderer.DisplayInputBox("Add to prompt", "", fn)
@@ -29,11 +29,11 @@ var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func (meta *Meta) AskAI(prompt string) {
-	askAI(meta, meta.askPrompt(prompt), "> "+prompt, prompt)
+func AskAI(meta *agent.Meta, prompt string) {
+	askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt)
 }
 
-func askAI(meta *Meta, prompt string, title string, query string) {
+func askAI(meta *agent.Meta, prompt string, title string, query string) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
 	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
 	fin := make(chan struct{})
@@ -59,7 +59,7 @@ func askAI(meta *Meta, prompt string, title string, query string) {
 	go func() {
 		defer sticky.Close()
 
-		result, err := meta.runLLM(prompt)
+		result, err := meta.RunLLM(prompt)
 		fin <- struct{}{}
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -88,38 +88,4 @@ func askAI(meta *Meta, prompt string, title string, query string) {
 			return
 		}
 	}()
-}
-
-const (
-	_ANTHROPIC_ENV_VAR = "ANTHROPIC_API_KEY"
-	_OPENAI_ENV_VAR    = "OPENAI_API_KEY"
-)
-
-func EnvOpenAi(renderer types.Renderer, callback func()) {
-	renderer.DisplayInputBox("OpenAI (ChatGPT) API Key", "", func(s string) {
-		_ = os.Setenv(_OPENAI_ENV_VAR, s)
-	})
-}
-
-func EnvAnthropic(renderer types.Renderer, callback func()) {
-	renderer.DisplayInputBox("Anthropic (Claude) API Key", "", func(s string) {
-		_ = os.Setenv(_ANTHROPIC_ENV_VAR, s)
-	})
-}
-
-func (meta *Meta) ChooseTools() {
-	s := make([]string, len(meta._tools))
-	for i, tool := range meta._tools {
-		s[i] = fmt.Sprintf("%s == %v", tool.Name(), tool.Enabled())
-	}
-
-	fnOk := func(i int) {
-		meta._tools[i].Toggle()
-		meta.executor = nil
-		meta.ChooseTools()
-	}
-
-	debug.Log(s)
-
-	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, nil)
 }
