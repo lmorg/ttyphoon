@@ -78,6 +78,18 @@ func (term *Term) parseApcCodes() {
 			term.mxapcInsert(types.ELEMENT_ID_IMAGE, apc)
 		}
 
+	case "config":
+		switch apc.Index(1) {
+		case "export":
+			term.mxapcConfigExport(apc)
+		case "var":
+			term.mxapcConfigVariables(apc)
+		case "unset":
+			term.mxapcConfigUnset(apc)
+		case "mcp":
+			term.mxapcConfigMcp(apc)
+		}
+
 	default:
 		term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))

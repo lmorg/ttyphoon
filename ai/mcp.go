@@ -18,7 +18,7 @@ func StartMcp(renderer types.Renderer, meta *agent.Meta) {
 		go func() {
 			err := StartServersFromJson(renderer, meta, files[i])
 			if err != nil {
-				renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start server from %s: %v", files[i], err))
+				renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
 			}
 		}()
 	}
@@ -31,7 +31,12 @@ func StartServersFromJson(renderer types.Renderer, meta *agent.Meta, filename st
 	if err != nil {
 		return err
 	}
+	config.Source = filename
+	return StartServersFromConfig(renderer, meta, config)
+}
 
+func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *mcp_config.ConfigT) error {
+	var err error
 	cache := &map[string]string{}
 
 	for i := range config.Mcp.Inputs {
@@ -50,7 +55,7 @@ func StartServersFromJson(renderer types.Renderer, meta *agent.Meta, filename st
 		updateVars(envs, cache)
 		updateVars(svr.Args, cache)
 
-		err = mcp.StartServerCmdLine(filename, meta, envs, name, svr.Command, svr.Args...)
+		err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
 		if err != nil {
 			return err
 		}

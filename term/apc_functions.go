@@ -1,6 +1,12 @@
 package virtualterm
 
 import (
+	"fmt"
+	"os"
+
+	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/mxtty/ai/mcp_config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 )
@@ -103,4 +109,49 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 
 	// prep for new block
 	term._blockMeta = new(types.BlockMeta)
+}
+
+func (term *Term) mxapcConfigExport(apc *types.ApcSlice) {
+	envs := make(map[string]string)
+	apc.Parameters(&envs)
+	for k, v := range envs {
+		err := os.Setenv(k, v)
+		if err != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unable to export %s: %v", k, err))
+		}
+	}
+}
+
+func (term *Term) mxapcConfigVariables(apc *types.ApcSlice) {
+	envs := make(map[string]string)
+	apc.Parameters(&envs)
+	for k, v := range envs {
+		err := os.Setenv(k, v)
+		if err != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unable to set local variable %s: %v", k, err))
+		}
+	}
+}
+
+func (term *Term) mxapcConfigUnset(apc *types.ApcSlice) {
+	var envs []string
+	apc.Parameters(&envs)
+	for i := range envs {
+		err := os.Unsetenv(envs[i])
+		if err != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unable to unset %s: %v", envs[i], err))
+		}
+	}
+}
+
+func (term *Term) mxapcConfigMcp(apc *types.ApcSlice) {
+	config := new(mcp_config.ConfigT)
+	apc.Parameters(config)
+	config.Source = "escape-sequence"
+	go func() {
+		err := ai.StartServersFromConfig(term.renderer, agent.Get(term.tile.Id()), config)
+		if err != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP from escape sequence: %v", err))
+		}
+	}()
 }

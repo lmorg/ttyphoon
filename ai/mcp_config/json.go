@@ -7,11 +7,12 @@ import (
 	"os"
 )
 
-type config struct {
+type ConfigT struct {
 	Mcp struct {
 		Servers ServersT `json:"servers"`
 		Inputs  InputsT  `json:"inputs"`
 	} `json:"mcp"`
+	Source string
 }
 
 type ServersT map[string]ServerT
@@ -32,7 +33,7 @@ func (env EnvVarsT) Slice() []string {
 	return envvars
 }
 
-func ReadJson(filename string) (*config, error) {
+func ReadJson(filename string) (*ConfigT, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -43,7 +44,7 @@ func ReadJson(filename string) (*config, error) {
 		return nil, err
 	}
 
-	config := new(config)
+	config := new(ConfigT)
 	err = json.Unmarshal(b, config)
 	return config, err
 }
