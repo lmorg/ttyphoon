@@ -43,9 +43,8 @@ func (h *ChatHistoryDetail) Description() string {
 Input should be an integer.`
 }
 
-func (h *ChatHistoryDetail) Name() string {
-	return "Chat History"
-}
+func (h *ChatHistoryDetail) Name() string { return "Chat History" }
+func (h *ChatHistoryDetail) Path() string { return "internal" }
 
 func (h *ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
 	if h.CallbacksHandler != nil {

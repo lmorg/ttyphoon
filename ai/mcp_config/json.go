@@ -10,7 +10,7 @@ import (
 type config struct {
 	Mcp struct {
 		Servers ServersT `json:"servers"`
-		Inputs  ServersT `json:"inputs"`
+		Inputs  InputsT  `json:"inputs"`
 	} `json:"mcp"`
 }
 
@@ -47,4 +47,3 @@ func ReadJson(filename string) (*config, error) {
 	err = json.Unmarshal(b, config)
 	return config, err
 }
-

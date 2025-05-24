@@ -122,6 +122,11 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon: 0xf7d9,
 		},
 		{
+			Title: "Start MCP servers...",
+			Fn:    func() { ai.StartMcp(sr, agent.Get(sr.termWin.Active.Id())) },
+			Icon:  0xf552,
+		},
+		{
 			Title: "Set Anthropic (Claude) API Key",
 			Fn:    func() { ai.EnvAnthropic(sr, sr.UpdateConfig) },
 			Icon:  0xf084,

@@ -24,24 +24,25 @@ type InputT struct {
 	Password    bool   `json:"password"`
 }
 
-type InputsT map[string]InputT
+type InputsT []InputT
 
-func (inputs InputsT) Get(renderer types.Renderer, id string) (string, error) {
-	input, ok := inputs[id]
-	if !ok {
-		return "", fmt.Errorf("missing input schema for `%s`", id)
-	}
-
+func (input *InputT) Get(renderer types.Renderer) (string, error) {
 	if input.Type != _INPUT_SCHEMA_TYPE_PROMPT_STRING {
-		return "", fmt.Errorf("input schema for `%s` is '%s', expecting '%s'", id, input.Type, _INPUT_SCHEMA_TYPE_PROMPT_STRING)
+		return "", fmt.Errorf("input schema for `%s` is '%s', expecting '%s'", input.Id, input.Type, _INPUT_SCHEMA_TYPE_PROMPT_STRING)
 	}
 
 	ch := make(chan string)
+	var err error
 
-	renderer.DisplayInputBox(input.Description, "", func(s string) {
-		ch <- s
-	}, nil)
+	renderer.DisplayInputBox(input.Description, "",
+		func(s string) {
+			ch <- s
+		},
+		func(_ string) {
+			err = fmt.Errorf("input required for '%s'", input.Id)
+			ch <- ""
+		})
 
 	val := <-ch
-	return val, nil
+	return val, err
 }

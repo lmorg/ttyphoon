@@ -35,9 +35,8 @@ func (d *Directory) Description() string {
 Returns a bullet point list of all files and directories found inside a directory.`
 }
 
-func (d *Directory) Name() string {
-	return "Read Directory"
-}
+func (d *Directory) Name() string { return "Read Directory" }
+func (d *Directory) Path() string { return "internal" }
 
 func (d *Directory) Call(ctx context.Context, input string) (string, error) {
 	if d.CallbacksHandler != nil {

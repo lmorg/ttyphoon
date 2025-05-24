@@ -36,6 +36,7 @@ func (wrapper *Wrapper) Enabled() bool { return wrapper.enabled }
 func (wrapper *Wrapper) Toggle()       { wrapper.enabled = !wrapper.enabled }
 
 func (wrapper *Wrapper) Name() string        { return wrapper.tool.Name() }
+func (Wrapper *Wrapper) Path() string        { return "internal" }
 func (wrapper *Wrapper) Description() string { return wrapper.tool.Description() }
 
 func (wrapper *Wrapper) Call(ctx context.Context, input string) (string, error) {

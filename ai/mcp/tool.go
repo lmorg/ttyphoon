@@ -14,8 +14,8 @@ type tool struct {
 	meta        *agent.Meta
 	server      string
 	name        string
+	path        string
 	description string
-	schema      string
 	enabled     bool
 }
 
@@ -25,6 +25,7 @@ func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
 		meta:        meta,
 		server:      t.server,
 		name:        t.name,
+		path:        t.path,
 		description: t.description,
 		enabled:     true,
 	}, nil
@@ -33,8 +34,11 @@ func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
 func (t *tool) Enabled() bool { return t.enabled }
 func (t *tool) Toggle()       { t.enabled = !t.enabled }
 
-func (t *tool) Name() string        { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
-func (t *tool) Description() string { return t.description + "\nInput should be a JSON object." }
+func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
+func (t *tool) Path() string { return t.path }
+func (t *tool) Description() string {
+	return t.description + "\nInput MUST be a JSON object"
+}
 
 func (t *tool) Call(ctx context.Context, input string) (string, error) {
 	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
@@ -46,6 +50,7 @@ func (t *tool) Call(ctx context.Context, input string) (string, error) {
 	if err == nil {
 		ret, err := t.client.call(ctx, t.name, m)
 		if err != nil {
+			t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 			return err.Error(), nil
 		}
 		return ret, nil
@@ -53,6 +58,7 @@ func (t *tool) Call(ctx context.Context, input string) (string, error) {
 
 	ret, err := t.client.call(ctx, t.name, map[string]interface{}{"input": input})
 	if err != nil {
+		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 		return fmt.Sprintf("JSON input expected with!\n\n%v\n\nInput: %s", err, input), nil
 	}
 	return ret, nil

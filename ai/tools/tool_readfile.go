@@ -33,9 +33,8 @@ func (f *ReadFile) Description() string {
 Useful for debugging output that references local files.`
 }
 
-func (f *ReadFile) Name() string {
-	return "Read File"
-}
+func (f *ReadFile) Name() string { return "Read File" }
+func (f *ReadFile) Path() string { return "internal" }
 
 func (f *ReadFile) Call(ctx context.Context, input string) (string, error) {
 	if f.CallbacksHandler != nil {

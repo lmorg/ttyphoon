@@ -46,3 +46,7 @@ func Get(tileId string) *Meta {
 	allTheAgents[tileId] = meta
 	return meta
 }
+
+func (meta *Meta) Reload() {
+	meta.executor = nil
+}

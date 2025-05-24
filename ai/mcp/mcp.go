@@ -6,7 +6,7 @@ import (
 	"github.com/lmorg/mxtty/ai/agent"
 )
 
-func StartServerCmdLine(envvars []string, server, command string, args ...string) error {
+func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, server, command string, args ...string) error {
 	c, err := connectCmdLine(envvars, command, args...)
 	if err != nil {
 		return err
@@ -18,9 +18,10 @@ func StartServerCmdLine(envvars []string, server, command string, args ...string
 	}
 
 	for i := range c.tools.Tools {
-		agent.ToolsAdd(&tool{
+		err = meta.ToolsAdd(&tool{
 			client: c,
 			server: server,
+			path:   cfgPath,
 			name:   c.tools.Tools[i].GetName(),
 			description: fmt.Sprintf("# Description:\n%s\n\n# Annotations:\n%s\n\n# Schema:\n%s",
 				c.tools.Tools[i].Description,
@@ -28,6 +29,9 @@ func StartServerCmdLine(envvars []string, server, command string, args ...string
 				string(c.tools.Tools[i].RawInputSchema),
 			),
 		})
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

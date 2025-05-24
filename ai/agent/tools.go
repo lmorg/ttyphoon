@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -13,6 +12,7 @@ type Tool interface {
 	Enabled() bool
 	Toggle()
 	Name() string
+	Path() string
 	Description() string
 	Call(context.Context, string) (string, error)
 }
@@ -34,6 +34,18 @@ func ToolsAdd(t Tool) {
 	_tools = append(_tools, t)
 }
 
+func (meta *Meta) ToolsAdd(t Tool) error {
+	tool, err := t.New(meta)
+	if err != nil {
+		return err
+	}
+
+	meta._tools = append(meta._tools, tool)
+	meta.Reload()
+
+	return nil
+}
+
 func (meta *Meta) ChooseTools() {
 	s := make([]string, len(meta._tools))
 	for i, tool := range meta._tools {
@@ -42,11 +54,9 @@ func (meta *Meta) ChooseTools() {
 
 	fnOk := func(i int) {
 		meta._tools[i].Toggle()
-		meta.executor = nil
+		meta.Reload()
 		meta.ChooseTools()
 	}
-
-	debug.Log(s)
 
 	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, nil)
 }

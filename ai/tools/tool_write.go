@@ -30,9 +30,8 @@ func (w *Write) New(meta *agent.Meta) (agent.Tool, error) {
 func (w *Write) Enabled() bool { return w.enabled }
 func (w *Write) Toggle()       { w.enabled = !w.enabled }
 
-func (w *Write) Name() string {
-	return "Write File"
-}
+func (w *Write) Name() string { return "Write File" }
+func (w *Write) Path() string { return "internal" }
 
 func (w *Write) Description() string {
 	return `Writes new files, overwrites an existing files.

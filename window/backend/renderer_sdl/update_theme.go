@@ -44,6 +44,8 @@ func (sr *sdlRender) updateThemeMenu() {
 		return
 	}
 
+	files = append(files, config.GetFiles("themes", _ITERMCOLORS_EXT)...)
+
 	fnHighlight := func(i int) {
 		err := iterm2.GetTheme(files[i])
 		if err != nil {

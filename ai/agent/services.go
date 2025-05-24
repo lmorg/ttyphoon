@@ -30,11 +30,11 @@ func (meta *Meta) ServiceName() string {
 }
 
 func (meta *Meta) ServiceNext() {
-	meta.executor = nil
 	meta.service++
 	if meta.service >= len(services) {
 		meta.service = 0
 	}
+	meta.Reload()
 }
 
 func (meta *Meta) ModelName() string {
@@ -42,8 +42,8 @@ func (meta *Meta) ModelName() string {
 }
 
 func (meta *Meta) ModelNext() {
-	meta.executor = nil
 	meta.model[meta.ServiceName()] = meta._modelNext()
+	meta.Reload()
 }
 
 func (meta *Meta) _modelNext() string {
