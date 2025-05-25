@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/agents"
 )
@@ -19,7 +20,8 @@ type Meta struct {
 	OutputBlock  string
 	InsertRowPos int32
 
-	_tools []Tool
+	_mcpServers []string
+	_tools      []Tool
 }
 
 func NewAgentMeta() *Meta {
@@ -49,4 +51,12 @@ func Get(tileId string) *Meta {
 
 func (meta *Meta) Reload() {
 	meta.executor = nil
+}
+
+func (meta *Meta) McpServerAdd(server string) {
+	meta._mcpServers = append(meta._mcpServers, server)
+}
+
+func (meta *Meta) McpServerExists(server string) bool {
+	return lists.Match(meta._mcpServers, server)
 }

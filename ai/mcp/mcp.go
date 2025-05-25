@@ -17,6 +17,8 @@ func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, serv
 		return err
 	}
 
+	meta.McpServerAdd(server)
+
 	for i := range c.tools.Tools {
 		err = meta.ToolsAdd(&tool{
 			client: c,
