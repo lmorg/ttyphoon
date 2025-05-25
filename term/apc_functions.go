@@ -122,7 +122,7 @@ func (term *Term) mxapcConfigExport(apc *types.ApcSlice) {
 	}
 }
 
-func (term *Term) mxapcConfigVariables(apc *types.ApcSlice) {
+/*func (term *Term) mxapcConfigVariables(apc *types.ApcSlice) {
 	envs := make(map[string]string)
 	apc.Parameters(&envs)
 	for k, v := range envs {
@@ -131,7 +131,7 @@ func (term *Term) mxapcConfigVariables(apc *types.ApcSlice) {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unable to set local variable %s: %v", k, err))
 		}
 	}
-}
+}*/
 
 func (term *Term) mxapcConfigUnset(apc *types.ApcSlice) {
 	var envs []string

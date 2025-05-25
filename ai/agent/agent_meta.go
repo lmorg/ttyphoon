@@ -26,7 +26,7 @@ func NewAgentMeta() *Meta {
 	meta := &Meta{
 		model: map[string]string{
 			LLM_OPENAI:    models[LLM_OPENAI][0],
-			LLM_ANTHROPIC: models[LLM_ANTHROPIC][0],
+			LLM_ANTHROPIC: models[LLM_ANTHROPIC][1],
 		},
 	}
 

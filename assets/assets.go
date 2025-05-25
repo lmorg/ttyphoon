@@ -35,6 +35,9 @@ const (
 
 	EMOJI        = "NotoColorEmoji-emojicompat.ttf"
 	FONT_AWESOME = "Font Awesome 6 Free-Solid-900.otf"
+
+	GLAMOUR_STYLE_DARK  = "md-glamour-dark.json"
+	GLAMOUR_STYLE_LIGHT = "md-glamour-light.json"
 )
 
 //go:embed bell.mp3
@@ -42,6 +45,7 @@ const (
 //go:embed *.ttf
 //go:embed *.otf
 //go:embed icon-*.bmp
+//go:embed *.json
 var embedFs embed.FS
 
 var assets map[string][]byte

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/ai/prompts"
+	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -72,14 +73,29 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 
 		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Explanation:\n\n%s", title, meta.ServiceName(), result)
 
-		theme := "dark"
+		var (
+			markdown string
+			theme    []byte
+		)
 		if types.THEME_LIGHT {
-			theme = "light"
+			theme = assets.Get(assets.GLAMOUR_STYLE_LIGHT)
+		} else {
+			theme = assets.Get(assets.GLAMOUR_STYLE_DARK)
 		}
 
-		markdown, err := glamour.Render(result, theme)
+		md, err := glamour.NewTermRenderer(
+			glamour.WithEmoji(),
+			glamour.WithWordWrap(int(meta.Term.GetSize().X)),
+			glamour.WithStylesFromJSONBytes(theme),
+		)
 		if err != nil {
 			markdown = result
+		} else {
+			defer md.Close()
+			markdown, err = md.Render(result)
+			if err != nil {
+				markdown = result
+			}
 		}
 
 		err = meta.Term.InsertSubTerm(query, markdown, meta.InsertRowPos, types.ROW_OUTPUT_BLOCK_AI)
