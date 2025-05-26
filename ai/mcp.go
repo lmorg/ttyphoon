@@ -56,8 +56,8 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 
 		envs := svr.Env.Slice()
 
-		updateVars(envs, cache)
-		updateVars(svr.Args, cache)
+		updateVars(meta, envs, cache)
+		updateVars(meta, svr.Args, cache)
 
 		err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
 		if err != nil {
@@ -68,18 +68,48 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 	return nil
 }
 
-var rxInput = regexp.MustCompile(`\$\{input:([-_a-zA-Z0-9]+)\}`)
+var (
+	rxInput = regexp.MustCompile(`\$\{input:([-_a-zA-Z0-9]+)\}`)
+	rxVars  = regexp.MustCompile(`\$\{([-_a-zA-Z0-9]+)\}`)
+)
 
-func updateVars(s []string, cache *map[string]string) {
+func updateVars(meta *agent.Meta, s []string, cache *map[string]string) error {
+	var err error
 	for i := range s {
-		s[i] = _updateVarsRxReplace(s[i], cache)
+		s[i], err = _updateVarsRxReplace(meta, s[i], cache)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func _updateVarsRxReplace(s string, cache *map[string]string) string {
+func _updateVarsRxReplace(meta *agent.Meta, s string, cache *map[string]string) (string, error) {
+	var (
+		val string
+		ok  bool
+	)
+
 	match := rxInput.FindAllStringSubmatch(s, -1)
 	for i := range match {
-		s = strings.ReplaceAll(s, match[i][0], (*cache)[match[i][1]])
+		val, ok = (*cache)[match[i][1]]
+		if !ok {
+			return "", fmt.Errorf("input missing: '%s'", match[i][1])
+		}
+		s = strings.ReplaceAll(s, match[i][0], val)
 	}
-	return s
+
+	match = rxVars.FindAllStringSubmatch(s, -1)
+	for i := range match {
+		switch match[i][1] {
+		case "workspaceFolder":
+			val = meta.Pwd
+		default:
+			return "", fmt.Errorf("variable does not exist: '%s'", match[i][1])
+		}
+		s = strings.ReplaceAll(s, match[i][0], val)
+	}
+
+	return s, nil
 }
