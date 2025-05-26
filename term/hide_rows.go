@@ -67,15 +67,38 @@ func (term *Term) UnhideRows(pos int32) error {
 	return nil
 }
 
+func (term *Term) insertRowsAtRowId(id uint64, rows types.Screen) error {
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
+	for i := range term._normBuf {
+		if term._normBuf[i].Id == id {
+			return term._insertRows(int32(i+len(term._scrollBuf)-1), rows)
+		}
+	}
+
+	for i := range term._scrollBuf {
+		if term._scrollBuf[i].Id == id {
+			return term._insertRows(int32(i)-1, rows)
+		}
+	}
+
+	return fmt.Errorf("cannot insert rows: cannot find row with ID %d", id)
+}
+
 func (term *Term) insertRows(pos int32, rows types.Screen) error {
 	if term.IsAltBuf() {
 		return errors.New("this feature is not supported in alt buffer")
 	}
 
-	debug.Log(rows.String())
-
 	term._mutex.Lock()
+
 	defer term._mutex.Unlock()
+	return term._insertRows(pos, rows)
+}
+
+func (term *Term) _insertRows(pos int32, rows types.Screen) error {
+	debug.Log(rows.String())
 
 	tmp := term._scrollBuf
 	tmp = append(tmp, term._normBuf...)

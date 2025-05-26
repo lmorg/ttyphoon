@@ -416,3 +416,7 @@ func (term *Term) ConvertRelativeToAbsoluteY(pos *types.XY) int32 {
 func (term *Term) GetCursorPosition() *types.XY {
 	return term.curPos()
 }
+
+func (term *Term) GetRowId(y int32) uint64 {
+	return (*term.screen)[y].Id
+}

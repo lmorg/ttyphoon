@@ -149,7 +149,8 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 			meta.CmdLine = term.CmdLine(pos)
 			meta.Pwd = term.Pwd(pos)
 			meta.OutputBlock = string(lines)
-			meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(pos)
+			//meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(pos)
+			term.GetRowId(term.GetCursorPosition().Y)
 			ai.Explain(meta, true)
 		default:
 			panic(fmt.Sprintf("TODO: unmet conditional '%d'", hl.mode))

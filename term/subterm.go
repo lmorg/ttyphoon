@@ -73,7 +73,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	return subTerm._normBuf[0:subTerm.curPos().Y]
 }
 
-func (term *Term) InsertSubTerm(query, content string, cellY int32, meta types.RowMetaFlag) error {
+func (term *Term) InsertSubTerm(query, content string, insertAtRowId uint64, meta types.RowMetaFlag) error {
 	rows := term.newSubTerm(query, content, meta)
-	return term.insertRows(cellY, rows)
+	return term.insertRowsAtRowId(insertAtRowId, rows)
 }
