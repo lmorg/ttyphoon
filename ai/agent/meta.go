@@ -15,10 +15,10 @@ type Meta struct {
 	Term     types.Term
 	Renderer types.Renderer
 
-	CmdLine      string
-	Pwd          string
-	OutputBlock  string
-	InsertRowPos int32
+	CmdLine       string
+	Pwd           string
+	OutputBlock   string
+	InsertAtRowId uint64
 
 	_mcpServers []string
 	_tools      []Tool

@@ -98,7 +98,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 			}
 		}
 
-		err = meta.Term.InsertSubTerm(query, markdown, meta.InsertRowPos, types.ROW_OUTPUT_BLOCK_AI)
+		err = meta.Term.InsertSubTerm(query, markdown, meta.InsertAtRowId, types.ROW_OUTPUT_BLOCK_AI)
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return

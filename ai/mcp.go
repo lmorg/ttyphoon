@@ -56,8 +56,12 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 
 		envs := svr.Env.Slice()
 
-		updateVars(meta, envs, cache)
-		updateVars(meta, svr.Args, cache)
+		if err = updateVars(meta, envs, cache); err != nil {
+			return err
+		}
+		if err = updateVars(meta, svr.Args, cache); err != nil {
+			return err
+		}
 
 		err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
 		if err != nil {
