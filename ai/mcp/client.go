@@ -82,3 +82,7 @@ func printToolResult(result *mcp.CallToolResult) string {
 
 	return results
 }
+
+func (c *Client) Close() error {
+	return c.client.Close()
+}

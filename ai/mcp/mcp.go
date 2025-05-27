@@ -2,11 +2,16 @@ package mcp
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/mxtty/debug"
 )
 
 func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, server, command string, args ...string) error {
+	debug.Log(envvars)
+	log.Printf("MCP server %s: %s %v", server, command, args)
+
 	c, err := connectCmdLine(envvars, command, args...)
 	if err != nil {
 		return err
@@ -17,7 +22,7 @@ func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, serv
 		return err
 	}
 
-	meta.McpServerAdd(server)
+	meta.McpServerAdd(server, c)
 
 	for i := range c.tools.Tools {
 		err = meta.ToolsAdd(&tool{

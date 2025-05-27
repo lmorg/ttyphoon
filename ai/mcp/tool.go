@@ -33,6 +33,7 @@ func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
 
 func (t *tool) Enabled() bool { return t.enabled }
 func (t *tool) Toggle()       { t.enabled = !t.enabled }
+func (t *tool) Close() error  { return t.client.client.Close() }
 
 func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
 func (t *tool) Path() string { return t.path }

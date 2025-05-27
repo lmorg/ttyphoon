@@ -25,4 +25,5 @@ type Tile interface {
 	GetTerm() Term
 	SetTerm(Term)
 	Pwd() string
+	Close()
 }
