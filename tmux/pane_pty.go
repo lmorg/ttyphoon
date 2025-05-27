@@ -15,16 +15,20 @@ import (
 func (p *PaneT) File() *os.File      { return nil }
 func (p *PaneT) Read() (rune, error) { return p.buf.Read() }
 func (p *PaneT) BufSize() int        { return p.buf.BufSize() }
-func (p *PaneT) Close()              {}
 
 func (p *PaneT) exit() {
 	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.id, p.title))
 
 	p.buf.Close()
-	p.term.Close()
+	//p.term.Close()
+	p.term = nil
+	p.Close()
 
 	p.tmux.panes.Delete(p.id)
-	p.tmux.wins[p.windowId].panes.Delete(p.id)
+	win, ok := p.tmux.wins[p.windowId]
+	if ok {
+		win.panes.Delete(p.id)
+	}
 
 	debug.Log(p)
 }

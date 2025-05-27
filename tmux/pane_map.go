@@ -42,7 +42,7 @@ func (pm *paneMap) Each() iter.Seq[*PaneT] {
 	return func(yield func(*PaneT) bool) {
 
 		pm._mutex.RLock()
-		defer pm._mutex.RUnlock()
+		//defer pm._mutex.RUnlock()
 		for _, pane := range pm._map {
 			pm._mutex.RUnlock()
 
@@ -52,5 +52,7 @@ func (pm *paneMap) Each() iter.Seq[*PaneT] {
 				break
 			}
 		}
+
+		pm._mutex.RUnlock()
 	}
 }

@@ -261,7 +261,7 @@ func (tmux *Tmux) CloseWindow(winId string) {
 		return
 	}
 
-	win.closeAllPanes()
+	//win.closeAllPanes()
 	win.close(tmux)
 }
 
@@ -273,10 +273,11 @@ func (win *WindowT) close(tmux *Tmux) {
 	tmux.renderer.DisplayNotification(types.NOTIFY_INFO, msg)
 }
 
-func (win *WindowT) closeAllPanes() {
+/*func (win *WindowT) closeAllPanes() {
 	//win.panes.mutex.Lock()
 	for pane := range win.panes.Each() {
 		pane.exit()
 	}
 	//win.panes.mutex.Unlock()
 }
+*/

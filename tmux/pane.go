@@ -276,6 +276,12 @@ func (tmux *Tmux) paneExited() error {
 		}
 	}
 
+	for pane := range tmux.panes.Each() {
+		if pane.closed {
+			pane.exit()
+		}
+	}
+
 	go tmux.renderer.RefreshWindowList()
 
 	return nil
