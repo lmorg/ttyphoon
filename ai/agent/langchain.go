@@ -46,7 +46,7 @@ func initLLM(meta *Meta) error {
 		}
 	}
 
-	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(50))
+	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(100))
 	meta.executor = agents.NewExecutor(agent)
 
 	return nil
@@ -57,6 +57,10 @@ const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 // RunLLM calls the LLM with the prompt string.
 // Use `ai` package to create specific prompts.
 func (meta *Meta) RunLLM(prompt string) (string, error) {
+	if meta.fnCancel != nil {
+		meta.fnCancel()
+	}
+
 	if meta.executor == nil {
 		err := initLLM(meta)
 		if err != nil {
@@ -64,7 +68,9 @@ func (meta *Meta) RunLLM(prompt string) (string, error) {
 		}
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Minute)
+	var ctx context.Context
+	ctx, meta.fnCancel = context.WithTimeout(context.Background(), 5*time.Minute)
+
 	result, err := chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
 	if err == nil {
 		return result, nil

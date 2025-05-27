@@ -89,6 +89,8 @@ func updateVars(meta *agent.Meta, s []string, cache *map[string]string) error {
 	return nil
 }
 
+const _VAR_WORKSPACE_FOLDER = "workspaceFolder"
+
 func _updateVarsRxReplace(meta *agent.Meta, s string, cache *map[string]string) (string, error) {
 	var (
 		val string
@@ -107,7 +109,10 @@ func _updateVarsRxReplace(meta *agent.Meta, s string, cache *map[string]string) 
 	match = rxVars.FindAllStringSubmatch(s, -1)
 	for i := range match {
 		switch match[i][1] {
-		case "workspaceFolder":
+		case _VAR_WORKSPACE_FOLDER:
+			if meta.Pwd == "" {
+				return "", fmt.Errorf("unable to set ${%s} because pwd is unknown", _VAR_WORKSPACE_FOLDER)
+			}
 			val = meta.Pwd
 		default:
 			return "", fmt.Errorf("variable does not exist: '%s'", match[i][1])

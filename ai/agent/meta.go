@@ -1,7 +1,9 @@
 package agent
 
 import (
-	"github.com/lmorg/murex/utils/lists"
+	"context"
+	"fmt"
+
 	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/agents"
 )
@@ -20,7 +22,9 @@ type Meta struct {
 	OutputBlock   string
 	InsertAtRowId uint64
 
-	_mcpServers []string
+	fnCancel context.CancelFunc
+
+	_mcpServers map[string]client
 	_tools      []Tool
 }
 
@@ -30,6 +34,7 @@ func NewAgentMeta() *Meta {
 			LLM_OPENAI:    models[LLM_OPENAI][0],
 			LLM_ANTHROPIC: models[LLM_ANTHROPIC][1],
 		},
+		_mcpServers: make(map[string]client),
 	}
 
 	meta.toolsInit()
@@ -53,10 +58,31 @@ func (meta *Meta) Reload() {
 	meta.executor = nil
 }
 
-func (meta *Meta) McpServerAdd(server string) {
-	meta._mcpServers = append(meta._mcpServers, server)
+func (meta *Meta) McpServerAdd(server string, client client) {
+	meta._mcpServers[server] = client
 }
 
 func (meta *Meta) McpServerExists(server string) bool {
-	return lists.Match(meta._mcpServers, server)
+	_, ok := meta._mcpServers[server]
+	return ok
+}
+
+func Close(tileId string) {
+	meta, ok := allTheAgents[tileId]
+	if !ok {
+		return
+	}
+
+	for server, client := range meta._mcpServers {
+		err := client.Close()
+		if err != nil {
+			if meta.Renderer != nil {
+				meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Error closing MCP Server '%s': %v", server, err))
+			}
+		} else {
+			if meta.Renderer != nil {
+				meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing MCP Server '%s'", server))
+			}
+		}
+	}
 }
