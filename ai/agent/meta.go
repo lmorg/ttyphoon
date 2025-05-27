@@ -17,10 +17,10 @@ type Meta struct {
 	Term     types.Term
 	Renderer types.Renderer
 
-	CmdLine       string
-	Pwd           string
-	OutputBlock   string
-	InsertAtRowId uint64
+	CmdLine          string
+	Pwd              string
+	OutputBlock      string
+	InsertAfterRowId uint64
 
 	fnCancel context.CancelFunc
 

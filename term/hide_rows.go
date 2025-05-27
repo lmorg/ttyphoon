@@ -73,13 +73,13 @@ func (term *Term) insertRowsAtRowId(id uint64, rows types.Screen) error {
 
 	for i := range term._normBuf {
 		if term._normBuf[i].Id == id {
-			return term._insertRows(int32(i+len(term._scrollBuf)-1), rows)
+			return term._insertRows(int32(i+len(term._scrollBuf)), rows)
 		}
 	}
 
 	for i := range term._scrollBuf {
 		if term._scrollBuf[i].Id == id {
-			return term._insertRows(int32(i)-1, rows)
+			return term._insertRows(int32(i), rows)
 		}
 	}
 

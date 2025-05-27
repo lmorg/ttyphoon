@@ -59,6 +59,7 @@ const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 func (meta *Meta) RunLLM(prompt string) (string, error) {
 	if meta.fnCancel != nil {
 		meta.fnCancel()
+		meta.fnCancel = nil
 	}
 
 	if meta.executor == nil {

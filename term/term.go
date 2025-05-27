@@ -419,5 +419,8 @@ func (term *Term) GetCursorPosition() *types.XY {
 }
 
 func (term *Term) GetRowId(y int32) uint64 {
+	if y < 0 {
+		y = 0
+	}
 	return (*term.screen)[y].Id
 }

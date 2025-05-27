@@ -120,7 +120,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 	meta.Pwd = term.RowSrcFromScrollBack(blockPos[0]).Pwd
 	meta.OutputBlock = string(term.copyOutputBlock(blockPos))
 	//meta.InsertRowPos = blockPos[1]
-	meta.InsertAtRowId = (*term.screen)[term.curPos().Y].Id
+	meta.InsertAfterRowId = term.GetRowId(term.curPos().Y - 1)
 
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
