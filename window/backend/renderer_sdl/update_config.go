@@ -11,6 +11,12 @@ import (
 )
 
 func (sr *sdlRender) UpdateConfig() {
+	tile := sr.termWin.Active
+	meta := agent.Get(tile.Id())
+	meta.Renderer = sr
+	meta.Term = tile.GetTerm()
+	meta.Pwd = tile.Pwd()
+
 	menu := newContextMenu(sr)
 	menu.Append([]types.MenuItem{
 		{
@@ -104,26 +110,24 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: fmt.Sprintf("AI service == %s", agent.Get(sr.termWin.Active.Id()).ServiceName()),
-			Fn:    func() { agent.Get(sr.termWin.Active.Id()).ServiceNext(); sr.UpdateConfig() },
+			Fn:    func() { meta.ServiceNext(); sr.UpdateConfig() },
 			Icon:  0xe4f6,
 		},
 		{
 			Title: fmt.Sprintf("Model == %s", agent.Get(sr.termWin.Active.Id()).ModelName()),
-			Fn:    func() { agent.Get(sr.termWin.Active.Id()).ModelNext(); sr.UpdateConfig() },
+			Fn:    func() { meta.ModelNext(); sr.UpdateConfig() },
 			Icon:  0xe699,
 		},
 		{
 			Title: "Enable or disable specific AI tools...",
 			Fn: func() {
-				meta := agent.Get(sr.termWin.Active.Id())
-				meta.Renderer = sr
 				meta.ChooseTools()
 			},
 			Icon: 0xf7d9,
 		},
 		{
 			Title: "Start MCP servers...",
-			Fn:    func() { ai.StartMcp(sr, agent.Get(sr.termWin.Active.Id())) },
+			Fn:    func() { ai.StartMcp(sr, meta) },
 			Icon:  0xf552,
 		},
 		{
@@ -142,12 +146,12 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Bash integration (written to shell)",
-			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.bash")) },
+			Fn:    func() { tile.GetTerm().Reply(integrations.Get("shell.bash")) },
 			Icon:  0xf120,
 		},
 		{
 			Title: "Zsh integration (written to shell)",
-			Fn:    func() { sr.termWin.Active.GetTerm().Reply(integrations.Get("shell.zsh")) },
+			Fn:    func() { tile.GetTerm().Reply(integrations.Get("shell.zsh")) },
 			Icon:  0xf120,
 		},
 	}...)

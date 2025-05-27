@@ -180,3 +180,5 @@ func (t *winTileT) Pwd() string {
 	pwd, _ := os.Getwd()
 	return pwd
 }
+
+func (t *winTileT) Close() {}

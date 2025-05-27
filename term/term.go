@@ -304,6 +304,7 @@ type scrollRegionT struct {
 
 func (term *Term) Close() {
 	term.Pty.Close()
+	term.tile.Close()
 }
 
 func (term *Term) Reply(b []byte) {
