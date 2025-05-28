@@ -54,6 +54,9 @@ func (term *Term) parseApcCodes() {
 		case "output-block":
 			term.mxapcBeginOutputBlock(apc)
 
+		case "code-block":
+			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK, apc)
+
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
@@ -62,10 +65,13 @@ func (term *Term) parseApcCodes() {
 	case "end":
 		switch apc.Index(1) {
 		case "csv":
-			term.mxapcEnd(types.ELEMENT_ID_CSV, apc)
+			term.mxapcEnd(apc, true)
 
 		case "output-block":
 			term.mxapcEndOutputBlock(apc)
+
+		case "code-block":
+			term.mxapcEnd(apc, false)
 
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,

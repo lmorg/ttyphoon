@@ -15,20 +15,20 @@ func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice
 	term._activeElement = term.renderer.NewElement(term.tile, element)
 }
 
-func (term *Term) mxapcEnd(_ types.ElementID, parameters *types.ApcSlice) {
+func (term *Term) mxapcEnd(parameters *types.ApcSlice, crlf bool) {
 	if term._activeElement == nil {
 		return
 	}
-	el := term._activeElement           // this needs to be in this order because a
-	term._activeElement = nil           // function inside _mxapcGenerate returns
-	term._mxapcGenerate(el, parameters) // without processing if _activeElement set
+	el := term._activeElement                 // this needs to be in this order because a
+	term._activeElement = nil                 // function inside _mxapcGenerate returns
+	term._mxapcGenerate(el, parameters, crlf) // without processing if _activeElement set
 }
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
-	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters)
+	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters, true)
 }
 
-func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
+func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice, crlf bool) {
 	err := el.Generate(parameters, term.sgr)
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -41,7 +41,7 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
 
 	elPos := new(types.XY)
 	for ; elPos.Y < size.Y; elPos.Y++ {
-		if term.curPos().X != 0 {
+		if term.curPos().X != 0 && crlf {
 			term.carriageReturn()
 			term.lineFeed()
 		}
@@ -51,6 +51,10 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
 	}
 
 	term._noAutoLineWrap = lineWrap
+
+	if !crlf {
+		term._curPos.X -= 2 // I don't know why I need this and I feel dirty adding it!
+	}
 }
 
 func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {

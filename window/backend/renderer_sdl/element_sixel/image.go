@@ -1,4 +1,4 @@
-package elementSixel
+package element_sixel
 
 import (
 	"bytes"

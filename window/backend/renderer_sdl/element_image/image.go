@@ -1,4 +1,4 @@
-package elementImage
+package element_image
 
 import (
 	"bytes"

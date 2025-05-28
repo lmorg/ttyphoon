@@ -1,72 +1,66 @@
-package element_hyperlink
+package element_codeblock
 
 import (
 	"bytes"
-	"errors"
 	"os/exec"
 
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"golang.design/x/clipboard"
 )
 
-type ElementHyperlink struct {
-	renderer types.Renderer
-	tile     types.Tile
-	phrase   []rune
-	url      string
-	size     *types.XY
-	sgr      *types.Sgr
+type ElementCodeBlock struct {
+	renderer  types.Renderer
+	tile      types.Tile
+	codeBlock []rune
+	size      *types.XY
+	sgr       *types.Sgr
 }
 
-func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
-	return &ElementHyperlink{renderer: renderer, tile: tile}
+func New(renderer types.Renderer, tile types.Tile) *ElementCodeBlock {
+	return &ElementCodeBlock{renderer: renderer, tile: tile}
 }
 
-func (el *ElementHyperlink) Generate(apc *types.ApcSlice, sgr *types.Sgr) error {
-	el.url = apc.Index(0)
-	if el.url == "" {
-		return errors.New("empty url in hyperlink")
-	}
-
-	el.phrase = []rune(apc.Index(1))
-	if len(el.phrase) == 0 {
-		el.phrase = []rune(el.url)
-	}
-
-	el.size = &types.XY{int32(len(el.phrase)), 1}
+func (el *ElementCodeBlock) Generate(apc *types.ApcSlice, sgr *types.Sgr) error {
+	el.size = &types.XY{int32(len(el.codeBlock)), 1}
 	el.sgr = sgr.Copy()
+
+	debug.Log(el.codeBlock)
+	debug.Log(len(el.codeBlock))
+	debug.Log(el.size)
 
 	return nil
 }
 
-func (el *ElementHyperlink) Write(_ rune) error {
-	return errors.New("not supported")
+func (el *ElementCodeBlock) Write(r rune) error {
+	el.codeBlock = append(el.codeBlock, r)
+	return nil
 }
 
-func (el *ElementHyperlink) Size() *types.XY {
+func (el *ElementCodeBlock) Size() *types.XY {
 	return el.size
 }
 
 // Draw:
 // size: optional. Defaults to element size
 // pos:  required. Position to draw element
-func (el *ElementHyperlink) Draw(size *types.XY, pos *types.XY) {
+func (el *ElementCodeBlock) Draw(size *types.XY, pos *types.XY) {
 	for x := range el.size.X {
 		cell := &types.Cell{
-			Char: el.phrase[x],
+			Char: el.codeBlock[x],
 			Sgr:  el.sgr,
 		}
 		el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + x, pos.Y})
 	}
 }
 
-func (el *ElementHyperlink) Rune(pos *types.XY) rune {
-	return el.phrase[pos.X]
+func (el *ElementCodeBlock) Rune(pos *types.XY) rune {
+	return el.codeBlock[pos.X]
 }
 
-func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
+func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	if state != types.BUTTON_RELEASED {
 		callback()
 		return
@@ -74,7 +68,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 	switch button {
 	case types.MOUSE_BUTTON_LEFT:
-		copyToClipboard(el.renderer, el.url)
+		copyToClipboard(el.renderer, string(el.codeBlock))
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:
@@ -84,7 +78,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 			},
 			{
 				Title: "Copy link to clipboard",
-				Fn:    func() { copyToClipboard(el.renderer, el.url) },
+				Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
 				Icon:  0xf0c5,
 			},
 		}...)
@@ -93,7 +87,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 			el.renderer.AddToContextMenu(
 				types.MenuItem{
 					Title: "Open link with " + apps[i],
-					Fn:    func() { openWith(el.renderer, cmds[i], el.url) },
+					Fn:    func() { openWith(el.renderer, cmds[i], string(el.codeBlock)) },
 					Icon:  0xf08e,
 				},
 			)
@@ -145,17 +139,18 @@ func openWith(renderer types.Renderer, exe []string, url string) {
 	}()
 }
 
-func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
+func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	callback()
 }
 
-func (el *ElementHyperlink) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
-	el.renderer.StatusBarText("[Click] open " + el.url)
+func (el *ElementCodeBlock) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
+	el.renderer.StatusBarText("[Click] open " + string(el.codeBlock))
 	el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
+	//el.renderer.DrawHighlightRect(el.tile,)
 	cursor.Hand()
 }
 
-func (el *ElementHyperlink) MouseOut() {
+func (el *ElementCodeBlock) MouseOut() {
 	el.renderer.StatusBarText("")
 	el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
 	cursor.Arrow()

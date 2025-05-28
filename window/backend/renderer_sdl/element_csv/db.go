@@ -1,4 +1,4 @@
-package elementCsv
+package element_csv
 
 import (
 	"database/sql"

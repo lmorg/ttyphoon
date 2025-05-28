@@ -82,8 +82,8 @@
     "format": "Image: {{.text}} →"
   },
   "code": {
-    "prefix": " ",
-    "suffix": " ",
+    "prefix": " \u001b_begin;code-block\u001b\\",
+    "suffix": "\u001b_end;code-block\u001b\\ ",
     "color": "203",
     "background_color": "236"
   },
