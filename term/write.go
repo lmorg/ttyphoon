@@ -20,7 +20,7 @@ func (term *Term) writeCell(r rune, el types.Element) {
 
 	var wide bool
 
-	if r > 128 {
+	if r > 128 && el == nil {
 		// A bit of a hack, but runewidth would be slow for every character on
 		// on predominantly fast scrolling ASCII text.
 		// Another kludge is that we are treating zero width runes as one cell
