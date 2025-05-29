@@ -1,10 +1,8 @@
 package element_codeblock
 
 import (
-	"bytes"
-	"os/exec"
-
-	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -68,7 +66,31 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 	switch button {
 	case types.MOUSE_BUTTON_LEFT:
-		copyToClipboard(el.renderer, string(el.codeBlock))
+		term := el.tile.GetTerm()
+		curPos := term.GetCursorPosition().Y - 1
+		meta := agent.Get(el.tile.Id())
+		meta.Renderer = el.renderer
+		meta.Term = term
+		meta.OutputBlock = ""
+		meta.InsertAfterRowId = term.GetRowId(curPos)
+		meta.CmdLine = string(el.codeBlock)
+		items := []string{"Execute in shell", "Copy to clipboard", "Learn more..."}
+		s := string(el.codeBlock)
+		fn := func(i int) {
+			switch i {
+			case 0:
+				term.Reply([]byte(s))
+
+			case 1:
+				copyToClipboard(el.renderer, s)
+
+			case 2:
+				ai.Explain(meta, false)
+
+			}
+		}
+		el.renderer.DisplayMenu("Actions", items, nil, fn, nil)
+		callback()
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:
@@ -82,16 +104,6 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 				Icon:  0xf0c5,
 			},
 		}...)
-		apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems()
-		for i := range apps {
-			el.renderer.AddToContextMenu(
-				types.MenuItem{
-					Title: "Open link with " + apps[i],
-					Fn:    func() { openWith(el.renderer, cmds[i], string(el.codeBlock)) },
-					Icon:  0xf08e,
-				},
-			)
-		}
 		callback()
 		return
 
@@ -104,39 +116,6 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 func copyToClipboard(renderer types.Renderer, url string) {
 	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
 	clipboard.Write(clipboard.FmtText, []byte(url))
-}
-
-func openWith(renderer types.Renderer, exe []string, url string) {
-	var b []byte
-	buf := bytes.NewBuffer(b)
-
-	for param := range exe {
-		if exe[param] == "$$" {
-			exe[param] = url
-		}
-	}
-
-	cmd := exec.Command(exe[0], exe[1:]...)
-	cmd.Stderr = buf
-
-	err := cmd.Start()
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			msg := buf.String()
-			if msg == "" {
-				msg = err.Error()
-			}
-			//if debug.Enabled {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
-			//}
-			//el.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Unable to launch `%s`", cmds[i-2][0]))
-		}
-	}()
 }
 
 func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {

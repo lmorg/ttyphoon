@@ -17,8 +17,9 @@ const (
 )
 
 type subTermTileT struct {
-	parentTerm types.Term
+	//parentTerm types.Term
 	parentTile types.Tile
+	term       types.Term
 	curPath    string
 }
 
@@ -31,15 +32,14 @@ func (stt *subTermTileT) Bottom() int32  { return stt.parentTile.Bottom() }
 func (stt *subTermTileT) AtBottom() bool { return stt.parentTile.AtBottom() }
 func (stt *subTermTileT) Close()         {}
 
-func (stt *subTermTileT) GetTerm() types.Term     { return stt.parentTerm }
-func (stt *subTermTileT) SetTerm(term types.Term) { stt.parentTerm = term }
+func (stt *subTermTileT) GetTerm() types.Term     { return stt.term }
+func (stt *subTermTileT) SetTerm(term types.Term) { stt.term = term }
 func (stt *subTermTileT) Pwd() string             { return stt.curPath }
 
 func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) types.Screen {
 	debug.Log(content)
 
 	tile := subTermTileT{
-		parentTerm: term,
 		parentTile: term.tile,
 		curPath:    term.tile.Pwd(),
 	}
@@ -69,8 +69,9 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 		}
 	}
 
-	debug.Log(subTerm.curPos())
 	subTerm.Close()
+	debug.Log(subTerm.curPos())
+	subTerm.tile.SetTerm(term) // not sure why this is needed either
 	return subTerm._normBuf[0:subTerm.curPos().Y]
 }
 
