@@ -96,7 +96,7 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 			},
 		}...)
 
-		menu.DisplayMenu("Actions")
+		menu.DisplayMenu("Code block action")
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:

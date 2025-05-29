@@ -43,15 +43,24 @@ Terminal:
       IncLineNumbers: false
       OpenAgents:
         - Name: System Default
-          Command: [open, $$]
+          Command: [open, "${url}" ]
+          Schemes: [ "*" ]
+
         - Name: Zed
-          Command: [zed, $$]
+          Command: [ zed, "${path}" ]
+          Schemes: [ file ]
         - Name: Visual Studio Code
-          Command: [code, $$]
+          Command: [ code, "${path}" ]
+          Schemes: [ file ]
         - Name: Mozilla FireFox
-          Command: [firefox, $$]
+          Command: [ firefox, "${url}" ]
+          Schemes: [ "*" ]
         - Name: Google Chrome
-          Command: [chrome, $$]
+          Command: [ chrome, "${url}" ]
+          Schemes: [ "*" ]
+        - Name: Chromium
+          Command: [ chromium, "${url}" ]
+          Schemes: [ "*" ]
 
     Table:
       ScrollMultiplierX: 2

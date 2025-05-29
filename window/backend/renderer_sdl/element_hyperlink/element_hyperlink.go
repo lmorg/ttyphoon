@@ -3,7 +3,10 @@ package element_hyperlink
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
@@ -16,6 +19,8 @@ type ElementHyperlink struct {
 	tile     types.Tile
 	phrase   []rune
 	url      string
+	scheme   string
+	path     string
 	size     *types.XY
 	sgr      *types.Sgr
 }
@@ -34,6 +39,12 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice, sgr *types.Sgr) error 
 	if len(el.phrase) == 0 {
 		el.phrase = []rune(el.url)
 	}
+
+	split := strings.SplitN(el.url, "://", 2)
+	if len(split) != 2 {
+		return fmt.Errorf("invalid url, missing '://': %s", el.url)
+	}
+	el.scheme, el.path = split[0], split[1]
 
 	el.size = &types.XY{int32(len(el.phrase)), 1}
 	el.sgr = sgr.Copy()
@@ -74,30 +85,14 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 	switch button {
 	case types.MOUSE_BUTTON_LEFT:
-		copyToClipboard(el.renderer, el.url)
+		menu := el.renderer.NewContextMenu()
+		menu.Append(el.contextMenuItems()...)
+		menu.DisplayMenu("Hyperlink action")
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:
-		el.renderer.AddToContextMenu([]types.MenuItem{
-			{
-				Title: types.MENU_SEPARATOR,
-			},
-			{
-				Title: "Copy link to clipboard",
-				Fn:    func() { copyToClipboard(el.renderer, el.url) },
-				Icon:  0xf0c5,
-			},
-		}...)
-		apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems()
-		for i := range apps {
-			el.renderer.AddToContextMenu(
-				types.MenuItem{
-					Title: "Open link with " + apps[i],
-					Fn:    func() { openWith(el.renderer, cmds[i], el.url) },
-					Icon:  0xf08e,
-				},
-			)
-		}
+		el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
+		//el.renderer.AddToContextMenu(el.contextMenuItems()...)
 		callback()
 		return
 
@@ -107,19 +102,38 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 	}
 }
 
+func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
+	menuItems := []types.MenuItem{
+		{
+			Title: "Copy link to clipboard",
+			Fn:    func() { copyToClipboard(el.renderer, el.url) },
+			Icon:  0xf0c5,
+		},
+	}
+	apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems(el.scheme)
+	for i := range apps {
+		menuItems = append(menuItems,
+			types.MenuItem{
+				Title: "Open link with " + apps[i],
+				Fn:    func() { el.openWith(cmds[i]) },
+				Icon:  0xf08e,
+			},
+		)
+	}
+	return menuItems
+}
+
 func copyToClipboard(renderer types.Renderer, url string) {
 	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
 	clipboard.Write(clipboard.FmtText, []byte(url))
 }
 
-func openWith(renderer types.Renderer, exe []string, url string) {
+func (el *ElementHyperlink) openWith(exe []string) {
 	var b []byte
 	buf := bytes.NewBuffer(b)
 
 	for param := range exe {
-		if exe[param] == "$$" {
-			exe[param] = url
-		}
+		exe[param] = os.Expand(exe[param], el.getVar)
 	}
 
 	cmd := exec.Command(exe[0], exe[1:]...)
@@ -127,7 +141,7 @@ func openWith(renderer types.Renderer, exe []string, url string) {
 
 	err := cmd.Start()
 	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
@@ -138,11 +152,24 @@ func openWith(renderer types.Renderer, exe []string, url string) {
 				msg = err.Error()
 			}
 			//if debug.Enabled {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
 			//}
 			//el.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Unable to launch `%s`", cmds[i-2][0]))
 		}
 	}()
+}
+
+func (el *ElementHyperlink) getVar(s string) string {
+	switch s {
+	case "url":
+		return el.url
+	case "scheme":
+		return el.scheme
+	case "path":
+		return el.path
+	default:
+		return "INVALID_VARIABLE_NAME"
+	}
 }
 
 func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {

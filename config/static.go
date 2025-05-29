@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/mxtty/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
@@ -106,10 +107,15 @@ type configT struct {
 type OpenAgentsT []struct {
 	Name    string   `yaml:"Name"`
 	Command []string `yaml:"Command"`
+	Schemes []string `yaml:"Schemes"`
 }
 
-func (oa *OpenAgentsT) MenuItems() (apps []string, cmds [][]string) {
+func (oa *OpenAgentsT) MenuItems(scheme string) (apps []string, cmds [][]string) {
 	for i := range *oa {
+		if !lists.Match((*oa)[i].Schemes, scheme) && !lists.Match((*oa)[i].Schemes, "*") {
+			continue
+		}
+
 		if !oa.isAvail((*oa)[i].Command[0]) {
 			continue
 		}
