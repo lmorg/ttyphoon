@@ -1,6 +1,8 @@
 package element_codeblock
 
 import (
+	"fmt"
+
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
@@ -74,23 +76,27 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 		meta.OutputBlock = ""
 		meta.InsertAfterRowId = term.GetRowId(curPos)
 		meta.CmdLine = string(el.codeBlock)
-		items := []string{"Execute in shell", "Copy to clipboard", "Learn more..."}
-		s := string(el.codeBlock)
-		fn := func(i int) {
-			switch i {
-			case 0:
-				term.Reply([]byte(s))
 
-			case 1:
-				copyToClipboard(el.renderer, s)
+		menu := el.renderer.NewContextMenu()
+		menu.Append([]types.MenuItem{
+			{
+				Title: "Write to shell",
+				Fn:    func() { term.Reply([]byte(string(el.codeBlock))) },
+				Icon:  0xf120,
+			},
+			{
+				Title: "Copy to clipboard",
+				Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
+				Icon:  0xf0c5,
+			},
+			{
+				Title: fmt.Sprintf("Learn more (%s)", meta.ServiceName()),
+				Fn:    func() { ai.Explain(meta, true) },
+				Icon:  0xf544,
+			},
+		}...)
 
-			case 2:
-				ai.Explain(meta, false)
-
-			}
-		}
-		el.renderer.DisplayMenu("Actions", items, nil, fn, nil)
-		callback()
+		menu.DisplayMenu("Actions")
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:

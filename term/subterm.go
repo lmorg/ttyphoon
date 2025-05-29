@@ -70,8 +70,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	}
 
 	subTerm.Close()
-	debug.Log(subTerm.curPos())
-	subTerm.tile.SetTerm(term) // not sure why this is needed either
+	subTerm.tile.SetTerm(term) // also a bit of a kludge
 	subTerm._scrollBuf = append(subTerm._scrollBuf, subTerm._normBuf...)
 	return subTerm._scrollBuf
 }

@@ -17,7 +17,7 @@ func (sr *sdlRender) UpdateConfig() {
 	meta.Term = tile.GetTerm()
 	meta.Pwd = tile.Pwd()
 
-	menu := newContextMenu(sr)
+	menu := sr.NewContextMenu()
 	menu.Append([]types.MenuItem{
 		{
 			Title: fmt.Sprintf("%s == %v", "Terminal.ColorTheme", config.Config.Terminal.ColorTheme),

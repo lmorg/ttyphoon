@@ -21,7 +21,7 @@ func Explain(meta *agent.Meta, promptDialogue bool) {
 		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
-	meta.Renderer.DisplayInputBox("Add to prompt", "", fn, nil)
+	meta.Renderer.DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
 const _STICKY_MESSAGE = "Asking %s.... "
@@ -71,7 +71,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 			meta.AddHistory(title, result)
 		}
 
-		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Explanation:\n\n%s", title, meta.ServiceName(), result)
+		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Response:\n\n%s", title, meta.ServiceName(), result)
 
 		var (
 			markdown string

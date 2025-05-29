@@ -15,11 +15,6 @@ const (
 	_INPUT_ALPHA_BG = 255
 )
 
-/*var (
-	_INPUT_BOARDER_COLOUR = types.SGR_COLOR_FOREGROUND
-	_INPUT_BACKGROUND     = types.SGR_COLOR_BLACK_BRIGHT
-)*/
-
 type menuWidgetT struct {
 	title             string
 	options           []string
@@ -47,7 +42,7 @@ type contextMenuT struct {
 	renderer *sdlRender
 }
 
-func newContextMenu(renderer *sdlRender) *contextMenuT {
+func (renderer *sdlRender) NewContextMenu() types.ContextMenu {
 	return &contextMenuT{renderer: renderer}
 }
 
@@ -104,6 +99,12 @@ func (cm *contextMenuT) _clearHoverFn() {
 func (cm *contextMenuT) Append(menuItems ...types.MenuItem) {
 	cm.items = append(cm.items, menuItems...)
 }
+
+func (cm *contextMenuT) DisplayMenu(title string) {
+	cm.renderer.DisplayMenuUnderCursor(title, cm.Options(), cm.Icons(), cm.Highlight, cm.Callback, cm.Cancel)
+}
+
+func (cm *contextMenuT) MenuItems() []types.MenuItem { return cm.items }
 
 func (sr *sdlRender) AddToContextMenu(menuItems ...types.MenuItem) {
 	sr.contextMenu.Append(menuItems...)

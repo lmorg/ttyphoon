@@ -184,7 +184,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		}
 
 	case types.MOUSE_BUTTON_RIGHT:
-		sr.contextMenu = newContextMenu(sr) // empty the context menu
+		sr.contextMenu = sr.NewContextMenu() // empty the context menu
 		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, func() {
 			if evt.State == sdl.RELEASED {
 				tw._eventMouseButtonRightClick(sr, sr.convertPxToCellXYTile(sr.termWin.Active, evt.X, evt.Y), true)
@@ -199,16 +199,16 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY, underCursor bool) {
 	term := sr.termWin.Active.GetTerm()
 
-	menu := newContextMenu(sr)
+	menu := sr.NewContextMenu()
 	menu.Append(types.MenuItem{
 		Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
 		Fn:    sr.clipboardPaste,
 		Icon:  0xf0ea,
 	})
 
-	if sr.contextMenu != nil && len(sr.contextMenu.items) > 0 {
+	if sr.contextMenu != nil && len(sr.contextMenu.MenuItems()) > 0 {
 		//menu = append(menu, types.MenuItem{Title: MENU_SEPARATOR})
-		menu.Append(sr.contextMenu.items...)
+		menu.Append(sr.contextMenu.MenuItems()...)
 	}
 
 	menu.Append([]types.MenuItem{
