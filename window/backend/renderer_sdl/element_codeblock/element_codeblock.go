@@ -68,54 +68,47 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 	switch button {
 	case types.MOUSE_BUTTON_LEFT:
-		term := el.tile.GetTerm()
-		curPos := term.GetCursorPosition().Y - 1
-		meta := agent.Get(el.tile.Id())
-		meta.Renderer = el.renderer
-		meta.Term = term
-		meta.OutputBlock = ""
-		meta.InsertAfterRowId = term.GetRowId(curPos)
-		meta.CmdLine = string(el.codeBlock)
-
 		menu := el.renderer.NewContextMenu()
-		menu.Append([]types.MenuItem{
-			{
-				Title: "Write to shell",
-				Fn:    func() { term.Reply([]byte(string(el.codeBlock))) },
-				Icon:  0xf120,
-			},
-			{
-				Title: "Copy to clipboard",
-				Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
-				Icon:  0xf0c5,
-			},
-			{
-				Title: fmt.Sprintf("Learn more (%s)", meta.ServiceName()),
-				Fn:    func() { ai.Explain(meta, true) },
-				Icon:  0xf544,
-			},
-		}...)
-
+		menu.Append(el.contextMenuItems()...)
 		menu.DisplayMenu("Code block action")
 		return
 
 	case types.MOUSE_BUTTON_RIGHT:
-		el.renderer.AddToContextMenu([]types.MenuItem{
-			{
-				Title: types.MENU_SEPARATOR,
-			},
-			{
-				Title: "Copy link to clipboard",
-				Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
-				Icon:  0xf0c5,
-			},
-		}...)
+		el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
 		callback()
 		return
 
 	default:
 		callback()
 		return
+	}
+}
+
+func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
+	term := el.tile.GetTerm()
+	curPos := term.GetCursorPosition().Y - 1
+	meta := agent.Get(el.tile.Id())
+	meta.Renderer = el.renderer
+	meta.Term = term
+	meta.OutputBlock = ""
+	meta.InsertAfterRowId = term.GetRowId(curPos)
+	meta.CmdLine = string(el.codeBlock)
+	return []types.MenuItem{
+		{
+			Title: "Write code to shell",
+			Fn:    func() { term.Reply([]byte(string(el.codeBlock))) },
+			Icon:  0xf120,
+		},
+		{
+			Title: "Copy code to clipboard",
+			Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
+			Icon:  0xf0c5,
+		},
+		{
+			Title: fmt.Sprintf("Learn more about code (%s)", meta.ServiceName()),
+			Fn:    func() { ai.Explain(meta, true) },
+			Icon:  0xf544,
+		},
 	}
 }
 

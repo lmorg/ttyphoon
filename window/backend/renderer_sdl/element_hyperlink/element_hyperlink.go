@@ -92,7 +92,6 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 	case types.MOUSE_BUTTON_RIGHT:
 		el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
-		//el.renderer.AddToContextMenu(el.contextMenuItems()...)
 		callback()
 		return
 
