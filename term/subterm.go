@@ -52,7 +52,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	content = strings.ReplaceAll(content, "\n", "\r\n")
 	pty := ptty.NewMock()
 
-	subTerm := NewTerminal(&tile, term.renderer, &types.XY{X: term.size.X, Y: 10000}, false)
+	subTerm := NewTerminal(&tile, term.renderer, &types.XY{X: term.size.X, Y: 1}, false)
 	subTerm.Start(pty)
 
 	b := fmt.Appendf(nil, _SUBTERM_META_BEGIN, beginPayloadBytes)
@@ -64,7 +64,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 
 	for {
 		if pty.BufSize() == 0 {
-			time.Sleep(1 * time.Second) // a bit of a kludge
+			time.Sleep(250 * time.Millisecond) // a bit of a kludge
 			break
 		}
 	}
@@ -72,7 +72,8 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	subTerm.Close()
 	debug.Log(subTerm.curPos())
 	subTerm.tile.SetTerm(term) // not sure why this is needed either
-	return subTerm._normBuf[0:subTerm.curPos().Y]
+	subTerm._scrollBuf = append(subTerm._scrollBuf, subTerm._normBuf...)
+	return subTerm._scrollBuf
 }
 
 func (term *Term) InsertSubTerm(query, content string, insertAtRowId uint64, meta types.RowMetaFlag) error {
