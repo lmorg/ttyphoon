@@ -176,7 +176,7 @@ func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 }
 
 func (el *ElementHyperlink) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
-	el.renderer.StatusBarText("[Click] open " + el.url)
+	el.renderer.StatusBarText("[Click] Hyperlink options: " + el.url)
 	el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
 	cursor.Hand()
 }

@@ -27,7 +27,6 @@ func (term *Term) phraseSetToRowPos() {
 
 	term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
-
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 }
 
@@ -75,7 +74,7 @@ skipHttp:
 
 		if _, err := os.Stat(file); err == nil {
 			file = filepath.Clean(file)
-			_autoHotlink(term, row, posFile[i], file)
+			_autoHotlink(term, row, posFile[i], "file://"+file)
 		}
 	}
 }

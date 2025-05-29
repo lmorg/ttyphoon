@@ -112,9 +112,9 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 	}
 }
 
-func copyToClipboard(renderer types.Renderer, url string) {
-	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
-	clipboard.Write(clipboard.FmtText, []byte(url))
+func copyToClipboard(renderer types.Renderer, code string) {
+	renderer.DisplayNotification(types.NOTIFY_INFO, "Code copied to clipboard")
+	clipboard.Write(clipboard.FmtText, []byte(code))
 }
 
 func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
@@ -122,7 +122,7 @@ func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 }
 
 func (el *ElementCodeBlock) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
-	el.renderer.StatusBarText("[Click] open " + string(el.codeBlock))
+	el.renderer.StatusBarText("[Click] Code block options...")
 	el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
 	//el.renderer.DrawHighlightRect(el.tile,)
 	cursor.Hand()
