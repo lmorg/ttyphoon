@@ -137,14 +137,12 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Enable or disable specific AI tools...",
-			Fn: func() {
-				meta.ChooseTools()
-			},
-			Icon: 0xf7d9,
+			Fn:    func() { meta.ChooseTools(func(int) { sr.UpdateConfig() }) },
+			Icon:  0xf7d9,
 		},
 		{
 			Title: "Start MCP servers...",
-			Fn:    func() { ai.StartMcp(sr, meta) },
+			Fn:    func() { ai.StartMcp(sr, meta, func(int) { sr.UpdateConfig() }) },
 			Icon:  0xf552,
 		},
 		{

@@ -12,7 +12,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func StartMcp(renderer types.Renderer, meta *agent.Meta) {
+func StartMcp(renderer types.Renderer, meta *agent.Meta, cancel types.MenuCallbackT) {
 	files := config.GetFiles("mcp", ".json")
 	load := func(i int) {
 		go func() {
@@ -21,9 +21,10 @@ func StartMcp(renderer types.Renderer, meta *agent.Meta) {
 				renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
 			}
 		}()
+		StartMcp(renderer, meta, cancel)
 	}
 
-	renderer.DisplayMenu("Select a config file to load", files, nil, load, nil)
+	renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
 func StartServersFromJson(renderer types.Renderer, meta *agent.Meta, filename string) error {

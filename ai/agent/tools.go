@@ -46,7 +46,7 @@ func (meta *Meta) ToolsAdd(t Tool) error {
 	return nil
 }
 
-func (meta *Meta) ChooseTools() {
+func (meta *Meta) ChooseTools(cancel types.MenuCallbackT) {
 	s := make([]string, len(meta._tools))
 	for i, tool := range meta._tools {
 		s[i] = fmt.Sprintf("%s == %v", tool.Name(), tool.Enabled())
@@ -55,8 +55,8 @@ func (meta *Meta) ChooseTools() {
 	fnOk := func(i int) {
 		meta._tools[i].Toggle()
 		meta.Reload()
-		meta.ChooseTools()
+		meta.ChooseTools(cancel)
 	}
 
-	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, nil)
+	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, cancel)
 }
