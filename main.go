@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 func main() {
 	pprof.Start()
 	defer pprof.CleanUp()
+
+	loadEnvs()
 
 	getFlags()
 
@@ -83,4 +86,15 @@ func regularSession() {
 	   tile.Term.Start(pty)
 	   backend.Start(renderer, appWin, nil)
 	*/
+}
+
+func loadEnvs() {
+	files := config.GetFiles("/", ".env")
+	for i := range files {
+		split := strings.SplitN(files[i], "=", 2)
+		if len(split) != 2 {
+			split = []string{files[i], ""}
+		}
+		os.Setenv(split[0], split[1])
+	}
 }
