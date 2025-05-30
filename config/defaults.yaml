@@ -116,6 +116,10 @@ Window:
   TabBarHoverHighlight: true
   TileHighlightFill: true
 
+
+  BellVisualNotification: false
+  BellPlayAudio: true
+
   # RefreshInterval is how long to wait between forced window updates.
   # Lower values produce smoother scrolling when large text is rapidly written
   # to the terminal but at the cost of slower terminal performance and greater

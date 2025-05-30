@@ -60,6 +60,23 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 
 		{
+			Title: fmt.Sprintf("%s == %v", "Window.BellVisualNotification", config.Config.Window.BellVisualNotification),
+			Fn: func() {
+				config.Config.Window.BellVisualNotification = !config.Config.Window.BellVisualNotification
+				sr.UpdateConfig()
+			},
+			Icon: 0xf0f3,
+		},
+		{
+			Title: fmt.Sprintf("%s == %v", "Window.BellPlayAudio", config.Config.Window.BellPlayAudio),
+			Fn: func() {
+				config.Config.Window.BellPlayAudio = !config.Config.Window.BellPlayAudio
+				sr.UpdateConfig()
+			},
+			Icon: 0xf0a1,
+		},
+
+		{
 			Title: fmt.Sprintf("%s == %v", "Window.StatusBar", config.Config.Window.StatusBar),
 			Fn: func() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar

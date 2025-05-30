@@ -82,15 +82,17 @@ type configT struct {
 	} `yaml:"Terminal"`
 
 	Window struct {
-		Opacity               int  `yaml:"Opacity"`
-		InactiveOpacity       int  `yaml:"InactiveOpacity"`
-		StatusBar             bool `yaml:"StatusBar"`
-		TabBarFrame           bool `yaml:"TabBarFrame"`
-		TabBarActiveHighlight bool `yaml:"TabBarActiveHighlight"`
-		TabBarHoverHighlight  bool `yaml:"TabBarHoverHighlight"`
-		TileHighlightFill     bool `yaml:"TileHighlightFill"`
-		RefreshInterval       int  `yaml:"RefreshInterval"`
-		UseGPU                bool `yaml:"UseGPU"`
+		Opacity                int  `yaml:"Opacity"`
+		InactiveOpacity        int  `yaml:"InactiveOpacity"`
+		StatusBar              bool `yaml:"StatusBar"`
+		TabBarFrame            bool `yaml:"TabBarFrame"`
+		TabBarActiveHighlight  bool `yaml:"TabBarActiveHighlight"`
+		TabBarHoverHighlight   bool `yaml:"TabBarHoverHighlight"`
+		TileHighlightFill      bool `yaml:"TileHighlightFill"`
+		RefreshInterval        int  `yaml:"RefreshInterval"`
+		UseGPU                 bool `yaml:"UseGPU"`
+		BellVisualNotification bool `yaml:"BellVisualNotification"`
+		BellPlayAudio          bool `yaml:"BellPlayAudio"`
 	} `yaml:"Window"`
 
 	TypeFace struct {

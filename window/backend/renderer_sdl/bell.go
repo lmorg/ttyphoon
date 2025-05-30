@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/lmorg/mxtty/assets"
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
@@ -45,12 +46,18 @@ func (sr *sdlRender) Bell() {
 }
 
 func (sr *sdlRender) _bell() {
-	err := sr.bell.Play(1)
-	if err != nil {
-		sr.DisplayNotification(types.NOTIFY_ERROR,
-			fmt.Sprintf("Could not play %s from memory: %s", assets.BELL, err.Error()))
-		return
+	if config.Config.Window.BellVisualNotification {
+		sr.DisplayNotification(types.NOTIFY_INFO, "DING! System bell received")
 	}
-	sr.DisplayNotification(types.NOTIFY_INFO, "DING! System bell received")
-	sdl.Delay(5000)
+
+	if config.Config.Window.BellPlayAudio {
+		err := sr.bell.Play(1)
+		if err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR,
+				fmt.Sprintf("Could not play %s from memory: %s", assets.BELL, err.Error()))
+			return
+		}
+
+		sdl.Delay(5000)
+	}
 }
