@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -78,7 +79,8 @@ func (meta *Meta) RunLLM(prompt string) (string, error) {
 	}
 
 	if strings.HasPrefix(err.Error(), _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT) {
-		return err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):], nil
+		log.Println(err)
+		return err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):], nil // bit of a kludge this one
 	}
 	return result, err
 }
