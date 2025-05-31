@@ -5,8 +5,8 @@ import (
 	"math"
 
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/lmorg/mxtty/window/backend/cursor"
-	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

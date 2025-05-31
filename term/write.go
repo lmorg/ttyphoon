@@ -3,7 +3,7 @@ package virtualterm
 import (
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
-	"github.com/mattn/go-runewidth"
+	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
 type _debugWriteCell struct {

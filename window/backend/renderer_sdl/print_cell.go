@@ -5,7 +5,7 @@ import (
 
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
-	"github.com/mattn/go-runewidth"
+	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/mattn/go-runewidth"
-
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
 func (term *Term) phraseAppend(r rune) {

@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
-	"github.com/mattn/go-runewidth"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

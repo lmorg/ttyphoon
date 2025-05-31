@@ -16,6 +16,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/mattn/go-sixel v0.0.5
 	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/rivo/uniseg v0.4.7
 	github.com/tmc/langchaingo v0.1.14-0.20250529114305-d0c1b8866537
 	github.com/veandco/go-sdl2 v0.5.0-alpha.7
 	golang.design/x/clipboard v0.7.0
@@ -70,7 +71,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.7 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
