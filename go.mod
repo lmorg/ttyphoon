@@ -6,7 +6,6 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/creack/pty v1.1.24
-	github.com/flopp/go-findfont v0.1.0
 	github.com/forPelevin/gomoji v1.3.0
 	github.com/go-text/render v0.2.0
 	github.com/go-text/typesetting v0.3.0

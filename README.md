@@ -24,7 +24,6 @@
     - [Extended features](#extended-features)
     - [Common application support](#common-application-support)
   - [Application Usability](#application-usability)
-  - [Tmux Integration](#tmux-integration)
 - [Supported Platforms](#supported-platforms)
 - [Install Guide](#install-guide)
 - [How To Support](#how-to-support)
@@ -223,7 +222,7 @@ eg `xterm` and similar terminal emulators
   - [x] Auto-hyperlink URLs
   - [ ] ANSI escape sequence supported
 - [ ] Bracketed paste mode
-- [ ] Inlining images
+- [x] Inlining images
   - [x] Ttyphoon codes
   - [ ] iterm2 compatible
   - [ ] Kitty compatible
@@ -292,7 +291,6 @@ To do so you will need the following installed:
 - Go compiler
 - SDL libraries
   - sdl2
-  - sdl2_ttf
   - sdl2_mixer
 - `pkg-config`
 
