@@ -3,16 +3,21 @@ package typeface
 import (
 	"image"
 	"log"
+	"math"
 	"regexp"
 	"unsafe"
 
 	"github.com/go-text/render"
+	"github.com/go-text/typesetting/di"
 	"github.com/go-text/typesetting/font"
 	"github.com/go-text/typesetting/fontscan"
+	"github.com/go-text/typesetting/shaping"
 	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
+	"golang.org/x/image/math/fixed"
 )
 
 var _FONT_FAMILIES = []string{"monospace", "emoji", "math", "fantasy"}
@@ -43,7 +48,6 @@ type fontHarfbuzz struct {
 	style styleT
 	fsize float32
 	fmap  *fontscan.FontMap
-	sdl   *fontSdl // just needed while I figure out how to do everything in harfbuzz
 }
 
 func (f *fontHarfbuzz) Init() error {
@@ -57,9 +61,7 @@ func (f *fontHarfbuzz) Init() error {
 	}
 
 	f.fmap.SetQuery(fontscan.Query{Families: _FONT_FAMILIES})
-
-	f.sdl = new(fontSdl)
-	return err
+	return nil
 }
 
 func (f *fontHarfbuzz) Open(name string, size int) (err error) {
@@ -67,8 +69,8 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 
 	if name != "" {
 		_FONT_FAMILIES = append([]string{name}, _FONT_FAMILIES...)
-		name = f.fmap.FontLocation(f.getFace('W').Font).File
-		return f.sdl.Open(name, size)
+		f.setSize(size)
+		return nil
 	}
 
 	f.openAsset(assets.TYPEFACE, _STYLE_NORMAL)
@@ -81,8 +83,9 @@ func (f *fontHarfbuzz) Open(name string, size int) (err error) {
 	rx := regexp.MustCompile(`[-.]`)
 	fontName := rx.Split(assets.TYPEFACE, 2)
 	_FONT_FAMILIES = append(fontName[:1], _FONT_FAMILIES...)
+	f.setSize(size)
 
-	return f.sdl.Open("", size)
+	return nil
 }
 
 func (f *fontHarfbuzz) openAsset(name string, style styleT) {
@@ -100,8 +103,34 @@ func (f *fontHarfbuzz) openAsset(name string, style styleT) {
 	f.fmap.AddFace(f.face[style], fontscan.Location{}, f.face[style].Describe())
 }
 
+func (f *fontHarfbuzz) setSize(pointSize int) {
+	var shaper shaping.HarfbuzzShaper
+
+	dpi := 72 //96
+	size := fixed.Int26_6(int(math.Round((float64(pointSize*dpi) / 72.0) * 64)))
+
+	input := shaping.Input{
+		Size:      size,
+		Face:      f.getFace('W'), // my own method which returns *font.Face
+		Text:      []rune{'W'},
+		RunStart:  0,
+		RunEnd:    1,
+		Direction: di.DirectionLTR,
+	}
+
+	output := shaper.Shape(input)
+
+	y := -int32(output.Glyphs[0].Height.Floor())
+	f.size = &types.XY{
+		X: int32(output.Glyphs[0].Width.Floor()) + int32(config.Config.TypeFace.AdjustCellWidth),
+		Y: y*2 + int32(config.Config.TypeFace.AdjustCellHeight),
+	}
+
+	debug.Log(f.size)
+}
+
 func (f *fontHarfbuzz) getSize() *types.XY {
-	return f.sdl.size
+	return f.size
 }
 
 func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
@@ -141,10 +170,6 @@ func (f *fontHarfbuzz) SetStyle(style types.SgrFlag) {
 func (f *fontHarfbuzz) getFace(ch rune) *font.Face {
 	style := f.style.TypeFace()
 
-	/*if style >= _STYLE_FONT_AWESOME || f.style >= _STYLE_FONT_AWESOME || ch == '' {
-		panic(style)
-	}*/
-
 	if f.face[style] != nil && f.glyphIsProvided(ch) {
 		return f.face[style]
 	}
@@ -164,6 +189,12 @@ func (f *fontHarfbuzz) RenderGlyphs(fg *types.Colour, cellRect *sdl.Rect, ch ...
 	}
 
 	_ = textRenderer.DrawString(string(ch), img, f.getFace(ch[0]))
+
+	/*yOffset := int(float32(f.getSize().Y) / 1.25)
+	if GlyphIsEmoji(ch[0]) {
+		yOffset += 3
+	}
+	_ = textRenderer.DrawStringAt(string(ch), img, 0, yOffset, f.getFace(ch[0]))*/
 
 	surface, err := sdl.CreateRGBSurfaceWithFormatFrom(
 		unsafe.Pointer(&img.Pix[0]),
