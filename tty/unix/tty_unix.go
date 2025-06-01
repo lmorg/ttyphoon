@@ -1,4 +1,7 @@
-package ptty
+//go:build !windows
+// +build !windows
+
+package tty_unix
 
 import (
 	"fmt"
@@ -9,12 +12,14 @@ import (
 	"github.com/creack/pty"
 	"github.com/lmorg/mxtty/types"
 	runebuf "github.com/lmorg/mxtty/utils/rune_buf"
+	"golang.org/x/sys/unix"
 )
 
 type Pty struct {
 	primary   *os.File
 	secondary *os.File
 	buf       *runebuf.Buf
+	process   *os.Process
 }
 
 func NewPty(size *types.XY) (types.Pty, error) {
@@ -59,10 +64,6 @@ func OpenPty(path string) (types.Pty, error) {
 	return p, nil
 }
 
-func (p *Pty) File() *os.File {
-	return p.primary
-}
-
 func (p *Pty) Write(b []byte) error {
 	_, err := p.secondary.Write(b)
 	return err
@@ -86,10 +87,22 @@ func (p *Pty) Read() (rune, error) {
 }
 
 func (p *Pty) Resize(size *types.XY) error {
-	return pty.Setsize(p.File(), &pty.Winsize{
+	err := pty.Setsize(p.primary, &pty.Winsize{
 		Cols: uint16(size.X),
 		Rows: uint16(size.Y),
 	})
+	if err != nil {
+		return err
+	}
+
+	if p.process != nil {
+		err = p.process.Signal(unix.SIGWINCH)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *Pty) BufSize() int {
@@ -98,5 +111,6 @@ func (p *Pty) BufSize() int {
 
 func (p *Pty) Close() {
 	p.buf.Close()
-	p.Close()
+	_ = p.primary.Close()   // we don't really care about errors here
+	_ = p.secondary.Close() // we don't really care about errors here
 }

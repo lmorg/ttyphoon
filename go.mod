@@ -11,13 +11,13 @@ require (
 	github.com/go-text/typesetting v0.3.0
 	github.com/lmorg/murex v0.0.0-20250115225944-b4c429617fd4
 	github.com/lmorg/readline/v4 v4.1.1
-	github.com/mark3labs/mcp-go v0.31.0
+	github.com/mark3labs/mcp-go v0.31.1-0.20250601083948-ca9be6e1e497
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/mattn/go-sixel v0.0.5
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/rivo/uniseg v0.4.7
 	github.com/tmc/langchaingo v0.1.14-0.20250529114305-d0c1b8866537
-	github.com/veandco/go-sdl2 v0.5.0-alpha.7
+	github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12
 	golang.design/x/clipboard v0.7.0
 	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.24.0

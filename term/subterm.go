@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/ptty"
+	"github.com/lmorg/mxtty/tty"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -50,7 +50,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	beginPayloadBytes, _ := json.Marshal(beginPayloadMap)
 
 	content = strings.ReplaceAll(content, "\n", "\r\n")
-	pty := ptty.NewMock()
+	pty := tty.NewMock()
 
 	subTerm := NewTerminal(&tile, term.renderer, &types.XY{X: term.size.X, Y: 1}, false)
 	subTerm.Start(pty)

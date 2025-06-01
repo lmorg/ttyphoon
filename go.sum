@@ -197,8 +197,8 @@ github.com/lmorg/readline/v4 v4.1.1 h1:2EZddEoICN4XXlD4BuWdkdnjCGJqTZivIYi79MOg7
 github.com/lmorg/readline/v4 v4.1.1/go.mod h1:Zdp/tnRZl0eTssyikMGSp61wOZwxJLw/CtK2sE2f9e8=
 github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69Aj6K7nkY=
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
-github.com/mark3labs/mcp-go v0.31.0 h1:4UxSV8aM770OPmTvaVe/b1rA2oZAjBMhGBfUgOGut+4=
-github.com/mark3labs/mcp-go v0.31.0/go.mod h1:rXqOudj/djTORU/ThxYx8fqEVj/5pvTuuebQ2RC7uk4=
+github.com/mark3labs/mcp-go v0.31.1-0.20250601083948-ca9be6e1e497 h1:6wckja7AMyB79NOyc6je7YasKEqwsD0+3OmNUWqifZ4=
+github.com/mark3labs/mcp-go v0.31.1-0.20250601083948-ca9be6e1e497/go.mod h1:rXqOudj/djTORU/ThxYx8fqEVj/5pvTuuebQ2RC7uk4=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
@@ -282,8 +282,8 @@ github.com/temoto/robotstxt v1.1.2 h1:W2pOjSJ6SWvldyEuiFXNxz3xZ8aiWX5LbfDiOFd7Fx
 github.com/temoto/robotstxt v1.1.2/go.mod h1:+1AmkuG3IYkh1kv0d2qEB9Le88ehNO0zwOr3ujewlOo=
 github.com/tmc/langchaingo v0.1.14-0.20250529114305-d0c1b8866537 h1:wY01V9qcesOIYLAgGoUVbWXVttmnsXiQ+f6RTrwjTqI=
 github.com/tmc/langchaingo v0.1.14-0.20250529114305-d0c1b8866537/go.mod h1:+IqdoB4DMsDfySpmNKgtYSuWAL/b9glBJ2Hpzr0Hk6M=
-github.com/veandco/go-sdl2 v0.5.0-alpha.7 h1:wzRAZIGoY0SC4c4mBcv7br7KwK5lEjF7wYKosNfAHVk=
-github.com/veandco/go-sdl2 v0.5.0-alpha.7/go.mod h1:OROqMhHD43nT4/i9crJukyVecjPNYYuCofep6SNiAjY=
+github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12 h1:EYa4/+5j1HpUMdHNBfYjDT7lIJoJJ9OpfCJsu70axJY=
+github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12/go.mod h1:OROqMhHD43nT4/i9crJukyVecjPNYYuCofep6SNiAjY=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=

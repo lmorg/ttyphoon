@@ -6,7 +6,6 @@ import (
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
-	"golang.org/x/sys/unix"
 )
 
 func (term *Term) Resize(size *types.XY) {
@@ -134,13 +133,6 @@ func (term *Term) resizePty() {
 	err := term.Pty.Resize(term.size)
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
-
-	if term.process != nil {
-		err = term.process.Signal(unix.SIGWINCH)
-		if err != nil {
-			debug.Log(err)
-		}
 	}
 }
 

@@ -99,3 +99,5 @@ func (p *PaneT) Resize(size *types.XY) error {
 
 	//return p.tmux.RefreshClient(size)
 }
+
+func (p *PaneT) ExecuteShell(func()) {}

@@ -38,7 +38,6 @@ type Term struct {
 	sgr      *types.Sgr
 	renderer types.Renderer
 	Pty      types.Pty
-	process  *os.Process
 	_mutex   sync.Mutex
 
 	screen        *types.Screen
@@ -159,7 +158,7 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 func (term *Term) Start(pty types.Pty) {
 	term.Pty = pty
 
-	go term.exec()
+	go term.Pty.ExecuteShell(term.renderer.TriggerQuit)
 	go term.readLoop()
 }
 

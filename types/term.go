@@ -1,9 +1,5 @@
 package types
 
-import (
-	"os"
-)
-
 type EventIgnoredCallback func()
 
 type Term interface {
@@ -36,14 +32,5 @@ type Term interface {
 	Host(*XY) string
 	Pwd(*XY) string
 	CmdLine(*XY) string
-	Close()
-}
-
-type Pty interface {
-	File() *os.File
-	Read() (rune, error)
-	Write([]byte) error
-	Resize(*XY) error
-	BufSize() int
 	Close()
 }

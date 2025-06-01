@@ -41,8 +41,8 @@ however hooks will be built into [Murex](https://github.com/lmorg/murex) so
 the terminal will be instantly usable even before wider support across other
 shells and command line applications is adopted.
 
-At its heart, `Ttyphoon` is a regular terminal emulator. Like Kitty, iTerm2, and
-PuTTY (to name a few). But where `Ttyphoon` differs is that it also supports
+At its heart, Ttyphoon is a regular terminal emulator. Like Kitty, iTerm2, and
+PuTTY (to name a few). But where Ttyphoon differs is that it also supports
 inlining rich content. Some terminal emulators support inlining images. Others
 might also allow videos. But none bar some edge case Electron terminals offer
 collapsible trees for JSON printouts. Easy to navigate directory views. Nor any
@@ -53,9 +53,9 @@ The few terminal emulators that do attempt to offer this usually fail to be
 good, or even just compatible, with all the CLI tools that we've come to depend
 on.
 
-`Ttyphoon` aims to do _both well_. Even if you never want for any interactive
-widgets, `Ttyphoon` will be a good terminal emulator. And for those who want a
-little more GUI in their CLI, `Ttyphoon` will be a great modern user interface.
+Ttyphoon aims to do _both well_. Even if you never want for any interactive
+widgets, Ttyphoon will be a good terminal emulator. And for those who want a
+little more GUI in their CLI, Ttyphoon will be a great modern user interface.
 
 ## Screenshots
 
@@ -277,8 +277,8 @@ Support for the following platforms is planned:
   - [ ] tested on 13.x, Ventura
   - [x] tested on 14.x, Sonoma
   - [x] tested on 15.x, Sequoia
-- [ ] Windows
-  - [ ] PTY support implemented
+- [x] Windows
+  - [x] PTY support implemented
   - [ ] tested on Windows 10
   - [ ] tested on Windows 11
 
