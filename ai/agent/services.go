@@ -27,6 +27,7 @@ var models = map[string][]string{
 	},
 	LLM_OLLAMA: {
 		"deepseek-r1",
+		"qwen3",
 	},
 }
 
