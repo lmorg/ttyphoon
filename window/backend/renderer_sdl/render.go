@@ -60,11 +60,14 @@ func (sr *sdlRender) drawBg() {
 			rect.H -= sr.glyphSize.Y
 		}
 		bg := types.SGR_COLOR_BACKGROUND
-		if config.Config.Window.TileHighlightFill && tile.Id() != sr.termWin.Active.Id() {
-			bg = types.SGR_COLOR_BLACK
-		}
 		_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 255)
 		_ = sr.renderer.FillRect(rect)
+		if config.Config.Window.TileHighlightFill && tile.Id() != sr.termWin.Active.Id() {
+			//bg = types.SGR_COLOR_BLACK
+			//_ = sr.renderer.SetDrawColor(bg.Red, bg.Green, bg.Blue, 51)
+			_ = sr.renderer.SetDrawColor(0, 0, 0, 51)
+			_ = sr.renderer.FillRect(rect)
+		}
 	}
 
 	if len(sr.termWin.Tiles) > 1 {
