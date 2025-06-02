@@ -33,6 +33,7 @@ func NewAgentMeta() *Meta {
 		model: map[string]string{
 			LLM_OPENAI:    models[LLM_OPENAI][0],
 			LLM_ANTHROPIC: models[LLM_ANTHROPIC][1],
+			LLM_OLLAMA:    models[LLM_OLLAMA][0],
 		},
 		_mcpServers: make(map[string]client),
 	}

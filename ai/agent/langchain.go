@@ -10,6 +10,7 @@ import (
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/tools"
 )
@@ -20,6 +21,10 @@ func llmOpenAI(meta *Meta) (llms.Model, error) {
 
 func llmAnthropic(meta *Meta) (llms.Model, error) {
 	return anthropic.New(anthropic.WithModel(meta.ModelName()))
+}
+
+func llmOllama(meta *Meta) (llms.Model, error) {
+	return ollama.New(ollama.WithModel(meta.ModelName()))
 }
 
 func initLLM(meta *Meta) error {
@@ -33,6 +38,8 @@ func initLLM(meta *Meta) error {
 		model, err = llmAnthropic(meta)
 	case LLM_OPENAI:
 		model, err = llmOpenAI(meta)
+	case LLM_OLLAMA:
+		model, err = llmOllama(meta)
 	default:
 		panic("unexpected branch")
 	}

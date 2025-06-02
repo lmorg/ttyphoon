@@ -3,11 +3,13 @@ package agent
 const (
 	LLM_OPENAI    = "ChatGPT"
 	LLM_ANTHROPIC = "Claude"
+	LLM_OLLAMA    = "Ollama"
 )
 
 var services = []string{
 	LLM_ANTHROPIC,
 	LLM_OPENAI,
+	LLM_OLLAMA,
 }
 
 var models = map[string][]string{
@@ -22,6 +24,9 @@ var models = map[string][]string{
 		"claude-3-opus-latest",
 		"claude-3-7-sonnet-latest",
 		"claude-3-5-haiku-latest",
+	},
+	LLM_OLLAMA: {
+		"deepseek-r1",
 	},
 }
 

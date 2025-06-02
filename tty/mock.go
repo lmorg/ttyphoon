@@ -44,6 +44,4 @@ func NewMock() types.Pty {
 	return &MockPty{buf: runebuf.New()}
 }
 
-func (p *MockPty) ExecuteShell(_ func()) {
-	panic("not supported in MockPty")
-}
+func (p *MockPty) ExecuteShell(_ func()) {}
