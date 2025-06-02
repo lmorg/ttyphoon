@@ -9,7 +9,6 @@ const (
 var services = []string{
 	LLM_ANTHROPIC,
 	LLM_OPENAI,
-	LLM_OLLAMA,
 }
 
 var models = map[string][]string{
@@ -17,6 +16,7 @@ var models = map[string][]string{
 		"gpt-4.1",
 		"gpt-4",
 		"o4-mini",
+		"gpt-3.5-turbo",
 	},
 	LLM_ANTHROPIC: {
 		"claude-opus-4-20250514",
@@ -25,10 +25,7 @@ var models = map[string][]string{
 		"claude-3-7-sonnet-latest",
 		"claude-3-5-haiku-latest",
 	},
-	LLM_OLLAMA: {
-		"deepseek-r1",
-		"qwen3",
-	},
+	LLM_OLLAMA: {}, // generated automatically
 }
 
 func (meta *Meta) ServiceName() string {

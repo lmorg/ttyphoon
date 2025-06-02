@@ -1,0 +1,46 @@
+package agent
+
+import (
+	"bytes"
+	"os/exec"
+	"strings"
+)
+
+func init() {
+	ollamaModels := ollamaModels()
+	if len(ollamaModels) > 0 {
+		services = append([]string{LLM_OLLAMA}, services...)
+		models[LLM_OLLAMA] = ollamaModels
+	}
+}
+
+func ollamaModels() []string {
+	var buf bytes.Buffer
+	cmd := exec.Command("ollama", "list")
+	cmd.Stdout = &buf
+
+	err := cmd.Start()
+	if err != nil {
+		return nil
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return nil
+	}
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 2 {
+		return nil
+	}
+
+	var models []string
+	for i := 1; i < len(lines); i++ {
+		split := strings.SplitN(lines[i], " ", 2)
+		if len(split) != 2 {
+			continue
+		}
+		models = append(models, split[0])
+	}
+	return models
+}
