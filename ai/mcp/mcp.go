@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/invopop/jsonschema"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 )
@@ -25,11 +26,16 @@ func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, serv
 	meta.McpServerAdd(server, c)
 
 	for i := range c.tools.Tools {
+		json, err := jsonschema.Reflect(c.tools.Tools[i].InputSchema.Properties).MarshalJSON()
+		if err != nil {
+			return err
+		}
 		err = meta.ToolsAdd(&tool{
 			client: c,
 			server: server,
 			path:   cfgPath,
 			name:   c.tools.Tools[i].GetName(),
+			schema: string(json),
 			description: fmt.Sprintf("# Description:\n%s\n\n# Annotations:\n%s\n\n# Schema:\n%s",
 				c.tools.Tools[i].Description,
 				c.tools.Tools[i].Annotations.Title,

@@ -16,6 +16,7 @@ type tool struct {
 	name        string
 	path        string
 	description string
+	schema      string
 	enabled     bool
 }
 
@@ -38,7 +39,7 @@ func (t *tool) Close() error  { return t.client.client.Close() }
 func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
 func (t *tool) Path() string { return t.path }
 func (t *tool) Description() string {
-	return t.description + "\nInput MUST be a JSON object"
+	return t.description + "\nInput MUST be a JSON object with the following schema:\n" + t.schema
 }
 
 func (t *tool) Call(ctx context.Context, input string) (string, error) {

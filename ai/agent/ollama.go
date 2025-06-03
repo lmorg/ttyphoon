@@ -7,6 +7,10 @@ import (
 )
 
 func init() {
+	addServiceOllama()
+}
+
+func addServiceOllama() {
 	ollamaModels := ollamaModels()
 	if len(ollamaModels) > 0 {
 		services = append([]string{LLM_OLLAMA}, services...)

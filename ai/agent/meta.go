@@ -30,12 +30,14 @@ type Meta struct {
 
 func NewAgentMeta() *Meta {
 	meta := &Meta{
-		model: map[string]string{
-			LLM_OPENAI:    models[LLM_OPENAI][0],
-			LLM_ANTHROPIC: models[LLM_ANTHROPIC][1],
-			LLM_OLLAMA:    models[LLM_OLLAMA][0],
-		},
+		model:       map[string]string{},
 		_mcpServers: make(map[string]client),
+	}
+
+	for _, service := range services {
+		if len(models[service]) != 0 {
+			meta.model[service] = models[service][0]
+		}
 	}
 
 	meta.toolsInit()
