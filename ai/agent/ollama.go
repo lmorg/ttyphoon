@@ -2,11 +2,12 @@ package agent
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"strings"
 )
 
-func init() {
+func Init() {
 	addServiceOllama()
 }
 
@@ -21,6 +22,7 @@ func addServiceOllama() {
 func ollamaModels() []string {
 	var buf bytes.Buffer
 	cmd := exec.Command("ollama", "list")
+	cmd.Env = os.Environ()
 	cmd.Stdout = &buf
 
 	err := cmd.Start()

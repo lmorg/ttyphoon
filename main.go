@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug/pprof"
 	"github.com/lmorg/mxtty/tmux"
@@ -21,6 +23,7 @@ func main() {
 
 	getFlags()
 
+	agent.Init()
 	typeface.Init()
 
 	if config.Config.Tmux.Enabled && tmuxInstalled() {
@@ -91,10 +94,19 @@ func regularSession() {
 func loadEnvs() {
 	files := config.GetFiles("/", ".env")
 	for i := range files {
-		split := strings.SplitN(files[i], "=", 2)
-		if len(split) != 2 {
-			split = []string{files[i], ""}
+		f, err := os.Open(files[i])
+		if err != nil {
+			log.Print(err)
+			continue
 		}
-		os.Setenv(split[0], split[1])
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			split := strings.SplitN(scanner.Text(), "=", 2)
+			if len(split) != 2 {
+				split = []string{files[i], ""}
+			}
+			log.Printf(`%s: "%s" = "%s"`, files[i], split[0], split[1])
+			os.Setenv(split[0], split[1])
+		}
 	}
 }
