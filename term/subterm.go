@@ -24,6 +24,7 @@ type subTermTileT struct {
 }
 
 func (stt *subTermTileT) Name() string   { return stt.parentTile.Name() }
+func (stt *subTermTileT) SetName(string) {}
 func (stt *subTermTileT) Id() string     { return stt.parentTile.Id() }
 func (stt *subTermTileT) Left() int32    { return stt.parentTile.Left() }
 func (stt *subTermTileT) Top() int32     { return stt.parentTile.Top() }

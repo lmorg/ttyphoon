@@ -168,8 +168,9 @@ func (t *winTileT) Top() int32    { return 0 }
 func (t *winTileT) Right() int32  { return t.sr.winCellSize.X }
 func (t *winTileT) Bottom() int32 { return t.sr.winCellSize.Y }
 
-func (t *winTileT) Name() string { return app.Title }
-func (t *winTileT) Id() string   { return "" }
+func (t *winTileT) Name() string   { return app.Title }
+func (t *winTileT) SetName(string) {}
+func (t *winTileT) Id() string     { return "" }
 
 func (t *winTileT) AtBottom() bool { return true }
 

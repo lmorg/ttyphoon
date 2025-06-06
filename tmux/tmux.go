@@ -226,7 +226,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_PASTE_BUFFER_DELETED:    __respIgnored,
 	_RESP_PAUSE:                   __respIgnored,
 	_RESP_SESSION_CHANGED:         __respIgnored,
-	_RESP_SESSION_RENAMED:         __respIgnored,
+	_RESP_SESSION_RENAMED:         _respSessionRenamed,
 	_RESP_SESSION_WINDOW_CHANGED:  _respSessionWindowChanged,
 	_RESP_SESSIONS_CHANGED:        __respIgnored,
 	_RESP_SUBSCRIPTION_CHANGED:    __respIgnored,
@@ -289,6 +289,7 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 }
 
 func _respWindowRenamed(tmux *Tmux, b []byte) {
+	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	win, ok := tmux.wins[string(params[1])]
 	if !ok {
@@ -301,6 +302,7 @@ func _respWindowRenamed(tmux *Tmux, b []byte) {
 }
 
 func _respWindowPaneChanged(tmux *Tmux, b []byte) {
+	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	go func() {
 		errToNotification(tmux.renderer, tmux.updatePaneInfo(string(params[2])))
@@ -337,6 +339,11 @@ func _respError(tmux *Tmux, b []byte) {
 
 func _respConfigError(tmux *Tmux, b []byte) {
 	tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, string(b))
+}
+
+func _respSessionRenamed(tmux *Tmux, b []byte) {
+	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
+	_respSessionWindowChanged(tmux, b)
 }
 
 func _respSessionWindowChanged(tmux *Tmux, b []byte) {

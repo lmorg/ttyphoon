@@ -11,6 +11,10 @@ import (
 func (sr *sdlRender) SetWindowTitle(title string) {
 	sr.title = fmt.Sprintf("%s: %s", app.Name, title)
 	atomic.CompareAndSwapInt32(&sr.updateTitle, 0, 1)
+	//if sr.tmux != nil {
+	sr.termWin.Active.SetName(title)
+	sr.windowTabs = nil
+	//}
 }
 
 func (sr *sdlRender) GetWindowTitle() string {
