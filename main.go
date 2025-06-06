@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug/pprof"
 	"github.com/lmorg/mxtty/tmux"
@@ -23,7 +22,6 @@ func main() {
 
 	getFlags()
 
-	agent.Init()
 	typeface.Init()
 
 	if config.Config.Tmux.Enabled && tmuxInstalled() {

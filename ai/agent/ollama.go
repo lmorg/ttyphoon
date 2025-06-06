@@ -5,13 +5,18 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/lmorg/mxtty/types"
 )
 
-func Init() {
-	addServiceOllama()
+func Init(renderer types.Renderer) {
+	go addServiceOllama(renderer)
 }
 
-func addServiceOllama() {
+func addServiceOllama(renderer types.Renderer) {
+	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, "Querying Ollama....")
+	defer sticky.Close()
+
 	ollamaModels := ollamaModels()
 	if len(ollamaModels) > 0 {
 		services = append([]string{LLM_OLLAMA}, services...)

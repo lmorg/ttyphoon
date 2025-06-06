@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"log"
 
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/config"
@@ -163,6 +164,8 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 	sr.registerHotkey()
 	go sr.blinkSlowLoop()
 	sr.setRefreshInterval()
+
+	agent.Init(sr)
 
 	sr.eventLoop()
 }
