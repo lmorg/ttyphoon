@@ -6,7 +6,6 @@ import (
 
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 )
@@ -30,10 +29,10 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 		return
 	}
 
-	absPosY := int32(len(term._scrollBuf)) - int32(term._scrollOffset) + pos.Y
+	absPosY := len(term._scrollBuf) - term._scrollOffset + int(pos.Y)
 
 	if button == types.MOUSE_BUTTON_RIGHT && !term.IsAltBuf() {
-		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
+		/*blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
 		if err == nil {
 
 			var (
@@ -45,12 +44,13 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 					isOutputBlock = true
 					break
 				}
-			}
+			}*/
 
-			if isOutputBlock {
-				term._mouseClickContextMenuOutputBlock(blockPos, block)
-			}
+		//	if isOutputBlock {
+		if screen[pos.Y].Block.Meta != 0 {
+			term._mouseClickContextMenuOutputBlock(absPosY)
 		}
+		//}
 	}
 
 	if pos.X < 0 {
@@ -67,26 +67,30 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 			return
 		}
 
-		var block []int32
+		/*var block []int32
 		for _, block = range term._cacheBlock {
 			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
 				goto isOutputBlock
 			}
-		}
+		}*/
 
 		// not an output block
-		return
+		//return
 
-	isOutputBlock:
+		//isOutputBlock:
 
-		blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
+		/*blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
 		debug.Log(blockPos)
 		if err != nil {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 			return
-		}
+		}*/
 
-		if err = term.HideRows(blockPos[0], blockPos[1]+1); err != nil {
+		if screen[pos.Y].Block.Meta == types.META_BLOCK_NONE {
+			return
+		}
+		absBlockPos := term.getBlockStartAndEndAbs(absPosY)
+		if err := term.HideRows(absBlockPos[0], absBlockPos[1]+1); err != nil {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 		}
 		return
@@ -112,13 +116,15 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, state, callback)
 }
 
-func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []int32) {
+func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
+	absBlockPos := term.getBlockStartAndEndAbs(absPosY)
+	relBlockPos := term.getBlockStartAndEndRel(absBlockPos)
 	meta := agent.Get(term.tile.Id())
 	meta.Term = term
 	meta.Renderer = term.renderer
-	meta.CmdLine = string(term.getCmdLine(blockPos[0]))
-	meta.Pwd = term.RowSrcFromScrollBack(blockPos[0]).Pwd
-	meta.OutputBlock = string(term.copyOutputBlock(blockPos))
+	meta.CmdLine = string(term.getCmdLine(int(absBlockPos[0])))
+	meta.Pwd = term.RowSrcFromScrollBack(absBlockPos[0]).Pwd
+	meta.OutputBlock = string(term.copyOutputBlock(absBlockPos))
 	//meta.InsertRowPos = blockPos[1]
 	meta.InsertAfterRowId = term.GetRowId(term.curPos().Y - 1)
 
@@ -129,22 +135,22 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 				Icon:  0xf0c5,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { term.copyOutputBlockToClipboard(blockPos) },
+				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
 				Title: fmt.Sprintf("Explain output block (%s)", meta.ServiceName()),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { ai.Explain(meta, false) },
+				Fn: func() { ai.Explain(meta, true /*false*/) },
 			},
-			{
+			/*{
 				Title: fmt.Sprintf("Explain with custom prompt (%s)", meta.ServiceName()),
 				Icon:  0xf6e8,
 				Highlight: func() func() {
@@ -153,7 +159,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(blockPos [2]int32, block []i
 					}
 				},
 				Fn: func() { ai.Explain(meta, true) },
-			},
+			},*/
 		}...)
 }
 
@@ -206,12 +212,16 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 			return
 		}
 
-		var block []int32
+		/*var block []int32
 		for _, block = range term._cacheBlock {
 			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
 				cursor.Hand()
 				return
 			}
+		}*/
+		if screen[pos.Y].Block.Meta != types.META_BLOCK_NONE {
+			cursor.Hand()
+			return
 		}
 
 		cursor.Arrow()
@@ -257,7 +267,7 @@ func (term *Term) MousePosition(pos *types.XY) {
 	if pos.X < 0 {
 
 		if len(screen[pos.Y].Hidden) > 0 {
-			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Meta)
+			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Block.Meta)
 			term._mousePosRenderer.Set(func() {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
@@ -268,49 +278,53 @@ func (term *Term) MousePosition(pos *types.XY) {
 			return
 		}
 
-		var block []int32
+		/*var block []int32
 		for _, block = range term._cacheBlock {
 			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
 				goto isOutputBlock
 			}
-		}
+		}*/
 
-		term._mousePosRenderer.Set(func() {})
-		return
-
-	isOutputBlock:
-		var colour *types.Colour
-		switch {
-		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
-			colour = types.COLOR_AI
-		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-			colour = types.COLOR_ERROR
-		case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-			colour = types.COLOR_OK
-		default:
-			absScreen := append(term._scrollBuf, term._normBuf...)
-			absPos := term.convertRelPosToAbsPos(pos)
-			for y := absPos.Y + 1; int(y) < len(absScreen); y++ {
-				switch {
-				case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-					colour = types.COLOR_ERROR
-					goto drawRect
-				case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-					colour = types.COLOR_OK
-					goto drawRect
-				default:
-					continue
-				}
-			}
+		if screen[pos.Y].Block.Meta == types.META_BLOCK_NONE {
 			term._mousePosRenderer.Set(func() {})
 			return
 		}
 
-	drawRect:
+		/*isOutputBlock:
+			var colour *types.Colour
+			switch {
+			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
+				colour = types.COLOR_AI
+			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
+				colour = types.COLOR_ERROR
+			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
+				colour = types.COLOR_OK
+			default:
+				absScreen := append(term._scrollBuf, term._normBuf...)
+				absPos := term.convertRelPosToAbsPos(pos)
+				for y := absPos.Y + 1; int(y) < len(absScreen); y++ {
+					switch {
+					case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
+						colour = types.COLOR_ERROR
+						goto drawRect
+					case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
+						colour = types.COLOR_OK
+						goto drawRect
+					default:
+						continue
+					}
+				}
+				term._mousePosRenderer.Set(func() {})
+				return
+			}
+
+		drawRect:*/
+		colour := _outputBlockChromeColour(screen[pos.Y].Block.Meta)
+		relBlockPos := term.getBlockStartAndEndRel(term.getBlockStartAndEndAbs(int(term.convertRelPosToAbsPos(pos).Y)))
 		term._mousePosRenderer.Set(func() {
 			term.renderer.DrawRectWithColour(term.tile,
-				&types.XY{X: 0, Y: block[0]},
-				&types.XY{X: term.size.X, Y: block[1]},
+				&types.XY{X: 0, Y: relBlockPos[0]},
+				&types.XY{X: term.size.X, Y: relBlockPos[1]},
 				colour, true,
 			)
 		})

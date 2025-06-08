@@ -25,7 +25,7 @@ type Term interface {
 	SearchAiPrompts()
 	Match(*XY)
 	GetRowId(int32) uint64
-	InsertSubTerm(string, string, uint64, RowMetaFlag) error
+	InsertSubTerm(string, string, uint64, BlockMetaFlag) error
 	ConvertRelativeToAbsoluteY(*XY) int32
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte

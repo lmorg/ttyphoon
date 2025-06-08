@@ -145,10 +145,10 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	return b
 }
 
-func (term *Term) copyOutputBlock(blockPos [2]int32) []rune {
+func (term *Term) copyOutputBlock(absBlockPos [2]int) []rune {
 	var block []rune
 
-	for i := int(blockPos[0]); i <= int(blockPos[1]); i++ {
+	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
 		if i < len(term._scrollBuf) {
 			block = append(block, *term._scrollBuf[i].Phrase...)
 		} else {
@@ -159,29 +159,19 @@ func (term *Term) copyOutputBlock(blockPos [2]int32) []rune {
 	return block
 }
 
-func (term *Term) copyOutputBlockToClipboard(blockPos [2]int32) {
-	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(blockPos))))
+func (term *Term) copyOutputBlockToClipboard(absBlockPos [2]int) {
+	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(absBlockPos))))
 }
 
-func (term *Term) getCmdLine(pos int32) []rune {
-	for i := int(pos); i > -1; i-- {
-		if i < len(term._scrollBuf) {
-			if term._scrollBuf[i].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
-				return term._scrollBuf[i].Block.Query
-			}
-
-		} else {
-			if term._normBuf[i-len(term._scrollBuf)].Meta.Is(types.ROW_OUTPUT_BLOCK_BEGIN) {
-				return term._normBuf[i-len(term._scrollBuf)].Block.Query
-			}
-
-		}
+func (term *Term) getCmdLine(absPos int) []rune {
+	if absPos < len(term._scrollBuf) {
+		return term._scrollBuf[absPos].Block.Query
 	}
 
-	return nil
+	return term._normBuf[absPos-len(term._scrollBuf)].Block.Query
 }
 
 func (term *Term) CmdLine(pos *types.XY) string {
 	y := term.ConvertRelativeToAbsoluteY(pos)
-	return string(term.getCmdLine(y))
+	return string(term.getCmdLine(int(y)))
 }

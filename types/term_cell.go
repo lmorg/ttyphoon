@@ -1,9 +1,5 @@
 package types
 
-import (
-	"strings"
-)
-
 type Cell struct {
 	Char    rune
 	Sgr     *Sgr
@@ -47,77 +43,4 @@ func (c *Cell) GetElementXY() *XY {
 		X: c.Char >> 16,
 		Y: c.Char &^ _CELL_ELEMENTXY_MASK,
 	}
-}
-
-/*
-	ROWS
-*/
-
-type Row struct {
-	Id     uint64
-	Cells  []*Cell
-	Meta   RowMetaFlag
-	Hidden Screen
-	Phrase *[]rune
-	Source *RowSource
-	Block  *BlockMeta
-}
-
-type RowSource struct {
-	Host string
-	Pwd  string
-}
-
-type BlockMeta struct {
-	Query   []rune // typically command line
-	ExitNum int
-}
-
-type RowMetaFlag uint16
-
-// Flags
-const (
-	ROW_META_NONE          RowMetaFlag = 0
-	ROW_OUTPUT_BLOCK_BEGIN RowMetaFlag = 1 << iota
-	ROW_OUTPUT_BLOCK_END
-	ROW_OUTPUT_BLOCK_ERROR
-	ROW_OUTPUT_BLOCK_AI
-	ROW_META_COLLAPSED
-)
-
-func (f RowMetaFlag) Is(flag RowMetaFlag) bool {
-	return f&flag != 0
-}
-
-func (f *RowMetaFlag) Set(flag RowMetaFlag) {
-	*f |= flag
-}
-
-func (f *RowMetaFlag) Unset(flag RowMetaFlag) {
-	*f &^= flag
-}
-
-func (r *Row) String() string {
-	slice := make([]rune, len(r.Cells))
-
-	for i, cell := range r.Cells {
-		slice[i] = cell.Rune()
-	}
-
-	return string(slice)
-}
-
-/*
-	SCREEN
-*/
-
-type Screen []*Row
-
-func (screen *Screen) String() string {
-	slice := make([]string, len(*screen))
-	for i, row := range *screen {
-		slice[i] = row.String()
-	}
-
-	return strings.Join(slice, "\n")
 }

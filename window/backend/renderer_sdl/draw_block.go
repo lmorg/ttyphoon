@@ -7,6 +7,10 @@ import (
 )
 
 func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *types.Colour, folded bool) {
+	if n == 0 {
+		return
+	}
+
 	start += tile.Top()
 
 	texture := sr.createRendererTexture()
@@ -16,11 +20,16 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 	defer sr.renderer.SetRenderTarget(nil)
 	defer sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
 
+	height := n
+	if start+n > tile.Bottom() {
+		height = tile.Bottom() - start
+	}
+
 	rect := &sdl.Rect{
 		X: (tile.Left() * sr.glyphSize.X) + _PANE_LEFT_MARGIN_OUTER,
 		Y: (start * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
 		W: _PANE_BLOCK_HIGHLIGHT,
-		H: n * sr.glyphSize.Y,
+		H: (height + 1) /*n*/ * sr.glyphSize.Y,
 	}
 
 	if folded {
@@ -31,7 +40,7 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 	//_ = texture.SetBlendMode(sdl.BLENDMODE_ADD)
 	_ = sr.renderer.FillRect(rect)
 
-	if !folded {
+	if !folded && start+n <= tile.Bottom() {
 		x2 := (tile.Right()+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER
 		_ = sr.renderer.DrawLine(rect.X, rect.Y+rect.H, x2, rect.Y+rect.H)
 	}

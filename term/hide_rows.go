@@ -8,7 +8,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (term *Term) HideRows(start int32, end int32) error {
+func (term *Term) HideRows(absStart, absEnd int) error {
 	if term.IsAltBuf() {
 		return errors.New("this feature is not supported in alt buffer")
 	}
@@ -19,21 +19,21 @@ func (term *Term) HideRows(start int32, end int32) error {
 	newBuf := term._scrollBuf
 	newBuf = append(newBuf, term._normBuf...)
 
-	if len(newBuf[start-1].Hidden) != 0 {
+	if len(newBuf[absStart-1].Hidden) != 0 {
 		return errors.New("this row already contains hidden rows")
 	}
 
-	newBuf[start-1].Hidden = clone(newBuf[start:end])
-	debug.Log(newBuf[start-1].Hidden.String())
-	length := len(newBuf[start-1].Hidden)
-	newBuf = append(newBuf[:start], newBuf[end:]...)
+	newBuf[absStart-1].Hidden = clone(newBuf[absStart:absEnd])
+	debug.Log(newBuf[absStart-1].Hidden.String())
+	length := len(newBuf[absStart-1].Hidden)
+	newBuf = append(newBuf[:absStart], newBuf[absEnd:]...)
 
 	if len(newBuf) < int(term.size.Y) {
 		newBuf = append(term.makeScreen(), newBuf...)
 	}
 
 	if term._scrollOffset > 0 {
-		term._scrollOffset -= int(end - start)
+		term._scrollOffset -= absEnd - absStart
 	}
 	term.updateScrollback()
 
@@ -45,20 +45,20 @@ func (term *Term) HideRows(start int32, end int32) error {
 	return nil
 }
 
-func (term *Term) UnhideRows(pos int32) error {
+func (term *Term) UnhideRows(absPos int) error {
 	if term.IsAltBuf() {
 		return errors.New("this feature is not supported in alt buffer")
 	}
 
 	var row *types.Row
 
-	if int(pos) < len(term._scrollBuf) {
-		row = term._scrollBuf[pos]
+	if absPos < len(term._scrollBuf) {
+		row = term._scrollBuf[absPos]
 	} else {
-		row = term._normBuf[int(pos)-len(term._scrollBuf)]
+		row = term._normBuf[absPos-len(term._scrollBuf)]
 	}
 
-	term.insertRows(pos, row.Hidden)
+	term.insertRows(absPos, row.Hidden)
 
 	length := len(row.Hidden)
 	row.Hidden = nil
@@ -73,20 +73,20 @@ func (term *Term) insertRowsAtRowId(id uint64, rows types.Screen) error {
 
 	for i := range term._normBuf {
 		if term._normBuf[i].Id == id {
-			return term._insertRows(int32(i+len(term._scrollBuf)), rows)
+			return term._insertRows(i+len(term._scrollBuf), rows)
 		}
 	}
 
 	for i := range term._scrollBuf {
 		if term._scrollBuf[i].Id == id {
-			return term._insertRows(int32(i), rows)
+			return term._insertRows(i, rows)
 		}
 	}
 
 	return fmt.Errorf("cannot insert rows: cannot find row with ID %d", id)
 }
 
-func (term *Term) insertRows(pos int32, rows types.Screen) error {
+func (term *Term) insertRows(absPos int, rows types.Screen) error {
 	if term.IsAltBuf() {
 		return errors.New("this feature is not supported in alt buffer")
 	}
@@ -94,17 +94,17 @@ func (term *Term) insertRows(pos int32, rows types.Screen) error {
 	term._mutex.Lock()
 
 	defer term._mutex.Unlock()
-	return term._insertRows(pos, rows)
+	return term._insertRows(absPos, rows)
 }
 
-func (term *Term) _insertRows(pos int32, rows types.Screen) error {
+func (term *Term) _insertRows(absPos int, rows types.Screen) error {
 	debug.Log(rows.String())
 
 	tmp := term._scrollBuf
 	tmp = append(tmp, term._normBuf...)
 
-	newBuf := append(clone(tmp[:pos+1]), rows...)
-	newBuf = clone(append(newBuf, tmp[pos+1:]...))
+	newBuf := append(clone(tmp[:absPos+1]), rows...)
+	newBuf = clone(append(newBuf, tmp[absPos+1:]...))
 
 	term._normBuf = clone(newBuf[len(newBuf)-int(term.size.Y):])
 	term._scrollBuf = clone(newBuf[:len(newBuf)-int(term.size.Y)])
@@ -136,7 +136,7 @@ func (term *Term) FoldAtIndent(pos *types.XY) error {
 func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hide bool) (int32, error) {
 	var x, y int32
 	for y = absPos.Y + 1; int(y) < len(screen); y++ {
-		if screen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END) || screen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR) {
+		if screen[y].RowMeta.Is(types.META_ROW_END) {
 			goto fold
 		}
 
@@ -157,7 +157,7 @@ fold:
 	}
 
 	if hide {
-		term.HideRows(absPos.Y, y)
+		term.HideRows(int(absPos.Y), int(y))
 	}
 	return y, nil
 }

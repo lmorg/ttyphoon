@@ -89,7 +89,7 @@ type Term struct {
 	_noAutoLineWrap   bool // No Auto-Wrap Mode (DECAWM), VT100.
 
 	// cache
-	_cacheBlock       [][]int32
+	//_cacheBlock       [][]int32
 	_mousePosRenderer types.FuncMutex
 }
 
@@ -395,11 +395,11 @@ func (term *Term) Pwd(pos *types.XY) string {
 	return term.tile.Pwd()
 }
 
-func (term *Term) RowSrcFromScrollBack(y int32) (src *types.RowSource) {
-	if int(y) < len(term._scrollBuf) {
-		src = term._scrollBuf[y].Source
+func (term *Term) RowSrcFromScrollBack(absY int) (src *types.RowSource) {
+	if absY < len(term._scrollBuf) {
+		src = term._scrollBuf[absY].Source
 	} else {
-		src = term._normBuf[int(y)-len(term._scrollBuf)].Source
+		src = term._normBuf[absY-len(term._scrollBuf)].Source
 	}
 
 	if src == nil {

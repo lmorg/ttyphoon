@@ -1,8 +1,6 @@
 package virtualterm
 
 import (
-	"errors"
-
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -13,6 +11,7 @@ func (term *Term) convertRelPosToAbsPos(pos *types.XY) *types.XY {
 	}
 }
 
+/*
 func (term *Term) outputBlocksFindStartEnd(absolutePosition int32) (loc [2]int32, row [2]*types.Row, err error) {
 	if term.IsAltBuf() {
 		return loc, row, errors.New("this is not supported in alt buffer")
@@ -54,3 +53,4 @@ func outputBlockFindMatchingRuneAfter(screen types.Screen, absPos *types.XY, r r
 
 	}
 }
+*/

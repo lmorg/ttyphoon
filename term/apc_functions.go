@@ -68,12 +68,12 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		return
 	}
 
-	if term._blockMeta == nil {
-		term._blockMeta = new(types.BlockMeta)
-	}
-	if (*term.screen)[term.curPos().Y].Block == nil {
-		(*term.screen)[term.curPos().Y].Block = term._blockMeta
-	}
+	//if term._blockMeta == nil {
+	term._blockMeta = new(types.BlockMeta)
+	//}
+	//if (*term.screen)[term.curPos().Y].Block == nil {
+	(*term.screen)[term.curPos().Y].Block = term._blockMeta
+	//}
 
 	var params struct {
 		CmdLine string
@@ -81,7 +81,7 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 
 	apc.Parameters(&params)
 
-	(*term.screen)[term.curPos().Y].Meta.Set(types.ROW_OUTPUT_BLOCK_BEGIN)
+	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN)
 	(*term.screen)[term.curPos().Y].Block.Query = []rune(params.CmdLine)
 }
 
@@ -102,15 +102,16 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 
 	var params struct {
 		ExitNum  int
-		MetaFlag types.RowMetaFlag
+		MetaFlag types.BlockMetaFlag
 	}
 
 	apc.Parameters(&params)
 
+	(*term.screen)[pos.Y].RowMeta.Set(types.META_ROW_END)
 	if params.ExitNum == 0 {
-		(*term.screen)[pos.Y].Meta.Set(types.ROW_OUTPUT_BLOCK_END | params.MetaFlag)
+		term._blockMeta.Meta.Set(types.META_BLOCK_OK | params.MetaFlag)
 	} else {
-		(*term.screen)[pos.Y].Meta.Set(types.ROW_OUTPUT_BLOCK_ERROR | params.MetaFlag)
+		term._blockMeta.Meta.Set(types.META_BLOCK_ERROR | params.MetaFlag)
 	}
 
 	term._blockMeta.ExitNum = params.ExitNum

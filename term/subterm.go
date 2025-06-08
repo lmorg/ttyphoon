@@ -37,7 +37,7 @@ func (stt *subTermTileT) GetTerm() types.Term     { return stt.term }
 func (stt *subTermTileT) SetTerm(term types.Term) { stt.term = term }
 func (stt *subTermTileT) Pwd() string             { return stt.curPath }
 
-func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) types.Screen {
+func (term *Term) newSubTerm(query, content string, meta types.BlockMetaFlag) types.Screen {
 	debug.Log(content)
 
 	tile := subTermTileT{
@@ -76,7 +76,7 @@ func (term *Term) newSubTerm(query, content string, meta types.RowMetaFlag) type
 	return subTerm._scrollBuf
 }
 
-func (term *Term) InsertSubTerm(query, content string, insertAtRowId uint64, meta types.RowMetaFlag) error {
+func (term *Term) InsertSubTerm(query, content string, insertAtRowId uint64, meta types.BlockMetaFlag) error {
 	rows := term.newSubTerm(query, content, meta)
 	return term.insertRowsAtRowId(insertAtRowId, rows)
 }
