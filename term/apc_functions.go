@@ -60,12 +60,8 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		return
 	}
 
-	//if term._blockMeta == nil {
 	term._blockMeta = new(types.BlockMeta)
-	//}
-	//if (*term.screen)[term.curPos().Y].Block == nil {
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
-	//}
 
 	var params struct {
 		CmdLine string

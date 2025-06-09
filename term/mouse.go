@@ -32,25 +32,9 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	absPosY := len(term._scrollBuf) - term._scrollOffset + int(pos.Y)
 
 	if button == types.MOUSE_BUTTON_RIGHT && !term.IsAltBuf() {
-		/*blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
-		if err == nil {
-
-			var (
-				block         []int32
-				isOutputBlock bool
-			)
-			for _, block = range term._cacheBlock {
-				if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-					isOutputBlock = true
-					break
-				}
-			}*/
-
-		//	if isOutputBlock {
-		if screen[pos.Y].Block.Meta != 0 {
+		if screen[pos.Y].Block.Meta != types.META_BLOCK_NONE {
 			term._mouseClickContextMenuOutputBlock(absPosY)
 		}
-		//}
 	}
 
 	if pos.X < 0 {
@@ -66,25 +50,6 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 			}
 			return
 		}
-
-		/*var block []int32
-		for _, block = range term._cacheBlock {
-			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-				goto isOutputBlock
-			}
-		}*/
-
-		// not an output block
-		//return
-
-		//isOutputBlock:
-
-		/*blockPos, _, err := term.outputBlocksFindStartEnd(absPosY)
-		debug.Log(blockPos)
-		if err != nil {
-			term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
-			return
-		}*/
 
 		if screen[pos.Y].Block.Meta == types.META_BLOCK_NONE {
 			return
@@ -125,7 +90,6 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	meta.CmdLine = string(term.getCmdLine(int(absBlockPos[0])))
 	meta.Pwd = term.RowSrcFromScrollBack(absBlockPos[0]).Pwd
 	meta.OutputBlock = string(term.copyOutputBlock(absBlockPos))
-	//meta.InsertRowPos = blockPos[1]
 	meta.InsertAfterRowId = term.GetRowId(term.curPos().Y - 1)
 
 	term.renderer.AddToContextMenu(
@@ -212,13 +176,6 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 			return
 		}
 
-		/*var block []int32
-		for _, block = range term._cacheBlock {
-			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-				cursor.Hand()
-				return
-			}
-		}*/
 		if screen[pos.Y].Block.Meta != types.META_BLOCK_NONE {
 			cursor.Hand()
 			return
@@ -278,47 +235,11 @@ func (term *Term) MousePosition(pos *types.XY) {
 			return
 		}
 
-		/*var block []int32
-		for _, block = range term._cacheBlock {
-			if block[0] <= pos.Y && block[0]+block[1] > pos.Y {
-				goto isOutputBlock
-			}
-		}*/
-
 		if screen[pos.Y].Block.Meta == types.META_BLOCK_NONE {
 			term._mousePosRenderer.Set(func() {})
 			return
 		}
 
-		/*isOutputBlock:
-			var colour *types.Colour
-			switch {
-			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_AI):
-				colour = types.COLOR_AI
-			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-				colour = types.COLOR_ERROR
-			case screen[block[0]+block[1]-1].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-				colour = types.COLOR_OK
-			default:
-				absScreen := append(term._scrollBuf, term._normBuf...)
-				absPos := term.convertRelPosToAbsPos(pos)
-				for y := absPos.Y + 1; int(y) < len(absScreen); y++ {
-					switch {
-					case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_ERROR):
-						colour = types.COLOR_ERROR
-						goto drawRect
-					case absScreen[y].Meta.Is(types.ROW_OUTPUT_BLOCK_END):
-						colour = types.COLOR_OK
-						goto drawRect
-					default:
-						continue
-					}
-				}
-				term._mousePosRenderer.Set(func() {})
-				return
-			}
-
-		drawRect:*/
 		colour := _outputBlockChromeColour(screen[pos.Y].Block.Meta)
 		relBlockPos := term.getBlockStartAndEndRel(term.getBlockStartAndEndAbs(int(term.convertRelPosToAbsPos(pos).Y)))
 		term._mousePosRenderer.Set(func() {
@@ -338,10 +259,6 @@ func (term *Term) MousePosition(pos *types.XY) {
 			term.renderer.StatusBarText("[Click] Fold branch")
 			term._mousePosRenderer.Set(func() {
 				h := min(height-pos.Y, term.size.Y-pos.Y)
-				/*h := height - pos.Y
-				if h > term.size.Y-pos.Y {
-				h = term.size.Y - pos.Y
-				}*/
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: pos.X, Y: pos.Y},
 					&types.XY{X: term.size.X - pos.X, Y: h},
