@@ -6,8 +6,12 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *types.Colour, folded bool) {
-	start += tile.Top()
+func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, _start, n int32, c *types.Colour, folded bool) {
+	if _start >= tile.GetTerm().GetSize().Y {
+		return
+	}
+
+	start := _start + tile.Top()
 
 	texture := sr.createRendererTexture()
 	if texture == nil {
@@ -17,8 +21,8 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 	defer sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
 
 	height := n
-	if start+n > tile.Bottom() {
-		height = tile.Bottom() - start
+	if _start+n >= tile.GetTerm().GetSize().Y {
+		height = tile.GetTerm().GetSize().Y - _start - 1
 	}
 
 	rect := &sdl.Rect{

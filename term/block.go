@@ -28,6 +28,10 @@ func (term *Term) getBlockStartAndEndRel(absBlockPos [2]int) [2]int32 {
 		int32(absBlockPos[0] - len(term._scrollBuf) + term._scrollOffset),
 		int32(absBlockPos[1] - absBlockPos[0] + 1),
 	}
+	/*debug.Log(absBlockPos)
+	debug.Log(r)
+	//panic(len(term._scrollBuf) + term._scrollOffset)
+	return r*/
 }
 
 func _outputBlockChromeColour(meta types.BlockMetaFlag) *types.Colour {

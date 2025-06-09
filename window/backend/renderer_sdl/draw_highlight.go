@@ -3,6 +3,7 @@ package rendersdl
 import (
 	"log"
 
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
@@ -32,10 +33,22 @@ func (sr *sdlRender) DrawHighlightRect(tile types.Tile, _topLeftCell, bottomRigh
 		highlightAlphaBorder, highlightAlphaFill)
 }
 
-func (sr *sdlRender) DrawRectWithColour(tile types.Tile, _topLeftCell, bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+func (sr *sdlRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
+	debug.Log(_topLeftCell)
+	debug.Log(_bottomRightCell)
+
 	topLeftCell := types.XY{
-		X: _topLeftCell.X + tile.Left(),
-		Y: _topLeftCell.Y + tile.Top(),
+		X: _topLeftCell.X,
+		Y: max(_topLeftCell.Y, 0),
+	}
+
+	bottomRightCell := types.XY{
+		X: _bottomRightCell.X,
+		Y: _bottomRightCell.Y + min(_topLeftCell.Y, 0),
+	}
+
+	if bottomRightCell.Y+topLeftCell.Y > tile.GetTerm().GetSize().Y {
+		bottomRightCell.Y = tile.GetTerm().GetSize().Y - topLeftCell.Y
 	}
 
 	leftMargin := _PANE_LEFT_MARGIN
@@ -45,8 +58,8 @@ func (sr *sdlRender) DrawRectWithColour(tile types.Tile, _topLeftCell, bottomRig
 
 	sr._drawHighlightRect(
 		&sdl.Rect{
-			X: (topLeftCell.X * sr.glyphSize.X) + leftMargin,
-			Y: (topLeftCell.Y * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
+			X: ((topLeftCell.X + tile.Left()) * sr.glyphSize.X) + leftMargin,
+			Y: ((topLeftCell.Y + tile.Top()) * sr.glyphSize.Y) + _PANE_TOP_MARGIN,
 			W: (bottomRightCell.X * sr.glyphSize.X) + _PANE_LEFT_MARGIN - leftMargin,
 			H: (bottomRightCell.Y * sr.glyphSize.Y),
 		},
