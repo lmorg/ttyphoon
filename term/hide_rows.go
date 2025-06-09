@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
@@ -134,24 +135,27 @@ func (term *Term) FoldAtIndent(pos *types.XY) error {
 }
 
 func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hide bool) (int32, error) {
-	var x, y int32
+	x := int(absPos.X)
+	var y int32
 	for y = absPos.Y + 1; int(y) < len(screen); y++ {
 		if screen[y].RowMeta.Is(types.META_ROW_END) {
-			goto fold
+			break
 		}
 
-		for x = int32(0); x <= absPos.X && int(x) < len(*screen[y].Phrase); x++ {
-
-			if (*screen[y].Phrase)[x] == ' ' {
-				// next column
+		if x > len(*screen[y].Phrase) {
+			if strings.TrimSpace(string(*screen[y].Phrase)) == "" {
 				continue
 			}
-
-			goto fold
+			break
 		}
+
+		if strings.TrimSpace(string((*screen[y].Phrase)[:x+1])) == "" {
+			continue
+		}
+
+		break
 	}
 
-fold:
 	if absPos.Y == y-1 {
 		return 0, errors.New("nothing to fold")
 	}
