@@ -17,6 +17,10 @@ func (term *Term) HideRows(absStart, absEnd int) error {
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
 
+	if absStart < 1 {
+		absStart = 1
+	}
+
 	newBuf := term._scrollBuf
 	newBuf = append(newBuf, term._normBuf...)
 
