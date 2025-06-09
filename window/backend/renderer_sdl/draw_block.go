@@ -37,7 +37,7 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, start, n int32, c *t
 	_ = sr.renderer.FillRect(rect)
 
 	if !folded && start+n <= tile.Bottom() {
-		x2 := (tile.Right()+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER
+		x2 := (tile.Right()+2)*sr.glyphSize.X + _PANE_LEFT_MARGIN_OUTER - 1
 		_ = sr.renderer.DrawLine(rect.X, rect.Y+rect.H, x2, rect.Y+rect.H)
 	}
 }

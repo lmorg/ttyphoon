@@ -108,17 +108,23 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 	}
 	for y = 0; y < len(screen); y++ {
 		if len(screen[y].Hidden) != 0 {
-			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 1, _outputBlockChromeColour(screen[y].Hidden[len(screen[y].Hidden)-1].Block.Meta), true)
+			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 0, _outputBlockChromeColour(screen[y].Hidden[len(screen[y].Hidden)-1].Block.Meta), true)
 		}
 		if screen[y].RowMeta.Is(types.META_ROW_BEGIN) {
 			begin = y
 		}
 		if screen[y].RowMeta.Is(types.META_ROW_END) {
+			if begin == -1 {
+				continue
+			}
 			term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), _outputBlockChromeColour(screen[y].Block.Meta), false)
 			begin = -1
 		}
 	}
 	if begin != -1 {
-		term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), _outputBlockChromeColour(screen[y-1].Block.Meta), false)
+		c := _outputBlockChromeColour(screen[y-1].Block.Meta)
+		if c != types.COLOR_FOLDED {
+			term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), c, false)
+		}
 	}
 }

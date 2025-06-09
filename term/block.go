@@ -1,13 +1,12 @@
 package virtualterm
 
-import "github.com/lmorg/mxtty/types"
+import (
+	"github.com/lmorg/mxtty/types"
+)
 
 func (term *Term) getBlockStartAndEndAbs(absPos int) [2]int {
-	var (
-		screen = append(term._scrollBuf, term._normBuf...)
-		begin  int
-		end    int
-	)
+	screen := append(term._scrollBuf, term._normBuf...)
+	var begin, end int
 
 	for begin = absPos; begin >= 0; begin-- {
 		if screen[begin].RowMeta.Is(types.META_ROW_BEGIN) {
@@ -16,7 +15,7 @@ func (term *Term) getBlockStartAndEndAbs(absPos int) [2]int {
 	}
 
 	for end = absPos; end < len(screen); end++ {
-		if screen[begin].RowMeta.Is(types.META_ROW_END) {
+		if screen[end].RowMeta.Is(types.META_ROW_END) {
 			break
 		}
 	}
@@ -26,8 +25,8 @@ func (term *Term) getBlockStartAndEndAbs(absPos int) [2]int {
 
 func (term *Term) getBlockStartAndEndRel(absBlockPos [2]int) [2]int32 {
 	return [2]int32{
-		int32(absBlockPos[0] - len(term._scrollBuf) - term._scrollOffset),
-		int32(absBlockPos[1] - absBlockPos[0]),
+		int32(absBlockPos[0] - len(term._scrollBuf) + term._scrollOffset),
+		int32(absBlockPos[1] - absBlockPos[0] + 1),
 	}
 }
 

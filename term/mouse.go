@@ -222,7 +222,6 @@ func (term *Term) MousePosition(pos *types.XY) {
 	screen := term.visibleScreen()
 
 	if pos.X < 0 {
-
 		if len(screen[pos.Y].Hidden) > 0 {
 			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Block.Meta)
 			term._mousePosRenderer.Set(func() {
@@ -250,7 +249,6 @@ func (term *Term) MousePosition(pos *types.XY) {
 			)
 		})
 		return
-
 	}
 
 	if screen[pos.Y].Cells[pos.X].Element == nil {
