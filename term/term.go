@@ -166,6 +166,7 @@ func (term *Term) reset(size *types.XY) {
 	term.size = size
 	term.resizePty()
 	term._curPos = types.XY{}
+	term._blockMeta = new(types.BlockMeta)
 
 	term._normBuf = term.makeScreen()
 	term._altBuf = term.makeScreen()
@@ -187,7 +188,6 @@ func (term *Term) reset(size *types.XY) {
 		term.renderer.SetKeyboardFnMode(types.KeysTmuxClient)
 	}
 
-	term._blockMeta = new(types.BlockMeta)
 }
 
 func (term *Term) makeScreen() types.Screen {
@@ -203,6 +203,7 @@ func (term *Term) makeRow() *types.Row {
 		Id:     nextRowId(),
 		Cells:  term.makeCells(term.size.X),
 		Phrase: new([]rune),
+		Block:  term._blockMeta,
 	}
 
 	return row
