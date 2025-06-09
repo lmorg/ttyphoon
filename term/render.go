@@ -162,7 +162,7 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 		if len(screen[y].Hidden) != 0 {
 			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 1, _outputBlockChromeColour(screen[y].Hidden[len(screen[y].Hidden)-1].Block.Meta), true)
 		}
-		if screen[y].RowMeta == types.META_ROW_BEGIN {
+		if screen[y].RowMeta.Is(types.META_ROW_BEGIN) {
 			begin = y
 		}
 		if screen[y].RowMeta.Is(types.META_ROW_END) {

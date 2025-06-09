@@ -39,10 +39,6 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice, c
 	lineWrap := term._noAutoLineWrap
 	term._noAutoLineWrap = true
 
-	/*if !crlf {
-		term._curPos.X++ // I don't know why I need this and I feel dirty adding it!
-	}*/
-
 	elPos := new(types.XY)
 	for ; elPos.Y < size.Y; elPos.Y++ {
 		if term.curPos().X != 0 && crlf {
@@ -53,10 +49,6 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice, c
 			term.writeCell(types.SetElementXY(elPos), el)
 		}
 	}
-
-	/*if !crlf {
-		term._curPos.X -= 2 // I don't know why I need this and I feel dirty adding it!
-	}*/
 
 	term._noAutoLineWrap = lineWrap
 }
