@@ -219,7 +219,7 @@ func _searchCmdLinesBuf(buf types.Screen, ai bool) rowTuplesT {
 			if len(tup.query) < 3 {
 				tup.query += "   "
 			}
-			tuples = append(tuples)
+			tuples = append(tuples, tup)
 		}
 	}
 
