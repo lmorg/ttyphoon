@@ -219,7 +219,7 @@ func render(sr *sdlRender) error {
 		mouseX, mouseY, _ := sdl.GetMouseState()
 		tile := sr.getTileFromPxOrActive(mouseX, mouseY)
 		posNegX := sr.convertPxToCellXYNegXTile(tile, mouseX, mouseY)
-		tile.GetTerm().MousePosition(posNegX)
+		tile.GetTerm().MouseHover(posNegX)
 	}
 
 	sr.renderFooter()

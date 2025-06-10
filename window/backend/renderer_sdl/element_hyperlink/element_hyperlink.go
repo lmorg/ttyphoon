@@ -63,7 +63,7 @@ func (el *ElementHyperlink) Size() *types.XY {
 // Draw:
 // size: optional. Defaults to element size
 // pos:  required. Position to draw element
-func (el *ElementHyperlink) Draw(size *types.XY, pos *types.XY) {
+func (el *ElementHyperlink) Draw(_size *types.XY, pos *types.XY) {
 	for x := range el.size.X {
 		cell := &types.Cell{
 			Char: el.phrase[x],
@@ -71,6 +71,12 @@ func (el *ElementHyperlink) Draw(size *types.XY, pos *types.XY) {
 		}
 		el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + x, pos.Y})
 	}
+
+	var size = el.size
+	if _size != nil {
+		size = el.size
+	}
+	el.renderer.DrawHighlightRect(el.tile, pos, size)
 }
 
 func (el *ElementHyperlink) Rune(pos *types.XY) rune {

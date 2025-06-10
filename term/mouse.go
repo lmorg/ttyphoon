@@ -212,7 +212,7 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].GetElementXY(), movement, callback)
 }
 
-func (term *Term) MousePosition(pos *types.XY) {
+func (term *Term) MouseHover(pos *types.XY) {
 	if term._mousePosRenderer.Call() {
 		return
 	}
