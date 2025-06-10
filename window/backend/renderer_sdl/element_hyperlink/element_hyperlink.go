@@ -22,6 +22,7 @@ type ElementHyperlink struct {
 	scheme   string
 	path     string
 	size     *types.XY
+	pos      *types.XY
 	sgr      *types.Sgr
 }
 
@@ -63,7 +64,8 @@ func (el *ElementHyperlink) Size() *types.XY {
 // Draw:
 // size: optional. Defaults to element size
 // pos:  required. Position to draw element
-func (el *ElementHyperlink) Draw(_size *types.XY, pos *types.XY) {
+func (el *ElementHyperlink) Draw(pos *types.XY) {
+	el.pos = pos
 	for x := range el.size.X {
 		cell := &types.Cell{
 			Char: el.phrase[x],
@@ -71,12 +73,6 @@ func (el *ElementHyperlink) Draw(_size *types.XY, pos *types.XY) {
 		}
 		el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + x, pos.Y})
 	}
-
-	var size = el.size
-	if _size != nil {
-		size = el.size
-	}
-	el.renderer.DrawHighlightRect(el.tile, pos, size)
 }
 
 func (el *ElementHyperlink) Rune(pos *types.XY) rune {
@@ -181,14 +177,33 @@ func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 	callback()
 }
 
-func (el *ElementHyperlink) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
+func (el *ElementHyperlink) MouseMotion(pos *types.XY, size *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Hyperlink options: " + el.url)
-	el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
 	cursor.Hand()
+
+	if !config.Config.Window.HoverEffectHighlight {
+		el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
+	}
 }
 
 func (el *ElementHyperlink) MouseOut() {
 	el.renderer.StatusBarText("")
-	el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
 	cursor.Arrow()
+
+	if !config.Config.Window.HoverEffectHighlight {
+		el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+	}
+}
+
+func (el *ElementHyperlink) MouseHover() func() {
+	if !config.Config.Window.HoverEffectHighlight {
+		return func() {}
+	}
+
+	return func() {
+		if el.pos == nil {
+			return
+		}
+		el.renderer.DrawHighlightRect(el.tile, el.pos, el.size)
+	}
 }

@@ -87,7 +87,7 @@ type configT struct {
 		StatusBar              bool `yaml:"StatusBar"`
 		TabBarFrame            bool `yaml:"TabBarFrame"`
 		TabBarActiveHighlight  bool `yaml:"TabBarActiveHighlight"`
-		TabBarHoverHighlight   bool `yaml:"TabBarHoverHighlight"`
+		HoverEffectHighlight   bool `yaml:"HoverEffectHighlight"`
 		TileHighlightFill      bool `yaml:"TileHighlightFill"`
 		RefreshInterval        int  `yaml:"RefreshInterval"`
 		UseGPU                 bool `yaml:"UseGPU"`

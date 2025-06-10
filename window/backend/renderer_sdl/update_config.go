@@ -77,6 +77,16 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 
 		{
+			Title: fmt.Sprintf("%s == %v", "Window.HoverEffectHighlight", config.Config.Window.HoverEffectHighlight),
+			Fn: func() {
+				config.Config.Window.HoverEffectHighlight = !config.Config.Window.HoverEffectHighlight
+				sr.initFooter()
+				sr.UpdateConfig()
+			},
+			Icon: 0xf591,
+		},
+
+		{
 			Title: fmt.Sprintf("%s == %v", "Window.StatusBar", config.Config.Window.StatusBar),
 			Fn: func() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar
@@ -103,15 +113,7 @@ func (sr *sdlRender) UpdateConfig() {
 			},
 			//Icon: 0xe59a,
 		},
-		{
-			Title: fmt.Sprintf("%s == %v", "Window.TabBarHoverHighlight", config.Config.Window.TabBarHoverHighlight),
-			Fn: func() {
-				config.Config.Window.TabBarHoverHighlight = !config.Config.Window.TabBarHoverHighlight
-				sr.initFooter()
-				sr.UpdateConfig()
-			},
-			//Icon: 0xe59a,
-		},
+
 		{
 			Title: fmt.Sprintf("%s == %v", "Window.TileHighlightFill", config.Config.Window.TileHighlightFill),
 			Fn: func() {

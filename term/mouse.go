@@ -251,20 +251,24 @@ func (term *Term) MouseHover(pos *types.XY) {
 		return
 	}
 
-	if screen[pos.Y].Cells[pos.X].Element == nil {
-		if height := term._mousePositionCodeFoldable(screen, pos); height >= 0 {
-			cursor.Hand()
-			term.renderer.StatusBarText("[Click] Fold branch")
-			term._mousePosRenderer.Set(func() {
-				h := min(height-pos.Y, term.size.Y-pos.Y)
-				term.renderer.DrawRectWithColour(term.tile,
-					&types.XY{X: pos.X, Y: pos.Y},
-					&types.XY{X: term.size.X - pos.X, Y: h},
-					types.COLOR_FOLDED, false,
-				)
-			})
-			return
-		}
+	if screen[pos.Y].Cells[pos.X].Element != nil {
+		//term._mousePosRenderer.Set(func() {})
+		term._mousePosRenderer.Set(screen[pos.Y].Cells[pos.X].Element.MouseHover())
+		return
+	}
+
+	if height := term._mousePositionCodeFoldable(screen, pos); height >= 0 {
+		cursor.Hand()
+		term.renderer.StatusBarText("[Click] Fold branch")
+		term._mousePosRenderer.Set(func() {
+			h := min(height-pos.Y, term.size.Y-pos.Y)
+			term.renderer.DrawRectWithColour(term.tile,
+				&types.XY{X: pos.X, Y: pos.Y},
+				&types.XY{X: term.size.X - pos.X, Y: h},
+				types.COLOR_FOLDED, false,
+			)
+		})
+		return
 	}
 
 	term._mousePosRenderer.Set(func() {})

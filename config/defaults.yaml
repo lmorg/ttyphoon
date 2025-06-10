@@ -113,9 +113,9 @@ Window:
   StatusBar: true
   TabBarFrame: false
   TabBarActiveHighlight: true
-  TabBarHoverHighlight: true
   TileHighlightFill: true
 
+  HoverEffectHighlight: true
 
   BellVisualNotification: false
   BellPlayAudio: true

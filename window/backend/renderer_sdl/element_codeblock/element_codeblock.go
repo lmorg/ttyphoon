@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -16,6 +17,7 @@ type ElementCodeBlock struct {
 	tile      types.Tile
 	codeBlock []rune
 	size      *types.XY
+	pos       *types.XY
 	sgr       *types.Sgr
 }
 
@@ -46,7 +48,8 @@ func (el *ElementCodeBlock) Size() *types.XY {
 // Draw:
 // size: optional. Defaults to element size
 // pos:  required. Position to draw element
-func (el *ElementCodeBlock) Draw(size *types.XY, pos *types.XY) {
+func (el *ElementCodeBlock) Draw(pos *types.XY) {
+	el.pos = pos
 	for x := range el.size.X {
 		cell := &types.Cell{
 			Char: el.codeBlock[x],
@@ -123,13 +126,31 @@ func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 
 func (el *ElementCodeBlock) MouseMotion(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Code block options...")
-	el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
-	//el.renderer.DrawHighlightRect(el.tile,)
 	cursor.Hand()
+
+	if !config.Config.Window.HoverEffectHighlight {
+		el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
+	}
 }
 
 func (el *ElementCodeBlock) MouseOut() {
 	el.renderer.StatusBarText("")
-	el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
 	cursor.Arrow()
+
+	if !config.Config.Window.HoverEffectHighlight {
+		el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+	}
+}
+
+func (el *ElementCodeBlock) MouseHover() func() {
+	if !config.Config.Window.HoverEffectHighlight {
+		return func() {}
+	}
+
+	return func() {
+		if el.pos == nil {
+			return
+		}
+		el.renderer.DrawHighlightRect(el.tile, el.pos, el.size)
+	}
 }

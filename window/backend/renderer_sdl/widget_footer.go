@@ -170,7 +170,7 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 			sr.windowTabs.last = sr.windowTabs.mouseOver
 			cursor.Arrow()
 		}
-		if !config.Config.Window.TabBarHoverHighlight {
+		if !config.Config.Window.HoverEffectHighlight {
 			for i := range sr.windowTabs.cells {
 				sr.windowTabs.cells[i].Sgr.Bitwise.Unset(types.SGR_UNDERLINE)
 			}
@@ -186,7 +186,7 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 	topLeftCellX = sr.windowTabs.offset.X + sr.windowTabs.boundaries[sr.windowTabs.mouseOver]
 	bottomRightCellX = sr.windowTabs.boundaries[sr.windowTabs.mouseOver+1] - sr.windowTabs.boundaries[sr.windowTabs.mouseOver]
 
-	if config.Config.Window.TabBarHoverHighlight {
+	if config.Config.Window.HoverEffectHighlight {
 		highlightRect := &sdl.Rect{
 			X: (topLeftCellX * sr.glyphSize.X) + _PANE_LEFT_MARGIN,
 			Y: (topLeftCellY * sr.glyphSize.Y) + _PANE_TOP_MARGIN,

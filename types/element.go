@@ -5,10 +5,11 @@ type Element interface {
 	Write(rune) error
 	Rune(*XY) rune
 	Size() *XY
-	Draw(*XY, *XY)
+	Draw(*XY)
 	MouseClick(*XY, MouseButtonT, uint8, ButtonStateT, EventIgnoredCallback)
 	MouseWheel(*XY, *XY, EventIgnoredCallback)
 	MouseMotion(*XY, *XY, EventIgnoredCallback)
+	MouseHover() func()
 	MouseOut()
 }
 

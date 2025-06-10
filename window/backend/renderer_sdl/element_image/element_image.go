@@ -75,16 +75,12 @@ func (el *ElementImage) Size() *types.XY {
 // Draw:
 // size: optional. Defaults to element size
 // pos:  required. Position to draw element
-func (el *ElementImage) Draw(size *types.XY, pos *types.XY) {
+func (el *ElementImage) Draw(pos *types.XY) {
 	if len(el.bmp) == 0 {
 		return
 	}
 
-	if size == nil {
-		size = el.size
-	}
-
-	el.image.Draw(size, &types.XY{pos.X + el.tile.Left(), pos.Y + el.tile.Top()})
+	el.image.Draw(el.size, &types.XY{pos.X + el.tile.Left(), pos.Y + el.tile.Top()})
 }
 
 func (el *ElementImage) Rune(_ *types.XY) rune {
@@ -130,6 +126,10 @@ func (el *ElementImage) MouseMotion(_ *types.XY, _ *types.XY, callback types.Eve
 func (el *ElementImage) MouseOut() {
 	el.renderer.StatusBarText("")
 	cursor.Arrow()
+}
+
+func (el *ElementImage) MouseHover() func() {
+	return func() {}
 }
 
 func (el *ElementImage) copyImageToClipboard() {

@@ -177,3 +177,7 @@ func (el *ElementCsv) MouseOut() {
 	el.highlight = nil
 	el.renderer.TriggerRedraw()
 }
+
+func (el *ElementCsv) MouseHover() func() {
+	return func() {}
+}

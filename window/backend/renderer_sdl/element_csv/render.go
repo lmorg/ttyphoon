@@ -4,7 +4,7 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (el *ElementCsv) Draw(size *types.XY, pos *types.XY) {
+func (el *ElementCsv) Draw(pos *types.XY) {
 	pos.X += el.renderOffset
 
 	cell := &types.Cell{Sgr: &types.Sgr{}}
