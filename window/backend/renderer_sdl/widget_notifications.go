@@ -1,7 +1,9 @@
 package rendersdl
 
 import (
+	"context"
 	"log"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -194,18 +196,71 @@ func (sr *sdlRender) preloadNotificationGlyphs() {
 	}
 }
 
+func (sr *sdlRender) DisplayNotification(notificationType types.NotificationType, message string) {
+	notification := &notificationT{
+		Type:    notificationType,
+		Message: message,
+		id:      time.Now().UnixMilli(),
+		//paneId:  sr.tmux.ActivePane().Id,
+	}
+	sr.notifications.addTimed(notification)
+}
+
+func (sr *sdlRender) DisplaySticky(notificationType types.NotificationType, message string, cancel func()) types.Notification {
+	notification := &notificationT{
+		Type:    notificationType,
+		Message: message,
+		id:      time.Now().UnixMilli(),
+		sticky:  true,
+		//paneId:  sr.tmux.ActivePane().Id,
+	}
+	sr.notifications.addSticky(notification, cancel)
+
+	return notification
+}
+
 type notifyT struct {
 	timed  []*notificationT
 	sticky []*notificationT
-	mutex  sync.Mutex
+	//close <- chan
+	mutex sync.Mutex
+}
+
+func (n *notifyT) delete(notification *notificationT) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
+	var notifications *[]*notificationT
+	if notification.sticky {
+		notifications = &n.sticky
+	} else {
+		notifications = &n.timed
+	}
+
+	var i int
+	for i = range *notifications {
+		if (*notifications)[i].id == notification.id {
+			goto matched
+		}
+	}
+	return
+
+matched:
+	if notification.sticky {
+		n.sticky = slices.Delete(n.sticky, i, 1)
+	} else {
+		n.timed = slices.Delete(n.timed, i, 1)
+	}
 }
 
 type notificationT struct {
 	Type    types.NotificationType
 	Message string
-	wait    <-chan time.Time
+	sticky  bool
+	ctx     context.Context
 	end     time.Time
 	close   func()
+	cancel  func()
 	id      int64
 	//paneId  string
 }
@@ -220,47 +275,35 @@ func (notification *notificationT) Close() {
 	}
 }
 
-func (n *notifyT) _wait() {
-	for {
-		if len(n.timed) == 0 {
-			return
-		}
-
-		<-n.timed[0].wait
-		n.remove()
-	}
+func (notification *notificationT) UpdateCanceller(canceller func()) {
+	notification.cancel = canceller
 }
 
 func (n *notifyT) addTimed(notification *notificationT) {
 	d := 5 * time.Second
 	notification.end = time.Now().Add(d)
-	notification.wait = time.After(d)
+	notification.ctx, notification.cancel = context.WithTimeout(context.Background(), d)
 
 	n.mutex.Lock()
 	n.timed = append(n.timed, notification)
 
-	if len(n.timed) > 0 {
-		go n._wait()
-	}
 	n.mutex.Unlock()
+
+	go func() {
+		<-notification.ctx.Done()
+		n.delete(notification)
+	}()
 
 	log.Printf("NOTIFICATION: %s", notification.Message)
 }
 
-func (n *notifyT) addSticky(notification *notificationT) {
-	notification.id = time.Now().UnixMilli()
+func (n *notifyT) addSticky(notification *notificationT, cancel func()) {
 	notification.close = func() {
-		n.mutex.Lock()
-		var i int
-		for i := range n.sticky {
-			if n.sticky[i].id == notification.id {
-				goto matched
-			}
-		}
-		return
-	matched:
-		n.sticky = append(n.sticky[:i], n.sticky[i+1:]...)
-		n.mutex.Unlock()
+		n.delete(notification)
+	}
+	notification.cancel = func() {
+		cancel()
+		notification.close()
 	}
 
 	n.mutex.Lock()
@@ -270,16 +313,13 @@ func (n *notifyT) addSticky(notification *notificationT) {
 	log.Printf("NOTIFICATION: %s", notification.Message)
 }
 
-func (n *notifyT) remove() {
-	n.mutex.Lock()
-	n.timed = n.timed[1:]
-	n.mutex.Unlock()
-}
-
 func (n *notifyT) get() []*notificationT {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
+	return n._get()
+}
 
+func (n *notifyT) _get() []*notificationT {
 	if len(n.sticky) == 0 && len(n.timed) == 0 {
 		return nil
 	}
@@ -291,24 +331,30 @@ func (n *notifyT) get() []*notificationT {
 	return notifications
 }
 
-func (sr *sdlRender) DisplayNotification(notificationType types.NotificationType, message string) {
-	notification := &notificationT{
-		Type:    notificationType,
-		Message: message,
-		//paneId:  sr.tmux.ActivePane().Id,
+func (notify *notifyT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) bool {
+	if evt.State == sdl.RELEASED {
+		return false
 	}
-	sr.notifications.addTimed(notification)
-}
 
-func (sr *sdlRender) DisplaySticky(notificationType types.NotificationType, message string) types.Notification {
-	notification := &notificationT{
-		Type:    notificationType,
-		Message: message,
-		//paneId:  sr.tmux.ActivePane().Id,
+	notify.mutex.Lock()
+
+	notifications := notify._get()
+	if len(notifications) == 0 {
+		notify.mutex.Unlock()
+		return false
 	}
-	sr.notifications.addSticky(notification)
 
-	return notification
+	offset := (sr.glyphSize.Y + (_WIDGET_INNER_MARGIN * 3))
+
+	i := int(evt.Y / offset)
+	if i >= len(notifications) {
+		notify.mutex.Unlock()
+		return false
+	}
+
+	notify.mutex.Unlock()
+	notifications[i].cancel()
+	return true
 }
 
 func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {

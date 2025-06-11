@@ -53,7 +53,7 @@ const notifyLoading = "Loading CSV. Line %d..."
 func New(renderer types.Renderer, tile types.Tile) *ElementCsv {
 	el := &ElementCsv{renderer: renderer, tile: tile}
 
-	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines))
+	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines), func() {})
 
 	err := el.createDb()
 	if err != nil {

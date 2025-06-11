@@ -13,5 +13,6 @@ const (
 
 type Notification interface {
 	SetMessage(string)
+	UpdateCanceller(func())
 	Close()
 }

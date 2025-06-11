@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
@@ -64,7 +65,7 @@ const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
 // RunLLM calls the LLM with the prompt string.
 // Use `ai` package to create specific prompts.
-func (meta *Meta) RunLLM(prompt string) (string, error) {
+func (meta *Meta) RunLLM(prompt string, sticky types.Notification) (string, error) {
 	if meta.fnCancel != nil {
 		meta.fnCancel()
 		meta.fnCancel = nil
@@ -79,6 +80,7 @@ func (meta *Meta) RunLLM(prompt string) (string, error) {
 
 	var ctx context.Context
 	ctx, meta.fnCancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	sticky.UpdateCanceller(meta.fnCancel)
 
 	result, err := chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
 	if err == nil {

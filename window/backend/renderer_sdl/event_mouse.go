@@ -16,7 +16,9 @@ func (sr *sdlRender) eventMouseButton(evt *sdl.MouseButtonEvent) {
 		sr.highlighter.eventMouseButton(sr, evt)
 
 	default:
-		sr.termWidget.eventMouseButton(sr, evt)
+		if !sr.notifications.eventMouseButton(sr, evt) {
+			sr.termWidget.eventMouseButton(sr, evt)
+		}
 	}
 }
 

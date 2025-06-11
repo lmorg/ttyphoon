@@ -49,7 +49,7 @@ type Renderer interface {
 	TriggerQuit()
 	NewElement(Tile, ElementID) Element
 	DisplayNotification(NotificationType, string)
-	DisplaySticky(NotificationType, string) Notification
+	DisplaySticky(NotificationType, string, func()) Notification
 	DisplayInputBox(string, string, InputBoxCallbackT, InputBoxCallbackT)
 	DisplayMenu(string, []string, MenuCallbackT, MenuCallbackT, MenuCallbackT)
 	NewContextMenu() ContextMenu

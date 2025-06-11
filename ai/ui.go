@@ -36,7 +36,7 @@ func AskAI(meta *agent.Meta, prompt string) {
 
 func askAI(meta *agent.Meta, prompt string, title string, query string) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
-	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage)
+	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
 	fin := make(chan struct{})
 	var i int
 
@@ -44,7 +44,8 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 		for {
 			select {
 			case <-fin:
-				sticky.SetMessage("Formatting output....")
+				//sticky.SetMessage("Formatting output....")
+				sticky.Close()
 				return
 			case <-time.After(500 * time.Millisecond):
 				sticky.SetMessage(fmt.Sprintf("%s %s", stickyMessage, _STICKY_SPINNER[i]))
@@ -58,9 +59,9 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 	}()
 
 	go func() {
-		defer sticky.Close()
+		//defer sticky.Close()
 
-		result, err := meta.RunLLM(prompt)
+		result, err := meta.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
 			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())

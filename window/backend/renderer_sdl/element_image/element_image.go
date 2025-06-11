@@ -35,7 +35,7 @@ func New(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY
 }
 
 func (el *ElementImage) Generate(apc *types.ApcSlice, _ *types.Sgr) error {
-	notify := el.renderer.DisplaySticky(types.NOTIFY_DEBUG, "Importing image from ANSI escape codes....")
+	notify := el.renderer.DisplaySticky(types.NOTIFY_DEBUG, "Importing image from ANSI escape codes....", func() {})
 	defer notify.Close()
 
 	apc.Parameters(&el.parameters)

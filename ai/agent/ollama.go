@@ -14,7 +14,7 @@ func Init(renderer types.Renderer) {
 }
 
 func addServiceOllama(renderer types.Renderer) {
-	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, "Querying Ollama....")
+	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, "Querying Ollama....", func() {})
 	defer sticky.Close()
 
 	ollamaModels := ollamaModels()
