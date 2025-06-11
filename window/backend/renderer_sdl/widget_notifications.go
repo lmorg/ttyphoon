@@ -247,9 +247,9 @@ func (n *notifyT) delete(notification *notificationT) {
 
 matched:
 	if notification.sticky {
-		n.sticky = slices.Delete(n.sticky, i, 1)
+		n.sticky = slices.Delete(n.sticky, i, i+1)
 	} else {
-		n.timed = slices.Delete(n.timed, i, 1)
+		n.timed = slices.Delete(n.timed, i, i+1)
 	}
 }
 
@@ -259,8 +259,8 @@ type notificationT struct {
 	sticky  bool
 	ctx     context.Context
 	end     time.Time
-	close   func()
 	cancel  func()
+	closed  bool
 	id      int64
 	//paneId  string
 }
@@ -270,9 +270,7 @@ func (notification *notificationT) SetMessage(message string) {
 }
 
 func (notification *notificationT) Close() {
-	if notification.close != nil {
-		notification.close()
-	}
+	notification.closed = true
 }
 
 func (notification *notificationT) UpdateCanceller(canceller func()) {
@@ -291,19 +289,16 @@ func (n *notifyT) addTimed(notification *notificationT) {
 
 	go func() {
 		<-notification.ctx.Done()
-		n.delete(notification)
+		notification.closed = true
 	}()
 
 	log.Printf("NOTIFICATION: %s", notification.Message)
 }
 
 func (n *notifyT) addSticky(notification *notificationT, cancel func()) {
-	notification.close = func() {
-		n.delete(notification)
-	}
 	notification.cancel = func() {
 		cancel()
-		notification.close()
+		notification.closed = true
 	}
 
 	n.mutex.Lock()
@@ -373,6 +368,11 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 
 	var offset int32
 	for _, notification := range notifications {
+		if notification.closed {
+			go sr.notifications.delete(notification)
+			continue
+		}
+
 		//if notification.paneId != "" && notification.paneId != sr.tmux.ActivePane().Id {
 		//	continue
 		//}
@@ -413,7 +413,7 @@ func (sr *sdlRender) renderNotification(windowRect *sdl.Rect) {
 		sr.renderer.FillRect(&rect)
 
 		// render countdown
-		if notification.close == nil {
+		if !notification.sticky {
 			s := strconv.Itoa(int(time.Until(notification.end)/time.Second) + 1)
 			sr.printString(s, _notifyCountdownSgr[notification.Type], &types.XY{
 				X: windowRect.W - _WIDGET_OUTER_MARGIN - countdownW,
