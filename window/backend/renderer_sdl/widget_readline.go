@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/lmorg/mxtty/codes"
@@ -21,7 +22,7 @@ type widgetReadlineT struct {
 	Hook           func()
 }
 
-func (sr *sdlRender) NewReadline(termWidth int32, defaultValue, defaultStatus string) *widgetReadlineT {
+func (sr *sdlRender) NewReadline(termWidth int32, historyKey, defaultValue, defaultStatus string) *widgetReadlineT {
 	rl := &widgetReadlineT{
 		_instance:      readline.NewInstance(),
 		_defaultStatus: defaultStatus,
@@ -30,6 +31,7 @@ func (sr *sdlRender) NewReadline(termWidth int32, defaultValue, defaultStatus st
 	}
 
 	rl._callback = rl._instance.MakeNoTtyChan(int(termWidth))
+	rl._instance.History = newReadlineHistory(historyKey)
 	rl._instance.History.Write(defaultValue)
 	rl._instance.HintText = func([]rune, int) []rune { return []rune(defaultStatus) }
 
@@ -130,4 +132,61 @@ func (rl *widgetReadlineT) Readline(sr *sdlRender, callback func(string, error))
 			callback(s, err)
 		}
 	}()
+}
+
+/*
+	HISTORY
+*/
+
+var readlineHistoryCache = map[string][]string{}
+
+// readlineHistory is an example of a LineHistory interface:
+type readlineHistory struct {
+	items []string
+}
+
+func newReadlineHistory(key string) *readlineHistory {
+	h := new(readlineHistory)
+
+	if key == "" {
+		return h
+	}
+
+	s, ok := readlineHistoryCache[key]
+	if !ok {
+		s = []string{}
+	}
+
+	h.items = make([]string, len(s))
+	copy(h.items, s)
+
+	return h
+}
+
+// Write to history
+func (h *readlineHistory) Write(s string) (int, error) {
+	h.items = append(h.items, s)
+	return len(h.items), nil
+}
+
+// GetLine returns a line from history
+func (h *readlineHistory) GetLine(i int) (string, error) {
+	switch {
+	case i < 0:
+		return "", errors.New("requested history item out of bounds: < 0")
+	case i > h.Len()-1:
+		return "", errors.New("requested history item out of bounds: > Len()")
+	default:
+		return h.items[i], nil
+	}
+}
+
+// Len returns the number of lines in history
+func (h *readlineHistory) Len() int {
+	return len(h.items)
+}
+
+// Dump returns the entire history
+func (h *readlineHistory) Dump() interface{} {
+	return h.items
 }

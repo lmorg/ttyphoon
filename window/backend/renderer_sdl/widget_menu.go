@@ -175,7 +175,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		}
 	}
 
-	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
+	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
 
 	sr.menu.readline.Hook = func() {
 		sr.menu.updateHidden()

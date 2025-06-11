@@ -33,7 +33,7 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, ok types
 	}
 
 	sr.inputBox = &inputBoxWidgetT{
-		readline: sr.NewReadline(maxChars, defaultValue,
+		readline: sr.NewReadline(maxChars, title, defaultValue,
 			fmt.Sprintf(`[Return] Ok  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode  |  [Up] Default: "%s"`, defaultValue),
 		),
 		sr:        sr,
@@ -56,16 +56,17 @@ func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, ok types
 }
 
 func (inputBox *inputBoxWidgetT) Ok(s string) {
-	inputBox.sr._closeInputBox()
+	inputBox.sr._closeInputBox(s)
 	inputBox._ok(s)
 }
 
 func (inputBox *inputBoxWidgetT) Cancel(s string) {
-	inputBox.sr._closeInputBox()
+	inputBox.sr._closeInputBox(s)
 	inputBox._cancel(s)
 }
 
-func (sr *sdlRender) _closeInputBox() {
+func (sr *sdlRender) _closeInputBox(s string) {
+	readlineHistoryCache[sr.inputBox.title] = append(readlineHistoryCache[sr.inputBox.title], s)
 	sr.footerText = ""
 	sr.inputBox = nil
 	sr.termWin.Active.GetTerm().ShowCursor(true)
