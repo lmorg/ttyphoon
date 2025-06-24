@@ -31,7 +31,7 @@ func (term *Term) phraseSetToRowPos() {
 
 var (
 	rxUrl  = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=#a-zA-Z0-9]+`)
-	rxFile = regexp.MustCompile(`(~|)[-./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
+	rxFile = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
 )
 
 func (term *Term) autoHotlink(row *types.Row) {
