@@ -45,7 +45,7 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice, sgr *types.Sgr) error 
 	if len(split) != 2 {
 		return fmt.Errorf("invalid url, missing '://': %s", el.url)
 	}
-	el.scheme, el.path = split[0], split[1]
+	el.scheme, el.path = strings.ToLower(split[0]), split[1]
 
 	el.size = &types.XY{int32(len(el.phrase)), 1}
 	el.sgr = sgr.Copy()
@@ -107,7 +107,7 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 	menuItems := []types.MenuItem{
 		{
 			Title: "Copy link to clipboard",
-			Fn:    func() { copyToClipboard(el.renderer, el.url) },
+			Fn:    func() { copyToClipboard(el.renderer, el.schemaOrPath()) },
 			Icon:  0xf0c5,
 		},
 	}
@@ -121,7 +121,36 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 			},
 		)
 	}
+	menuItems = append(menuItems, types.MenuItem{
+		Title: "Write URL to shell",
+		Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },
+		Icon:  0xf120,
+	})
+
+	/*if strings.HasPrefix(el.scheme, "http") {
+		term := el.tile.GetTerm()
+		curPos := term.GetCursorPosition().Y - 1
+		meta := agent.Get(el.tile.Id())
+		meta.Renderer = el.renderer
+		meta.Term = term
+		meta.OutputBlock = ""
+		meta.InsertAfterRowId = term.GetRowId(curPos)
+		meta.CmdLine = string(el.url)
+		menuItems = append(menuItems, types.MenuItem{
+			Title: fmt.Sprintf("Summarize website (%s)", meta.ServiceName()),
+			Fn:    func() { ai.AskAI(meta, "Can you summarize a website via the following URL: "+el.url) },
+			Icon:  0xf120,
+		})
+	}*/
 	return menuItems
+}
+
+func (el *ElementHyperlink) schemaOrPath() string {
+	if el.scheme == "file" {
+		return string(el.path)
+	} else {
+		return string(el.url)
+	}
 }
 
 func copyToClipboard(renderer types.Renderer, url string) {
