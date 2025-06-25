@@ -15,26 +15,26 @@ import (
 	"golang.org/x/tools/txtar"
 )
 
-type ReadFile struct {
+type ReadFiles struct {
 	CallbacksHandler callbacks.Handler
 	meta             *agent.Meta
 	enabled          bool
 }
 
 func init() {
-	agent.ToolsAdd(&ReadFile{})
+	agent.ToolsAdd(&ReadFiles{})
 }
 
-func (f *ReadFile) New(meta *agent.Meta) (agent.Tool, error) {
-	return &ReadFile{meta: meta, enabled: true}, nil
+func (f *ReadFiles) New(meta *agent.Meta) (agent.Tool, error) {
+	return &ReadFiles{meta: meta, enabled: true}, nil
 }
 
-func (f *ReadFile) Enabled() bool { return f.enabled }
-func (f *ReadFile) Toggle()       { f.enabled = !f.enabled }
+func (f *ReadFiles) Enabled() bool { return f.enabled }
+func (f *ReadFiles) Toggle()       { f.enabled = !f.enabled }
 
-func (f *ReadFile) Name() string { return "Read Files" }
-func (f *ReadFile) Path() string { return "internal" }
-func (f *ReadFile) Description() string {
+func (f *ReadFiles) Name() string { return "Read Files" }
+func (f *ReadFiles) Path() string { return "internal" }
+func (f *ReadFiles) Description() string {
 	return `Open a local files for reading and return their contents.
 Useful for debugging output that references local files.
 The output of this tool will conform to the ` + "`txtar`" + ` specification.
@@ -43,7 +43,7 @@ The input for this tool MUST be a JSON array of strings. Each array item will be
 `
 }
 
-func (f *ReadFile) Call(ctx context.Context, input string) (response string, err error) {
+func (f *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
 		log.Printf("Agent tool '%s' input:\n%s", f.Name(), input)
 		defer func() {
