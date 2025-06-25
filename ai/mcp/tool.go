@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/types"
@@ -16,11 +17,12 @@ type tool struct {
 	name        string
 	path        string
 	description string
-	schema      string
+	schema      []byte
 	enabled     bool
 }
 
 func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
+
 	return &tool{
 		client:      t.client,
 		meta:        meta,
@@ -28,6 +30,7 @@ func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
 		name:        t.name,
 		path:        t.path,
 		description: t.description,
+		schema:      t.schema,
 		enabled:     true,
 	}, nil
 }
@@ -39,29 +42,29 @@ func (t *tool) Close() error  { return t.client.client.Close() }
 func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
 func (t *tool) Path() string { return t.path }
 func (t *tool) Description() string {
-	return t.description + "\nInput MUST be a JSON object with the following schema:\n" + t.schema
+	return t.description + "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
 }
 
-func (t *tool) Call(ctx context.Context, input string) (string, error) {
+func (t *tool) Call(ctx context.Context, input string) (ret string, err error) {
+	log.Printf("MCP tool '%s' input:    %s", t.Name(), input)
+	defer func() {
+		log.Printf("MCP tool '%s' response: %s", t.Name(), ret)
+		log.Printf("MCP tool '%s' error:    %v", t.Name(), err)
+	}()
+
 	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.meta.ServiceName(), t.Name()))
 
-	// this code is a massive kludge!
-	m := make(map[string]interface{})
-	err := json.Unmarshal([]byte(input), &m)
-	if err == nil {
-		ret, err := t.client.call(ctx, t.name, m)
-		if err != nil {
-			t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
-			return err.Error(), nil
-		}
-		return ret, nil
+	var args map[string]any
+	err = json.Unmarshal([]byte(input), &args)
+	if err != nil {
+		err = nil
+		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 
-	ret, err := t.client.call(ctx, t.name, map[string]interface{}{"input": input})
+	ret, err = t.client.call(ctx, t.name, args)
 	if err != nil {
 		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
-		return fmt.Sprintf("JSON input expected with!\n\n%v\n\nInput: %s", err, input), nil
 	}
-	return ret, nil
+	return ret, err
 }

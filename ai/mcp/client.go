@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -55,10 +56,15 @@ func (c *Client) listTools() error {
 	return nil
 }
 
-func (c *Client) call(ctx context.Context, name string, input any) (string, error) {
-	req := mcp.CallToolRequest{}
-	req.Params.Name = name
-	req.Params.Arguments = input
+func (c *Client) call(ctx context.Context, name string, args map[string]any) (string, error) {
+	req := mcp.CallToolRequest{
+		Request: mcp.Request{Method: "tools/call"},
+		Params: mcp.CallToolParams{
+			Name:      name,
+			Arguments: args,
+		},
+	}
+
 	result, err := c.client.CallTool(ctx, req)
 	if err != nil {
 		return "", err
@@ -80,6 +86,7 @@ func printToolResult(result *mcp.CallToolResult) string {
 		}
 	}
 
+	debug.Log(results)
 	return results
 }
 
