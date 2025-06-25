@@ -43,14 +43,20 @@ func (t *tool) Close() error  { return t.client.client.Close() }
 func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
 func (t *tool) Path() string { return t.path }
 func (t *tool) Description() string {
-	return t.description + "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
+	description := t.description //+ "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
+
+	if debug.Trace {
+		log.Printf("MCP tool '%s' description:\n%s", t.Name(), description)
+	}
+
+	return description
 }
 
-func (t *tool) Call(ctx context.Context, input string) (ret string, err error) {
+func (t *tool) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
 		log.Printf("MCP tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
-			log.Printf("MCP tool '%s' response:\n%s", t.Name(), ret)
+			log.Printf("MCP tool '%s' response:\n%s", t.Name(), response)
 			log.Printf("MCP tool '%s' error: %v", t.Name(), err)
 		}()
 	}
@@ -65,9 +71,9 @@ func (t *tool) Call(ctx context.Context, input string) (ret string, err error) {
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 
-	ret, err = t.client.call(ctx, t.name, args)
+	response, err = t.client.call(ctx, t.name, args)
 	if err != nil {
 		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 	}
-	return ret, err
+	return response, err
 }

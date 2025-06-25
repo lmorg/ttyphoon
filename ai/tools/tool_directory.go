@@ -3,7 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
-	"os"
+	"io/fs"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -38,12 +39,18 @@ Returns a bullet point list of all files and directories found inside a director
 func (d *Directory) Name() string { return "Read Directory" }
 func (d *Directory) Path() string { return "internal" }
 
-func (d *Directory) Call(ctx context.Context, input string) (string, error) {
+func (d *Directory) Call(ctx context.Context, input string) (response string, err error) {
+	if debug.Trace {
+		log.Printf("Agent tool '%s' input:\n%s", d.Name(), input)
+		defer func() {
+			log.Printf("Agent tool '%s' response:\n%s", d.Name(), response)
+			log.Printf("Agent tool '%s' error: %v", d.Name(), err)
+		}()
+	}
+
 	if d.CallbacksHandler != nil {
 		d.CallbacksHandler.HandleToolStart(ctx, input)
 	}
-
-	debug.Log(input)
 
 	var pathname string
 	if strings.HasPrefix(input, d.meta.Pwd) {
@@ -56,17 +63,19 @@ func (d *Directory) Call(ctx context.Context, input string) (string, error) {
 
 	d.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, d.meta.ServiceName()+" is querying directory: "+pathname)
 
-	err := filepath.Walk(pathname, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(pathname, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			result.WriteString(fmt.Sprintf("- Error accessing '%s': %v\n", path, err))
-			return err
+			return nil
 		}
 
-		if info.Name()[0] == '.' && len(info.Name()) > 1 {
-			return fmt.Errorf("ignoring %s", info.Name())
+		if len(d.Name()) > 1 && d.Name()[0] == '.' {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
 		}
 
-		if info.IsDir() {
+		if d.IsDir() {
 			result.WriteString(fmt.Sprintf("- Directory: '%s'\n", path))
 		} else {
 			result.WriteString(fmt.Sprintf("- File: '%s'\n", path))
@@ -79,10 +88,11 @@ func (d *Directory) Call(ctx context.Context, input string) (string, error) {
 		result.WriteString(fmt.Sprintf("- Error: %v\n", err))
 	}
 
+	response = result.String()
+
 	if d.CallbacksHandler != nil {
-		d.CallbacksHandler.HandleToolEnd(ctx, result.String())
+		d.CallbacksHandler.HandleToolEnd(ctx, response)
 	}
 
-	debug.Log(result.String())
-	return result.String(), nil
+	return response, nil
 }
