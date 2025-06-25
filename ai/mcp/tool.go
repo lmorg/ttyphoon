@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -46,11 +47,13 @@ func (t *tool) Description() string {
 }
 
 func (t *tool) Call(ctx context.Context, input string) (ret string, err error) {
-	log.Printf("MCP tool '%s' input:    %s", t.Name(), input)
-	defer func() {
-		log.Printf("MCP tool '%s' response: %s", t.Name(), ret)
-		log.Printf("MCP tool '%s' error:    %v", t.Name(), err)
-	}()
+	if debug.Trace {
+		log.Printf("MCP tool '%s' input:\n%s", t.Name(), input)
+		defer func() {
+			log.Printf("MCP tool '%s' response:\n%s", t.Name(), ret)
+			log.Printf("MCP tool '%s' error: %v", t.Name(), err)
+		}()
+	}
 
 	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.meta.ServiceName(), t.Name()))
