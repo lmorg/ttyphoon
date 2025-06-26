@@ -26,6 +26,8 @@
   - [Application Usability](#application-usability)
 - [Supported Platforms](#supported-platforms)
 - [Install Guide](#install-guide)
+  - [VT Debugging](#vt-debugging)
+  - [AI Tracing](#ai-tracing)
 - [How To Support](#how-to-support)
 
 ## Multimedia Terminal Emulator
@@ -296,6 +298,18 @@ To do so you will need the following installed:
 
 Aside from that, it's as easy as running `go build .` from the git repository
 root directory.
+
+### VT Debugging
+
+The terminal emulator functions can provide verbose logging for debugging. To
+enable this, build with `-tags debug` flag. Please note that this will add a
+lot of noise to the stdout of the terminal used to launch Ttyphoon.
+
+### AI Tracing
+
+The AI features, prompts sent to LLMs and messages between MCP tools can be
+traced for debugging. To enable this, build with `-tags trace`. Trace messages
+are sent to the stdout of the terminal used to launch TTyphoon.
 
 ## How To Support
 
