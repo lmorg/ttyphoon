@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/lmorg/mxtty/ai"
+	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
@@ -127,7 +129,7 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		Icon:  0xf120,
 	})
 
-	/*if strings.HasPrefix(el.scheme, "http") {
+	if strings.HasPrefix(el.scheme, "http") {
 		term := el.tile.GetTerm()
 		curPos := term.GetCursorPosition().Y - 1
 		meta := agent.Get(el.tile.Id())
@@ -138,10 +140,10 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		meta.CmdLine = string(el.url)
 		menuItems = append(menuItems, types.MenuItem{
 			Title: fmt.Sprintf("Summarize website (%s)", meta.ServiceName()),
-			Fn:    func() { ai.AskAI(meta, "Can you summarize a website via the following URL: "+el.url) },
-			Icon:  0xf120,
+			Fn:    func() { ai.AskAI(meta, "Can you summarize the contents of this web page: "+el.url) },
+			Icon:  0xf544,
 		})
-	}*/
+	}
 	return menuItems
 }
 
