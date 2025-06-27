@@ -23,17 +23,17 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
-func (w *Write) New(meta *agent.Meta) (agent.Tool, error) {
+func (t *Write) New(meta *agent.Meta) (agent.Tool, error) {
 	return &Write{meta: meta, enabled: false}, nil
 }
 
-func (w *Write) Enabled() bool { return w.enabled }
-func (w *Write) Toggle()       { w.enabled = !w.enabled }
+func (t *Write) Enabled() bool { return t.enabled }
+func (t *Write) Toggle()       { t.enabled = !t.enabled }
 
-func (w *Write) Name() string { return "Write File" }
-func (w *Write) Path() string { return "internal" }
+func (t *Write) Name() string { return "Write File" }
+func (t *Write) Path() string { return "internal" }
 
-func (w *Write) Description() string {
+func (t *Write) Description() string {
 	return `Writes new files, overwrites an existing files.
 Useful for making changes, correcting mistakes, and writing new code and configuration.
 File contents should contain the entire file, including parts of the file that are not changing.
@@ -41,9 +41,9 @@ The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
 `
 }
 
-func (w *Write) Call(ctx context.Context, input string) (string, error) {
-	if w.CallbacksHandler != nil {
-		w.CallbacksHandler.HandleToolStart(ctx, input)
+func (t *Write) Call(ctx context.Context, input string) (string, error) {
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
 	debug.Log(input)
@@ -53,30 +53,30 @@ func (w *Write) Call(ctx context.Context, input string) (string, error) {
 	arc := txtar.Parse([]byte(input))
 	for i := range arc.Files {
 		var filename string
-		if strings.HasPrefix(arc.Files[i].Name, w.meta.Pwd) {
+		if strings.HasPrefix(arc.Files[i].Name, t.meta.Pwd) {
 			filename = arc.Files[i].Name
 		} else {
-			filename = w.meta.Pwd + "/" + arc.Files[i].Name
+			filename = t.meta.Pwd + "/" + arc.Files[i].Name
 		}
 
-		w.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, w.meta.ServiceName()+" writing file: "+filename)
+		t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" writing file: "+filename)
 
 		f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0664)
 		if err != nil {
-			w.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 		_, err = f.Write(arc.Files[i].Data)
 		if err != nil {
-			w.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 
 		err = f.Close()
 		if err != nil {
-			w.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			// continue // don't need to "continue" here
 		}
@@ -84,8 +84,8 @@ func (w *Write) Call(ctx context.Context, input string) (string, error) {
 		result += fmt.Sprintf("INFO '%s': file written successfully\n", filename)
 	}
 
-	if w.CallbacksHandler != nil {
-		w.CallbacksHandler.HandleToolEnd(ctx, result)
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolEnd(ctx, result)
 	}
 
 	debug.Log(result)

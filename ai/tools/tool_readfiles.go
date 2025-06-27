@@ -29,12 +29,12 @@ func (f *ReadFiles) New(meta *agent.Meta) (agent.Tool, error) {
 	return &ReadFiles{meta: meta, enabled: true}, nil
 }
 
-func (f *ReadFiles) Enabled() bool { return f.enabled }
-func (f *ReadFiles) Toggle()       { f.enabled = !f.enabled }
+func (t *ReadFiles) Enabled() bool { return t.enabled }
+func (t *ReadFiles) Toggle()       { t.enabled = !t.enabled }
 
-func (f *ReadFiles) Name() string { return "Read Files" }
-func (f *ReadFiles) Path() string { return "internal" }
-func (f *ReadFiles) Description() string {
+func (t *ReadFiles) Name() string { return "Read Files" }
+func (t *ReadFiles) Path() string { return "internal" }
+func (t *ReadFiles) Description() string {
 	return `Open a local files for reading and return their contents.
 Useful for debugging output that references local files.
 The output of this tool will conform to the ` + "`txtar`" + ` specification.
@@ -43,17 +43,17 @@ The input for this tool MUST be a JSON array of strings. Each array item will be
 `
 }
 
-func (f *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
+func (t *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
-		log.Printf("Agent tool '%s' input:\n%s", f.Name(), input)
+		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
-			log.Printf("Agent tool '%s' response:\n%s", f.Name(), response)
-			log.Printf("Agent tool '%s' error: %v", f.Name(), err)
+			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
+			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
 		}()
 	}
 
-	if f.CallbacksHandler != nil {
-		f.CallbacksHandler.HandleToolStart(ctx, input)
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
 	var files []string
@@ -67,11 +67,11 @@ func (f *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	for i := range files {
 		filename := files[i]
 
-		if !strings.HasPrefix(filename, f.meta.Pwd) {
-			filename = f.meta.Pwd + "/" + files[i]
+		if !strings.HasPrefix(filename, t.meta.Pwd) {
+			filename = t.meta.Pwd + "/" + files[i]
 		}
 
-		f.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, f.meta.ServiceName()+" requesting file: "+filename[len(f.meta.Pwd):])
+		t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" requesting file: "+filename[len(t.meta.Pwd):])
 
 		var b []byte
 		info, err := os.Stat(filename)
@@ -95,8 +95,8 @@ func (f *ReadFiles) Call(ctx context.Context, input string) (response string, er
 
 	response = string(txtar.Format(&archive))
 
-	if f.CallbacksHandler != nil {
-		f.CallbacksHandler.HandleToolEnd(ctx, response)
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolEnd(ctx, response)
 	}
 
 	return response, nil

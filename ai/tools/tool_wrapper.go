@@ -3,20 +3,24 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
+	"github.com/tmc/langchaingo/callbacks"
 	"github.com/tmc/langchaingo/tools"
 	"github.com/tmc/langchaingo/tools/duckduckgo"
 	"github.com/tmc/langchaingo/tools/scraper"
 )
 
 type Wrapper struct {
-	meta    *agent.Meta
-	tool    tools.Tool
-	invoker func() (tools.Tool, error)
-	enabled bool
+	CallbacksHandler callbacks.Handler
+	meta             *agent.Meta
+	tool             tools.Tool
+	invoker          func() (tools.Tool, bool, error)
+	enabled          bool
 }
 
 func init() {
@@ -24,33 +28,54 @@ func init() {
 	agent.ToolsAdd(&Wrapper{invoker: invokeScaper})
 }
 
-func (wrapper *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
-	tool, err := wrapper.invoker()
+func (t *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
+	tool, enabled, err := t.invoker()
 	if err != nil {
 		return nil, err
 	}
-	return &Wrapper{meta: meta, tool: tool, enabled: true}, nil
+	return &Wrapper{meta: meta, tool: tool, enabled: enabled}, nil
 }
 
-func (wrapper *Wrapper) Enabled() bool { return wrapper.enabled }
-func (wrapper *Wrapper) Toggle()       { wrapper.enabled = !wrapper.enabled }
+func (t *Wrapper) Enabled() bool { return t.enabled }
+func (t *Wrapper) Toggle()       { t.enabled = !t.enabled }
 
-func (wrapper *Wrapper) Name() string        { return wrapper.tool.Name() }
-func (Wrapper *Wrapper) Path() string        { return "internal" }
-func (wrapper *Wrapper) Description() string { return wrapper.tool.Description() }
+func (t *Wrapper) Name() string        { return t.tool.Name() }
+func (t *Wrapper) Path() string        { return "internal" }
+func (t *Wrapper) Description() string { return t.tool.Description() }
 
-func (wrapper *Wrapper) Call(ctx context.Context, input string) (string, error) {
-	wrapper.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
-		fmt.Sprintf("%s is running a %s: %s", wrapper.meta.ServiceName(), wrapper.Name(), input))
-	return wrapper.tool.Call(ctx, input)
+func (t *Wrapper) Call(ctx context.Context, input string) (response string, err error) {
+	if debug.Trace {
+		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
+		defer func() {
+			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
+			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
+		}()
+	}
+
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolStart(ctx, input)
+	}
+
+	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
+		fmt.Sprintf("%s is running a %s: %s", t.meta.ServiceName(), t.Name(), input))
+
+	response, err = t.tool.Call(ctx, input)
+
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolEnd(ctx, response)
+	}
+
+	return
 }
 
 /////
 
-func invokeScaper() (tools.Tool, error) {
-	return scraper.New()
+func invokeScaper() (tools.Tool, bool, error) {
+	tool, err := scraper.New(scraper.WithParallelsNum(10), scraper.WithMaxDepth(1), scraper.WithAsync(false))
+	return tool, !_CHROME_INSTALLED, err
 }
 
-func invokeDDG() (tools.Tool, error) {
-	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
+func invokeDDG() (tools.Tool, bool, error) {
+	tool, err := duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
+	return tool, true, err
 }

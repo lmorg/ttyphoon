@@ -31,29 +31,29 @@ func init() {
 	agent.ToolsAdd(&ChatHistoryDetail{})
 }
 
-func (h *ChatHistoryDetail) New(meta *agent.Meta) (agent.Tool, error) {
+func (t *ChatHistoryDetail) New(meta *agent.Meta) (agent.Tool, error) {
 	return &ChatHistoryDetail{meta: meta, enabled: true}, nil
 }
 
-func (h *ChatHistoryDetail) Enabled() bool { return h.enabled }
-func (h *ChatHistoryDetail) Toggle()       { h.enabled = !h.enabled }
+func (t *ChatHistoryDetail) Enabled() bool { return t.enabled }
+func (t *ChatHistoryDetail) Toggle()       { t.enabled = !t.enabled }
 
-func (h *ChatHistoryDetail) Description() string {
+func (t *ChatHistoryDetail) Description() string {
 	return `Returns the the full prompt for a specific chat history index.
 Input should be an integer.`
 }
 
-func (h *ChatHistoryDetail) Name() string { return "Chat History" }
-func (h *ChatHistoryDetail) Path() string { return "internal" }
+func (t *ChatHistoryDetail) Name() string { return "Chat History" }
+func (t *ChatHistoryDetail) Path() string { return "internal" }
 
-func (h *ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
-	if h.CallbacksHandler != nil {
-		h.CallbacksHandler.HandleToolStart(ctx, input)
+func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
 	var result string
 
-	h.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", h.meta.ServiceName(), input))
+	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.meta.ServiceName(), input))
 
 	i, err := strconv.Atoi(input)
 	switch {
@@ -63,21 +63,21 @@ func (h *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 	case i < 0:
 		result = "ERROR: you cannot have negative indexes."
 		goto fin
-	case i >= len(h.meta.History):
+	case i >= len(t.meta.History):
 		result = "ERROR: index doesn't match a chat."
 		goto fin
 	}
 
 	result = fmt.Sprintf(_HISTORY_DETAILED,
-		h.meta.History[i].Title,
-		h.meta.History[i].OutputBlock,
-		h.meta.History[i].Response,
+		t.meta.History[i].Title,
+		t.meta.History[i].OutputBlock,
+		t.meta.History[i].Response,
 	)
 
 fin:
 
-	if h.CallbacksHandler != nil {
-		h.CallbacksHandler.HandleToolEnd(ctx, result)
+	if t.CallbacksHandler != nil {
+		t.CallbacksHandler.HandleToolEnd(ctx, result)
 	}
 
 	return result, nil
