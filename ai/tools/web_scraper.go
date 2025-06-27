@@ -2,16 +2,17 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/tmc/langchaingo/callbacks"
 )
-
-var _CHROME_INSTALLED = which.Which("chrome") != "" || which.Which("chromium") != ""
 
 type ChromeScraper struct {
 	CallbacksHandler callbacks.Handler
@@ -24,19 +25,19 @@ func init() {
 }
 
 func (t ChromeScraper) New(meta *agent.Meta) (agent.Tool, error) {
-	return &ChromeScraper{meta: meta, enabled: _CHROME_INSTALLED}, nil
+	return &ChromeScraper{meta: meta, enabled: true}, nil
 }
 
 func (t *ChromeScraper) Enabled() bool { return t.enabled }
 func (t *ChromeScraper) Toggle()       { t.enabled = !t.enabled }
 
 func (t *ChromeScraper) Description() string {
-	return `Loads a web page in Chrome and returns the contents of its page.
+	return `Loads a web page and returns the contents of its page.
 Useful for checking online content.
 The input for this tool is a URL to the web page.`
 }
 
-func (t *ChromeScraper) Name() string { return "Chrome Scraper" }
+func (t *ChromeScraper) Name() string { return "Web Scraper" }
 func (t *ChromeScraper) Path() string { return "internal" }
 
 func (t *ChromeScraper) Call(ctx context.Context, input string) (response string, err error) {
@@ -60,9 +61,46 @@ func (t *ChromeScraper) Call(ctx context.Context, input string) (response string
 		chromedp.OuterHTML("body", &response, chromedp.ByQuery),
 	)
 
+	if err != nil {
+		if debug.Trace {
+			log.Printf("Agent tool Chrome '%s' error: %v", t.Name(), err)
+		}
+		var fallbackErr error
+		response, fallbackErr = fallbackHttpRequest(input)
+		if fallbackErr == nil {
+			err = nil
+		} else {
+			err = fmt.Errorf("%v: ALSO: %v", err, fallbackErr)
+		}
+	}
+
 	if t.CallbacksHandler != nil {
 		t.CallbacksHandler.HandleToolEnd(ctx, response)
 	}
 
 	return response, err
+}
+
+func fallbackHttpRequest(url string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating fallback request: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error making fallback request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading fallback request: %v", err)
+	}
+
+	return string(body), err
 }

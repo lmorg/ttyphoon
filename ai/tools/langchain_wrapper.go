@@ -12,28 +12,27 @@ import (
 	"github.com/tmc/langchaingo/callbacks"
 	"github.com/tmc/langchaingo/tools"
 	"github.com/tmc/langchaingo/tools/duckduckgo"
-	"github.com/tmc/langchaingo/tools/scraper"
 )
 
 type Wrapper struct {
 	CallbacksHandler callbacks.Handler
 	meta             *agent.Meta
 	tool             tools.Tool
-	invoker          func() (tools.Tool, bool, error)
+	invoker          func() (tools.Tool, error)
 	enabled          bool
 }
 
 func init() {
 	agent.ToolsAdd(&Wrapper{invoker: invokeDDG})
-	agent.ToolsAdd(&Wrapper{invoker: invokeScaper})
+	//agent.ToolsAdd(&Wrapper{invoker: invokeScaper})
 }
 
 func (t *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
-	tool, enabled, err := t.invoker()
+	tool, err := t.invoker()
 	if err != nil {
 		return nil, err
 	}
-	return &Wrapper{meta: meta, tool: tool, enabled: enabled}, nil
+	return &Wrapper{meta: meta, tool: tool, enabled: true}, nil
 }
 
 func (t *Wrapper) Enabled() bool { return t.enabled }
@@ -70,12 +69,11 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 
 /////
 
-func invokeScaper() (tools.Tool, bool, error) {
+/*func invokeScaper() (tools.Tool, bool, error) {
 	tool, err := scraper.New(scraper.WithParallelsNum(10), scraper.WithMaxDepth(1), scraper.WithAsync(false))
 	return tool, !_CHROME_INSTALLED, err
-}
+}*/
 
-func invokeDDG() (tools.Tool, bool, error) {
-	tool, err := duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
-	return tool, true, err
+func invokeDDG() (tools.Tool, error) {
+	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
 }
