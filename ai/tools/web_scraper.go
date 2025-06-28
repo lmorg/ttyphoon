@@ -6,11 +6,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/chromedp/chromedp"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/types"
 	"github.com/tmc/langchaingo/callbacks"
 )
 
@@ -34,11 +38,27 @@ func (t *ChromeScraper) Toggle()       { t.enabled = !t.enabled }
 func (t *ChromeScraper) Description() string {
 	return `Loads a web page and returns the contents of its page.
 Useful for checking online content.
-The input for this tool is a URL to the web page.`
+The input for this tool is a URL to the web page.
+The output of this tool will either be HTML or markdown.`
 }
 
 func (t *ChromeScraper) Name() string { return "Web Scraper" }
 func (t *ChromeScraper) Path() string { return "internal" }
+
+var (
+	// I know you shouldn't use regex to parse HTML.
+	// This is only used in the extreme edge case that a markdown document
+	// cannot be automatically generated from the HTML document. At that
+	// point the HTML parser has already failed and we are now looking to
+	// use an LLM for parsing. In that instance, our token count will be
+	// massive so stripping the following HTML tags via regexp, while crude,
+	// will reduce the token count.
+	rxHtml = []*regexp.Regexp{
+		regexp.MustCompile(`(?si)<head( |>).*?</head>`),
+		regexp.MustCompile(`(?si)<svg( |>).*?</svg>`),
+		regexp.MustCompile(`(?si)<script( |>).*?</script>`),
+	}
+)
 
 func (t *ChromeScraper) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
@@ -53,15 +73,30 @@ func (t *ChromeScraper) Call(ctx context.Context, input string) (response string
 		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
+	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s: using Chrome: %s", t.meta.ServiceName(), input))
+
 	chromeCtx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
+	var body, article string
+
 	err = chromedp.Run(chromeCtx,
 		chromedp.Navigate(input),
-		chromedp.OuterHTML("body", &response, chromedp.ByQuery),
+		chromedp.Sleep(3*time.Second), // this is a kludge to allow dynamic sites which require JS to finish rendering
+		chromedp.InnerHTML("body", &body, chromedp.ByQuery),
+		chromedp.InnerHTML("article", &article, chromedp.ByQuery),
 	)
 
+	if article != "" {
+		response = article
+	} else {
+		response = body
+	}
+
 	if err != nil {
+		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("%s: couldn't start Chrome: %v", t.meta.ServiceName(), err))
+		t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s: using fallback raw HTTP: %s", t.meta.ServiceName(), input))
+
 		if debug.Trace {
 			log.Printf("Agent tool Chrome '%s' error: %v", t.Name(), err)
 		}
@@ -71,6 +106,22 @@ func (t *ChromeScraper) Call(ctx context.Context, input string) (response string
 			err = nil
 		} else {
 			err = fmt.Errorf("%v: ALSO: %v", err, fallbackErr)
+		}
+	}
+
+	md, mdErr := htmltomarkdown.ConvertString(response)
+	if mdErr == nil {
+		response = md
+	} else {
+		// we cannot parse the HTML document via correct methods,
+		// so now lets focus on reducing the token count so the LLM
+		// can parse the HTML document fast and cost-effectively.
+		for _, rx := range rxHtml {
+			found := rx.FindAllString(response, -1)
+			for i := range found {
+				log.Println(found[i])
+				response = strings.Replace(response, found[i], "", 1)
+			}
 		}
 	}
 

@@ -139,9 +139,11 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		meta.InsertAfterRowId = term.GetRowId(curPos)
 		meta.CmdLine = string(el.url)
 		menuItems = append(menuItems, types.MenuItem{
-			Title: fmt.Sprintf("Summarize website (%s)", meta.ServiceName()),
-			Fn:    func() { ai.AskAI(meta, "Can you summarize the contents of this web page: "+el.url) },
-			Icon:  0xf544,
+			Title: fmt.Sprintf("Summarize hyperlink (%s)", meta.ServiceName()),
+			Fn: func() {
+				ai.AskAI(meta, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url))
+			},
+			Icon: 0xf544,
 		})
 	}
 	return menuItems
