@@ -73,6 +73,7 @@ type Term struct {
 	_rowPhrase       *[]rune
 	_rowSource       *types.RowSource
 	_blockMeta       *types.BlockMeta
+	_apcStack        uint
 
 	// search
 	_searchHighlight  bool

@@ -47,38 +47,58 @@ func (term *Term) parseApcCodes() {
 
 	switch apc.Index(0) {
 	case "begin":
+		if term._apcStack > 0 {
+			term._apcStack++
+			break
+		}
+		term._apcStack = 1
+
 		switch apc.Index(1) {
 		case "csv":
 			term.mxapcBegin(types.ELEMENT_ID_CSV, apc)
 
-		case "output-block":
-			term.mxapcBeginOutputBlock(apc)
-
 		case "code-block":
 			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK, apc)
 
+		case "output-block":
+			term._apcStack--
+			term.mxapcBeginOutputBlock(apc)
+
 		default:
+			term._apcStack--
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "end":
+		if term._apcStack > 1 {
+			term._apcStack--
+			break
+		}
+		term._apcStack = 0
+
 		switch apc.Index(1) {
 		case "csv":
 			term.mxapcEnd(apc, true)
 
+		case "code-block":
+			term.mxapcEnd(apc, true)
+
 		case "output-block":
+			term._apcStack++
 			term.mxapcEndOutputBlock(apc)
 
-		case "code-block":
-			term.mxapcEnd(apc, false)
-
 		default:
+			term._apcStack++
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "insert":
+		if term._apcStack > 0 {
+			break
+		}
+
 		switch apc.Index(1) {
 		case "image":
 			term.mxapcInsert(types.ELEMENT_ID_IMAGE, apc)
