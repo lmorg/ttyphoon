@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/glamour"
@@ -96,6 +97,10 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 			markdown, err = md.Render(result)
 			if err != nil {
 				markdown = result
+			} else {
+				// this is a kludge to work around a bug in the markdown package
+				markdown = strings.ReplaceAll(markdown, "!```start!", "\u001b_begin;code-block\u001b\\")
+				markdown = strings.ReplaceAll(markdown, "!```end!", "\u001b_end;code-block\u001b\\")
 			}
 		}
 

@@ -88,6 +88,8 @@
     "background_color": "236"
   },
   "code_block": {
+    "block_prefix": "!```start!",
+    "block_suffix": "!```end!",
     "color": "244",
     "margin": 2,
     "chroma": {
