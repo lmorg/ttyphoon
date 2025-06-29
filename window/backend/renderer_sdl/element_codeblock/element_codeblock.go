@@ -6,38 +6,47 @@ import (
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"golang.design/x/clipboard"
 )
 
 type ElementCodeBlock struct {
-	renderer  types.Renderer
-	tile      types.Tile
-	codeBlock []rune
-	size      *types.XY
-	pos       *types.XY
-	sgr       *types.Sgr
+	renderer types.Renderer
+	tile     types.Tile
+	raw      []rune
+	grid     [][]rune
+	size     *types.XY
+	pos      *types.XY
+	sgr      *types.Sgr
 }
 
 func New(renderer types.Renderer, tile types.Tile) *ElementCodeBlock {
-	return &ElementCodeBlock{renderer: renderer, tile: tile}
+	return &ElementCodeBlock{
+		renderer: renderer,
+		tile:     tile,
+		size:     &types.XY{X: tile.GetTerm().GetSize().X, Y: 1},
+		grid:     make([][]rune, 1),
+	}
 }
 
 func (el *ElementCodeBlock) Generate(apc *types.ApcSlice, sgr *types.Sgr) error {
-	el.size = &types.XY{int32(len(el.codeBlock)), 1}
+	if el.size.Y == 1 {
+		el.size = &types.XY{int32(len(el.raw)), 1}
+	}
 	el.sgr = sgr.Copy()
-
-	debug.Log(el.codeBlock)
-	debug.Log(len(el.codeBlock))
-	debug.Log(el.size)
 
 	return nil
 }
 
 func (el *ElementCodeBlock) Write(r rune) error {
-	el.codeBlock = append(el.codeBlock, r)
+	el.raw = append(el.raw, r)
+	if r == '\n' {
+		el.size.Y++
+		el.grid = append(el.grid, []rune{})
+	}
+	el.grid[len(el.grid)-1] = append(el.grid[len(el.grid)-1], r)
+
 	return nil
 }
 
@@ -50,17 +59,24 @@ func (el *ElementCodeBlock) Size() *types.XY {
 // pos:  required. Position to draw element
 func (el *ElementCodeBlock) Draw(pos *types.XY) {
 	el.pos = pos
-	for x := range el.size.X {
-		cell := &types.Cell{
-			Char: el.codeBlock[x],
-			Sgr:  el.sgr,
+	for y := range el.grid {
+		for x := range el.grid[y] {
+			cell := &types.Cell{
+				Char: el.grid[y][x],
+				Sgr:  el.sgr,
+			}
+			el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + int32(x), pos.Y + int32(y)})
 		}
-		el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + x, pos.Y})
 	}
 }
 
 func (el *ElementCodeBlock) Rune(pos *types.XY) rune {
-	return el.codeBlock[pos.X]
+	line := el.grid[pos.Y]
+	if len(line) <= int(pos.X) {
+		return ' '
+	}
+
+	return line[pos.X]
 }
 
 func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
@@ -95,16 +111,16 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 	meta.Term = term
 	meta.OutputBlock = ""
 	meta.InsertAfterRowId = term.GetRowId(curPos)
-	meta.CmdLine = string(el.codeBlock)
+	meta.CmdLine = string(el.raw)
 	return []types.MenuItem{
 		{
 			Title: "Write code to shell",
-			Fn:    func() { term.Reply([]byte(string(el.codeBlock))) },
+			Fn:    func() { term.Reply([]byte(string(el.raw))) },
 			Icon:  0xf120,
 		},
 		{
 			Title: "Copy code to clipboard",
-			Fn:    func() { copyToClipboard(el.renderer, string(el.codeBlock)) },
+			Fn:    func() { copyToClipboard(el.renderer, string(el.raw)) },
 			Icon:  0xf0c5,
 		},
 		{
