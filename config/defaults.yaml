@@ -133,3 +133,17 @@ Window:
   # Disabling GPU will run slower and consume more system resources, so it is
   # recommended to leave this set to `true`
   UseGPU: true
+
+AI:
+  AvailableModels:
+    ChatGPT:
+      - gpt-4.1
+      - gpt-4
+      - o4-mini
+      - gpt-3.5-turbo
+    Claude:
+      - claude-opus-4-20250514
+      - claude-sonnet-4-20250514
+      - claude-3-opus-latest
+      - claude-3-7-sonnet-latest
+      - claude-3-5-haiku-latest

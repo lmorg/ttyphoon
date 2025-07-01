@@ -29,16 +29,14 @@ type Meta struct {
 }
 
 func NewAgentMeta() *Meta {
+	refreshServiceList()
+
 	meta := &Meta{
 		model:       map[string]string{},
 		_mcpServers: make(map[string]client),
 	}
 
-	for _, service := range services {
-		if len(models[service]) != 0 {
-			meta.model[service] = models[service][0]
-		}
-	}
+	setDefaultModels(meta)
 
 	meta.toolsInit()
 

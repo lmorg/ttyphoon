@@ -1,38 +1,28 @@
 package agent
 
+import (
+	"slices"
+
+	"github.com/lmorg/mxtty/config"
+)
+
 const (
 	LLM_OPENAI    = "ChatGPT"
 	LLM_ANTHROPIC = "Claude"
 	LLM_OLLAMA    = "Ollama"
 )
 
-var services = []string{
-	LLM_ANTHROPIC,
-	LLM_OPENAI,
-}
-
-var models = map[string][]string{
-	LLM_OPENAI: {
-		"gpt-4.1",
-		"gpt-4",
-		"o4-mini",
-		"gpt-3.5-turbo",
-	},
-	LLM_ANTHROPIC: {
-		"claude-opus-4-20250514",
-		"claude-sonnet-4-20250514",
-		"claude-3-opus-latest",
-		"claude-3-7-sonnet-latest",
-		"claude-3-5-haiku-latest",
-	},
-	LLM_OLLAMA: {}, // generated automatically
-}
+var (
+	services []string
+	models   map[string][]string
+)
 
 func (meta *Meta) ServiceName() string {
 	return services[meta.service]
 }
 
 func (meta *Meta) ServiceNext() {
+	refreshServiceList()
 	meta.service++
 	if meta.service >= len(services) {
 		meta.service = 0
@@ -45,6 +35,7 @@ func (meta *Meta) ModelName() string {
 }
 
 func (meta *Meta) ModelNext() {
+	refreshServiceList()
 	meta.model[meta.ServiceName()] = meta._modelNext()
 	meta.Reload()
 }
@@ -64,4 +55,27 @@ func (meta *Meta) _modelNext() string {
 	}
 
 	return models[meta.ServiceName()][0]
+}
+
+func refreshServiceList() {
+	models = config.Config.Ai.AvailableModels
+	services = []string{}
+	for service := range config.Config.Ai.AvailableModels {
+		services = append(services, service)
+	}
+}
+
+func setDefaultModels(meta *Meta) {
+	for service, model := range config.Config.Ai.DefaultModels {
+		if slices.Contains(models[service], model) {
+			meta.model[service] = model
+		}
+	}
+
+	for i := range services {
+		if services[i] == config.Config.Ai.DefaultService {
+			meta.service = i
+			break
+		}
+	}
 }
