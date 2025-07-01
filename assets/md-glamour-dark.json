@@ -89,8 +89,8 @@
   },
   "code_block": {
     "margin": 2,
-    "block_prefix": "!```start!  ",
-    "block_suffix": "!```end!",
+    "block_prefix": "!```codeblock!start!  ",
+    "block_suffix": "!```codeblock!end!",
     "color": "244",
     "chroma": {
       "text": {

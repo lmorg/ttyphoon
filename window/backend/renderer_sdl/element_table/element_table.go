@@ -1,9 +1,7 @@
-package element_csv
+package element_table
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/csv"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -13,7 +11,15 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-type ElementCsv struct {
+type srcType int
+
+const (
+	_SRC_TYPE_CSV      = 1
+	_SRC_TYPE_MARKDOWN = 2
+)
+
+type ElementTable struct {
+	srcType    srcType
 	renderer   types.Renderer
 	tile       types.Tile
 	size       types.XY
@@ -48,10 +54,22 @@ var arrowGlyph = map[bool]rune{
 	true:  '↓',
 }
 
-const notifyLoading = "Loading CSV. Line %d..."
+const notifyLoading = "Loading table. Line %d..."
 
-func New(renderer types.Renderer, tile types.Tile) *ElementCsv {
-	el := &ElementCsv{renderer: renderer, tile: tile}
+func NewCsv(renderer types.Renderer, tile types.Tile) *ElementTable {
+	return newTable(renderer, tile, _SRC_TYPE_CSV)
+}
+
+func NewMarkdown(renderer types.Renderer, tile types.Tile) *ElementTable {
+	return newTable(renderer, tile, _SRC_TYPE_MARKDOWN)
+}
+
+func newTable(renderer types.Renderer, tile types.Tile, srcType srcType) *ElementTable {
+	el := &ElementTable{
+		renderer: renderer,
+		tile:     tile,
+		srcType:  srcType,
+	}
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines), func() {})
 
@@ -66,7 +84,7 @@ func New(renderer types.Renderer, tile types.Tile) *ElementCsv {
 	return el
 }
 
-func (el *ElementCsv) Write(r rune) error {
+func (el *ElementTable) Write(r rune) error {
 	el.buf = append(el.buf, r)
 	if r == '\n' {
 		el.lines++
@@ -79,22 +97,29 @@ type parametersT struct {
 	CreateHeadings bool `json:"CreateHeadings"`
 }
 
-func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
+func (el *ElementTable) Generate(apc *types.ApcSlice) error {
 	defer el.notify.Close()
 
-	buf := bytes.NewBufferString(string(el.buf))
-	r := csv.NewReader(buf)
-	r.LazyQuotes = true
-	r.TrimLeadingSpace = true
-	r.FieldsPerRecord = -1
-	recs, err := r.ReadAll()
-	if err != nil {
-		return fmt.Errorf("error reading CSV: %v", err)
-	}
+	var (
+		recs [][]string
+		err  error
+	)
 
-	var params parametersT
-	apc.Parameters(&params)
+	params := new(parametersT)
+	apc.Parameters(params)
 	debug.Log(params)
+
+	switch el.srcType {
+	case _SRC_TYPE_CSV:
+		recs, err = fromCsv(el)
+	case _SRC_TYPE_MARKDOWN:
+		recs, err = fromMarkdown(el, params)
+	default:
+		panic("unknown table type")
+	}
+	if err != nil {
+		return err
+	}
 
 	firstRecord := 1
 	if params.CreateHeadings {
@@ -164,11 +189,11 @@ func (el *ElementCsv) Generate(apc *types.ApcSlice) error {
 	return nil
 }
 
-func (el *ElementCsv) Size() *types.XY {
+func (el *ElementTable) Size() *types.XY {
 	return &el.size
 }
 
-func (el *ElementCsv) Rune(pos *types.XY) rune {
+func (el *ElementTable) Rune(pos *types.XY) rune {
 	pos.X -= el.renderOffset
 
 	if pos.Y == 0 {

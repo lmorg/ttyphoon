@@ -1,4 +1,4 @@
-package element_csv
+package element_table
 
 import (
 	"database/sql"
@@ -33,7 +33,7 @@ var orderByStr = map[bool]string{
 	true:  "DESC",
 }
 
-func (el *ElementCsv) createDb() error {
+func (el *ElementTable) createDb() error {
 	var err error
 	el.db, err = sql.Open(driverName, ":memory:")
 	if err != nil {
@@ -43,7 +43,7 @@ func (el *ElementCsv) createDb() error {
 	return nil
 }
 
-func (el *ElementCsv) createTable(headings []string) error {
+func (el *ElementTable) createTable(headings []string) error {
 	var err error
 
 	if len(headings) == 0 {
@@ -72,7 +72,7 @@ func (el *ElementCsv) createTable(headings []string) error {
 	return nil
 }
 
-func (el *ElementCsv) insertRecords(records []string) error {
+func (el *ElementTable) insertRecords(records []string) error {
 	if len(records) == 0 {
 		return fmt.Errorf("no records to insert into transaction on table %s", el.name)
 	}

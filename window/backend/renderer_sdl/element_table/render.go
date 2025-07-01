@@ -1,10 +1,10 @@
-package element_csv
+package element_table
 
 import (
 	"github.com/lmorg/mxtty/types"
 )
 
-func (el *ElementCsv) Draw(pos *types.XY) {
+func (el *ElementTable) Draw(pos *types.XY) {
 	pos.X += el.renderOffset
 
 	cell := &types.Cell{Sgr: &types.Sgr{}}

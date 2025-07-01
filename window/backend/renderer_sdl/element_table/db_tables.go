@@ -1,4 +1,4 @@
-package element_csv
+package element_table
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 const _ROW_ID = "rowid"
 
-func (el *ElementCsv) sqlWhere() string {
+func (el *ElementTable) sqlWhere() string {
 	where := el.filter
 	if where != "" {
 		where = "WHERE " + where
@@ -21,7 +21,7 @@ func (el *ElementCsv) sqlWhere() string {
 	return where
 }
 
-func (el *ElementCsv) sqlString() string {
+func (el *ElementTable) sqlString() string {
 	orderBy := _ROW_ID
 	var sql string
 	if el.orderByIndex > 0 {
@@ -34,7 +34,7 @@ func (el *ElementCsv) sqlString() string {
 	return fmt.Sprintf(sql, el.name, el.sqlWhere(), orderBy, orderByStr[el.orderDesc], el.size.Y-1, el.limitOffset)
 }
 
-func (el *ElementCsv) runQuery() error {
+func (el *ElementTable) runQuery() error {
 	query := el.sqlString()
 	dbRows, err := el.db.Query(query)
 	if err != nil {
@@ -126,7 +126,7 @@ func _strToAnyPtr(s *[]string, max int) []any {
 	return slice
 }
 
-func (el *ElementCsv) ExportCsv() {
+func (el *ElementTable) ExportCsv() {
 	var b []byte
 	buf := bytes.NewBuffer(b)
 	w := csv.NewWriter(buf)

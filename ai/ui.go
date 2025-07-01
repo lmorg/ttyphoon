@@ -99,8 +99,10 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 				markdown = result
 			} else {
 				// this is a kludge to work around a bug in the markdown package
-				markdown = strings.ReplaceAll(markdown, "!```start!", "\u001b_begin;code-block\u001b\\")
-				markdown = strings.ReplaceAll(markdown, "!```end!", "\u001b_end;code-block\u001b\\")
+				markdown = strings.ReplaceAll(markdown, "!```codeblock!start!", "\u001b_begin;code-block\u001b\\")
+				markdown = strings.ReplaceAll(markdown, "!```codeblock!end!", "\u001b_end;code-block\u001b\\")
+				markdown = strings.ReplaceAll(markdown, "!```mdtable!start!", "\u001b_begin;md-table\u001b\\")
+				markdown = strings.ReplaceAll(markdown, "!```mdtable!end!", "\u001b_end;md-table\u001b\\")
 			}
 		}
 

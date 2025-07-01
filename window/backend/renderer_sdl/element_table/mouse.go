@@ -1,4 +1,4 @@
-package element_csv
+package element_table
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // so I'm willing to live with this kludge....for now.
 const _RENDER_OFFSETS_OFFSET = 3
 
-func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
+func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
 
 	if pos.Y != 0 {
@@ -106,7 +106,7 @@ func (el *ElementCsv) MouseClick(_pos *types.XY, button types.MouseButtonT, clic
 	}
 }
 
-func (el *ElementCsv) MouseWheel(_ *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
+func (el *ElementTable) MouseWheel(_ *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
 	termX := el.tile.GetTerm().GetSize().X
 	width := el.boundaries[len(el.boundaries)-1]
 	mod := codes.Modifier(el.renderer.GetKeyboardModifier())
@@ -148,7 +148,7 @@ func (el *ElementCsv) MouseWheel(_ *types.XY, movement *types.XY, callback types
 	}
 }
 
-func (el *ElementCsv) MouseMotion(_pos *types.XY, move *types.XY, callback types.EventIgnoredCallback) {
+func (el *ElementTable) MouseMotion(_pos *types.XY, move *types.XY, callback types.EventIgnoredCallback) {
 	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
 
 	switch {
@@ -172,12 +172,12 @@ func (el *ElementCsv) MouseMotion(_pos *types.XY, move *types.XY, callback types
 	el.renderer.TriggerRedraw()
 }
 
-func (el *ElementCsv) MouseOut() {
+func (el *ElementTable) MouseOut() {
 	el.renderer.StatusBarText("")
 	el.highlight = nil
 	el.renderer.TriggerRedraw()
 }
 
-func (el *ElementCsv) MouseHover() func() {
+func (el *ElementTable) MouseHover() func() {
 	return func() {}
 }

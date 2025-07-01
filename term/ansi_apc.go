@@ -57,6 +57,9 @@ func (term *Term) parseApcCodes() {
 		case "csv":
 			term.mxapcBegin(types.ELEMENT_ID_CSV, apc)
 
+		case "md-table":
+			term.mxapcBegin(types.ELEMENT_ID_MARKDOWN_TABLE, apc)
+
 		case "code-block":
 			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK, apc)
 
@@ -79,6 +82,9 @@ func (term *Term) parseApcCodes() {
 
 		switch apc.Index(1) {
 		case "csv":
+			term.mxapcEnd(apc)
+
+		case "md-table":
 			term.mxapcEnd(apc)
 
 		case "code-block":
