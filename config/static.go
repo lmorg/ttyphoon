@@ -3,6 +3,8 @@ package config
 import (
 	"bytes"
 	_ "embed"
+	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -21,14 +23,27 @@ import (
 var defaults []byte
 
 func init() {
-	err := Default()
+	err := ReadConfig(bytes.NewReader(defaults))
 	if err != nil {
 		panic(err)
 	}
+
+	files := GetFiles(".", ".yaml")
+	for i := range files {
+		f, err := os.Open(files[i])
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		err = ReadConfig(f)
+		if err != nil {
+			log.Println(err)
+		}
+	}
 }
 
-func Default() error {
-	yml := yaml.NewDecoder(bytes.NewReader(defaults))
+func ReadConfig(r io.Reader) error {
+	yml := yaml.NewDecoder(r)
 	yml.KnownFields(true)
 
 	err := yml.Decode(&Config)
@@ -104,6 +119,12 @@ type configT struct {
 		AdjustCellWidth  int      `yaml:"AdjustCellWidth"`
 		AdjustCellHeight int      `yaml:"AdjustCellHeight"`
 	} `yaml:"TypeFace"`
+
+	Ai struct {
+		AvailableModels map[string][]string `yaml:"AvailableModels"`
+		DefaultModels   map[string]string   `yaml:"DefaultModels"`
+		DefaultService  string              `yaml:"DefaultService"`
+	} `yaml:"AI"`
 }
 
 type OpenAgentsT []struct {
