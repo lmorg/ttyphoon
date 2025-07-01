@@ -29,10 +29,10 @@ type ElementHyperlink struct {
 }
 
 func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
-	return &ElementHyperlink{renderer: renderer, tile: tile}
+	return &ElementHyperlink{renderer: renderer, tile: tile, sgr: tile.GetTerm().GetSgr().Copy()}
 }
 
-func (el *ElementHyperlink) Generate(apc *types.ApcSlice, sgr *types.Sgr) error {
+func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 	el.url = apc.Index(0)
 	if el.url == "" {
 		return errors.New("empty url in hyperlink")
@@ -50,7 +50,7 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice, sgr *types.Sgr) error 
 	el.scheme, el.path = strings.ToLower(split[0]), split[1]
 
 	el.size = &types.XY{int32(len(el.phrase)), 1}
-	el.sgr = sgr.Copy()
+	//el.sgr = sgr.Copy()
 
 	return nil
 }

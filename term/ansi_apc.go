@@ -47,11 +47,11 @@ func (term *Term) parseApcCodes() {
 
 	switch apc.Index(0) {
 	case "begin":
-		if term._apcStack > 0 {
+		/*if term._apcStack > 0 {
 			term._apcStack++
 			break
 		}
-		term._apcStack = 1
+		term._apcStack = 1*/
 
 		switch apc.Index(1) {
 		case "csv":
@@ -61,43 +61,43 @@ func (term *Term) parseApcCodes() {
 			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK, apc)
 
 		case "output-block":
-			term._apcStack--
+			//term._apcStack--
 			term.mxapcBeginOutputBlock(apc)
 
 		default:
-			term._apcStack--
+			//term._apcStack--
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "end":
-		if term._apcStack > 1 {
+		/*if term._apcStack > 1 {
 			term._apcStack--
 			break
 		}
-		term._apcStack = 0
+		term._apcStack = 0*/
 
 		switch apc.Index(1) {
 		case "csv":
-			term.mxapcEnd(apc, true)
+			term.mxapcEnd(apc)
 
 		case "code-block":
-			term.mxapcEnd(apc, true)
+			term.mxapcEnd(apc)
 
 		case "output-block":
-			term._apcStack++
+			//term._apcStack++
 			term.mxapcEndOutputBlock(apc)
 
 		default:
-			term._apcStack++
+			//term._apcStack++
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "insert":
-		if term._apcStack > 0 {
+		/*if term._apcStack > 0 {
 			break
-		}
+		}*/
 
 		switch apc.Index(1) {
 		case "image":

@@ -81,14 +81,16 @@
     "format": "Image: {{.text}} →"
   },
   "code": {
-    "prefix": " \u001b_begin;code-block\u001b\\",
-    "suffix": "\u001b_end;code-block\u001b\\ ",
+    "prefix": "\u001b_begin;code-block\u001b\\",
+    "suffix": "\u001b_end;code-block\u001b\\",
     "color": "203",
     "background_color": "254"
   },
   "code_block": {
-    "color": "242",
     "margin": 2,
+    "block_prefix": "!```start!  ",
+    "block_suffix": "!```end!",
+    "color": "242",
     "chroma": {
       "text": {
         "color": "#2A2A2A"

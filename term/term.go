@@ -424,3 +424,7 @@ func (term *Term) GetRowId(y int32) uint64 {
 	}
 	return (*term.screen)[y].Id
 }
+
+func (term *Term) GetSgr() *types.Sgr {
+	return term.sgr
+}

@@ -5,6 +5,7 @@ type EventIgnoredCallback func()
 type Term interface {
 	Start(Pty)
 	GetSize() *XY
+	GetSgr() *Sgr
 	Resize(*XY)
 	Render() bool
 	GetCursorPosition() *XY

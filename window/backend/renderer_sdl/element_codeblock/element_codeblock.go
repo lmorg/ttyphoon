@@ -15,10 +15,9 @@ type ElementCodeBlock struct {
 	renderer types.Renderer
 	tile     types.Tile
 	raw      []rune
-	grid     [][]rune
+	grid     [][]*types.Cell
 	size     *types.XY
 	pos      *types.XY
-	sgr      *types.Sgr
 }
 
 func New(renderer types.Renderer, tile types.Tile) *ElementCodeBlock {
@@ -26,26 +25,27 @@ func New(renderer types.Renderer, tile types.Tile) *ElementCodeBlock {
 		renderer: renderer,
 		tile:     tile,
 		size:     &types.XY{X: tile.GetTerm().GetSize().X, Y: 1},
-		grid:     make([][]rune, 1),
+		grid:     make([][]*types.Cell, 1),
 	}
 }
 
-func (el *ElementCodeBlock) Generate(apc *types.ApcSlice, sgr *types.Sgr) error {
+func (el *ElementCodeBlock) Generate(apc *types.ApcSlice) error {
 	if el.size.Y == 1 {
 		el.size = &types.XY{int32(len(el.raw)), 1}
 	}
-	el.sgr = sgr.Copy()
 
 	return nil
 }
 
 func (el *ElementCodeBlock) Write(r rune) error {
-	el.raw = append(el.raw, r)
-	if r == '\n' {
+	cell := &types.Cell{Char: r, Sgr: el.tile.GetTerm().GetSgr().Copy()}
+	el.raw = append(el.raw, cell.Char)
+	if cell.Char == '\n' {
 		el.size.Y++
-		el.grid = append(el.grid, []rune{})
+		el.grid = append(el.grid, []*types.Cell{})
+	} else {
+		el.grid[len(el.grid)-1] = append(el.grid[len(el.grid)-1], cell)
 	}
-	el.grid[len(el.grid)-1] = append(el.grid[len(el.grid)-1], r)
 
 	return nil
 }
@@ -61,11 +61,7 @@ func (el *ElementCodeBlock) Draw(pos *types.XY) {
 	el.pos = pos
 	for y := range el.grid {
 		for x := range el.grid[y] {
-			cell := &types.Cell{
-				Char: el.grid[y][x],
-				Sgr:  el.sgr,
-			}
-			el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + int32(x), pos.Y + int32(y)})
+			el.renderer.PrintCell(el.tile, el.grid[y][x], &types.XY{pos.X + int32(x), pos.Y + int32(y)})
 		}
 	}
 }
@@ -75,8 +71,7 @@ func (el *ElementCodeBlock) Rune(pos *types.XY) rune {
 	if len(line) <= int(pos.X) {
 		return ' '
 	}
-
-	return line[pos.X]
+	return line[pos.X].Char
 }
 
 func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
@@ -145,7 +140,7 @@ func (el *ElementCodeBlock) MouseMotion(_ *types.XY, _ *types.XY, callback types
 	cursor.Hand()
 
 	if !config.Config.Window.HoverEffectHighlight {
-		el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
+		el.bitwise(func(bitwise *types.SgrFlag) { bitwise.Set(types.SGR_UNDERLINE) })
 	}
 }
 
@@ -154,7 +149,8 @@ func (el *ElementCodeBlock) MouseOut() {
 	cursor.Arrow()
 
 	if !config.Config.Window.HoverEffectHighlight {
-		el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+		//el.sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+		el.bitwise(func(bitwise *types.SgrFlag) { bitwise.Unset(types.SGR_UNDERLINE) })
 	}
 }
 
@@ -168,5 +164,13 @@ func (el *ElementCodeBlock) MouseHover() func() {
 			return
 		}
 		el.renderer.DrawHighlightRect(el.tile, el.pos, el.size)
+	}
+}
+
+func (el *ElementCodeBlock) bitwise(fn func(*types.SgrFlag)) {
+	for y := range el.grid {
+		for x := range el.grid[y] {
+			fn(&(el.grid[y][x].Sgr.Bitwise))
+		}
 	}
 }

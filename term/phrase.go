@@ -89,8 +89,8 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 	}
 
 	acp := types.NewApcSliceNoParse([]string{path, display})
-	el := term.renderer.NewElement(term.tile, types.ELEMENT_ID_HYPERLINK)
-	err := el.Generate(acp, row.Cells[pos[0]].Sgr)
+	el := term.renderer.NewElement(term.tile, types.ELEMENT_ID_HYPERLINK) // TODO: SGR please
+	err := el.Generate(acp)
 	if err != nil {
 		return
 	}

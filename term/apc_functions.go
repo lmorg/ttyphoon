@@ -15,21 +15,21 @@ func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice
 	term._activeElement = term.renderer.NewElement(term.tile, element)
 }
 
-func (term *Term) mxapcEnd(parameters *types.ApcSlice, crlf bool) {
+func (term *Term) mxapcEnd(parameters *types.ApcSlice) {
 	if term._activeElement == nil {
 		return
 	}
-	el := term._activeElement                 // this needs to be in this order because a
-	term._activeElement = nil                 // function inside _mxapcGenerate returns
-	term._mxapcGenerate(el, parameters, crlf) // without processing if _activeElement set
+	el := term._activeElement           // this needs to be in this order because a
+	term._activeElement = nil           // function inside _mxapcGenerate returns
+	term._mxapcGenerate(el, parameters) // without processing if _activeElement set
 }
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
-	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters, true)
+	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters)
 }
 
-func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice, crlf bool) {
-	err := el.Generate(parameters, term.sgr)
+func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
+	err := el.Generate(parameters)
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
@@ -41,7 +41,7 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice, c
 
 	elPos := new(types.XY)
 	for ; elPos.Y < size.Y; elPos.Y++ {
-		if term.curPos().X != 0 && crlf {
+		if elPos.Y > 0 {
 			term.carriageReturn()
 			term.lineFeed()
 		}

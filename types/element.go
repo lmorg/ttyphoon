@@ -1,7 +1,7 @@
 package types
 
 type Element interface {
-	Generate(*ApcSlice, *Sgr) error
+	Generate(*ApcSlice) error
 	Write(rune) error
 	Rune(*XY) rune
 	Size() *XY

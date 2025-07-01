@@ -138,7 +138,7 @@ func (el *ElementCsv) ExportCsv() {
 
 	err := w.Write(line)
 	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err))
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v", err))
 		return
 	}
 
