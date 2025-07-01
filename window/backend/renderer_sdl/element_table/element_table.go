@@ -11,15 +11,15 @@ import (
 	"github.com/lmorg/mxtty/types"
 )
 
-type srcType int
+type elementType int
 
 const (
-	_SRC_TYPE_CSV      = 1
-	_SRC_TYPE_MARKDOWN = 2
+	_ELEMENT_TYPE_CSV      = 1 + iota
+	_ELEMENT_TYPE_MARKDOWN = 2
 )
 
 type ElementTable struct {
-	srcType    srcType
+	elType     elementType
 	renderer   types.Renderer
 	tile       types.Tile
 	size       types.XY
@@ -57,18 +57,18 @@ var arrowGlyph = map[bool]rune{
 const notifyLoading = "Loading table. Line %d..."
 
 func NewCsv(renderer types.Renderer, tile types.Tile) *ElementTable {
-	return newTable(renderer, tile, _SRC_TYPE_CSV)
+	return newTable(renderer, tile, _ELEMENT_TYPE_CSV)
 }
 
 func NewMarkdown(renderer types.Renderer, tile types.Tile) *ElementTable {
-	return newTable(renderer, tile, _SRC_TYPE_MARKDOWN)
+	return newTable(renderer, tile, _ELEMENT_TYPE_MARKDOWN)
 }
 
-func newTable(renderer types.Renderer, tile types.Tile, srcType srcType) *ElementTable {
+func newTable(renderer types.Renderer, tile types.Tile, elType elementType) *ElementTable {
 	el := &ElementTable{
 		renderer: renderer,
 		tile:     tile,
-		srcType:  srcType,
+		elType:   elType,
 	}
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines), func() {})
@@ -109,10 +109,10 @@ func (el *ElementTable) Generate(apc *types.ApcSlice) error {
 	apc.Parameters(params)
 	debug.Log(params)
 
-	switch el.srcType {
-	case _SRC_TYPE_CSV:
+	switch el.elType {
+	case _ELEMENT_TYPE_CSV:
 		recs, err = fromCsv(el)
-	case _SRC_TYPE_MARKDOWN:
+	case _ELEMENT_TYPE_MARKDOWN:
 		recs, err = fromMarkdown(el, params)
 	default:
 		panic("unknown table type")

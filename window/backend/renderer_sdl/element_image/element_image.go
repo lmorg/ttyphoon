@@ -13,12 +13,21 @@ import (
 	"golang.org/x/image/bmp"
 )
 
+type elementType int
+
+const (
+	_ELEMENT_TYPE_BITMAP = 1 + iota
+	_ELEMENT_TYPE_SIXEL
+)
+
 type ElementImage struct {
+	elType     elementType
 	renderer   types.Renderer
 	tile       types.Tile
 	parameters parametersT
 	size       *types.XY
 	load       func([]byte, *types.XY) (types.Image, error)
+	escSeq     []byte // only used for sixel
 	bmp        []byte
 	image      types.Image
 }
@@ -30,8 +39,21 @@ type parametersT struct {
 	Height   int32
 }
 
-func New(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
-	return &ElementImage{renderer: renderer, tile: tile, load: loadFn}
+func NewBitmap(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
+	return newImage(renderer, tile, loadFn, _ELEMENT_TYPE_BITMAP)
+}
+
+func NewSixel(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY) (types.Image, error)) *ElementImage {
+	return newImage(renderer, tile, loadFn, _ELEMENT_TYPE_SIXEL)
+}
+
+func newImage(renderer types.Renderer, tile types.Tile, loadFn func([]byte, *types.XY) (types.Image, error), elType elementType) *ElementImage {
+	return &ElementImage{
+		renderer: renderer,
+		tile:     tile,
+		load:     loadFn,
+		elType:   elType,
+	}
 }
 
 func (el *ElementImage) Generate(apc *types.ApcSlice) error {
@@ -47,16 +69,24 @@ func (el *ElementImage) Generate(apc *types.ApcSlice) error {
 		el.size.Y = 15 // default
 	}
 
-	err := el.decode()
+	var err error
+	switch el.elType {
+	case _ELEMENT_TYPE_BITMAP:
+		err = el.fromBitmap()
+	case _ELEMENT_TYPE_SIXEL:
+		err = el.fromSixel(apc)
+	default:
+		panic("unknown image type")
+	}
 	if err != nil {
-		return fmt.Errorf("cannot decode image: %s", err.Error())
+		return fmt.Errorf("cannot decode image: %v", err)
 	}
 
 	// cache image
 
 	el.image, err = el.load(el.bmp, el.size)
 	if err != nil {
-		return fmt.Errorf("cannot cache image: %s", err.Error())
+		return fmt.Errorf("cannot cache image: %v", err)
 	}
 
 	// destroy image allocation upon garbage collection

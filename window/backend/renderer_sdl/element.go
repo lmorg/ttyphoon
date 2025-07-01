@@ -5,17 +5,16 @@ import (
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_codeblock"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_hyperlink"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_image"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_sixel"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_table"
 )
 
 func (sr *sdlRender) NewElement(tile types.Tile, id types.ElementID) types.Element {
 	switch id {
 	case types.ELEMENT_ID_IMAGE:
-		return element_image.New(sr, tile, sr.loadImage)
+		return element_image.NewBitmap(sr, tile, sr.loadImage)
 
 	case types.ELEMENT_ID_SIXEL:
-		return element_sixel.New(sr, tile, sr.loadImage)
+		return element_image.NewSixel(sr, tile, sr.loadImage)
 
 	case types.ELEMENT_ID_CSV:
 		return element_table.NewCsv(sr, tile)

@@ -1,16 +1,19 @@
-package element_sixel
+package element_image
 
 import (
 	"bytes"
 	"fmt"
 	"image"
 
+	"github.com/lmorg/mxtty/types"
 	"github.com/mattn/go-sixel"
 	"golang.org/x/image/bmp"
 )
 
-func (el *ElementImage) decode() error {
-	img, err := el.decodeSixel()
+func (el *ElementImage) fromSixel(apc *types.ApcSlice) error {
+	el.escSeq = []byte(apc.Index(0))
+
+	img, err := el.fromSixel_decodeSixel()
 	if err != nil {
 		return fmt.Errorf("unable to load image: %s", err.Error())
 	}
@@ -27,7 +30,7 @@ func (el *ElementImage) decode() error {
 	return nil
 }
 
-func (el *ElementImage) decodeSixel() (*image.Image, error) {
+func (el *ElementImage) fromSixel_decodeSixel() (*image.Image, error) {
 	reader := bytes.NewReader(el.escSeq)
 	var img image.Image
 	err := sixel.NewDecoder(reader).Decode(&img)

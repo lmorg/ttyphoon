@@ -15,19 +15,19 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-func (el *ElementImage) decode() error {
+func (el *ElementImage) fromBitmap() error {
 	var (
 		b   []byte
 		err error
 	)
 
 	if el.parameters.Filename != "" {
-		b, err = _loadImage(el.parameters.Filename)
+		b, err = fromBitmap_loadImage(el.parameters.Filename)
 	} else {
 		if el.parameters.Base64 == "" {
 			return fmt.Errorf(`no image supplied in "Base64" nor "Filename" parameters`)
 		}
-		b, err = _decodeImage(el.parameters.Base64)
+		b, err = fromBitmap_decodeImage(el.parameters.Base64)
 	}
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (el *ElementImage) decode() error {
 	return nil
 }
 
-func _loadImage(filename string) ([]byte, error) {
+func fromBitmap_loadImage(filename string) ([]byte, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("unable to open image: %s", err.Error())
@@ -59,7 +59,7 @@ func _loadImage(filename string) ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-func _decodeImage(b64 string) ([]byte, error) {
+func fromBitmap_decodeImage(b64 string) ([]byte, error) {
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode base64 string: %s", err.Error())
