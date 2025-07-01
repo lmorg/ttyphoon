@@ -139,9 +139,10 @@ func setFieldValue(v reflect.Value, name string, value string) error {
 		field.Set(reflect.ValueOf(value))
 
 	case reflect.Int.String():
+		value = strings.TrimSpace(value)
 		i, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("cannot convert field to int: %s", name)
+			return fmt.Errorf(`cannot convert field to int: "%s": "%s" (%v)`, name, value, []byte(value))
 		}
 		field.Set(reflect.ValueOf(i))
 
