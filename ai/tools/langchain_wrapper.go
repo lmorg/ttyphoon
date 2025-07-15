@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/lmorg/mcp-web-scraper/langchain"
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/debug"
@@ -24,7 +25,7 @@ type Wrapper struct {
 
 func init() {
 	agent.ToolsAdd(&Wrapper{invoker: invokeDDG})
-	//agent.ToolsAdd(&Wrapper{invoker: invokeScaper})
+	agent.ToolsAdd(&Wrapper{invoker: invokeScraper})
 }
 
 func (t *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
@@ -69,11 +70,15 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 
 /////
 
-/*func invokeScaper() (tools.Tool, bool, error) {
+/*func invokeScraper() (tools.Tool, bool, error) {
 	tool, err := scraper.New(scraper.WithParallelsNum(10), scraper.WithMaxDepth(1), scraper.WithAsync(false))
 	return tool, !_CHROME_INSTALLED, err
 }*/
 
 func invokeDDG() (tools.Tool, error) {
 	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
+}
+
+func invokeScraper() (tools.Tool, error) {
+	return langchain.NewScraper(), nil
 }

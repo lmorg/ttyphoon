@@ -1,18 +1,18 @@
 module github.com/lmorg/mxtty
 
-go 1.24.1
+go 1.24.5
 
 require (
-	github.com/JohannesKaufmann/html-to-markdown/v2 v2.3.3
 	github.com/adrg/xdg v0.5.3
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/creack/pty v1.1.24
 	github.com/forPelevin/gomoji v1.3.0
 	github.com/go-text/render v0.2.0
 	github.com/go-text/typesetting v0.3.0
+	github.com/lmorg/mcp-web-scraper v0.1.1
 	github.com/lmorg/murex v0.0.0-20250115225944-b4c429617fd4
 	github.com/lmorg/readline/v4 v4.1.2
-	github.com/mark3labs/mcp-go v0.32.0
+	github.com/mark3labs/mcp-go v0.33.0
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/mattn/go-sixel v0.0.5
 	github.com/mattn/go-sqlite3 v1.14.28
@@ -28,7 +28,6 @@ require (
 )
 
 require (
-	github.com/JohannesKaufmann/dom v0.2.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20250403032234-65de8f5d025b // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250211171154-1ae217ad3535 // indirect
@@ -53,7 +52,7 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250623112707-45752038d08d // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/chromedp/chromedp v0.13.7
+	github.com/chromedp/chromedp v0.13.7 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect

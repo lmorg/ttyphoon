@@ -14,11 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-/*
-	Eventually these will be user configurable rather than compiled time
-	options.
-*/
-
 //go:embed defaults.yaml
 var defaults []byte
 
