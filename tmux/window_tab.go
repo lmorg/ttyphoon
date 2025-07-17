@@ -27,7 +27,7 @@ func (tmux *Tmux) GetTermTiles() *types.AppWindowTerms {
 
 	aw.Active = tmux.activeWindow.ActivePane()
 
-	for _, win := range tmux.wins {
+	for win := range tmux.wins.Each() {
 		if win.closed {
 			win.close(tmux)
 			continue

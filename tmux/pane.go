@@ -216,8 +216,8 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 	}
 
-	win, ok := tmux.wins[pane.windowId]
-	if !ok {
+	win := tmux.wins.Get(pane.windowId)
+	if win == nil {
 		/*err := tmux.updateWinInfo(pane.WindowId)
 		if err != nil {
 			panic(err)

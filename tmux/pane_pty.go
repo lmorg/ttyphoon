@@ -25,8 +25,8 @@ func (p *PaneT) exit() {
 	p.Close()
 
 	p.tmux.panes.Delete(p.id)
-	win, ok := p.tmux.wins[p.windowId]
-	if ok {
+	win := p.tmux.wins.Get(p.windowId)
+	if win != nil {
 		win.panes.Delete(p.id)
 	}
 

@@ -127,8 +127,8 @@ type Tmux struct {
 	tty   *os.File
 	resp  chan *tmuxResponseT
 	_resp *tmuxResponseT
-	wins  map[string]*WindowT
-	panes paneMap //map[string]*PaneT
+	wins  windowMap //map[string]*WindowT
+	panes paneMap   //map[string]*PaneT
 
 	keys      keyBindsT
 	allowExit bool
@@ -154,7 +154,7 @@ const (
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	tmux := &Tmux{
 		resp:     make(chan *tmuxResponseT),
-		wins:     make(map[string]*WindowT),
+		wins:     newWindowMap(),
 		panes:    newPaneMap(),
 		renderer: renderer,
 	}
@@ -291,8 +291,8 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 func _respWindowRenamed(tmux *Tmux, b []byte) {
 	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
 	params := bytes.SplitN(b, []byte{' '}, 3)
-	win, ok := tmux.wins[string(params[1])]
-	if !ok {
+	win := tmux.wins.Get(string(params[1]))
+	if win == nil {
 		debug.Log("No window to rename with Id: " + string(params[1]))
 		return
 	}
