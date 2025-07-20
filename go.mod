@@ -9,7 +9,7 @@ require (
 	github.com/forPelevin/gomoji v1.3.1
 	github.com/go-text/render v0.2.0
 	github.com/go-text/typesetting v0.3.0
-	github.com/lmorg/mcp-web-scraper v0.1.1
+	github.com/lmorg/mcp-web-scraper v1.0.1
 	github.com/lmorg/murex v0.0.0-20250702220300-bb72b6fdd502
 	github.com/lmorg/readline/v4 v4.1.2
 	github.com/mark3labs/mcp-go v0.34.0
@@ -38,6 +38,8 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	github.com/JohannesKaufmann/dom v0.2.0 // indirect
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.3.3 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
@@ -50,7 +52,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect
 	github.com/charmbracelet/x/ansi v0.9.3 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
-	github.com/charmbracelet/x/exp/slice v0.0.0-20250714123521-bc8a1995e079 // indirect
+	github.com/charmbracelet/x/exp/slice v0.0.0-20250720010745-3615766e35a0 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/chromedp/chromedp v0.13.7 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
@@ -86,8 +88,8 @@ require (
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	go.starlark.net v0.0.0-20250717191651-336a4b3a6d1d // indirect
 	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/exp v0.0.0-20250717185816-542afb5b7346 // indirect
-	golang.org/x/exp/shiny v0.0.0-20250717185816-542afb5b7346 // indirect
+	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
+	golang.org/x/exp/shiny v0.0.0-20250718183923-645b1fa84792 // indirect
 	golang.org/x/mobile v0.0.0-20250711185624-d5bb5ecc55c0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/term v0.33.0 // indirect
