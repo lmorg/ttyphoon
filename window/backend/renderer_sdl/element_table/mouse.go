@@ -14,7 +14,7 @@ import (
 // In my opinion this shouldn't be needed. So it's likely a symptom of a bug
 // elsewhere. However this does seem to fix things and adds next to no overhead
 // so I'm willing to live with this kludge....for now.
-const _RENDER_OFFSETS_OFFSET = 3
+const _RENDER_OFFSETS_OFFSET = 1 //3
 
 func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
