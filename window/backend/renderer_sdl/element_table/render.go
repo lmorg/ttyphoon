@@ -29,13 +29,14 @@ func (el *ElementTable) Draw(pos *types.XY) {
 		relPos.X = pos.X + el.boundaries[el.orderByIndex-2]
 	}
 
-	cell.Sgr.Bitwise.Unset(types.SGR_INVERT)
-	cell.Sgr.Fg = types.SGR_COLOR_RED
+	cell.Sgr.Bg = types.SGR_COLOR_RED
+	cell.Sgr.Bitwise.Set(types.SGR_BOLD)
 
 	cell.Char = arrowGlyph[el.orderDesc]
 	el.renderer.PrintCell(el.tile, cell, relPos)
 
-	cell.Sgr.Fg = types.SGR_COLOR_FOREGROUND
+	cell.Sgr.Bitwise.Unset(types.SGR_BOLD)
+	cell.Sgr.Bg = types.SGR_COLOR_BACKGROUND
 
 skipOrderGlyph:
 
