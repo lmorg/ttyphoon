@@ -54,4 +54,31 @@ skipOrderGlyph:
 	}
 
 	el.renderer.DrawTable(el.tile, pos, int32(len(el.table)), el.boundaries)
+
+	el.renderScrollbars(pos.Y, types.SGR_COLOR_BACKGROUND)
+}
+
+func (el *ElementTable) renderScrollbars(posY int32, c *types.Colour) {
+	el.renderScrollbarVertical(posY, c)
+	el.renderScrollbarHorizontal(posY, c)
+}
+
+func (el *ElementTable) renderScrollbarHorizontal(posY int32, c *types.Colour) {
+	termSize := el.tile.GetTerm().GetSize()
+	topleft := &types.XY{X: 0, Y: posY + el.size.Y}
+	if topleft.Y > termSize.Y {
+		topleft.Y = termSize.Y
+	}
+
+	el.renderer.DrawGaugeH(el.tile, topleft, termSize.X-1, int(-el.renderOffset+termSize.X), int(el.boundaries[len(el.boundaries)-1]), c)
+}
+
+func (el *ElementTable) renderScrollbarVertical(posY int32, c *types.Colour) {
+	termSize := el.tile.GetTerm().GetSize()
+	topleft := &types.XY{X: termSize.X, Y: posY + 2}
+	height := el.size.Y
+	if topleft.Y+height > termSize.Y {
+		height = termSize.Y - posY
+	}
+	el.renderer.DrawGaugeV(el.tile, topleft, height-2, int(el.limitOffset+el.size.Y), int(el.lines), c)
 }

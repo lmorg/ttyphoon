@@ -202,6 +202,7 @@ func (el *ElementTable) MouseHover(curPosTile *types.XY, curPosElement *types.XY
 				&types.XY{X: start, Y: curPosTile.Y},
 				&types.XY{X: end, Y: columnHeight},
 			)
+			el.renderScrollbars(curPosTile.Y, types.SGR_COLOR_FOREGROUND)
 		}
 	}
 
@@ -210,5 +211,6 @@ func (el *ElementTable) MouseHover(curPosTile *types.XY, curPosElement *types.XY
 			&types.XY{X: start, Y: curPosTile.Y},
 			&types.XY{X: end, Y: 1},
 		)
+		el.renderScrollbars(curPosTile.Y-curPosElement.Y, types.SGR_COLOR_FOREGROUND)
 	}
 }
