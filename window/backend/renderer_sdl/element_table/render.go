@@ -5,7 +5,7 @@ import (
 )
 
 func (el *ElementTable) Draw(pos *types.XY) {
-	pos.X += el.renderOffset
+	//pos.X += el.renderOffset
 
 	cell := &types.Cell{Sgr: &types.Sgr{}}
 	cell.Sgr.Reset()
@@ -59,10 +59,10 @@ skipOrderGlyph:
 		var start, end int32
 
 		for i := range el.boundaries {
-			if el.highlight.X-el.renderOffset < el.boundaries[i] {
+			if el.highlight.X+el.renderOffset < el.boundaries[i] {
 				if i != 0 {
-					start = el.boundaries[i-1] + pos.X
-					end = int32(el.width[i]) + 2
+					start = el.boundaries[i-1] + pos.X //+ el.renderOffset
+					end = int32(el.width[i]) + 2       // + el.renderOffset
 				} else {
 					end = int32(el.width[i]) + 2 + el.renderOffset
 				}

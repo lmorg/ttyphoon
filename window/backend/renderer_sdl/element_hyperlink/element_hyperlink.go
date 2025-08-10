@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -109,7 +110,7 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 	menuItems := []types.MenuItem{
 		{
 			Title: "Copy link to clipboard",
-			Fn:    func() { copyToClipboard(el.renderer, el.schemaOrPath()) },
+			Fn:    func() { copyLinkToClipboard(el.renderer, el.schemaOrPath()) },
 			Icon:  0xf0c5,
 		},
 	}
@@ -123,11 +124,17 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 			},
 		)
 	}
-	menuItems = append(menuItems, types.MenuItem{
-		Title: "Write URL to shell",
-		Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },
-		Icon:  0xf120,
-	})
+	menuItems = append(menuItems, []types.MenuItem{
+		{
+			Title: types.MENU_SEPARATOR,
+		},
+		{
+			Title: "Write link to shell",
+			Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },
+			Icon:  0xf120,
+		},
+	}...,
+	)
 
 	if strings.HasPrefix(el.scheme, "http") {
 		term := el.tile.GetTerm()
@@ -146,6 +153,33 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 			Icon: 0xf544,
 		})
 	}
+
+	if el.scheme == "file" {
+		f, err := os.Open(el.schemaOrPath())
+		if err != nil {
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return menuItems
+		}
+		defer f.Close()
+
+		info, err := f.Stat()
+		if err != nil {
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return menuItems
+		}
+
+		if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
+			//renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
+			return menuItems
+		}
+
+		menuItems = append(menuItems, types.MenuItem{
+			Title: "Copy contents to clipboard",
+			Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
+			Icon:  0xf0c5,
+		})
+	}
+
 	return menuItems
 }
 
@@ -157,9 +191,40 @@ func (el *ElementHyperlink) schemaOrPath() string {
 	}
 }
 
-func copyToClipboard(renderer types.Renderer, url string) {
+func copyLinkToClipboard(renderer types.Renderer, url string) {
 	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
 	clipboard.Write(clipboard.FmtText, []byte(url))
+}
+
+const _CONTENTS_CLIP_MAX = 10 * 1024 * 1024 // 10 MB
+
+func copyContentsToClipboard(renderer types.Renderer, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	if info.Size() > _CONTENTS_CLIP_MAX {
+		renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
+		return
+	}
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	renderer.DisplayNotification(types.NOTIFY_INFO, "File contents copied to clipboard")
+	clipboard.Write(clipboard.FmtText, b)
 }
 
 func (el *ElementHyperlink) openWith(exe []string) {
