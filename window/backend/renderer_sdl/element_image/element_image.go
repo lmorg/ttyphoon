@@ -158,7 +158,7 @@ func (el *ElementImage) MouseOut() {
 	cursor.Arrow()
 }
 
-func (el *ElementImage) MouseHover() func() {
+func (el *ElementImage) MouseHover(_ *types.XY, _ *types.XY) func() {
 	return func() {}
 }
 

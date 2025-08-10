@@ -9,7 +9,7 @@ type Element interface {
 	MouseClick(*XY, MouseButtonT, uint8, ButtonStateT, EventIgnoredCallback)
 	MouseWheel(*XY, *XY, EventIgnoredCallback)
 	MouseMotion(*XY, *XY, EventIgnoredCallback)
-	MouseHover() func()
+	MouseHover(curPosTile *XY, curPosElement *XY) func()
 	MouseOut()
 }
 

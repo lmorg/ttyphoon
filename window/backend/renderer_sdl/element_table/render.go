@@ -5,7 +5,7 @@ import (
 )
 
 func (el *ElementTable) Draw(pos *types.XY) {
-	//pos.X += el.renderOffset
+	pos.X += el.renderOffset
 
 	cell := &types.Cell{Sgr: &types.Sgr{}}
 	cell.Sgr.Reset()
@@ -54,28 +54,4 @@ skipOrderGlyph:
 	}
 
 	el.renderer.DrawTable(el.tile, pos, int32(len(el.table)), el.boundaries)
-
-	if el.highlight != nil {
-		var start, end int32
-
-		for i := range el.boundaries {
-			if el.highlight.X+el.renderOffset < el.boundaries[i] {
-				if i != 0 {
-					start = el.boundaries[i-1] + pos.X //+ el.renderOffset
-					end = int32(el.width[i]) + 2       // + el.renderOffset
-				} else {
-					end = int32(el.width[i]) + 2 + el.renderOffset
-				}
-				if start+end > el.size.X {
-					end = el.size.X - start
-				}
-				break
-			}
-		}
-
-		el.renderer.DrawHighlightRect(el.tile,
-			&types.XY{X: start, Y: el.highlight.Y + pos.Y},
-			&types.XY{X: end, Y: 1},
-		)
-	}
 }

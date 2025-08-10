@@ -162,22 +162,53 @@ func (el *ElementTable) MouseMotion(_pos *types.XY, move *types.XY, callback typ
 	default:
 		el.renderer.StatusBarText("")
 	}
-
-	if pos.Y < 1 || int(pos.Y) > len(el.table) || pos.X > el.boundaries[len(el.boundaries)-1] {
-		el.highlight = nil
-		return
-	}
-
-	el.highlight = &types.XY{X: pos.X, Y: pos.Y}
-	el.renderer.TriggerRedraw()
 }
 
 func (el *ElementTable) MouseOut() {
 	el.renderer.StatusBarText("")
-	el.highlight = nil
-	el.renderer.TriggerRedraw()
 }
 
-func (el *ElementTable) MouseHover() func() {
-	return func() {}
+func (el *ElementTable) MouseHover(curPosTile *types.XY, curPosElement *types.XY) func() {
+	var start, end int32
+
+	for i := range el.boundaries {
+		if curPosElement.X-el.renderOffset < el.boundaries[i] {
+			if i > 0 {
+				start = el.boundaries[i-1]
+			}
+			start += el.renderOffset
+			end = int32(el.width[i]) + 2
+
+			if start < 0 {
+				end += start
+				start = 0
+			}
+
+			if start+end > el.size.X {
+				end = el.size.X - start
+			}
+			break
+		}
+	}
+
+	if curPosElement.Y == 0 {
+		termHeight := el.tile.GetTerm().GetSize().Y
+		columnHeight := el.size.Y
+		if curPosTile.Y-curPosElement.Y+el.size.Y > termHeight {
+			columnHeight = termHeight - curPosTile.Y + curPosElement.Y
+		}
+		return func() {
+			el.renderer.DrawHighlightRect(el.tile,
+				&types.XY{X: start, Y: curPosTile.Y},
+				&types.XY{X: end, Y: columnHeight},
+			)
+		}
+	}
+
+	return func() {
+		el.renderer.DrawHighlightRect(el.tile,
+			&types.XY{X: start, Y: curPosTile.Y},
+			&types.XY{X: end, Y: 1},
+		)
+	}
 }

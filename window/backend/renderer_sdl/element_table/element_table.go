@@ -44,9 +44,8 @@ type ElementTable struct {
 	orderByIndex int  // row
 	orderDesc    bool // ASC or DESC
 
-	renderOffset int32
+	renderOffset int32 // negative value
 	limitOffset  int32
-	highlight    *types.XY
 }
 
 var arrowGlyph = map[bool]rune{

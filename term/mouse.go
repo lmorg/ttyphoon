@@ -253,7 +253,7 @@ func (term *Term) MouseHover(pos *types.XY) {
 
 	if screen[pos.Y].Cells[pos.X].Element != nil {
 		//term._mousePosRenderer.Set(func() {})
-		term._mousePosRenderer.Set(screen[pos.Y].Cells[pos.X].Element.MouseHover())
+		term._mousePosRenderer.Set(screen[pos.Y].Cells[pos.X].Element.MouseHover(pos, screen[pos.Y].Cells[pos.X].GetElementXY()))
 		return
 	}
 

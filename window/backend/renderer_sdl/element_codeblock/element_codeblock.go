@@ -154,7 +154,7 @@ func (el *ElementCodeBlock) MouseOut() {
 	}
 }
 
-func (el *ElementCodeBlock) MouseHover() func() {
+func (el *ElementCodeBlock) MouseHover(_ *types.XY, _ *types.XY) func() {
 	if !config.Config.Window.HoverEffectHighlight {
 		return func() {}
 	}
