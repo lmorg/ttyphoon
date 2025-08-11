@@ -278,9 +278,10 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		menu.updateHighlight(-1)
 		return
 
-	case sdl.K_DOWN:
+	case sdl.K_DOWN, sdl.K_TAB:
 		menu.updateHighlight(1)
 		return
+
 	}
 
 	menu.readline.eventKeyPress(sr, evt)
