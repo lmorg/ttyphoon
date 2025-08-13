@@ -15,9 +15,10 @@ type Row struct {
 type RowMetaFlag uint16
 
 const (
-	META_ROW_NONE  RowMetaFlag = 0
-	META_ROW_BEGIN RowMetaFlag = 1 << iota
-	META_ROW_END
+	META_ROW_NONE        RowMetaFlag = 0
+	META_ROW_BEGIN_BLOCK RowMetaFlag = 1 << iota
+	META_ROW_END_BLOCK
+	META_ROW_FROM_LINE_OVERFLOW
 )
 
 func (f RowMetaFlag) Is(flag RowMetaFlag) bool { return f&flag != 0 }

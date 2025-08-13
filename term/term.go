@@ -176,7 +176,7 @@ func (term *Term) reset(size *types.XY) {
 	term.csiResetTabStops()
 
 	term.screen = &term._normBuf
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	term.sgr = types.SGR_DEFAULT.Copy()
 

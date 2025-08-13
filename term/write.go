@@ -38,9 +38,10 @@ func (term *Term) writeCell(r rune, el types.Element) {
 
 	if term._curPos.X >= term.size.X && !term._noAutoLineWrap {
 		term._curPos.X = 0
-		phrase := term._rowPhrase // a bit of a hack but we want to...
-		term.lineFeed()
-		term._rowPhrase = phrase // ...retain the same row for _rowPhrase
+		//phrase := term._rowPhrase // a bit of a hack but we want to...
+		term.lineFeed(_LINEFEED_LINE_OVERFLOWED)
+		//term._rowPhrase = phrase // ...retain the same row for _rowPhrase
+
 	}
 
 	cell := term.currentCell()

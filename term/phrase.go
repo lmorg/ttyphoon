@@ -19,12 +19,18 @@ func (term *Term) phraseAppend(r rune) {
 	*term._rowPhrase = append(*term._rowPhrase, r)
 }
 
-func (term *Term) phraseSetToRowPos() {
+func (term *Term) phraseSetToRowPos(flags linefeedF) {
 	if term.IsAltBuf() {
 		return
 	}
 
-	term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
+	if flags.Is(_LINEFEED_LINE_OVERFLOWED) {
+		(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_FROM_LINE_OVERFLOW)
+	} else {
+		(*term.screen)[term.curPos().Y].RowMeta.Unset(types.META_ROW_FROM_LINE_OVERFLOW)
+		term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
+	}
+
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 }

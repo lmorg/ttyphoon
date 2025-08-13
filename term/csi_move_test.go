@@ -101,7 +101,7 @@ func TestScrollingRegion(t *testing.T) {
 				Operation: func(t *testing.T, term *Term) {
 					term.setScrollingRegion([]int32{3, 4})
 					term.carriageReturn()
-					term.lineFeed()
+					term.lineFeed(_LINEFEED_CURSOR_MOVED)
 				},
 			},
 			{
@@ -110,7 +110,7 @@ func TestScrollingRegion(t *testing.T) {
 				Operation: func(t *testing.T, term *Term) {
 					term.setScrollingRegion([]int32{3, 4})
 					term.carriageReturn()
-					term.lineFeed()
+					term.lineFeed(_LINEFEED_CURSOR_MOVED)
 					term.writeCells("baz8")
 				},
 			},

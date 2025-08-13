@@ -43,7 +43,7 @@ func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
 	for ; elPos.Y < size.Y; elPos.Y++ {
 		if elPos.Y > 0 {
 			term.carriageReturn()
-			term.lineFeed()
+			term.lineFeed(_LINEFEED_CURSOR_MOVED)
 		}
 		for elPos.X = 0; elPos.X < size.X && term._curPos.X < term.size.X; elPos.X++ {
 			term.writeCell(types.SetElementXY(elPos), el)
@@ -69,7 +69,7 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 
 	apc.Parameters(&params)
 
-	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN)
+	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN_BLOCK)
 	(*term.screen)[term.curPos().Y].Block.Query = []rune(params.CmdLine)
 }
 
@@ -95,7 +95,7 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 
 	apc.Parameters(&params)
 
-	(*term.screen)[pos.Y].RowMeta.Set(types.META_ROW_END)
+	(*term.screen)[pos.Y].RowMeta.Set(types.META_ROW_END_BLOCK)
 	if params.ExitNum == 0 {
 		term._blockMeta.Meta.Set(types.META_BLOCK_OK | params.MetaFlag)
 	} else {

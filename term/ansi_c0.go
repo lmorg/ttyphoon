@@ -65,15 +65,15 @@ func (term *Term) readChar(r rune) {
 			return
 		}
 		term.phraseAppend(r)
-		term.lineFeed()
+		term.lineFeed(_LINEFEED_CURSOR_MOVED)
 
 	case 11:
 		// Ctrl+K: Vertical Tab:
-		term.lineFeed()
+		term.lineFeed(_LINEFEED_CURSOR_MOVED)
 
 	case 12:
 		// Ctrl+L: Form Feed (FF)
-		term.lineFeed()
+		term.lineFeed(_LINEFEED_CURSOR_MOVED)
 
 	case 13:
 		// Ctrl+M: Carriage Return (CR) aka \r

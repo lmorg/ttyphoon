@@ -142,7 +142,7 @@ func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hi
 	x := int(absPos.X)
 	var y int32
 	for y = absPos.Y + 1; int(y) < len(screen); y++ {
-		if screen[y].RowMeta.Is(types.META_ROW_END) {
+		if screen[y].RowMeta.Is(types.META_ROW_END_BLOCK) {
 			break
 		}
 

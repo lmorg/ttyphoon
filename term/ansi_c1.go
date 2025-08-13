@@ -179,12 +179,12 @@ func (term *Term) parseC1Codes() {
 
 	case 'D':
 		// Index (IND  is 0x84).
-		term.lineFeed()
+		term.lineFeed(_LINEFEED_CURSOR_MOVED)
 
 	case 'E':
 		// Next Line (NEL  is 0x85).
 		term.carriageReturn()
-		term.lineFeed()
+		term.lineFeed(_LINEFEED_CURSOR_MOVED)
 
 	case 'F', 'G':
 		// Start of Selected Area

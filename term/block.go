@@ -9,13 +9,13 @@ func (term *Term) getBlockStartAndEndAbs(absPos int) [2]int {
 	var begin, end int
 
 	for begin = absPos; begin >= 0; begin-- {
-		if screen[begin].RowMeta.Is(types.META_ROW_BEGIN) {
+		if screen[begin].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) {
 			break
 		}
 	}
 
 	for end = absPos; end < len(screen); end++ {
-		if screen[end].RowMeta.Is(types.META_ROW_END) {
+		if screen[end].RowMeta.Is(types.META_ROW_END_BLOCK) {
 			break
 		}
 	}

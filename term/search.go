@@ -210,7 +210,7 @@ func _searchCmdLinesBuf(buf types.Screen, ai bool) rowTuplesT {
 	var tuples rowTuplesT
 
 	for i := len(buf) - 1; i >= 0; i-- {
-		if buf[i].RowMeta.Is(types.META_ROW_BEGIN) && buf[i].Block.Meta.Is(types.META_BLOCK_AI) == ai {
+		if buf[i].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) && buf[i].Block.Meta.Is(types.META_BLOCK_AI) == ai {
 			tup := rowTupleT{
 				rowId:   buf[i].Id,
 				query:   string(buf[i].Block.Query),

@@ -8,11 +8,22 @@ import (
 
 // basic TTY operations
 
+type linefeedF int
+
+const (
+	_LINEFEED_CURSOR_MOVED    linefeedF = 0
+	_LINEFEED_LINE_OVERFLOWED linefeedF = 1
+)
+
+func (f linefeedF) Is(flag linefeedF) bool { return f&flag != 0 }
+func (f *linefeedF) Set(flag linefeedF)    { *f |= flag }
+func (f *linefeedF) Unset(flag linefeedF)  { *f &^= flag }
+
 func (term *Term) carriageReturn() {
 	term._curPos.X = 0
 }
 
-func (term *Term) lineFeed() {
+func (term *Term) lineFeed(flags linefeedF) {
 	//debug.Log(term.curPos.Y)
 	//term.phraseIsClickable((*term.screen)[term._curPos.Y])
 
@@ -22,7 +33,7 @@ func (term *Term) lineFeed() {
 		term.csiMoveCursorDownwardsExcOrigin(1)
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(flags)
 	go term.lfRedraw()
 }
 
@@ -46,7 +57,7 @@ func (term *Term) reverseLineFeed() {
 		term.csiMoveCursorUpwardsExcOrigin(1)
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 }
 
 /*
@@ -112,7 +123,7 @@ func (term *Term) csiMoveCursorUpwards(i int32) (overflow int32) {
 		term._curPos.Y = top
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }
@@ -133,7 +144,7 @@ func (term *Term) csiMoveCursorUpwardsExcOrigin(i int32) (overflow int32) {
 		term._curPos.Y = top
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }
@@ -158,7 +169,7 @@ func (term *Term) csiMoveCursorDownwards(i int32) (overflow int32) {
 		term._curPos.Y = bottom
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }
@@ -180,7 +191,7 @@ func (term *Term) csiMoveCursorDownwardsExcOrigin(i int32) (overflow int32) {
 		term._curPos.Y = bottom
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }
@@ -214,7 +225,7 @@ func (term *Term) moveCursorToRow(row int32) {
 		term._curPos.Y = row - 1
 	}
 
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 }
 
 // csiMoveCursorToPos: 0 values should default to current cursor position.
