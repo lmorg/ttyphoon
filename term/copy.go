@@ -146,17 +146,19 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 }
 
 func (term *Term) copyOutputBlock(absBlockPos [2]int) []rune {
-	var block []rune
+	var block string //[]rune
 
 	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
 		if i < len(term._scrollBuf) {
-			block = append(block, *term._scrollBuf[i].Phrase...)
+			//block = append(block, *term._scrollBuf[i].Phrase...)
+			block += term._scrollBuf[i].String()
 		} else {
-			block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
+			//block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
+			block += term._normBuf[i-len(term._scrollBuf)].String()
 		}
 	}
 
-	return block
+	return []rune(block) // TODO, is this better returning a []rune ?
 }
 
 func (term *Term) copyOutputBlockToClipboard(absBlockPos [2]int) {

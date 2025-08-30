@@ -39,13 +39,16 @@ func (as *ApcSlice) Index(i int) string {
 	return as.slice[i]
 }
 
-func (as *ApcSlice) Parameters(params any) {
+func (as *ApcSlice) Parameters(params any) error {
 	s := as.Index(2)
 
 	if s != "" {
 		err := json.Unmarshal([]byte(s), params)
 		if err != nil {
-			log.Printf("WARNING: cannot decode APC string '%s': %s", s, err.Error())
+			log.Printf("WARNING: cannot decode APC string '%s': %v", s, err)
+			return err
 		}
 	}
+
+	return nil
 }

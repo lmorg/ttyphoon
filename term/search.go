@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
 const _SEARCH_OFFSET = 3
@@ -55,8 +56,12 @@ func (term *Term) searchBuf(search string) {
 		return
 	}
 
-	fnMatch := func(phrase string) bool {
-		return rxMatch.MatchString(phrase)
+	fnMatch := func(phrase string) []int {
+		index := rxMatch.FindStringIndex(phrase)
+		if index == nil {
+			return nil
+		}
+		return []int{index[0], runewidth.StringWidth(phrase[index[0]:index[1]])}
 	}
 
 	normOk := term._searchBuf(term._normBuf, fnMatch)
@@ -85,40 +90,34 @@ func (term *Term) searchClearResults() {
 	term.updateScrollback()
 }
 
-func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) bool) bool {
+func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) []int) bool {
 	firstMatch := -1
 	for y := len(buf) - 1; y >= 0; y-- {
-		for x := len(buf[y].Cells) - 1; x >= 0; x-- {
-			if buf[y].Cells[x].Phrase == nil {
-				continue
+
+		row := buf.Phrase(y)
+		inStr := fnSearch(strings.ToLower(row))
+		if inStr != nil {
+			// add to search results
+			phrase := strings.TrimSpace(row)
+			term._searchResults = append(term._searchResults, searchResult{
+				rowId:  buf[y].Id,
+				phrase: phrase,
+			})
+
+			// highlight
+			x, z := inStr[0], 0
+			for i := range inStr[1] {
+				if x+i >= len(buf[y+z].Cells) {
+					x = 0
+					z++
+				}
+				buf[y+z].Cells[x+i].Sgr = buf[y+z].Cells[x+i].Sgr.Copy()
+				buf[y+z].Cells[x+i].Sgr.Bitwise.Set(types.SGR_HIGHLIGHT_SEARCH_RESULT)
+				term._searchHlHistory = append(term._searchHlHistory, buf[y].Cells[x+i])
 			}
 
-			s := strings.ToLower(string(*buf[y].Cells[x].Phrase))
-			if fnSearch(s) {
-				phrase := string(*buf[y].Cells[x].Phrase)
-				phrase = strings.ReplaceAll(phrase, "\n", "")
-				phrase = strings.TrimSpace(phrase)
-				term._searchResults = append(term._searchResults, searchResult{
-					rowId:  buf[y].Id,
-					phrase: phrase,
-				})
-				i, j, l := 0, 0, 0
-			highlight:
-				for ; x+i < len(buf[y].Cells); i++ {
-					buf[y+j].Cells[x+i].Sgr = buf[y+j].Cells[x+i].Sgr.Copy()
-					buf[y+j].Cells[x+i].Sgr.Bitwise.Set(types.SGR_HIGHLIGHT_SEARCH_RESULT)
-					term._searchHlHistory = append(term._searchHlHistory, buf[y+j].Cells[x+i])
-					l++
-				}
-				if l < len(*buf[y].Cells[x].Phrase) {
-					i = 0
-					j++
-					goto highlight
-				}
-
-				if firstMatch == -1 {
-					firstMatch = y
-				}
+			if firstMatch == -1 {
+				firstMatch = y
 			}
 		}
 	}

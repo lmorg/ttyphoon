@@ -3,10 +3,9 @@ package types
 import "strings"
 
 type Row struct {
-	Id      uint64
-	Cells   []*Cell
-	Hidden  Screen
-	Phrase  *[]rune
+	Id     uint64
+	Cells  []*Cell
+	Hidden Screen
 	Source  *RowSource
 	Block   *BlockMeta
 	RowMeta RowMetaFlag
@@ -52,8 +51,8 @@ func (f *BlockMetaFlag) Unset(flag BlockMetaFlag)  { *f &^= flag }
 func (r *Row) String() string {
 	slice := make([]rune, len(r.Cells))
 
-	for i, cell := range r.Cells {
-		slice[i] = cell.Rune()
+	for i := range r.Cells {
+		slice[i] = r.Cells[i].Rune()
 	}
 
 	return string(slice)
@@ -72,4 +71,27 @@ func (screen *Screen) String() string {
 	}
 
 	return strings.Join(slice, "\n")
+}
+
+func (screen *Screen) Phrase(row int) string {
+	slice := make([]rune, len((*screen)[row].Cells))
+
+	for iCells := range (*screen)[row].Cells {
+		slice[iCells] = (*screen)[row].Cells[iCells].Rune()
+	}
+
+	for iRow := row + 1; iRow < len(*screen); iRow++ {
+		if !(*screen)[iRow].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
+			break
+		}
+
+		sliceRow := make([]rune, len((*screen)[iRow].Cells))
+		for iCells := range (*screen)[iRow].Cells {
+			sliceRow[iCells] = (*screen)[iRow].Cells[iCells].Rune()
+		}
+
+		slice = append(slice, sliceRow...)
+	}
+
+	return string(slice)
 }

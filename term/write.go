@@ -56,11 +56,11 @@ func (term *Term) writeCell(r rune, el types.Element) {
 	if term._insertOrReplace == _STATE_IRM_REPLACE {
 		// add to phrase
 		if el == nil && term._activeElement == nil {
-			if term._phrase == nil {
+			/*if term._phrase == nil {
 				term._phrase = new([]rune)
 				cell.Phrase = term._phrase
 			}
-			*term._phrase = append(*term._phrase, r)
+			*term._phrase = append(*term._phrase, r)*/
 			// ^ old code, delete
 			term.phraseAppend(r)
 			// ^ new code, keep
