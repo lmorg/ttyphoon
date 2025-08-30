@@ -3,14 +3,17 @@
 
     printf "\033_insert;integration\033\\"
 
-    output_block_integration () {
+    _output_block_begin() {
         [ -n "$COMP_LINE" ] && return
         [ "$BASH_COMMAND" = "$PROMPT_COMMAND" ] && return
 
-        printf "\033_begin;output-block\033\\"
+        printf "\033_begin;output-block;${BASH_COMMAND}\033\\"
     }
 
-    PROMPT_COMMAND='printf "\033_end;output-block;{\"ExitNum\":$?}\033\\"'
+    _output_block_end() {
+        printf "\033_end;output-block;{\"ExitNum\":$?}\033\\"
+    }
 
-    trap 'output_block_integration' DEBUG
+    trap '_output_block_begin' DEBUG
+    PROMPT_COMMAND='_output_block_end'
 }
