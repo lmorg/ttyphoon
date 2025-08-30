@@ -67,7 +67,9 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		CmdLine string
 	}
 
-	apc.Parameters(&params)
+	if err := apc.Parameters(&params); err != nil {
+		params.CmdLine = apc.Index(2)
+	}
 
 	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN_BLOCK)
 	(*term.screen)[term.curPos().Y].Block.Query = []rune(params.CmdLine)
