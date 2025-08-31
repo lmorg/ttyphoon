@@ -303,7 +303,7 @@ func (term *Term) _mousePositionCodeFoldable(screen types.Screen, pos *types.XY)
 
 	height = height - absPos.Y + pos.Y
 
-	if height-pos.Y == 2 && strings.TrimSpace(string(*screen[height-1].Phrase)) == "" {
+	if height-pos.Y == 2 && strings.TrimSpace(screen.Phrase(int(height)-1)) == "" {
 		return -1
 	}
 

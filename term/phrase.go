@@ -16,15 +16,21 @@ func (term *Term) phraseAppend(r rune) {
 		return
 	}
 
-	*term._rowPhrase = append(*term._rowPhrase, r)
+	//*term._rowPhrase = append(*term._rowPhrase, r)
 }
 
-func (term *Term) phraseSetToRowPos() {
+func (term *Term) phraseSetToRowPos(flags linefeedF) {
 	if term.IsAltBuf() {
 		return
 	}
 
-	term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
+	if flags.Is(_LINEFEED_LINE_OVERFLOWED) {
+		(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_FROM_LINE_OVERFLOW)
+	} else {
+		(*term.screen)[term.curPos().Y].RowMeta.Unset(types.META_ROW_FROM_LINE_OVERFLOW)
+		//term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
+	}
+
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 }
@@ -35,7 +41,7 @@ var (
 )
 
 func (term *Term) autoHotlink(row *types.Row) {
-	phrase := string(*row.Phrase)
+	phrase := row.String() // TODO: this should be Phrase()
 	posUrl := rxUrl.FindStringIndex(phrase)
 	if posUrl != nil {
 		if posUrl[0] > int(term.size.X) || posUrl[1] > int(term.size.X) {
@@ -83,7 +89,7 @@ func _autoHotlink(term *Term, row *types.Row, pos []int, path string) {
 		return
 	}
 
-	display := string((*row.Phrase)[pos[0]:pos[1]])
+	display := row.String()[pos[0]:pos[1]]
 	if path == "" {
 		path = display
 	}

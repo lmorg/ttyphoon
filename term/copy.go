@@ -133,7 +133,8 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	for y := begin.Y; y <= end.Y; y++ {
 		var line string
 		for x := begin.X; x <= end.X; x++ {
-			line += string(screen[y].Cells[x].Rune())
+			s := string(screen[y].Cells[x].Rune())
+			line += strings.TrimRight(s, " ")
 		}
 		line = strings.TrimRight(line, " ") + "\n"
 		b = append(b, []byte(line)...)
@@ -145,22 +146,24 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	return b
 }
 
-func (term *Term) copyOutputBlock(absBlockPos [2]int) []rune {
-	var block []rune
+func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
+	var block string //[]rune
 
 	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
 		if i < len(term._scrollBuf) {
-			block = append(block, *term._scrollBuf[i].Phrase...)
+			//block = append(block, *term._scrollBuf[i].Phrase...)
+			block += term._scrollBuf[i].String()
 		} else {
-			block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
+			//block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
+			block += term._normBuf[i-len(term._scrollBuf)].String()
 		}
 	}
 
-	return block
+	return []byte(block)
 }
 
 func (term *Term) copyOutputBlockToClipboard(absBlockPos [2]int) {
-	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(absBlockPos))))
+	clipboard.Write(clipboard.FmtText, term.copyOutputBlock(absBlockPos))
 }
 
 func (term *Term) getCmdLine(absPos int) []rune {

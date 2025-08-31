@@ -70,7 +70,13 @@ func (el *ElementTable) renderScrollbarHorizontal(posY int32, c *types.Colour) {
 		topleft.Y = termSize.Y
 	}
 
-	el.renderer.DrawGaugeH(el.tile, topleft, termSize.X-1, int(-el.renderOffset+termSize.X), int(el.boundaries[len(el.boundaries)-1]), c)
+	tableWidth := el.boundaries[len(el.boundaries)-1]
+
+	if tableWidth < termSize.X {
+		return
+	}
+
+	el.renderer.DrawGaugeH(el.tile, topleft, termSize.X-1, int(-el.renderOffset+termSize.X), int(tableWidth), c)
 }
 
 func (el *ElementTable) renderScrollbarVertical(posY int32, c *types.Colour) {
@@ -80,5 +86,10 @@ func (el *ElementTable) renderScrollbarVertical(posY int32, c *types.Colour) {
 	if topleft.Y+height > termSize.Y {
 		height = termSize.Y - posY
 	}
+
+	if height >= el.lines {
+		return
+	}
+	
 	el.renderer.DrawGaugeV(el.tile, topleft, height-2, int(el.limitOffset+el.size.Y), int(el.lines), c)
 }

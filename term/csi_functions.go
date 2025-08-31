@@ -57,7 +57,7 @@ func (term *Term) csiCursorPosRestore() {
 	debug.Log(term._curPos)
 	debug.Log(term._savedCurPos)
 	term._curPos = term._savedCurPos
-	term.phraseSetToRowPos()
+	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 }
 
 func (term *Term) csiCursorHide() {

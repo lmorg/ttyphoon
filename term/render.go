@@ -114,10 +114,10 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 		if len(screen[y].Hidden) != 0 {
 			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 0, _outputBlockChromeColour(screen[y].Hidden[len(screen[y].Hidden)-1].Block.Meta), true)
 		}
-		if screen[y].RowMeta.Is(types.META_ROW_BEGIN) {
+		if screen[y].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) {
 			begin = y
 		}
-		if screen[y].RowMeta.Is(types.META_ROW_END) {
+		if screen[y].RowMeta.Is(types.META_ROW_END_BLOCK) {
 			if begin == -1 {
 				continue
 			}
