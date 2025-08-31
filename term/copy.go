@@ -146,7 +146,7 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	return b
 }
 
-func (term *Term) copyOutputBlock(absBlockPos [2]int) []rune {
+func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
 	var block string //[]rune
 
 	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
@@ -159,11 +159,11 @@ func (term *Term) copyOutputBlock(absBlockPos [2]int) []rune {
 		}
 	}
 
-	return []rune(block) // TODO, is this better returning a []rune ?
+	return []byte(block)
 }
 
 func (term *Term) copyOutputBlockToClipboard(absBlockPos [2]int) {
-	clipboard.Write(clipboard.FmtText, []byte(string(term.copyOutputBlock(absBlockPos))))
+	clipboard.Write(clipboard.FmtText, term.copyOutputBlock(absBlockPos))
 }
 
 func (term *Term) getCmdLine(absPos int) []rune {
