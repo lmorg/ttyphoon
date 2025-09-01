@@ -15,11 +15,18 @@ const (
 	_INPUT_ALPHA_BG = 255
 )
 
+type menuItemRendererT struct {
+	label         string
+	icon          rune
+	callbackIndex int
+	hidden        bool
+}
+
 type menuWidgetT struct {
 	title             string
-	options           []string
 	incIcons          bool
-	icons             []rune
+	_menuOptions      []menuItemRendererT
+	menuItems         []*menuItemRendererT
 	highlightIndex    int
 	highlightCallback types.MenuCallbackT
 	selectCallback    types.MenuCallbackT
@@ -27,8 +34,9 @@ type menuWidgetT struct {
 	mouseRect         sdl.Rect
 	pos               *types.XY
 	maxLen            int32
+	maxHeight         int
+	offset            int
 	readline          *widgetReadlineT
-	hidden            []bool
 	_hoverFn          func()
 }
 
@@ -147,32 +155,42 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		cancelCallback = func(_ int) {}
 	}
 
-	opts := make([]string, len(options))
-	copy(opts, options)
+	items := make([]menuItemRendererT, len(options))
+	incIcons := len(icons) != 0
+	if !incIcons {
+		icons = make([]rune, len(options))
+	}
 
-	//sr.footerText = "[Up/Down] Highlight  |  [Return] Choose  |  [Esc] Cancel"
+	var crop = int(sr.winCellSize.X - 10)
+	if incIcons {
+		crop -= 3
+	}
+
+	for i := range options {
+		items[i].label = runewidth.Truncate(options[i], int(crop), "…")
+		if len(items[i].label) > int(sr.menu.maxLen) {
+			sr.menu.maxLen = int32(runewidth.StringWidth(items[i].label))
+		}
+
+		items[i].callbackIndex = i
+		items[i].icon = icons[i]
+	}
+
 	sr.menu = &menuWidgetT{
 		title:             title,
-		options:           opts,
-		incIcons:          len(icons) != 0,
-		icons:             icons,
-		hidden:            make([]bool, len(options)),
+		_menuOptions:      items,
+		incIcons:          incIcons,
 		highlightCallback: highlightCallback,
 		selectCallback:    selectCallback,
 		cancelCallback:    cancelCallback,
 		highlightIndex:    _MENU_HIGHLIGHT_INIT,
 	}
 
-	var crop = int(sr.winCellSize.X - 10)
-	if sr.menu.incIcons {
-		crop -= 3
-	}
+	sr.menu.maxHeight = int(sr.winCellSize.Y - 20)
 
-	for i := range sr.menu.options {
-		sr.menu.options[i] = runewidth.Truncate(sr.menu.options[i], int(crop), "…")
-		if len(sr.menu.options[i]) > int(sr.menu.maxLen) {
-			sr.menu.maxLen = int32(runewidth.StringWidth(sr.menu.options[i]))
-		}
+	sr.menu.menuItems = make([]*menuItemRendererT, sr.menu.maxHeight)
+	for i := range sr.menu.maxHeight {
+		sr.menu.menuItems[i] = &sr.menu._menuOptions[i]
 	}
 
 	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
