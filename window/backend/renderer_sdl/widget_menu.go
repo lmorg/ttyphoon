@@ -23,21 +23,35 @@ type menuItemRendererT struct {
 }
 
 type menuWidgetT struct {
-	title             string
-	incIcons          bool
-	_menuOptions      []menuItemRendererT
-	menuItems         []*menuItemRendererT
-	highlightIndex    int
-	highlightCallback types.MenuCallbackT
-	selectCallback    types.MenuCallbackT
-	cancelCallback    types.MenuCallbackT
-	mouseRect         sdl.Rect
-	pos               *types.XY
-	maxLen            int32
-	maxHeight         int
-	offset            int
-	readline          *widgetReadlineT
-	_hoverFn          func()
+	title              string
+	incIcons           bool
+	_menuOptions       []menuItemRendererT
+	menuItems          []*menuItemRendererT
+	highlightIndex     int
+	_highlightCallback types.MenuCallbackT
+	_selectCallback    types.MenuCallbackT
+	_cancelCallback    types.MenuCallbackT
+	mouseRect          sdl.Rect
+	pos                *types.XY
+	maxLen             int32
+	maxHeight          int
+	readline           *widgetReadlineT
+	_hoverFn           func()
+}
+
+func (mw *menuWidgetT) highlightCallback(index int) {
+	i := mw.menuItems[index].callbackIndex
+	mw._highlightCallback(i)
+}
+
+func (mw *menuWidgetT) selectCallback() {
+	i := mw.menuItems[mw.highlightIndex].callbackIndex
+	mw._selectCallback(i)
+}
+
+func (mw *menuWidgetT) cancelCallback() {
+	i := mw.menuItems[mw.highlightIndex].callbackIndex
+	mw._cancelCallback(i)
 }
 
 const (
@@ -158,13 +172,13 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 	incIcons := len(icons) != 0
 
 	sr.menu = &menuWidgetT{
-		title:             title,
-		_menuOptions:      items,
-		incIcons:          incIcons,
-		highlightCallback: highlightCallback,
-		selectCallback:    selectCallback,
-		cancelCallback:    cancelCallback,
-		highlightIndex:    _MENU_HIGHLIGHT_INIT,
+		title:              title,
+		_menuOptions:       items,
+		incIcons:           incIcons,
+		_highlightCallback: highlightCallback,
+		_selectCallback:    selectCallback,
+		_cancelCallback:    cancelCallback,
+		highlightIndex:     _MENU_HIGHLIGHT_INIT,
 	}
 
 	if !incIcons {
@@ -276,20 +290,17 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 }
 
 func (menu *menuWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
-	//menu.filter += evt.GetText()
 	menu.readline.eventTextInput(sr, evt)
 }
 
 func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
-	//mod := keyEventModToCodesModifier(evt.Keysym.Mod)
-
 	switch evt.Keysym.Sym {
 	case sdl.K_RETURN, sdl.K_RETURN2, sdl.K_KP_ENTER:
 		if menu.highlightIndex < 0 {
 			return
 		}
 		sr.closeMenu()
-		menu.selectCallback(menu.highlightIndex)
+		menu.selectCallback()
 		return
 
 	case sdl.K_UP:
@@ -311,7 +322,7 @@ func (menu *menuWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEve
 	}
 	if evt.Button != 1 {
 		sr.closeMenu()
-		menu.cancelCallback(menu.highlightIndex)
+		menu.cancelCallback()
 		return
 	}
 
@@ -319,12 +330,12 @@ func (menu *menuWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEve
 	menu._mouseMotion(evt.X, evt.Y, sr)
 	if i == -1 {
 		sr.closeMenu()
-		menu.cancelCallback(menu.highlightIndex)
+		menu.cancelCallback()
 		return
 	}
 
 	sr.closeMenu()
-	menu.selectCallback(menu.highlightIndex)
+	menu.selectCallback()
 }
 
 func (menu *menuWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
@@ -621,14 +632,12 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	}
 
 	if len(sr.menu._menuOptions) > sr.menu.maxHeight {
-		rect = sdl.Rect{
+		sr.drawGaugeV(&sdl.Rect{
 			X: menuRect.X + ((sr.menu.maxLen + 1) * sr.glyphSize.X) - 2,
 			Y: menuRect.Y + (sr.glyphSize.X * 5),
 			W: sr.glyphSize.X,
 			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
-		}
-		sr.drawGaugeV(&rect, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN)
-		//sr.drawGaugeV(&rect, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN_BRIGHT)
+		}, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN)
 	}
 }
 
