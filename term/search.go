@@ -9,7 +9,7 @@ import (
 	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
-const _SEARCH_OFFSET = 3
+const _SEARCH_OFFSET = 0
 
 func (term *Term) Search() {
 	if term.IsAltBuf() {
@@ -128,12 +128,10 @@ func (term *Term) ShowSearchResults() {
 	offset := term._scrollOffset
 	sr := make([]searchResult, len(term._searchResults))
 	results := make([]string, len(term._searchResults))
-	j := len(term._searchResults) - 1
 
 	for i := range term._searchResults {
-		sr[j] = term._searchResults[i]
-		results[j] = term._searchResults[i].phrase
-		j--
+		sr[i] = term._searchResults[i]
+		results[i] = term._searchResults[i].phrase
 	}
 
 	cbHighlight := func(i int) {
