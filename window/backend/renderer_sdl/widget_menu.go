@@ -132,7 +132,7 @@ func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, icon
 
 func (sr *sdlRender) displayMenuWithIcons(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	sr.displayMenu(title, options, icons, highlightCallback, selectCallback, cancelCallback)
-	sr.menu.icons = icons
+	//sr.menu.icons = icons
 }
 
 func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
@@ -157,6 +157,17 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 
 	items := make([]menuItemRendererT, len(options))
 	incIcons := len(icons) != 0
+
+	sr.menu = &menuWidgetT{
+		title:             title,
+		_menuOptions:      items,
+		incIcons:          incIcons,
+		highlightCallback: highlightCallback,
+		selectCallback:    selectCallback,
+		cancelCallback:    cancelCallback,
+		highlightIndex:    _MENU_HIGHLIGHT_INIT,
+	}
+
 	if !incIcons {
 		icons = make([]rune, len(options))
 	}
@@ -176,17 +187,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		items[i].icon = icons[i]
 	}
 
-	sr.menu = &menuWidgetT{
-		title:             title,
-		_menuOptions:      items,
-		incIcons:          incIcons,
-		highlightCallback: highlightCallback,
-		selectCallback:    selectCallback,
-		cancelCallback:    cancelCallback,
-		highlightIndex:    _MENU_HIGHLIGHT_INIT,
-	}
-
-	sr.menu.maxHeight = int(sr.winCellSize.Y - 20)
+	sr.menu.maxHeight = min(int(sr.winCellSize.Y-10), len(options))
 
 	sr.menu.menuItems = make([]*menuItemRendererT, sr.menu.maxHeight)
 	for i := range sr.menu.maxHeight {
@@ -224,15 +225,15 @@ func (sr *sdlRender) closeMenu() {
 func (menu *menuWidgetT) updateHidden() {
 	filter := menu.readline.Value()
 	if filter == "" {
-		for i := range menu.hidden {
-			menu.hidden[i] = false
+		for i := range menu._menuOptions {
+			menu._menuOptions[i].hidden = false
 		}
 		return
 	}
 
 	filter = strings.ToLower(filter)
-	for i := range menu.options {
-		menu.hidden[i] = !strings.Contains(strings.ToLower(menu.options[i]), filter)
+	for i := range menu._menuOptions {
+		menu._menuOptions[i].hidden = !strings.Contains(strings.ToLower(menu._menuOptions[i].label), filter)
 	}
 }
 
@@ -242,7 +243,7 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 		if menu.highlightIndex < 0 {
 			menu.highlightIndex = 0
 		}
-		if menu.hidden[menu.highlightIndex] {
+		if menu.menuItems[menu.highlightIndex].hidden {
 			adjust = 1
 		}
 	}
@@ -252,22 +253,22 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 		attempts++
 		menu.highlightIndex += adjust
 
-		if menu.highlightIndex >= len(menu.options) {
+		if menu.highlightIndex >= menu.maxHeight {
 			menu.highlightIndex = 0
 		} else if menu.highlightIndex < 0 {
-			menu.highlightIndex = len(menu.options) - 1
+			menu.highlightIndex = menu.maxHeight - 1
 		}
 
-		if attempts > len(menu.options) {
+		if attempts > menu.maxHeight {
 			menu.highlightIndex = _MENU_HIGHLIGHT_HIDDEN
 			return
 		}
 
-		if menu.hidden[menu.highlightIndex] {
+		if menu.menuItems[menu.highlightIndex].hidden {
 			continue
 		}
 
-		if menu.options[menu.highlightIndex] != types.MENU_SEPARATOR {
+		if menu.menuItems[menu.highlightIndex].label != types.MENU_SEPARATOR {
 			break
 		}
 	}
@@ -344,7 +345,7 @@ func (menu *menuWidgetT) _mouseMotion(x, y int32, sr *sdlRender) {
 		return
 	}
 
-	if menu.hidden[i] {
+	if menu.menuItems[i].hidden {
 		cursor.Arrow()
 		return
 	}
@@ -365,11 +366,11 @@ func (menu *menuWidgetT) _mouseHover(x, y int32, glyphSize *types.XY) int {
 	rel := y - menu.mouseRect.Y
 	i := int(rel / glyphSize.Y)
 
-	if i >= len(menu.options) {
+	if i >= menu.maxHeight {
 		return -1
 	}
 
-	if menu.options[i] == types.MENU_SEPARATOR {
+	if menu.menuItems[i].label == types.MENU_SEPARATOR {
 		menu.highlightIndex = _MENU_HIGHLIGHT_HIDDEN
 		return -1
 	}
@@ -410,7 +411,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	if int32(len(sr.menu.title))+iconByGlyphs > maxLen {
 		maxLen = (int32(len(sr.menu.title)) + iconByGlyphs)
 	}
-	height := (sr.glyphSize.Y * int32(len(sr.menu.options))) + (_WIDGET_OUTER_MARGIN * 2) + sr.notifyIconSize.Y
+	height := (sr.glyphSize.Y * int32(sr.menu.maxHeight)) + (_WIDGET_OUTER_MARGIN * 2) + sr.notifyIconSize.Y
 	width := (sr.glyphSize.X * maxLen) + (_WIDGET_OUTER_MARGIN * 3) + optionOffset
 
 	var x, y int32
@@ -523,13 +524,13 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	curPos := sr.menu.readline.CursorPosition()
 
 	offset += _WIDGET_INNER_MARGIN
-	for i := range sr.menu.options {
-		if sr.menu.options[i] == types.MENU_SEPARATOR {
+	for i, item := range sr.menu.menuItems {
+		if item.label == types.MENU_SEPARATOR {
 			if filter != "" {
-				sr.menu.hidden[i] = true
+				item.hidden = true
 				continue
 			}
-			sr.menu.hidden[i] = false
+			item.hidden = false
 
 			// draw horizontal separator
 			sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, 96)
@@ -543,25 +544,25 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			continue
 		}
 
-		if sr.menu.hidden[i] {
+		if item.hidden {
 			continue
 		}
 
-		if sr.menu.incIcons && sr.menu.icons[i] != 0 {
+		if sr.menu.incIcons && item.icon != 0 {
 			rectIcon := sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
 				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)) + 1,
 				W: sr.glyphSize.X*2 + dropShadowOffset,
 				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
 			}
-			sr.printCellRect(sr.menu.icons[i], &types.Sgr{Fg: types.SGR_COLOR_FOREGROUND, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
+			sr.printCellRect(item.icon, &types.Sgr{Fg: types.SGR_COLOR_FOREGROUND, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 		}
 
 		pos := &types.XY{
 			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset,
 			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
 		}
-		sr.printString(sr.menu.options[i], types.SGR_DEFAULT, pos)
+		sr.printString(item.label, types.SGR_DEFAULT, pos)
 
 	}
 
