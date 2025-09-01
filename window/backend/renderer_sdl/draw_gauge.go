@@ -16,6 +16,10 @@ func (sr *sdlRender) DrawGaugeH(tile types.Tile, topLeft *types.XY, width int32,
 }
 
 func (sr *sdlRender) drawGaugeH(rect *sdl.Rect, value, max int, c *types.Colour) {
+	if value > max {
+		value = max
+	}
+
 	sr._drawHighlightRect(rect, c, c, 128, 32)
 
 	texture := sr.createRendererTexture()
@@ -42,6 +46,10 @@ func (sr *sdlRender) DrawGaugeV(tile types.Tile, topLeft *types.XY, height int32
 }
 
 func (sr *sdlRender) drawGaugeV(rect *sdl.Rect, value, max int, c *types.Colour) {
+	if value > max {
+		value = max
+	}
+
 	sr._drawHighlightRect(rect, c, c, 128, 32)
 
 	texture := sr.createRendererTexture()

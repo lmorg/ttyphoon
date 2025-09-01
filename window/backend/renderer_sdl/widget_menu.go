@@ -22,6 +22,8 @@ type menuItemRendererT struct {
 	hidden        bool
 }
 
+var _HIDDEN_PADDING_ITEM = &menuItemRendererT{hidden: true}
+
 type menuWidgetT struct {
 	title              string
 	incIcons           bool
@@ -35,23 +37,19 @@ type menuWidgetT struct {
 	pos                *types.XY
 	maxLen             int32
 	maxHeight          int
+	visible            int
 	readline           *widgetReadlineT
 	_hoverFn           func()
 }
 
-func (mw *menuWidgetT) highlightCallback(index int) {
-	i := mw.menuItems[index].callbackIndex
-	mw._highlightCallback(i)
+func (menu *menuWidgetT) highlightCallback(index int) {
+	menu._highlightCallback(menu.menuItems[index].callbackIndex)
 }
-
-func (mw *menuWidgetT) selectCallback() {
-	i := mw.menuItems[mw.highlightIndex].callbackIndex
-	mw._selectCallback(i)
+func (menu *menuWidgetT) selectCallback() {
+	menu._selectCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
 }
-
-func (mw *menuWidgetT) cancelCallback() {
-	i := mw.menuItems[mw.highlightIndex].callbackIndex
-	mw._cancelCallback(i)
+func (menu *menuWidgetT) cancelCallback() {
+	menu._cancelCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
 }
 
 const (
@@ -201,11 +199,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 	}
 
 	sr.menu.maxHeight = min(int(sr.winCellSize.Y-10), len(options))
-
-	sr.menu.menuItems = make([]*menuItemRendererT, sr.menu.maxHeight)
-	for i := range sr.menu.maxHeight {
-		sr.menu.menuItems[i] = &sr.menu._menuOptions[i]
-	}
+	sr.menu.showAll()
 
 	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
 
@@ -235,18 +229,48 @@ func (sr *sdlRender) closeMenu() {
 	sr.menu = nil
 }
 
+func (menu *menuWidgetT) showAll() {
+	menu.menuItems = make([]*menuItemRendererT, menu.maxHeight)
+	menu.visible = len(menu._menuOptions)
+	for i := range menu.maxHeight {
+		menu.menuItems[i] = &menu._menuOptions[i]
+	}
+}
+
 func (menu *menuWidgetT) updateHidden() {
 	filter := menu.readline.Value()
 	if filter == "" {
 		for i := range menu._menuOptions {
 			menu._menuOptions[i].hidden = false
 		}
+		menu.showAll()
 		return
 	}
 
 	filter = strings.ToLower(filter)
+
+	menu.visible = 0
+	var j int
+	if len(menu._menuOptions) <= menu.maxHeight {
+		j = menu.maxHeight
+	} else {
+		menu.menuItems = make([]*menuItemRendererT, menu.maxHeight)
+	}
+
 	for i := range menu._menuOptions {
 		menu._menuOptions[i].hidden = !strings.Contains(strings.ToLower(menu._menuOptions[i].label), filter)
+
+		if !menu._menuOptions[i].hidden {
+			menu.visible++
+			if j < menu.maxHeight {
+				menu.menuItems[j] = &menu._menuOptions[i]
+				j++
+			}
+		}
+	}
+
+	for ; j < menu.maxHeight; j++ {
+		menu.menuItems[j] = _HIDDEN_PADDING_ITEM
 	}
 }
 
@@ -536,11 +560,11 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	offset += _WIDGET_INNER_MARGIN
 	for i, item := range sr.menu.menuItems {
 		if item.label == types.MENU_SEPARATOR {
-			if filter != "" {
+			/*if filter != "" {
 				item.hidden = true
 				continue
 			}
-			item.hidden = false
+			item.hidden = false*/
 
 			// draw horizontal separator
 			sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, 96)
@@ -563,7 +587,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
 				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)) + 1,
 				W: sr.glyphSize.X*2 + dropShadowOffset,
-				H: sr.glyphSize.Y + dropShadowOffset, // * 2,
+				H: sr.glyphSize.Y + dropShadowOffset,
 			}
 			sr.printCellRect(item.icon, &types.Sgr{Fg: types.SGR_COLOR_FOREGROUND, Bg: types.SGR_COLOR_BACKGROUND, Bitwise: types.SGR_WIDE_CHAR | types.SGR_SPECIAL_FONT_AWESOME}, &rectIcon)
 		}
@@ -637,7 +661,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			Y: menuRect.Y + (sr.glyphSize.X * 5),
 			W: sr.glyphSize.X,
 			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
-		}, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN)
+		}, sr.menu.maxHeight, sr.menu.visible, types.SGR_COLOR_GREEN)
 	}
 }
 
