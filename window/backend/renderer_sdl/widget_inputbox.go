@@ -10,6 +10,11 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const (
+	_INPUT_ALPHA    = 255
+	_INPUT_ALPHA_BG = 255
+)
+
 type inputBoxWidgetT struct {
 	title     string
 	_ok       types.InputBoxCallbackT
