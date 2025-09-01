@@ -132,7 +132,6 @@ func (sr *sdlRender) DisplayMenuUnderCursor(title string, options []string, icon
 
 func (sr *sdlRender) displayMenuWithIcons(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	sr.displayMenu(title, options, icons, highlightCallback, selectCallback, cancelCallback)
-	//sr.menu.icons = icons
 }
 
 func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
@@ -611,17 +610,26 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		})
 	}
 
-	if sr.menu.highlightIndex == _MENU_HIGHLIGHT_HIDDEN {
-		return
+	if sr.menu.highlightIndex != _MENU_HIGHLIGHT_HIDDEN {
+		rect = sdl.Rect{
+			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN,
+			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(sr.menu.highlightIndex)),
+			W: width - _WIDGET_OUTER_MARGIN,
+			H: sr.glyphSize.Y,
+		}
+		sr._drawHighlightRect(&rect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaBorder-20)
 	}
 
-	rect = sdl.Rect{
-		X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN,
-		Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(sr.menu.highlightIndex)),
-		W: width - _WIDGET_OUTER_MARGIN,
-		H: sr.glyphSize.Y,
+	if len(sr.menu._menuOptions) > sr.menu.maxHeight {
+		rect = sdl.Rect{
+			X: menuRect.X + ((sr.menu.maxLen + 1) * sr.glyphSize.X) - 2,
+			Y: menuRect.Y + (sr.glyphSize.X * 5),
+			W: sr.glyphSize.X,
+			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
+		}
+		sr.drawGaugeV(&rect, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN)
+		//sr.drawGaugeV(&rect, sr.menu.maxHeight, len(sr.menu._menuOptions), types.SGR_COLOR_GREEN_BRIGHT)
 	}
-	sr._drawHighlightRect(&rect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaBorder-20)
 }
 
 func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRender, surface *sdl.Surface, windowRect, rect *sdl.Rect) {
