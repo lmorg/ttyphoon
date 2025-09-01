@@ -2,6 +2,7 @@ package rendersdl
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/runewidth"
@@ -40,6 +41,7 @@ type menuWidgetT struct {
 	visible            int
 	readline           *widgetReadlineT
 	_hoverFn           func()
+	renderMutex        sync.Mutex
 }
 
 func (menu *menuWidgetT) highlightCallback(index int) {
@@ -238,6 +240,9 @@ func (menu *menuWidgetT) showAll() {
 }
 
 func (menu *menuWidgetT) updateHidden() {
+	menu.renderMutex.Lock()
+	defer menu.renderMutex.Unlock()
+
 	filter := menu.readline.Value()
 	if filter == "" {
 		for i := range menu._menuOptions {
@@ -413,6 +418,8 @@ func (menu *menuWidgetT) _mouseHover(x, y int32, glyphSize *types.XY) int {
 }
 
 func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
+	sr.menu.renderMutex.Lock()
+	defer sr.menu.renderMutex.Unlock()
 	if sr.menu.highlightIndex < 0 {
 		sr.menu._hoverFn = nil
 	}
@@ -560,12 +567,6 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	offset += _WIDGET_INNER_MARGIN
 	for i, item := range sr.menu.menuItems {
 		if item.label == types.MENU_SEPARATOR {
-			/*if filter != "" {
-				item.hidden = true
-				continue
-			}
-			item.hidden = false*/
-
 			// draw horizontal separator
 			sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, 96)
 			rect = sdl.Rect{
@@ -661,7 +662,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			Y: menuRect.Y + (sr.glyphSize.X * 5),
 			W: sr.glyphSize.X,
 			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
-		}, sr.menu.maxHeight, sr.menu.visible, types.SGR_COLOR_GREEN)
+		}, min(sr.menu.maxHeight, sr.menu.visible), sr.menu.visible, types.SGR_COLOR_GREEN)
 	}
 }
 
