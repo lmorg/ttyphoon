@@ -11,11 +11,6 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const (
-	_INPUT_ALPHA    = 255
-	_INPUT_ALPHA_BG = 255
-)
-
 type menuItemRendererT struct {
 	label         string
 	icon          rune
@@ -42,6 +37,7 @@ type menuWidgetT struct {
 	readline           *widgetReadlineT
 	_hoverFn           func()
 	renderMutex        sync.Mutex
+	opacity            byte
 }
 
 func (menu *menuWidgetT) highlightCallback(index int) {
@@ -179,6 +175,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 		_selectCallback:    selectCallback,
 		_cancelCallback:    cancelCallback,
 		highlightIndex:     _MENU_HIGHLIGHT_INIT,
+		opacity:            _INPUT_ALPHA,
 	}
 
 	if !incIcons {
@@ -203,7 +200,7 @@ func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, h
 	sr.menu.maxHeight = min(int(sr.winCellSize.Y-10), len(options))
 	sr.menu.showAll()
 
-	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode)")
+	sr.menu.readline = sr.NewReadline(sr.menu.maxLen, "", "", "[Up/Down] Highlight  |  [Return] Choose  |  [Ctrl+c] Cancel  |  [Esc] Vim Mode  | [F4] Translucent")
 
 	sr.menu.readline.Hook = func() {
 		sr.menu.updateHidden()
@@ -339,6 +336,13 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	case sdl.K_DOWN, sdl.K_TAB:
 		menu.updateHighlight(1)
 		return
+
+	case sdl.K_F4:
+		if menu.opacity == _INPUT_ALPHA {
+			menu.opacity = 32
+		} else {
+			menu.opacity = _INPUT_ALPHA
+		}
 
 	}
 
@@ -501,7 +505,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		W: menuRect.W - 2,
 		H: menuRect.H - 2,
 	}
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, 255)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, sr.menu.opacity)
 	_ = sr.renderer.FillRect(&rect)
 	_ = sr.renderer.SetDrawColor(notifyColour[types.NOTIFY_QUESTION].Red, notifyColour[types.NOTIFY_QUESTION].Green, notifyColour[types.NOTIFY_QUESTION].Blue, notifyColour[types.NOTIFY_QUESTION].Alpha)
 	_ = sr.renderer.FillRect(&rect)
@@ -519,11 +523,11 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	// draw border
 	offset := sr.notifyIconSize.Y
 	width = menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, _INPUT_ALPHA)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, sr.menu.opacity)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN - 1,
 		Y: menuRect.Y + offset - 1,
-		W: width + 2, // menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN + 2,
+		W: width + 2,
 		H: menuRect.H - offset - _WIDGET_OUTER_MARGIN + 2,
 	}
 	sr.renderer.DrawRect(&rect)
@@ -531,17 +535,17 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN,
 		Y: menuRect.Y + offset,
-		W: width, //menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN,
+		W: width,
 		H: menuRect.H - offset - _WIDGET_OUTER_MARGIN,
 	}
 	sr.renderer.DrawRect(&rect)
 
 	// fill background
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, _INPUT_ALPHA_BG)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, sr.menu.opacity)
 	rect = sdl.Rect{
 		X: menuRect.X + _WIDGET_OUTER_MARGIN + 1,
 		Y: menuRect.Y + offset + 1,
-		W: width - 2, //menuRect.W - _WIDGET_OUTER_MARGIN - _WIDGET_OUTER_MARGIN - 2,
+		W: width - 2,
 		H: menuRect.H - offset - _WIDGET_OUTER_MARGIN - 2,
 	}
 	sr.renderer.FillRect(&rect)
@@ -583,7 +587,8 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			continue
 		}
 
-		if sr.menu.incIcons && item.icon != 0 {
+		if sr.menu.incIcons && item.icon != 0 &&
+			(sr.menu.opacity == _INPUT_ALPHA || sr.menu.highlightIndex == i) {
 			rectIcon := sdl.Rect{
 				X: menuRect.X + _WIDGET_OUTER_MARGIN + (_WIDGET_INNER_MARGIN * 2),
 				Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)) + 1,
@@ -597,39 +602,51 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			X: menuRect.X + _WIDGET_OUTER_MARGIN + _WIDGET_INNER_MARGIN + optionOffset,
 			Y: menuRect.Y + offset + (sr.glyphSize.Y * int32(i)),
 		}
-		sr.printString(item.label, types.SGR_DEFAULT, pos)
-
+		if sr.menu.opacity == _INPUT_ALPHA || sr.menu.highlightIndex == i {
+			sr.printString(item.label, types.SGR_DEFAULT, pos)
+		}
 	}
 
-	if surface, ok := sr.notifyIcon[types.NOTIFY_QUESTION].Asset().(*sdl.Surface); ok {
-		srcRect := &sdl.Rect{
-			X: 0,
-			Y: 0,
-			W: surface.W,
-			H: surface.H,
-		}
+	if sr.menu.opacity == _INPUT_ALPHA {
+		if surface, ok := sr.notifyIcon[types.NOTIFY_QUESTION].Asset().(*sdl.Surface); ok {
+			srcRect := &sdl.Rect{
+				X: 0,
+				Y: 0,
+				W: surface.W,
+				H: surface.H,
+			}
 
-		dstRect := &sdl.Rect{
-			X: menuRect.X,
-			Y: menuRect.Y,
-			W: sr.notifyIconSize.X,
-			H: sr.notifyIconSize.X,
-		}
+			dstRect := &sdl.Rect{
+				X: menuRect.X,
+				Y: menuRect.Y,
+				W: sr.notifyIconSize.X,
+				H: sr.notifyIconSize.X,
+			}
 
-		texture, err := sr.renderer.CreateTextureFromSurface(surface)
-		if err != nil {
-			panic(err) // TODO: don't panic!
-		}
-		defer texture.Destroy()
+			texture, err := sr.renderer.CreateTextureFromSurface(surface)
+			if err != nil {
+				panic(err) // TODO: don't panic!
+			}
+			defer texture.Destroy()
 
-		err = sr.renderer.Copy(texture, srcRect, dstRect)
-		if err != nil {
-			panic(err) // TODO: don't panic!
+			err = sr.renderer.Copy(texture, srcRect, dstRect)
+			if err != nil {
+				panic(err) // TODO: don't panic!
+			}
 		}
 	}
 
 	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
+
+	if len(sr.menu._menuOptions) > sr.menu.maxHeight && sr.menu.opacity == _INPUT_ALPHA {
+		sr.drawGaugeV(&sdl.Rect{
+			X: menuRect.X + ((sr.menu.maxLen + 1) * sr.glyphSize.X) - 2,
+			Y: menuRect.Y + (sr.glyphSize.X * 5),
+			W: sr.glyphSize.X,
+			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
+		}, min(sr.menu.maxHeight, sr.menu.visible), sr.menu.visible, types.SGR_COLOR_GREEN)
+	}
 
 	if filter != "" {
 		surface, err := sdl.CreateRGBSurfaceWithFormat(0, windowRect.W, windowRect.H, 32, uint32(sdl.PIXELFORMAT_RGBA32))
@@ -655,15 +672,6 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 		sr._drawHighlightRect(&rect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaBorder-20)
 	}
-
-	if len(sr.menu._menuOptions) > sr.menu.maxHeight {
-		sr.drawGaugeV(&sdl.Rect{
-			X: menuRect.X + ((sr.menu.maxLen + 1) * sr.glyphSize.X) - 2,
-			Y: menuRect.Y + (sr.glyphSize.X * 5),
-			W: sr.glyphSize.X,
-			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
-		}, min(sr.menu.maxHeight, sr.menu.visible), sr.menu.visible, types.SGR_COLOR_GREEN)
-	}
 }
 
 func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRender, surface *sdl.Surface, windowRect, rect *sdl.Rect) {
@@ -673,7 +681,7 @@ func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRen
 	}
 
 	// draw border
-	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, _INPUT_ALPHA)
+	_ = sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, sr.menu.opacity)
 	borderRect := sdl.Rect{
 		X: rect.X - 1,
 		Y: rect.Y - 1,
@@ -690,7 +698,7 @@ func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRen
 	sr.renderer.DrawRect(&borderRect)
 
 	// fill background
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, _INPUT_ALPHA_BG)
+	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, sr.menu.opacity)
 	borderRect = sdl.Rect{
 		X: rect.X + 1,
 		Y: rect.Y + 1,
