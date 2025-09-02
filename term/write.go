@@ -62,7 +62,7 @@ func (term *Term) writeCell(r rune, el types.Element) {
 			}
 			*term._phrase = append(*term._phrase, r)*/
 			// ^ old code, delete
-			term.phraseAppend(r)
+			//term.phraseAppend(r)
 			// ^ new code, keep
 		}
 

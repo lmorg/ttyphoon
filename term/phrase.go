@@ -11,18 +11,18 @@ import (
 	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
-func (term *Term) phraseAppend(r rune) {
+/*func (term *Term) phraseAppend(r rune) {
 	if term.IsAltBuf() {
 		return
 	}
 
 	//*term._rowPhrase = append(*term._rowPhrase, r)
-}
+}*/
 
 func (term *Term) phraseSetToRowPos(flags linefeedF) {
-	if term.IsAltBuf() {
+	/*if term.IsAltBuf() {
 		return
-	}
+	}*/
 
 	if flags.Is(_LINEFEED_LINE_OVERFLOWED) {
 		(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_FROM_LINE_OVERFLOW)
