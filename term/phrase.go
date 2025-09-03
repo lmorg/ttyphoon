@@ -7,7 +7,6 @@ import (
 	"regexp"
 
 	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/runewidth"
 )
@@ -19,11 +18,8 @@ func (term *Term) phraseSetToRowPos(flags linefeedF) {
 
 	if flags.Is(_LINEFEED_LINE_OVERFLOWED) {
 		(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_FROM_LINE_OVERFLOW)
-		debug.Log("overflow")
 	} else {
 		(*term.screen)[term.curPos().Y].RowMeta.Unset(types.META_ROW_FROM_LINE_OVERFLOW)
-		debug.Log("new line")
-		//term._rowPhrase = (*term.screen)[term.curPos().Y].Phrase
 	}
 
 	(*term.screen)[term.curPos().Y].Source = term._rowSource

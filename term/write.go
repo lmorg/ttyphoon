@@ -38,9 +38,7 @@ func (term *Term) writeCell(r rune, el types.Element) {
 
 	if term._curPos.X >= term.size.X && !term._noAutoLineWrap {
 		term._curPos.X = 0
-		//phrase := term._rowPhrase // a bit of a hack but we want to...
 		term.lineFeed(_LINEFEED_LINE_OVERFLOWED)
-		//term._rowPhrase = phrase // ...retain the same row for _rowPhrase
 
 	}
 
@@ -54,18 +52,6 @@ func (term *Term) writeCell(r rune, el types.Element) {
 	}*/
 
 	if term._insertOrReplace == _STATE_IRM_REPLACE {
-		// add to phrase
-		if el == nil && term._activeElement == nil {
-			/*if term._phrase == nil {
-				term._phrase = new([]rune)
-				cell.Phrase = term._phrase
-			}
-			*term._phrase = append(*term._phrase, r)*/
-			// ^ old code, delete
-			//term.phraseAppend(r)
-			// ^ new code, keep
-		}
-
 		if wide {
 			cell.Sgr.Bitwise.Set(types.SGR_WIDE_CHAR)
 			term._curPos.X += 2

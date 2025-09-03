@@ -25,8 +25,7 @@ func (term *Term) carriageReturn() {
 
 func (term *Term) lineFeed(flags linefeedF) {
 	//debug.Log(term.curPos.Y)
-	//term.phraseIsClickable((*term.screen)[term._curPos.Y])
-	debug.Log(term.screen.Phrase(int(term.curPos().Y)))
+	//debug.Log(term.screen.Phrase(int(term.curPos().Y)))
 
 	if term.csiMoveCursorDownwardsExcOrigin(1) != 0 {
 		term.appendScrollBuf(1)
