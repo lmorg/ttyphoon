@@ -147,6 +147,7 @@ func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hi
 		}
 
 		phrase := screen.Phrase(int(y))
+		debug.Log(phrase)
 		if x >= len(phrase) {
 			if strings.TrimSpace(phrase) == "" {
 				continue
@@ -161,7 +162,7 @@ func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hi
 		break
 	}
 
-	if absPos.Y == y-1 {
+	if absPos.Y == y {
 		return 0, errors.New("nothing to fold")
 	}
 

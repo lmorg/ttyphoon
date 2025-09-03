@@ -26,6 +26,7 @@ func (term *Term) carriageReturn() {
 func (term *Term) lineFeed(flags linefeedF) {
 	//debug.Log(term.curPos.Y)
 	//term.phraseIsClickable((*term.screen)[term._curPos.Y])
+	debug.Log(term.screen.Phrase(int(term.curPos().Y)))
 
 	if term.csiMoveCursorDownwardsExcOrigin(1) != 0 {
 		term.appendScrollBuf(1)
@@ -128,6 +129,8 @@ func (term *Term) csiMoveCursorUpwards(i int32) (overflow int32) {
 	return
 }
 
+// csiMoveCursorUpwardsExcOrigin doesn't call phraseSetToRowPos(), thus that
+// method will need to called manually.
 func (term *Term) csiMoveCursorUpwardsExcOrigin(i int32) (overflow int32) {
 	debug.Log(i)
 
@@ -144,7 +147,7 @@ func (term *Term) csiMoveCursorUpwardsExcOrigin(i int32) (overflow int32) {
 		term._curPos.Y = top
 	}
 
-	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
+	//term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }
@@ -174,6 +177,8 @@ func (term *Term) csiMoveCursorDownwards(i int32) (overflow int32) {
 	return
 }
 
+// csiMoveCursorDownwardsExcOrigin doesn't call phraseSetToRowPos(), thus that
+// method will need to called manually.
 func (term *Term) csiMoveCursorDownwardsExcOrigin(i int32) (overflow int32) {
 	debug.Log(i)
 
@@ -191,7 +196,7 @@ func (term *Term) csiMoveCursorDownwardsExcOrigin(i int32) (overflow int32) {
 		term._curPos.Y = bottom
 	}
 
-	term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
+	//term.phraseSetToRowPos(_LINEFEED_CURSOR_MOVED)
 
 	return
 }

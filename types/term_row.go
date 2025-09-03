@@ -3,9 +3,9 @@ package types
 import "strings"
 
 type Row struct {
-	Id     uint64
-	Cells  []*Cell
-	Hidden Screen
+	Id      uint64
+	Cells   []*Cell
+	Hidden  Screen
 	Source  *RowSource
 	Block   *BlockMeta
 	RowMeta RowMetaFlag
@@ -74,6 +74,10 @@ func (screen *Screen) String() string {
 }
 
 func (screen *Screen) Phrase(row int) string {
+	if (*screen)[row].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
+		return ""
+	}
+
 	slice := make([]rune, len((*screen)[row].Cells))
 
 	for iCells := range (*screen)[row].Cells {
