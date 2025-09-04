@@ -150,17 +150,22 @@ func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
 	var (
 		block  string
 		phrase string
-		ok     bool
+		err    error
 	)
 
 	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
 		if i < len(term._scrollBuf) {
-			phrase, ok = term._scrollBuf.Phrase(i)
+			phrase, err = term._scrollBuf.Phrase(i)
 		} else {
-			phrase, ok = term._normBuf.Phrase(i - len(term._scrollBuf))
+			phrase, err = term._normBuf.Phrase(i - len(term._scrollBuf))
 		}
-		if ok {
+
+		switch err {
+		case nil:
 			block += phrase + "\n"
+
+		case types.ERR_PHRASE_INVALID_ROW:
+			return []byte(block)
 		}
 	}
 

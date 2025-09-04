@@ -1,6 +1,9 @@
 package types
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 type Row struct {
 	Id      uint64
@@ -18,6 +21,7 @@ const (
 	META_ROW_BEGIN_BLOCK RowMetaFlag = 1 << iota
 	META_ROW_END_BLOCK
 	META_ROW_FROM_LINE_OVERFLOW
+	META_ROW_AUTO_HOTLINKED
 )
 
 func (f RowMetaFlag) Is(flag RowMetaFlag) bool { return f&flag != 0 }
@@ -73,9 +77,17 @@ func (screen *Screen) String() string {
 	return strings.Join(slice, "\n")
 }
 
-func (screen *Screen) Phrase(row int) (string, bool) {
+var (
+	ERR_PHRASE_OVERFLOW_ROW = errors.New("overflow row")
+	ERR_PHRASE_INVALID_ROW  = errors.New("index does not exist in slice")
+)
+
+func (screen *Screen) Phrase(row int) (string, error) {
+	if row >= len(*screen) {
+		return "", ERR_PHRASE_INVALID_ROW
+	}
 	if (*screen)[row].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
-		return "", false
+		return "", ERR_PHRASE_OVERFLOW_ROW
 	}
 
 	slice := make([]rune, len((*screen)[row].Cells))
@@ -97,5 +109,5 @@ func (screen *Screen) Phrase(row int) (string, bool) {
 		slice = append(slice, sliceRow...)
 	}
 
-	return strings.TrimRight(string(slice), " "), true
+	return strings.TrimRight(string(slice), " "), nil
 }
