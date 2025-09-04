@@ -73,9 +73,9 @@ func (screen *Screen) String() string {
 	return strings.Join(slice, "\n")
 }
 
-func (screen *Screen) Phrase(row int) string {
+func (screen *Screen) Phrase(row int) (string, bool) {
 	if (*screen)[row].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
-		return ""
+		return "", false
 	}
 
 	slice := make([]rune, len((*screen)[row].Cells))
@@ -97,5 +97,5 @@ func (screen *Screen) Phrase(row int) string {
 		slice = append(slice, sliceRow...)
 	}
 
-	return string(slice)
+	return strings.TrimRight(string(slice), " "), true
 }

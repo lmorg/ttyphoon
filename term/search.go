@@ -94,7 +94,7 @@ func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) []int) bool
 	firstMatch := -1
 	for y := len(buf) - 1; y >= 0; y-- {
 
-		row := buf.Phrase(y)
+		row, _ := buf.Phrase(y)
 		inStr := fnSearch(strings.ToLower(row))
 		if inStr != nil {
 			// add to search results

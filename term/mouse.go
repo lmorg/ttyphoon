@@ -2,7 +2,6 @@ package virtualterm
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
@@ -306,7 +305,8 @@ func (term *Term) _mousePositionCodeFoldable(screen types.Screen, pos *types.XY)
 
 	height = height - absPos.Y + pos.Y
 
-	if height-pos.Y == 2 && strings.TrimSpace(screen.Phrase(int(height)-1)) == "" { // TODO: i don't remember what this does
+	phrase, _ := screen.Phrase(int(height) - 1)
+	if height-pos.Y == 2 && phrase == "" { // TODO: i don't remember what this does
 		return -1
 	}
 

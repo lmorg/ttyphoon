@@ -146,7 +146,7 @@ func outputBlockFoldIndent(term *Term, screen types.Screen, absPos *types.XY, hi
 			break
 		}
 
-		phrase := screen.Phrase(int(y))
+		phrase, _ := screen.Phrase(int(y))
 		debug.Log(phrase)
 		if x >= len(phrase) {
 			if strings.TrimSpace(phrase) == "" {
