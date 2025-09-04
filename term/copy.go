@@ -147,15 +147,20 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 }
 
 func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
-	var block string //[]rune
+	var (
+		block  string
+		phrase string
+		ok     bool
+	)
 
 	for i := absBlockPos[0]; i <= absBlockPos[1]; i++ {
 		if i < len(term._scrollBuf) {
-			//block = append(block, *term._scrollBuf[i].Phrase...)
-			block += term._scrollBuf[i].String()
+			phrase, ok = term._scrollBuf.Phrase(i)
 		} else {
-			//block = append(block, *term._normBuf[i-len(term._scrollBuf)].Phrase...)
-			block += term._normBuf[i-len(term._scrollBuf)].String()
+			phrase, ok = term._normBuf.Phrase(i - len(term._scrollBuf))
+		}
+		if ok {
+			block += phrase + "\n"
 		}
 	}
 

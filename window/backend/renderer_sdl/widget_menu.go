@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"log"
 	"strings"
 	"sync"
 
@@ -125,6 +126,10 @@ func (cm *contextMenuT) DisplayMenu(title string) {
 func (cm *contextMenuT) MenuItems() []types.MenuItem { return cm.items }
 
 func (sr *sdlRender) AddToContextMenu(menuItems ...types.MenuItem) {
+	if sr.contextMenu == nil {
+		log.Println("nil context menu")
+		return
+	}
 	sr.contextMenu.Append(menuItems...)
 }
 

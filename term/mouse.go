@@ -2,7 +2,6 @@ package virtualterm
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/lmorg/mxtty/ai"
 	"github.com/lmorg/mxtty/ai/agent"
@@ -280,15 +279,18 @@ func (term *Term) _mousePositionCodeFoldable(screen types.Screen, pos *types.XY)
 	}
 
 	if screen[pos.Y].Cells[pos.X].Char == ' ' {
+		// indent must be after a printable character...
 		return -1
 	}
 
 	if pos.X > 0 && screen[pos.Y].Cells[pos.X-1].Char != ' ' {
+		// ...but it doesn't have the be the first character...
 		pos.X--
 	}
 
 	for x := pos.X - 1; x >= 0; x-- {
 		if screen[pos.Y].Cells[x].Char != ' ' {
+			// ...however the it cannot be too far into the line...
 			return -1
 		}
 	}
@@ -303,7 +305,8 @@ func (term *Term) _mousePositionCodeFoldable(screen types.Screen, pos *types.XY)
 
 	height = height - absPos.Y + pos.Y
 
-	if height-pos.Y == 2 && strings.TrimSpace(screen.Phrase(int(height)-1)) == "" {
+	phrase, _ := screen.Phrase(int(height) - 1)
+	if height-pos.Y == 2 && phrase == "" { // TODO: i don't remember what this does
 		return -1
 	}
 
