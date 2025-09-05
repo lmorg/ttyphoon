@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	rxUrl  = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=#a-zA-Z0-9]+`)
-	rxFile = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+(\.[a-zA-Z0-9]+|/)`)
+	rxUrl     = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=#a-zA-Z0-9]+`)
+	rxFile    = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+`)
+	rxSrcLine = regexp.MustCompile(`:[0-9]+$`)
 )
 
 func (term *Term) autoHyperlink(rows types.Screen) {
@@ -55,7 +56,7 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 
 	for i := range posFile {
 		label := phrase[posFile[i][0]:posFile[i][1]]
-		file := label
+		file := rxSrcLine.ReplaceAllString(label, "")
 
 		if file[0] == '~' {
 			home, _ := os.UserHomeDir()
