@@ -43,30 +43,20 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 		return errors.New("empty url in hyperlink")
 	}
 
-	/*el.phrase = []rune(apc.Index(1))
-	if len(el.phrase) == 0 {
-		el.phrase = []rune(el.url)
-	}*/
-
 	split := strings.SplitN(el.url, "://", 2)
 	if len(split) != 2 {
 		return fmt.Errorf("invalid url, missing '://': %s", el.url)
 	}
 	el.scheme, el.path = strings.ToLower(split[0]), split[1]
 
-	//el.size = &types.XY{int32(len(el.phrase)), 1}
-	//el.sgr = sgr.Copy()
-
 	return nil
 }
 
 func (el *ElementHyperlink) Write(r rune) error {
 	if r == '\n' {
-		//el.label = append(el.label, []rune{})
 		return nil
 	}
 
-	//el.label[len(el.label)-1] = append(el.label[len(el.label)-1], r)*/
 	el.label = append(el.label, r)
 
 	return nil
@@ -188,7 +178,6 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		}
 
 		if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
-			el.renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
 			return menuItems
 		}
 
