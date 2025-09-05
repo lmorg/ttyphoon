@@ -6,6 +6,7 @@ type Term interface {
 	Start(Pty)
 	GetSize() *XY
 	GetSgr() *Sgr
+	GetCellSgr(*XY) *Sgr
 	Resize(*XY)
 	Render() bool
 	GetCursorPosition() *XY

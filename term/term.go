@@ -71,9 +71,9 @@ type Term struct {
 	_mouseButtonDown bool
 	//_phrase          *[]rune
 	//_rowPhrase       *[]rune
-	_rowSource       *types.RowSource
-	_blockMeta       *types.BlockMeta
-	_apcStack        uint
+	_rowSource *types.RowSource
+	_blockMeta *types.BlockMeta
+	_apcStack  uint
 
 	// search
 	_searchHighlight  bool
@@ -200,9 +200,9 @@ func (term *Term) makeScreen() types.Screen {
 
 func (term *Term) makeRow() *types.Row {
 	row := &types.Row{
-		Id:     nextRowId(),
-		Cells:  term.makeCells(term.size.X),
-		Block:  term._blockMeta,
+		Id:    nextRowId(),
+		Cells: term.makeCells(term.size.X),
+		Block: term._blockMeta,
 	}
 
 	return row
@@ -426,4 +426,8 @@ func (term *Term) GetRowId(y int32) uint64 {
 
 func (term *Term) GetSgr() *types.Sgr {
 	return term.sgr
+}
+
+func (term *Term) GetCellSgr(cell *types.XY) *types.Sgr {
+	return term.visibleScreen()[cell.Y].Cells[cell.X].Sgr
 }

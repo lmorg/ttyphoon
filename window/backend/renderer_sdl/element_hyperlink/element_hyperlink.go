@@ -71,6 +71,7 @@ func (el *ElementHyperlink) Size() *types.XY {
 // pos: Position to draw element
 func (el *ElementHyperlink) Draw(termPos *types.XY) {
 	el.pos = termPos
+	el.sgr = el.tile.GetTerm().GetCellSgr(el.pos)
 
 	width := el.tile.GetTerm().GetSize().X
 	x, y := el.pos.X, int32(0)
@@ -258,10 +259,7 @@ func (el *ElementHyperlink) openWith(exe []string) {
 			if msg == "" {
 				msg = err.Error()
 			}
-			//if debug.Enabled {
 			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
-			//}
-			//el.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Unable to launch `%s`", cmds[i-2][0]))
 		}
 	}()
 }
@@ -309,10 +307,6 @@ func (el *ElementHyperlink) MouseHover(_ *types.XY, _ *types.XY) func() {
 	fn := make([]func(), 0)
 	width := el.tile.GetTerm().GetSize().X
 	start, x, y := el.pos.X, el.pos.X, int32(0)
-
-	/*fn[0] = func() {
-		el.renderer.DrawHighlightRect(el.tile, el.pos, &types.XY{X: width - el.pos.X, Y: 1})
-	}*/
 
 	for range el.label {
 		if x >= width {
