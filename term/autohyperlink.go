@@ -74,6 +74,11 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 }
 
 func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link string) {
+	defer func() {
+		if r := recover(); r != nil {
+			debug.Log(r)
+		}
+	}()
 	debug.Log(label)
 
 	acp := types.NewApcSliceNoParse([]string{label, link})

@@ -429,5 +429,13 @@ func (term *Term) GetSgr() *types.Sgr {
 }
 
 func (term *Term) GetCellSgr(cell *types.XY) *types.Sgr {
-	return term.visibleScreen()[cell.Y].Cells[cell.X].Sgr
+	screen := term.visibleScreen()
+	if cell.Y < 0 || int(cell.Y) >= len(screen) {
+		return term.sgr
+	}
+	if cell.X < 0 || int(cell.X) >= len(screen[cell.Y].Cells) {
+		return term.sgr
+	}
+
+	return screen[cell.Y].Cells[cell.X].Sgr
 }
