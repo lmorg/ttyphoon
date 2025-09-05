@@ -195,7 +195,7 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 			term._mouseIn.MouseOut()
 		}
 
-		term.autoHotlink(screen.ContinuousRows(int(pos.Y)))
+		term.autoHyperlink(screen.ContinuousRows(int(pos.Y)))
 
 		callback()
 		return

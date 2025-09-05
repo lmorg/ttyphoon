@@ -21,7 +21,7 @@ const (
 	META_ROW_BEGIN_BLOCK RowMetaFlag = 1 << iota
 	META_ROW_END_BLOCK
 	META_ROW_FROM_LINE_OVERFLOW
-	META_ROW_AUTO_HOTLINKED
+	META_ROW_AUTO_HYPERLINKED
 )
 
 func (f RowMetaFlag) Is(flag RowMetaFlag) bool { return f&flag != 0 }

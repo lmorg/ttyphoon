@@ -25,22 +25,13 @@ func (sr *sdlRender) UpdateConfig() {
 			Icon:  0xf53f,
 		},
 		{
-			Title: fmt.Sprintf("%s == %v", "Terminal.AutoHotlink", config.Config.Terminal.AutoHotlink),
+			Title: fmt.Sprintf("%s == %v", "Terminal.AutoHyperlink", config.Config.Terminal.AutoHyperlink),
 			Fn: func() {
-				config.Config.Terminal.AutoHotlink = !config.Config.Terminal.AutoHotlink
+				config.Config.Terminal.AutoHyperlink = !config.Config.Terminal.AutoHyperlink
 				sr.UpdateConfig()
 			},
 			Icon: 0xf0c1,
 		},
-		/*{
-			Title: fmt.Sprintf("%s = %v", "Terminal.Widgets.AutoHotlink.IncLineNumbers", config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers),
-			Fn: func() {
-				config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers = !config.Config.Terminal.Widgets.AutoHotlink.IncLineNumbers
-				sr.UpdateConfig()
-			},
-			//Icon: 0xf0c1,
-		},*/
-
 		{
 			Title: fmt.Sprintf("%s == %v", "TypeFace.DropShadow", config.Config.TypeFace.DropShadow),
 			Fn: func() {

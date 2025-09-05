@@ -76,7 +76,7 @@ type configT struct {
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
-		AutoHotlink             bool   `yaml:"AutoHotlink"`
+		AutoHyperlink           bool   `yaml:"AutoHyperlink"`
 
 		Widgets struct {
 			Table struct {
@@ -84,10 +84,10 @@ type configT struct {
 				ScrollMultiplierY int32 `yaml:"ScrollMultiplierY"`
 			} `yaml:"Table"`
 
-			AutoHotlink struct {
+			AutoHyperlink struct {
 				IncLineNumbers bool        `yaml:"IncLineNumbers"`
 				OpenAgents     OpenAgentsT `yaml:"OpenAgents"`
-			} `yaml:"AutoHotlink"`
+			} `yaml:"AutoHyperlink"`
 		} `yaml:"Widgets"`
 	} `yaml:"Terminal"`
 

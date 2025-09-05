@@ -34,12 +34,11 @@ Terminal:
 
   #ColorTheme: "~/Chalk.itermcolors"
 
-  # Experimental support to turn anything that looks like a URL or file on disk
-  # into a hotlink that can be clicked.
-  AutoHotlink: true
+  # Turn anything that looks like a URL or file on disk into a hyperlink.
+  AutoHyperlink: true
 
   Widgets:
-    AutoHotlink:
+    AutoHyperlink:
       IncLineNumbers: false
       OpenAgents:
         - Name: System Default

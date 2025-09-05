@@ -124,7 +124,7 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 			Icon:  0xf0c5,
 		},
 	}
-	apps, cmds := config.Config.Terminal.Widgets.AutoHotlink.OpenAgents.MenuItems(el.scheme)
+	apps, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
 	for i := range apps {
 		menuItems = append(menuItems,
 			types.MenuItem{
