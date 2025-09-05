@@ -111,3 +111,29 @@ func (screen *Screen) Phrase(row int) (string, error) {
 
 	return strings.TrimRight(string(slice), " "), nil
 }
+
+func (screen *Screen) ContinuousRows(rowIndex int) []*Row {
+	rows := make([]*Row, 0, len(*screen))
+
+	for i := rowIndex; i >= 0; i-- {
+		//debug.Log(fmt.Sprintf("Prepend %d", i))
+		rows = append([]*Row{(*screen)[i]}, rows...)
+		if !(*screen)[i].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
+			//debug.Log("Prepend break")
+			break
+		}
+	}
+
+	for i := rowIndex + 1; i < len(*screen); i++ {
+		if !(*screen)[i].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
+			//debug.Log("Append break")
+			break
+		}
+		//debug.Log(fmt.Sprintf("Append %d", i))
+		rows = append(rows, (*screen)[i])
+	}
+
+	//debug.Log(fmt.Sprintf("Row count %d", len(rows)))
+
+	return rows
+}

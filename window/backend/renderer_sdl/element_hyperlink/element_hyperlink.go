@@ -20,29 +20,33 @@ import (
 type ElementHyperlink struct {
 	renderer types.Renderer
 	tile     types.Tile
-	phrase   []rune
+	label    []rune
 	url      string
 	scheme   string
 	path     string
-	size     *types.XY
-	pos      *types.XY
 	sgr      *types.Sgr
+	pos      *types.XY
 }
 
 func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
-	return &ElementHyperlink{renderer: renderer, tile: tile, sgr: tile.GetTerm().GetSgr().Copy()}
+	return &ElementHyperlink{
+		renderer: renderer,
+		tile:     tile,
+		sgr:      tile.GetTerm().GetSgr().Copy(),
+	}
 }
 
 func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
-	el.url = apc.Index(0)
+	el.label = []rune(apc.Index(0))
+	el.url = apc.Index(1)
 	if el.url == "" {
 		return errors.New("empty url in hyperlink")
 	}
 
-	el.phrase = []rune(apc.Index(1))
+	/*el.phrase = []rune(apc.Index(1))
 	if len(el.phrase) == 0 {
 		el.phrase = []rune(el.url)
-	}
+	}*/
 
 	split := strings.SplitN(el.url, "://", 2)
 	if len(split) != 2 {
@@ -50,36 +54,51 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 	}
 	el.scheme, el.path = strings.ToLower(split[0]), split[1]
 
-	el.size = &types.XY{int32(len(el.phrase)), 1}
+	//el.size = &types.XY{int32(len(el.phrase)), 1}
 	//el.sgr = sgr.Copy()
 
 	return nil
 }
 
-func (el *ElementHyperlink) Write(_ rune) error {
-	return errors.New("not supported")
+func (el *ElementHyperlink) Write(r rune) error {
+	if r == '\n' {
+		//el.label = append(el.label, []rune{})
+		return nil
+	}
+
+	//el.label[len(el.label)-1] = append(el.label[len(el.label)-1], r)*/
+	el.label = append(el.label, r)
+
+	return nil
 }
 
 func (el *ElementHyperlink) Size() *types.XY {
-	return el.size
+	panic("not yet implemented")
+	//return el.size
 }
 
 // Draw:
-// size: optional. Defaults to element size
-// pos:  required. Position to draw element
-func (el *ElementHyperlink) Draw(pos *types.XY) {
-	el.pos = pos
-	for x := range el.size.X {
-		cell := &types.Cell{
-			Char: el.phrase[x],
-			Sgr:  el.sgr,
+// pos: Position to draw element
+func (el *ElementHyperlink) Draw(termPos *types.XY) {
+	el.pos = termPos
+
+	width := el.tile.GetTerm().GetSize().X
+	x, y := el.pos.X, int32(0)
+
+	for i := range el.label {
+		if x >= width {
+			y++
+			x = 0
 		}
-		el.renderer.PrintCell(el.tile, cell, &types.XY{pos.X + x, pos.Y})
+		cell := &types.Cell{Sgr: el.sgr}
+		cell.Char = el.label[i]
+		el.renderer.PrintCell(el.tile, cell, &types.XY{X: x, Y: el.pos.Y + y})
+		x++
 	}
 }
 
 func (el *ElementHyperlink) Rune(pos *types.XY) rune {
-	return el.phrase[pos.X]
+	return el.label[pos.X]
 }
 
 func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
@@ -169,7 +188,7 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		}
 
 		if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
-			//renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
+			el.renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
 			return menuItems
 		}
 
@@ -298,10 +317,47 @@ func (el *ElementHyperlink) MouseHover(_ *types.XY, _ *types.XY) func() {
 		return func() {}
 	}
 
+	fn := make([]func(), 0)
+	width := el.tile.GetTerm().GetSize().X
+	start, x, y := el.pos.X, el.pos.X, int32(0)
+
+	/*fn[0] = func() {
+		el.renderer.DrawHighlightRect(el.tile, el.pos, &types.XY{X: width - el.pos.X, Y: 1})
+	}*/
+
+	for range el.label {
+		if x >= width {
+			localStart, localX, localY := start, x, y
+			fn = append(fn, func() {
+				el.renderer.DrawHighlightRect(
+					el.tile,
+					&types.XY{X: localStart, Y: el.pos.Y + localY},
+					&types.XY{X: localX, Y: 1},
+				)
+			})
+			y++
+			x = 0
+			start = 0
+		}
+		x++
+	}
+	if x > 0 {
+		localStart, localX, localY := start, x, y
+		fn = append(fn, func() {
+			el.renderer.DrawHighlightRect(
+				el.tile,
+				&types.XY{X: localStart, Y: el.pos.Y + localY},
+				&types.XY{X: localX - localStart, Y: 1},
+			)
+		})
+	}
+
 	return func() {
 		if el.pos == nil {
 			return
 		}
-		el.renderer.DrawHighlightRect(el.tile, el.pos, el.size)
+		for i := range fn {
+			fn[i]()
+		}
 	}
 }

@@ -55,7 +55,6 @@ func (el *ElementCodeBlock) Size() *types.XY {
 }
 
 // Draw:
-// size: optional. Defaults to element size
 // pos:  required. Position to draw element
 func (el *ElementCodeBlock) Draw(pos *types.XY) {
 	el.pos = pos
