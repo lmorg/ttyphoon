@@ -17,8 +17,6 @@ Do not explain what the command line does, we already know this. Only explain th
 Output needs to be strictly formatted as markdown.
 Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
 Bullet points and numbered lists should be indented.
-You can use tools to read file contents and search the web.
-You can read files from disk to gain more context.
 `
 
 const _PROMPT_ASK = `
@@ -27,8 +25,6 @@ Do not quote the question verbatim in your response.
 Output needs to be strictly formatted as markdown.
 Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
 Bullet points and numbered lists should be indented.
-You are allowed to check online.
-You are allowed to write files to disk.
 `
 
 func GetExplain(meta *agent.Meta, userPrompt string) string {

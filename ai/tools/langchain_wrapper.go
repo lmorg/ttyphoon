@@ -20,11 +20,12 @@ type Wrapper struct {
 	meta             *agent.Meta
 	tool             tools.Tool
 	invoker          func() (tools.Tool, error)
+	addDescription   string
 	enabled          bool
 }
 
 func init() {
-	agent.ToolsAdd(&Wrapper{invoker: invokeDDG})
+	agent.ToolsAdd(&Wrapper{invoker: invokeDDG, addDescription: "Only search the web if you are not already confident with an answer"})
 	agent.ToolsAdd(&Wrapper{invoker: invokeScraper})
 }
 
@@ -41,7 +42,7 @@ func (t *Wrapper) Toggle()       { t.enabled = !t.enabled }
 
 func (t *Wrapper) Name() string        { return t.tool.Name() }
 func (t *Wrapper) Path() string        { return "internal" }
-func (t *Wrapper) Description() string { return t.tool.Description() }
+func (t *Wrapper) Description() string { return t.tool.Description() + "\n" + t.addDescription }
 
 func (t *Wrapper) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
@@ -69,11 +70,6 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 }
 
 /////
-
-/*func invokeScraper() (tools.Tool, bool, error) {
-	tool, err := scraper.New(scraper.WithParallelsNum(10), scraper.WithMaxDepth(1), scraper.WithAsync(false))
-	return tool, !_CHROME_INSTALLED, err
-}*/
 
 func invokeDDG() (tools.Tool, error) {
 	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
