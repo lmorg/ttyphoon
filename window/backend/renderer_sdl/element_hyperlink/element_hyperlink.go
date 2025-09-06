@@ -71,7 +71,9 @@ func (el *ElementHyperlink) Size() *types.XY {
 // pos: Position to draw element
 func (el *ElementHyperlink) Draw(termPos *types.XY) {
 	el.pos = termPos
-	el.sgr = el.tile.GetTerm().GetCellSgr(el.pos)
+	if sgr := el.tile.GetTerm().GetCellSgr(el.pos); sgr != nil {
+		el.sgr = sgr
+	}
 
 	width := el.tile.GetTerm().GetSize().X
 	x, y := el.pos.X, int32(0)

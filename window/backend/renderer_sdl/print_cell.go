@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/veandco/go-sdl2/sdl"
@@ -46,6 +47,14 @@ func (sr *sdlRender) PrintCell(tile types.Tile, cell *types.Cell, _cellPos *type
 	if cell.Char == 0 || _cellPos.X < 0 || _cellPos.Y < 0 {
 		return
 	}
+	if cell.Sgr == nil {
+		if debug.Enabled {
+			panic("ERROR: nil sgr")
+		} else {
+			sr.DisplayNotification(types.NOTIFY_DEBUG, "ERROR: nil sgr")
+		}
+		return
+	}
 
 	if tile.GetTerm() != nil {
 		tileSize := tile.GetTerm().GetSize()
@@ -64,6 +73,7 @@ func (sr *sdlRender) printCell(tile types.Tile, cell *types.Cell, _cellPos *type
 	}
 
 	glyphSizeX := sr.glyphSize.X
+
 	if cell.Sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {
 		glyphSizeX *= 2
 	}
