@@ -9,6 +9,7 @@ import (
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 )
 
 var (
@@ -44,7 +45,7 @@ func _autoHyperlinkUrls(term *Term, rows []*types.Row, phrase string) {
 
 	for i := range posUrl {
 		url := phrase[posUrl[i][0]:posUrl[i][1]]
-		_autoHyperlinkElement(term, rows, posUrl[i], url, url)
+		_autoHyperlinkElement(term, rows, phrase, posUrl[i], url, url)
 	}
 }
 
@@ -74,12 +75,12 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 
 		if _, err := os.Stat(file); err == nil {
 			file = filepath.Clean(file)
-			_autoHyperlinkElement(term, rows, posFile[i], label, "file://"+file)
+			_autoHyperlinkElement(term, rows, phrase, posFile[i], label, "file://"+file)
 		}
 	}
 }
 
-func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link string) {
+func _autoHyperlinkElement(term *Term, rows []*types.Row, phrase string, pos []int, label, link string) {
 	defer func() {
 		if r := recover(); r != nil {
 			debug.Log(r)
@@ -94,8 +95,13 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link
 		return
 	}
 
-	x, y, z := int32(pos[0]), int32(0), int32(0)
-	for i := pos[0]; i < pos[1]; i++ {
+	startCell := runewidth.StringWidth(string(phrase[:pos[0]]))
+	endCell := runewidth.StringWidth(string(phrase[pos[0]:pos[1]])) + startCell
+	debug.Log(startCell)
+	debug.Log(endCell)
+
+	x, y, z := int32(startCell), int32(0), int32(0)
+	for i := startCell; i < endCell; i++ {
 		if x >= term.size.X {
 			y++
 			x = 0
