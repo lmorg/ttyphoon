@@ -48,6 +48,9 @@ func (menu *menuWidgetT) selectCallback() {
 	menu._selectCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
 }
 func (menu *menuWidgetT) cancelCallback() {
+	if menu.highlightIndex < 0 {
+		return
+	}
 	menu._cancelCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
 }
 
