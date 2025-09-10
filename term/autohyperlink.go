@@ -98,17 +98,28 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, phrase string, pos []i
 
 	startCell := runewidth.StringWidth(string(phrase[:pos[0]]))
 	endCell := runewidth.StringWidth(string(phrase[pos[0]:pos[1]])) + startCell
+	rLabel, r := []rune(label), 0
+	termSizeX := int(term.size.X)
 
-	x, y, z := int32(startCell), int32(0), int32(0)
+	x, y, z := startCell, int32(0), int32(0)
+	var wide bool
 	for i := startCell; i < endCell; i++ {
-		if x >= term.size.X {
+		if x >= termSizeX {
 			y++
 			x = 0
 		}
 
 		rows[y].Cells[x].Element = el
 		rows[y].Cells[x].Char = types.SetElementXY(&types.XY{X: z, Y: 0})
+		if wide {
+			wide = false
+			r--
+		} else if runewidth.RuneWidth(rLabel[r]) == 2 {
+			rows[y].Cells[x].Sgr.Bitwise.Set(types.SGR_WIDE_CHAR)
+			wide = true
+		}
 		x++
 		z++
+		r++
 	}
 }

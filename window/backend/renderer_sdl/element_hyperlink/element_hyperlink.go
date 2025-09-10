@@ -13,6 +13,7 @@ import (
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"golang.design/x/clipboard"
 )
@@ -37,7 +38,13 @@ func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
 }
 
 func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
-	el.label = []rune(apc.Index(0))
+	var i int
+	el.label = make([]rune, runewidth.StringWidth(apc.Index(0)))
+	for _, r := range apc.Index(0) {
+		el.label[i] = r
+		i += runewidth.RuneWidth(r)
+	}
+
 	el.url = apc.Index(1)
 	if el.url == "" {
 		return errors.New("empty url in hyperlink")

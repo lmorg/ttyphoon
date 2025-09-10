@@ -90,11 +90,22 @@ func (screen *Screen) Phrase(row int) (string, error) {
 		return "", ERR_PHRASE_OVERFLOW_ROW
 	}
 
-	slice := make([]rune, len((*screen)[row].Cells))
+	var (
+		slice    []rune
+		wideChar bool
+	)
 
-	
+	getChar := func(c *Cell) rune {
+		wideChar = c.Sgr != nil && c.Sgr.Bitwise.Is(SGR_WIDE_CHAR)
+		return c.Rune()
+	}
+
 	for iCells := range (*screen)[row].Cells {
-		slice[iCells] = (*screen)[row].Cells[iCells].Rune()
+		if wideChar {
+			wideChar = false
+			continue
+		}
+		slice = append(slice, getChar((*screen)[row].Cells[iCells]))
 	}
 
 	for iRow := row + 1; iRow < len(*screen); iRow++ {
@@ -102,12 +113,14 @@ func (screen *Screen) Phrase(row int) (string, error) {
 			break
 		}
 
-		sliceRow := make([]rune, len((*screen)[iRow].Cells))
+		wideChar = false
 		for iCells := range (*screen)[iRow].Cells {
-			sliceRow[iCells] = (*screen)[iRow].Cells[iCells].Rune()
+			if wideChar {
+				wideChar = false
+				continue
+			}
+			slice = append(slice, getChar((*screen)[iRow].Cells[iCells]))
 		}
-
-		slice = append(slice, sliceRow...)
 	}
 
 	return strings.TrimRight(string(slice), " "), nil
