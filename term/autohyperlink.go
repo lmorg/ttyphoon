@@ -14,8 +14,9 @@ import (
 
 var (
 	rxUrl     = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=#a-zA-Z0-9]+`)
-	rxFile    = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+`)
+	rxFile    = regexp.MustCompile(`(~|)[-:./_%&?+=\pL\pN\pP]+`)
 	rxSrcLine = regexp.MustCompile(`:[0-9]+$`)
+	//rxFile    = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+`)
 )
 
 func (term *Term) autoHyperlink(rows types.Screen) {
@@ -97,8 +98,6 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, phrase string, pos []i
 
 	startCell := runewidth.StringWidth(string(phrase[:pos[0]]))
 	endCell := runewidth.StringWidth(string(phrase[pos[0]:pos[1]])) + startCell
-	debug.Log(startCell)
-	debug.Log(endCell)
 
 	x, y, z := int32(startCell), int32(0), int32(0)
 	for i := startCell; i < endCell; i++ {

@@ -39,7 +39,6 @@ func (term *Term) writeCell(r rune, el types.Element) {
 	if term._curPos.X >= term.size.X && !term._noAutoLineWrap {
 		term._curPos.X = 0
 		term.lineFeed(_LINEFEED_LINE_OVERFLOWED)
-
 	}
 
 	cell := term.currentCell()

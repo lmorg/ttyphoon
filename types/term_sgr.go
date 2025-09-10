@@ -43,6 +43,7 @@ const (
 
 	SGR_HIGHLIGHT_SEARCH_RESULT
 	SGR_HIGHLIGHT_HEADING
+	//SGR_IGNORE_CELL // eg if the cell before is a wide character
 
 	// _SGR_PLACEHOLDER1
 	// _SGR_PLACEHOLDER2

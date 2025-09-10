@@ -92,6 +92,7 @@ func (screen *Screen) Phrase(row int) (string, error) {
 
 	slice := make([]rune, len((*screen)[row].Cells))
 
+	
 	for iCells := range (*screen)[row].Cells {
 		slice[iCells] = (*screen)[row].Cells[iCells].Rune()
 	}
