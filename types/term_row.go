@@ -53,13 +53,24 @@ func (f *BlockMetaFlag) Set(flag BlockMetaFlag)    { *f |= flag }
 func (f *BlockMetaFlag) Unset(flag BlockMetaFlag)  { *f &^= flag }
 
 func (r *Row) String() string {
-	slice := make([]rune, len(r.Cells))
+	var (
+		slice    []rune
+		wideChar bool
+		getChar  = func(c *Cell) rune {
+			wideChar = c.Sgr != nil && c.Sgr.Bitwise.Is(SGR_WIDE_CHAR)
+			return c.Rune()
+		}
+	)
 
-	for i := range r.Cells {
-		slice[i] = r.Cells[i].Rune()
+	for _, c := range r.Cells {
+		if wideChar {
+			wideChar = false
+			continue
+		}
+		slice = append(slice, getChar(c))
 	}
 
-	return string(slice)
+	return strings.TrimLeft(string(slice), " ")
 }
 
 /*
@@ -69,36 +80,38 @@ func (r *Row) String() string {
 type Screen []*Row
 
 func (screen *Screen) String() string {
-	slice := make([]string, len(*screen))
-	for i, row := range *screen {
-		slice[i] = row.String()
+	var s string
+	for _, row := range *screen {
+		if !row.RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
+			s += "\n"
+		}
+		s += row.String()
 	}
 
-	return strings.Join(slice, "\n")
+	return s + "\n"
 }
 
 var (
-	ERR_PHRASE_OVERFLOW_ROW = errors.New("overflow row")
-	ERR_PHRASE_INVALID_ROW  = errors.New("index does not exist in slice")
+	ErrPhraseOverflowRow = errors.New("overflow row")
+	ErrPhraseInvalidRow  = errors.New("index does not exist in slice")
 )
 
 func (screen *Screen) Phrase(row int) (string, error) {
 	if row >= len(*screen) {
-		return "", ERR_PHRASE_INVALID_ROW
+		return "", ErrPhraseInvalidRow
 	}
 	if (*screen)[row].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
-		return "", ERR_PHRASE_OVERFLOW_ROW
+		return "", ErrPhraseOverflowRow
 	}
 
 	var (
 		slice    []rune
 		wideChar bool
+		getChar  = func(c *Cell) rune {
+			wideChar = c.Sgr != nil && c.Sgr.Bitwise.Is(SGR_WIDE_CHAR)
+			return c.Rune()
+		}
 	)
-
-	getChar := func(c *Cell) rune {
-		wideChar = c.Sgr != nil && c.Sgr.Bitwise.Is(SGR_WIDE_CHAR)
-		return c.Rune()
-	}
 
 	for iCells := range (*screen)[row].Cells {
 		if wideChar {

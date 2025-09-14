@@ -42,7 +42,11 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 	el.label = make([]rune, runewidth.StringWidth(apc.Index(0)))
 	for _, r := range apc.Index(0) {
 		el.label[i] = r
-		i += runewidth.RuneWidth(r)
+		w := runewidth.RuneWidth(r)
+		if w == 2 {
+			el.label[i+1] = ' '
+		}
+		i += w
 	}
 
 	el.url = apc.Index(1)

@@ -30,15 +30,21 @@ func (term *Term) CopyRange(topLeft, bottomRight *types.XY) []byte {
 	// This is some ugly ass code. Sorry!
 	// It is also called infrequently and not worth my time optimizing right now
 	var (
-		ix, iy int
-		x, y   int32
-		screen = term.visibleScreen()
-		cell   *types.Cell
-		b      []byte
-		line   string
+		ix, iy   int
+		x, y     int32
+		screen   = term.visibleScreen()
+		cell     *types.Cell
+		b        []byte
+		line     string
+		wideChar bool
+		getChar  = func(cell *types.Cell) rune {
+			wideChar = cell.Sgr != nil && cell.Sgr.Bitwise.Is(types.SGR_WIDE_CHAR)
+			return cell.Rune()
+		}
 	)
 
 	for iy = range screen {
+		wideChar = false
 		for ix, cell = range screen[iy].Cells {
 			x, y = int32(ix), int32(iy)
 			switch {
@@ -49,17 +55,32 @@ func (term *Term) CopyRange(topLeft, bottomRight *types.XY) []byte {
 					(y < topLeft.Y && y > bottomRight.Y) ||
 					// end multiline
 					(x >= bottomRight.X && y == bottomRight.Y) {
-					line += string(cell.Rune())
+
+					if wideChar {
+						wideChar = false
+						continue
+					}
+					line += string(getChar(cell))
 				}
 
 			case topLeft.Y == bottomRight.Y: // midline
 				if bottomRight.X < topLeft.X { //backwards
 					if x <= topLeft.X && x >= bottomRight.X && y == topLeft.Y {
-						line += string(cell.Rune())
+
+						if wideChar {
+							wideChar = false
+							continue
+						}
+						line += string(getChar(cell))
 					}
 				} else { // forwards
 					if x >= topLeft.X && x <= bottomRight.X && y == topLeft.Y {
-						line += string(cell.Rune())
+
+						if wideChar {
+							wideChar = false
+							continue
+						}
+						line += string(getChar(cell))
 					}
 				}
 
@@ -70,7 +91,12 @@ func (term *Term) CopyRange(topLeft, bottomRight *types.XY) []byte {
 					(y > topLeft.Y && y < bottomRight.Y) ||
 					// end multiline
 					(x <= bottomRight.X && y == bottomRight.Y) {
-					line += string(cell.Rune())
+
+					if wideChar {
+						wideChar = false
+						continue
+					}
+					line += string(getChar(cell))
 				}
 			}
 		}
@@ -131,11 +157,22 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	var b []byte
 
 	for y := begin.Y; y <= end.Y; y++ {
-		var line string
+		var (
+			line     string
+			wideChar bool
+			getChar  = func(c *types.Cell) rune {
+				wideChar = c.Sgr != nil && c.Sgr.Bitwise.Is(types.SGR_WIDE_CHAR)
+				return c.Rune()
+			}
+		)
+
 		for x := begin.X; x <= end.X; x++ {
-			s := string(screen[y].Cells[x].Rune())
-			line += strings.TrimRight(s, " ")
+			if wideChar {
+				continue
+			}
+			line += string(getChar(screen[y].Cells[x]))
 		}
+
 		line = strings.TrimRight(line, " ") + "\n"
 		b = append(b, []byte(line)...)
 	}
@@ -164,7 +201,7 @@ func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
 		case nil:
 			block += phrase + "\n"
 
-		case types.ERR_PHRASE_INVALID_ROW:
+		case types.ErrPhraseInvalidRow:
 			return []byte(block)
 		}
 	}
