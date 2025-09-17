@@ -15,8 +15,13 @@ func ToMarkdown(n *Node) string {
 func writeNode(sb *strings.Builder, n *Node, depth int) {
 	switch n.Type {
 	case NodeDocument:
-		for _, c := range n.Children {
+		var prevBlock NodeType = -1
+		for i, c := range n.Children {
+			if i > 0 && isBlockNode(c.Type) && isBlockNode(prevBlock) {
+				sb.WriteString("\n")
+			}
 			writeNode(sb, c, 0)
+			prevBlock = c.Type
 		}
 	case NodeHeading:
 		level := 1
@@ -34,9 +39,15 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 		for _, c := range n.Children {
 			writeNode(sb, c, depth)
 		}
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 	case NodeText:
-		sb.WriteString(n.Text)
+		if len(n.Children) > 0 {
+			for _, c := range n.Children {
+				writeNode(sb, c, depth)
+			}
+		} else {
+			sb.WriteString(n.Text)
+		}
 	case NodeBold:
 		sb.WriteString("**")
 		for _, c := range n.Children {
@@ -68,46 +79,48 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 	case NodeCodeBlock:
 		sb.WriteString("```")
 		sb.WriteString("\n")
-		sb.WriteString(n.Text)
+		sb.WriteString(strings.TrimRight(n.Text, "\n"))
 		sb.WriteString("\n```")
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 	case NodeQuote:
 		for _, c := range n.Children {
-			sb.WriteString("> ")
-			writeNode(sb, c, depth)
-			sb.WriteString("\n")
+			lines := strings.Split(strings.TrimRight(renderNodeToString(c, depth), "\n"), "\n")
+			for _, l := range lines {
+				sb.WriteString("> " + l + "\n")
+			}
 		}
-		sb.WriteString("\n")
 	case NodeListBullet, NodeListNumbered:
 		for i, c := range n.Children {
 			if c.Type == NodeListItem {
+				indent := strings.Repeat("  ", depth)
 				if n.Type == NodeListBullet {
-					sb.WriteString("- ")
+					sb.WriteString(indent + "- ")
 				} else {
-					sb.WriteString(strings.TrimSpace(strings.Repeat(" ", depth*2)))
-					sb.WriteString(strings.TrimSpace(strconv.Itoa(i+1) + ". "))
+					sb.WriteString(indent + strconv.Itoa(i+1) + ". ")
 				}
 				writeNode(sb, c, depth+1)
 				sb.WriteString("\n")
 			}
 		}
-		sb.WriteString("\n")
 	case NodeListItem:
 		for _, c := range n.Children {
 			writeNode(sb, c, depth)
 		}
 	case NodeTable:
-		for _, row := range n.Children {
+		for i, row := range n.Children {
 			writeNode(sb, row, depth)
 			sb.WriteString("\n")
-		}
-		sb.WriteString("\n")
-	case NodeTableRow:
-		for i, cell := range n.Children {
-			if i > 0 {
-				sb.WriteString(" | ")
+			// After header row, print separator if next row is not separator
+			if i == 0 && len(n.Children) > 1 {
+				sb.WriteString("|" + strings.Repeat("---|", len(row.Children)) + "\n")
 			}
+		}
+	case NodeTableRow:
+		sb.WriteString("|")
+		for _, cell := range n.Children {
+			sb.WriteString(" ")
 			writeNode(sb, cell, depth)
+			sb.WriteString(" |")
 		}
 	case NodeTableCell:
 		sb.WriteString(n.Text)
@@ -130,4 +143,21 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 	case NodeTaskChecked:
 		sb.WriteString("[x] ")
 	}
+}
+
+// isBlockNode returns true if the node type is a block-level element
+func isBlockNode(t NodeType) bool {
+	switch t {
+	case NodeHeading, NodeParagraph, NodeCodeBlock, NodeQuote, NodeListBullet, NodeListNumbered, NodeTable:
+		return true
+	default:
+		return false
+	}
+}
+
+// renderNodeToString renders a node to a string (used for blockquotes)
+func renderNodeToString(n *Node, depth int) string {
+	var sb strings.Builder
+	writeNode(&sb, n, depth)
+	return sb.String()
 }

@@ -161,39 +161,69 @@ func (p *parserState) parseTaskList() *Node {
 }
 
 func (p *parserState) parseList() *Node {
-	var listType NodeType
+	// Determine the indentation and list type of the first item
 	line, _ := p.peekLine()
-	if isNumberedList(line) {
-		listType = NodeListNumbered
-	} else {
-		listType = NodeListBullet
-	}
+	baseIndent, listType := getListIndentAndType(line)
 	list := &Node{Type: listType}
 	for {
 		line, ok := p.peekLine()
-		if !ok || (!strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") && !isNumberedList(line)) {
+		if !ok {
 			break
 		}
+		indent, itemType := getListIndentAndType(line)
+		if indent < baseIndent || (itemType != NodeListBullet && itemType != NodeListNumbered) {
+			break
+		}
+		if indent > baseIndent {
+			// Nested list: parse as child of previous item
+			lastItem := list.Children[len(list.Children)-1]
+			nested := p.parseList()
+			lastItem.Children = append(lastItem.Children, nested)
+			continue
+		}
+		// Parse this list item
 		p.pos++
 		item := &Node{Type: NodeListItem}
-		var content string
-		if isNumberedList(line) {
-			idx := strings.Index(line, ". ")
-			content = line[idx+2:]
-		} else {
-			content = line[2:]
-		}
+		content := extractListContent(line)
 		item.Children = append(item.Children, parseInlines(content))
-		// Check for nested list
-		if next, ok := p.peekLine(); ok && (strings.HasPrefix(next, "  - ") || strings.HasPrefix(next, "    - ")) {
-			p.pos++
-			nested := &Node{Type: NodeListBullet}
-			nested.Children = append(nested.Children, parseInlines(strings.TrimSpace(next[2:])))
-			item.Children = append(item.Children, nested)
-		}
 		list.Children = append(list.Children, item)
 	}
 	return list
+}
+
+// getListIndentAndType returns the indentation level (number of leading spaces) and list type for a line
+func getListIndentAndType(line string) (int, NodeType) {
+	indent := 0
+	for indent < len(line) && line[indent] == ' ' {
+		indent++
+	}
+	trimmed := line[indent:]
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+		return indent, NodeListBullet
+	}
+	if isNumberedList(trimmed) {
+		return indent, NodeListNumbered
+	}
+	return indent, -1
+}
+
+// extractListContent returns the content of a list item line (removing marker and leading spaces)
+func extractListContent(line string) string {
+	i := 0
+	for i < len(line) && line[i] == ' ' {
+		i++
+	}
+	trimmed := line[i:]
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+		return trimmed[2:]
+	}
+	if isNumberedList(trimmed) {
+		idx := strings.Index(trimmed, ". ")
+		if idx >= 0 {
+			return trimmed[idx+2:]
+		}
+	}
+	return trimmed
 }
 
 func isNumberedList(line string) bool {
