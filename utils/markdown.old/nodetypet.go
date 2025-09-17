@@ -1,0 +1,32 @@
+//go:generate stringer -type=nodeTypeT
+package markdown
+
+type nodeTypeT int
+
+const (
+	_NODE_PARAGRAPH nodeTypeT = iota
+	_NODE_LINE_SPACE
+	_NODE_LINK
+	_NODE_LINK_LABEL
+	_NODE_LINK_URL
+	_NODE_CODE_INLINE
+	_NODE_CODE_BLOCK
+	_NODE_QUOTE
+	_NODE_HEADING_0 // this is just used to calculate the other headings
+	_NODE_HEADING_1
+	_NODE_HEADING_2
+	_NODE_HEADING_3
+	_NODE_HEADING_4
+	_NODE_HEADING_5
+	_NODE_HEADING_6
+	_NODE_LIST_BULLET
+	_NODE_LIST_NUMBERED
+	_NODE_LIST_CHECK_TRUE
+	_NODE_LIST_CHECK_FALSE
+	_NODE_TABLE
+	_NODE_TABLE_ROW
+	_NODE_TABLE_CELL
+	_NODE_IMAGE
+)
+
+const _MAX_HEADING = 6

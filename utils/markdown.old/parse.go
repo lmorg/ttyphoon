@@ -1,82 +1,94 @@
 package markdown
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type nodeT struct {
 	nodeType nodeTypeT
 	children []*nodeT
 	meta     any
-	text     string // for leaf nodes
+	text     []rune
 }
 
-func (n *nodeT) addLeaf(nodeType nodeTypeT, text []rune, state *stateT) {
+func (n *nodeT) dump() any {
+	var children []any
+	for i := range n.children {
+		children = append(children, n.children[i].dump())
+	}
+	var meta any
+	if n.meta != nil {
+		meta = fmt.Sprintf("%T(%v)", n.meta, n.meta)
+	} else {
+		meta = "n/a"
+	}
+	return map[string]any{
+		"Type":     n.nodeType.String(),
+		"Meta":     meta,
+		"Text":     string(n.text),
+		"Children": children,
+	}
+}
+
+func (n *nodeT) String() string {
+	b, err := json.MarshalIndent(n.dump(), "    ", "    ")
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
+}
+
+func (n *nodeT) addLeaf(nodeType nodeTypeT, text []rune, state *stateT, meta any) {
+	n._addLeaf(nodeType, text, meta)
+	state.paragraph = _PARAGRAPH_NONE
+}
+
+func (n *nodeT) addParagraph(text []rune, state *stateT) {
+	n._addLeaf(_NODE_PARAGRAPH, text, state.paragraph)
+	state.paragraph.Set(_PARAGRAPH_CONTINUOUS_LINE)
+}
+
+func (n *nodeT) _addLeaf(nodeType nodeTypeT, text []rune, meta any) {
 	n.children = append(n.children, &nodeT{
 		nodeType: nodeType,
-		text:     string(text),
+		text:     text,
+		meta:     meta,
 	})
-	state.textStyle = _STYLE_NONE
 }
 
 type fnParserT func(*nodeT, *stateT, []rune)
 
 func (n *nodeT) addNode(nodeType nodeTypeT, parser fnParserT, state *stateT, line []rune) {
-	node := &nodeT{nodeType: nodeType}
 	n.children = append(n.children, node)
-	state.textStyle = _STYLE_NONE
+	state.paragraph = _PARAGRAPH_NONE
 	parser(node, state, line)
 }
 
-type nodeTypeT int
-
-const (
-	_NODE_PARAGRAPH nodeTypeT = iota
-	_NODE_LINE_SPACE
-	_NODE_LINK
-	_NODE_LINK_LABEL
-	_NODE_LINK_URL
-	//_NODE_BOLD
-	//_NODE_ITALIC
-	//_NODE_UNDERLINE
-	//_NODE_STRIKETHROUGH
-	_NODE_CODE_INLINE
-	_NODE_CODE_BLOCK
-	_NODE_QUOTE
-	_NODE_HEADING_0 // this is just used to calculate the other headings
-	_NODE_HEADING_1
-	_NODE_HEADING_2
-	_NODE_HEADING_3
-	_NODE_HEADING_4
-	_NODE_HEADING_5
-	_NODE_HEADING_6
-	_NODE_LIST_BULLET
-	_NODE_LIST_NUMBERED
-	_NODE_LIST_CHECK_TRUE
-	_NODE_LIST_CHECK_FALSE
-	_NODE_TABLE
-	_NODE_TABLE_ROW
-	_NODE_TABLE_CELL
-	_NODE_IMAGE
-)
-
-const _MAX_HEADING = 6
-
 type stateT struct {
 	ch        chan []rune
-	textStyle textStyleT
+	paragraph paragraphT
 }
 
-type textStyleT int
+type paragraphT int
 
 const (
-	_STYLE_NONE  textStyleT = 0
-	_STYLE_TOKEN textStyleT = 1 << iota
-	_STYLE_BOLD
-	_STYLE_ITALIC
-	_STYLE_UNDERLINE
-	_STYLE_STRIKETHROUGH
+	_PARAGRAPH_NONE   paragraphT = 0
+	_PARAGRAPH_NESTED paragraphT = 1 << (iota - 1)
+	_PARAGRAPH_CONTINUOUS_LINE
+	_PARAGRAPH_BOLD_BEGIN
+	_PARAGRAPH_BOLD_END
+	_PARAGRAPH_ITALIC_BEGIN
+	_PARAGRAPH_ITALIC_END
+	_PARAGRAPH_UNDERLINE_BEGIN
+	_PARAGRAPH_UNDERLINE_END
+	_PARAGRAPH_STRIKETHROUGH_BEGIN
+	_PARAGRAPH_STRIKETHROUGH_END
 )
 
-func (f textStyleT) Is(flag textStyleT) bool { return f&flag != 0 }
-func (f *textStyleT) Set(flag textStyleT)    { *f |= flag }
-func (f *textStyleT) Unset(flag textStyleT)  { *f &^= flag }
+func (f paragraphT) Is(flag paragraphT) bool { return f&flag != 0 }
+func (f *paragraphT) Set(flag paragraphT)    { *f |= flag }
+func (f *paragraphT) Unset(flag paragraphT)  { *f &^= flag }
 
 // Parse parses the given markdown runes and returns the root AST node.
 func Parse(md []rune) *nodeT {
@@ -121,16 +133,17 @@ func parse(parentNode *nodeT, state *stateT) {
 
 		parseLine(parentNode, state, line)
 	}
-
 }
 
 // parseLine parses a single line and adds nodes to the parent AST node.
 func parseLine(parentNode *nodeT, state *stateT, line []rune) {
 	if len(line) == 0 {
-		parentNode.addLeaf(_NODE_LINE_SPACE, nil, state)
+		//parentNode.lfCount++
+		//if parentNode.lfCount == 1 {
+		parentNode.addLeaf(_NODE_LINE_SPACE, nil, state, nil)
+		//}
 		return
 	}
-
 	switch line[0] {
 	case '#':
 		parseHeading(parentNode, state, line)
@@ -148,13 +161,12 @@ func parseLine(parentNode *nodeT, state *stateT, line []rune) {
 
 	case ' ':
 		if len(line) >= 4 && line[1] == ' ' && line[2] == ' ' && line[3] == ' ' {
-			parentNode.addLeaf(_NODE_PARAGRAPH, line, state)
+			//parentNode.addLeaf(_NODE_PARAGRAPH, line, state, nil)
 			return
 		}
 	}
 
-	parentNode.addLeaf(_NODE_PARAGRAPH, line, state)
-
+	parseParagraph(parentNode, state, line)
 }
 
 func parseHeading(parentNode *nodeT, state *stateT, line []rune) {
@@ -163,11 +175,12 @@ func parseHeading(parentNode *nodeT, state *stateT, line []rune) {
 		i++
 	}
 
-	parentNode.addNode(_NODE_HEADING_0+nodeTypeT(min(i, _MAX_HEADING)), parseParagraph, state, line[i:])
+	parentNode.addNode(_NODE_HEADING_0+nodeTypeT(min(i, _MAX_HEADING)), parseParagraph, state, ltrim(line[i:]))
 }
 
 func parseCodeBlock(parentNode *nodeT, state *stateT, line []rune) {
-	parentNode.addLeaf(_NODE_CODE_BLOCK, line, state)
+	meta := string(line)
+	var r []rune
 
 	ok := true
 	for ok {
@@ -175,16 +188,23 @@ func parseCodeBlock(parentNode *nodeT, state *stateT, line []rune) {
 
 		if len(line) >= 3 &&
 			line[len(line)-1] == '`' && line[len(line)-2] == '`' && line[len(line)-3] == '`' {
-			line = line[:len(line)-2]
+			line = line[:len(line)-3]
 			ok = false
 		}
 
-		parentNode.addLeaf(_NODE_CODE_BLOCK, line, state)
+		if !ok && len(line) == 0 {
+			break
+		}
+
+		r = append(r, line...)
+		r = append(r, '\n')
 	}
+
+	parentNode.addLeaf(_NODE_CODE_BLOCK, r, state, meta)
 }
 
 func parseParagraph(parentNode *nodeT, state *stateT, line []rune) {
-	parentNode.meta = state.textStyle
+	//parentNode.meta = state.paragraph
 
 	var (
 		i int
@@ -199,7 +219,7 @@ func parseParagraph(parentNode *nodeT, state *stateT, line []rune) {
 	}
 
 	next := func() rune {
-		if i < len(line) {
+		if i+1 < len(line) {
 			return line[i+1]
 		}
 		return ' '
@@ -211,32 +231,38 @@ func parseParagraph(parentNode *nodeT, state *stateT, line []rune) {
 			if prev() != ' ' || next() != '*' {
 				continue
 			}
+			panic("bold")
 
 		case '_': // underline
 			if prev() != ' ' || next() == ' ' {
 				continue
 			}
+			panic("underline")
 
 		case '`': // fixed width
 			if prev() != ' ' || next() == ' ' {
 				continue
 			}
+			panic("fixed width")
 
 		case '~': // strikethrough
 			if prev() != ' ' || next() == ' ' {
 				continue
 			}
+			panic("strikethrough")
 
 		case '[': // link
+			panic("link")
 
 		case '!': // image
 			if next() != '[' {
 				continue
 			}
+			panic("image")
 
 		default:
 		}
 	}
 
-	parentNode.text = string(line)
+	parentNode.addParagraph(line, state)
 }
