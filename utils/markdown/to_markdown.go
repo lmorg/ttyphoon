@@ -103,8 +103,16 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 			}
 		}
 	case NodeListItem:
-		for _, c := range n.Children {
-			writeNode(sb, c, depth)
+		for i, c := range n.Children {
+			if i == 0 {
+				writeNode(sb, c, depth)
+			} else if c.Type == NodeListBullet || c.Type == NodeListNumbered {
+				sb.WriteString("\n")
+				writeNode(sb, c, depth)
+			} else {
+				// fallback: write other children inline
+				writeNode(sb, c, depth)
+			}
 		}
 	case NodeTable:
 		for i, row := range n.Children {
