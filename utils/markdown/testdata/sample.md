@@ -14,7 +14,7 @@ This is a **bold** and *italic* text with `inline code`.
 [Link to GitHub](https://github.com)
 
 | Header 1 | Header 2 |
-|----------|----------|
+| -------- | -------- |
 | Cell 1   | Cell 2   |
 | Cell 3   | Cell 4   |
 

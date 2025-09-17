@@ -5,6 +5,25 @@ import (
 	"strings"
 )
 
+// isTableSeparatorRow returns true if the row is a Markdown table separator (e.g., |---|---|)
+func isTableSeparatorRow(row *Node) bool {
+	if row.Type != NodeTableRow {
+		return false
+	}
+	for _, cell := range row.Children {
+		txt := strings.TrimSpace(cell.Text)
+		if len(txt) == 0 {
+			continue
+		}
+		for _, r := range txt {
+			if r != '-' && r != ':' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // ToMarkdown renders the AST back to markdown format.
 func ToMarkdown(n *Node) string {
 	var sb strings.Builder
@@ -118,9 +137,11 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 		for i, row := range n.Children {
 			writeNode(sb, row, depth)
 			sb.WriteString("\n")
-			// After header row, print separator if next row is not separator
+			// After header row, print separator if next row is not already a separator
 			if i == 0 && len(n.Children) > 1 {
-				sb.WriteString("|" + strings.Repeat("---|", len(row.Children)) + "\n")
+				if !isTableSeparatorRow(n.Children[1]) {
+					sb.WriteString("|" + strings.Repeat("---|", len(row.Children)) + "\n")
+				}
 			}
 		}
 	case NodeTableRow:
