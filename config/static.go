@@ -73,7 +73,7 @@ type configT struct {
 
 	Terminal struct {
 		ColorTheme              string `yaml:"ColorTheme"`
-		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
+		ScrollbackBuffer        int    `yaml:"ScrollbackBuffer"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
 		AutoHyperlink           bool   `yaml:"AutoHyperlink"`

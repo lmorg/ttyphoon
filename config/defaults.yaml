@@ -13,9 +13,9 @@ Shell:
   Fallback: [$SHELL]
 
 Terminal:
-  # ScrollbackHistory is the size of the scrollback buffer.
+  # ScrollbackBuffer is the size of the scrollback buffer.
   # Value is number of lines
-  ScrollbackHistory: 10000
+  ScrollbackBuffer: 100000
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view

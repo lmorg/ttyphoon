@@ -89,8 +89,8 @@ func (term *Term) appendScrollBuf(n int) {
 
 	term._scrollBuf = append(term._scrollBuf, term._normBuf[0:n]...)
 
-	if len(term._scrollBuf) > config.Config.Terminal.ScrollbackHistory {
-		term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-config.Config.Terminal.ScrollbackHistory:]
+	if len(term._scrollBuf) > config.Config.Terminal.ScrollbackBuffer {
+		term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-config.Config.Terminal.ScrollbackBuffer:]
 	}
 
 	if term._scrollOffset > 0 {
