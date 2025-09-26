@@ -29,6 +29,7 @@ const (
 	NodeLinkURL
 	NodeTaskUnchecked
 	NodeTaskChecked
+	NodeHorizontalRule
 )
 
 type Node struct {

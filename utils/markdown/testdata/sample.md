@@ -15,8 +15,8 @@ This is a **bold** and *italic* text with `inline code`.
 
 | Header 1 | Header 2 |
 | -------- | -------- |
-| Cell 1   | Cell 2   |
-| Cell 3   | Cell 4   |
+| Cell 1 | Cell 2 |
+| Cell 3 | Cell 4 |
 
 ---
 
@@ -31,4 +31,3 @@ Text with ~~strikethrough~~ and __underline__.
 
 - [ ] Task list item
 - [x] Completed task
-

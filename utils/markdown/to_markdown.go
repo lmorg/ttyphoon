@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -28,16 +29,24 @@ func isTableSeparatorRow(row *Node) bool {
 func ToMarkdown(n *Node) string {
 	var sb strings.Builder
 	writeNode(&sb, n, 0)
-	return sb.String()
+	return normalizeSpacing(sb.String())
+}
+
+// normalizeSpacing collapses 3+ consecutive newlines to exactly two
+func normalizeSpacing(md string) string {
+	re := regexp.MustCompile(`\n{3,}`)
+	return re.ReplaceAllString(md, "\n\n")
 }
 
 func writeNode(sb *strings.Builder, n *Node, depth int) {
 	switch n.Type {
+	case NodeHorizontalRule:
+		sb.WriteString("---\n\n")
 	case NodeDocument:
 		var prevBlock NodeType = -1
 		for i, c := range n.Children {
 			if i > 0 && isBlockNode(c.Type) && isBlockNode(prevBlock) {
-				sb.WriteString("\n")
+				sb.WriteString("\n\n")
 			}
 			writeNode(sb, c, 0)
 			prevBlock = c.Type
@@ -58,7 +67,6 @@ func writeNode(sb *strings.Builder, n *Node, depth int) {
 		for _, c := range n.Children {
 			writeNode(sb, c, depth)
 		}
-		sb.WriteString("\n")
 	case NodeText:
 		if len(n.Children) > 0 {
 			for _, c := range n.Children {
