@@ -62,8 +62,6 @@ func initLLM(meta *Meta) error {
 	return nil
 }
 
-const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
-
 // RunLLM calls the LLM with the prompt string.
 // Use `ai` package to create specific prompts.
 func (meta *Meta) RunLLM(prompt string, sticky types.Notification) (result string, err error) {
@@ -92,13 +90,25 @@ func (meta *Meta) RunLLM(prompt string, sticky types.Notification) (result strin
 	sticky.UpdateCanceller(meta.fnCancel)
 
 	result, err = chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
-	if err == nil {
-		return result, nil
-	}
 
-	if strings.HasPrefix(err.Error(), _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT) {
+	switch {
+	case err == nil:
+		return result, nil
+
+	case strings.HasPrefix(err.Error(), agents.ErrUnableToParseOutput.Error()):
 		log.Println(err)
-		return err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):], nil // bit of a kludge this one
+		return err.Error()[len(agents.ErrUnableToParseOutput.Error())+2:], nil // bit of a kludge this one
+
+	case err == agents.ErrNotFinished:
+		return "", err //meta.oneShot(prompt, sticky)
+
+	default:
+		return result, err
 	}
-	return result, err
 }
+
+/*
+func (meta *Meta) oneShot(prompt string, sticky types.Notification) (result string, err error) {
+
+}
+*/

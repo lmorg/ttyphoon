@@ -25,7 +25,7 @@ type Wrapper struct {
 }
 
 func init() {
-	agent.ToolsAdd(&Wrapper{invoker: invokeDDG, addDescription: "Only search the web if you are not already confident with an answer"})
+	agent.ToolsAdd(&Wrapper{invoker: invokeDDG})
 	agent.ToolsAdd(&Wrapper{invoker: invokeScraper})
 }
 
