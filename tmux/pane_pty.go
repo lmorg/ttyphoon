@@ -1,7 +1,6 @@
 package tmux
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -9,7 +8,6 @@ import (
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/utils/octal"
 )
 
 func (p *PaneT) File() *os.File      { return nil }
@@ -19,6 +17,7 @@ func (p *PaneT) BufSize() int        { return p.buf.BufSize() }
 func (p *PaneT) exit() {
 	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.id, p.title))
 
+	p.tty.Close()
 	p.buf.Close()
 	//p.term.Close()
 	p.term = nil
@@ -34,7 +33,7 @@ func (p *PaneT) exit() {
 }
 
 func (p *PaneT) Write(b []byte) error {
-	if len(b) == 0 {
+	/*if len(b) == 0 {
 		return errors.New("nothing to write")
 	}
 
@@ -57,6 +56,9 @@ func (p *PaneT) Write(b []byte) error {
 	command := []byte(fmt.Sprintf(`send-keys %s -t %s `, flags, p.id))
 	command = append(command, b...)
 	_, err = p.tmux.SendCommand(command)
+	return err*/
+
+	_, err := p.tty.Write(b)
 	return err
 }
 

@@ -3,6 +3,7 @@ package tmux
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/lmorg/mxtty/codes"
@@ -73,6 +74,7 @@ type PaneT struct {
 	tmux     *Tmux
 	term     types.Term
 	buf      *runebuf.Buf
+	tty      *os.File
 	closed   bool
 }
 
@@ -126,6 +128,12 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 		buf:  runebuf.New(),
 	}
 
+	var err error
+	pane.tty, err = os.OpenFile(info.Tty, os.O_APPEND|os.O_WRONLY, 600)
+	if err != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "cannot open tmux pane for writing: "+err.Error())
+	}
+
 	virtualterm.NewTerminal(
 		pane, tmux.renderer,
 		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
@@ -153,6 +161,7 @@ type paneInfo struct {
 	WinActive bool   `tmux:"?window_active,true,false"`
 	AtBottom  bool   `tmux:"?pane_at_bottom,true,false"`
 	CurPath   string `tmux:"pane_current_path"`
+	Tty       string `tmux:"pane_tty"`
 }
 
 // updatePaneInfo, paneId is optional. Leave blank to update all panes
