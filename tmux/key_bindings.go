@@ -1,22 +1,11 @@
 package tmux
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/mxtty/hotkeys"
 )
-
-type keyBindsT struct {
-	tmux    map[string]map[string]string
-	prefix  string
-	fnTable map[string]*fnKeyStructT
-}
-
-type fnKeyStructT struct {
-	fn   fnKeyT
-	note string
-}
 
 type fnKeyT func(*Tmux) error
 
@@ -150,32 +139,16 @@ func (tmux *Tmux) _getDefaultTmuxKeyBindings() error {
 		return err
 	}
 
-	tmux.keys.tmux = make(map[string]map[string]string)
-	tmux.keys.fnTable = make(map[string]*fnKeyStructT)
-
 	for i := range resp.Message {
 		split := strings.SplitN(string(resp.Message[i]), " ", 3)
-		if tmux.keys.tmux[split[PREFIX]] == nil {
-			tmux.keys.tmux[split[PREFIX]] = make(map[string]string)
-		}
-
 		note := strings.TrimSpace(split[NOTE])
-
-		tmux.keys.tmux[split[PREFIX]][split[KEY]] = note
-
 		if fn, ok := defaultFnKeys[note]; ok {
-			tmux.keys.fnTable[split[KEY]] = &fnKeyStructT{fn, note}
-		}
-	}
 
-	debug.Log(tmux.keys.tmux)
-	debug.Log(fmt.Sprintf("len(tmux.keys.tmux) == %d", len(tmux.keys.tmux)))
-	//debug.Log(tmux.keys.fnTable)
-
-	if len(tmux.keys.tmux) == 1 {
-		for tmux.keys.prefix = range tmux.keys.tmux {
-			// assign key prefix to mxtty
-			debug.Log(tmux.keys.prefix)
+			hotkeys.Add(
+				codes.KeyName(split[PREFIX]),
+				codes.KeyName(split[KEY]),
+				func() error { return fn(tmux) },
+				note)
 		}
 	}
 

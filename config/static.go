@@ -71,6 +71,11 @@ type configT struct {
 		Fallback []string `yaml:"Fallback"`
 	} `yaml:"Shell"`
 
+	Hotkeys struct {
+		PrefixTtl int `yaml:"PrefixTTL"`
+		RepeatTtl int `yaml:"RepeatTTL"`
+	} `yaml:"Hotkeys"`
+
 	Terminal struct {
 		ColorTheme              string `yaml:"ColorTheme"`
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`

@@ -8,6 +8,7 @@ import (
 	"github.com/lmorg/mxtty/ai/agent"
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/hotkeys"
 	"github.com/lmorg/mxtty/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
@@ -30,13 +31,21 @@ func (tw *termWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
 					if ignore {
 						return
 					}
-					sr.termWin.Active.GetTerm().Reply(b)
+
+					if !sr.hotkey(codes.KeyCode(b[0]), 0) {
+						sr.termWin.Active.GetTerm().Reply(b)
+					}
 
 				case <-time.After(5 * time.Millisecond):
-					sr.termWin.Active.GetTerm().Reply(b)
+					if !sr.hotkey(codes.KeyCode(b[0]), 0) {
+						sr.termWin.Active.GetTerm().Reply(b)
+					}
 				}
 
 			}()
+			return
+		}
+		if sr.hotkey(codes.KeyCode(b[0]), 0) {
 			return
 		}
 	}
@@ -124,10 +133,27 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 
 	keyCode := sr.keyCodeLookup(evt.Keysym.Sym)
+
+	if sr.hotkey(keyCode, mod) {
+		return
+	}
+
 	b := codes.GetAnsiEscSeq(sr.keyboardMode.Get(), keyCode, mod)
 	if len(b) > 0 {
 		sr.termWin.Active.GetTerm().Reply(b)
 	}
+}
+
+func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
+	fn := hotkeys.KeyPress(keyCode, mod)
+	if fn == nil {
+		return false
+	}
+
+	if err := fn(); err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+	return true
 }
 
 func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent) {

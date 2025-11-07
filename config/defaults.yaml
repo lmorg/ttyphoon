@@ -12,6 +12,12 @@ Shell:
   Default: [murex]
   Fallback: [$SHELL]
 
+Hotkeys:
+  # How many milliseconds to wait before ignoring the prefix key
+  PrefixTTL: 2000
+  # How many milliseconds to wait before ignoring any chained key presses
+  RepeatTTL: 1000
+
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines

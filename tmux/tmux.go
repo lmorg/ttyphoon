@@ -130,7 +130,6 @@ type Tmux struct {
 	wins  windowMap //map[string]*WindowT
 	panes paneMap   //map[string]*PaneT
 
-	keys      keyBindsT
 	allowExit bool
 
 	appWindow    *types.AppWindowTerms
