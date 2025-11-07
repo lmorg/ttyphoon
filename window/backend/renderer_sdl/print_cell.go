@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/debug"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/veandco/go-sdl2/sdl"
@@ -58,6 +59,11 @@ func (sr *sdlRender) PrintCell(tile types.Tile, cell *types.Cell, _cellPos *type
 }
 
 func (sr *sdlRender) printCell(tile types.Tile, cell *types.Cell, _cellPos *types.XY) {
+	if cell.Sgr == nil {
+		debug.Log("unexpected nil")
+		return
+	}
+
 	cellPos := types.XY{
 		X: _cellPos.X + tile.Left(),
 		Y: _cellPos.Y + tile.Top(),
