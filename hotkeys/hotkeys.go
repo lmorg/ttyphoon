@@ -1,6 +1,9 @@
 package hotkeys
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/lmorg/mxtty/codes"
@@ -24,6 +27,7 @@ type hotkeysT struct {
 
 type hotKeyT struct {
 	fn   HotKeyFn
+	name codes.KeyName
 	desc string
 }
 
@@ -43,8 +47,13 @@ func newPrefix(prefix codes.KeyName) *hotkeysT {
 	return hk
 }
 
-func (hk *hotkeysT) Add(key codes.KeyCode, mod codes.Modifier, fn HotKeyFn, desc string) {
-	hk.fnTable[mod][key] = &hotKeyT{fn, desc}
+func (hk *hotkeysT) Add(key codes.KeyName, fn HotKeyFn, desc string) {
+	code, mod := key.Code()
+	hk.fnTable[mod][code] = &hotKeyT{
+		fn:   fn,
+		name: key,
+		desc: desc,
+	}
 }
 
 func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
@@ -76,8 +85,7 @@ func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotKeyFn, desc string) {
 		hk = newPrefix(prefix)
 	}
 
-	key, mod := hotkey.Code()
-	hk.Add(key, mod, fn, desc)
+	hk.Add(hotkey, fn, desc)
 }
 
 func KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
@@ -89,4 +97,62 @@ func KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
 	}
 
 	return nil
+}
+
+func KeyPressWithPrefix(prefix codes.KeyName, hotkey codes.KeyName) error {
+	hotkeys := prefixes[prefix]
+	if hotkeys == nil {
+		return fmt.Errorf("hotkey prefix not found: %s", prefix)
+	}
+
+	code, mod := hotkey.Code()
+	codes := hotkeys.fnTable[mod]
+	if codes == nil {
+		return fmt.Errorf("hotkey not found with modifier: %s", hotkey)
+	}
+	hk := codes[code]
+	if hk == nil {
+		return fmt.Errorf("hotkey not found with key code: %s", hotkey)
+	}
+
+	return hk.fn()
+}
+
+type HotKeyListItemT struct {
+	Prefix      codes.KeyName
+	Hotkey      codes.KeyName
+	Description string
+}
+
+func List() []*HotKeyListItemT {
+	var list []*HotKeyListItemT
+
+	for prefix := range prefixes {
+		for _, codes := range prefixes[prefix].fnTable {
+			for _, hk := range codes {
+				list = append(list, &HotKeyListItemT{
+					Prefix:      prefix,
+					Hotkey:      hk.name,
+					Description: hk.desc,
+				})
+			}
+		}
+
+	}
+
+	slices.SortFunc(list, func(a, b *HotKeyListItemT) int {
+		n := strings.Compare(a.Description, b.Description)
+		if n != 0 {
+			return n
+		}
+
+		n = strings.Compare(string(a.Prefix), string(b.Prefix))
+		if n != 0 {
+			return n
+		}
+
+		return strings.Compare(string(a.Hotkey), string(b.Hotkey))
+	})
+
+	return list
 }

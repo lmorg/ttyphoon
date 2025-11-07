@@ -2,8 +2,11 @@ package tmux
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/mxtty/hotkeys"
 	"github.com/lmorg/mxtty/types"
 )
 
@@ -163,24 +166,26 @@ func fnKeyResizePaneLeft5(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-L
 func fnKeyResizePaneRight5(tmux *Tmux) error { return _fnKeyResizePane(tmux, "-R 5") }
 
 func fnKeyListBindings(tmux *Tmux) error {
-	/*	var slice []string
-		for key, fn := range tmux.keys.fnTable {
-			slice = append(slice, fmt.Sprintf("%-4s %-8s %s", tmux.keys.prefix, key, fn.note))
+	var (
+		hkList = hotkeys.List()
+		slice  []string
+	)
+
+	for _, hk := range hkList {
+		slice = append(slice, fmt.Sprintf("%-4s %-8s %s", hk.Prefix, hk.Hotkey, hk.Description))
+	}
+
+	selectCallback := func(i int) {
+		prefix := codes.KeyName(strings.TrimSpace(slice[i][:4]))
+		hotkey := codes.KeyName(strings.TrimSpace(slice[i][5 : 5+8]))
+		err := hotkeys.KeyPressWithPrefix(prefix, hotkey)
+		if err != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
+	}
 
-		sort.Strings(slice)
-
-		selectCallback := func(i int) {
-			s := strings.TrimSpace(slice[i][5 : 5+8])
-			err := tmux.keys.fnTable[s].fn(tmux)
-			if err != nil {
-				tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			}
-		}
-
-		tmux.renderer.DisplayMenu("Hotkeys", slice, nil, selectCallback, nil)
-		return nil*/
-	return fmt.Errorf("TODO: I need to rewrite this again")
+	tmux.renderer.DisplayMenu("Hotkeys", slice, nil, selectCallback, nil)
+	return nil
 }
 
 func (tmux *Tmux) ListKeyBindings() {

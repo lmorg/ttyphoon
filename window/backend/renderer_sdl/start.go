@@ -7,6 +7,7 @@ import (
 	"github.com/lmorg/mxtty/app"
 	"github.com/lmorg/mxtty/assets"
 	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/mxtty/hotkeys"
 	"github.com/lmorg/mxtty/tmux"
 	"github.com/lmorg/mxtty/types"
 	"github.com/lmorg/mxtty/window/backend/typeface"
@@ -166,6 +167,8 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 	sr.setRefreshInterval()
 
 	agent.Init(sr)
+
+	hotkeys.Add("F2", "s", func() error { sr.UpdateConfig(); return nil }, "Settings...")
 
 	sr.eventLoop()
 }
