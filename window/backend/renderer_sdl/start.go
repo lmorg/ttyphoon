@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/lmorg/mxtty/ai/agent"
@@ -168,7 +169,43 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 
 	agent.Init(sr)
 
-	hotkeys.Add("F2", "s", func() error { sr.UpdateConfig(); return nil }, "Settings...")
+	sr.hotkeys()
 
 	sr.eventLoop()
+}
+
+/*
+   Settings:
+     Prefix: F2
+     Hotkey: t
+   FindNew:
+     Hotkey: F3
+   FindClear:
+     Prefix: F2
+     Hotkey: F3
+   AskAI:
+     Prefix: F2
+     Hotkey: a
+*/
+
+func (sr *sdlRender) hotkeys() {
+	conf := config.Config.Hotkeys.Functions.Scan()
+	for _, hk := range conf {
+		switch hk.Function {
+		case "Settings":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.UpdateConfig() }, "Settings...")
+		case "Paste":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.clipboardPaste() }, "Paste from clipboard")
+		case "AskAI":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }, "Ask AI...")
+		case "SearchAIPrompts":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().SearchAiPrompts() }, "Search AI prompts...")
+		case "SearchCommandLines":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().SearchCmdLines() }, "Search command line history...")
+		case "VisualEditor":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.visualEditor() }, "Visual editor...")
+		default:
+			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
+		}
+	}
 }

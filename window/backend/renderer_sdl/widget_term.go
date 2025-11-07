@@ -92,42 +92,7 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		return
 	}
 
-	switch {
-	case evt.Keysym.Sym == sdl.K_F3 && mod == codes.MOD_NONE:
-		fallthrough
-	case evt.Keysym.Sym == 'f' && mod == codes.MOD_META:
-		sr.termWin.Active.GetTerm().Search()
-		return
-
-	case evt.Keysym.Sym == 'v' && (mod == codes.MOD_META || mod == codes.MOD_CTRL|codes.MOD_SHIFT):
-		sr.clipboardPaste()
-		return
-
-	case evt.Keysym.Sym == 's' && mod == codes.MOD_META:
-		sr.UpdateConfig()
-		return
-
-	case evt.Keysym.Sym == 'a' && mod == codes.MOD_META:
-		askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1})
-		return
-
-	case evt.Keysym.Sym == 'c' && mod == codes.MOD_META:
-		sr.termWin.Active.GetTerm().SearchCmdLines()
-		return
-
-	case evt.Keysym.Sym == 'p' && mod == codes.MOD_META:
-		sr.termWin.Active.GetTerm().SearchAiPrompts()
-		return
-
-	case evt.Keysym.Sym == 'e' && mod == codes.MOD_META:
-		sr.DisplayInputBox("Visual editor", "", func(s string) {
-			if s != "" {
-				sr.termWin.Active.GetTerm().Reply([]byte(s))
-			}
-		}, nil)
-		return
-
-	case evt.Keysym.Sym == sdl.K_APPLICATION:
+	if evt.Keysym.Sym == sdl.K_APPLICATION {
 		tw._eventMouseButtonRightClick(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}, false)
 		return
 	}
@@ -144,15 +109,21 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 }
 
+func (sr *sdlRender) visualEditor() {
+	sr.DisplayInputBox("Visual editor", "", func(s string) {
+		if s != "" {
+			sr.termWin.Active.GetTerm().Reply([]byte(s))
+		}
+	}, nil)
+}
+
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	fn := hotkeys.KeyPress(keyCode, mod)
 	if fn == nil {
 		return false
 	}
 
-	if err := fn(); err != nil {
-		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
+	fn()
 	return true
 }
 

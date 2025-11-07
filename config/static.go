@@ -10,6 +10,7 @@ import (
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
+	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
@@ -72,8 +73,9 @@ type configT struct {
 	} `yaml:"Shell"`
 
 	Hotkeys struct {
-		PrefixTtl int `yaml:"PrefixTTL"`
-		RepeatTtl int `yaml:"RepeatTTL"`
+		PrefixTtl int              `yaml:"PrefixTTL"`
+		RepeatTtl int              `yaml:"RepeatTTL"`
+		Functions HotkeyFunctionsT `yaml:"Functions"`
 	} `yaml:"Hotkeys"`
 
 	Terminal struct {
@@ -125,6 +127,39 @@ type configT struct {
 		DefaultModels   map[string]string   `yaml:"DefaultModels"`
 		DefaultService  string              `yaml:"DefaultService"`
 	} `yaml:"AI"`
+}
+
+type HotkeyFunctionsT map[string]string
+
+func (hk HotkeyFunctionsT) Scan() []*hotkeyFunctionT {
+	var hotkeysFunctions []*hotkeyFunctionT
+	for hotkeys, function := range hk {
+		keys := strings.SplitN(hotkeys, "::", 2)
+		switch len(keys) {
+		case 1:
+			hotkeysFunctions = append(hotkeysFunctions, &hotkeyFunctionT{
+				Function: function,
+				Hotkey:   codes.KeyName(hotkeys),
+			})
+
+		case 2:
+			hotkeysFunctions = append(hotkeysFunctions, &hotkeyFunctionT{
+				Function: function,
+				Prefix:   codes.KeyName(keys[0]),
+				Hotkey:   codes.KeyName(keys[1]),
+			})
+
+		default:
+			panic(hotkeys)
+		}
+	}
+	return hotkeysFunctions
+}
+
+type hotkeyFunctionT struct {
+	Function string
+	Prefix   codes.KeyName
+	Hotkey   codes.KeyName
 }
 
 type OpenAgentsT []struct {

@@ -10,11 +10,11 @@ import (
 	"github.com/lmorg/mxtty/config"
 )
 
-type HotKeyFn func() error
+type HotkeyFn func()
 
 var (
 	prefixes    = map[codes.KeyName]*hotkeysT{}
-	prefixFound = func() error { return nil }
+	prefixFound = func() {}
 )
 
 type hotkeysT struct {
@@ -26,7 +26,7 @@ type hotkeysT struct {
 }
 
 type hotKeyT struct {
-	fn   HotKeyFn
+	fn   HotkeyFn
 	name codes.KeyName
 	desc string
 }
@@ -47,7 +47,7 @@ func newPrefix(prefix codes.KeyName) *hotkeysT {
 	return hk
 }
 
-func (hk *hotkeysT) Add(key codes.KeyName, fn HotKeyFn, desc string) {
+func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string) {
 	code, mod := key.Code()
 	hk.fnTable[mod][code] = &hotKeyT{
 		fn:   fn,
@@ -56,7 +56,15 @@ func (hk *hotkeysT) Add(key codes.KeyName, fn HotKeyFn, desc string) {
 	}
 }
 
-func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
+func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
+	if hk.prefixKey == 0 && hk.prefixMod == codes.MOD_NONE {
+		fn := hk.fnTable[mod][key]
+		if fn == nil {
+			return nil
+		}
+		return fn.fn
+	}
+
 	if hk.prefixTtl.After(time.Now()) {
 		// still within prefix time limit
 		fn := hk.fnTable[mod][key]
@@ -79,7 +87,7 @@ func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
 	return nil
 }
 
-func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotKeyFn, desc string) {
+func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string) {
 	hk := prefixes[prefix]
 	if hk == nil {
 		hk = newPrefix(prefix)
@@ -88,7 +96,7 @@ func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotKeyFn, desc string) {
 	hk.Add(hotkey, fn, desc)
 }
 
-func KeyPress(key codes.KeyCode, mod codes.Modifier) HotKeyFn {
+func KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
 	for _, prefix := range prefixes {
 		fn := prefix.KeyPress(key, mod)
 		if fn != nil {
@@ -115,7 +123,8 @@ func KeyPressWithPrefix(prefix codes.KeyName, hotkey codes.KeyName) error {
 		return fmt.Errorf("hotkey not found with key code: %s", hotkey)
 	}
 
-	return hk.fn()
+	hk.fn()
+	return nil
 }
 
 type HotKeyListItemT struct {

@@ -17,6 +17,18 @@ Hotkeys:
   PrefixTTL: 2000
   # How many milliseconds to wait before ignoring any chained key presses
   RepeatTTL: 1000
+  Functions:
+    "C-v": Paste
+    "M-v": Paste
+    "C-S-v": Paste
+    "F2::s": Settings
+    "M-f": Find
+    "C-f": Find
+    "F3::F3": Find
+    "F2::a": AskAI
+    "F3::a": SearchAIPrompts
+    "F3::c": SearchCommandLines
+    "F2::v": VisualEditor
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.

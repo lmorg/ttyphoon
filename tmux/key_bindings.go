@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/mxtty/codes"
 	"github.com/lmorg/mxtty/hotkeys"
+	"github.com/lmorg/mxtty/types"
 )
 
 type fnKeyT func(*Tmux) error
@@ -147,7 +148,11 @@ func (tmux *Tmux) _getDefaultTmuxKeyBindings() error {
 			hotkeys.Add(
 				codes.KeyName(split[PREFIX]),
 				codes.KeyName(split[KEY]),
-				func() error { return fn(tmux) },
+				func() {
+					if err := fn(tmux); err != nil {
+						tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+					}
+				},
 				note)
 		}
 	}
