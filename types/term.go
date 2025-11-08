@@ -2,6 +2,16 @@ package types
 
 type EventIgnoredCallback func()
 
+type SearchMode int
+
+const (
+	SEARCH_REGEX SearchMode = iota
+	SEARCH_RESULTS
+	SEARCH_CLEAR
+	SEARCH_CMD_LINES
+	SEARCH_AI_PROMPTS
+)
+
 type Term interface {
 	Start(Pty)
 	GetSize() *XY
@@ -21,10 +31,7 @@ type Term interface {
 	ShowCursor(bool)
 	HasFocus(bool)
 	MakeVisible(bool)
-	Search()
-	ShowSearchResults()
-	SearchCmdLines()
-	SearchAiPrompts()
+	Search(SearchMode)
 	Match(*XY)
 	GetRowId(int32) uint64
 	InsertSubTerm(string, string, uint64, BlockMetaFlag) error

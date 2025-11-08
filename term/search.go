@@ -11,16 +11,30 @@ import (
 
 const _SEARCH_OFFSET = 0
 
-func (term *Term) Search() {
+func (term *Term) Search(mode types.SearchMode) {
 	if term.IsAltBuf() {
 		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search is not supported in alt buffer")
 		return
 	}
 
-	if len(term._searchResults) == 0 {
+	switch mode {
+	case types.SEARCH_REGEX:
 		term.search()
-	} else {
-		term.ShowSearchResults()
+
+	case types.SEARCH_RESULTS:
+		term.SearchShowResults()
+
+	case types.SEARCH_CLEAR:
+		term.SearchClearResults()
+
+	case types.SEARCH_CMD_LINES:
+		term.SearchCmdLines()
+
+	case types.SEARCH_AI_PROMPTS:
+		term.SearchAiPrompts()
+
+	default:
+		term.renderer.DisplayNotification(types.NOTIFY_ERROR, "invalid search mode")
 	}
 }
 
@@ -33,8 +47,6 @@ func (term *Term) searchBuf(search string) {
 		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search string too short. Minimum search length is 2")
 		return
 	}
-
-	term.searchClearResults()
 
 	if search == "" {
 		return
@@ -70,14 +82,14 @@ func (term *Term) searchBuf(search string) {
 	term._searchHighlight = term._searchHighlight || normOk || scrollOk
 
 	if normOk || scrollOk {
-		term.ShowSearchResults()
+		term.SearchShowResults()
 		return
 	}
 
 	term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Search string not found: '%s'", search))
 }
 
-func (term *Term) searchClearResults() {
+func (term *Term) SearchClearResults() {
 	term._searchHighlight = false
 	for _, cell := range term._searchHlHistory {
 		if cell != nil && cell.Sgr != nil {
@@ -124,7 +136,7 @@ func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) []int) bool
 	return firstMatch != -1
 }
 
-func (term *Term) ShowSearchResults() {
+func (term *Term) SearchShowResults() {
 	offset := term._scrollOffset
 	sr := make([]searchResult, len(term._searchResults))
 	results := make([]string, len(term._searchResults))
@@ -140,7 +152,6 @@ func (term *Term) ShowSearchResults() {
 	cbCancel := func(int) {
 		term._scrollOffset = offset
 		term.updateScrollback()
-		term.search()
 	}
 	cbSelect := func(int) {}
 	term.renderer.DisplayMenu("Search results", results, cbHighlight, cbSelect, cbCancel)

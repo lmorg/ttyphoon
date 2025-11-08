@@ -227,7 +227,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Icon:  0xf72b,
 		},
 		{
-			Title: fmt.Sprintf("Ask AI (%s) [%s+a]", agent.Get(sr.termWin.Active.Id()).ServiceName(), types.KEY_STR_META),
+			Title: fmt.Sprintf("Ask AI (%s)", agent.Get(sr.termWin.Active.Id()).ServiceName()),
 			Fn:    func() { askAi(sr, pos) },
 			Icon:  0xe05d,
 		},
@@ -235,18 +235,18 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 			Title: types.MENU_SEPARATOR,
 		},
 		{
-			Title: fmt.Sprintf("Find text [%s+f]", types.KEY_STR_META),
-			Fn:    term.Search,
+			Title: "Find text",
+			Fn:    func() { term.Search(types.SEARCH_REGEX) },
 			Icon:  0xf002,
 		},
 		{
-			Title: fmt.Sprintf("List command line prompts [%s+c]", types.KEY_STR_META),
-			Fn:    term.SearchCmdLines,
+			Title: "List command line history",
+			Fn:    func() { term.Search(types.SEARCH_CMD_LINES) },
 			Icon:  0xf0ae,
 		},
 		{
-			Title: fmt.Sprintf("Jump to AI prompts [%s+p]", types.KEY_STR_META),
-			Fn:    term.SearchAiPrompts,
+			Title: "Jump to AI prompts",
+			Fn:    func() { term.Search(types.SEARCH_AI_PROMPTS) },
 			Icon:  0xf0ca,
 		},
 		{
@@ -268,7 +268,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 	}
 
 	menu.Append(types.MenuItem{
-		Title: fmt.Sprintf("Settings [%s+s]", types.KEY_STR_META),
+		Title: "Settings...",
 		Fn:    sr.UpdateConfig,
 		Icon:  0xf013,
 	})

@@ -18,7 +18,7 @@ const (
 	Revision = 1000
 )
 
-const Title = "Ttyphoon - Multimedia Terminal Emulator"
+const Title = "Ttyphoon: The Next Generation Terminal Emulator"
 
 // Copyright is the copyright owner string
 const Copyright = "© 2023-2025 Laurence Morgan"

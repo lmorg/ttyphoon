@@ -196,16 +196,25 @@ func (sr *sdlRender) hotkeys() {
 			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.UpdateConfig() }, "Settings...")
 		case "Paste":
 			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.clipboardPaste() }, "Paste from clipboard")
-		case "AskAI":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }, "Ask AI...")
-		case "SearchAIPrompts":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().SearchAiPrompts() }, "Search AI prompts...")
-		case "SearchCommandLines":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().SearchCmdLines() }, "Search command line history...")
 		case "VisualEditor":
 			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.visualEditor() }, "Visual editor...")
+
+		case "AskAI":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }, "Ask AI...")
+
+		case "SearchRegex":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }, "Search terminal output for regex match...")
+		case "SearchResults":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_RESULTS) }, "View search results...")
+		case "SearchClear":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CLEAR) }, "Clear search results")
+		case "SearchAIPrompts":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_AI_PROMPTS) }, "Search AI prompts...")
+		case "SearchCommandLines":
+			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }, "Search command line history...")
+
 		default:
-			sr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
+			sr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
 		}
 	}
 }
