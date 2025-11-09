@@ -62,7 +62,7 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 			home, _ := os.UserHomeDir()
 			file = fmt.Sprintf("%s/%s", home, file[1:])
 		}
-		if file[0] != '/' {
+		if file[0] != '/' && rows[0].Source != nil {
 			file = fmt.Sprintf("%s/%s", rows[0].Source.Pwd, file)
 		}
 
