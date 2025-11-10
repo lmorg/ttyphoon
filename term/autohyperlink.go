@@ -58,6 +58,9 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 		label := phrase[posFile[i][0]:posFile[i][1]]
 		file := rxSrcLine.ReplaceAllString(label, "")
 
+		if len(file) == 0 {
+			continue
+		}
 		if file[0] == '~' {
 			home, _ := os.UserHomeDir()
 			file = fmt.Sprintf("%s/%s", home, file[1:])
