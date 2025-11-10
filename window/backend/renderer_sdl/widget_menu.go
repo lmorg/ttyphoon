@@ -2,10 +2,10 @@ package rendersdl
 
 import (
 	"log"
-	"strings"
 	"sync"
 
 	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/mxtty/utils/find"
 	"github.com/lmorg/mxtty/utils/runewidth"
 	"github.com/lmorg/mxtty/window/backend/cursor"
 	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
@@ -36,6 +36,7 @@ type menuWidgetT struct {
 	maxHeight          int
 	visible            int
 	readline           *widgetReadlineT
+	filterErr          error
 	_hoverFn           func()
 	renderMutex        sync.Mutex
 	opacity            byte
@@ -246,15 +247,16 @@ func (menu *menuWidgetT) updateHidden() {
 	defer menu.renderMutex.Unlock()
 
 	filter := menu.readline.Value()
-	if filter == "" {
+	var ff find.FindT
+	ff, menu.filterErr = find.New(filter)
+
+	if filter == "" || menu.filterErr != nil {
 		for i := range menu._menuOptions {
 			menu._menuOptions[i].hidden = false
 		}
 		menu.showAll()
 		return
 	}
-
-	filter = strings.ToLower(filter)
 
 	menu.visible = 0
 	var j int
@@ -265,7 +267,7 @@ func (menu *menuWidgetT) updateHidden() {
 	}
 
 	for i := range menu._menuOptions {
-		menu._menuOptions[i].hidden = !strings.Contains(strings.ToLower(menu._menuOptions[i].label), filter)
+		menu._menuOptions[i].hidden = !ff.MatchString(menu._menuOptions[i].label)
 
 		if !menu._menuOptions[i].hidden {
 			menu.visible++
@@ -703,7 +705,11 @@ func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRen
 	sr.renderer.DrawRect(&borderRect)
 
 	// fill background
-	sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, sr.menu.opacity)
+	if menu.filterErr == nil {
+		sr.renderer.SetDrawColor(types.SGR_COLOR_BACKGROUND.Red, types.SGR_COLOR_BACKGROUND.Green, types.SGR_COLOR_BACKGROUND.Blue, sr.menu.opacity)
+	} else {
+		sr.renderer.SetDrawColor(types.SGR_COLOR_RED.Red, types.SGR_COLOR_RED.Green, types.SGR_COLOR_RED.Blue, sr.menu.opacity)
+	}
 	borderRect = sdl.Rect{
 		X: rect.X + 1,
 		Y: rect.Y + 1,

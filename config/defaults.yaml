@@ -19,13 +19,11 @@ Hotkeys:
   RepeatTTL: 1000
   Functions:
     "F2::s": Settings
-    "C-v": Paste
     "M-v": Paste
     "C-S-v": Paste
     "F2::v": VisualEditor
     "F2::a": AskAI
     "M-f": SearchRegex
-    "C-f": SearchRegex
     "F3::F3": SearchRegex
     "F3::d": SearchResults
     "F3::c": SearchClear

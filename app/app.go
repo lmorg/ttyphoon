@@ -14,7 +14,7 @@ const Name = "Ttyphoon"
 const (
 	version  = "%d.%d.%d"
 	Major    = 0
-	Minor    = 15
+	Minor    = 16
 	Revision = 1000
 )
 
