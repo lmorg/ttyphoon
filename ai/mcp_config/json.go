@@ -12,7 +12,8 @@ type ConfigT struct {
 		Servers ServersT `json:"servers"`
 		Inputs  InputsT  `json:"inputs"`
 	} `json:"mcp"`
-	Source string
+	McpServers *ServersT `json:"mcp.servers"`
+	Source     string
 }
 
 type ServersT map[string]ServerT
@@ -45,6 +46,7 @@ func ReadJson(filename string) (*ConfigT, error) {
 	}
 
 	config := new(ConfigT)
+	config.McpServers = &config.Mcp.Servers
 	err = json.Unmarshal(b, config)
 	return config, err
 }
