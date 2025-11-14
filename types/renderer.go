@@ -65,6 +65,6 @@ type Renderer interface {
 type Image interface {
 	Size() *XY
 	Asset() any
-	Draw(size *XY, pos *XY)
+	Draw(tile Tile, size *XY, pos *XY)
 	Close()
 }

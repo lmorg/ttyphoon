@@ -60,17 +60,32 @@ func (img *cachedImage) Size() *types.XY {
 	return img.sizeCells
 }
 
-func (img *cachedImage) Draw(size *types.XY, pos *types.XY) {
+func (img *cachedImage) Draw(tile types.Tile, size *types.XY, pos *types.XY) {
+	termSize := tile.GetTerm().GetSize()
+	sizeX := size.X
+	pcntX := float64(1)
+	if size.X+pos.X > termSize.X {
+		sizeX = termSize.X - pos.X
+		pcntX = float64(sizeX) / float64(size.X)
+	}
+
+	sizeY := size.Y
+	pcntY := float64(1)
+	if size.Y+pos.Y > termSize.Y {
+		sizeY = termSize.Y - pos.Y
+		pcntY = float64(sizeY) / float64(size.Y)
+	}
+
 	srcRect := &sdl.Rect{
-		W: img.surface.W,
-		H: img.surface.H,
+		W: int32(float64(img.surface.W) * pcntX),
+		H: int32(float64(img.surface.H) * pcntY),
 	}
 
 	dstRect := &sdl.Rect{
-		X: (pos.X * img.sr.glyphSize.X) + _PANE_LEFT_MARGIN,
-		Y: (pos.Y * img.sr.glyphSize.Y) + _PANE_TOP_MARGIN,
-		W: size.X * img.sr.glyphSize.X,
-		H: size.Y * img.sr.glyphSize.Y,
+		X: (tile.Left()+pos.X)*img.sr.glyphSize.X + _PANE_LEFT_MARGIN,
+		Y: (tile.Top()+pos.Y)*img.sr.glyphSize.Y + _PANE_TOP_MARGIN,
+		W: sizeX * img.sr.glyphSize.X,
+		H: sizeY * img.sr.glyphSize.Y,
 	}
 
 	img.sr.AddToElementStack(&layer.RenderStackT{img.texture, srcRect, dstRect, false})

@@ -110,7 +110,7 @@ func (el *ElementImage) Draw(pos *types.XY) {
 		return
 	}
 
-	el.image.Draw(el.size, &types.XY{pos.X + el.tile.Left(), pos.Y + el.tile.Top()})
+	el.image.Draw(el.tile, el.size, &types.XY{pos.X, pos.Y})
 }
 
 func (el *ElementImage) Rune(_ *types.XY) rune {
