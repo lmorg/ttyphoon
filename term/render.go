@@ -22,11 +22,11 @@ func (term *Term) Render() bool {
 	}
 
 	if term._scrollOffset != 0 {
-		topLeft := &types.XY{
-			X: term.tile.Right() + 1,
-			Y: term.tile.Top() + 1,
-		}
-		term.renderer.DrawGaugeV(term.tile, topLeft, term.size.Y-1, len(term._scrollBuf)-term._scrollOffset, len(term._scrollBuf), types.SGR_COLOR_BLACK_BRIGHT)
+		term.renderer.DrawGaugeV(
+			term.tile,
+			&types.XY{X: term.size.X, Y: 1}, term.size.Y-1,
+			len(term._scrollBuf)-term._scrollOffset, len(term._scrollBuf),
+			types.SGR_COLOR_BLACK_BRIGHT)
 	}
 
 	term._renderOutputBlockChrome(screen)
