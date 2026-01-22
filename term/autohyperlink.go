@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 var (

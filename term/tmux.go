@@ -1,6 +1,6 @@
 package virtualterm
 
-import "github.com/lmorg/mxtty/codes"
+import "github.com/lmorg/ttyphoon/codes"
 
 func (term *Term) tmuxRenameWindow() {
 	var title []rune

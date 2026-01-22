@@ -3,8 +3,8 @@ package virtualterm
 import (
 	"log"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 /*

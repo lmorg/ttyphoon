@@ -3,7 +3,7 @@ package mcp_config
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 const _INPUT_SCHEMA_TYPE_PROMPT_STRING = "promptString"

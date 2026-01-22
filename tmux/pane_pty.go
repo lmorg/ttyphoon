@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/utils/octal"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/octal"
 )
 
 func (p *PaneT) File() *os.File      { return nil }

@@ -3,7 +3,7 @@ package virtualterm
 import (
 	"strings"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 	"golang.design/x/clipboard"
 )
 

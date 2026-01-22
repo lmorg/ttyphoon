@@ -3,8 +3,8 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

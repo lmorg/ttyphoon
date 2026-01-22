@@ -1,7 +1,7 @@
 package rendersdl
 
 import (
-	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

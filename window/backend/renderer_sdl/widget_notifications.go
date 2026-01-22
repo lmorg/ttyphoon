@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lmorg/mxtty/assets"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/assets"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

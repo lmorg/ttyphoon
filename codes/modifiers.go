@@ -3,7 +3,7 @@ package codes
 import (
 	"strings"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 /*

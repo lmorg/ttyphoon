@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

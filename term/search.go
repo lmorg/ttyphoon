@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/utils/runewidth"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/runewidth"
 )
 
 const _SEARCH_OFFSET = 0

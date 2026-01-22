@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/lmorg/mxtty/app"
-	_ "github.com/lmorg/mxtty/debug/pprof"
+	"github.com/lmorg/ttyphoon/app"
+	_ "github.com/lmorg/ttyphoon/debug/pprof"
 )
 
 func Log(v any) {

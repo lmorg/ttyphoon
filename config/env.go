@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/ttyphoon/app"
 )
 
 var UnsetEnv = []string{

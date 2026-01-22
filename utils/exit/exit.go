@@ -3,7 +3,7 @@ package exit
 import (
 	"os"
 
-	"github.com/lmorg/mxtty/debug/pprof"
+	"github.com/lmorg/ttyphoon/debug/pprof"
 )
 
 func Exit(code int) {

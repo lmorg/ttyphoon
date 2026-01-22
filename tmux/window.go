@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 /*

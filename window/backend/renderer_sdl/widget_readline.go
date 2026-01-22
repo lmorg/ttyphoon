@@ -4,8 +4,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/readline/v4"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"

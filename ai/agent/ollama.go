@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func Init(renderer types.Renderer) {

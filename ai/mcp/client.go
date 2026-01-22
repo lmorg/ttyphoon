@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/lmorg/mxtty/app"
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 )

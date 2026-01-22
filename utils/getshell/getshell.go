@@ -3,7 +3,7 @@ package getshell
 import (
 	"runtime"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 const (

@@ -3,9 +3,9 @@ package tmux
 import (
 	"strings"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/hotkeys"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/hotkeys"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 type fnKeyT func(*Tmux) error

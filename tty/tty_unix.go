@@ -4,8 +4,8 @@
 package tty
 
 import (
-	tty_unix "github.com/lmorg/mxtty/tty/unix"
-	"github.com/lmorg/mxtty/types"
+	tty_unix "github.com/lmorg/ttyphoon/tty/unix"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func NewPty(size *types.XY) (types.Pty, error) {

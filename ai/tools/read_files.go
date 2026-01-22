@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/tmc/langchaingo/callbacks"
 	"golang.org/x/tools/txtar"
 )

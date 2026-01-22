@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/lmorg/mxtty/utils/exit"
+	"github.com/lmorg/ttyphoon/utils/exit"
 )
 
 var (

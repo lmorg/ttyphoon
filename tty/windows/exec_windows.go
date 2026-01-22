@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/ttyphoon/config"
 	conpty "github.com/qsocket/conpty-go"
 )
 

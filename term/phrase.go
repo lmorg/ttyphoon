@@ -1,7 +1,7 @@
 package virtualterm
 
 import (
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func (term *Term) phraseSetToRowPos(flags linefeedF) {

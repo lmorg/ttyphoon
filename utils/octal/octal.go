@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 func Escape(b []byte) []byte {

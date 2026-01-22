@@ -4,7 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/ttyphoon/codes"
 )
 
 /*

@@ -3,7 +3,7 @@ package element_image
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

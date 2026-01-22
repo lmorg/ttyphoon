@@ -3,7 +3,7 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 	"golang.design/x/hotkey"
 )
 

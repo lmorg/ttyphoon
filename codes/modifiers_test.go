@@ -3,8 +3,8 @@ package codes_test
 import (
 	"testing"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func TestGetAnsiEscSeqWithModifer(t *testing.T) {

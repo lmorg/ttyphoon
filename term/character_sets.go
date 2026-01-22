@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lmorg/mxtty/charset"
+	"github.com/lmorg/ttyphoon/charset"
 )
 
 /*

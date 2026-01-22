@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/tmc/langchaingo/callbacks"
 )
 

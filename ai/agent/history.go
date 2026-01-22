@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 type HistoryItemT struct {

@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lmorg/mxtty/codes"
+	"github.com/lmorg/ttyphoon/codes"
 )
 
 type Buf struct {

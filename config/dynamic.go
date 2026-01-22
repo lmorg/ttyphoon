@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/adrg/xdg"
-	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/ttyphoon/app"
 )
 
 func GetFiles(subDir string, fileExt string) []string {

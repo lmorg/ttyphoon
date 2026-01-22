@@ -3,9 +3,9 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/ai"
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func askAi(sr *sdlRender, pos *types.XY) {

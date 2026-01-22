@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/mattn/go-sixel"
 	"golang.org/x/image/bmp"
 )

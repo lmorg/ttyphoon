@@ -5,11 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/hotkeys"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/hotkeys"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )

@@ -3,8 +3,8 @@ package virtualterm
 import (
 	"os"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 func init() {

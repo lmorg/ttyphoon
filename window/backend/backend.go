@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"github.com/lmorg/mxtty/types"
-	rendersdl "github.com/lmorg/mxtty/window/backend/renderer_sdl"
+	"github.com/lmorg/ttyphoon/types"
+	rendersdl "github.com/lmorg/ttyphoon/window/backend/renderer_sdl"
 )
 
 func Initialise() (types.Renderer, *types.XY) {

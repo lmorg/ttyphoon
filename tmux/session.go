@@ -3,7 +3,7 @@ package tmux
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 /*

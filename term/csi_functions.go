@@ -3,9 +3,9 @@ package virtualterm
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func (term *Term) csiRepeatPreceding(n int32) {

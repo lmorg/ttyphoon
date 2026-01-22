@@ -10,8 +10,8 @@ import (
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/utils/themes/iterm2"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
 

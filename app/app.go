@@ -43,4 +43,4 @@ func Semver() *semver.Version {
 	return sv
 }
 
-const ProjectSourcePath = "github.com/lmorg/mxtty/"
+const ProjectSourcePath = "github.com/lmorg/ttyphoon/"

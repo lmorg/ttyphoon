@@ -1,6 +1,6 @@
 package virtualterm
 
-import "github.com/lmorg/mxtty/types"
+import "github.com/lmorg/ttyphoon/types"
 
 func (term *Term) c1DecalnTestAlignment() {
 	term._curPos = types.XY{} // top left

@@ -3,7 +3,7 @@ package rendersdl
 import (
 	"log"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func (sr *sdlRender) DrawTable(tile types.Tile, pos *types.XY, height int32, boundaries []int32) {

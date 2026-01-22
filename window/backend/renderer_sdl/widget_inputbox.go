@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/utils/runewidth"
-	"github.com/lmorg/mxtty/window/backend/cursor"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/runewidth"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

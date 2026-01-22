@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func (term *Term) HideRows(absStart, absEnd int) error {

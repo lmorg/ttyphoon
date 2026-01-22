@@ -3,10 +3,10 @@ package rendersdl
 import (
 	"fmt"
 
-	"github.com/lmorg/mxtty/ai"
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/window/backend/cursor"
+	"github.com/lmorg/ttyphoon/ai"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

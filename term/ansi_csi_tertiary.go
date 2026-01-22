@@ -3,7 +3,7 @@ package virtualterm
 import (
 	"log"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 /*

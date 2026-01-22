@@ -3,7 +3,7 @@ package virtualterm
 import (
 	"sort"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 /*

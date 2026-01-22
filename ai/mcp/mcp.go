@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, server, command string, args ...string) error {

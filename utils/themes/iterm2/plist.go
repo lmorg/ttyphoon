@@ -11,7 +11,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/lmorg/mxtty/debug"
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 // Plist represents the root structure of the plist file

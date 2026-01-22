@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 type HotkeyFn func()

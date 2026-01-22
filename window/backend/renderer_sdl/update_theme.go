@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/utils/themes/iterm2"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

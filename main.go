@@ -7,11 +7,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug/pprof"
-	"github.com/lmorg/mxtty/tmux"
-	"github.com/lmorg/mxtty/window/backend"
-	"github.com/lmorg/mxtty/window/backend/typeface"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug/pprof"
+	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/window/backend"
+	"github.com/lmorg/ttyphoon/window/backend/typeface"
 )
 
 func main() {

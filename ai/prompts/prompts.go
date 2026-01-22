@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/lmorg/mxtty/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent"
 )
 
 const _PROMPT_EXPLAIN = `

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lmorg/mxtty/codes"
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/window/backend/cursor"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"golang.design/x/clipboard"
 )
 

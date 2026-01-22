@@ -8,7 +8,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )

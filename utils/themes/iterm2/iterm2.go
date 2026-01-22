@@ -6,8 +6,8 @@ import (
 	"math"
 	"os"
 
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 // GetTheme loads an iTerm2 .plist theme and returns a map of colors

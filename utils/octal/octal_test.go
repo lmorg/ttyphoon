@@ -3,7 +3,7 @@ package octal_test
 import (
 	"testing"
 
-	"github.com/lmorg/mxtty/utils/octal"
+	"github.com/lmorg/ttyphoon/utils/octal"
 )
 
 func TestUnescape(t *testing.T) {

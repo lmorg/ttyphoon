@@ -1,7 +1,7 @@
 package element_table
 
 import (
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func (el *ElementTable) Draw(pos *types.XY) {

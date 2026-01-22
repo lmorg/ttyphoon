@@ -2,8 +2,8 @@ package typeface
 
 import (
 	"github.com/forPelevin/gomoji"
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )

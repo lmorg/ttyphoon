@@ -7,11 +7,11 @@ import (
 	godebug "runtime/debug"
 	"strings"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/debug"
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
-	"github.com/lmorg/mxtty/window/backend/typeface"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
+	"github.com/lmorg/ttyphoon/window/backend/typeface"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

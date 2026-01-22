@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 type Tool interface {

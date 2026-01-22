@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/lmorg/mxtty/charset"
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/types"
-	sbh "github.com/lmorg/mxtty/utils/scrollback_history"
+	"github.com/lmorg/ttyphoon/charset"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
+	sbh "github.com/lmorg/ttyphoon/utils/scrollback_history"
 )
 
 /*

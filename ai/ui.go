@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/ai/prompts"
-	"github.com/lmorg/mxtty/assets"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/prompts"
+	"github.com/lmorg/ttyphoon/assets"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func Explain(meta *agent.Meta, promptDialogue bool) {

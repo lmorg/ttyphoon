@@ -5,11 +5,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lmorg/mxtty/ai/agent"
-	"github.com/lmorg/mxtty/ai/mcp"
-	"github.com/lmorg/mxtty/ai/mcp_config"
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/mcp"
+	"github.com/lmorg/ttyphoon/ai/mcp_config"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func StartMcp(renderer types.Renderer, meta *agent.Meta, cancel types.MenuCallbackT) {

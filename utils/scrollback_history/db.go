@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lmorg/mxtty/app"
+	"github.com/lmorg/ttyphoon/app"
 	_ "github.com/mattn/go-sqlite3"
 )
 

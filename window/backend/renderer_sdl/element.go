@@ -1,11 +1,11 @@
 package rendersdl
 
 import (
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_codeblock"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_hyperlink"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_image"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/element_table"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_codeblock"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_hyperlink"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_image"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_table"
 )
 
 func (sr *sdlRender) NewElement(tile types.Tile, id types.ElementID) types.Element {

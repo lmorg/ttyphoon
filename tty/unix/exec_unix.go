@@ -10,8 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/lmorg/mxtty/config"
-	"github.com/lmorg/mxtty/utils/getshell"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/utils/getshell"
 )
 
 func (p *Pty) ExecuteShell(exit func()) {

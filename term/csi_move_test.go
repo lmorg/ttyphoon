@@ -3,7 +3,7 @@ package virtualterm
 import (
 	"testing"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 func TestReverseLineFeed(t *testing.T) {

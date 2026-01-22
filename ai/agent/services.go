@@ -3,7 +3,7 @@ package agent
 import (
 	"slices"
 
-	"github.com/lmorg/mxtty/config"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 const (

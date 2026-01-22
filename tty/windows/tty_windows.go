@@ -7,8 +7,8 @@ import (
 	"io"
 	"log"
 
-	"github.com/lmorg/mxtty/types"
-	runebuf "github.com/lmorg/mxtty/utils/rune_buf"
+	"github.com/lmorg/ttyphoon/types"
+	runebuf "github.com/lmorg/ttyphoon/utils/rune_buf"
 	conpty "github.com/qsocket/conpty-go"
 )
 

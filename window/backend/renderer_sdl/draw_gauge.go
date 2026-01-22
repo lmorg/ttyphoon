@@ -1,8 +1,8 @@
 package rendersdl
 
 import (
-	"github.com/lmorg/mxtty/types"
-	"github.com/lmorg/mxtty/window/backend/renderer_sdl/layer"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

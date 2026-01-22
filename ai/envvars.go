@@ -3,7 +3,7 @@ package ai
 import (
 	"os"
 
-	"github.com/lmorg/mxtty/types"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 const (

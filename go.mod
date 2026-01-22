@@ -1,4 +1,4 @@
-module github.com/lmorg/mxtty
+module github.com/lmorg/ttyphoon
 
 go 1.24.5
 
