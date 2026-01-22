@@ -60,7 +60,7 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		return
 	}
 
-	term._blockMeta = new(types.BlockMeta)
+	term._blockMeta = NewRowBlockMeta(term)
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 
 	var params struct {
@@ -107,7 +107,7 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 	term._blockMeta.ExitNum = params.ExitNum
 
 	// prep for new block
-	term._blockMeta = new(types.BlockMeta)
+	term._blockMeta = NewRowBlockMeta(term)
 }
 
 func (term *Term) mxapcConfigExport(apc *types.ApcSlice) {

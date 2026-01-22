@@ -61,7 +61,6 @@ func (term *Term) _resizeFromTop(max int) {
 		copy(newScreen[max:], term._normBuf)
 		term._normBuf = newScreen
 
-		//term._normBuf = append(term._scrollBuf[len(term._scrollBuf)-max:], term._normBuf...)
 		term._scrollBuf = term._scrollBuf[:len(term._scrollBuf)-max]
 
 		if !term.IsAltBuf() {

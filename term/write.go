@@ -91,11 +91,17 @@ func (term *Term) appendScrollBuf(n int) {
 	term._scrollBuf = append(term._scrollBuf, term._normBuf[0:n]...)
 
 	if len(term._scrollBuf) > config.Config.Terminal.ScrollbackHistory {
-		term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-config.Config.Terminal.ScrollbackHistory:]
+		term.cropScrollBuf(config.Config.Terminal.ScrollbackHistory)
+		//term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-config.Config.Terminal.ScrollbackHistory:]
 	}
 
 	if term._scrollOffset > 0 {
 		term._scrollOffset += n
 		term.updateScrollback()
 	}
+}
+
+func (term *Term) cropScrollBuf(n int) {
+	term.historyDb.Append(term._scrollBuf[:n])
+	term._scrollBuf = term._scrollBuf[len(term._scrollBuf)-n:]
 }

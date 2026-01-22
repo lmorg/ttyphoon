@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/mxtty/charset"
 	"github.com/lmorg/mxtty/config"
 	"github.com/lmorg/mxtty/types"
+	sbh "github.com/lmorg/mxtty/utils/scrollback_history"
 )
 
 /*
@@ -45,6 +46,7 @@ type Term struct {
 	_altBuf       types.Screen
 	_scrollBuf    types.Screen
 	_scrollOffset int
+	historyDb     *sbh.ScrollbackHistory
 
 	// smooth scroll
 	_ssCounter   int32
@@ -69,11 +71,11 @@ type Term struct {
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
-	//_phrase          *[]rune
-	//_rowPhrase       *[]rune
-	_rowSource *types.RowSource
-	_blockMeta *types.BlockMeta
-	_apcStack  uint
+	_rowSource       *types.RowSource
+	_blockMeta       *types.BlockMeta
+	_blockMetaId     atomic.Int64
+
+	_apcStack uint
 
 	// search
 	_searchHighlight  bool
@@ -162,15 +164,24 @@ func (term *Term) Start(pty types.Pty) {
 	go term.readLoop()
 }
 
+func NewRowBlockMeta(term *Term) *types.BlockMeta {
+	return &types.BlockMeta{
+		Id: term._blockMetaId.Add(1),
+	}
+}
+
 func (term *Term) reset(size *types.XY) {
 	term.size = size
 	term.resizePty()
 	term._curPos = types.XY{}
-	term._blockMeta = new(types.BlockMeta)
+	term._blockMeta = NewRowBlockMeta(term)
 
 	term._normBuf = term.makeScreen()
 	term._altBuf = term.makeScreen()
 	term.eraseScrollBack()
+	term.historyDb = sbh.New(term.tile.Id(), func(err error) {
+		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	})
 
 	term._tabWidth = 8
 	term.csiResetTabStops()
@@ -187,7 +198,6 @@ func (term *Term) reset(size *types.XY) {
 	if config.Config.Tmux.Enabled {
 		term.renderer.SetKeyboardFnMode(types.KeysTmuxClient)
 	}
-
 }
 
 func (term *Term) makeScreen() types.Screen {
