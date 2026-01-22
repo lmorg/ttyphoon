@@ -35,6 +35,7 @@ type menuWidgetT struct {
 	maxLen             int32
 	maxHeight          int
 	visible            int
+	visOffset          int
 	readline           *widgetReadlineT
 	filterErr          error
 	_hoverFn           func()
@@ -43,13 +44,13 @@ type menuWidgetT struct {
 }
 
 func (menu *menuWidgetT) highlightCallback(index int) {
-	menu._highlightCallback(menu.menuItems[index].callbackIndex)
+	menu._highlightCallback(menu.menuItems[index+menu.visOffset].callbackIndex)
 }
 func (menu *menuWidgetT) selectCallback() {
-	menu._selectCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
+	menu._selectCallback(menu.menuItems[menu.highlightIndex+menu.visOffset].callbackIndex)
 }
 func (menu *menuWidgetT) cancelCallback() {
-	menu._cancelCallback(menu.menuItems[menu.highlightIndex].callbackIndex)
+	menu._cancelCallback(menu.menuItems[menu.highlightIndex+menu.visOffset].callbackIndex)
 }
 
 const (
@@ -235,9 +236,9 @@ func (sr *sdlRender) closeMenu() {
 }
 
 func (menu *menuWidgetT) showAll() {
-	menu.menuItems = make([]*menuItemRendererT, menu.maxHeight)
 	menu.visible = len(menu._menuOptions)
-	for i := range menu.maxHeight {
+	menu.menuItems = make([]*menuItemRendererT, menu.visible)
+	for i := range menu.visible {
 		menu.menuItems[i] = &menu._menuOptions[i]
 	}
 }
@@ -263,7 +264,7 @@ func (menu *menuWidgetT) updateHidden() {
 	if len(menu._menuOptions) <= menu.maxHeight {
 		j = menu.maxHeight
 	} else {
-		menu.menuItems = make([]*menuItemRendererT, menu.maxHeight)
+		menu.menuItems = []*menuItemRendererT{}
 	}
 
 	for i := range menu._menuOptions {
@@ -271,21 +272,18 @@ func (menu *menuWidgetT) updateHidden() {
 
 		if !menu._menuOptions[i].hidden {
 			menu.visible++
-			if j < menu.maxHeight {
-				menu.menuItems[j] = &menu._menuOptions[i]
-				j++
-			}
+			menu.menuItems = append(menu.menuItems, &menu._menuOptions[i])
+			j++
 		}
 	}
 
 	for ; j < menu.maxHeight; j++ {
-		menu.menuItems[j] = _HIDDEN_PADDING_ITEM
+		menu.menuItems = append(menu.menuItems, _HIDDEN_PADDING_ITEM)
 	}
 }
 
 func (menu *menuWidgetT) updateHighlight(adjust int) {
 	if adjust == 0 {
-		//hl := menu.highlightIndex
 		if menu.highlightIndex < 0 {
 			menu.highlightIndex = 0
 		}
@@ -379,7 +377,30 @@ func (menu *menuWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEve
 }
 
 func (menu *menuWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent) {
-	// do nothing
+	if evt.MouseX < menu.mouseRect.X || evt.MouseX > menu.mouseRect.X+menu.mouseRect.W ||
+		evt.MouseY < menu.mouseRect.Y || evt.MouseY > menu.mouseRect.Y+menu.mouseRect.H {
+		sr.termWidget.eventMouseWheel(sr, evt)
+		return
+	}
+
+	var offset int
+	if evt.Direction == sdl.MOUSEWHEEL_FLIPPED {
+		offset = int(-evt.Y)
+	} else {
+		offset = int(evt.Y)
+	}
+
+	menu.visOffset -= offset
+
+	if menu.visOffset < 0 {
+		menu.visOffset = 0
+	}
+	if menu.visOffset+menu.maxHeight >= menu.visible {
+		menu.visOffset = menu.visible - menu.maxHeight
+	}
+
+	menu.updateHidden()
+	menu.updateHighlight(0)
 }
 
 func (menu *menuWidgetT) eventMouseMotion(sr *sdlRender, evt *sdl.MouseMotionEvent) {
@@ -576,7 +597,16 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 	curPos := sr.menu.readline.CursorPosition()
 
 	offset += _WIDGET_INNER_MARGIN
-	for i, item := range sr.menu.menuItems {
+	i := -1
+	for index, item := range sr.menu.menuItems {
+		if index < sr.menu.visOffset {
+			continue
+		}
+		if i == sr.menu.maxHeight {
+			break
+		}
+		i++
+
 		if item.label == types.MENU_SEPARATOR {
 			// draw horizontal separator
 			sr.renderer.SetDrawColor(types.SGR_COLOR_FOREGROUND.Red, types.SGR_COLOR_FOREGROUND.Green, types.SGR_COLOR_FOREGROUND.Blue, 96)
@@ -652,7 +682,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 			Y: menuRect.Y + (sr.glyphSize.X * 5),
 			W: sr.glyphSize.X,
 			H: int32(sr.menu.maxHeight) * sr.glyphSize.Y,
-		}, min(sr.menu.maxHeight, sr.menu.visible), sr.menu.visible, types.SGR_COLOR_GREEN)
+		}, min(sr.menu.maxHeight+sr.menu.visOffset, sr.menu.visible), sr.menu.visible, types.SGR_COLOR_GREEN)
 	}
 
 	if filter != "" {
