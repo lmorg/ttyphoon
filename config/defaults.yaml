@@ -33,7 +33,7 @@ Hotkeys:
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
-  ScrollbackHistory: 10000
+  ScrollbackHistory: 1000
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view
@@ -154,13 +154,12 @@ Window:
 AI:
   AvailableModels:
     ChatGPT:
-      - gpt-4.1
-      - gpt-4
-      - o4-mini
-      - gpt-3.5-turbo
+      # https://platform.openai.com/docs/models
+      - gpt-5.2
+      - gpt-5-mini
+      - gpt-5-nano
     Claude:
-      - claude-opus-4-20250514
-      - claude-sonnet-4-20250514
-      - claude-3-opus-latest
-      - claude-3-7-sonnet-latest
-      - claude-3-5-haiku-latest
+      # https://platform.claude.com/docs/en/about-claude/models/overview
+      - claude-opus-4-5
+      - claude-sonnet-4-5
+      - claude-haiku-4-5
