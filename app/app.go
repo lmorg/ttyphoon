@@ -14,14 +14,14 @@ const Name = "Ttyphoon"
 const (
 	version  = "%d.%d.%d"
 	Major    = 0
-	Minor    = 16
-	Revision = 2010
+	Minor    = 17
+	Revision = 1000
 )
 
 const Title = "Ttyphoon: The Next Generation Terminal Emulator"
 
 // Copyright is the copyright owner string
-const Copyright = "© 2023-2025 Laurence Morgan"
+const Copyright = "© 2023-20256Laurence Morgan"
 
 // License is the projects software license
 const License = "License GPL v2"
