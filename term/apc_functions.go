@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -108,6 +109,62 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 
 	// prep for new block
 	term._blockMeta = NewRowBlockMeta(term)
+}
+
+func (term *Term) askAi(prompt string) {
+	meta := agent.Get(term.tile.Id())
+	meta.Term = term
+	meta.Renderer = term.renderer
+	meta.CmdLine = ""
+	meta.Pwd = term._rowSource.Pwd
+	meta.OutputBlock = ""
+	meta.InsertAfterRowId = term.GetRowId(term.GetCursorPosition().Y - 1)
+	ai.AskAI(meta, prompt)
+}
+
+func (term *Term) mxapcAiAsk(parameters *types.ApcSlice) {
+	prompt := parameters.Index(2)
+	if prompt == "" {
+		term.renderer.DisplayNotification(types.NOTIFY_DEBUG, "Missing config in `ai;agent` ANSI sequence")
+		return
+	}
+
+	term.askAi(prompt)
+}
+
+type mxapcAiAgentT struct {
+	mcp_config.ConfigT
+	SystemPrompt string `json:"system_prompt"`
+	UserPrompt   string `json:"user_prompt"`
+	Agents       bool
+}
+
+func (term *Term) mxapcAiAgent(parameters *types.ApcSlice) {
+	acpConfig := parameters.Index(2)
+	if acpConfig == "" {
+		term.renderer.DisplayNotification(types.NOTIFY_DEBUG, "Missing config in `ai;agent` ANSI sequence")
+		return
+	}
+
+	agentConfig := new(mxapcAiAgentT)
+	agentConfig.McpServers = &agentConfig.Mcp.Servers
+	err := json.Unmarshal([]byte(acpConfig), agentConfig)
+	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_DEBUG, fmt.Sprintf("Cannot decode ai;agent config: %s", err))
+		return
+	}
+
+	go func() {
+		if len(agentConfig.Mcp.Servers) > 0 {
+			err = ai.StartServersFromConfig(term.renderer, agent.Get(term.tile.Id()), &agentConfig.ConfigT)
+			if err != nil {
+				term.renderer.DisplayNotification(types.NOTIFY_DEBUG, err.Error())
+				return
+			}
+		}
+
+		term.askAi(agentConfig.SystemPrompt + "\n\n" + agentConfig.UserPrompt)
+	}()
 }
 
 func (term *Term) mxapcConfigExport(apc *types.ApcSlice) {

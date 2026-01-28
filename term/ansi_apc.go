@@ -70,7 +70,7 @@ func (term *Term) parseApcCodes() {
 		default:
 			//term._apcStack--
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `begin` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "end":
@@ -97,7 +97,7 @@ func (term *Term) parseApcCodes() {
 		default:
 			//term._apcStack++
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `end` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "insert":
@@ -110,7 +110,18 @@ func (term *Term) parseApcCodes() {
 			term.mxapcInsert(types.ELEMENT_ID_IMAGE, apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `insert` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+		}
+
+	case "ai":
+		switch apc.Index(1) {
+		case "ask":
+			term.mxapcAiAsk(apc)
+		case "agent":
+			term.mxapcAiAgent(apc)
+		default:
+			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
+				fmt.Sprintf("Unknown mxAPC `ai` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	case "config":
@@ -125,11 +136,11 @@ func (term *Term) parseApcCodes() {
 			term.mxapcConfigMcp(apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `config` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
 	default:
 		term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(0), string(text[:len(text)-1])))
 	}
 }
