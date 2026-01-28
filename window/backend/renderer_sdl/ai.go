@@ -16,7 +16,6 @@ func askAi(sr *sdlRender, pos *types.XY) {
 	meta.CmdLine = term.CmdLine(pos)
 	meta.Pwd = term.Pwd(pos)
 	meta.OutputBlock = ""
-	//meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(term.GetCursorPosition()) - 1
 	meta.InsertAfterRowId = term.GetRowId(term.GetCursorPosition().Y - 1)
 
 	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", meta.ServiceName()), "", func(prompt string) {

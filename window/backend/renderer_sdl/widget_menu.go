@@ -1,9 +1,11 @@
 package rendersdl
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/find"
 	"github.com/lmorg/ttyphoon/utils/runewidth"
@@ -47,10 +49,20 @@ func (menu *menuWidgetT) highlightCallback(index int) {
 	menu._highlightCallback(menu.menuItems[index+menu.visOffset].callbackIndex)
 }
 func (menu *menuWidgetT) selectCallback() {
-	menu._selectCallback(menu.menuItems[menu.highlightIndex+menu.visOffset].callbackIndex)
+	index := menu.highlightIndex + menu.visOffset
+	if index < 0 || index >= len(menu.menuItems) {
+		debug.Log(fmt.Sprintf("%d out of bounds for menuItems[%d] in selectCallback()", index, len(menu.menuItems)))
+		return
+	}
+	menu._selectCallback(menu.menuItems[index].callbackIndex)
 }
 func (menu *menuWidgetT) cancelCallback() {
-	menu._cancelCallback(menu.menuItems[menu.highlightIndex+menu.visOffset].callbackIndex)
+	index := menu.highlightIndex + menu.visOffset
+	if index < 0 || index >= len(menu.menuItems) {
+		debug.Log(fmt.Sprintf("%d out of bounds for menuItems[%d] in cancelCallback()", index, len(menu.menuItems)))
+		return
+	}
+	menu._cancelCallback(menu.menuItems[index].callbackIndex)
 }
 
 const (
