@@ -45,7 +45,7 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 
 	split := strings.SplitN(el.url, "://", 2)
 	if len(split) != 2 {
-		return fmt.Errorf("invalid url, missing '://': %s", el.url)
+		return fmt.Errorf("invalid url, missing schema: '://': %s", el.url)
 	}
 	el.scheme, el.path = strings.ToLower(split[0]), split[1]
 

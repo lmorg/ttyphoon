@@ -19,6 +19,7 @@ Hotkeys:
   RepeatTTL: 1000
   Functions:
     "F2::s": Settings
+    "F2::C-r": ReloadSettings
     "M-v": Paste
     "C-S-v": Paste
     "F2::v": VisualEditor

@@ -28,11 +28,33 @@ func (term *Term) autoHyperlink(rows types.Screen) {
 
 	phrase, _ := rows.Phrase(0)
 
+	_autoHyperlinkUserRegexp(term, rows, phrase)
 	_autoHyperlinkUrls(term, rows, phrase)
 	_autoHyperlinkFiles(term, rows, phrase)
 
 	for _, row := range rows {
 		row.RowMeta.Set(types.META_ROW_AUTO_HYPERLINKED)
+	}
+}
+
+func _autoHyperlinkUserRegexp(term *Term, rows []*types.Row, phrase string) {
+	for _, custom := range config.Config.Terminal.Widgets.AutoHyperlink.CustomRegexp {
+		if custom.Rx == nil {
+			continue
+		}
+
+		posRx := custom.Rx.FindAllStringIndex(phrase, -1)
+		if posRx == nil {
+			continue
+		}
+
+		var label, link string
+
+		for i := range posRx {
+			label = phrase[posRx[i][0]:posRx[i][1]]
+			link = custom.Rx.ReplaceAllString(label, custom.Link)
+			_autoHyperlinkElement(term, rows, posRx[i], label, link)
+		}
 	}
 }
 
@@ -88,6 +110,7 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link
 	el := term.renderer.NewElement(term.tile, types.ELEMENT_ID_HYPERLINK)
 	err := el.Generate(acp)
 	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_DEBUG, err.Error())
 		return
 	}
 
