@@ -53,18 +53,20 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 			renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
 			continue
 		}
-		renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name))
-
+		sticky := renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
 		envs := svr.Env.Slice()
 
 		if err = updateVars(meta, envs, cache); err != nil {
+			sticky.Close()
 			return err
 		}
 		if err = updateVars(meta, svr.Args, cache); err != nil {
+			sticky.Close()
 			return err
 		}
 
 		err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
+		sticky.Close()
 		if err != nil {
 			return err
 		}
