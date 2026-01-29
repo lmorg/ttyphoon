@@ -50,7 +50,7 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 
 	for name, svr := range config.Mcp.Servers {
 		if meta.McpServerExists(name) {
-			renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
+			//renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
 			continue
 		}
 		sticky := renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
