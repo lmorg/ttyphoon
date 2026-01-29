@@ -12,6 +12,7 @@ import (
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
@@ -31,7 +32,7 @@ func LoadConfig() error {
 		return err
 	}
 
-	files := GetFiles(".", ".yaml")
+	files := file.GetConfigFiles(".", ".yaml")
 	for i := range files {
 		f, err := os.Open(files[i])
 		if err != nil {

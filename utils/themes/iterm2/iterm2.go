@@ -3,55 +3,36 @@ package iterm2
 import (
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"os"
-	"strings"
 
-	"github.com/adrg/xdg"
-	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
-
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil
-}
 
 // GetTheme loads an iTerm2 .plist theme and returns a map of colors
 func GetTheme(filename string) error {
-	// Open the plist file
-	if !fileExists(filename) {
-		for _, dir := range xdg.ConfigDirs {
-			xdgFilename := fmt.Sprintf("%s/%s/%s", dir, strings.ToLower(app.Name), filename)
-			if fileExists(xdgFilename) {
-				filename = xdgFilename
-				goto open
-			}
+	var (
+		f   *os.File
+		err error
+	)
 
-			log.Printf("cannot find theme file: %s", xdgFilename)
-
-			xdgFilename = fmt.Sprintf("%s/%s/themes/%s", dir, strings.ToLower(app.Name), filename)
-			if fileExists(xdgFilename) {
-				filename = xdgFilename
-				goto open
-			}
-
-			log.Printf("cannot find theme file: %s", xdgFilename)
+	if file.Exists(filename) {
+		f, err = os.Open(filename)
+		if err != nil {
+			return fmt.Errorf("error opening theme file: %v", err)
 		}
-
-		return fmt.Errorf("cannot find theme file: %s", filename)
+	} else if f, err = file.OpenConfigFile("themes", filename); err == nil {
+	} else {
+		f, err = file.OpenConfigFile(".", filename)
+		if err != nil {
+			return fmt.Errorf("error opening theme file: %v", err)
+		}
 	}
+	defer f.Close()
 
-open:
-	file, err := os.Open(filename)
-	if err != nil {
-		return fmt.Errorf("error opening theme file: %v", err)
-	}
-	defer file.Close()
-
-	theme, err := unmarshalTheme(file)
+	theme, err := unmarshalTheme(f)
 	if err != nil {
 		return err
 	}

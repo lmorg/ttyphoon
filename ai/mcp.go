@@ -8,12 +8,12 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/mcp"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
-	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 func StartMcp(renderer types.Renderer, meta *agent.Meta, cancel types.MenuCallbackT) {
-	files := config.GetFiles("mcp", ".json")
+	files := file.GetConfigFiles("mcp", ".json")
 	load := func(i int) {
 		go func() {
 			err := StartServersFromJson(renderer, meta, files[i])

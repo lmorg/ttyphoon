@@ -27,8 +27,8 @@ func (sbh *ScrollbackHistory) Append(screen types.Screen) {
 	for _, row := range screen {
 
 		_, err = tx.Exec(`INSERT INTO 'row'
-						(phrase, meta, host, pwd, block_id)
-					VALUES (?, ?, ?, ?, ?);`,
+							(phrase, meta, host, pwd, block_id)
+							VALUES (?, ?, ?, ?, ?);`,
 			row.String(), row.RowMeta, row.Source.Host, row.Source.Pwd, row.Block.Id)
 		if err != nil {
 			sbh.errCallback(fmt.Errorf("cannot write into row_block transaction: %s", err))
@@ -37,8 +37,8 @@ func (sbh *ScrollbackHistory) Append(screen types.Screen) {
 		}
 
 		_, err = tx.Exec(`INSERT OR IGNORE INTO 'block'
-						(block_id, exit_num, query, meta)
-					VALUES (?, ?, ?, ?);`,
+							(block_id, exit_num, query, meta)
+							VALUES (?, ?, ?, ?);`,
 			row.Block.Id, row.Block.ExitNum, string(row.Block.Query), row.Block.Meta)
 		if err != nil {
 			sbh.errCallback(fmt.Errorf("cannot write into row_block transaction: %s", err))

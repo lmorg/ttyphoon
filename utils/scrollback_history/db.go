@@ -12,13 +12,9 @@ import (
 
 const driverName = "sqlite3"
 
-const (
-	sqlCreateTable  = `CREATE TABLE IF NOT EXISTS '%s' (%s);`
-	sqlInsertRecord = `INSERT INTO '%s' VALUES (%s);`
-)
-
 func New(tileId string, errCallback func(error)) *ScrollbackHistory {
 	sbh := &ScrollbackHistory{errCallback: errCallback}
+	return sbh // disable this while i figure out how to use it
 
 	path := fmt.Sprintf("file:%s/%s-%d-scrollback-history-buf-%s-%d.db",
 		os.TempDir(), app.Name, os.Getpid(), tileId, time.Now().Unix())

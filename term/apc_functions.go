@@ -3,13 +3,16 @@ package virtualterm
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
@@ -134,9 +137,9 @@ func (term *Term) mxapcAiAsk(parameters *types.ApcSlice) {
 
 type mxapcAiAgentT struct {
 	mcp_config.ConfigT
-	SystemPrompt string `json:"system_prompt"`
-	UserPrompt   string `json:"user_prompt"`
-	Agents       bool
+	SystemPrompt string `json:"systemPrompt"`
+	UserPrompt   string `json:"userPrompt"`
+	//Agents       ...
 }
 
 func (term *Term) mxapcAiAgent(parameters *types.ApcSlice) {
@@ -163,7 +166,24 @@ func (term *Term) mxapcAiAgent(parameters *types.ApcSlice) {
 			}
 		}
 
-		term.askAi(agentConfig.SystemPrompt + "\n\n" + agentConfig.UserPrompt)
+		if agentConfig.SystemPrompt != "" {
+			if strings.Contains(agentConfig.SystemPrompt, `../`) || strings.Contains(agentConfig.SystemPrompt, `..\`) {
+				term.renderer.DisplayNotification(types.NOTIFY_WARN, "systemPrompt files cannot exist outside of the system-prompt directory")
+			}
+			f, err := file.OpenConfigFile("system-prompts", agentConfig.SystemPrompt)
+			if err == nil {
+				defer f.Close()
+				term.renderer.DisplayNotification(types.NOTIFY_DEBUG, fmt.Sprintf("Using system prompt: %s", f.Name()))
+				b, err := io.ReadAll(f)
+				if err != nil {
+					term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+					return
+				}
+				agentConfig.SystemPrompt = string(b)
+			}
+		}
+
+		term.askAi(fmt.Sprintf("%s\n%s", agentConfig.SystemPrompt, agentConfig.UserPrompt))
 	}()
 }
 

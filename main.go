@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug/pprof"
 	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/window/backend"
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
 )
@@ -90,7 +91,7 @@ func regularSession() {
 }
 
 func loadEnvs() {
-	files := config.GetFiles("/", ".env")
+	files := file.GetConfigFiles("/", ".env")
 	for i := range files {
 		f, err := os.Open(files[i])
 		if err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -36,16 +37,16 @@ func (sr *sdlRender) updateThemeMenu() {
 		return
 	}
 
-	files, err := filepath.Glob(home + "/*" + _ITERMCOLORS_EXT)
+	themes, err := filepath.Glob(home + "/*" + _ITERMCOLORS_EXT)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
-	files = append(files, config.GetFiles("themes", _ITERMCOLORS_EXT)...)
+	themes = append(themes, file.GetConfigFiles("themes", _ITERMCOLORS_EXT)...)
 
 	fnHighlight := func(i int) {
-		err := iterm2.GetTheme(files[i])
+		err := iterm2.GetTheme(themes[i])
 		if err != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
@@ -53,9 +54,9 @@ func (sr *sdlRender) updateThemeMenu() {
 		sr.fontCache.Reallocate()
 		sr.cacheBgTexture.Destroy(sr)
 
-		filename := files[i]
-		if strings.HasPrefix(files[i], home) {
-			filename = "~" + files[i][len(home):]
+		filename := themes[i]
+		if strings.HasPrefix(themes[i], home) {
+			filename = "~" + themes[i][len(home):]
 		}
 		config.Config.Terminal.ColorTheme = filename
 	}
@@ -65,5 +66,5 @@ func (sr *sdlRender) updateThemeMenu() {
 		sr.UpdateConfig()
 	}
 
-	sr.DisplayMenu("Settings > Select a theme", files, fnHighlight, fnSelect, fnSelect)
+	sr.DisplayMenu("Settings > Select a theme", themes, fnHighlight, fnSelect, fnSelect)
 }
