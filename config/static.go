@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/lmorg/murex/utils/lists"
@@ -19,31 +20,39 @@ import (
 var defaults []byte
 
 func init() {
-	err := ReadConfig(bytes.NewReader(defaults))
-	if err != nil {
+	if err := LoadConfig(); err != nil {
 		panic(err)
+	}
+}
+
+func LoadConfig() error {
+	err := readConfigFile(bytes.NewReader(defaults))
+	if err != nil {
+		return err
 	}
 
 	files := GetFiles(".", ".yaml")
 	for i := range files {
 		f, err := os.Open(files[i])
 		if err != nil {
-			log.Println(err)
-			continue
+			return err
 		}
-		err = ReadConfig(f)
+		err = readConfigFile(f)
 		if err != nil {
-			log.Println(err)
+			return err
 		}
 	}
+
+	return nil
 }
 
-func ReadConfig(r io.Reader) error {
+func readConfigFile(r io.Reader) error {
 	yml := yaml.NewDecoder(r)
 	yml.KnownFields(true)
 
 	err := yml.Decode(&Config)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 
@@ -53,7 +62,14 @@ func ReadConfig(r io.Reader) error {
 		colorTheme = strings.ReplaceAll(colorTheme, "~", home)
 		err = iterm2.GetTheme(colorTheme)
 		if err != nil {
-			panic(err)
+			return err
+		}
+	}
+
+	for _, custom := range Config.Terminal.Widgets.AutoHyperlink.CustomRegexp {
+		custom.Rx, err = regexp.Compile(custom.Match)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -92,8 +108,9 @@ type configT struct {
 			} `yaml:"Table"`
 
 			AutoHyperlink struct {
-				IncLineNumbers bool        `yaml:"IncLineNumbers"`
-				OpenAgents     OpenAgentsT `yaml:"OpenAgents"`
+				IncLineNumbers bool                          `yaml:"IncLineNumbers"`
+				OpenAgents     OpenAgentsT                   `yaml:"OpenAgents"`
+				CustomRegexp   []*AutoHyperlinkCustomRegexpT `yaml:"CustomRegexp"`
 			} `yaml:"AutoHyperlink"`
 		} `yaml:"Widgets"`
 	} `yaml:"Terminal"`
@@ -166,6 +183,12 @@ type OpenAgentsT []struct {
 	Name    string   `yaml:"Name"`
 	Command []string `yaml:"Command"`
 	Schemes []string `yaml:"Schemes"`
+}
+
+type AutoHyperlinkCustomRegexpT struct {
+	Match string         `yaml:"Match"`
+	Link  string         `yaml:"Link"`
+	Rx    *regexp.Regexp `yaml:"-"`
 }
 
 func (oa *OpenAgentsT) MenuItems(scheme string) (apps []string, cmds [][]string) {
