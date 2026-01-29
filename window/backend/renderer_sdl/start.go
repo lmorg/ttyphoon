@@ -1,14 +1,12 @@
 package rendersdl
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/config"
-	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
@@ -172,49 +170,4 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 	sr.hotkeys()
 
 	sr.eventLoop()
-}
-
-/*
-   Settings:
-     Prefix: F2
-     Hotkey: t
-   FindNew:
-     Hotkey: F3
-   FindClear:
-     Prefix: F2
-     Hotkey: F3
-   AskAI:
-     Prefix: F2
-     Hotkey: a
-*/
-
-func (sr *sdlRender) hotkeys() {
-	conf := config.Config.Hotkeys.Functions.Scan()
-	for _, hk := range conf {
-		switch hk.Function {
-		case "Settings":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.UpdateConfig() }, "Settings...")
-		case "Paste":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.clipboardPaste() }, "Paste from clipboard")
-		case "VisualEditor":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.visualEditor() }, "Visual editor...")
-
-		case "AskAI":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }, "Ask AI...")
-
-		case "SearchRegex":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }, "Search terminal output for regex match...")
-		case "SearchResults":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_RESULTS) }, "View search results...")
-		case "SearchClear":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CLEAR) }, "Clear search results")
-		case "SearchAIPrompts":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_AI_PROMPTS) }, "Search AI prompts...")
-		case "SearchCommandLines":
-			hotkeys.Add(hk.Prefix, hk.Hotkey, func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }, "Search command line history...")
-
-		default:
-			sr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
-		}
-	}
 }
