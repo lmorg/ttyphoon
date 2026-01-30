@@ -22,6 +22,8 @@ type ServerT struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
 	Env     EnvVarsT `json:"env"`
+	Type    string   `json:"type"`
+	Url     string   `json:"url"`
 }
 
 type EnvVarsT map[string]string

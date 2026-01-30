@@ -23,6 +23,18 @@ func connectCmdLine(envvars []string, command string, args ...string) (*Client, 
 		return nil, fmt.Errorf("failed to create client: %v", err)
 	}
 
+	return initClient(c)
+}
+
+func connectHttp(url string) (*Client, error) {
+	c, err := client.NewStreamableHttpClient(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client: %v", err)
+	}
+	return initClient(c)
+}
+
+func initClient(c *client.Client) (*Client, error) {
 	// Initialize the client
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION

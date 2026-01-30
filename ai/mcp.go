@@ -65,7 +65,12 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 			return err
 		}
 
-		err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
+		switch svr.Type {
+		case "http", "https":
+			err = mcp.StartServerHttp(config.Source, meta, name, svr.Url)
+		default:
+			err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
+		}
 		sticky.Close()
 		if err != nil {
 			return err

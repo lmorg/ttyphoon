@@ -17,7 +17,22 @@ func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, serv
 		return err
 	}
 
-	err = c.listTools()
+	return startServer(cfgPath, meta, server, c)
+}
+
+func StartServerHttp(cfgPath string, meta *agent.Meta, server, url string) error {
+	log.Printf("MCP server %s: %s", server, url)
+
+	c, err := connectHttp(url)
+	if err != nil {
+		return err
+	}
+
+	return startServer(cfgPath, meta, server, c)
+}
+
+func startServer(cfgPath string, meta *agent.Meta, server string, c *Client) error {
+	err := c.listTools()
 	if err != nil {
 		return err
 	}
