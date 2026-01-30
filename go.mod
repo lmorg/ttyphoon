@@ -12,7 +12,7 @@ require (
 	github.com/lmorg/mcp-web-scraper v1.0.1
 	github.com/lmorg/murex v0.0.0-20260111231928-c71002785e97
 	github.com/lmorg/readline/v4 v4.2.2
-	github.com/mark3labs/mcp-go v0.43.2
+	github.com/mark3labs/mcp-go v0.44.0-beta.2
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/mattn/go-sixel v0.0.8
 	github.com/mattn/go-sqlite3 v1.14.33
@@ -44,7 +44,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/PuerkitoBio/goquery v1.11.0 // indirect
-	github.com/alecthomas/chroma/v2 v2.23.0 // indirect
+	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -54,12 +54,12 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect
 	github.com/charmbracelet/x/ansi v0.11.4 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.14 // indirect
-	github.com/charmbracelet/x/exp/slice v0.0.0-20260119114936-fd556377ea59 // indirect
+	github.com/charmbracelet/x/exp/slice v0.0.0-20260127155452-b72a9a918687 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/chromedp/chromedp v0.14.2 // indirect
-	github.com/clipperhouse/displaywidth v0.7.0 // indirect
+	github.com/clipperhouse/displaywidth v0.8.0 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
-	github.com/clipperhouse/uax29/v2 v2.3.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.4.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
