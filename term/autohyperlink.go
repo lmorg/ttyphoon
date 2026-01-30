@@ -9,6 +9,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/runewidth"
 )
 
 var (
@@ -98,6 +99,12 @@ func _autoHyperlinkFiles(term *Term, rows []*types.Row, phrase string) {
 	}
 }
 
+func autoHyperlinkUnicodeOffset(rows []*types.Row, posRx *[]int) {
+	str := rows[0].String()
+	(*posRx)[0] = runewidth.StringWidth(str[:(*posRx)[0]])
+	(*posRx)[1] = runewidth.StringWidth(str[:(*posRx)[1]])
+}
+
 func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -105,6 +112,8 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link
 		}
 	}()
 	debug.Log(label)
+
+	autoHyperlinkUnicodeOffset(rows, &pos)
 
 	acp := types.NewApcSliceNoParse([]string{label, link})
 	el := term.renderer.NewElement(term.tile, types.ELEMENT_ID_HYPERLINK)
