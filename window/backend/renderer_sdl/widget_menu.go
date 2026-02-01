@@ -333,6 +333,7 @@ func (menu *menuWidgetT) updateHighlight(adjust int) {
 }
 
 func (menu *menuWidgetT) eventTextInput(sr *sdlRender, evt *sdl.TextInputEvent) {
+	menu.visOffset = 0
 	menu.readline.eventTextInput(sr, evt)
 }
 
@@ -392,6 +393,10 @@ func (menu *menuWidgetT) eventMouseWheel(sr *sdlRender, evt *sdl.MouseWheelEvent
 	if evt.MouseX < menu.mouseRect.X || evt.MouseX > menu.mouseRect.X+menu.mouseRect.W ||
 		evt.MouseY < menu.mouseRect.Y || evt.MouseY > menu.mouseRect.Y+menu.mouseRect.H {
 		sr.termWidget.eventMouseWheel(sr, evt)
+		return
+	}
+
+	if menu.visible < menu.maxHeight {
 		return
 	}
 
@@ -614,7 +619,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		if index < sr.menu.visOffset {
 			continue
 		}
-		if i == sr.menu.maxHeight {
+		if i == sr.menu.maxHeight-1 {
 			break
 		}
 		i++
