@@ -39,10 +39,10 @@ func (skills Skills) FromFunctionName(fn string) *SkillT {
 }
 
 func ReadSkills() Skills {
-	var (
-		files  = file.GetConfigGlob("agent-skills/*/SKILL.md")
-		skills []*SkillT
-	)
+	var skills []*SkillT
+
+	files := file.GetConfigGlob("agent-skills/*/SKILL.md")
+	files = append(files, file.GetConfigGlob("skills/*/SKILL.md")...)
 
 	for i := range files {
 		f, err := os.Open(files[i])
