@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/tmc/langchaingo/agents"
 )
@@ -35,7 +36,7 @@ func NewAgentMeta() *Meta {
 	meta := &Meta{
 		model:         map[string]string{},
 		_mcpServers:   make(map[string]client),
-		maxIterations: _MAX_ITERATIONS,
+		maxIterations: config.Config.Ai.MaxIterations,
 	}
 
 	setDefaultModels(meta)
