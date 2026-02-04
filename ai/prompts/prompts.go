@@ -22,11 +22,11 @@ var _PROMPT_EXPLAIN string
 //go:embed ask.md
 var _PROMPT_ASK string
 
+var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
+
 func GetExplain(meta *agent.Meta, userPrompt string) string {
 	return os.Expand(_PROMPT_EXPLAIN, promptVars(meta, userPrompt))
 }
-
-var rxSkillFunction = regexp.MustCompile(`^@[-a-zA-Z0-9]+($|\s)`)
 
 func GetAsk(meta *agent.Meta, userPrompt string) string {
 	fn := rxSkillFunction.FindString(userPrompt)

@@ -24,6 +24,7 @@ Hotkeys:
     "C-S-v": Paste
     "F2::v": VisualEditor
     "F2::a": AskAI
+    "F2::/": AgentSkills
     "M-f": SearchRegex
     "F3::F3": SearchRegex
     "F3::d": SearchResults

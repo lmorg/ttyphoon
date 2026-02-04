@@ -69,6 +69,9 @@ func (sr *sdlRender) hotkeys() {
 		case "AskAI":
 			fn = func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }
 			desc = "Ask AI..."
+		case "AgentSkills":
+			fn = func() { askAiSkill(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }
+			desc = "Ask AI with Agent Skill..."
 
 		case "SearchRegex":
 			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }
