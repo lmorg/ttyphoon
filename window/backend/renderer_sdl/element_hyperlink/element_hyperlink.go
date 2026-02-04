@@ -121,6 +121,11 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		{
 			Title: "Copy link to clipboard",
 			Fn:    func() { copyLinkToClipboard(el.renderer, el.schemaOrPath()) },
+			Icon:  0xf0c1,
+		},
+		{
+			Title: "Copy text to clipboard",
+			Fn:    func() { copyLinkToClipboard(el.renderer, string(el.label)) },
 			Icon:  0xf0c5,
 		},
 	}
