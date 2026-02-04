@@ -1,44 +1,73 @@
 package prompts
 
 import (
-	"fmt"
+	_ "embed"
+	"os"
+	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/skills"
+	"github.com/lmorg/ttyphoon/types"
 )
 
-const _PROMPT_EXPLAIN = `
-You are a non-interactive agent responding to a developer or DevOps engineer's query.
-A command line application has been executed. Can you explain its output?
-If it is an error, you should focus on how to fix the error.
-If it is not an error, you should keep the answer as succinct as possible.
-Do not quote the command line output verbatim in your response.
-Do not explain what the command line does, we already know this. Only explain the output.
-Output needs to be strictly formatted as markdown.
-Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
-Bullet points and numbered lists should be indented.
-You can use tools to read file contents and search the web.
-You can read files from disk to gain more context.
-`
+//go:embed system.md
+var _PROMPT_SYSTEM string
 
-const _PROMPT_ASK = `
-You are a helpful non-interactive agent responding to a developer or DevOps engineer's question.
-Do not quote the question verbatim in your response.
-Output needs to be strictly formatted as markdown.
-Examples should be formatted as code and quoted exactly like ` + "```code```" + `.
-Bullet points and numbered lists should be indented.
-You are allowed to check online.
-You are allowed to write files to disk.
-`
+//go:embed explain.md
+var _PROMPT_EXPLAIN string
+
+//go:embed ask.md
+var _PROMPT_ASK string
 
 func GetExplain(meta *agent.Meta, userPrompt string) string {
-	return fmt.Sprintf(
-		"%s\nOperating system: %s, CPU: %s.\n%s\n%s\nCommand line executed: %s\nCommand line output below:\n%s",
-		_PROMPT_EXPLAIN, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt, meta.CmdLine, meta.OutputBlock)
+	return os.Expand(_PROMPT_EXPLAIN, promptVars(meta, userPrompt))
 }
 
+var rxSkillFunction = regexp.MustCompile(`^@[-a-zA-Z0-9]+($|\s)`)
+
 func GetAsk(meta *agent.Meta, userPrompt string) string {
-	return fmt.Sprintf(
-		"%sOperating system: %s, CPU: %s.\n%s\n%s",
-		_PROMPT_ASK, runtime.GOOS, runtime.GOARCH, meta.History.String(), userPrompt)
+	fn := rxSkillFunction.FindString(userPrompt)
+	if fn == "" {
+		return os.Expand(_PROMPT_ASK, promptVars(meta, userPrompt))
+	}
+
+	fn = strings.TrimRight(fn[1:], " ")
+	skill := skills.ReadSkills().FromFunctionName(fn)
+	if skill == nil {
+		return os.Expand(_PROMPT_ASK, promptVars(meta, userPrompt))
+	}
+
+	err := meta.SkillStartTools(skill)
+	if err != nil {
+		meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(meta, userPrompt))
+}
+
+func promptVars(meta *agent.Meta, userPrompt string) func(string) string {
+	return func(s string) string {
+		switch s {
+		case "SYSTEM_PROMPT":
+			return os.Expand(_PROMPT_SYSTEM, promptVars(meta, userPrompt))
+		case "MAX_ITERATIONS":
+			return strconv.Itoa(meta.MaxIterations())
+		case "HOST_OS":
+			return runtime.GOOS
+		case "HOST_CPU":
+			return runtime.GOARCH
+		case "HISTORY":
+			return meta.History.String()
+		case "USER_PROMPT":
+			return userPrompt
+		case "COMMAND_LINE":
+			return meta.CmdLine
+		case "COMMAND_OUTPUT":
+			return meta.OutputBlock
+		default:
+			return "$" + s
+		}
+	}
 }

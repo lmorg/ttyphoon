@@ -1,4 +1,4 @@
-package mcp
+package agent
 
 import (
 	"context"
@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
-type tool struct {
-	client      *Client
-	meta        *agent.Meta
+type mcpTool struct {
+	client      *mcp_client.Client
+	meta        *Meta
 	server      string
 	name        string
 	path        string
@@ -22,9 +22,9 @@ type tool struct {
 	enabled     bool
 }
 
-func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
+func (t *mcpTool) New(meta *Meta) (Tool, error) {
 
-	return &tool{
+	return &mcpTool{
 		client:      t.client,
 		meta:        meta,
 		server:      t.server,
@@ -36,13 +36,13 @@ func (t *tool) New(meta *agent.Meta) (agent.Tool, error) {
 	}, nil
 }
 
-func (t *tool) Enabled() bool { return t.enabled }
-func (t *tool) Toggle()       { t.enabled = !t.enabled }
-func (t *tool) Close() error  { return t.client.client.Close() }
+func (t *mcpTool) Enabled() bool { return t.enabled }
+func (t *mcpTool) Toggle()       { t.enabled = !t.enabled }
+func (t *mcpTool) Close() error  { return t.client.Close() }
 
-func (t *tool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
-func (t *tool) Path() string { return t.path }
-func (t *tool) Description() string {
+func (t *mcpTool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
+func (t *mcpTool) Path() string { return t.path }
+func (t *mcpTool) Description() string {
 	description := t.description //+ "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
 
 	if debug.Trace {
@@ -52,7 +52,7 @@ func (t *tool) Description() string {
 	return description
 }
 
-func (t *tool) Call(ctx context.Context, input string) (response string, err error) {
+func (t *mcpTool) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
 		log.Printf("MCP tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
@@ -71,7 +71,7 @@ func (t *tool) Call(ctx context.Context, input string) (response string, err err
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 
-	response, err = t.client.call(ctx, t.name, args)
+	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
 		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 	}

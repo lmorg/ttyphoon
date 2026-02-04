@@ -1,4 +1,4 @@
-package mcp
+package mcp_client
 
 import (
 	"context"
@@ -14,10 +14,10 @@ import (
 type Client struct {
 	client     *client.Client
 	initResult mcp.InitializeResult
-	tools      *mcp.ListToolsResult
+	Tools      *mcp.ListToolsResult
 }
 
-func connectCmdLine(envvars []string, command string, args ...string) (*Client, error) {
+func ConnectCmdLine(envvars []string, command string, args ...string) (*Client, error) {
 	c, err := client.NewStdioMCPClient(command, envvars, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %v", err)
@@ -26,7 +26,7 @@ func connectCmdLine(envvars []string, command string, args ...string) (*Client, 
 	return initClient(c)
 }
 
-func connectHttp(url string) (*Client, error) {
+func ConnectHttp(url string) (*Client, error) {
 	c, err := client.NewStreamableHttpClient(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %v", err)
@@ -56,19 +56,19 @@ func initClient(c *client.Client) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) listTools() error {
+func (c *Client) ListTools() error {
 	toolsRequest := mcp.ListToolsRequest{}
 	tools, err := c.client.ListTools(context.Background(), toolsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %v", err)
 	}
 
-	c.tools = tools
+	c.Tools = tools
 
 	return nil
 }
 
-func (c *Client) call(ctx context.Context, name string, args map[string]any) (string, error) {
+func (c *Client) Call(ctx context.Context, name string, args map[string]any) (string, error) {
 	req := mcp.CallToolRequest{
 		Request: mcp.Request{Method: "tools/call"},
 		Params: mcp.CallToolParams{

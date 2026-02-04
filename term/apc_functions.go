@@ -159,7 +159,7 @@ func (term *Term) mxapcAiAgent(parameters *types.ApcSlice) {
 
 	go func() {
 		if len(agentConfig.Mcp.Servers) > 0 {
-			err = ai.StartServersFromConfig(term.renderer, agent.Get(term.tile.Id()), &agentConfig.ConfigT)
+			err = agent.Get(term.tile.Id()).StartServersFromConfig(&agentConfig.ConfigT)
 			if err != nil {
 				term.renderer.DisplayNotification(types.NOTIFY_DEBUG, err.Error())
 				return
@@ -225,7 +225,7 @@ func (term *Term) mxapcConfigMcp(apc *types.ApcSlice) {
 	apc.Parameters(config)
 	config.Source = "escape-sequence"
 	go func() {
-		err := ai.StartServersFromConfig(term.renderer, agent.Get(term.tile.Id()), config)
+		err := agent.Get(term.tile.Id()).StartServersFromConfig(config)
 		if err != nil {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP from escape sequence: %v", err))
 		}

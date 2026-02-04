@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -56,8 +57,8 @@ func initLLM(meta *Meta) error {
 		}
 	}
 
-	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(100))
-	meta.executor = agents.NewExecutor(agent)
+	agent := agents.NewOneShotAgent(model, agentTools, agents.WithMaxIterations(meta.MaxIterations()))
+	meta.executor = agents.NewExecutor(agent, agents.WithMaxIterations(meta.MaxIterations()))
 
 	return nil
 }
@@ -92,6 +93,11 @@ func (meta *Meta) RunLLM(prompt string, sticky types.Notification) (result strin
 	sticky.UpdateCanceller(meta.fnCancel)
 
 	result, err = chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
+	if strings.Contains(result, "<max_iterations_reached/>") {
+		go meta.Renderer.DisplayNotification(types.NOTIFY_DEBUG, "Max iterations reached, resuming with updated context")
+		return meta.RunLLM(fmt.Sprintf("%s\n\n# What's been learned so far\n%s", prompt, result), sticky)
+	}
+
 	if err == nil {
 		return result, nil
 	}

@@ -1,18 +1,18 @@
-package mcp
+package agent
 
 import (
 	"fmt"
 	"log"
 
-	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/debug"
 )
 
-func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, server, command string, args ...string) error {
+func startServerCmdLine(cfgPath string, meta *Meta, envvars []string, server, command string, args ...string) error {
 	debug.Log(envvars)
 	log.Printf("MCP server %s: %s %v", server, command, args)
 
-	c, err := connectCmdLine(envvars, command, args...)
+	c, err := mcp_client.ConnectCmdLine(envvars, command, args...)
 	if err != nil {
 		return err
 	}
@@ -20,10 +20,10 @@ func StartServerCmdLine(cfgPath string, meta *agent.Meta, envvars []string, serv
 	return startServer(cfgPath, meta, server, c)
 }
 
-func StartServerHttp(cfgPath string, meta *agent.Meta, server, url string) error {
+func startServerHttp(cfgPath string, meta *Meta, server, url string) error {
 	log.Printf("MCP server %s: %s", server, url)
 
-	c, err := connectHttp(url)
+	c, err := mcp_client.ConnectHttp(url)
 	if err != nil {
 		return err
 	}
@@ -31,28 +31,28 @@ func StartServerHttp(cfgPath string, meta *agent.Meta, server, url string) error
 	return startServer(cfgPath, meta, server, c)
 }
 
-func startServer(cfgPath string, meta *agent.Meta, server string, c *Client) error {
-	err := c.listTools()
+func startServer(cfgPath string, meta *Meta, server string, c *mcp_client.Client) error {
+	err := c.ListTools()
 	if err != nil {
 		return err
 	}
 
 	meta.McpServerAdd(server, c)
 
-	for i := range c.tools.Tools {
-		jsonSchema, err := c.tools.Tools[i].MarshalJSON()
+	for i := range c.Tools.Tools {
+		jsonSchema, err := c.Tools.Tools[i].MarshalJSON()
 		if err != nil {
 			return err
 		}
 
-		err = meta.ToolsAdd(&tool{
+		err = meta.ToolsAdd(&mcpTool{
 			client: c,
 			server: server,
 			path:   cfgPath,
-			name:   c.tools.Tools[i].GetName(),
+			name:   c.Tools.Tools[i].GetName(),
 			schema: jsonSchema,
 			description: fmt.Sprintf("%s\nInput schema: %s",
-				c.tools.Tools[i].Description,
+				c.Tools.Tools[i].Description,
 				string(jsonSchema),
 			),
 		})

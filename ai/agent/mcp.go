@@ -1,47 +1,65 @@
-package ai
+package agent
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/lmorg/ttyphoon/ai/agent"
-	"github.com/lmorg/ttyphoon/ai/mcp"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
+	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
 )
 
-func StartMcp(renderer types.Renderer, meta *agent.Meta, cancel types.MenuCallbackT) {
+func (meta *Meta) McpMenu(cancel types.MenuCallbackT) {
 	files := file.GetConfigFiles("mcp", ".json")
 	load := func(i int) {
 		go func() {
-			err := StartServersFromJson(renderer, meta, files[i])
+			err := meta.StartServersFromJson(files[i])
 			if err != nil {
-				renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
+				meta.Renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
 			}
 		}()
-		StartMcp(renderer, meta, cancel)
+		meta.McpMenu(cancel)
 	}
 
-	renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
+	meta.Renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
-func StartServersFromJson(renderer types.Renderer, meta *agent.Meta, filename string) error {
+func (meta *Meta) SkillStartTools(skill *skills.SkillT) error {
+	var err error
+	for _, tool := range skill.Tools {
+		switch tool.Name {
+		case "mcp":
+			var filename string
+			filename, err = file.GetConfigFile("mcp", tool.Parameters+".json")
+			if err != nil {
+				return err
+			}
+			err = meta.StartServersFromJson(filename)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (meta *Meta) StartServersFromJson(filename string) error {
 	config, err := mcp_config.ReadJson(filename)
 	if err != nil {
 		return err
 	}
 	config.Source = filename
-	return StartServersFromConfig(renderer, meta, config)
+	return meta.StartServersFromConfig(config)
 }
 
-func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *mcp_config.ConfigT) error {
+func (meta *Meta) StartServersFromConfig(config *mcp_config.ConfigT) error {
 	var err error
 	cache := &map[string]string{}
 
 	for i := range config.Mcp.Inputs {
-		val, err := config.Mcp.Inputs[i].Get(renderer)
+		val, err := config.Mcp.Inputs[i].Get(meta.Renderer)
 		if err != nil {
 			return err
 		}
@@ -53,7 +71,7 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 			//renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
 			continue
 		}
-		sticky := renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
+		sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
 		envs := svr.Env.Slice()
 
 		if err = updateVars(meta, envs, cache); err != nil {
@@ -67,9 +85,9 @@ func StartServersFromConfig(renderer types.Renderer, meta *agent.Meta, config *m
 
 		switch svr.Type {
 		case "http", "https":
-			err = mcp.StartServerHttp(config.Source, meta, name, svr.Url)
+			err = startServerHttp(config.Source, meta, name, svr.Url)
 		default:
-			err = mcp.StartServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
+			err = startServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
 		}
 		sticky.Close()
 		if err != nil {
@@ -85,7 +103,7 @@ var (
 	rxVars  = regexp.MustCompile(`\$\{([-_a-zA-Z0-9]+)\}`)
 )
 
-func updateVars(meta *agent.Meta, s []string, cache *map[string]string) error {
+func updateVars(meta *Meta, s []string, cache *map[string]string) error {
 	var err error
 	for i := range s {
 		s[i], err = _updateVarsRxReplace(meta, s[i], cache)
@@ -99,7 +117,7 @@ func updateVars(meta *agent.Meta, s []string, cache *map[string]string) error {
 
 const _VAR_WORKSPACE_FOLDER = "workspaceFolder"
 
-func _updateVarsRxReplace(meta *agent.Meta, s string, cache *map[string]string) (string, error) {
+func _updateVarsRxReplace(meta *Meta, s string, cache *map[string]string) (string, error) {
 	var (
 		val string
 		ok  bool

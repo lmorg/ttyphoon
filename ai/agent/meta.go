@@ -9,10 +9,11 @@ import (
 )
 
 type Meta struct {
-	executor *agents.Executor
-	service  int
-	model    map[string]string
-	History  HistoryT
+	executor      *agents.Executor
+	service       int
+	model         map[string]string
+	maxIterations int
+	History       HistoryT
 
 	Term     types.Term
 	Renderer types.Renderer
@@ -32,8 +33,9 @@ func NewAgentMeta() *Meta {
 	refreshServiceList()
 
 	meta := &Meta{
-		model:       map[string]string{},
-		_mcpServers: make(map[string]client),
+		model:         map[string]string{},
+		_mcpServers:   make(map[string]client),
+		maxIterations: _MAX_ITERATIONS,
 	}
 
 	setDefaultModels(meta)
@@ -53,6 +55,10 @@ func Get(tileId string) *Meta {
 
 	allTheAgents[tileId] = meta
 	return meta
+}
+
+func (meta *Meta) MaxIterations() int {
+	return meta.maxIterations
 }
 
 func (meta *Meta) Reload() {

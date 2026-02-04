@@ -32,7 +32,9 @@ var _STICKY_SPINNER = []string{
 }
 
 func AskAI(meta *agent.Meta, prompt string) {
-	askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt)
+	go func() {
+		askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt)
+	}()
 }
 
 func askAI(meta *agent.Meta, prompt string, title string, query string) {

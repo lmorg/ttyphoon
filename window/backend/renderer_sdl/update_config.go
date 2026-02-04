@@ -135,7 +135,7 @@ func (sr *sdlRender) UpdateConfig() {
 		},
 		{
 			Title: "Start MCP servers...",
-			Fn:    func() { ai.StartMcp(sr, meta, func(int) { sr.UpdateConfig() }) },
+			Fn:    func() { meta.McpMenu(func(int) { sr.UpdateConfig() }) },
 			Icon:  0xf552,
 		},
 		{
