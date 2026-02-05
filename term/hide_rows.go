@@ -111,8 +111,20 @@ func (term *Term) _insertRows(absPos int, rows types.Screen) error {
 	newBuf := append(clone(tmp[:absPos+1]), rows...)
 	newBuf = clone(append(newBuf, tmp[absPos+1:]...))
 
-	term._normBuf = clone(newBuf[len(newBuf)-int(term.size.Y):])
-	term._scrollBuf = clone(newBuf[:len(newBuf)-int(term.size.Y)])
+	var l int
+	for i := len(term._normBuf) - 1; i > 0; i-- {
+		if strings.TrimSpace(term._normBuf[i].String()) != "" {
+			break
+		}
+		l++
+	}
+	l = min(l, len(term._scrollBuf))
+	if l > 0 && int(term.curPos().Y) > absPos-len(term._scrollBuf) {
+		term._curPos.Y += int32(l)
+	}
+
+	term._normBuf = clone(newBuf[len(newBuf)-int(term.size.Y)-l:])
+	term._scrollBuf = clone(newBuf[:len(newBuf)-int(term.size.Y)-l])
 
 	return nil
 }
