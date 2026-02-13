@@ -90,7 +90,17 @@ func (el *ElementImage) Generate(apc *types.ApcSlice) error {
 	}
 
 	// destroy image allocation upon garbage collection
-	runtime.AddCleanup(el, func(img types.Image) { el.renderer.TriggerDeallocation(img.Close) }, el.image)
+	type imageCleanup struct {
+		triggerDealloc func(func())
+		closeImage     func()
+	}
+	cleanup := &imageCleanup{
+		triggerDealloc: el.renderer.TriggerDeallocation,
+		closeImage:     el.image.Close,
+	}
+	runtime.AddCleanup(el, func(ic *imageCleanup) {
+		ic.triggerDealloc(ic.closeImage)
+	}, cleanup)
 	return nil
 }
 

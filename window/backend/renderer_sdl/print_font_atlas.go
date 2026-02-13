@@ -113,7 +113,7 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 		}
 	}
 
-	runtime.AddCleanup(fa, func(any) { fa.Destroy() }, true)
+	runtime.AddCleanup(fa, func(obj any) { obj.(*fontAtlasT).Destroy() }, true)
 
 	return fa
 }
