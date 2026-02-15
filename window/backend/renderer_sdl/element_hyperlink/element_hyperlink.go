@@ -92,27 +92,44 @@ func (el *ElementHyperlink) Rune(pos *types.XY) rune {
 	return el.label[pos.X]
 }
 
-func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, _ uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
+func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, count uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
 	if state != types.BUTTON_RELEASED {
 		callback()
 		return
 	}
 
-	switch button {
-	case types.MOUSE_BUTTON_LEFT:
-		menu := el.renderer.NewContextMenu()
-		menu.Append(el.contextMenuItems()...)
-		menu.DisplayMenu("Hyperlink action")
-		return
+	switch count {
+	case 1:
+		switch button {
+		case types.MOUSE_BUTTON_LEFT:
+			menu := el.renderer.NewContextMenu()
+			menu.Append(el.contextMenuItems()...)
+			menu.DisplayMenu("Hyperlink action")
 
-	case types.MOUSE_BUTTON_RIGHT:
-		el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
-		callback()
-		return
+		case types.MOUSE_BUTTON_RIGHT:
+			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
+			callback()
+
+		case types.MOUSE_BUTTON_MIDDLE:
+			el.openWithDefault()
+		default:
+			callback()
+		}
 
 	default:
-		callback()
-		return
+		switch button {
+		case types.MOUSE_BUTTON_LEFT:
+			el.openWithDefault()
+		default:
+			callback()
+		}
+	}
+}
+
+func (el *ElementHyperlink) openWithDefault() {
+	_, cmd := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
+	if len(cmd) > 0 {
+		el.openWith(cmd[0])
 	}
 }
 
@@ -140,9 +157,9 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		)
 	}
 	menuItems = append(menuItems, []types.MenuItem{
-		{
+		/*{
 			Title: types.MENU_SEPARATOR,
-		},
+		},*/
 		{
 			Title: "Write link to shell",
 			Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },

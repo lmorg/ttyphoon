@@ -61,15 +61,16 @@ Terminal:
     AutoHyperlink:
       IncLineNumbers: false
       OpenAgents:
+        # first item in scheme is the 3x / middle click
+        - Name: Visual Studio Code
+          Command: [ code, "${path}" ]
+          Schemes: [ file ]
         - Name: System Default
-          Command: [open, "${url}" ]
+          Command: [ open, "${url}" ]
           Schemes: [ "*" ]
 
         - Name: Zed
           Command: [ zed, "${path}" ]
-          Schemes: [ file ]
-        - Name: Visual Studio Code
-          Command: [ code, "${path}" ]
           Schemes: [ file ]
         - Name: Mozilla FireFox
           Command: [ firefox, "${url}" ]

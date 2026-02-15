@@ -176,9 +176,9 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 		})
 
 	case types.MOUSE_BUTTON_MIDDLE:
-		if evt.State == sdl.PRESSED {
-			sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, sr.clipboardPaste)
-		}
+		//if evt.State == sdl.PRESSED {
+		sr.termWin.Active.GetTerm().MouseClick(posCell, button, evt.Clicks, state, sr.clipboardPaste)
+		//}
 
 	case types.MOUSE_BUTTON_RIGHT:
 		sr.contextMenu = sr.NewContextMenu() // empty the context menu
