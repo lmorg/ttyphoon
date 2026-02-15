@@ -60,7 +60,7 @@ func (r *Row) String() string {
 		slice[i] = r.Cells[i].Rune()
 	}
 
-	return string(slice)
+	return strings.TrimRight(string(slice), " ")
 }
 
 /*
