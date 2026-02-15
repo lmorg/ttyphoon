@@ -146,6 +146,10 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 			Icon:  0xf0c5,
 		},
 	}
+
+	menuItems = el._menuItemsSchemaHttp(menuItems)
+	menuItems = el._menuItemsSchemaFile(menuItems)
+
 	apps, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
 	for i := range apps {
 		menuItems = append(menuItems,
@@ -157,9 +161,6 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 		)
 	}
 	menuItems = append(menuItems, []types.MenuItem{
-		/*{
-			Title: types.MENU_SEPARATOR,
-		},*/
 		{
 			Title: "Write link to shell",
 			Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },
@@ -168,48 +169,60 @@ func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
 	}...,
 	)
 
-	if strings.HasPrefix(el.scheme, "http") {
-		term := el.tile.GetTerm()
-		curPos := term.GetCursorPosition().Y - 1
-		meta := agent.Get(el.tile.Id())
-		meta.Renderer = el.renderer
-		meta.Term = term
-		meta.OutputBlock = ""
-		meta.InsertAfterRowId = term.GetRowId(curPos)
-		meta.CmdLine = string(el.url)
-		menuItems = append(menuItems, types.MenuItem{
-			Title: fmt.Sprintf("Summarize hyperlink (%s)", meta.ServiceName()),
-			Fn: func() {
-				ai.AskAI(meta, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url))
-			},
-			Icon: 0xf544,
-		})
+	return menuItems
+}
+
+func (el *ElementHyperlink) _menuItemsSchemaHttp(menuItems []types.MenuItem) []types.MenuItem {
+	if !strings.HasPrefix(el.scheme, "http") {
+		return menuItems
 	}
 
-	if el.scheme == "file" {
-		f, err := os.Open(el.schemaOrPath())
-		if err != nil {
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			return menuItems
-		}
-		defer f.Close()
+	term := el.tile.GetTerm()
+	curPos := term.GetCursorPosition().Y - 1
+	meta := agent.Get(el.tile.Id())
+	meta.Renderer = el.renderer
+	meta.Term = term
+	meta.OutputBlock = ""
+	meta.InsertAfterRowId = term.GetRowId(curPos)
+	meta.CmdLine = string(el.url)
+	menuItems = append(menuItems, types.MenuItem{
+		Title: fmt.Sprintf("Summarize hyperlink (%s)", meta.ServiceName()),
+		Fn: func() {
+			ai.AskAI(meta, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url))
+		},
+		Icon: 0xf544,
+	})
 
-		info, err := f.Stat()
-		if err != nil {
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			return menuItems
-		}
+	return menuItems
+}
 
-		if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
-			return menuItems
-		}
-
-		menuItems = append(menuItems, types.MenuItem{
-			Title: "Copy contents to clipboard",
-			Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
-			Icon:  0xf0c5,
-		})
+func (el *ElementHyperlink) _menuItemsSchemaFile(menuItems []types.MenuItem) []types.MenuItem {
+	if el.scheme != "file" {
+		return menuItems
 	}
+
+	f, err := os.Open(el.schemaOrPath())
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return menuItems
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return menuItems
+	}
+
+	if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
+		return menuItems
+	}
+
+	menuItems = append(menuItems, types.MenuItem{
+		Title: "Copy contents to clipboard",
+		Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
+		Icon:  0xf0c6,
+	})
 
 	return menuItems
 }
