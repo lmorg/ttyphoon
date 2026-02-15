@@ -3,6 +3,7 @@ package tmux
 import (
 	"fmt"
 
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -77,7 +78,10 @@ func (tmux *Tmux) setSessionTerminalFeatures() error {
 }
 
 func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
-	err := tmux.setSessionTerminalFeatures()
+	var err error
+	defer debug.Log(err)
+
+	err = tmux.setSessionTerminalFeatures()
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"sync"
@@ -151,6 +152,7 @@ const (
 )
 
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
+	debug.Log(startCommand)
 	tmux := &Tmux{
 		resp:     make(chan *tmuxResponseT),
 		wins:     newWindowMap(),
@@ -159,18 +161,24 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	}
 
 	var err error
+	debug.Log("tmux tty Start()... ")
 	tmux._resp = new(tmuxResponseT)
-
 	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
 	tmux.cmd.Env = config.SetEnv()
 	tmux.tty, err = pty.Start(tmux.cmd)
+	debug.Log(fmt.Sprintf("tmux tty Start() err == %v", err))
 	if err != nil {
 		return nil, err
 	}
 
 	// Discard the following because it's just setting mode:
 	//    \u001bP1000p
-	_, _ = tmux.tty.Read(make([]byte, 7))
+	debug.Log("tmux tty Read()...")
+	_, err = tmux.tty.Read(make([]byte, 7))
+	debug.Log(fmt.Sprintf("tmux tty Read() err == %v", err))
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
 		scanner := bufio.NewScanner(tmux.tty)
