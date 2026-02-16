@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 type Row struct {
@@ -34,10 +35,12 @@ type RowSource struct {
 }
 
 type BlockMeta struct {
-	Id      int64
-	Query   []rune // typically command line
-	ExitNum int
-	Meta    BlockMetaFlag
+	Id        int64
+	Query     []rune // typically command line
+	ExitNum   int
+	TimeStart time.Time
+	TimeEnd   time.Time
+	Meta      BlockMetaFlag
 }
 
 type BlockMetaFlag uint16
@@ -84,11 +87,16 @@ var (
 )
 
 func (screen *Screen) Phrase(row int) (string, error) {
+	s, _, err := screen.phrase(row)
+	return s, err
+}
+
+func (screen *Screen) phrase(row int) (string, int, error) {
 	if row >= len(*screen) {
-		return "", ERR_PHRASE_INVALID_ROW
+		return "", -1, ERR_PHRASE_INVALID_ROW
 	}
 	if (*screen)[row].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
-		return "", ERR_PHRASE_OVERFLOW_ROW
+		return "", -1, ERR_PHRASE_OVERFLOW_ROW
 	}
 
 	slice := make([]rune, len((*screen)[row].Cells))
@@ -97,7 +105,8 @@ func (screen *Screen) Phrase(row int) (string, error) {
 		slice[iCells] = (*screen)[row].Cells[iCells].Rune()
 	}
 
-	for iRow := row + 1; iRow < len(*screen); iRow++ {
+	var iRow int
+	for iRow = row + 1; iRow < len(*screen); iRow++ {
 		if !(*screen)[iRow].RowMeta.Is(META_ROW_FROM_LINE_OVERFLOW) {
 			break
 		}
@@ -110,7 +119,20 @@ func (screen *Screen) Phrase(row int) (string, error) {
 		slice = append(slice, sliceRow...)
 	}
 
-	return strings.TrimRight(string(slice), " "), nil
+	return strings.TrimRight(string(slice), " "), iRow, nil
+}
+
+func (screen *Screen) PhraseAll() string {
+	var (
+		p string
+		s string
+		i int
+	)
+	for i >= 0 {
+		s, i, _ = screen.phrase(i)
+		p += "\n" + s
+	}
+	return strings.TrimSpace(p)
 }
 
 func (screen *Screen) ContinuousRows(rowIndex int) []*Row {

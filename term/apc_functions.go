@@ -6,13 +6,16 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
+	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 )
 
 func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
@@ -30,6 +33,43 @@ func (term *Term) mxapcEnd(parameters *types.ApcSlice) {
 
 func (term *Term) mxapcInsert(element types.ElementID, parameters *types.ApcSlice) {
 	term._mxapcGenerate(term.renderer.NewElement(term.tile, element), parameters)
+}
+
+type _apcDisplayMenuT struct {
+	Title string                  `json:"title"`
+	Items []*_apcDisplayMenuItemT `json:"menuItem"`
+}
+
+type _apcDisplayMenuItemT struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+func (term *Term) mxapcDisplayMenu(parameters *types.ApcSlice) {
+	p := new(_apcDisplayMenuT)
+	err := parameters.Parameters(p)
+	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	// TODO
+}
+
+type _mxapcDisplayInputT struct {
+	Title   string   `json:"title"`
+	History []string `json:"history"`
+}
+
+func (term *Term) mxapcDisplayInput(parameters *types.ApcSlice) {
+	p := new(_mxapcDisplayInputT)
+	err := parameters.Parameters(p)
+	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		return
+	}
+
+	// TODO
 }
 
 func (term *Term) _mxapcGenerate(el types.Element, parameters *types.ApcSlice) {
@@ -75,8 +115,8 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		params.CmdLine = apc.Index(2)
 	}
 
+	term._blockMeta.Query = []rune(params.CmdLine)
 	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN_BLOCK)
-	(*term.screen)[term.curPos().Y].Block.Query = []rune(params.CmdLine)
 }
 
 func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
@@ -109,9 +149,24 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 	}
 
 	term._blockMeta.ExitNum = params.ExitNum
+	term._blockMeta.TimeEnd = time.Now()
 
 	// prep for new block
-	term._blockMeta = NewRowBlockMeta(term)
+	term._blockMeta = NewRowBlockMeta(term) // TODO, wouldn't this lead to duplication of rowIDs?
+
+	if config.Config.Terminal.WriteMarkdownHistory {
+		var (
+			screen = append(term._scrollBuf, term._normBuf...)
+			begin  = int(term.curPos().Y) + len(term._scrollBuf)
+			end    = begin
+		)
+		for ; begin >= 0; begin-- {
+			if screen[begin].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) {
+				break
+			}
+		}
+		go historymd.Write(term.tile, screen[max(0, begin):end])
+	}
 }
 
 func (term *Term) askAi(prompt string) {

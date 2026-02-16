@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/lmorg/ttyphoon/charset"
@@ -166,7 +167,8 @@ func (term *Term) Start(pty types.Pty) {
 
 func NewRowBlockMeta(term *Term) *types.BlockMeta {
 	return &types.BlockMeta{
-		Id: term._blockMetaId.Add(1),
+		Id:        term._blockMetaId.Add(1),
+		TimeStart: time.Now(),
 	}
 }
 

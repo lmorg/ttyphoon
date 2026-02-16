@@ -23,15 +23,16 @@ type subTermTileT struct {
 	curPath    string
 }
 
-func (stt *subTermTileT) Name() string   { return stt.parentTile.Name() }
-func (stt *subTermTileT) SetName(string) {}
-func (stt *subTermTileT) Id() string     { return stt.parentTile.Id() }
-func (stt *subTermTileT) Left() int32    { return stt.parentTile.Left() }
-func (stt *subTermTileT) Top() int32     { return stt.parentTile.Top() }
-func (stt *subTermTileT) Right() int32   { return stt.parentTile.Right() }
-func (stt *subTermTileT) Bottom() int32  { return stt.parentTile.Bottom() }
-func (stt *subTermTileT) AtBottom() bool { return stt.parentTile.AtBottom() }
-func (stt *subTermTileT) Close()         {}
+func (stt *subTermTileT) Name() string      { return stt.parentTile.Name() }
+func (stt *subTermTileT) SetName(string)    {}
+func (stt *subTermTileT) GroupName() string { return stt.parentTile.GroupName() }
+func (stt *subTermTileT) Id() string        { return stt.parentTile.Id() }
+func (stt *subTermTileT) Left() int32       { return stt.parentTile.Left() }
+func (stt *subTermTileT) Top() int32        { return stt.parentTile.Top() }
+func (stt *subTermTileT) Right() int32      { return stt.parentTile.Right() }
+func (stt *subTermTileT) Bottom() int32     { return stt.parentTile.Bottom() }
+func (stt *subTermTileT) AtBottom() bool    { return stt.parentTile.AtBottom() }
+func (stt *subTermTileT) Close()            {}
 
 func (stt *subTermTileT) GetTerm() types.Term     { return stt.term }
 func (stt *subTermTileT) SetTerm(term types.Term) { stt.term = term }

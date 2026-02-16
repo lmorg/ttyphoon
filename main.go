@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/debug/pprof"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/utils/file"
@@ -104,7 +106,7 @@ func loadEnvs() {
 			if len(split) != 2 {
 				split = []string{files[i], ""}
 			}
-			log.Printf(`%s: "%s" = "%s"`, files[i], split[0], split[1])
+			debug.Log(fmt.Sprintf(`%s: "%s" = "%s"`, files[i], split[0], split[1]))
 			os.Setenv(split[0], split[1])
 		}
 	}

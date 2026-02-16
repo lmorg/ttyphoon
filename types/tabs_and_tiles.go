@@ -17,6 +17,7 @@ type Tab interface {
 type Tile interface {
 	Name() string
 	SetName(string)
+	GroupName() string
 	Id() string
 	Left() int32
 	Top() int32

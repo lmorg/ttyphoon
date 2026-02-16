@@ -113,6 +113,17 @@ func (term *Term) parseApcCodes() {
 				fmt.Sprintf("Unknown mxAPC `insert` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
+	case "display":
+		switch apc.Index(1) {
+		case "menu":
+			term.mxapcDisplayMenu(apc)
+		case "input":
+			term.mxapcDisplayInput(apc)
+		default:
+			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
+				fmt.Sprintf("Unknown mxAPC `display` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+		}
+
 	case "ai":
 		switch apc.Index(1) {
 		case "ask":

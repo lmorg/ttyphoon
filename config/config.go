@@ -99,6 +99,7 @@ type configT struct {
 		ColorTheme              string `yaml:"ColorTheme"`
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
+		WriteMarkdownHistory    bool   `yaml:"WriteMarkdownHistory"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
 		AutoHyperlink           bool   `yaml:"AutoHyperlink"`
 
