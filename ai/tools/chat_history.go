@@ -53,7 +53,7 @@ func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 
 	var result string
 
-	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.meta.ServiceName(), input))
+	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.meta.ServiceName(), input))
 
 	i, err := strconv.Atoi(input)
 	switch {

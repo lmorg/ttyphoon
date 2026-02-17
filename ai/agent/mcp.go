@@ -17,13 +17,13 @@ func (meta *Meta) McpMenu(cancel types.MenuCallbackT) {
 		go func() {
 			err := meta.StartServersFromJson(files[i])
 			if err != nil {
-				meta.Renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
+				meta.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
 			}
 		}()
 		meta.McpMenu(cancel)
 	}
 
-	meta.Renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
+	meta.renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
 func (meta *Meta) SkillStartTools(skill *skills.SkillT) error {
@@ -59,7 +59,7 @@ func (meta *Meta) StartServersFromConfig(config *mcp_config.ConfigT) error {
 	cache := &map[string]string{}
 
 	for i := range config.Mcp.Inputs {
-		val, err := config.Mcp.Inputs[i].Get(meta.Renderer)
+		val, err := config.Mcp.Inputs[i].Get(meta.renderer)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func (meta *Meta) StartServersFromConfig(config *mcp_config.ConfigT) error {
 			//renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
 			continue
 		}
-		sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
+		sticky := meta.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
 		envs := svr.Env.Slice()
 
 		if err = updateVars(meta, envs, cache); err != nil {

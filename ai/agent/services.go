@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"slices"
+	"fmt"
 
 	"github.com/lmorg/ttyphoon/config"
 )
@@ -13,69 +13,68 @@ const (
 )
 
 var (
-	services []string
-	models   map[string][]string
+	models map[string][]string
 )
 
 func (meta *Meta) ServiceName() string {
-	return services[meta.service]
-}
-
-func (meta *Meta) ServiceNext() {
-	refreshServiceList()
-	meta.service++
-	if meta.service >= len(services) {
-		meta.service = 0
-	}
-	meta.Reload()
+	return meta.serviceName
 }
 
 func (meta *Meta) ModelName() string {
-	return meta.model[meta.ServiceName()]
+	return meta.modelName
 }
 
-func (meta *Meta) ModelNext() {
-	refreshServiceList()
-	meta.model[meta.ServiceName()] = meta._modelNext()
-	meta.Reload()
+type selectServiceMenuItemT struct {
+	service string
+	modelId int
 }
 
-func (meta *Meta) _modelNext() string {
-	for i := range models[meta.ServiceName()] {
-		if models[meta.ServiceName()][i] != meta.ModelName() {
-			continue
-		}
+func (meta *Meta) SelectServiceModel(returnFn func()) {
+	var (
+		modelXRef []selectServiceMenuItemT
+		labels    []string
+	)
 
-		i++
-		if i == len(models[meta.ServiceName()]) {
-			return models[meta.ServiceName()][0]
+	for serviceName := range models {
+		for modelId, modelName := range models[serviceName] {
+			modelXRef = append(modelXRef, selectServiceMenuItemT{
+				service: serviceName,
+				modelId: modelId,
+			})
+			labels = append(labels, fmt.Sprintf("%s: %s", serviceName, modelName))
 		}
-
-		return models[meta.ServiceName()][i]
 	}
 
-	return models[meta.ServiceName()][0]
+	selectFn := func(i int) {
+		meta.serviceName = modelXRef[i].service
+		meta.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
+		meta.Reload()
+		if returnFn != nil {
+			returnFn()
+		}
+	}
+
+	meta.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
 }
 
 func refreshServiceList() {
 	models = config.Config.Ai.AvailableModels
-	services = []string{}
-	for service := range config.Config.Ai.AvailableModels {
-		services = append(services, service)
-	}
+	models[LLM_OLLAMA] = ollamaModels()
 }
 
 func setDefaultModels(meta *Meta) {
-	for service, model := range config.Config.Ai.DefaultModels {
-		if slices.Contains(models[service], model) {
-			meta.model[service] = model
+	if len(models[config.Config.Ai.DefaultService]) != 0 {
+		meta.serviceName = config.Config.Ai.DefaultService
+	} else {
+		for meta.serviceName = range models {
+			// just get the first service, whatever that service might be
+			break
 		}
 	}
 
-	for i := range services {
-		if services[i] == config.Config.Ai.DefaultService {
-			meta.service = i
-			break
-		}
+	if config.Config.Ai.DefaultModels[meta.serviceName] != "" {
+		meta.modelName = config.Config.Ai.DefaultModels[meta.serviceName]
+	} else {
+		meta.modelName = models[meta.serviceName][0]
 	}
 }

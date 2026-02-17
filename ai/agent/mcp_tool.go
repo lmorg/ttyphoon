@@ -61,7 +61,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 		}()
 	}
 
-	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
+	t.meta.renderer.DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.meta.ServiceName(), t.Name()))
 
 	var args map[string]any
@@ -73,7 +73,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
-		t.meta.Renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+		t.meta.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 	}
 	return response, err
 }

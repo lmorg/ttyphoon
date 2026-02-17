@@ -56,7 +56,7 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
-	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO,
+	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running a %s: %s", t.meta.ServiceName(), t.Name(), input))
 
 	response, err = t.tool.Call(ctx, input)

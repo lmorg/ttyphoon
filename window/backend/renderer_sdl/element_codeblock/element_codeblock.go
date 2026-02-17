@@ -101,8 +101,8 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 	term := el.tile.GetTerm()
 	curPos := term.GetCursorPosition().Y - 1
 	meta := agent.Get(el.tile.Id())
-	meta.Renderer = el.renderer
-	meta.Term = term
+	//meta.Renderer = el.renderer
+	//meta.Term = term
 	meta.OutputBlock = ""
 	meta.InsertAfterRowId = term.GetRowId(curPos)
 	meta.CmdLine = string(el.raw)

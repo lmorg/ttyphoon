@@ -13,8 +13,8 @@ import (
 func (sr *sdlRender) UpdateConfig() {
 	tile := sr.termWin.Active
 	meta := agent.Get(tile.Id())
-	meta.Renderer = sr
-	meta.Term = tile.GetTerm()
+	//meta.Renderer = sr
+	//meta.Term = tile.GetTerm()
 	meta.Pwd = tile.Pwd()
 
 	menu := sr.NewContextMenu()
@@ -119,14 +119,9 @@ func (sr *sdlRender) UpdateConfig() {
 			Title: types.MENU_SEPARATOR,
 		},
 		{
-			Title: fmt.Sprintf("AI service == %s", agent.Get(sr.termWin.Active.Id()).ServiceName()),
-			Fn:    func() { meta.ServiceNext(); sr.UpdateConfig() },
+			Title: fmt.Sprintf("AI Model == %s: %s", meta.ServiceName(), meta.ModelName()),
+			Fn:    func() { meta.SelectServiceModel(sr.UpdateConfig) },
 			Icon:  0xe4f6,
-		},
-		{
-			Title: fmt.Sprintf("Model == %s", agent.Get(sr.termWin.Active.Id()).ModelName()),
-			Fn:    func() { meta.ModelNext(); sr.UpdateConfig() },
-			Icon:  0xe699,
 		},
 		{
 			Title: "Enable or disable specific AI tools...",

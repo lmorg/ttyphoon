@@ -52,7 +52,7 @@ type Renderer interface {
 	DisplayNotification(NotificationType, string)
 	DisplaySticky(NotificationType, string, func()) Notification
 	DisplayInputBox(string, string, InputBoxCallbackT, InputBoxCallbackT)
-	DisplayMenu(string, []string, MenuCallbackT, MenuCallbackT, MenuCallbackT)
+	DisplayMenu(title string, items []string, highlight MenuCallbackT, ok MenuCallbackT, cancel MenuCallbackT)
 	NewContextMenu() ContextMenu
 	AddToContextMenu(...MenuItem)
 	GetWindowMeta() any

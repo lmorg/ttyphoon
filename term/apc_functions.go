@@ -171,8 +171,8 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 
 func (term *Term) askAi(prompt string) {
 	meta := agent.Get(term.tile.Id())
-	meta.Term = term
-	meta.Renderer = term.renderer
+	//meta.Term = term
+	//meta.Renderer = term.renderer
 	meta.CmdLine = ""
 	meta.Pwd = term._rowSource.Pwd
 	meta.OutputBlock = ""

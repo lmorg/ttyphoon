@@ -84,8 +84,6 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	absBlockPos := term.getBlockStartAndEndAbs(absPosY)
 	relBlockPos := term.getBlockStartAndEndRel(absBlockPos)
 	meta := agent.Get(term.tile.Id())
-	meta.Term = term
-	meta.Renderer = term.renderer
 	meta.CmdLine = string(term.getCmdLine(int(absBlockPos[0])))
 	meta.Pwd = term.RowSrcFromScrollBack(absBlockPos[0]).Pwd
 	meta.OutputBlock = string(term.copyOutputBlock(absBlockPos))

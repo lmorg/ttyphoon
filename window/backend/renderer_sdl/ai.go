@@ -13,8 +13,8 @@ import (
 func askAi(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
 	meta := agent.Get(sr.termWin.Active.Id())
-	meta.Term = term
-	meta.Renderer = sr
+	//meta.Term = term
+	//meta.Renderer = sr
 	meta.CmdLine = term.CmdLine(pos)
 	meta.Pwd = term.Pwd(pos)
 	meta.OutputBlock = ""
@@ -28,8 +28,6 @@ func askAi(sr *sdlRender, pos *types.XY) {
 func askAiSkill(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
 	meta := agent.Get(sr.termWin.Active.Id())
-	meta.Term = term
-	meta.Renderer = sr
 	meta.CmdLine = term.CmdLine(pos)
 	meta.Pwd = term.Pwd(pos)
 	meta.OutputBlock = ""

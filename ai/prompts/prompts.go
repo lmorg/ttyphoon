@@ -42,7 +42,7 @@ func GetAsk(meta *agent.Meta, userPrompt string) string {
 
 	err := meta.SkillStartTools(skill)
 	if err != nil {
-		meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(meta, userPrompt))
 }

@@ -71,7 +71,7 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 			filename = t.meta.Pwd + "/" + files[i]
 		}
 
-		t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" requesting file: "+filename[len(t.meta.Pwd):])
+		t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" requesting file: "+filename[len(t.meta.Pwd):])
 
 		var b []byte
 		info, err := os.Stat(filename)

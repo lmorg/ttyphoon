@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -19,21 +21,31 @@ func addServiceOllama(renderer types.Renderer) {
 
 	ollamaModels := ollamaModels()
 	if len(ollamaModels) > 0 {
-		services = append([]string{LLM_OLLAMA}, services...)
-		if len(models) == 0 {
-			models = make(map[string][]string)
-		}
-		models[LLM_OLLAMA] = ollamaModels
+		go func() {
+			if len(models) > 0 {
+				models[LLM_OLLAMA] = ollamaModels
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}()
 	}
 }
 
 func ollamaModels() []string {
-	var buf bytes.Buffer
+	var (
+		buf    bytes.Buffer
+		models []string
+		err    error
+	)
+
+	defer debug.Log(err)
+	defer debug.Log(models)
+
 	cmd := exec.Command("ollama", "list")
 	cmd.Env = os.Environ()
 	cmd.Stdout = &buf
 
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return nil
 	}
@@ -48,7 +60,6 @@ func ollamaModels() []string {
 		return nil
 	}
 
-	var models []string
 	for i := 1; i < len(lines); i++ {
 		split := strings.SplitN(lines[i], " ", 2)
 		if len(split) != 2 {

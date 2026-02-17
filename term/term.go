@@ -8,6 +8,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/charset"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
@@ -154,6 +155,8 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 
 	term.reset(size)
 	tile.SetTerm(term)
+
+	go agent.Initialize(tile.Id(), term, renderer)
 
 	return term
 }

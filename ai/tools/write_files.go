@@ -59,24 +59,24 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 			filename = t.meta.Pwd + "/" + arc.Files[i].Name
 		}
 
-		t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" writing file: "+filename)
+		t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" writing file: "+filename)
 
 		f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0664)
 		if err != nil {
-			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 		_, err = f.Write(arc.Files[i].Data)
 		if err != nil {
-			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 
 		err = f.Close()
 		if err != nil {
-			t.meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			// continue // don't need to "continue" here
 		}

@@ -11,13 +11,13 @@ import (
 
 type Meta struct {
 	executor      *agents.Executor
-	service       int
-	model         map[string]string
+	serviceName   string
+	modelName     string
 	maxIterations int
 	History       HistoryT
 
-	Term     types.Term
-	Renderer types.Renderer
+	term     types.Term
+	renderer types.Renderer
 
 	CmdLine          string
 	Pwd              string
@@ -30,11 +30,28 @@ type Meta struct {
 	_tools      []Tool
 }
 
-func NewAgentMeta() *Meta {
+var allTheAgents = map[string]*Meta{}
+
+func Initialize(tileId string, term types.Term, renderer types.Renderer) {
+	meta := Get(tileId)
+	meta.term = term
+	meta.renderer = renderer
+}
+
+func Get(tileId string) *Meta {
+	meta, ok := allTheAgents[tileId]
+	if !ok {
+		meta = newAgentMeta()
+	}
+
+	allTheAgents[tileId] = meta
+	return meta
+}
+
+func newAgentMeta() *Meta {
 	refreshServiceList()
 
 	meta := &Meta{
-		model:         map[string]string{},
 		_mcpServers:   make(map[string]client),
 		maxIterations: config.Config.Ai.MaxIterations,
 	}
@@ -43,18 +60,6 @@ func NewAgentMeta() *Meta {
 
 	meta.toolsInit()
 
-	return meta
-}
-
-var allTheAgents = map[string]*Meta{}
-
-func Get(tileId string) *Meta {
-	meta, ok := allTheAgents[tileId]
-	if !ok {
-		meta = NewAgentMeta()
-	}
-
-	allTheAgents[tileId] = meta
 	return meta
 }
 
@@ -75,6 +80,9 @@ func (meta *Meta) McpServerExists(server string) bool {
 	return ok
 }
 
+func (meta *Meta) Renderer() types.Renderer { return meta.renderer }
+func (meta *Meta) Term() types.Term         { return meta.term }
+
 func Close(tileId string) {
 	meta, ok := allTheAgents[tileId]
 	if !ok {
@@ -84,12 +92,12 @@ func Close(tileId string) {
 	for server, client := range meta._mcpServers {
 		err := client.Close()
 		if err != nil {
-			if meta.Renderer != nil {
-				meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Error closing MCP Server '%s': %v", server, err))
+			if meta.renderer != nil {
+				meta.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Error closing MCP Server '%s': %v", server, err))
 			}
 		} else {
-			if meta.Renderer != nil {
-				meta.Renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing MCP Server '%s'", server))
+			if meta.renderer != nil {
+				meta.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing MCP Server '%s'", server))
 			}
 		}
 	}

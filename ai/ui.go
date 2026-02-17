@@ -22,7 +22,7 @@ func Explain(meta *agent.Meta, promptDialogue bool) {
 		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
-	meta.Renderer.DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
+	meta.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
 const _STICKY_MESSAGE = "Asking %s.... "
@@ -39,7 +39,7 @@ func AskAI(meta *agent.Meta, prompt string) {
 
 func askAI(meta *agent.Meta, prompt string, title string, query string) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
-	sticky := meta.Renderer.DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
+	sticky := meta.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
 	fin := make(chan struct{})
 	var i int
 
@@ -52,7 +52,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 				return
 			case <-time.After(500 * time.Millisecond):
 				sticky.SetMessage(fmt.Sprintf("%s %s", stickyMessage, _STICKY_SPINNER[i]))
-				meta.Renderer.TriggerRedraw()
+				meta.Renderer().TriggerRedraw()
 				i++
 				if i >= len(_STICKY_SPINNER) {
 					i = 0
@@ -67,7 +67,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 		result, err := meta.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
-			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			//return
 			result = err.Error()
 
@@ -89,7 +89,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 
 		md, err := glamour.NewTermRenderer(
 			glamour.WithEmoji(),
-			glamour.WithWordWrap(int(meta.Term.GetSize().X)),
+			glamour.WithWordWrap(int(meta.Term().GetSize().X)-1),
 			glamour.WithStylesFromJSONBytes(theme),
 		)
 		if err != nil {
@@ -108,9 +108,9 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 			}
 		}
 
-		err = meta.Term.InsertSubTerm(query, markdown, meta.InsertAfterRowId, types.META_BLOCK_AI)
+		err = meta.Term().InsertSubTerm(query, markdown, meta.InsertAfterRowId, types.META_BLOCK_AI)
 		if err != nil {
-			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
 	}()

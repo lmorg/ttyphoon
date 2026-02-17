@@ -23,7 +23,7 @@ func (meta *Meta) toolsInit() {
 	for i := range _tools {
 		newTool, err := _tools[i].New(meta)
 		if err != nil {
-			meta.Renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			meta.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			continue
 		}
 		meta._tools = append(meta._tools, newTool)
@@ -58,5 +58,5 @@ func (meta *Meta) ChooseTools(cancel types.MenuCallbackT) {
 		meta.ChooseTools(cancel)
 	}
 
-	meta.Renderer.DisplayMenu("AI tools", s, nil, fnOk, cancel)
+	meta.renderer.DisplayMenu("AI tools", s, nil, fnOk, cancel)
 }

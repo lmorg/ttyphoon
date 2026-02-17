@@ -94,7 +94,7 @@ func (meta *Meta) RunLLM(prompt string, sticky types.Notification) (result strin
 
 	result, err = chains.Run(ctx, meta.executor, prompt, chains.WithTemperature(1))
 	if strings.Contains(result, "<max_iterations_reached/>") {
-		go meta.Renderer.DisplayNotification(types.NOTIFY_DEBUG, "Max iterations reached, resuming with updated context")
+		go meta.renderer.DisplayNotification(types.NOTIFY_DEBUG, "Max iterations reached, resuming with updated context")
 		return meta.RunLLM(fmt.Sprintf("%s\n\n# What's been learned so far\n%s", prompt, result), sticky)
 	}
 

@@ -61,7 +61,7 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 
 	var result strings.Builder
 
-	t.meta.Renderer.DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" is querying directory: "+pathname)
+	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" is querying directory: "+pathname)
 
 	err = filepath.WalkDir(pathname, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
