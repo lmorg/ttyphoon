@@ -20,6 +20,9 @@ func addServiceOllama(renderer types.Renderer) {
 	ollamaModels := ollamaModels()
 	if len(ollamaModels) > 0 {
 		services = append([]string{LLM_OLLAMA}, services...)
+		if len(models) == 0 {
+			models = make(map[string][]string)
+		}
 		models[LLM_OLLAMA] = ollamaModels
 	}
 }
