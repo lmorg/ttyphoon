@@ -87,7 +87,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	meta.CmdLine = string(term.getCmdLine(int(absBlockPos[0])))
 	meta.Pwd = term.RowSrcFromScrollBack(absBlockPos[0]).Pwd
 	meta.OutputBlock = string(term.copyOutputBlock(absBlockPos))
-	meta.InsertAfterRowId = term.GetRowId(term.curPos().Y - 1)
+	insertAfterRowId := term.GetRowId(term.curPos().Y - 1)
 
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
@@ -109,18 +109,8 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { ai.Explain(meta, true /*false*/) },
+				Fn: func() { ai.Explain(meta, true, insertAfterRowId) },
 			},
-			/*{
-				Title: fmt.Sprintf("Explain with custom prompt (%s)", meta.ServiceName()),
-				Icon:  0xf6e8,
-				Highlight: func() func() {
-					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: block[0]}, &types.XY{X: term.size.X, Y: block[1]}, types.COLOR_SELECTION, true)
-					}
-				},
-				Fn: func() { ai.Explain(meta, true) },
-			},*/
 		}...)
 }
 

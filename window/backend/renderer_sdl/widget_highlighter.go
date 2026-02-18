@@ -144,14 +144,8 @@ func (hl *highlightWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButton
 			}
 		case _HIGHLIGHT_MODE_AI:
 			meta := agent.Get(sr.termWin.Active.Id())
-			//meta.Term = term
-			//meta.Renderer = sr
-			meta.CmdLine = term.CmdLine(pos)
-			meta.Pwd = term.Pwd(pos)
 			meta.OutputBlock = string(lines)
-			//meta.InsertRowPos = term.ConvertRelativeToAbsoluteY(pos)
-			term.GetRowId(term.GetCursorPosition().Y)
-			ai.Explain(meta, true)
+			ai.Explain(meta, true, term.GetRowId(term.GetCursorPosition().Y))
 		default:
 			panic(fmt.Sprintf("TODO: unmet conditional '%d'", hl.mode))
 		}

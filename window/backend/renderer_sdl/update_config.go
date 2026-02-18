@@ -13,9 +13,6 @@ import (
 func (sr *sdlRender) UpdateConfig() {
 	tile := sr.termWin.Active
 	meta := agent.Get(tile.Id())
-	//meta.Renderer = sr
-	//meta.Term = tile.GetTerm()
-	meta.Pwd = tile.Pwd()
 
 	menu := sr.NewContextMenu()
 	menu.Append([]types.MenuItem{

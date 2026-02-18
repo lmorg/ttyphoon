@@ -13,25 +13,17 @@ import (
 func askAi(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
 	meta := agent.Get(sr.termWin.Active.Id())
-	//meta.Term = term
-	//meta.Renderer = sr
-	meta.CmdLine = term.CmdLine(pos)
-	meta.Pwd = term.Pwd(pos)
-	meta.OutputBlock = ""
-	meta.InsertAfterRowId = term.GetRowId(term.GetCursorPosition().Y - 1)
+	insertAfterRowId := term.GetRowId(term.GetCursorPosition().Y - 1)
 
 	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", meta.ServiceName()), "", func(prompt string) {
-		ai.AskAI(meta, prompt)
+		ai.AskAI(meta, prompt, insertAfterRowId)
 	}, nil)
 }
 
 func askAiSkill(sr *sdlRender, pos *types.XY) {
 	term := sr.termWin.Active.GetTerm()
 	meta := agent.Get(sr.termWin.Active.Id())
-	meta.CmdLine = term.CmdLine(pos)
-	meta.Pwd = term.Pwd(pos)
-	meta.OutputBlock = ""
-	meta.InsertAfterRowId = term.GetRowId(term.GetCursorPosition().Y - 1)
+	insertAfterRowId := term.GetRowId(term.GetCursorPosition().Y - 1)
 
 	skills := skills.ReadSkills()
 
@@ -57,7 +49,7 @@ func askAiSkill(sr *sdlRender, pos *types.XY) {
 
 	fnSelect := func(i int) {
 		sr.DisplayInputBox(fmt.Sprintf("/%s (%s)", skills[i].FunctionName, skills[i].Description), "", func(prompt string) {
-			ai.AskAI(meta, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
+			ai.AskAI(meta, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt), insertAfterRowId)
 		}, nil)
 	}
 

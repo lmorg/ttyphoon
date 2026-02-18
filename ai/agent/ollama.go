@@ -5,13 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/lmorg/ttyphoon/debug"
-	"github.com/lmorg/ttyphoon/types"
 )
 
-func Init(renderer types.Renderer) {
+/*func Init(renderer types.Renderer) {
 	go addServiceOllama(renderer)
 }
 
@@ -29,7 +27,7 @@ func addServiceOllama(renderer types.Renderer) {
 			time.Sleep(100 * time.Millisecond)
 		}()
 	}
-}
+}*/
 
 func ollamaModels() []string {
 	var (

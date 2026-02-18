@@ -36,7 +36,7 @@ Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
   ScrollbackHistory: 10000
-  WriteMarkdownHistory: true
+  WriteMarkdownHistory: false
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view

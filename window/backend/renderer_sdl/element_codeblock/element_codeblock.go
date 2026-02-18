@@ -101,10 +101,7 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 	term := el.tile.GetTerm()
 	curPos := term.GetCursorPosition().Y - 1
 	meta := agent.Get(el.tile.Id())
-	//meta.Renderer = el.renderer
-	//meta.Term = term
-	meta.OutputBlock = ""
-	meta.InsertAfterRowId = term.GetRowId(curPos)
+	insertAfterRowId := term.GetRowId(curPos)
 	meta.CmdLine = string(el.raw)
 	return []types.MenuItem{
 		{
@@ -119,7 +116,7 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 		},
 		{
 			Title: fmt.Sprintf("Learn more about code (%s)", meta.ServiceName()),
-			Fn:    func() { ai.Explain(meta, true) },
+			Fn:    func() { ai.Explain(meta, true, insertAfterRowId) },
 			Icon:  0xf544,
 		},
 	}

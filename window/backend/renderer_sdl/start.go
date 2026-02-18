@@ -3,7 +3,6 @@ package rendersdl
 import (
 	"log"
 
-	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/config"
@@ -165,7 +164,7 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 	go sr.blinkSlowLoop()
 	sr.setRefreshInterval()
 
-	agent.Init(sr)
+	//agent.Init(sr)
 
 	sr.hotkeys()
 

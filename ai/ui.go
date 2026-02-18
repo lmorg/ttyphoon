@@ -12,14 +12,14 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func Explain(meta *agent.Meta, promptDialogue bool) {
+func Explain(meta *agent.Meta, promptDialogue bool, insertAfterRowId uint64) {
 	if !promptDialogue {
-		askAI(meta, prompts.GetExplain(meta, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine)
+		askAI(meta, prompts.GetExplain(meta, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine, insertAfterRowId)
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt)
+		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt, insertAfterRowId)
 	}
 
 	meta.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
@@ -31,13 +31,13 @@ var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func AskAI(meta *agent.Meta, prompt string) {
+func AskAI(meta *agent.Meta, prompt string, insertAfterRowId uint64) {
 	go func() {
-		askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt)
+		askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt, insertAfterRowId)
 	}()
 }
 
-func askAI(meta *agent.Meta, prompt string, title string, query string) {
+func askAI(meta *agent.Meta, prompt string, title string, query string, insertAfterRowId uint64) {
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
 	sticky := meta.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
 	fin := make(chan struct{})
@@ -47,7 +47,6 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 		for {
 			select {
 			case <-fin:
-				//sticky.SetMessage("Formatting output....")
 				sticky.Close()
 				return
 			case <-time.After(500 * time.Millisecond):
@@ -62,13 +61,10 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 	}()
 
 	go func() {
-		//defer sticky.Close()
-
 		result, err := meta.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
 			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			//return
 			result = err.Error()
 
 		} else {
@@ -108,7 +104,8 @@ func askAI(meta *agent.Meta, prompt string, title string, query string) {
 			}
 		}
 
-		err = meta.Term().InsertSubTerm(query, markdown, meta.InsertAfterRowId, types.META_BLOCK_AI)
+		//insertAfterRowId := meta.Term().GetRowId(meta.Term().GetCursorPosition().Y - 1)
+		err = meta.Term().InsertSubTerm(query, markdown, insertAfterRowId, types.META_BLOCK_AI)
 		if err != nil {
 			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return

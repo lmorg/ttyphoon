@@ -59,7 +59,12 @@ func (meta *Meta) SelectServiceModel(returnFn func()) {
 
 func refreshServiceList() {
 	models = config.Config.Ai.AvailableModels
-	models[LLM_OLLAMA] = ollamaModels()
+	go func() {
+		ollama := ollamaModels()
+		if len(ollama) > 0 {
+			models[LLM_OLLAMA] = ollamaModels()
+		}
+	}()
 }
 
 func setDefaultModels(meta *Meta) {

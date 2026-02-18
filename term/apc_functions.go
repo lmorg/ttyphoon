@@ -151,9 +151,6 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 	term._blockMeta.ExitNum = params.ExitNum
 	term._blockMeta.TimeEnd = time.Now()
 
-	// prep for new block
-	term._blockMeta = NewRowBlockMeta(term) // TODO, wouldn't this lead to duplication of rowIDs?
-
 	if config.Config.Terminal.WriteMarkdownHistory {
 		var (
 			screen = append(term._scrollBuf, term._normBuf...)
@@ -167,17 +164,15 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 		}
 		go historymd.Write(term.tile, screen[max(0, begin):end])
 	}
+
+	// prep for new block
+	term._blockMeta = NewRowBlockMeta(term) // TODO, wouldn't this lead to duplication of rowIDs?
 }
 
 func (term *Term) askAi(prompt string) {
 	meta := agent.Get(term.tile.Id())
-	//meta.Term = term
-	//meta.Renderer = term.renderer
-	meta.CmdLine = ""
-	meta.Pwd = term._rowSource.Pwd
-	meta.OutputBlock = ""
-	meta.InsertAfterRowId = term.GetRowId(term.GetCursorPosition().Y - 1)
-	ai.AskAI(meta, prompt)
+	insertAfterRowId := term.GetRowId(term.GetCursorPosition().Y - 1)
+	ai.AskAI(meta, prompt, insertAfterRowId)
 }
 
 func (term *Term) mxapcAiAsk(parameters *types.ApcSlice) {

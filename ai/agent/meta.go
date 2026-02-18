@@ -19,10 +19,9 @@ type Meta struct {
 	term     types.Term
 	renderer types.Renderer
 
-	CmdLine          string
-	Pwd              string
-	OutputBlock      string
-	InsertAfterRowId uint64
+	CmdLine     string
+	Pwd         string
+	OutputBlock string
 
 	fnCancel context.CancelFunc
 
@@ -42,9 +41,15 @@ func Get(tileId string) *Meta {
 	meta, ok := allTheAgents[tileId]
 	if !ok {
 		meta = newAgentMeta()
+		allTheAgents[tileId] = meta
+		return meta
 	}
 
-	allTheAgents[tileId] = meta
+	curPos := meta.term.GetCursorPosition()
+	meta.CmdLine = meta.term.CmdLine(curPos)
+	meta.Pwd = meta.term.Pwd(curPos)
+	meta.OutputBlock = ""
+
 	return meta
 }
 

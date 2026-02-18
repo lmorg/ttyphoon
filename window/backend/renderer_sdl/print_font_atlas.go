@@ -3,7 +3,6 @@ package rendersdl
 import (
 	"fmt"
 	"log"
-	"runtime"
 	godebug "runtime/debug"
 	"strings"
 
@@ -113,7 +112,7 @@ func newFontAtlas(chars []rune, sgr *types.Sgr, glyphSize *types.XY, renderer *s
 		}
 	}
 
-	runtime.AddCleanup(fa, func(obj any) { obj.(*fontAtlasT).Destroy() }, true)
+	//runtime.AddCleanup(fa, func(fa *fontAtlasT) { fa.Destroy() }, fa) // TODO: fix me please
 
 	return fa
 }
