@@ -13,7 +13,7 @@ import (
 
 type mcpTool struct {
 	client      *mcp_client.Client
-	meta        *Meta
+	agent       *Agent
 	server      string
 	name        string
 	path        string
@@ -22,11 +22,11 @@ type mcpTool struct {
 	enabled     bool
 }
 
-func (t *mcpTool) New(meta *Meta) (Tool, error) {
+func (t *mcpTool) New(agent *Agent) (Tool, error) {
 
 	return &mcpTool{
 		client:      t.client,
-		meta:        meta,
+		agent:       agent,
 		server:      t.server,
 		name:        t.name,
 		path:        t.path,
@@ -61,8 +61,8 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 		}()
 	}
 
-	t.meta.renderer.DisplayNotification(types.NOTIFY_INFO,
-		fmt.Sprintf("%s is running an MCP tool: %s", t.meta.ServiceName(), t.Name()))
+	t.agent.renderer.DisplayNotification(types.NOTIFY_INFO,
+		fmt.Sprintf("%s is running an MCP tool: %s", t.agent.ServiceName(), t.Name()))
 
 	var args map[string]any
 	err = json.Unmarshal([]byte(input), &args)
@@ -73,7 +73,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
-		t.meta.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+		t.agent.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 	}
 	return response, err
 }

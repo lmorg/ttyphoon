@@ -12,17 +12,17 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func Explain(meta *agent.Meta, promptDialogue bool, insertAfterRowId uint64) {
+func Explain(agent *agent.Agent, promptDialogue bool) {
 	if !promptDialogue {
-		askAI(meta, prompts.GetExplain(meta, ""), fmt.Sprintf("```\n%s\n```", meta.CmdLine), meta.CmdLine, insertAfterRowId)
+		askAI(agent, prompts.GetExplain(agent, ""), fmt.Sprintf("```\n%s\n```", agent.Meta.CmdLine), agent.Meta.CmdLine)
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(meta, prompts.GetExplain(meta, userPrompt), "> "+userPrompt, userPrompt, insertAfterRowId)
+		askAI(agent, prompts.GetExplain(agent, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
-	meta.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
+	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
 const _STICKY_MESSAGE = "Asking %s.... "
@@ -31,15 +31,16 @@ var _STICKY_SPINNER = []string{
 	"🤔", "",
 }
 
-func AskAI(meta *agent.Meta, prompt string, insertAfterRowId uint64) {
+func AskAI(agent *agent.Agent, prompt string) {
 	go func() {
-		askAI(meta, prompts.GetAsk(meta, prompt), "> "+prompt, prompt, insertAfterRowId)
+		askAI(agent, prompts.GetAsk(agent, prompt), "> "+prompt, prompt)
 	}()
 }
 
-func askAI(meta *agent.Meta, prompt string, title string, query string, insertAfterRowId uint64) {
-	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, meta.ServiceName())
-	sticky := meta.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
+func askAI(agent *agent.Agent, prompt string, title string, query string) {
+	insertAfterRowId := agent.Term().GetRowId(agent.Term().GetCursorPosition().Y - 1)
+	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName())
+	sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
 	fin := make(chan struct{})
 	var i int
 
@@ -51,7 +52,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string, insertAf
 				return
 			case <-time.After(500 * time.Millisecond):
 				sticky.SetMessage(fmt.Sprintf("%s %s", stickyMessage, _STICKY_SPINNER[i]))
-				meta.Renderer().TriggerRedraw()
+				agent.Renderer().TriggerRedraw()
 				i++
 				if i >= len(_STICKY_SPINNER) {
 					i = 0
@@ -61,17 +62,17 @@ func askAI(meta *agent.Meta, prompt string, title string, query string, insertAf
 	}()
 
 	go func() {
-		result, err := meta.RunLLM(prompt, sticky)
+		result, err := agent.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
-			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
 
 		} else {
-			meta.AddHistory(title, result)
+			agent.AddHistory(title, result)
 		}
 
-		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Response:\n\n%s", title, meta.ServiceName(), result)
+		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Response:\n\n%s", title, agent.ServiceName(), result)
 
 		var (
 			markdown string
@@ -85,7 +86,7 @@ func askAI(meta *agent.Meta, prompt string, title string, query string, insertAf
 
 		md, err := glamour.NewTermRenderer(
 			glamour.WithEmoji(),
-			glamour.WithWordWrap(int(meta.Term().GetSize().X)-1),
+			glamour.WithWordWrap(int(agent.Term().GetSize().X)-1),
 			glamour.WithStylesFromJSONBytes(theme),
 		)
 		if err != nil {
@@ -104,10 +105,9 @@ func askAI(meta *agent.Meta, prompt string, title string, query string, insertAf
 			}
 		}
 
-		//insertAfterRowId := meta.Term().GetRowId(meta.Term().GetCursorPosition().Y - 1)
-		err = meta.Term().InsertSubTerm(query, markdown, insertAfterRowId, types.META_BLOCK_AI)
+		err = agent.Term().InsertSubTerm(query, markdown, insertAfterRowId, types.META_BLOCK_AI)
 		if err != nil {
-			meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
 	}()

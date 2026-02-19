@@ -11,22 +11,22 @@ import (
 	"github.com/lmorg/ttyphoon/utils/file"
 )
 
-func (meta *Meta) McpMenu(cancel types.MenuCallbackT) {
+func (agent *Agent) McpMenu(cancel types.MenuCallbackT) {
 	files := file.GetConfigFiles("mcp", ".json")
 	load := func(i int) {
 		go func() {
-			err := meta.StartServersFromJson(files[i])
+			err := agent.StartServersFromJson(files[i])
 			if err != nil {
-				meta.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
+				agent.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", files[i], err))
 			}
 		}()
-		meta.McpMenu(cancel)
+		agent.McpMenu(cancel)
 	}
 
-	meta.renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
+	agent.renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
-func (meta *Meta) SkillStartTools(skill *skills.SkillT) error {
+func (agent *Agent) SkillStartTools(skill *skills.SkillT) error {
 	var err error
 	for _, tool := range skill.Tools {
 		switch tool.Name {
@@ -36,7 +36,7 @@ func (meta *Meta) SkillStartTools(skill *skills.SkillT) error {
 			if err != nil {
 				return err
 			}
-			err = meta.StartServersFromJson(filename)
+			err = agent.StartServersFromJson(filename)
 		}
 		if err != nil {
 			return err
@@ -45,21 +45,21 @@ func (meta *Meta) SkillStartTools(skill *skills.SkillT) error {
 	return nil
 }
 
-func (meta *Meta) StartServersFromJson(filename string) error {
+func (agent *Agent) StartServersFromJson(filename string) error {
 	config, err := mcp_config.ReadJson(filename)
 	if err != nil {
 		return err
 	}
 	config.Source = filename
-	return meta.StartServersFromConfig(config)
+	return agent.StartServersFromConfig(config)
 }
 
-func (meta *Meta) StartServersFromConfig(config *mcp_config.ConfigT) error {
+func (agent *Agent) StartServersFromConfig(config *mcp_config.ConfigT) error {
 	var err error
 	cache := &map[string]string{}
 
 	for i := range config.Mcp.Inputs {
-		val, err := config.Mcp.Inputs[i].Get(meta.renderer)
+		val, err := config.Mcp.Inputs[i].Get(agent.renderer)
 		if err != nil {
 			return err
 		}
@@ -67,27 +67,27 @@ func (meta *Meta) StartServersFromConfig(config *mcp_config.ConfigT) error {
 	}
 
 	for name, svr := range config.Mcp.Servers {
-		if meta.McpServerExists(name) {
+		if agent.McpServerExists(name) {
 			//renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
 			continue
 		}
-		sticky := meta.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
+		sticky := agent.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
 		envs := svr.Env.Slice()
 
-		if err = updateVars(meta, envs, cache); err != nil {
+		if err = updateVars(agent, envs, cache); err != nil {
 			sticky.Close()
 			return err
 		}
-		if err = updateVars(meta, svr.Args, cache); err != nil {
+		if err = updateVars(agent, svr.Args, cache); err != nil {
 			sticky.Close()
 			return err
 		}
 
 		switch svr.Type {
 		case "http", "https":
-			err = startServerHttp(config.Source, meta, name, svr.Url)
+			err = startServerHttp(config.Source, agent, name, svr.Url)
 		default:
-			err = startServerCmdLine(config.Source, meta, envs, name, svr.Command, svr.Args...)
+			err = startServerCmdLine(config.Source, agent, envs, name, svr.Command, svr.Args...)
 		}
 		sticky.Close()
 		if err != nil {
@@ -103,10 +103,10 @@ var (
 	rxVars  = regexp.MustCompile(`\$\{([-_a-zA-Z0-9]+)\}`)
 )
 
-func updateVars(meta *Meta, s []string, cache *map[string]string) error {
+func updateVars(agent *Agent, s []string, cache *map[string]string) error {
 	var err error
 	for i := range s {
-		s[i], err = _updateVarsRxReplace(meta, s[i], cache)
+		s[i], err = _updateVarsRxReplace(agent, s[i], cache)
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ func updateVars(meta *Meta, s []string, cache *map[string]string) error {
 
 const _VAR_WORKSPACE_FOLDER = "workspaceFolder"
 
-func _updateVarsRxReplace(meta *Meta, s string, cache *map[string]string) (string, error) {
+func _updateVarsRxReplace(agent *Agent, s string, cache *map[string]string) (string, error) {
 	var (
 		val string
 		ok  bool
@@ -136,10 +136,10 @@ func _updateVarsRxReplace(meta *Meta, s string, cache *map[string]string) (strin
 	for i := range match {
 		switch match[i][1] {
 		case _VAR_WORKSPACE_FOLDER:
-			if meta.Pwd == "" {
+			if agent.Meta.Pwd == "" {
 				return "", fmt.Errorf("unable to set ${%s} because pwd is unknown", _VAR_WORKSPACE_FOLDER)
 			}
-			val = meta.Pwd
+			val = agent.Meta.Pwd
 		default:
 			return "", fmt.Errorf("variable does not exist: '%s'", match[i][1])
 		}

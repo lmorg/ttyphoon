@@ -23,7 +23,7 @@ const _HISTORY_DETAILED = `
 
 type ChatHistoryDetail struct {
 	CallbacksHandler callbacks.Handler
-	meta             *agent.Meta
+	agent            *agent.Agent
 	enabled          bool
 }
 
@@ -31,8 +31,8 @@ func init() {
 	agent.ToolsAdd(&ChatHistoryDetail{})
 }
 
-func (t *ChatHistoryDetail) New(meta *agent.Meta) (agent.Tool, error) {
-	return &ChatHistoryDetail{meta: meta, enabled: true}, nil
+func (t *ChatHistoryDetail) New(agent *agent.Agent) (agent.Tool, error) {
+	return &ChatHistoryDetail{agent: agent, enabled: true}, nil
 }
 
 func (t *ChatHistoryDetail) Enabled() bool { return t.enabled }
@@ -53,7 +53,7 @@ func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 
 	var result string
 
-	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.meta.ServiceName(), input))
+	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.agent.ServiceName(), input))
 
 	i, err := strconv.Atoi(input)
 	switch {
@@ -63,15 +63,15 @@ func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 	case i < 0:
 		result = "ERROR: you cannot have negative indexes."
 		goto fin
-	case i >= len(t.meta.History):
+	case i >= len(t.agent.History):
 		result = "ERROR: index doesn't match a chat."
 		goto fin
 	}
 
 	result = fmt.Sprintf(_HISTORY_DETAILED,
-		t.meta.History[i].Title,
-		t.meta.History[i].OutputBlock,
-		t.meta.History[i].Response,
+		t.agent.History[i].Title,
+		t.agent.History[i].OutputBlock,
+		t.agent.History[i].Response,
 	)
 
 fin:

@@ -98,15 +98,15 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 }
 
 func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
-	term := el.tile.GetTerm()
-	curPos := term.GetCursorPosition().Y - 1
-	meta := agent.Get(el.tile.Id())
-	insertAfterRowId := term.GetRowId(curPos)
-	meta.CmdLine = string(el.raw)
+	agt := agent.Get(el.tile.Id())
+	agt.Meta = &agent.Meta{
+		CmdLine: string(el.raw),
+	}
+
 	return []types.MenuItem{
 		{
 			Title: "Write code to shell",
-			Fn:    func() { term.Reply([]byte(string(el.raw))) },
+			Fn:    func() { el.tile.GetTerm().Reply([]byte(string(el.raw))) },
 			Icon:  0xf120,
 		},
 		{
@@ -115,8 +115,8 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 			Icon:  0xf0c5,
 		},
 		{
-			Title: fmt.Sprintf("Learn more about code (%s)", meta.ServiceName()),
-			Fn:    func() { ai.Explain(meta, true, insertAfterRowId) },
+			Title: fmt.Sprintf("Learn more about code (%s)", agt.ServiceName()),
+			Fn:    func() { ai.Explain(agt, true) },
 			Icon:  0xf544,
 		},
 	}

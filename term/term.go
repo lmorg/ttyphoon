@@ -156,7 +156,7 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 	term.reset(size)
 	tile.SetTerm(term)
 
-	agent.Initialize(tile.Id(), term, renderer)
+	agent.New(renderer, tile)
 
 	return term
 }

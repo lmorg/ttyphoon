@@ -24,48 +24,48 @@ var _PROMPT_ASK string
 
 var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
 
-func GetExplain(meta *agent.Meta, userPrompt string) string {
-	return os.Expand(_PROMPT_EXPLAIN, promptVars(meta, userPrompt))
+func GetExplain(agent *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_EXPLAIN, promptVars(agent, userPrompt))
 }
 
-func GetAsk(meta *agent.Meta, userPrompt string) string {
+func GetAsk(agent *agent.Agent, userPrompt string) string {
 	fn := rxSkillFunction.FindString(userPrompt)
 	if fn == "" {
-		return os.Expand(_PROMPT_ASK, promptVars(meta, userPrompt))
+		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
 	}
 
 	fn = strings.TrimRight(fn[1:], " ")
 	skill := skills.ReadSkills().FromFunctionName(fn)
 	if skill == nil {
-		return os.Expand(_PROMPT_ASK, promptVars(meta, userPrompt))
+		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
 	}
 
-	err := meta.SkillStartTools(skill)
+	err := agent.SkillStartTools(skill)
 	if err != nil {
-		meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(meta, userPrompt))
+	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agent, userPrompt))
 }
 
-func promptVars(meta *agent.Meta, userPrompt string) func(string) string {
+func promptVars(agent *agent.Agent, userPrompt string) func(string) string {
 	return func(s string) string {
 		switch s {
 		case "SYSTEM_PROMPT":
-			return os.Expand(_PROMPT_SYSTEM, promptVars(meta, userPrompt))
+			return os.Expand(_PROMPT_SYSTEM, promptVars(agent, userPrompt))
 		case "MAX_ITERATIONS":
-			return strconv.Itoa(meta.MaxIterations())
+			return strconv.Itoa(agent.MaxIterations())
 		case "HOST_OS":
 			return runtime.GOOS
 		case "HOST_CPU":
 			return runtime.GOARCH
 		case "HISTORY":
-			return meta.History.String()
+			return agent.History.String()
 		case "USER_PROMPT":
 			return userPrompt
 		case "COMMAND_LINE":
-			return meta.CmdLine
+			return agent.Meta.CmdLine
 		case "COMMAND_OUTPUT":
-			return meta.OutputBlock
+			return agent.Meta.OutputBlock
 		default:
 			return "$" + s
 		}

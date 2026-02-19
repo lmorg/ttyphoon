@@ -177,14 +177,12 @@ func (el *ElementHyperlink) _menuItemsSchemaHttp(menuItems []types.MenuItem) []t
 		return menuItems
 	}
 
-	term := el.tile.GetTerm()
-	curPos := term.GetCursorPosition().Y - 1
-	meta := agent.Get(el.tile.Id())
-	insertAfterRowId := term.GetRowId(curPos)
+	agt := agent.Get(el.tile.Id())
+	agt.Meta = &agent.Meta{}
 	menuItems = append(menuItems, types.MenuItem{
-		Title: fmt.Sprintf("Summarize hyperlink (%s)", meta.ServiceName()),
+		Title: fmt.Sprintf("Summarize hyperlink (%s)", agt.ServiceName()),
 		Fn: func() {
-			ai.AskAI(meta, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url), insertAfterRowId)
+			ai.AskAI(agt, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url))
 		},
 		Icon: 0xf544,
 	})

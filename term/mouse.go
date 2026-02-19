@@ -83,11 +83,12 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	absBlockPos := term.getBlockStartAndEndAbs(absPosY)
 	relBlockPos := term.getBlockStartAndEndRel(absBlockPos)
-	meta := agent.Get(term.tile.Id())
-	meta.CmdLine = string(term.getCmdLine(int(absBlockPos[0])))
-	meta.Pwd = term.RowSrcFromScrollBack(absBlockPos[0]).Pwd
-	meta.OutputBlock = string(term.copyOutputBlock(absBlockPos))
-	insertAfterRowId := term.GetRowId(term.curPos().Y - 1)
+	agt := agent.Get(term.tile.Id())
+	agt.Meta = &agent.Meta{
+		Pwd:         term.RowSrcFromScrollBack(absBlockPos[0]).Pwd,
+		CmdLine:     string(term.getCmdLine(int(absBlockPos[0]))),
+		OutputBlock: string(term.copyOutputBlock(absBlockPos)),
+	}
 
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
@@ -102,14 +103,14 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Explain output block (%s)", meta.ServiceName()),
+				Title: fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
 						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
-				Fn: func() { ai.Explain(meta, true, insertAfterRowId) },
+				Fn: func() { ai.Explain(agt, true) },
 			},
 		}...)
 }
