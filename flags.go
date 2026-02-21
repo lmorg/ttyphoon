@@ -13,6 +13,8 @@ import (
 
 var (
 	fAnsiImage string
+	fWindow    string
+	fMeta      string
 )
 
 const (
@@ -23,6 +25,8 @@ const (
 
 func getFlags() {
 	flag.StringVar(&fAnsiImage, "image", "", "")
+	flag.StringVar(&fWindow, "window", "", "window to display")
+	flag.StringVar(&fMeta, "meta", "", "payload")
 	flag.Parse()
 
 	switch {

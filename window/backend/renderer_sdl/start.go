@@ -6,6 +6,7 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
@@ -25,14 +26,14 @@ var (
 	Y      int32 = sdl.WINDOWPOS_UNDEFINED
 )
 
-func init() {
+func Initialise() (types.Renderer, *types.XY) {
 	err := sdl.Init(sdl.INIT_VIDEO)
 	if err != nil {
 		panic(err.Error())
 	}
-}
 
-func Initialise() (types.Renderer, *types.XY) {
+	debug.Log("Initialising backend SDL")
+
 	rect, err := sdl.GetDisplayUsableBounds(0)
 	if err != nil {
 		log.Printf("ERROR: %s", err.Error())
@@ -42,6 +43,7 @@ func Initialise() (types.Renderer, *types.XY) {
 		width = rect.W / 2
 		height = rect.H
 	}
+	debug.Log(rect)
 
 	sr := new(sdlRender)
 	err = sr.createWindow(app.Title)

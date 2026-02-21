@@ -3,6 +3,7 @@ package typeface
 import (
 	"github.com/forPelevin/gomoji"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -14,6 +15,7 @@ func Init() {
 	harfbuzz = new(fontHarfbuzz)
 	err := harfbuzz.Init()
 	if err != nil {
+		debug.Log(err)
 		panic(err)
 	}
 
@@ -29,6 +31,8 @@ func Init() {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	debug.Log("harfbuzz initialized")
 }
 
 func GetSize() *types.XY {
