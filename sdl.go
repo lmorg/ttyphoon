@@ -31,8 +31,6 @@ func startSdl() {
 
 	getFlags()
 
-	loadEnvs()
-
 	typeface.Init()
 
 	if config.Config.Tmux.Enabled && tmuxInstalled() {

@@ -3,4 +3,4 @@
 
 package debug
 
-const Enabled = true
+const Enabled = false

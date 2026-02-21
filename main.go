@@ -1,29 +1,24 @@
 package main
 
 import (
-	"embed"
 	"os"
 
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 )
 
-//go:embed all:frontend/dist
-var wailsAssets embed.FS
-
 func main() {
 	if os.Getenv("MXTTY_BUILD") == "true" {
-		wInputBox()
+		startWails("")
 		return
 	}
 
+	loadEnvs()
+
 	switch dispatcher.WindowNameT(os.Getenv(dispatcher.ENV_WINDOW)) {
 	case dispatcher.WindowInputBox:
-		wInputBox()
-
-	case dispatcher.WindowSDL:
-		startSdl()
+		startWails(dispatcher.WindowInputBox)
 
 	default:
-		dispatcher.Start()
+		startSdl()
 	}
 }

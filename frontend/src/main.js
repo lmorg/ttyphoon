@@ -1,26 +1,31 @@
 import './style.css';
 import './app.css';
 
-import logo from './assets/images/logo-universal.png';
-import {Greet} from '../wailsjs/go/main/WInputBox';
+//import logo from './assets/images/logo-universal.png';
+import { VisualInputBox } from '../wailsjs/go/main/WApp';
+//import { main } from "../wailsjs/go/models";
+
+
 
 document.querySelector('#app').innerHTML = `
     <img id="logo" class="logo">
-      <div class="result" id="result">Please enter your name below 👇</div>
+      <div class="result" id="result">bob</div>
       <div class="input-box" id="input">
         <input class="input" id="name" type="text" autocomplete="off" />
-        <button class="btn" onclick="greet()">Greet</button>
+        <button class="btn" onclick="send()">Send</button>
       </div>
     </div>
 `;
-document.getElementById('logo').src = logo;
+
+//document.body.style.backgroundColor = `rgb(${payload.window.bg.red}, ${payload.window.bg.green}, ${payload.window.bg.blue})`;
+//document.getElementById('logo').src = logo;
 
 let nameElement = document.getElementById("name");
 nameElement.focus();
 let resultElement = document.getElementById("result");
 
 // Setup the greet function
-window.greet = function () {
+window.send = function () {
     // Get name
     let name = nameElement.value;
 
@@ -29,7 +34,7 @@ window.greet = function () {
 
     // Call App.Greet(name)
     try {
-        Greet(name)
+        VisualInputBox(name)
             .then((result) => {
                 // Update result with data back from App.Greet()
                 resultElement.innerText = result;
