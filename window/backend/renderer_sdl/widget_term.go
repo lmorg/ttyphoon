@@ -111,24 +111,27 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 }
 
 func (sr *sdlRender) visualEditor() {
+	sr.cancelWInputBox()
+
 	pos := new(types.XY)
 	pos.X, pos.Y = sr.window.GetPosition()
 	w, _ := sr.window.GetSize()
 	size := &types.XY{X: w, Y: 300}
 
-	windowStyle := &dispatcher.WindowStyleT{
-		Pos:         *pos,
-		Size:        *size,
-		AlwaysOnTop: true,
-		Frameless:   true,
-	}
+	windowStyle := dispatcher.NewWindowStyle()
+	windowStyle.Pos = *pos
+	windowStyle.Size = *size
+	windowStyle.AlwaysOnTop = true
+	windowStyle.Frameless = true
 
 	var response dispatcher.RInputBoxT
-	_ = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, dispatcher.PInputBoxT{Title: "Visual editor"}, &response, func(err error) {
+	sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, dispatcher.PInputBoxT{Title: "Visual editor"}, &response, func(err error) {
 		if err != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-		sr.termWin.Active.GetTerm().Reply([]byte(response.Value))
+		if len(response.Value) > 0 {
+			sr.termWin.Active.GetTerm().Reply([]byte(response.Value))
+		}
 	})
 }
 

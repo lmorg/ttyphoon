@@ -1,12 +1,20 @@
 export namespace dispatcher {
 	
+	export enum WindowTypeT {
+	    sdl = "sdl",
+	    inputBox = "inputBox",
+	    markdown = "markdown",
+	}
 	export class WindowStyleT {
 	    fg: types.Colour;
 	    bg: types.Colour;
+	    Selection: types.Colour;
 	    pos: types.XY;
 	    size: types.XY;
 	    alwaysOnTop: boolean;
 	    frameLess: boolean;
+	    fontFamily: string;
+	    fontSize: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new WindowStyleT(source);
@@ -16,10 +24,13 @@ export namespace dispatcher {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.fg = this.convertValues(source["fg"], types.Colour);
 	        this.bg = this.convertValues(source["bg"], types.Colour);
+	        this.Selection = this.convertValues(source["Selection"], types.Colour);
 	        this.pos = this.convertValues(source["pos"], types.XY);
 	        this.size = this.convertValues(source["size"], types.XY);
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.frameLess = source["frameLess"];
+	        this.fontFamily = source["fontFamily"];
+	        this.fontSize = source["fontSize"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

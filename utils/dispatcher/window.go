@@ -8,14 +8,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-)
-
-type WindowNameT string
-
-const (
-	WindowSDL      WindowNameT = "sdl"
-	WindowInputBox WindowNameT = "inputBox"
 )
 
 type PayloadT struct {
@@ -26,30 +20,47 @@ type PayloadT struct {
 type WindowStyleT struct {
 	Fg          types.Colour `json:"fg"`
 	Bg          types.Colour `json:"bg"`
+	Selection   types.Colour `json:"Selection"`
 	Pos         types.XY     `json:"pos"`
 	Size        types.XY     `json:"size"`
 	AlwaysOnTop bool         `json:"alwaysOnTop"`
 	Frameless   bool         `json:"frameLess"`
+	FontFamily  string       `json:"fontFamily"`
+	FontSize    int          `json:"fontSize"`
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowNameT, windowStyle *WindowStyleT, parameters P, response any, callback func(error)) func() {
+func NewWindowStyle() *WindowStyleT {
+	fontFamily := config.Config.TypeFace.FontName
+	if fontFamily == "" {
+		fontFamily = "Hasklig"
+	}
+	return &WindowStyleT{
+		Fg:         *types.SGR_DEFAULT.Fg,
+		Bg:         *types.SGR_DEFAULT.Bg,
+		Selection:  *types.COLOR_SELECTION,
+		Pos:        types.XY{},
+		Size:       types.XY{X: 1024, Y: 768},
+		FontFamily: fmt.Sprintf(`"%s", monospace`, fontFamily),
+		FontSize:   config.Config.TypeFace.FontSize,
+	}
+}
+
+func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters P, response any, callback func(error)) func() {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,
 	}
-	payload.Window.Fg = *types.SGR_DEFAULT.Fg
-	payload.Window.Bg = *types.SGR_DEFAULT.Bg
 
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {
 		callback(err)
-		return func() {}
+		return nil
 	}
 
 	exe, err := os.Executable()
 	if err != nil {
 		callback(err)
-		return func() {}
+		return nil
 	}
 
 	cmd := exec.Command(exe)
@@ -64,7 +75,7 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowNameT, windowStyl
 	err = cmd.Start()
 	if err != nil {
 		callback(err)
-		return func() {}
+		return nil
 	}
 
 	go func() {
@@ -83,19 +94,14 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowNameT, windowStyl
 	}()
 
 	return func() {
-		_ = cmd.Cancel()
+		_ = cmd.Process.Kill()
 	}
 }
 
 func GetPayload(payload *PayloadT) error {
 	params := os.Getenv(ENV_PARAMETERS)
 	if params == "" {
-		payload.Window = WindowStyleT{
-			Fg:   *types.SGR_DEFAULT.Fg,
-			Bg:   *types.SGR_DEFAULT.Bg,
-			Pos:  types.XY{},
-			Size: types.XY{X: 1024, Y: 768},
-		}
+		payload.Window = *NewWindowStyle()
 		return nil
 	}
 	return json.Unmarshal([]byte(params), payload)

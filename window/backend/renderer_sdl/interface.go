@@ -60,12 +60,13 @@ type sdlRender struct {
 	notifyIconSize *types.XY
 
 	// widgets
-	termWin     *types.AppWindowTerms
-	termWidget  *termWidgetT
-	highlighter *highlightWidgetT
-	highlightAi bool
-	inputBox    *inputBoxWidgetT
-	menu        *menuWidgetT
+	termWin          *types.AppWindowTerms
+	termWidget       *termWidgetT
+	highlighter      *highlightWidgetT
+	highlightAi      bool
+	inputBox         *inputBoxWidgetT
+	_cancelWInputBox func()
+	menu             *menuWidgetT
 
 	// render function stacks
 	_elementStack []*layer.RenderStackT

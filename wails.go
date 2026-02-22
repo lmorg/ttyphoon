@@ -19,15 +19,24 @@ var wailsAssets embed.FS
 // App struct
 type WApp struct {
 	ctx     context.Context
-	Payload *dispatcher.PayloadT
-	//window  dispatcher.WindowNameT
+	payload *dispatcher.PayloadT
+	window  dispatcher.WindowTypeT
+}
+
+var WWindowTsBindings = []struct {
+	Value  dispatcher.WindowTypeT
+	TSName string
+}{
+	{dispatcher.WindowSdl, "sdl"},
+	{dispatcher.WindowInputBox, "inputBox"},
+	{dispatcher.WindowMarkdown, "markdown"},
 }
 
 // NewApp creates a new App application struct
-func NewWailsApp(window dispatcher.WindowNameT, payload *dispatcher.PayloadT) *WApp {
+func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *WApp {
 	return &WApp{
-		//Window:  window,
-		Payload: payload,
+		window:  window,
+		payload: payload,
 	}
 }
 
@@ -36,21 +45,25 @@ func NewWailsApp(window dispatcher.WindowNameT, payload *dispatcher.PayloadT) *W
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	runtime.WindowSetPosition(ctx, int(a.Payload.Window.Pos.X), int(a.Payload.Window.Pos.Y))
+	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
 }
 
 //func (a *WApp) shutdown(ctx context.Context) { os.Exit(0) }
+
+func (a *WApp) GetWindowType() string {
+	return string(a.window)
+}
 
 func (a *WApp) GetPayload() string {
 	return os.Getenv(dispatcher.ENV_PARAMETERS)
 }
 
 func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
-	return a.Payload.Window
+	return a.payload.Window
 }
 
 func (a *WApp) GetParameters() any {
-	return a.Payload.Parameters
+	return a.payload.Parameters
 }
 
 func (a *WApp) VisualInputBox(name string) string {
@@ -64,9 +77,15 @@ func (a *WApp) VisualInputBox(name string) string {
 	return ""
 }
 
+func (a *WApp) GetMarkdown() string {
+	//if a.Payload.Parameters
+	//return a.Payload.Parameters
+	return ""
+}
+
 // --------------------
 
-func startWails(window dispatcher.WindowNameT) {
+func startWails(window dispatcher.WindowTypeT) {
 	payload := &dispatcher.PayloadT{}
 
 	switch window {
@@ -103,6 +122,9 @@ func startWails(window dispatcher.WindowNameT) {
 		OnStartup: app.startup,
 		Bind: []interface{}{
 			app,
+		},
+		EnumBind: []interface{}{
+			WWindowTsBindings,
 		},
 	})
 

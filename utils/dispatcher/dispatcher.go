@@ -4,12 +4,20 @@ const ENV_WINDOW = "MXTTY_WINDOW"
 
 const ENV_PARAMETERS = "MXTTY_PARAMETERS"
 
+type WindowTypeT string
+
+const (
+	WindowSdl      WindowTypeT = "sdl"
+	WindowInputBox WindowTypeT = "inputBox"
+	WindowMarkdown WindowTypeT = "markdown"
+)
+
 type PInputBoxT struct {
 	Title string `json:"title"`
 }
 
 type PMarkdownT struct {
-	Uri string `json:"uri"`
+	Path string `json:"path"`
 }
 
 type RInputBoxT struct {

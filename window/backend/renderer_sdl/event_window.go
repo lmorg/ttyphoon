@@ -5,14 +5,22 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+func (sr *sdlRender) cancelWInputBox() {
+	if sr._cancelWInputBox != nil {
+		sr._cancelWInputBox()
+	}
+}
+
 func (sr *sdlRender) eventWindow(evt *sdl.WindowEvent) {
 	sr.cacheBgTexture.Destroy(sr)
 
 	switch evt.Event {
 	case sdl.WINDOWEVENT_RESIZED:
+		sr.cancelWInputBox()
 		sr.windowResized()
 
 	case sdl.WINDOWEVENT_FOCUS_GAINED:
+		sr.cancelWInputBox()
 		sr.termWin.Active.GetTerm().HasFocus(true)
 		sr.window.SetWindowOpacity(float32(config.Config.Window.Opacity) / 100)
 		sr.hkToggle = true
