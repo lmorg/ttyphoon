@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"os"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
@@ -18,14 +19,14 @@ var wailsAssets embed.FS
 // App struct
 type WApp struct {
 	ctx     context.Context
-	Payload *dispatcher.PayloadT   `json:"payload"`
-	Window  dispatcher.WindowNameT `json:"window"`
+	Payload *dispatcher.PayloadT
+	//window  dispatcher.WindowNameT
 }
 
 // NewApp creates a new App application struct
 func NewWailsApp(window dispatcher.WindowNameT, payload *dispatcher.PayloadT) *WApp {
 	return &WApp{
-		Window:  window,
+		//Window:  window,
 		Payload: payload,
 	}
 }
@@ -39,6 +40,18 @@ func (a *WApp) startup(ctx context.Context) {
 }
 
 //func (a *WApp) shutdown(ctx context.Context) { os.Exit(0) }
+
+func (a *WApp) GetPayload() string {
+	return os.Getenv(dispatcher.ENV_PARAMETERS)
+}
+
+func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
+	return a.Payload.Window
+}
+
+func (a *WApp) GetParameters() any {
+	return a.Payload.Parameters
+}
 
 func (a *WApp) VisualInputBox(name string) string {
 	response := &dispatcher.RInputBoxT{Value: name}
@@ -58,9 +71,9 @@ func startWails(window dispatcher.WindowNameT) {
 
 	switch window {
 	case dispatcher.WindowInputBox:
-		payload.Parameters = new(dispatcher.PInputBoxT)
+		//payload.Parameters = dispatcher.PInputBoxT{}
 	default:
-		payload.Parameters = "undef"
+		//payload.Parameters = "undef"
 	}
 
 	err := dispatcher.GetPayload(payload)
@@ -88,8 +101,9 @@ func startWails(window dispatcher.WindowNameT) {
 			A: uint8(config.Config.Window.Opacity/100) * 254,
 		},
 		OnStartup: app.startup,
-		Bind:      []interface{}{app},
-		//EnumBind:  []interface{}{payload},
+		Bind: []interface{}{
+			app,
+		},
 	})
 
 	if err != nil {

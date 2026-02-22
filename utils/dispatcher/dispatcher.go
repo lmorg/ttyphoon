@@ -8,6 +8,10 @@ type PInputBoxT struct {
 	Title string `json:"title"`
 }
 
+type PMarkdownT struct {
+	Uri string `json:"uri"`
+}
+
 type RInputBoxT struct {
 	Cancelled bool
 	Value     string

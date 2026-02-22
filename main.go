@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-	if os.Getenv("MXTTY_BUILD") == "true" {
-		startWails("")
+	if build := os.Getenv("MXTTY_BUILD"); build != "" {
+		startWails(dispatcher.WindowNameT(build))
 		return
 	}
 

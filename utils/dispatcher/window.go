@@ -19,8 +19,8 @@ const (
 )
 
 type PayloadT struct {
-	Parameters any           `json:"parameters"`
-	Window     *WindowStyleT `json:"window"`
+	Window     WindowStyleT `json:"window"`
+	Parameters any          `json:"parameters"`
 }
 
 type WindowStyleT struct {
@@ -32,11 +32,14 @@ type WindowStyleT struct {
 	Frameless   bool         `json:"frameLess"`
 }
 
-func DisplayWindow(windowName WindowNameT, windowStyle *WindowStyleT, parameters any, response any, callback func(error)) func() {
-	payload := PayloadT{
+func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowNameT, windowStyle *WindowStyleT, parameters P, response any, callback func(error)) func() {
+	payload := &PayloadT{
+		Window:     *windowStyle,
 		Parameters: parameters,
-		Window:     windowStyle,
 	}
+	payload.Window.Fg = *types.SGR_DEFAULT.Fg
+	payload.Window.Bg = *types.SGR_DEFAULT.Bg
+
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {
 		callback(err)
@@ -87,7 +90,7 @@ func DisplayWindow(windowName WindowNameT, windowStyle *WindowStyleT, parameters
 func GetPayload(payload *PayloadT) error {
 	params := os.Getenv(ENV_PARAMETERS)
 	if params == "" {
-		payload.Window = &WindowStyleT{
+		payload.Window = WindowStyleT{
 			Fg:   *types.SGR_DEFAULT.Fg,
 			Bg:   *types.SGR_DEFAULT.Bg,
 			Pos:  types.XY{},
