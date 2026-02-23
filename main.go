@@ -7,16 +7,20 @@ import (
 )
 
 func main() {
+	loadEnvs()
+
 	if build := os.Getenv("MXTTY_BUILD"); build != "" {
 		startWails(dispatcher.WindowTypeT(build))
 		return
 	}
 
-	loadEnvs()
-
-	switch dispatcher.WindowTypeT(os.Getenv(dispatcher.ENV_WINDOW)) {
+	window := dispatcher.WindowTypeT(os.Getenv(dispatcher.ENV_WINDOW))
+	switch window {
 	case dispatcher.WindowInputBox:
-		startWails(dispatcher.WindowInputBox)
+		startWails(window)
+
+	case dispatcher.WindowMarkdown:
+		startWails(window)
 
 	default:
 		startSdl()

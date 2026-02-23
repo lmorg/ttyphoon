@@ -5,16 +5,55 @@ export namespace dispatcher {
 	    inputBox = "inputBox",
 	    markdown = "markdown",
 	}
-	export class WindowStyleT {
+	export class ColoursT {
 	    fg: types.Colour;
 	    bg: types.Colour;
-	    Selection: types.Colour;
+	    green: types.Colour;
+	    selection: types.Colour;
+	    link: types.Colour;
+	    error: types.Colour;
+	
+	    static createFrom(source: any = {}) {
+	        return new ColoursT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fg = this.convertValues(source["fg"], types.Colour);
+	        this.bg = this.convertValues(source["bg"], types.Colour);
+	        this.green = this.convertValues(source["green"], types.Colour);
+	        this.selection = this.convertValues(source["selection"], types.Colour);
+	        this.link = this.convertValues(source["link"], types.Colour);
+	        this.error = this.convertValues(source["error"], types.Colour);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WindowStyleT {
 	    pos: types.XY;
 	    size: types.XY;
 	    alwaysOnTop: boolean;
 	    frameLess: boolean;
 	    fontFamily: string;
 	    fontSize: number;
+	    title: string;
+	    colors?: ColoursT;
 	
 	    static createFrom(source: any = {}) {
 	        return new WindowStyleT(source);
@@ -22,15 +61,14 @@ export namespace dispatcher {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.fg = this.convertValues(source["fg"], types.Colour);
-	        this.bg = this.convertValues(source["bg"], types.Colour);
-	        this.Selection = this.convertValues(source["Selection"], types.Colour);
 	        this.pos = this.convertValues(source["pos"], types.XY);
 	        this.size = this.convertValues(source["size"], types.XY);
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.frameLess = source["frameLess"];
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
+	        this.title = source["title"];
+	        this.colors = this.convertValues(source["colors"], ColoursT);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

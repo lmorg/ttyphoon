@@ -66,7 +66,7 @@ func Write(tile types.Tile, screen types.Screen) {
 
 	// write
 
-	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.Name, data.GroupName)
+	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.DirName, data.GroupName)
 	err = os.MkdirAll(path, 0700)
 	if err != nil {
 		return

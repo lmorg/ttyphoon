@@ -9,5 +9,9 @@
   },
   "devDependencies": {
     "vite": "^3.0.7"
+  },
+  "dependencies": {
+    "marked": "^17.0.3",
+    "marked-gfm-heading-id": "^4.1.3"
   }
 }

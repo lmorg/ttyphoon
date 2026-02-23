@@ -124,8 +124,10 @@ func (sr *sdlRender) visualEditor() {
 	windowStyle.AlwaysOnTop = true
 	windowStyle.Frameless = true
 
+	parameters := &dispatcher.PInputBoxT{Title: "Visual editor"}
 	var response dispatcher.RInputBoxT
-	sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, dispatcher.PInputBoxT{Title: "Visual editor"}, &response, func(err error) {
+
+	sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, &response, func(err error) {
 		if err != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}

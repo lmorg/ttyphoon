@@ -18,15 +18,23 @@ type PayloadT struct {
 }
 
 type WindowStyleT struct {
-	Fg          types.Colour `json:"fg"`
-	Bg          types.Colour `json:"bg"`
-	Selection   types.Colour `json:"Selection"`
-	Pos         types.XY     `json:"pos"`
-	Size        types.XY     `json:"size"`
-	AlwaysOnTop bool         `json:"alwaysOnTop"`
-	Frameless   bool         `json:"frameLess"`
-	FontFamily  string       `json:"fontFamily"`
-	FontSize    int          `json:"fontSize"`
+	Pos         types.XY  `json:"pos"`
+	Size        types.XY  `json:"size"`
+	AlwaysOnTop bool      `json:"alwaysOnTop"`
+	Frameless   bool      `json:"frameLess"`
+	FontFamily  string    `json:"fontFamily"`
+	FontSize    int       `json:"fontSize"`
+	Title       string    `json:"title"`
+	Colours     *ColoursT `json:"colors"`
+}
+
+type ColoursT struct {
+	Fg        types.Colour `json:"fg"`
+	Bg        types.Colour `json:"bg"`
+	Green     types.Colour `json:"green"`
+	Selection types.Colour `json:"selection"`
+	Link      types.Colour `json:"link"`
+	Error     types.Colour `json:"error"`
 }
 
 func NewWindowStyle() *WindowStyleT {
@@ -35,9 +43,13 @@ func NewWindowStyle() *WindowStyleT {
 		fontFamily = "Hasklig"
 	}
 	return &WindowStyleT{
-		Fg:         *types.SGR_DEFAULT.Fg,
-		Bg:         *types.SGR_DEFAULT.Bg,
-		Selection:  *types.COLOR_SELECTION,
+		Colours: &ColoursT{
+			Fg:        *types.SGR_DEFAULT.Fg,
+			Bg:        *types.SGR_DEFAULT.Bg,
+			Selection: *types.COLOR_SELECTION,
+			Link:      *types.SGR_COLOR_BLUE,
+			Error:     *types.COLOR_ERROR,
+		},
 		Pos:        types.XY{},
 		Size:       types.XY{X: 1024, Y: 768},
 		FontFamily: fmt.Sprintf(`"%s", monospace`, fontFamily),
@@ -45,7 +57,7 @@ func NewWindowStyle() *WindowStyleT {
 	}
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters P, response any, callback func(error)) func() {
+func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, response any, callback func(error)) func() {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,
@@ -89,13 +101,17 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyl
 			callback(errors.New(stderr.String()))
 			return
 		}
+		if stdout.Len() == 0 {
+			return
+		}
+
 		err = json.Unmarshal(stdout.Bytes(), response)
 		callback(err)
 	}()
 
-	return func() {
-		_ = cmd.Process.Kill()
-	}
+	cleanUp := func() { _ = cmd.Process.Kill() }
+	cleanUpFuncs = append(cleanUpFuncs, cleanUp)
+	return cleanUp
 }
 
 func GetPayload(payload *PayloadT) error {
@@ -104,7 +120,16 @@ func GetPayload(payload *PayloadT) error {
 		payload.Window = *NewWindowStyle()
 		return nil
 	}
-	return json.Unmarshal([]byte(params), payload)
+	err := json.Unmarshal([]byte(params), payload)
+	if err != nil {
+		return err
+	}
+
+	if payload.Window.Colours == nil {
+		payload.Window.Colours = NewWindowStyle().Colours
+	}
+
+	return nil
 }
 
 func Response(response any) error {

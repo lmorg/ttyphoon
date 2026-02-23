@@ -13,6 +13,7 @@ import (
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/debug/pprof"
 	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/window/backend"
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
@@ -21,9 +22,10 @@ import (
 func startSdl() {
 	pprof.Start()
 	defer pprof.CleanUp()
+	defer dispatcher.CleanUp()
 
 	if runtime.GOOS == "darwin" {
-		err := os.Setenv("PATH", "PATH="+os.Getenv("PATH")+":/opt/homebrew/bin:/opt/homebrew/sbin")
+		err := os.Setenv("PATH", "PATH="+os.Getenv("PATH")+":/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin")
 		if err != nil {
 			panic(err)
 		}

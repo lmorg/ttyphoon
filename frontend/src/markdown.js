@@ -1,49 +1,110 @@
-import { VisualInputBox } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle } from '../wailsjs/go/main/WApp';
+import { GetParameters, GetMarkdown, GetImage } from '../wailsjs/go/main/WApp';
 
-function autoGrow() {
-    if (document.getElementById('input').scrollHeight > document.getElementById('input').clientHeight) document.getElementById('input').style.height = document.getElementById('input').scrollHeight + 'px';
-}
+import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
-window.autoGrow = autoGrow;
+import { marked } from "marked";
+import { gfmHeadingId } from "marked-gfm-heading-id";
 
 document.querySelector('#app').innerHTML = `
-    <div class="title" id="title">{{Title}}</div>
-      <div class="input-box">
-        <!--<input class="input" id="input" type="text" autocomplete="off" />-->
-        <!--<div class="input" id="input" contenteditable="plaintext-only" onkeydown="autoGrow();" onkeyup="autoGrow();"></div>-->
-        <textarea class="input" id="input" onkeydown="autoGrow();" onkeydown="autoGrow();"></textarea>
-        <a class="btn" onclick="send()">Send</a>
-      </div>
-    </div>
+    <div id="ttyphoon-error"></div>
+    <div id="ttyphoon-markdown"></div>
 `;
 
-let inputElement = document.getElementById("input");
-setTimeout(function() { inputElement.focus() }, 0);
-
-
-let titleElement = document.getElementById("title");
+let errorElement = document.getElementById('ttyphoon-error')
 
 GetWindowStyle().then((result) => {
-    document.body.style.color           = `rgb(${result.fg.Red}, ${result.fg.Green}, ${result.fg.Blue})`;
-    document.body.style.backgroundColor = `rgb(${result.bg.Red}, ${result.bg.Green}, ${result.bg.Blue})`;
-    inputElement.style.color           = `rgb(${result.bg.Red}, ${result.bg.Green}, ${result.bg.Blue})`;
-    inputElement.style.backgroundColor = `rgb(${result.fg.Red}, ${result.fg.Green}, ${result.fg.Blue})`;
-})
+    document.body.style.color           = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
+    document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
+    errorElement.style.color = `rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue})`;
+
+    const style = document.createElement('style');
+    style.textContent = `
+        ::selection {
+            background-color: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
+        }
+        a {
+            text-decoration: none;
+            color: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    `;
+    document.head.appendChild(style);
+});
 
 GetParameters().then((result) => {
-    titleElement.innerText = result['title']
-})
+    GetMarkdown(result.path).then((doc) => {
+        markdown(doc);
+    });
+});
 
-window.send = function () {
-    try {
-        VisualInputBox(inputElement.value)
-            .then((result) => {
-                titleElement.innerText = result;
+function markdown(doc) {
+    const options = {};
+    marked.use(gfmHeadingId(options));
+    document.getElementById('ttyphoon-markdown').innerHTML = marked.parse(doc);
+
+    let rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
+
+    document.querySelectorAll('img').forEach(img => {
+        //console.log(img.src);
+        
+        if (img.src.match(rxWailsUrl)) {
+            let path = img.src.replace(rxWailsUrl, '')
+            GetImage(path).then((image) => {
+                if (image.match(/^error: /)) {
+                    console.log(image);
+                    //document.getElementById('markdown').innerText = image;
+                } else {
+                    //console.log(image);
+                    img.src = image;
+                }
             })
-            .catch((err) => {
-                console.error(err);
+        }
+    
+    });
+
+    let rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+
+    document.querySelectorAll('a').forEach(a => {
+        if (!a.href.match(rxWailsUrl)) {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                BrowserOpenURL(a.href);
             });
-    } catch (err) {
-        console.error(err);
-    }
+        }
+
+        if (!a.href.match(rxBookmark)) {
+            /*let id = a.href.replace(rxBookmark, '');
+            console.log(id);
+            //a.href = "#"+id;
+            a.addEventListener("click", () => {
+                document.getElementById(id).scrollIntoView();
+            });*/
+        }
+    });
+
+    GetWindowStyle().then((result) => {
+        document.querySelectorAll('div').forEach(div => {
+            div.style.fontFamily = result.fontFamily;
+            div.style.fontSize   = result.fontSize;
+        });
+        document.querySelectorAll('a').forEach(a => {
+            /*a.style.color = `rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue})`;
+            a.style.textDecoration = "none";
+
+                const style = a.createElement('style');
+                style.textContent = `:hover {
+                    border-width: 1px;
+                    border-style: solid;
+                    border-color: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
+                }`;
+                a.head.appendChild(style);*/
+        });
+    });
 };
+
+/*GetPayload().then((result) => {
+    document.getElementById('output').innerHTML = result;
+})*/

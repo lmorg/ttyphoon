@@ -15,12 +15,14 @@ const (
 type PInputBoxT struct {
 	Title string `json:"title"`
 }
+type RInputBoxT struct {
+	Cancelled bool
+	Value     string
+}
 
 type PMarkdownT struct {
 	Path string `json:"path"`
 }
-
-type RInputBoxT struct {
-	Cancelled bool
-	Value     string
+type RMarkdownT struct {
+	// no return value required
 }
