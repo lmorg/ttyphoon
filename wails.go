@@ -3,9 +3,16 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
-	"github.com/lmorg/ttyphoon/config"
+	ttyphoon "github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -19,16 +26,33 @@ var wailsAssets embed.FS
 // App struct
 type WApp struct {
 	ctx     context.Context
-	Payload *dispatcher.PayloadT
-	//window  dispatcher.WindowNameT
+	payload *dispatcher.PayloadT
+	window  dispatcher.WindowTypeT
+	dir     string
+	ipc     *dispatcher.IpcT
+	msgPipe chan *dispatcher.IpcMessageT
+}
+
+var WWindowTsBindings = []struct {
+	Value  dispatcher.WindowTypeT
+	TSName string
+}{
+	{dispatcher.WindowSdl, "sdl"},
+	{dispatcher.WindowInputBox, "inputBox"},
+	{dispatcher.WindowMarkdown, "markdown"},
 }
 
 // NewApp creates a new App application struct
-func NewWailsApp(window dispatcher.WindowNameT, payload *dispatcher.PayloadT) *WApp {
+func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *WApp {
 	return &WApp{
-		//Window:  window,
-		Payload: payload,
+		window:  window,
+		payload: payload,
+		msgPipe: make(chan *dispatcher.IpcMessageT),
 	}
+}
+
+func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
+	a.msgPipe <- msg
 }
 
 // startup is called when the app starts. The context is saved
@@ -36,57 +60,143 @@ func NewWailsApp(window dispatcher.WindowNameT, payload *dispatcher.PayloadT) *W
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	runtime.WindowSetPosition(ctx, int(a.Payload.Window.Pos.X), int(a.Payload.Window.Pos.Y))
+	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
+
+	go func() {
+		for msg := range a.msgPipe {
+			if msg.Error != nil {
+				runtime.EventsEmit(a.ctx, "error", msg.Error)
+			} else {
+				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
+			}
+		}
+	}()
 }
 
-//func (a *WApp) shutdown(ctx context.Context) { os.Exit(0) }
+func (a *WApp) domReady(ctx context.Context) {
+	if a.window == dispatcher.WindowHistory {
+		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
+		if err != nil {
+			log.Println(err)
+		}
+	}
+}
+
+func (a *WApp) beforeClose(ctx context.Context) bool {
+	if a.window == dispatcher.WindowHistory {
+		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "closeMenu"})
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	return false
+}
+
+func (a *WApp) GetWindowType() string {
+	return string(a.window)
+}
 
 func (a *WApp) GetPayload() string {
 	return os.Getenv(dispatcher.ENV_PARAMETERS)
 }
 
 func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
-	return a.Payload.Window
+	return a.payload.Window
 }
 
 func (a *WApp) GetParameters() any {
-	return a.Payload.Parameters
+	return a.payload.Parameters
 }
 
-func (a *WApp) VisualInputBox(name string) string {
-	response := &dispatcher.RInputBoxT{Value: name}
-	err := dispatcher.Response(response)
+func (a *WApp) VisualInputBox(value string) {
+	err := a.ipc.Send(&dispatcher.IpcMessageT{
+		EventName:  "ok",
+		Parameters: map[string]string{"value": value},
+	})
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	runtime.Quit(a.ctx)
+}
+
+func (a *WApp) GetMarkdown(path string) string {
+	f, err := os.Open(path)
 	if err != nil {
 		return err.Error()
 	}
 
-	runtime.Quit(a.ctx)
-	return ""
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return err.Error()
+	}
+
+	a.dir = filepath.Dir(path)
+
+	return string(b)
+}
+
+var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)
+
+func (a *WApp) GetImage(path string) string {
+	if len(path) == 0 {
+		return "error: empty string"
+	}
+
+	ext := strings.ToLower(rxExtension.FindString(path))
+	if len(ext) == 0 {
+		return "error: extension not found"
+	}
+
+	if path[0] != '/' {
+		// TODO: this isn't Windows compatible
+		path = a.dir + "/" + path
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	base64 := base64.StdEncoding.EncodeToString(b)
+
+	return fmt.Sprintf("data:%s;base64,%s", imageMime(ext), base64)
+}
+
+func imageMime(ext string) string {
+	if ext == ".svg" {
+		return "image/svg+xml"
+	}
+	return "image/" + ext[1:]
 }
 
 // --------------------
 
-func startWails(window dispatcher.WindowNameT) {
+func startWails(window dispatcher.WindowTypeT) {
 	payload := &dispatcher.PayloadT{}
-
-	switch window {
-	case dispatcher.WindowInputBox:
-		//payload.Parameters = dispatcher.PInputBoxT{}
-	default:
-		//payload.Parameters = "undef"
-	}
-
-	err := dispatcher.GetPayload(payload)
-	if err != nil {
-		panic(err)
-	}
 
 	// Create an instance of the app structure
 	app := NewWailsApp(window, payload)
 
+	ipc, err := dispatcher.ClientConnect(app.ipcRespFunc)
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+	}
+	app.ipc = ipc
+
+	err = dispatcher.GetPayload(payload)
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+	}
+
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title:       "TTYphoon",
+		Title:       fmt.Sprintf("%s: %s", ttyphoon.Name, payload.Window.Title),
 		Width:       int(payload.Window.Size.X),
 		Height:      int(payload.Window.Size.Y),
 		Frameless:   payload.Window.Frameless,
@@ -95,19 +205,33 @@ func startWails(window dispatcher.WindowNameT) {
 			Assets: wailsAssets,
 		},
 		BackgroundColour: &options.RGBA{
-			R: payload.Window.Fg.Red,
-			G: payload.Window.Fg.Green,
-			B: payload.Window.Fg.Blue,
-			A: uint8(config.Config.Window.Opacity/100) * 254,
+			R: payload.Window.Colours.Fg.Red,
+			G: payload.Window.Colours.Fg.Green,
+			B: payload.Window.Colours.Fg.Blue,
+			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
 		},
-		OnStartup: app.startup,
-		Bind: []interface{}{
-			app,
+		OnStartup:     app.startup,
+		OnDomReady:    app.domReady,
+		OnBeforeClose: app.beforeClose,
+		Bind:          []interface{}{app},
+		EnumBind:      []interface{}{WWindowTsBindings},
+		/*Mac: &mac.Options{
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
 		},
+		Linux: &linux.Options{
+			WindowIsTranslucent: true,
+		},
+
+		Windows: &windows.Options{
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
+		},*/
+
+		//BindingsAllowedOrigins: "*",
 	})
 
 	if err != nil {
 		panic(err)
 	}
-
 }

@@ -17,7 +17,7 @@ func New(tileId string, errCallback func(error)) *ScrollbackHistory {
 	return sbh // disable this while i figure out how to use it
 
 	path := fmt.Sprintf("file:%s/%s-%d-scrollback-history-buf-%s-%d.db",
-		os.TempDir(), app.Name, os.Getpid(), tileId, time.Now().Unix())
+		os.TempDir(), app.DirName, os.Getpid(), tileId, time.Now().Unix())
 	db, err := sql.Open(driverName, path)
 	if err != nil {
 		errCallback(fmt.Errorf("cannot open database: %s", err.Error()))

@@ -25,6 +25,7 @@ Hotkeys:
     "F2::v": VisualEditor
     "F2::a": AskAI
     "F2::/": AgentSkills
+    "F2::h": OpenHistory
     "M-f": SearchRegex
     "F3::F3": SearchRegex
     "F3::d": SearchResults

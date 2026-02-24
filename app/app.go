@@ -7,15 +7,18 @@ import (
 )
 
 // Name is the name of the $TERM
-const Name = "Ttyphoon"
+const Name = "TTYphoon"
+
+// DirName is the name in which config files et al are stored
+const DirName = "ttyphoon"
 
 // Version number of $TERM
 // Format of version string should be "(major).(minor).(revision) DESCRIPTION"
 const (
 	version  = "%d.%d.%d"
 	Major    = 0
-	Minor    = 17
-	Revision = 4300
+	Minor    = 18
+	Revision = 5000
 )
 
 const Title = "Ttyphoon: The Next Generation Terminal Emulator"
