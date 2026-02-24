@@ -22,6 +22,7 @@ import (
 func startSdl() {
 	pprof.Start()
 	defer pprof.CleanUp()
+	dispatcher.StartIpcServer()
 	defer dispatcher.CleanUp()
 
 	if runtime.GOOS == "darwin" {

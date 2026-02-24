@@ -1,7 +1,7 @@
 import { GetWindowStyle } from '../wailsjs/go/main/WApp';
 import { GetParameters, GetMarkdown, GetImage } from '../wailsjs/go/main/WApp';
 
-import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL, Quit } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -23,12 +23,39 @@ GetWindowStyle().then((result) => {
         ::selection {
             background-color: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
         }
+        h1, h2, h3, h4, h5, h6 {
+            color: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+        }
         a {
             text-decoration: none;
             color: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
         }
         a:hover {
             text-decoration: underline;
+        }
+        div {
+            font-size: ${result.fontSize}px;
+            font-family: ${result.fontFamily};
+        }
+        pre, code {
+            color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+        }
+        pre {
+            border: 0px;
+            border-left: 2px;
+            border-style: solid;
+            margin: 0px;
+            padding: 10px;
+            padding-left: 20px;
+        }
+        blockquote {
+            border: 0px;
+            border-left: 2px;
+            border-style: solid;
+            margin: 0px;
+            padding: 1px;
+            padding-left: 20px;
+            color: rgb(${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue});
         }
     `;
     document.head.appendChild(style);
@@ -38,6 +65,12 @@ GetParameters().then((result) => {
     GetMarkdown(result.path).then((doc) => {
         markdown(doc);
     });
+});
+
+EventsOn("markdownOpen", params => {
+    GetMarkdown(params.path).then((doc) => {
+        markdown(doc);
+    })
 });
 
 function markdown(doc) {
@@ -90,21 +123,6 @@ function markdown(doc) {
             div.style.fontFamily = result.fontFamily;
             div.style.fontSize   = result.fontSize;
         });
-        document.querySelectorAll('a').forEach(a => {
-            /*a.style.color = `rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue})`;
-            a.style.textDecoration = "none";
 
-                const style = a.createElement('style');
-                style.textContent = `:hover {
-                    border-width: 1px;
-                    border-style: solid;
-                    border-color: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
-                }`;
-                a.head.appendChild(style);*/
-        });
     });
 };
-
-/*GetPayload().then((result) => {
-    document.getElementById('output').innerHTML = result;
-})*/

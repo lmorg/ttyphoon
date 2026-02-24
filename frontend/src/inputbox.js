@@ -9,8 +9,8 @@ function autoGrow() {
     if (input.scrollHeight > input.clientHeight)
         input.style.height = input.scrollHeight + 'px';
 
-    if (window.scrollHeight > window.clientHeight)
-        WindowSetSize(window.style.width, window.scrollHeight);
+    if (document.body.scrollHeight > window.innerHeight)
+        WindowSetSize(window.innerWidth, document.body.scrollHeight + 30);
 }
 
 window.autoGrow = autoGrow;

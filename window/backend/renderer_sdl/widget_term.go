@@ -115,6 +115,14 @@ func (sr *sdlRender) visualEditor() {
 
 	pos := new(types.XY)
 	pos.X, pos.Y = sr.window.GetPosition()
+	displayIndex, err := sr.window.GetDisplayIndex()
+	if err == nil {
+		bounds, err := sdl.GetDisplayBounds(displayIndex)
+		if err == nil {
+			pos.X -= bounds.X
+			pos.Y -= bounds.Y
+		}
+	}
 	w, _ := sr.window.GetSize()
 	size := &types.XY{X: w, Y: 300}
 
@@ -127,9 +135,9 @@ func (sr *sdlRender) visualEditor() {
 	parameters := &dispatcher.PInputBoxT{Title: "Visual editor"}
 	var response dispatcher.RInputBoxT
 
-	sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, &response, func(err error) {
-		if err != nil {
-			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, &response, func(msg *dispatcher.IpcMessageT) {
+		if msg.Error != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		}
 		if len(response.Value) > 0 {
 			sr.termWin.Active.GetTerm().Reply([]byte(response.Value))

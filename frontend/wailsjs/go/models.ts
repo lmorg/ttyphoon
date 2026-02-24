@@ -9,6 +9,8 @@ export namespace dispatcher {
 	    fg: types.Colour;
 	    bg: types.Colour;
 	    green: types.Colour;
+	    yellow: types.Colour;
+	    magenta: types.Colour;
 	    selection: types.Colour;
 	    link: types.Colour;
 	    error: types.Colour;
@@ -22,6 +24,8 @@ export namespace dispatcher {
 	        this.fg = this.convertValues(source["fg"], types.Colour);
 	        this.bg = this.convertValues(source["bg"], types.Colour);
 	        this.green = this.convertValues(source["green"], types.Colour);
+	        this.yellow = this.convertValues(source["yellow"], types.Colour);
+	        this.magenta = this.convertValues(source["magenta"], types.Colour);
 	        this.selection = this.convertValues(source["selection"], types.Colour);
 	        this.link = this.convertValues(source["link"], types.Colour);
 	        this.error = this.convertValues(source["error"], types.Colour);

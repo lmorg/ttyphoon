@@ -8,7 +8,7 @@ GetWindowType().then((result) => {
     case "inputBox":
         import('./inputbox.js');
         break;
-    case "markdown":
+    case "markdown", "history":
         import('./markdown.js');
         break;
     default:

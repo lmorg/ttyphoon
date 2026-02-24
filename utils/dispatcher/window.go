@@ -1,9 +1,7 @@
 package dispatcher
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,6 +30,8 @@ type ColoursT struct {
 	Fg        types.Colour `json:"fg"`
 	Bg        types.Colour `json:"bg"`
 	Green     types.Colour `json:"green"`
+	Yellow    types.Colour `json:"yellow"`
+	Magenta   types.Colour `json:"magenta"`
 	Selection types.Colour `json:"selection"`
 	Link      types.Colour `json:"link"`
 	Error     types.Colour `json:"error"`
@@ -46,6 +46,9 @@ func NewWindowStyle() *WindowStyleT {
 		Colours: &ColoursT{
 			Fg:        *types.SGR_DEFAULT.Fg,
 			Bg:        *types.SGR_DEFAULT.Bg,
+			Green:     *types.SGR_COLOR_GREEN,
+			Yellow:    *types.SGR_COLOR_YELLOW,
+			Magenta:   *types.SGR_COLOR_MAGENTA,
 			Selection: *types.COLOR_SELECTION,
 			Link:      *types.SGR_COLOR_BLUE,
 			Error:     *types.COLOR_ERROR,
@@ -57,7 +60,7 @@ func NewWindowStyle() *WindowStyleT {
 	}
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, response any, callback func(error)) func() {
+func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, response any, callback RespFunc) (*IpcT, func()) {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,
@@ -65,20 +68,20 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyl
 
 	payloadJson, err := json.Marshal(payload)
 	if err != nil {
-		callback(err)
-		return nil
+		callback(&IpcMessageT{Error: err})
+		return nil, nil
 	}
 
 	exe, err := os.Executable()
 	if err != nil {
-		callback(err)
-		return nil
+		callback(&IpcMessageT{Error: err})
+		return nil, nil
 	}
 
 	cmd := exec.Command(exe)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	//var stdout, stderr bytes.Buffer
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("%s=%s", ENV_WINDOW, windowName),
 		fmt.Sprintf("%s=%s", ENV_PARAMETERS, string(payloadJson)),
@@ -86,32 +89,13 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyl
 
 	err = cmd.Start()
 	if err != nil {
-		callback(err)
-		return nil
+		callback(&IpcMessageT{Error: err})
+		return nil, nil
 	}
-
-	go func() {
-		err = cmd.Wait()
-		if err != nil {
-			// don't report error because we might have terminated the process
-			return
-		}
-
-		if stderr.Len() > 0 {
-			callback(errors.New(stderr.String()))
-			return
-		}
-		if stdout.Len() == 0 {
-			return
-		}
-
-		err = json.Unmarshal(stdout.Bytes(), response)
-		callback(err)
-	}()
 
 	cleanUp := func() { _ = cmd.Process.Kill() }
 	cleanUpFuncs = append(cleanUpFuncs, cleanUp)
-	return cleanUp
+	return hostListen(callback), cleanUp
 }
 
 func GetPayload(payload *PayloadT) error {

@@ -88,6 +88,9 @@ func (sr *sdlRender) hotkeys() {
 		case "SearchCommandLines":
 			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
 			desc = "Search command line history..."
+		case "OpenHistory":
+			fn = func() { Open(sr, sr.termWin.Active) }
+			desc = "Open history..."
 
 		default:
 			sr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))

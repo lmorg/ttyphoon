@@ -241,9 +241,9 @@ func openMarkdownViewer(el *ElementHyperlink) {
 	parameters := &dispatcher.PMarkdownT{Path: el.path}
 	var response dispatcher.RMarkdownT
 
-	_ = dispatcher.DisplayWindow(dispatcher.WindowMarkdown, windowStyle, parameters, &response, func(err error) {
-		if err != nil {
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	_, _ = dispatcher.DisplayWindow(dispatcher.WindowMarkdown, windowStyle, parameters, &response, func(msg *dispatcher.IpcMessageT) {
+		if msg.Error != nil {
+			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		}
 	})
 }

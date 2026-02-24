@@ -15,14 +15,9 @@ func main() {
 	}
 
 	window := dispatcher.WindowTypeT(os.Getenv(dispatcher.ENV_WINDOW))
-	switch window {
-	case dispatcher.WindowInputBox:
+	if window != "" {
 		startWails(window)
-
-	case dispatcher.WindowMarkdown:
-		startWails(window)
-
-	default:
+	} else {
 		startSdl()
 	}
 }

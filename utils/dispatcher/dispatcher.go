@@ -10,6 +10,7 @@ const (
 	WindowSdl      WindowTypeT = "sdl"
 	WindowInputBox WindowTypeT = "inputBox"
 	WindowMarkdown WindowTypeT = "markdown"
+	WindowHistory  WindowTypeT = "history"
 )
 
 type PInputBoxT struct {
