@@ -63,7 +63,7 @@ func (sr *sdlRender) hotkeys() {
 			fn = func() { sr.clipboardPaste() }
 			desc = "Paste from clipboard"
 		case "VisualEditor":
-			fn = func() { sr.visualEditor() }
+			fn = func() { sr.VisualEditor() }
 			desc = "Visual editor..."
 
 		case "AskAI":

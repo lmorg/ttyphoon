@@ -108,15 +108,16 @@ func (a *WApp) GetParameters() any {
 	return a.payload.Parameters
 }
 
-func (a *WApp) VisualInputBox(name string) string {
-	response := &dispatcher.RInputBoxT{Value: name}
-	err := dispatcher.Response(response)
+func (a *WApp) VisualInputBox(value string) {
+	err := a.ipc.Send(&dispatcher.IpcMessageT{
+		EventName:  "ok",
+		Parameters: map[string]string{"value": value},
+	})
 	if err != nil {
-		return err.Error()
+		log.Println(err.Error())
 	}
 
 	runtime.Quit(a.ctx)
-	return ""
 }
 
 func (a *WApp) GetMarkdown(path string) string {

@@ -60,7 +60,7 @@ func NewWindowStyle() *WindowStyleT {
 	}
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, response any, callback RespFunc) (*IpcT, func()) {
+func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, callback RespFunc) (*IpcT, func()) {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,
@@ -111,21 +111,6 @@ func GetPayload(payload *PayloadT) error {
 
 	if payload.Window.Colours == nil {
 		payload.Window.Colours = NewWindowStyle().Colours
-	}
-
-	return nil
-}
-
-func Response(response any) error {
-	// we don't care about errors here
-	b, err := json.Marshal(response)
-	if err != nil {
-		return err
-	}
-
-	_, err = os.Stdout.Write(b)
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -110,7 +110,11 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 }
 
-func (sr *sdlRender) visualEditor() {
+func (sr *sdlRender) VisualEditor() {
+	sr.multilineInputBox("Visual editor")
+}
+
+func (sr *sdlRender) multilineInputBox(title string) {
 	sr.cancelWInputBox()
 
 	pos := new(types.XY)
@@ -132,15 +136,18 @@ func (sr *sdlRender) visualEditor() {
 	windowStyle.AlwaysOnTop = true
 	windowStyle.Frameless = true
 
-	parameters := &dispatcher.PInputBoxT{Title: "Visual editor"}
-	var response dispatcher.RInputBoxT
+	parameters := &dispatcher.PInputBoxT{Title: title}
 
-	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, &response, func(msg *dispatcher.IpcMessageT) {
+	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
+			return
 		}
-		if len(response.Value) > 0 {
-			sr.termWin.Active.GetTerm().Reply([]byte(response.Value))
+		switch msg.EventName {
+		case "ok":
+			if msg.Parameters["value"] != "" {
+				sr.termWin.Active.GetTerm().Reply([]byte(msg.Parameters["value"]))
+			}
 		}
 	})
 }

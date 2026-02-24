@@ -14,4 +14,4 @@ export function GetWindowStyle():Promise<dispatcher.WindowStyleT>;
 
 export function GetWindowType():Promise<string>;
 
-export function VisualInputBox(arg1:string):Promise<string>;
+export function VisualInputBox(arg1:string):Promise<void>;

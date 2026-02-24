@@ -43,9 +43,8 @@ func Open(renderer *sdlRender, tile types.Tile) {
 	windowStyle.Title = string(files[0])
 
 	parameters := &dispatcher.PMarkdownT{Path: path + files[0]}
-	var response dispatcher.RMarkdownT
 
-	ipc, closer := dispatcher.DisplayWindow("history", windowStyle, parameters, &response, func(msg *dispatcher.IpcMessageT) {
+	ipc, closer := dispatcher.DisplayWindow("history", windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
 			renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		} else {

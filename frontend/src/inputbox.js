@@ -59,19 +59,11 @@ GetWindowStyle().then((result) => {
 
 GetParameters().then((result) => {
     titleElement.innerText = result['title']
-    //titleElement.innerText = result
 })
 
 window.send = function () {
     try {
-        //VisualInputBox(inputElement.value)
         VisualInputBox(inputElement.innerText)
-            .then((result) => {
-                titleElement.innerText = result;
-            })
-            .catch((err) => {
-                console.error(err);
-            });
     } catch (err) {
         console.error(err);
     }
