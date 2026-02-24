@@ -14,8 +14,11 @@ import (
 
 const FMT_DATE = "2006.01.02 @ 15.04.05"
 
-//go:embed template.md
-var mdTemplate string
+//go:embed template_cmd.md
+var mdTemplateCmd string
+
+//go:embed template_ai.md
+var mdTemplateAi string
 
 type metaT struct {
 	AppName      string
@@ -43,7 +46,29 @@ func Write(tile types.Tile, screen types.Screen) {
 		}
 	}()
 
-	data := metaT{
+	var (
+		ai   = screen[0].Block.Meta.Is(types.META_BLOCK_AI)
+		cmd  string
+		data metaT
+		tmpl *template.Template
+	)
+
+	if ai {
+		cmd = "AI Query"
+		tmpl, err = template.New("ai").Parse(mdTemplateAi)
+		if err != nil {
+			return
+		}
+
+	} else {
+		cmd = firstWord(string(screen[0].Block.Query))
+		tmpl, err = template.New("cmd").Parse(mdTemplateCmd)
+		if err != nil {
+			return
+		}
+	}
+
+	data = metaT{
 		AppName:      app.Name,
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
@@ -57,22 +82,10 @@ func Write(tile types.Tile, screen types.Screen) {
 		Output:       screen.PhraseAll(),
 	}
 
-	var cmd string
-	if screen[0].Block.Meta.Is(types.META_BLOCK_AI) {
-		cmd = "AI Query"
-	} else {
-		cmd = firstWord(data.Query)
-	}
-
 	// write
 
 	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.DirName, data.GroupName)
 	err = os.MkdirAll(path, 0700)
-	if err != nil {
-		return
-	}
-
-	tmpl, err := template.New("md").Parse(mdTemplate)
 	if err != nil {
 		return
 	}
