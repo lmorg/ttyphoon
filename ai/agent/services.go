@@ -16,12 +16,16 @@ var (
 	models map[string][]string
 )
 
-func (meta *Meta) ServiceName() string {
-	return meta.serviceName
+func init() {
+	refreshServiceList()
 }
 
-func (meta *Meta) ModelName() string {
-	return meta.modelName
+func (agent *Agent) ServiceName() string {
+	return agent.serviceName
+}
+
+func (agent *Agent) ModelName() string {
+	return agent.modelName
 }
 
 type selectServiceMenuItemT struct {
@@ -29,7 +33,7 @@ type selectServiceMenuItemT struct {
 	modelId int
 }
 
-func (meta *Meta) SelectServiceModel(returnFn func()) {
+func (agent *Agent) SelectServiceModel(returnFn func()) {
 	var (
 		modelXRef []selectServiceMenuItemT
 		labels    []string
@@ -46,15 +50,15 @@ func (meta *Meta) SelectServiceModel(returnFn func()) {
 	}
 
 	selectFn := func(i int) {
-		meta.serviceName = modelXRef[i].service
-		meta.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
-		meta.Reload()
+		agent.serviceName = modelXRef[i].service
+		agent.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
+		agent.Reload()
 		if returnFn != nil {
 			returnFn()
 		}
 	}
 
-	meta.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
+	agent.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
 }
 
 func refreshServiceList() {
@@ -67,19 +71,19 @@ func refreshServiceList() {
 	}()
 }
 
-func setDefaultModels(meta *Meta) {
+func (agent *Agent) setDefaultModels() {
 	if len(models[config.Config.Ai.DefaultService]) != 0 {
-		meta.serviceName = config.Config.Ai.DefaultService
+		agent.serviceName = config.Config.Ai.DefaultService
 	} else {
-		for meta.serviceName = range models {
+		for agent.serviceName = range models {
 			// just get the first service, whatever that service might be
 			break
 		}
 	}
 
-	if config.Config.Ai.DefaultModels[meta.serviceName] != "" {
-		meta.modelName = config.Config.Ai.DefaultModels[meta.serviceName]
+	if config.Config.Ai.DefaultModels[agent.serviceName] != "" {
+		agent.modelName = config.Config.Ai.DefaultModels[agent.serviceName]
 	} else {
-		meta.modelName = models[meta.serviceName][0]
+		agent.modelName = models[agent.serviceName][0]
 	}
 }

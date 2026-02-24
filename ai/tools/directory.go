@@ -16,7 +16,7 @@ import (
 
 type Directory struct {
 	CallbacksHandler callbacks.Handler
-	meta             *agent.Meta
+	agent            *agent.Agent
 	enabled          bool
 }
 
@@ -24,8 +24,8 @@ func init() {
 	agent.ToolsAdd(&Directory{})
 }
 
-func (t Directory) New(meta *agent.Meta) (agent.Tool, error) {
-	return &Directory{meta: meta, enabled: true}, nil
+func (t Directory) New(agent *agent.Agent) (agent.Tool, error) {
+	return &Directory{agent: agent, enabled: true}, nil
 }
 
 func (t *Directory) Enabled() bool { return t.enabled }
@@ -53,15 +53,15 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 	}
 
 	var pathname string
-	if strings.HasPrefix(input, t.meta.Pwd) {
+	if strings.HasPrefix(input, t.agent.Meta.Pwd) {
 		pathname = input
 	} else {
-		pathname = t.meta.Pwd + "/" + input
+		pathname = t.agent.Meta.Pwd + "/" + input
 	}
 
 	var result strings.Builder
 
-	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" is querying directory: "+pathname)
+	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" is querying directory: "+pathname)
 
 	err = filepath.WalkDir(pathname, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

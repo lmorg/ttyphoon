@@ -15,7 +15,7 @@ import (
 
 type Write struct {
 	CallbacksHandler callbacks.Handler
-	meta             *agent.Meta
+	agent            *agent.Agent
 	enabled          bool
 }
 
@@ -23,8 +23,8 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
-func (t *Write) New(meta *agent.Meta) (agent.Tool, error) {
-	return &Write{meta: meta, enabled: false}, nil
+func (t *Write) New(agent *agent.Agent) (agent.Tool, error) {
+	return &Write{agent: agent, enabled: false}, nil
 }
 
 func (t *Write) Enabled() bool { return t.enabled }
@@ -53,30 +53,30 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 	arc := txtar.Parse([]byte(input))
 	for i := range arc.Files {
 		var filename string
-		if strings.HasPrefix(arc.Files[i].Name, t.meta.Pwd) {
+		if strings.HasPrefix(arc.Files[i].Name, t.agent.Meta.Pwd) {
 			filename = arc.Files[i].Name
 		} else {
-			filename = t.meta.Pwd + "/" + arc.Files[i].Name
+			filename = t.agent.Meta.Pwd + "/" + arc.Files[i].Name
 		}
 
-		t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" writing file: "+filename)
+		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" writing file: "+filename)
 
 		f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0664)
 		if err != nil {
-			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 		_, err = f.Write(arc.Files[i].Data)
 		if err != nil {
-			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			continue
 		}
 
 		err = f.Close()
 		if err != nil {
-			t.meta.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
 			// continue // don't need to "continue" here
 		}

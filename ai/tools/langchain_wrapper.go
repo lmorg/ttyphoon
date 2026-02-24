@@ -17,7 +17,7 @@ import (
 
 type Wrapper struct {
 	CallbacksHandler callbacks.Handler
-	meta             *agent.Meta
+	agent            *agent.Agent
 	tool             tools.Tool
 	invoker          func() (tools.Tool, error)
 	enabled          bool
@@ -28,12 +28,12 @@ func init() {
 	agent.ToolsAdd(&Wrapper{invoker: invokeScraper})
 }
 
-func (t *Wrapper) New(meta *agent.Meta) (agent.Tool, error) {
+func (t *Wrapper) New(agent *agent.Agent) (agent.Tool, error) {
 	tool, err := t.invoker()
 	if err != nil {
 		return nil, err
 	}
-	return &Wrapper{meta: meta, tool: tool, enabled: true}, nil
+	return &Wrapper{agent: agent, tool: tool, enabled: true}, nil
 }
 
 func (t *Wrapper) Enabled() bool { return t.enabled }
@@ -56,8 +56,8 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
-	t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO,
-		fmt.Sprintf("%s is running a %s: %s", t.meta.ServiceName(), t.Name(), input))
+	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO,
+		fmt.Sprintf("%s is running a %s: %s", t.agent.ServiceName(), t.Name(), input))
 
 	response, err = t.tool.Call(ctx, input)
 

@@ -76,17 +76,30 @@ func (term *Term) insertRowsAtRowId(id uint64, rows types.Screen) error {
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
 
-	for i := len(term._normBuf) - 1; i >= 0; i-- {
+	for i := range term._normBuf {
 		if term._normBuf[i].Id == id {
 			return term._insertRows(i+len(term._scrollBuf), rows)
 		}
 	}
 
-	for i := len(term._scrollBuf) - 1; i >= 0; i-- {
+	for i := range term._scrollBuf {
 		if term._scrollBuf[i].Id == id {
 			return term._insertRows(i, rows)
 		}
 	}
+	/*
+			for i := len(term._normBuf) - 1; i >= 0; i-- {
+			if term._normBuf[i].Id == id {
+				return term._insertRows(i+len(term._scrollBuf), rows)
+			}
+		}
+
+		for i := len(term._scrollBuf) - 1; i >= 0; i-- {
+			if term._scrollBuf[i].Id == id {
+				return term._insertRows(i, rows)
+			}
+		}
+	*/
 
 	return fmt.Errorf("cannot insert rows: cannot find row with ID %d", id)
 }

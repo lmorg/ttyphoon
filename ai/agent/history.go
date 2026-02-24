@@ -15,11 +15,11 @@ type HistoryItemT struct {
 
 type HistoryT []HistoryItemT
 
-func (meta *Meta) AddHistory(title string, response string) {
-	meta.History = append(meta.History, HistoryItemT{
+func (agent *Agent) AddHistory(title string, response string) {
+	agent.History = append(agent.History, HistoryItemT{
 		Title:       title,
-		CmdLine:     meta.CmdLine,
-		OutputBlock: meta.OutputBlock,
+		CmdLine:     agent.Meta.CmdLine,
+		OutputBlock: agent.Meta.OutputBlock,
 		Response:    response,
 	})
 }

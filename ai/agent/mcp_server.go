@@ -8,7 +8,7 @@ import (
 	"github.com/lmorg/ttyphoon/debug"
 )
 
-func startServerCmdLine(cfgPath string, meta *Meta, envvars []string, server, command string, args ...string) error {
+func startServerCmdLine(cfgPath string, agent *Agent, envvars []string, server, command string, args ...string) error {
 	debug.Log(envvars)
 	log.Printf("MCP server %s: %s %v", server, command, args)
 
@@ -17,10 +17,10 @@ func startServerCmdLine(cfgPath string, meta *Meta, envvars []string, server, co
 		return err
 	}
 
-	return startServer(cfgPath, meta, server, c)
+	return startServer(cfgPath, agent, server, c)
 }
 
-func startServerHttp(cfgPath string, meta *Meta, server, url string) error {
+func startServerHttp(cfgPath string, agent *Agent, server, url string) error {
 	log.Printf("MCP server %s: %s", server, url)
 
 	c, err := mcp_client.ConnectHttp(url)
@@ -28,16 +28,16 @@ func startServerHttp(cfgPath string, meta *Meta, server, url string) error {
 		return err
 	}
 
-	return startServer(cfgPath, meta, server, c)
+	return startServer(cfgPath, agent, server, c)
 }
 
-func startServer(cfgPath string, meta *Meta, server string, c *mcp_client.Client) error {
+func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Client) error {
 	err := c.ListTools()
 	if err != nil {
 		return err
 	}
 
-	meta.McpServerAdd(server, c)
+	agent.McpServerAdd(server, c)
 
 	for i := range c.Tools.Tools {
 		jsonSchema, err := c.Tools.Tools[i].MarshalJSON()
@@ -45,7 +45,7 @@ func startServer(cfgPath string, meta *Meta, server string, c *mcp_client.Client
 			return err
 		}
 
-		err = meta.ToolsAdd(&mcpTool{
+		err = agent.ToolsAdd(&mcpTool{
 			client: c,
 			server: server,
 			path:   cfgPath,

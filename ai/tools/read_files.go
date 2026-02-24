@@ -17,7 +17,7 @@ import (
 
 type ReadFiles struct {
 	CallbacksHandler callbacks.Handler
-	meta             *agent.Meta
+	agent            *agent.Agent
 	enabled          bool
 }
 
@@ -25,8 +25,8 @@ func init() {
 	agent.ToolsAdd(&ReadFiles{})
 }
 
-func (f *ReadFiles) New(meta *agent.Meta) (agent.Tool, error) {
-	return &ReadFiles{meta: meta, enabled: true}, nil
+func (f *ReadFiles) New(agent *agent.Agent) (agent.Tool, error) {
+	return &ReadFiles{agent: agent, enabled: true}, nil
 }
 
 func (t *ReadFiles) Enabled() bool { return t.enabled }
@@ -67,11 +67,11 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	for i := range files {
 		filename := files[i]
 
-		if !strings.HasPrefix(filename, t.meta.Pwd) {
-			filename = t.meta.Pwd + "/" + files[i]
+		if !strings.HasPrefix(filename, t.agent.Meta.Pwd) {
+			filename = t.agent.Meta.Pwd + "/" + files[i]
 		}
 
-		t.meta.Renderer().DisplayNotification(types.NOTIFY_INFO, t.meta.ServiceName()+" requesting file: "+filename[len(t.meta.Pwd):])
+		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" requesting file: "+filename[len(t.agent.Meta.Pwd):])
 
 		var b []byte
 		info, err := os.Stat(filename)

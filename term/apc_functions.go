@@ -170,9 +170,9 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 }
 
 func (term *Term) askAi(prompt string) {
-	meta := agent.Get(term.tile.Id())
-	insertAfterRowId := term.GetRowId(term.GetCursorPosition().Y - 1)
-	ai.AskAI(meta, prompt, insertAfterRowId)
+	agt := agent.Get(term.tile.Id())
+	agt.Meta = &agent.Meta{}
+	ai.AskAI(agt, prompt)
 }
 
 func (term *Term) mxapcAiAsk(parameters *types.ApcSlice) {

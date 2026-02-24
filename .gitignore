@@ -4,3 +4,9 @@ mxtty
 mxtty.exe
 *.pprof
 .env
+
+# Wails
+
+build/bin
+node_modules
+frontend/dist

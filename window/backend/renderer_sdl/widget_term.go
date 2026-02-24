@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )
@@ -110,11 +111,25 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 }
 
 func (sr *sdlRender) visualEditor() {
-	sr.DisplayInputBox("Visual editor", "", func(s string) {
-		if s != "" {
-			sr.termWin.Active.GetTerm().Reply([]byte(s))
+	pos := new(types.XY)
+	pos.X, pos.Y = sr.window.GetPosition()
+	w, _ := sr.window.GetSize()
+	size := &types.XY{X: w, Y: 300}
+
+	windowStyle := &dispatcher.WindowStyleT{
+		Pos:         *pos,
+		Size:        *size,
+		AlwaysOnTop: true,
+		Frameless:   true,
+	}
+
+	var response dispatcher.RInputBoxT
+	_ = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, dispatcher.PInputBoxT{Title: "Visual editor"}, &response, func(err error) {
+		if err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
-	}, nil)
+		sr.termWin.Active.GetTerm().Reply([]byte(response.Value))
+	})
 }
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
