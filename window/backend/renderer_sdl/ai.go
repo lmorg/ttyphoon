@@ -46,7 +46,11 @@ func askAiSkill(sr *sdlRender, pos *types.XY) {
 	}
 
 	fnSelect := func(i int) {
-		sr.DisplayInputBox(fmt.Sprintf("/%s (%s)", skills[i].FunctionName, skills[i].Description), "", func(prompt string) {
+		/*sr.DisplayInputBox(fmt.Sprintf("/%s (%s)", skills[i].FunctionName, skills[i].Description), "", func(prompt string) {
+			ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
+		}, nil)*/
+
+		sr.DisplayInputBoxW(skills[i].Description, fmt.Sprintf("/%s ", skills[i].FunctionName), nil, func(prompt string) {
 			ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
 		}, nil)
 	}

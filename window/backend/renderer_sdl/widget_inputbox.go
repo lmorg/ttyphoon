@@ -26,7 +26,7 @@ type inputBoxWidgetT struct {
 
 const _INPUT_MAX_CHAR_WIDTH = 80
 
-func (sr *sdlRender) DisplayInputBox(title string, defaultValue string, ok types.InputBoxCallbackT, cancel types.InputBoxCallbackT) {
+func (sr *sdlRender) DisplayInputBox(title, defaultValue string, ok, cancel types.InputBoxCallbackT) {
 	maxChars := min(sr.winCellSize.X-15, _INPUT_MAX_CHAR_WIDTH)
 
 	if ok == nil {

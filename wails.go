@@ -51,53 +51,8 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *W
 	}
 }
 
-func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
-	a.msgPipe <- msg
-}
-
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
-func (a *WApp) startup(ctx context.Context) {
-	a.ctx = ctx
-
-	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
-
-	go func() {
-		for msg := range a.msgPipe {
-			if msg.Error != nil {
-				runtime.EventsEmit(a.ctx, "error", msg.Error)
-			} else {
-				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
-			}
-		}
-	}()
-}
-
-func (a *WApp) domReady(ctx context.Context) {
-	if a.window == dispatcher.WindowHistory {
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
-		if err != nil {
-			log.Println(err)
-		}
-	}
-}
-
-func (a *WApp) beforeClose(ctx context.Context) bool {
-	if a.window == dispatcher.WindowHistory {
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "closeMenu"})
-		if err != nil {
-			log.Println(err)
-		}
-	}
-	return false
-}
-
 func (a *WApp) GetWindowType() string {
 	return string(a.window)
-}
-
-func (a *WApp) GetPayload() string {
-	return os.Getenv(dispatcher.ENV_PARAMETERS)
 }
 
 func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
@@ -106,6 +61,16 @@ func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
 
 func (a *WApp) GetParameters() any {
 	return a.payload.Parameters
+}
+
+func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
+	err := a.ipc.Send(&dispatcher.IpcMessageT{
+		EventName:  eventName,
+		Parameters: parameters,
+	})
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (a *WApp) VisualInputBox(value string) {
@@ -176,6 +141,53 @@ func imageMime(ext string) string {
 }
 
 // --------------------
+
+func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
+	a.msgPipe <- msg
+}
+
+func (a *WApp) startup(ctx context.Context) {
+	a.ctx = ctx
+
+	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
+
+	//log.Println(a.GetPayload())
+}
+
+func (a *WApp) domReady(ctx context.Context) {
+	go func() {
+		for msg := range a.msgPipe {
+			//log.Println(msg.EventName)
+			if msg.Error != nil {
+				runtime.EventsEmit(a.ctx, "error", msg.Error)
+			} else {
+				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
+			}
+		}
+	}()
+
+	switch a.window {
+	case dispatcher.WindowHistory:
+		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
+		if err != nil {
+			log.Println(err)
+		}
+	case dispatcher.WindowInputBox:
+		//runtime.EventsEmit(a.ctx, "autoGrow")
+	}
+}
+
+func (a *WApp) beforeClose(ctx context.Context) bool {
+	switch a.window {
+	case dispatcher.WindowHistory:
+		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "closeMenu"})
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	return false
+}
 
 func startWails(window dispatcher.WindowTypeT) {
 	payload := &dispatcher.PayloadT{}

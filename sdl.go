@@ -9,10 +9,13 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/debug/pprof"
 	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/window/backend"
@@ -24,6 +27,15 @@ func startSdl() {
 	defer pprof.CleanUp()
 	dispatcher.StartIpcServer()
 	defer dispatcher.CleanUp()
+
+	cacheDbFile := "cache.db"
+	cacheDbPath, err := xdg.CacheFile(cacheDbFile)
+	if err != nil {
+		log.Println(err)
+		cacheDbPath = fmt.Sprintf("%s/%s-%s", os.TempDir(), app.DirName, cacheDbFile)
+	}
+	cache.SetPath(cacheDbPath)
+	cache.InitCache()
 
 	if runtime.GOOS == "darwin" {
 		err := os.Setenv("PATH", "PATH="+os.Getenv("PATH")+":/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin")

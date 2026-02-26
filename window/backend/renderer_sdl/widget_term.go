@@ -10,7 +10,6 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )
@@ -111,45 +110,11 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 }
 
 func (sr *sdlRender) VisualEditor() {
-	sr.multilineInputBox("Visual editor")
-}
-
-func (sr *sdlRender) multilineInputBox(title string) {
-	sr.cancelWInputBox()
-
-	pos := new(types.XY)
-	pos.X, pos.Y = sr.window.GetPosition()
-	displayIndex, err := sr.window.GetDisplayIndex()
-	if err == nil {
-		bounds, err := sdl.GetDisplayBounds(displayIndex)
-		if err == nil {
-			pos.X -= bounds.X
-			pos.Y -= bounds.Y
+	sr.DisplayInputBoxW("Visual editor", "", nil, func(value string) {
+		if value != "" {
+			sr.termWin.Active.GetTerm().Reply([]byte(value))
 		}
-	}
-	w, _ := sr.window.GetSize()
-	size := &types.XY{X: w, Y: 300}
-
-	windowStyle := dispatcher.NewWindowStyle()
-	windowStyle.Pos = *pos
-	windowStyle.Size = *size
-	windowStyle.AlwaysOnTop = true
-	windowStyle.Frameless = true
-
-	parameters := &dispatcher.PInputBoxT{Title: title}
-
-	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
-		if msg.Error != nil {
-			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
-			return
-		}
-		switch msg.EventName {
-		case "ok":
-			if msg.Parameters["value"] != "" {
-				sr.termWin.Active.GetTerm().Reply([]byte(msg.Parameters["value"]))
-			}
-		}
-	})
+	}, nil)
 }
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
