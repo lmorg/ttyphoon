@@ -2,9 +2,11 @@ package rendersdl
 
 import (
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
@@ -70,7 +72,7 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 		switch msg.EventName {
 		case "ok":
 			if value != "" {
-				history = append([]string{value}, history...)
+				history = prependHistory(value, history)
 				if cacheKey != "" {
 					cache.Write(cache.NS_INPUTBOXW_HISTORY, cacheKey, &history, time.Now().Add(time.Hour*24*365))
 				}
@@ -82,4 +84,17 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 			}
 		}
 	})
+}
+
+func prependHistory(item string, slice []string) []string {
+	i := slices.Index(slice, item)
+	switch i {
+	case -1:
+		return append([]string{item}, slice...)
+	case 0:
+		return slice
+	default:
+		slice, _ = lists.RemoveOrdered(slice, i)
+		return append([]string{item}, slice...)
+	}
 }

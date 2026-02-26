@@ -72,7 +72,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			agent.AddHistory(title, result)
 		}
 
-		result = fmt.Sprintf("# Your question:\n\n%s\n\n# %s's Response:\n\n%s", title, agent.ServiceName(), result)
+		result = fmt.Sprintf("# Your question\n\n%s\n\n# %s's Response\n\n%s", title, agent.ServiceName(), result)
 
 		var (
 			markdown string
