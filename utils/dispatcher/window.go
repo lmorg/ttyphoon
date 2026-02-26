@@ -1,8 +1,10 @@
 package dispatcher
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -79,12 +81,11 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyl
 	}
 
 	cmd := exec.Command(exe)
-	//var stdout, stderr bytes.Buffer
+	cmd.Stdin = bytes.NewBuffer(payloadJson)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("%s=%s", ENV_WINDOW, windowName),
-		fmt.Sprintf("%s=%s", ENV_PARAMETERS, string(payloadJson)),
 	)
 
 	err = cmd.Start()
@@ -99,12 +100,23 @@ func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyl
 }
 
 func GetPayload(payload *PayloadT) error {
-	params := os.Getenv(ENV_PARAMETERS)
-	if params == "" {
+	var err error
+
+	b := []byte(os.Getenv(ENV_PARAMETERS))
+
+	if len(b) == 0 {
+		b, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(b) == 0 {
 		payload.Window = *NewWindowStyle()
 		return nil
 	}
-	err := json.Unmarshal([]byte(params), payload)
+
+	err = json.Unmarshal(b, payload)
 	if err != nil {
 		return err
 	}

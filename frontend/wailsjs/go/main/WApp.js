@@ -14,16 +14,16 @@ export function GetParameters() {
   return window['go']['main']['WApp']['GetParameters']();
 }
 
-export function GetPayload() {
-  return window['go']['main']['WApp']['GetPayload']();
-}
-
 export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
 }
 
 export function GetWindowType() {
   return window['go']['main']['WApp']['GetWindowType']();
+}
+
+export function SendIpc(arg1, arg2) {
+  return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }
 
 export function VisualInputBox(arg1) {
