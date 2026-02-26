@@ -18,13 +18,13 @@ const (
 	version  = "%d.%d.%d"
 	Major    = 0
 	Minor    = 18
-	Revision = 5000
+	Revision = 6000
 )
 
 const Title = "Ttyphoon: The Next Generation Terminal Emulator"
 
 // Copyright is the copyright owner string
-const Copyright = "© 2023-20256Laurence Morgan"
+const Copyright = "© 2023-2026 Laurence Morgan"
 
 // License is the projects software license
 const License = "License GPL v2"
