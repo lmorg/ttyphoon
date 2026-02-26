@@ -8,6 +8,7 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -80,6 +81,34 @@ func Write(tile types.Tile, screen types.Screen) {
 		Query:        string(screen[0].Block.Query),
 		ExitNum:      screen[0].Block.ExitNum,
 		Output:       screen.PhraseAll(),
+	}
+
+	// auto-hyperlink
+
+	if ai {
+		for _, custom := range config.Config.Terminal.Widgets.AutoHyperlink.CustomRegexp {
+			if custom.Rx == nil {
+				continue
+			}
+
+			offset := 0
+			posRx := custom.Rx.FindAllStringIndex(data.Output, -1)
+			if posRx == nil {
+				continue
+			}
+
+			var label, link, a, begin, end string
+
+			for i := range posRx {
+				label = data.Output[posRx[i][0]+offset : posRx[i][1]+offset]
+				link = custom.Rx.ReplaceAllString(label, custom.Link)
+				a = fmt.Sprintf(`<a href="%s">%s</a>`, link, label)
+				begin = data.Output[:posRx[i][0]+offset]
+				end = data.Output[posRx[i][1]+offset:]
+				offset += len(a) - len(label)
+				data.Output = begin + a + end
+			}
+		}
 	}
 
 	// write
