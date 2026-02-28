@@ -1,6 +1,4 @@
-<h1>Ttyphoon</h1>
-
-(previously called mxtty)
+<h1>TTYphoon</h1>
 
 ![logo](assets/icon-large.bmp)
 

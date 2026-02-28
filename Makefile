@@ -107,12 +107,12 @@ remote-glamour:
 .PHONY: help
 help:
 	@echo "Available commands:"
-	@echo "  make build           - Build Ttyphoon"
+	@echo "  make build           - Build TTYphoon"
+	@echo "  make run-darwin      - Build and run macOS binary"
 	@echo '  make list-build-tags - list tags supported by `$$BUILD_TAGS`'
-	@echo "  make clean           - Remove build artifacts"
 	@echo ""
 	@echo "Development tools:"
-	@echo "  make build-dev       - Build with profiling and debug symbols"
-	@echo "  make run             - Build and run a dev build of Ttyphoon"
+#	@echo "  make build-dev       - Build with profiling and debug symbols"
+#	@echo "  make run             - Build and run a dev build of Ttyphoon"
 	@echo "  make test            - Run tests"
-	@echo "  make bench           - Run benchmarks"
+#	@echo "  make bench           - Run benchmarks"
