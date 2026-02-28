@@ -5,6 +5,7 @@ import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
+import hljs from "highlight.js/lib/common";
 
 document.querySelector('#app').innerHTML = `
     <div id="ttyphoon-error"></div>
@@ -59,7 +60,6 @@ GetWindowStyle().then((result) => {
         }
         details {
             opacity: 50%;
-
             width: 100%;
             border-radius: 0px;
             border-width: 2px;
@@ -68,8 +68,38 @@ GetWindowStyle().then((result) => {
             margin-top: 5px;
         }
         summary {
-
             cursor: pointer;
+        }
+
+        /* Highlight.js syntax highlighting theme */
+        pre code.hljs {
+            display: block;
+            overflow-x: auto;
+            background: transparent;
+            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+        }
+        .hljs-comment, .hljs-quote {
+            color: rgb(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue});
+            font-style: italic;
+        }
+        .hljs-keyword, .hljs-selector-tag, .hljs-subst {
+            color: rgb(${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue});
+            font-weight: bold;
+        }
+        .hljs-string, .hljs-title, .hljs-name, .hljs-type, .hljs-attribute, .hljs-symbol, .hljs-bullet, .hljs-addition, .hljs-built_in {
+            color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+        }
+        .hljs-number, .hljs-literal, .hljs-variable, .hljs-template-variable {
+            color: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+        }
+        .hljs-section, .hljs-meta, .hljs-function, .hljs-class, .hljs-title.class_ {
+            color: rgb(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue});
+        }
+        .hljs-deletion, .hljs-regexp, .hljs-link {
+            color: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
+        }
+        .hljs-punctuation, .hljs-tag {
+            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
         }
     `;
     document.head.appendChild(style);
@@ -91,6 +121,11 @@ function markdown(doc) {
     const options = {};
     marked.use(gfmHeadingId(options));
     document.getElementById('ttyphoon-markdown').innerHTML = marked.parse(doc);
+
+    // Apply syntax highlighting to all code blocks
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
 
     let rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
 

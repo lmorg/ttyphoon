@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -38,6 +39,7 @@ type metaT struct {
 	Summary      string
 	Query        string
 	Output       string
+	OutputLang   string
 }
 
 func WriteBlock(tile types.Tile, screen types.Screen) {
@@ -58,6 +60,8 @@ func WriteBlock(tile types.Tile, screen types.Screen) {
 		return
 	}
 
+	cmdLine := string(screen[0].Block.Query)
+
 	data := &metaT{
 		filename:     cmd,
 		AppName:      app.Name,
@@ -68,9 +72,17 @@ func WriteBlock(tile types.Tile, screen types.Screen) {
 		TimeDuration: screen[0].Block.TimeEnd.Sub(screen[0].Block.TimeStart).String(),
 		Host:         screen[0].Source.Host,
 		Pwd:          screen[0].Source.Pwd,
-		Query:        string(screen[0].Block.Query),
+		Query:        cmdLine,
 		ExitNum:      screen[0].Block.ExitNum,
 		Output:       screen.PhraseAll(),
+	}
+
+	switch {
+	case strings.HasPrefix(cmdLine, "diff"):
+		data.OutputLang = "diff"
+	case strings.HasPrefix(cmdLine, "git diff"):
+		data.OutputLang = "diff"
+	default:
 	}
 
 	err = write(tmpl, data)

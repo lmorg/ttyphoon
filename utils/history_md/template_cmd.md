@@ -12,15 +12,15 @@
 - Host: {{ .Host }}
 - Exit Code: `{{ .ExitNum }}`
 
-## Command Line / Query
+## Command Line
 
-```
+```sh
 {{ .Query }}
 ```
 
 ## Output
 
-```
+```{{ .OutputLang }}
 {{ .Output }}
 ```
 

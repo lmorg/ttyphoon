@@ -1,71 +1,33 @@
 # Variables
-BINARY_NAME?=mxtty
 GO_FLAGS=-v
-BUILD_DIR=./bin
-SOURCE_DIR=.
+MXTTY_WINDOW?="markdown"
+export MXTTY_WINDOW
 
 # Build variables that can be overridden
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD || echo "unknown")
 BUILD_DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S' || echo "unknown")
-#EXT_LDFLAGS?="-static"
-#LDFLAGS=-ldflags "-X github.com/lmorg/ttyphoon/app.branch=${BRANCH} -X github.com/lmorg/ttyphoon/app.buildDate=${BUILD_DATE} -extldflags=${EXT_LDFLAGS}"
 LDFLAGS=-ldflags "-X github.com/lmorg/ttyphoon/app.branch=${BRANCH} -X github.com/lmorg/ttyphoon/app.buildDate=${BUILD_DATE}"
-#BUILD_TAGS?=$(shell cat builtins/optional/standard-opts.txt || echo "")
-BUILD_TAGS?="trace"
-
-# Default target
-.PHONY: all
-all: build
 
 # Build the binary
 .PHONY: build
-build:
-	@echo "Building ${BINARY_NAME}..."
-	@mkdir -p ${BUILD_DIR}
-	go build ${GO_FLAGS} -tags ${BUILD_TAGS} ${LDFLAGS} -o ${BUILD_DIR}/${BINARY_NAME} ${SOURCE_DIR}
-	@echo "Build complete: ${BUILD_DIR}/${BINARY_NAME}"
-
-# Install the binary
-.PHONY: install
-install: build
-	@echo "Installing ${BINARY_NAME}..."
-	@cp ${BUILD_DIR}/${BINARY_NAME} /usr/bin/
-	echo "/usr/bin/${BINARY_NAME}" >> /etc/shells
-	@echo "Installation complete"
+build: generate
+	wails build
 
 # Run the application
-.PHONY: run
-run: build-dev
-	clear
-	@echo "Running ${BINARY_NAME}..."
-	${BUILD_DIR}/${BINARY_NAME} ${ARGS}
-
-# Build with dev flags
-.PHONY: build-dev
-build-dev: generate
-build-dev: GO_FLAGS += -gcflags="-N -l" #-race
-build-dev: BUILD_TAGS := "$(BUILD_TAGS),pprof,trace,debug"
-build-dev: build
+.PHONY: run-darwin
+run-darwin: build
+	unset MXTTY_WINDOW; ./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
 
 # Test
 .PHONY: test
-test: build
-	@mkdir -p ./test/tmp
+test: generate
 	go test ./... -count 1 -race -covermode=atomic
-	${BUILD_DIR}/${BINARY_NAME} -c 'g behavioural/*.mx -> foreach f { source $$f }; test run *'
+
 
 # Benchmark
 .PHONY: bench
 bench:
 	go test -bench=. -benchmem ./...
-
-# Clean build artifacts
-.PHONY: clean
-clean:
-	@echo "Cleaning..."
-	@rm -rf ${BUILD_DIR} ./test/tmp
-	@rm -f coverage.out coverage.html
-	@echo "Clean complete"
 
 # Update dependencies
 .PHONY: update-deps
@@ -73,20 +35,17 @@ update-deps:
 	go get -u ./...
 	go mod tidy
 
-# Lint code (requires golangci-lint)
-.PHONY: lint
-lint:
-	golangci-lint run
-
 # Generate code
 .PHONY: generate
 generate:
-	@echo "Rerunning code generation..."
+	@echo "Running code generation..."
 	go generate ./...
+	wails generate module
 
 # List available build tags
 .PHONY: list-build-tags
 list-build-tags:
+	export MXTTY_WINDOW
 	@find . -name "*.go" -exec grep "//go:build" {} \; \
 	| grep -v -E '(ignore|js|windows|linux|darwin|plan9|solaris|freebsd|openbsd|netbsd|dragonfly|aix)' \
 	| sed -e 's,//go:build ,,;s,!,,;' \
@@ -148,8 +107,7 @@ remote-glamour:
 .PHONY: help
 help:
 	@echo "Available commands:"
-	@echo "  make build           - Build the Ttyphoon"
-	@echo "  make install         - Install Ttyphoon to /usr/bin (requires root)"
+	@echo "  make build           - Build Ttyphoon"
 	@echo '  make list-build-tags - list tags supported by `$$BUILD_TAGS`'
 	@echo "  make clean           - Remove build artifacts"
 	@echo ""
@@ -158,9 +116,3 @@ help:
 	@echo "  make run             - Build and run a dev build of Ttyphoon"
 	@echo "  make test            - Run tests"
 	@echo "  make bench           - Run benchmarks"
-	@echo "  make update-deps     - Update all Go dependencies"
-	@echo "  make lint            - Lint code (requires golangci-lint)"
-	@echo ""
-	@echo "Variables:"
-	@echo "  GO_FLAGS='...'       - Additional go build flags (default: ${GO_FLAGS})"
-	@echo "  BUILD_TAGS='...'     - Additional go build tags  (default: $(shell cat ./builtins/optional/standard-opts.txt))"

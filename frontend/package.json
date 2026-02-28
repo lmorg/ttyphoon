@@ -8,10 +8,13 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "marked": "^17.0.3",
+    "marked-code-format": "^1.1.6",
+    "prettier": "^3.8.1",
     "vite": "^3.0.7"
   },
   "dependencies": {
-    "marked": "^17.0.3",
+    "highlight.js": "^11.11.1",
     "marked-gfm-heading-id": "^4.1.3"
   }
 }
