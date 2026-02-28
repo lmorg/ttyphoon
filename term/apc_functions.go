@@ -162,7 +162,7 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 				break
 			}
 		}
-		go historymd.Write(term.tile, screen[max(0, begin):end])
+		go historymd.WriteBlock(term.tile, screen[max(0, begin):end])
 	}
 
 	// prep for new block

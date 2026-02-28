@@ -454,3 +454,7 @@ func (term *Term) GetCellSgr(cell *types.XY) *types.Sgr {
 
 	return screen[cell.Y].Cells[cell.X].Sgr
 }
+
+func (term *Term) Tile() types.Tile {
+	return term.tile
+}

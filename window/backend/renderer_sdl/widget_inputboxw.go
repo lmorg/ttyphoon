@@ -21,9 +21,11 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 	pos.X, pos.Y = sr.window.GetPosition()
 	displayIndex, err := sr.window.GetDisplayIndex()
 	if err == nil {
-		bounds, err := sdl.GetDisplayBounds(displayIndex)
-		if err == nil {
+		bounds, _ := sdl.GetDisplayBounds(displayIndex)
+		if bounds.X < pos.X {
 			pos.X -= bounds.X
+		}
+		if bounds.Y < pos.Y {
 			pos.Y -= bounds.Y
 		}
 	}

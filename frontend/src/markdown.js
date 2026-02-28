@@ -1,7 +1,7 @@
 import { GetWindowStyle } from '../wailsjs/go/main/WApp';
 import { GetParameters, GetMarkdown, GetImage } from '../wailsjs/go/main/WApp';
 
-import { EventsOn, BrowserOpenURL, Quit } from '../wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -56,6 +56,20 @@ GetWindowStyle().then((result) => {
             padding: 1px;
             padding-left: 20px;
             color: rgb(${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue});
+        }
+        details {
+            opacity: 50%;
+
+            width: 100%;
+            border-radius: 0px;
+            border-width: 2px;
+            border-style: solid;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        summary {
+
+            cursor: pointer;
         }
     `;
     document.head.appendChild(style);

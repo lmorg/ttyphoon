@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/types"
+	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 )
 
 func Explain(agent *agent.Agent, promptDialogue bool) {
@@ -62,6 +63,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	}()
 
 	go func() {
+		start := time.Now()
 		result, err := agent.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
@@ -71,6 +73,8 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 		} else {
 			agent.AddHistory(title, result)
 		}
+
+		historymd.WriteAi(agent, title, prompt, result, start, time.Now())
 
 		result = fmt.Sprintf("# Your question\n\n%s\n\n# %s's Response\n\n%s", title, agent.ServiceName(), result)
 

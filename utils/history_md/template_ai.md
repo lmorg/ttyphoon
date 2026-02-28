@@ -1,16 +1,18 @@
-# {{ .AppName }} History
+# Your Question
 
-## Meta
+{{ .Summary }}
 
-- Group: {{ .GroupName }}
-- TilePane: {{ .TileName }}
-- Timestamps:
-  - Start: {{ .TimeStart }}
-  - End: {{ .TimeEnd }}
-  - Duration: {{ .TimeDuration }}
-- Working directory: {{ .Pwd }}
-- Host: {{ .Host }}
-- Exit Code: `{{ .ExitNum }}`
+<details>
+<summary>
+Full prompt
+</summary>
+
+{{ .Query }}
+</details>
+
+
+
+# {{ .Agent }} Response
 
 {{ .Output }}
 

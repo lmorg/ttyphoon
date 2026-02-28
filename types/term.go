@@ -19,6 +19,7 @@ type Term interface {
 	GetCellSgr(*XY) *Sgr
 	Resize(*XY)
 	Render() bool
+	Tile() Tile
 	GetCursorPosition() *XY
 	CopyRange(*XY, *XY) []byte
 	CopyLines(int32, int32) []byte
