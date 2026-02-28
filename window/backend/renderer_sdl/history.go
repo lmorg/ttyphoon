@@ -71,5 +71,14 @@ func Open(renderer *sdlRender, tile types.Tile) {
 
 	cancelFn := func(_ int) { closer() }
 
-	renderer.DisplayMenu("History item to view", files, selectFn, nil, cancelFn)
+	okFn := func(_ int) {
+		err := ipc.Send(&dispatcher.IpcMessageT{
+			EventName: "focus",
+		})
+		if err != nil {
+			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+	}
+
+	renderer.DisplayMenu("History item to view", files, selectFn, okFn, cancelFn)
 }

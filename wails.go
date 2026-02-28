@@ -150,17 +150,17 @@ func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
-
-	//log.Println(a.GetPayload())
 }
 
 func (a *WApp) domReady(ctx context.Context) {
 	go func() {
 		for msg := range a.msgPipe {
-			//log.Println(msg.EventName)
-			if msg.Error != nil {
+			switch {
+			case msg.Error != nil:
 				runtime.EventsEmit(a.ctx, "error", msg.Error)
-			} else {
+			case msg.EventName == "focus":
+				runtime.Show(ctx)
+			default:
 				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
 			}
 		}

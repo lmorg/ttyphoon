@@ -41,8 +41,8 @@ however hooks will be built into [Murex](https://github.com/lmorg/murex) so
 the terminal will be instantly usable even before wider support across other
 shells and command line applications is adopted.
 
-At its heart, Ttyphoon is a regular terminal emulator. Like Kitty, iTerm2, and
-PuTTY (to name a few). But where Ttyphoon differs is that it also supports
+At its heart, TTYphoon is a regular terminal emulator. Like Kitty, iTerm2, and
+PuTTY (to name a few). But where TTYphoon differs is that it also supports
 inlining rich content. Some terminal emulators support inlining images. Others
 might also allow videos. But none bar some edge case Electron terminals offer
 collapsible trees for JSON printouts. Easy to navigate directory views. Nor any
@@ -53,9 +53,9 @@ The few terminal emulators that do attempt to offer this usually fail to be
 good, or even just compatible, with all the CLI tools that we've come to depend
 on.
 
-Ttyphoon aims to do _both well_. Even if you never want for any interactive
-widgets, Ttyphoon will be a good terminal emulator. And for those who want a
-little more GUI in their CLI, Ttyphoon will be a great modern user interface.
+TTYphoon aims to do _both well_. Even if you never want for any interactive
+widgets, TTYphoon will be a good terminal emulator. And for those who want a
+little more GUI in their CLI, TTYphoon will be a great modern user interface.
 
 ## Screenshots
 
@@ -120,13 +120,13 @@ Search terms can be highlighted to quickly find instances of that term
 
 ### Plus more
 
-Ttyphoon has only been in development for a little over a year and features a
+TTYphoon has only been in development for a little over a year and features a
 purpose built, hardware accelerated, rendering engine to facilitate this hybrid
 of text and media. So expect many more feature to come!
 
 ## How It Works
 
-Ttyphoon uses SDL ([Simple DirectMedia Layer](https://en.wikipedia.org/wiki/Simple_DirectMedia_Layer))
+TTYphoon uses SDL ([Simple DirectMedia Layer](https://en.wikipedia.org/wiki/Simple_DirectMedia_Layer))
 which is a simple hardware-assisted multimedia library. This enables the
 terminal emulator to be both performant and also cross-platform. Essentially
 providing some of the conveniences that people have come to love from tools
@@ -137,8 +137,8 @@ terminal applications via ANSI escape sequences. Before groan, yes I agree that
 in-band escape sequences are a lousy way of encoding meta-information. However
 to succeed at being a good terminal emulator, it needs to support some historic
 design decisions no matter how archaic they might seem today. This allows
-Ttyphoon to work with existing terminal applications _and_ for third parties to
-easily add support for their applications to render rich content in Ttyphoon
+TTYphoon to work with existing terminal applications _and_ for third parties to
+easily add support for their applications to render rich content in TTYphoon
 without breaking compatibility for legacy terminal emulators.
 
 ## Whats Left To Do
@@ -223,7 +223,7 @@ eg `xterm` and similar terminal emulators
   - [ ] ANSI escape sequence supported
 - [ ] Bracketed paste mode
 - [x] Inlining images
-  - [x] Ttyphoon codes
+  - [x] TTYphoon codes
   - [ ] iterm2 compatible
   - [ ] Kitty compatible
   - [x] sixel graphics
@@ -284,7 +284,7 @@ Support for the following platforms is planned:
 
 ## Install Guide
 
-Currently Ttyphoon can only be compiled from source.
+Currently TTYphoon can only be compiled from source.
 
 To do so you will need the following installed:
 - C compiler (eg GNU C)
@@ -301,13 +301,13 @@ root directory.
 
 The terminal emulator functions can provide verbose logging for debugging. To
 enable this, build with `-tags debug` flag. Please note that this will add a
-lot of noise to the stdout of the terminal used to launch Ttyphoon.
+lot of noise to the stdout of the terminal used to launch TTYphoon.
 
 ### AI Tracing
 
 The AI features, prompts sent to LLMs and messages between MCP tools can be
 traced for debugging. To enable this, build with `-tags trace`. Trace messages
-are sent to the stdout of the terminal used to launch TTyphoon.
+are sent to the stdout of the terminal used to launch TTYphoon.
 
 ## How To Support
 
@@ -319,7 +319,7 @@ this project:
 
 - **Testing**: There is a plethora of different software that needs to run
   inside a terminal emulator and a multitude of distinct platforms that this
-  could run on. Any support testing Ttyphoon would be greatly appreciated.
+  could run on. Any support testing TTYphoon would be greatly appreciated.
 
 - **Documentation**: This is possibly the hardest part of any project to get
   right. Eventually documentation for this will follow the same structure as
@@ -331,7 +331,7 @@ this project:
   worthwhile discussion to have.
 
 - **Porting escape codes to other applications**: Currently [Murex](https://github.com/lmorg/murex)
-  is the pioneer for supporting Ttyphoon-specific ANSI escape codes. However it
+  is the pioneer for supporting TTYphoon-specific ANSI escape codes. However it
   would be good to see some of these extensions expanded out further. Maybe
   even to a point where this terminal emulator isn't required any more than a
   place to beta test future proposed escape sequences.

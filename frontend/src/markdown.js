@@ -1,7 +1,7 @@
 import { GetWindowStyle } from '../wailsjs/go/main/WApp';
-import { GetParameters, GetMarkdown, GetImage } from '../wailsjs/go/main/WApp';
+import { GetParameters, GetMarkdown, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
 
-import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL, Quit } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -175,3 +175,10 @@ function markdown(doc) {
 
     });
 };
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        SendIpc("focus", {});
+        Quit();
+    }
+});
