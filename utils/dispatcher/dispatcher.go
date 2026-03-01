@@ -12,6 +12,7 @@ const (
 	WindowMarkdown WindowTypeT = "markdown"
 	WindowHistory  WindowTypeT = "history"
 	WindowPreview  WindowTypeT = "preview"
+	WindowNotes    WindowTypeT = "notes"
 )
 
 type PInputBoxT struct {

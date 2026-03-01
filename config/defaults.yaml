@@ -26,6 +26,7 @@ Hotkeys:
     "F2::a": AskAI
     "F2::/": AgentSkills
     "F2::h": OpenHistory
+    "F2::n": OpenNotes
     "M-f": SearchRegex
     "F3::F3": SearchRegex
     "F3::d": SearchResults

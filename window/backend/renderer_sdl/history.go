@@ -44,7 +44,7 @@ func (sr *sdlRender) OpenHistory(tile types.Tile) {
 
 	parameters := &dispatcher.PMarkdownT{Path: path + files[0]}
 
-	ipc, closer := dispatcher.DisplayWindow("history", windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
+	ipc, closer := dispatcher.DisplayWindow(dispatcher.WindowHistory, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		} else {
@@ -56,6 +56,8 @@ func (sr *sdlRender) OpenHistory(tile types.Tile) {
 			}
 		}
 	})
+
+	// display menu
 
 	selectFn := func(i int) {
 		err := ipc.Send(&dispatcher.IpcMessageT{

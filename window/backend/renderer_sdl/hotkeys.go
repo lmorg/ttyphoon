@@ -6,6 +6,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"golang.design/x/hotkey"
 )
 
@@ -91,6 +92,9 @@ func (sr *sdlRender) hotkeys() {
 		case "OpenHistory":
 			fn = func() { sr.OpenHistory(sr.termWin.Active) }
 			desc = "Open history..."
+		case "OpenNotes":
+			fn = func() { sr.openNotes() }
+			desc = "Open notes..."
 
 		default:
 			sr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
@@ -99,4 +103,25 @@ func (sr *sdlRender) hotkeys() {
 		hotkeys.Add(hk.Prefix, hk.Hotkey, fn, desc)
 
 	}
+}
+
+func (sr *sdlRender) openNotes() {
+	windowStyle := dispatcher.NewWindowStyle()
+	windowStyle.Pos = types.XY{}
+	x, y := sr.window.GetSize()
+	windowStyle.Size = types.XY{X: x, Y: y}
+	windowStyle.Title = "Notes"
+
+	parameters := &dispatcher.PMarkdownT{}
+
+	_, _ = dispatcher.DisplayWindow(dispatcher.WindowNotes, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
+		if msg.Error != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
+		} else {
+			switch msg.EventName {
+			case "focus":
+				sr.TriggerDeallocation(sr.window.Raise)
+			}
+		}
+	})
 }

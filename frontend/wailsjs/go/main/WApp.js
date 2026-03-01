@@ -22,6 +22,14 @@ export function GetWindowType() {
   return window['go']['main']['WApp']['GetWindowType']();
 }
 
+export function ListFiles() {
+  return window['go']['main']['WApp']['ListFiles']();
+}
+
+export function SaveFile(arg1, arg2) {
+  return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
+}
+
 export function SendIpc(arg1, arg2) {
   return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }

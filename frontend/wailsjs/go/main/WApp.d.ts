@@ -12,6 +12,10 @@ export function GetWindowStyle():Promise<dispatcher.WindowStyleT>;
 
 export function GetWindowType():Promise<string>;
 
+export function ListFiles():Promise<Array<string>>;
+
+export function SaveFile(arg1:string,arg2:string):Promise<void>;
+
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function VisualInputBox(arg1:string):Promise<void>;

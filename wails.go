@@ -142,6 +142,19 @@ func imageMime(ext string) string {
 	return "image/" + ext[1:]
 }
 
+func (a *WApp) ListFiles() []string {
+	files, err := filepath.Glob(filepath.Join(a.dir, "*.md"))
+	if err != nil {
+		log.Println(err)
+		return []string{}
+	}
+	return files
+}
+
+func (a *WApp) SaveFile(filename, contents string) error {
+	return os.WriteFile(filepath.Join(a.dir, filename), []byte(contents), 0644)
+}
+
 // --------------------
 
 func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {

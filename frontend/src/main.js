@@ -13,7 +13,10 @@ GetWindowType().then((result) => {
         import('./markdown.js');
         break;
     case "preview":
-        //import('./preview.js');
+        import('./preview.js');
+        break;
+    case "notes":
+        import('./notes.js');
         break;
     default:
         // code block
