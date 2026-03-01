@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -22,6 +23,7 @@ type WindowStyleT struct {
 	Size        types.XY  `json:"size"`
 	AlwaysOnTop bool      `json:"alwaysOnTop"`
 	Frameless   bool      `json:"frameLess"`
+	StartHidden bool      `json:"startHidden"`
 	FontFamily  string    `json:"fontFamily"`
 	FontSize    int       `json:"fontSize"`
 	Title       string    `json:"title"`
@@ -85,10 +87,11 @@ func NewWindowStyle() *WindowStyleT {
 		Size:       types.XY{X: 1024, Y: 768},
 		FontFamily: fmt.Sprintf(`"%s", monospace`, fontFamily),
 		FontSize:   config.Config.TypeFace.FontSize,
+		Title:      app.Name,
 	}
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, callback RespFunc) (*IpcT, func()) {
+func DisplayWindow[P PInputBoxT | PMarkdownT | PPreviewT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, callback RespFunc) (*IpcT, func()) {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,

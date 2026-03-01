@@ -12,11 +12,11 @@ import (
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 )
 
-func Open(renderer *sdlRender, tile types.Tile) {
+func (sr *sdlRender) OpenHistory(tile types.Tile) {
 	path := fmt.Sprintf("%s/Documents/%s/history/%s/", xdg.Home, app.DirName, tile.GroupName())
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
@@ -29,7 +29,7 @@ func Open(renderer *sdlRender, tile types.Tile) {
 	}
 
 	if len(files) == 0 {
-		renderer.DisplayNotification(types.NOTIFY_WARN, "There is no history for this group")
+		sr.DisplayNotification(types.NOTIFY_WARN, "There is no history for this group")
 		return
 	}
 
@@ -38,7 +38,7 @@ func Open(renderer *sdlRender, tile types.Tile) {
 	// start webview
 	windowStyle := dispatcher.NewWindowStyle()
 	windowStyle.Pos = types.XY{}
-	x, y := renderer.window.GetSize()
+	x, y := sr.window.GetSize()
 	windowStyle.Size = types.XY{X: x, Y: y}
 	windowStyle.Title = string(files[0])
 
@@ -46,13 +46,13 @@ func Open(renderer *sdlRender, tile types.Tile) {
 
 	ipc, closer := dispatcher.DisplayWindow("history", windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
+			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		} else {
 			switch msg.EventName {
 			case "focus":
-				renderer.TriggerDeallocation(renderer.window.Raise)
+				sr.TriggerDeallocation(sr.window.Raise)
 			case "closeMenu":
-				renderer.closeMenu()
+				sr.closeMenu()
 			}
 		}
 	})
@@ -65,7 +65,7 @@ func Open(renderer *sdlRender, tile types.Tile) {
 			},
 		})
 		if err != nil {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 	}
 
@@ -76,9 +76,9 @@ func Open(renderer *sdlRender, tile types.Tile) {
 			EventName: "focus",
 		})
 		if err != nil {
-			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 	}
 
-	renderer.DisplayMenu("History item to view", files, selectFn, okFn, cancelFn)
+	sr.DisplayMenu("History item to view", files, selectFn, okFn, cancelFn)
 }

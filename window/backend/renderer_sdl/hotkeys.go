@@ -89,7 +89,7 @@ func (sr *sdlRender) hotkeys() {
 			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
 			desc = "Search command line history..."
 		case "OpenHistory":
-			fn = func() { Open(sr, sr.termWin.Active) }
+			fn = func() { sr.OpenHistory(sr.termWin.Active) }
 			desc = "Open history..."
 
 		default:

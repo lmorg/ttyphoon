@@ -59,6 +59,8 @@ type Renderer interface {
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
+	ShowPreview(string)
+	HidePreview()
 	Close()
 }
 

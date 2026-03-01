@@ -343,9 +343,14 @@ func (el *ElementHyperlink) MouseMotion(pos *types.XY, size *types.XY, callback 
 	if !config.Config.Window.HoverEffectHighlight {
 		el.sgr.Bitwise.Set(types.SGR_UNDERLINE)
 	}
+
+	/*if strings.HasPrefix(el.scheme, "http") {
+		el.renderer.ShowPreview(el.url)
+	}*/
 }
 
 func (el *ElementHyperlink) MouseOut() {
+	//el.renderer.HidePreview()
 	el.renderer.StatusBarText("")
 	cursor.Arrow()
 

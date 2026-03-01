@@ -9,5 +9,15 @@
   "author": {
     "name": "Laurence Morgan",
     "email": "mail@laurencemorgan.co.uk"
+  },
+
+  "info": {
+    "protocols": [
+      {
+        "scheme": "ttyphoon",
+        "description": "Open with TTYphoon",
+        "role": "Editor"
+      }
+    ]
   }
 }

@@ -88,11 +88,13 @@ func (a *WApp) VisualInputBox(value string) {
 func (a *WApp) GetMarkdown(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
+		log.Println(err)
 		return err.Error()
 	}
 
 	b, err := io.ReadAll(f)
 	if err != nil {
+		log.Println(err)
 		return err.Error()
 	}
 
@@ -213,6 +215,7 @@ func startWails(window dispatcher.WindowTypeT) {
 		Height:      int(payload.Window.Size.Y),
 		Frameless:   payload.Window.Frameless,
 		AlwaysOnTop: payload.Window.AlwaysOnTop,
+		StartHidden: payload.Window.StartHidden,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},

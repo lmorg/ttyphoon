@@ -11,6 +11,7 @@ const (
 	WindowInputBox WindowTypeT = "inputBox"
 	WindowMarkdown WindowTypeT = "markdown"
 	WindowHistory  WindowTypeT = "history"
+	WindowPreview  WindowTypeT = "preview"
 )
 
 type PInputBoxT struct {
@@ -22,3 +23,5 @@ type PInputBoxT struct {
 type PMarkdownT struct {
 	Path string `json:"path"`
 }
+
+type PPreviewT struct{}

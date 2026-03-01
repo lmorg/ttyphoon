@@ -118,8 +118,7 @@ EventsOn("markdownOpen", params => {
 });
 
 function markdown(doc) {
-    const options = {};
-    marked.use(gfmHeadingId(options));
+    marked.use(gfmHeadingId({}));
     document.getElementById('ttyphoon-markdown').innerHTML = marked.parse(doc);
 
     // Apply syntax highlighting to all code blocks

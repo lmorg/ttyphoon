@@ -347,6 +347,11 @@ func (menu *menuWidgetT) eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		menu.selectCallback()
 		return
 
+	case sdl.K_ESCAPE:
+		sr.closeMenu()
+		menu.cancelCallback()
+		return
+
 	case sdl.K_UP:
 		menu.updateHighlight(-1)
 		return

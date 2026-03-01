@@ -80,6 +80,7 @@ export namespace dispatcher {
 	    size: types.XY;
 	    alwaysOnTop: boolean;
 	    frameLess: boolean;
+	    startHidden: boolean;
 	    fontFamily: string;
 	    fontSize: number;
 	    title: string;
@@ -95,6 +96,7 @@ export namespace dispatcher {
 	        this.size = this.convertValues(source["size"], types.XY);
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.frameLess = source["frameLess"];
+	        this.startHidden = source["startHidden"];
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
 	        this.title = source["title"];
