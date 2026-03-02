@@ -225,6 +225,12 @@ func (a *WApp) SaveFile(filename, contents string) error {
 	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
+func (a *WApp) RenameFile(oldPath, newPath string) error {
+	oldPath = os.Expand(oldPath, a.expandMappingFunc)
+	newPath = os.Expand(newPath, a.expandMappingFunc)
+	return os.Rename(oldPath, newPath)
+}
+
 // --------------------
 
 func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {

@@ -26,6 +26,10 @@ export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
 
+export function RenameFile(arg1, arg2) {
+  return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
+}
+
 export function SaveFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
 }

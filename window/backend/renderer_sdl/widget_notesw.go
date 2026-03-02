@@ -51,8 +51,6 @@ func (sr *sdlRender) openNotes() {
 	tile := sr.termWin.Active
 	sr.startNotes(tile)
 
-	//sr.UpdateNotes(tile)
-
 	err := notes.ipc.Send(&dispatcher.IpcMessageT{
 		EventName: "notesFocus",
 		Parameters: map[string]string{

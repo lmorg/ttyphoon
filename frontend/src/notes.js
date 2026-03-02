@@ -77,7 +77,8 @@ const state = {
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
-    viewMode: 'viewer'
+    viewMode: 'viewer',
+    renamingFile: null
 };
 
 marked.use(gfmHeadingId({}));
@@ -211,6 +212,10 @@ function renderFileList() {
         item.addEventListener('click', () => {
             loadFile(file);
         });
+        item.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            openRenamePrompt(file);
+        });
         elements.list.appendChild(item);
     });
 }
@@ -255,11 +260,26 @@ async function saveFile() {
 }
 
 function openNewFilePrompt() {
+    state.renamingFile = null;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = '';
+    elements.modal.querySelector('#notes-modal-title').textContent = 'New note name';
     setTimeout(() => {
         elements.modalInput.focus();
+    }, 0);
+}
+
+function openRenamePrompt(file) {
+    state.renamingFile = file;
+    const fileName = file.split('/').pop().replace(/\.md$/, '');
+    elements.modal.dataset.open = 'true';
+    elements.modal.setAttribute('aria-hidden', 'false');
+    elements.modalInput.value = fileName;
+    elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
+    setTimeout(() => {
+        elements.modalInput.focus();
+        elements.modalInput.select();
     }, 0);
 }
 
@@ -288,6 +308,31 @@ async function createNewFile() {
         return;
     }
 
+    // Handle rename operation
+    if (state.renamingFile) {
+        const newPath = state.renamingFile.split('/').slice(0, -1).join('/') + '/' + fileName;
+        const renameFn = getWailsFunction('RenameFile');
+        if (!renameFn) {
+            setStatus('RenameFile is not available.', true);
+            return;
+        }
+
+        try {
+            await renameFn(state.renamingFile, newPath);
+            await refreshFiles();
+            if (state.currentFile === state.renamingFile) {
+                await loadFile(newPath);
+            }
+            closeNewFilePrompt();
+            setStatus(`Renamed to ${newPath}.`, false);
+        } catch (err) {
+            setStatus(`Failed to rename file.`, true);
+            console.error(err);
+        }
+        return;
+    }
+
+    // Handle new file creation
     fileName = "$NOTES/" + fileName;
 
     const exists = state.files.some((file) => file === fileName);
@@ -763,6 +808,11 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+    }
+
+    if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
+        event.preventDefault();
+        openRenamePrompt(state.currentFile);
     }
 
     if (event.key === 'Tab') {
