@@ -30,6 +30,7 @@ app.innerHTML = `
             <div id="notes-tabs" role="tablist">
                 <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
                 <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+                <button id="notes-delete" type="button" title="Delete current note">Delete</button>
                 <div id="notes-status" role="status"></div>
             </div>
             <div id="notes-panel">
@@ -52,6 +53,16 @@ app.innerHTML = `
             </div>
         </div>
     </div>
+    <div id="notes-delete-modal" data-open="false" aria-hidden="true">
+        <div id="notes-delete-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-delete-modal-title">
+            <div id="notes-delete-modal-title">Delete note</div>
+            <div id="notes-delete-modal-body"></div>
+            <div id="notes-delete-modal-actions">
+                <button id="notes-delete-cancel" type="button">Cancel</button>
+                <button id="notes-delete-confirm" type="button">Delete</button>
+            </div>
+        </div>
+    </div>
 `;
 
 const elements = {
@@ -60,6 +71,7 @@ const elements = {
     preview: document.getElementById('notes-preview'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
+    delete: document.getElementById('notes-delete'),
     refresh: document.getElementById('notes-refresh'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -68,7 +80,11 @@ const elements = {
     modal: document.getElementById('notes-modal'),
     modalInput: document.getElementById('notes-modal-input'),
     modalCancel: document.getElementById('notes-modal-cancel'),
-    modalCreate: document.getElementById('notes-modal-create')
+    modalCreate: document.getElementById('notes-modal-create'),
+    deleteModal: document.getElementById('notes-delete-modal'),
+    deleteModalBody: document.getElementById('notes-delete-modal-body'),
+    deleteCancel: document.getElementById('notes-delete-cancel'),
+    deleteConfirm: document.getElementById('notes-delete-confirm')
 };
 
 const state = {
@@ -78,7 +94,8 @@ const state = {
     renderTimer: null,
     autosaveTimer: null,
     viewMode: 'viewer',
-    renamingFile: null
+    renamingFile: null,
+    deletingFile: null
 };
 
 marked.use(gfmHeadingId({}));
@@ -255,6 +272,55 @@ async function saveFile() {
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
+        console.error(err);
+    }
+}
+
+function openDeletePrompt(file) {
+    state.deletingFile = file;
+    const fileName = file.split('/').pop();
+    elements.deleteModalBody.textContent = `Are you sure you want to delete "${fileName}"?`;
+    elements.deleteModal.dataset.open = 'true';
+    elements.deleteModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        elements.deleteConfirm.focus();
+    }, 0);
+}
+
+function closeDeletePrompt() {
+    elements.deleteModal.dataset.open = 'false';
+    elements.deleteModal.setAttribute('aria-hidden', 'true');
+    state.deletingFile = null;
+}
+
+async function confirmDelete() {
+    if (!state.deletingFile) {
+        setStatus('Select a note to delete.', true);
+        return;
+    }
+
+    const deleteFn = getWailsFunction('DeleteFile');
+    if (!deleteFn) {
+        setStatus('DeleteFile is not available.', true);
+        return;
+    }
+
+    const fileToDelete = state.deletingFile;
+    const fileName = fileToDelete.split('/').pop();
+
+    try {
+        await deleteFn(fileToDelete);
+        if (state.currentFile === fileToDelete) {
+            state.currentFile = '';
+            elements.editor.value = '';
+            renderMarkdown();
+            setDirty(false);
+        }
+        closeDeletePrompt();
+        await refreshFiles();
+        setStatus(`Deleted ${fileName}.`, false);
+    } catch (err) {
+        setStatus(`Failed to delete ${fileName}.`, true);
         console.error(err);
     }
 }
@@ -482,7 +548,33 @@ function applyWindowStyle(result) {
             display: flex;
         }
 
+        #notes-delete-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 999;
+        }
+
+        #notes-delete-modal[data-open="true"] {
+            display: flex;
+        }
+
         #notes-modal-card {
+            min-width: 360px;
+            max-width: 80vw;
+            border: 2px solid var(--fg);
+            background: var(--bg);
+            color: var(--fg);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #notes-delete-modal-card {
             min-width: 360px;
             max-width: 80vw;
             border: 2px solid var(--fg);
@@ -497,6 +589,15 @@ function applyWindowStyle(result) {
         #notes-modal-title {
             color: var(--accent);
             font-size: ${result.fontSize}px;
+        }
+
+        #notes-delete-modal-title {
+            color: var(--accent);
+            font-size: ${result.fontSize}px;
+        }
+
+        #notes-delete-modal-body {
+            opacity: 0.9;
         }
 
         #notes-modal-input {
@@ -515,7 +616,22 @@ function applyWindowStyle(result) {
             justify-content: flex-end;
         }
 
+        #notes-delete-modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
         #notes-modal-actions button {
+            border-radius: 0;
+            border: 2px solid var(--fg);
+            background: transparent;
+            color: var(--fg);
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        #notes-delete-modal-actions button {
             border-radius: 0;
             border: 2px solid var(--fg);
             background: transparent;
@@ -527,6 +643,21 @@ function applyWindowStyle(result) {
         #notes-modal-actions button:hover {
             border-color: var(--accent);
             color: var(--accent);
+        }
+
+        #notes-delete-modal-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        #notes-delete-confirm {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        #notes-delete-confirm:hover {
+            border-color: var(--error);
+            color: var(--error);
         }
 
         #notes-list {
@@ -604,6 +735,15 @@ function applyWindowStyle(result) {
         #notes-tabs button[aria-selected="true"] {
             border-color: var(--accent);
             color: var(--accent);
+        }
+
+        #notes-delete {
+            color: var(--error);
+            margin-left: auto;
+        }
+
+        #notes-delete:hover {
+            border-color: var(--error);
         }
 
         #notes-panel {
@@ -800,6 +940,22 @@ elements.modalCreate.addEventListener('click', () => {
     createNewFile();
 });
 
+elements.delete.addEventListener('click', () => {
+    if (!state.currentFile) {
+        setStatus('Select a note to delete.', true);
+        return;
+    }
+    openDeletePrompt(state.currentFile);
+});
+
+elements.deleteCancel.addEventListener('click', () => {
+    closeDeletePrompt();
+});
+
+elements.deleteConfirm.addEventListener('click', () => {
+    confirmDelete();
+});
+
 elements.refresh.addEventListener('click', () => {
     refreshFiles();
 });
@@ -823,6 +979,9 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
         event.preventDefault();
         closeNewFilePrompt();
+    } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
+        event.preventDefault();
+        closeDeletePrompt();
     } else if (event.key === 'Escape') {
         event.preventDefault();
         SendIpc('focus', {})

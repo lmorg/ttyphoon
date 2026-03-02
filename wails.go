@@ -231,6 +231,11 @@ func (a *WApp) RenameFile(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)
 }
 
+func (a *WApp) DeleteFile(filename string) error {
+	filename = os.Expand(filename, a.expandMappingFunc)
+	return os.Remove(filename)
+}
+
 // --------------------
 
 func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
