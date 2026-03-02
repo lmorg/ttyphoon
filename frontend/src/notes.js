@@ -1,4 +1,4 @@
-import { GetWindowStyle, GetMarkdown, GetParameters } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
@@ -99,6 +99,21 @@ function renderMarkdown() {
 
     elements.preview.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
+    });
+
+    const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
+
+    elements.preview.querySelectorAll('img').forEach((img) => {
+        if (img.src.match(rxWailsUrl)) {
+            const path = img.src.replace(rxWailsUrl, '');
+            GetImage(path).then((image) => {
+                if (image.match(/^error: /)) {
+                    console.log(image);
+                } else {
+                    img.src = image;
+                }
+            });
+        }
     });
 
     elements.preview.querySelectorAll('a').forEach((link) => {
@@ -712,6 +727,11 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+    }
+
+    if (event.key === 'Tab') {
+        event.preventDefault();
+        SendIpc("focus", {});
     }
 
     if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
