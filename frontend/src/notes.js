@@ -22,7 +22,6 @@ app.innerHTML = `
                 <div id="notes-actions">
                     <button id="notes-new" type="button">New</button>
                     <button id="notes-refresh" type="button">Refresh</button>
-                    <button id="notes-save" type="button">Save</button>
                 </div>
             </div>
             <div id="notes-list" role="list"></div>
@@ -61,7 +60,6 @@ const elements = {
     preview: document.getElementById('notes-preview'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
-    save: document.getElementById('notes-save'),
     refresh: document.getElementById('notes-refresh'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -78,6 +76,7 @@ const state = {
     currentFile: '',
     dirty: false,
     renderTimer: null,
+    autosaveTimer: null,
     viewMode: 'viewer'
 };
 
@@ -145,6 +144,16 @@ function scheduleRender() {
         state.renderTimer = null;
         renderMarkdown();
     }, 120);
+}
+
+function scheduleAutoSave() {
+    if (state.autosaveTimer) {
+        clearTimeout(state.autosaveTimer);
+    }
+    state.autosaveTimer = setTimeout(() => {
+        state.autosaveTimer = null;
+        saveFile();
+    }, 1000);
 }
 
 function setDirty(isDirty) {
@@ -257,7 +266,6 @@ function openNewFilePrompt() {
 function closeNewFilePrompt() {
     elements.modal.dataset.open = 'false';
     elements.modal.setAttribute('aria-hidden', 'true');
-    elements.newFile.focus();
 }
 
 function normalizeNoteName(rawName) {
@@ -723,6 +731,7 @@ if (elements.editor) {
     elements.editor.addEventListener('input', () => {
         setDirty(true);
         scheduleRender();
+        scheduleAutoSave();
     });
 }
 
@@ -744,10 +753,6 @@ elements.modalCancel.addEventListener('click', () => {
 
 elements.modalCreate.addEventListener('click', () => {
     createNewFile();
-});
-
-elements.save.addEventListener('click', () => {
-    saveFile();
 });
 
 elements.refresh.addEventListener('click', () => {
