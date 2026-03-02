@@ -1,5 +1,5 @@
 import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
-import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { BrowserOpenURL, WindowHide } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -737,6 +737,9 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
         event.preventDefault();
         closeNewFilePrompt();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        WindowHide();
     }
 });
 
