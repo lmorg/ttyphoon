@@ -19,10 +19,6 @@ app.innerHTML = `
         <aside id="notes-sidebar">
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
-                <div id="notes-actions">
-                    <button id="notes-new" type="button">New</button>
-                    <button id="notes-refresh" type="button">Refresh</button>
-                </div>
             </div>
             <div id="notes-list" role="list"></div>
         </aside>
@@ -30,6 +26,7 @@ app.innerHTML = `
             <div id="notes-tabs" role="tablist">
                 <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
                 <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+                <button id="notes-new" type="button">New</button>
                 <button id="notes-delete" type="button" title="Delete current note">Delete</button>
                 <div id="notes-status" role="status"></div>
             </div>
@@ -72,7 +69,6 @@ const elements = {
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
     delete: document.getElementById('notes-delete'),
-    refresh: document.getElementById('notes-refresh'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
     editorWrap: document.getElementById('notes-editor-wrap'),
@@ -331,6 +327,7 @@ function openNewFilePrompt() {
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = '';
     elements.modal.querySelector('#notes-modal-title').textContent = 'New note name';
+    elements.modalCreate.textContent = 'Create';
     setTimeout(() => {
         elements.modalInput.focus();
     }, 0);
@@ -343,6 +340,7 @@ function openRenamePrompt(file) {
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = fileName;
     elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
+    elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
         elements.modalInput.focus();
         elements.modalInput.select();
@@ -610,6 +608,16 @@ function applyWindowStyle(result) {
             outline: none;
         }
 
+        #notes-new:hover {
+            border-color: var(--green) !important;
+            color: var(--green) !important;
+        }
+        
+        #notes-modal-create:hover {
+            border-color: var(--green) !important;
+            color: var(--green) !important;
+        }
+
         #notes-modal-actions {
             display: flex;
             gap: 10px;
@@ -656,8 +664,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-delete-confirm:hover {
-            border-color: var(--error);
-            color: var(--error);
+            border-color: var(--error) !important;
+            color: var(--error) !important;
         }
 
         #notes-list {
@@ -737,13 +745,26 @@ function applyWindowStyle(result) {
             color: var(--accent);
         }
 
-        #notes-delete {
-            color: var(--error);
+        #notes-tabs button:hover {
+            border-color: var(--fg);
+        }
+
+        #notes-new {
             margin-left: auto;
         }
 
+        #notes-new:hover {
+            border-color: var(--fg);
+            color: var(--fg);
+        }
+
+        #notes-delete {
+            color: var(--error);
+        }
+
         #notes-delete:hover {
-            border-color: var(--error);
+            border-color: var(--error) !important;
+            color: var(--error);
         }
 
         #notes-panel {
@@ -954,10 +975,6 @@ elements.deleteCancel.addEventListener('click', () => {
 
 elements.deleteConfirm.addEventListener('click', () => {
     confirmDelete();
-});
-
-elements.refresh.addEventListener('click', () => {
-    refreshFiles();
 });
 
 document.addEventListener('keydown', (event) => {

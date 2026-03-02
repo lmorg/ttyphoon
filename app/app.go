@@ -17,8 +17,8 @@ const DirName = "ttyphoon"
 const (
 	version  = "%d.%d.%d"
 	Major    = 0
-	Minor    = 18
-	Revision = 6100
+	Minor    = 19
+	Revision = 1000
 )
 
 const Title = "Ttyphoon: The Next Generation Terminal Emulator"
