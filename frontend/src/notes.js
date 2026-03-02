@@ -26,12 +26,12 @@ app.innerHTML = `
                 </div>
             </div>
             <div id="notes-list" role="list"></div>
-            <div id="notes-status" role="status"></div>
         </aside>
         <main id="notes-main">
             <div id="notes-tabs" role="tablist">
-                <button id="notes-tab-editor" type="button" role="tab" aria-selected="true">Editor</button>
-                <button id="notes-tab-viewer" type="button" role="tab" aria-selected="false">Viewer</button>
+                <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
+                <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+                <div id="notes-status" role="status"></div>
             </div>
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
@@ -78,7 +78,7 @@ const state = {
     currentFile: '',
     dirty: false,
     renderTimer: null,
-    viewMode: 'editor'
+    viewMode: 'viewer'
 };
 
 marked.use(gfmHeadingId({}));
@@ -116,11 +116,24 @@ function renderMarkdown() {
         }
     });
 
-    elements.preview.querySelectorAll('a').forEach((link) => {
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            BrowserOpenURL(link.href);
-        });
+    let rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+
+    elements.preview.querySelectorAll('a').forEach(a => {
+        if (!a.href.match(rxWailsUrl)) {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                BrowserOpenURL(a.href);
+            });
+        }
+
+        if (!a.href.match(rxBookmark)) {
+            /*let id = a.href.replace(rxBookmark, '');
+            console.log(id);
+            //a.href = "#"+id;
+            a.addEventListener("click", () => {
+                document.getElementById(id).scrollIntoView();
+            });*/
+        }
     });
 }
 
@@ -261,11 +274,13 @@ function normalizeNoteName(rawName) {
 }
 
 async function createNewFile() {
-    const fileName = normalizeNoteName(elements.modalInput.value);
+    let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
         setStatus('File name cannot be empty.', true);
         return;
     }
+
+    fileName = "$NOTES/" + fileName;
 
     const exists = state.files.some((file) => file === fileName);
     if (exists) {
@@ -298,6 +313,10 @@ function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
 
+    const notesFileSize = result.fontSize * 2;
+    const notesStatusFontSize = result.fontSize - 2;
+    const notesTitleFontSize = result.fontSize + 4;
+
     const style = document.createElement('style');
     style.textContent = `
         :root {
@@ -328,10 +347,30 @@ function applyWindowStyle(result) {
             background-color: var(--selection);
         }
 
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+            background-color: var(--bg);
+        }
+
+        ::-webkit-scrollbar-track {
+            background-color: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--fg);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--accent);
+        }
+
         #notes-app {
             display: grid;
-            grid-template-columns: 260px 1fr;
+            grid-template-columns: 20% 1fr;
             height: 100vh;
+            overflow: hidden;
             color: var(--fg);
             background: var(--bg);
         }
@@ -339,9 +378,11 @@ function applyWindowStyle(result) {
         #notes-sidebar {
             display: flex;
             flex-direction: column;
-            border-right: 2px solid var(--fg);
+            /* border-right: 2px solid var(--fg); */
             padding: 16px;
             gap: 12px;
+            min-height: 0;
+            overflow: hidden;
         }
 
         #notes-sidebar-header {
@@ -351,7 +392,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-title {
-            font-size: calc(${result.fontSize}px + 4px);
+            font-size: ${notesTitleFontSize}px;
             color: var(--accent);
         }
 
@@ -440,10 +481,12 @@ function applyWindowStyle(result) {
             flex-direction: column;
             gap: 6px;
             overflow-y: auto;
+            overflow-x: hidden;
             flex: 1;
         }
 
         .notes-file {
+            min-height: ${notesFileSize}px;
             text-align: left;
             border-radius: 0;
             border: 2px solid transparent;
@@ -451,6 +494,9 @@ function applyWindowStyle(result) {
             color: var(--fg);
             padding: 6px 8px;
             cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .notes-file[data-active="true"] {
@@ -467,8 +513,10 @@ function applyWindowStyle(result) {
         }
 
         #notes-status {
-            font-size: calc(${result.fontSize}px - 2px);
+            font-size: ${notesStatusFontSize}px;
             opacity: 0.8;
+            align-self: center;
+            margin-left: auto;
         }
 
         #notes-status[data-state="error"] {
@@ -488,6 +536,7 @@ function applyWindowStyle(result) {
             gap: 8px;
             border-bottom: 2px solid var(--fg);
             padding-bottom: 6px;
+            align-items: center;
         }
 
         #notes-tabs button {
@@ -538,7 +587,6 @@ function applyWindowStyle(result) {
 
         #notes-preview-wrap {
             overflow-y: auto;
-            border-left: 2px solid var(--fg);
             padding-left: 16px;
         }
 
@@ -653,24 +701,6 @@ function applyWindowStyle(result) {
             color: var(--fg);
         }
 
-        @media (max-width: 980px) {
-            #notes-app {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto 1fr;
-            }
-
-            #notes-sidebar {
-                border-right: none;
-                border-bottom: 2px solid var(--fg);
-            }
-
-            #notes-preview-wrap {
-                border-left: none;
-                border-top: 2px solid var(--fg);
-                padding-left: 0;
-                padding-top: 16px;
-            }
-        }
     `;
 
     document.head.appendChild(style);
@@ -687,6 +717,7 @@ GetParameters().then((params) => {
 });
 
 refreshFiles();
+window.refreshFiles = refreshFiles;
 
 if (elements.editor) {
     elements.editor.addEventListener('input', () => {
@@ -739,6 +770,7 @@ document.addEventListener('keydown', (event) => {
         closeNewFilePrompt();
     } else if (event.key === 'Escape') {
         event.preventDefault();
+        SendIpc('focus', {})
         WindowHide();
     }
 });
@@ -750,4 +782,4 @@ elements.modalInput.addEventListener('keydown', (event) => {
     }
 });
 
-setViewMode('editor');
+setViewMode('viewer');

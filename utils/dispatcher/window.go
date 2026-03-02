@@ -24,6 +24,7 @@ type WindowStyleT struct {
 	AlwaysOnTop bool      `json:"alwaysOnTop"`
 	Frameless   bool      `json:"frameLess"`
 	StartHidden bool      `json:"startHidden"`
+	HideOnClose bool      `json:"hideOnClose"`
 	FontFamily  string    `json:"fontFamily"`
 	FontSize    int       `json:"fontSize"`
 	Title       string    `json:"title"`
@@ -91,7 +92,7 @@ func NewWindowStyle() *WindowStyleT {
 	}
 }
 
-func DisplayWindow[P PInputBoxT | PMarkdownT | PPreviewT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, callback RespFunc) (*IpcT, func()) {
+func DisplayWindow[P PInputBoxT | PMarkdownT | PPreviewT | PNotesT](windowName WindowTypeT, windowStyle *WindowStyleT, parameters *P, callback RespFunc) (*IpcT, func()) {
 	payload := &PayloadT{
 		Window:     *windowStyle,
 		Parameters: parameters,

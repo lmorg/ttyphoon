@@ -4,6 +4,8 @@ export namespace dispatcher {
 	    sdl = "sdl",
 	    inputBox = "inputBox",
 	    markdown = "markdown",
+	    preview = "preview",
+	    notes = "notes",
 	}
 	export class ColoursT {
 	    fg: types.Colour;
@@ -81,6 +83,7 @@ export namespace dispatcher {
 	    alwaysOnTop: boolean;
 	    frameLess: boolean;
 	    startHidden: boolean;
+	    hideOnClose: boolean;
 	    fontFamily: string;
 	    fontSize: number;
 	    title: string;
@@ -97,6 +100,7 @@ export namespace dispatcher {
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.frameLess = source["frameLess"];
 	        this.startHidden = source["startHidden"];
+	        this.hideOnClose = source["hideOnClose"];
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
 	        this.title = source["title"];

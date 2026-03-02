@@ -53,7 +53,7 @@ list-build-tags:
 	@echo "sqlite_omit_load_extension\nosusergo\nnetgo"
 
 # readline package development
-local_readline  = local/readline
+local_readline  = .local/readline
 remote_readline = lmorg/readline
 
 .PHONY: 
@@ -79,7 +79,7 @@ remote-readline:
 
 # glamour package development
 
-local_glamour  = local/glamour
+local_glamour  = .local/glamour
 remote_glamour = charmbracelet/glamour
 
 .PHONY: 

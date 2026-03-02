@@ -149,10 +149,10 @@ func WriteAi(agent *agent.Agent, summary, prompt, response string, start, end ti
 
 func write(tmpl *template.Template, data *metaT) error {
 	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.DirName, data.GroupName)
-	err := os.MkdirAll(path, 0700)
+	/*err := os.MkdirAll(path, 0700)
 	if err != nil {
 		return err
-	}
+	}*/
 
 	filename := fmt.Sprintf("%s/%s-%s.md", path, data.TimeStart, data.filename)
 	f, err := os.Create(filename)

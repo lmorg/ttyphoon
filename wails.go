@@ -25,12 +25,14 @@ var wailsAssets embed.FS
 
 // App struct
 type WApp struct {
-	ctx     context.Context
-	payload *dispatcher.PayloadT
-	window  dispatcher.WindowTypeT
-	dir     string
-	ipc     *dispatcher.IpcT
-	msgPipe chan *dispatcher.IpcMessageT
+	ctx         context.Context
+	payload     *dispatcher.PayloadT
+	window      dispatcher.WindowTypeT
+	mdBaseDir   string
+	projRoot    string
+	usrNotesDir string
+	ipc         *dispatcher.IpcT
+	msgPipe     chan *dispatcher.IpcMessageT
 }
 
 var WWindowTsBindings = []struct {
@@ -40,15 +42,40 @@ var WWindowTsBindings = []struct {
 	{dispatcher.WindowSdl, "sdl"},
 	{dispatcher.WindowInputBox, "inputBox"},
 	{dispatcher.WindowMarkdown, "markdown"},
+	{dispatcher.WindowPreview, "preview"},
+	{dispatcher.WindowNotes, "notes"},
 }
 
 // NewApp creates a new App application struct
 func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *WApp {
-	return &WApp{
+	a := &WApp{
 		window:  window,
 		payload: payload,
 		msgPipe: make(chan *dispatcher.IpcMessageT),
 	}
+
+	switch window {
+	case dispatcher.WindowNotes:
+		m, ok := payload.Parameters.(map[string]any)
+		if !ok {
+			a.projRoot = cwdOrPanic()
+		}
+		a.projRoot, ok = m["projectRoot"].(string)
+		if !ok {
+			a.projRoot = cwdOrPanic()
+		}
+		a.usrNotesDir, _ = m["userNotes"].(string)
+	}
+
+	return a
+}
+
+func cwdOrPanic() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	return cwd
 }
 
 func (a *WApp) GetWindowType() string {
@@ -86,6 +113,8 @@ func (a *WApp) VisualInputBox(value string) {
 }
 
 func (a *WApp) GetMarkdown(path string) string {
+	path = os.Expand(path, a.expandMappingFunc)
+
 	f, err := os.Open(path)
 	if err != nil {
 		log.Println(err)
@@ -98,7 +127,7 @@ func (a *WApp) GetMarkdown(path string) string {
 		return err.Error()
 	}
 
-	a.dir = filepath.Dir(path)
+	a.mdBaseDir = filepath.Dir(path)
 
 	return string(b)
 }
@@ -117,7 +146,7 @@ func (a *WApp) GetImage(path string) string {
 
 	if path[0] != '/' {
 		// TODO: this isn't Windows compatible
-		path = a.dir + "/" + path
+		path = a.mdBaseDir + "/" + path
 	}
 
 	f, err := os.Open(path)
@@ -143,7 +172,36 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
-	files, err := filepath.Glob(filepath.Join(a.dir, "*.md"))
+	files, err := filepath.Glob(fmt.Sprintf("%s/*.md", a.usrNotesDir))
+	for i := range files {
+		files[i] = strings.Replace(files[i], a.usrNotesDir, "$NOTES/", 1)
+	}
+
+	if a.projRoot == "" {
+		return files
+	}
+
+	err = filepath.WalkDir(a.projRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			log.Println(err)
+			return nil
+		}
+		if d.IsDir() {
+			if len(d.Name()) == 0 || d.Name()[0] == '.' || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(d.Name()) == 0 || d.Name()[0] == '.' {
+			return nil
+		}
+
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			filename := strings.Replace(path, a.projRoot, "$PROJ", 1)
+			files = append(files, filename)
+		}
+		return nil
+	})
 	if err != nil {
 		log.Println(err)
 		return []string{}
@@ -151,8 +209,20 @@ func (a *WApp) ListFiles() []string {
 	return files
 }
 
+func (a *WApp) expandMappingFunc(s string) string {
+	switch s {
+	case "PROJ":
+		return a.projRoot
+	case "NOTES":
+		return a.usrNotesDir
+	default:
+		return "error"
+	}
+}
+
 func (a *WApp) SaveFile(filename, contents string) error {
-	return os.WriteFile(filepath.Join(a.dir, filename), []byte(contents), 0644)
+	filename = os.Expand(filename, a.expandMappingFunc)
+	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
 // --------------------
@@ -174,7 +244,16 @@ func (a *WApp) domReady(ctx context.Context) {
 			case msg.Error != nil:
 				runtime.EventsEmit(a.ctx, "error", msg.Error)
 			case msg.EventName == "focus":
-				runtime.Show(ctx)
+				runtime.WindowShow(ctx)
+			case msg.EventName == "notesFocus":
+				runtime.WindowSetPosition(a.ctx, 0, 0)
+				runtime.WindowShow(ctx)
+				runtime.WindowSetPosition(a.ctx, 0, 0)
+				fallthrough
+			case msg.EventName == "notesUpdatePaths":
+				a.projRoot = msg.Parameters["projectRoot"]
+				a.usrNotesDir = msg.Parameters["userNotes"]
+				runtime.WindowExecJS(a.ctx, `window.refreshFiles();`)
 			default:
 				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
 			}
@@ -199,6 +278,9 @@ func (a *WApp) beforeClose(ctx context.Context) bool {
 		if err != nil {
 			log.Println(err)
 		}
+	case dispatcher.WindowNotes:
+		runtime.WindowHide(a.ctx)
+		return true
 	}
 
 	return false
@@ -223,12 +305,13 @@ func startWails(window dispatcher.WindowTypeT) {
 
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title:       fmt.Sprintf("%s: %s", ttyphoon.Name, payload.Window.Title),
-		Width:       int(payload.Window.Size.X),
-		Height:      int(payload.Window.Size.Y),
-		Frameless:   payload.Window.Frameless,
-		AlwaysOnTop: payload.Window.AlwaysOnTop,
-		StartHidden: payload.Window.StartHidden,
+		Title:             fmt.Sprintf("%s: %s", ttyphoon.Name, payload.Window.Title),
+		Width:             int(payload.Window.Size.X),
+		Height:            int(payload.Window.Size.Y),
+		Frameless:         payload.Window.Frameless,
+		AlwaysOnTop:       payload.Window.AlwaysOnTop,
+		StartHidden:       payload.Window.StartHidden,
+		HideWindowOnClose: payload.Window.HideOnClose,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},

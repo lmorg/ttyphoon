@@ -72,6 +72,7 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
+		//tmux.renderer.UpdateNotes(tmux.activeWindow.ActivePane())
 	}
 
 	activeWindow := tmux.activeWindow.id

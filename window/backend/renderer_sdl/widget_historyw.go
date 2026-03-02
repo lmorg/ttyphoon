@@ -12,8 +12,20 @@ import (
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 )
 
+func userDocs(tile types.Tile, function string) string {
+	path := fmt.Sprintf("%s/Documents/%s/%s/%s/", xdg.Home, app.DirName, function, tile.GroupName())
+
+	/*err :=*/
+	_ = os.MkdirAll(path, 0700)
+	/*if err != nil {
+		return err
+	}*/
+
+	return path
+}
+
 func (sr *sdlRender) OpenHistory(tile types.Tile) {
-	path := fmt.Sprintf("%s/Documents/%s/history/%s/", xdg.Home, app.DirName, tile.GroupName())
+	path := userDocs(tile, "history")
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())

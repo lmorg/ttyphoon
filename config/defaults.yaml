@@ -130,8 +130,8 @@ Window:
   # Window transparency. Some people like it, others do not.
   # Value is a percentage.
   # `100` disables transparency
-  Opacity: 95
-  InactiveOpacity: 80
+  Opacity: 100
+  InactiveOpacity: 95
 
   StatusBar: true
   TabBarFrame: false

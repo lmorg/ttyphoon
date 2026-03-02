@@ -24,6 +24,21 @@ GetWindowStyle().then((result) => {
         ::selection {
             background-color: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
         }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+            background-color: var(--bg);
+        }
+        ::-webkit-scrollbar-track {
+            background-color: var(--bg);
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--fg);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--accent);
+        }
         h1, h2, h3, h4, h5, h6 {
             color: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
         }

@@ -26,3 +26,8 @@ type PMarkdownT struct {
 }
 
 type PPreviewT struct{}
+
+type PNotesT struct {
+	ProjectRoot string `json:"projectRoot"`
+	UserNotes   string `json:"userNotes"`
+}

@@ -149,6 +149,7 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 			if err != nil {
 				sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			}
+			sr.UpdateNotes(tile)
 		}()
 	}
 
@@ -383,6 +384,8 @@ func (sr *sdlRender) RefreshWindowList() {
 	sr.cacheBgTexture.Destroy(sr)
 
 	sr.limiter.Unlock()
+
+	sr.UpdateNotes(sr.termWin.Active)
 }
 
 func (sr *sdlRender) writeToTemp() {
