@@ -30,4 +30,6 @@ type PPreviewT struct{}
 type PNotesT struct {
 	ProjectRoot string `json:"projectRoot"`
 	UserNotes   string `json:"userNotes"`
+	Filename    string `json:"filename"`
+	Content     string `json:"content"`
 }

@@ -104,9 +104,6 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		return
 	}
 
-	term._blockMeta = NewRowBlockMeta(term)
-	(*term.screen)[term.curPos().Y].Block = term._blockMeta
-
 	var params struct {
 		CmdLine string
 	}
@@ -115,8 +112,19 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 		params.CmdLine = apc.Index(2)
 	}
 
-	term._blockMeta.Query = []rune(params.CmdLine)
+	term.beginOutputBlock([]rune(params.CmdLine))
+}
+
+func (term *Term) beginOutputBlock(cmdLine []rune) {
+	term._blockMeta = NewRowBlockMeta(term)
+	(*term.screen)[term.curPos().Y].Block = term._blockMeta
+	term._blockMeta.Query = cmdLine
 	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN_BLOCK)
+}
+
+type endOutputBlockT struct {
+	ExitNum  int
+	MetaFlag types.BlockMetaFlag
 }
 
 func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
@@ -126,6 +134,20 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 		return
 	}
 
+	params := &endOutputBlockT{}
+
+	apc.Parameters(params)
+
+	if params.ExitNum == 0 {
+		params.MetaFlag.Set(types.META_BLOCK_OK)
+	} else {
+		params.MetaFlag.Set(types.META_BLOCK_ERROR)
+	}
+
+	term.endOutputBlock(params, nil)
+}
+
+func (term *Term) endOutputBlock(params *endOutputBlockT, aiMeta *types.AiMetaT) {
 	pos := term.curPos()
 	if pos.X == 0 {
 		pos.Y--
@@ -134,22 +156,12 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 		pos.Y = 0
 	}
 
-	var params struct {
-		ExitNum  int
-		MetaFlag types.BlockMetaFlag
-	}
-
-	apc.Parameters(&params)
-
 	(*term.screen)[pos.Y].RowMeta.Set(types.META_ROW_END_BLOCK)
-	if params.ExitNum == 0 {
-		term._blockMeta.Meta.Set(types.META_BLOCK_OK | params.MetaFlag)
-	} else {
-		term._blockMeta.Meta.Set(types.META_BLOCK_ERROR | params.MetaFlag)
-	}
 
 	term._blockMeta.ExitNum = params.ExitNum
 	term._blockMeta.TimeEnd = time.Now()
+	term._blockMeta.AiMeta = aiMeta
+	term._blockMeta.Meta = params.MetaFlag
 
 	if config.Config.Terminal.WriteMarkdownHistory {
 		var (
@@ -162,7 +174,7 @@ func (term *Term) mxapcEndOutputBlock(apc *types.ApcSlice) {
 				break
 			}
 		}
-		go historymd.WriteBlock(term.tile, screen[max(0, begin):end])
+		go historymd.Block(term.tile, screen[max(0, begin):end], historymd.TemplateWriter)
 	}
 
 	// prep for new block

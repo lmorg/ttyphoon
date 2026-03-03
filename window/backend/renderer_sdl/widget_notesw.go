@@ -14,7 +14,7 @@ var notes struct {
 	mutex sync.Mutex
 }
 
-func (sr *sdlRender) startNotes(tile types.Tile) {
+func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) {
 	if !notes.mutex.TryLock() {
 		// only run once
 		return
@@ -33,6 +33,8 @@ func (sr *sdlRender) startNotes(tile types.Tile) {
 	parameters := &dispatcher.PNotesT{
 		ProjectRoot: findProjectRoot(tile.Pwd()),
 		UserNotes:   userDocs(tile, "notes"),
+		Filename:    filename,
+		Content:     content,
 	}
 
 	notes.ipc, _ = dispatcher.DisplayWindow(dispatcher.WindowNotes, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
@@ -49,7 +51,7 @@ func (sr *sdlRender) startNotes(tile types.Tile) {
 
 func (sr *sdlRender) openNotes() {
 	tile := sr.termWin.Active
-	sr.startNotes(tile)
+	sr.startNotes(tile, "", "")
 
 	err := notes.ipc.Send(&dispatcher.IpcMessageT{
 		EventName: "notesFocus",
@@ -98,5 +100,23 @@ func findProjectRoot(cwd string) string {
 			return ""
 		}
 		pwd = parent
+	}
+}
+
+func (sr *sdlRender) NotesCreateAndOpen(filename, content string) {
+	if notes.ipc == nil {
+		sr.startNotes(sr.termWin.Active, filename, content)
+		return
+	}
+
+	err := notes.ipc.Send(&dispatcher.IpcMessageT{
+		EventName: "notesCreateAndOpen",
+		Parameters: map[string]string{
+			"filename": filename,
+			"contents": content,
+		},
+	})
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 }

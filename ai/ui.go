@@ -10,7 +10,6 @@ import (
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/types"
-	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 )
 
 func Explain(agent *agent.Agent, promptDialogue bool) {
@@ -74,14 +73,16 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			agent.AddHistory(title, result)
 		}
 
-		historymd.WriteAi(agent, title, prompt, result, start, time.Now())
+		/*err = historymd.Ai(agent, title, prompt, result, start, time.Now(), historymd.TemplateWriter)
+		if err != nil {
+			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}*/
 
-		result = fmt.Sprintf("# Your question\n\n%s\n\n# %s's Response\n\n%s", title, agent.ServiceName(), result)
+		var markdown string
+		output := fmt.Sprintf("# Your question\n\n%s\n\n# %s's Response\n\n%s", title, agent.ServiceName(), result)
 
-		var (
-			markdown string
-			theme    []byte
-		)
+		var theme []byte
 		if types.THEME_LIGHT {
 			theme = assets.Get(assets.GLAMOUR_STYLE_LIGHT)
 		} else {
@@ -94,22 +95,29 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			glamour.WithStylesFromJSONBytes(theme),
 		)
 		if err != nil {
-			markdown = result
-		} else {
-			defer md.Close()
-			markdown, err = md.Render(result)
-			if err != nil {
-				markdown = result
-			} else {
-				// this is a kludge to work around a bug in the markdown package
-				markdown = strings.ReplaceAll(markdown, "!```codeblock!start!", "\u001b_begin;code-block\u001b\\")
-				markdown = strings.ReplaceAll(markdown, "!```codeblock!end!", "\u001b_end;code-block\u001b\\")
-				markdown = strings.ReplaceAll(markdown, "!```mdtable!start!", "\u001b_begin;md-table\u001b\\")
-				markdown = strings.ReplaceAll(markdown, "!```mdtable!end!", "\u001b_end;md-table\u001b\\")
-			}
+			goto insertSubTerm
+		}
+		defer md.Close()
+
+		markdown, err = md.Render(output)
+		if err != nil {
+			goto insertSubTerm
 		}
 
-		err = agent.Term().InsertSubTerm(query, markdown, insertAfterRowId, types.META_BLOCK_AI)
+		// this is a kludge to work around a bug in the markdown package
+		markdown = strings.ReplaceAll(markdown, "!```codeblock!start!", "\u001b_begin;code-block\u001b\\")
+		markdown = strings.ReplaceAll(markdown, "!```codeblock!end!", "\u001b_end;code-block\u001b\\")
+		markdown = strings.ReplaceAll(markdown, "!```mdtable!start!", "\u001b_begin;md-table\u001b\\")
+		markdown = strings.ReplaceAll(markdown, "!```mdtable!end!", "\u001b_end;md-table\u001b\\")
+		output = markdown
+
+	insertSubTerm:
+
+		err = agent.Term().InsertSubTerm(query, output, insertAfterRowId, types.META_BLOCK_AI|types.META_BLOCK_OK, &types.AiMetaT{
+			Agent:    agent.ServiceName(),
+			Prompt:   &prompt,
+			Response: &result,
+		}, start)
 		if err != nil {
 			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return

@@ -1,13 +1,13 @@
 # Your Question
 
-{{ .Summary }}
+{{ .Query }}
 
 <details>
 <summary>
 Full prompt
 </summary>
 
-{{ .Query }}
+{{ .FullPrompt }}
 </details>
 
 

@@ -2,17 +2,15 @@ package historymd
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
-	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -24,7 +22,7 @@ var mdTemplateCmd string
 //go:embed template_ai.md
 var mdTemplateAi string
 
-type metaT struct {
+type TemplateFieldsT struct {
 	filename     string
 	AppName      string
 	GroupName    string
@@ -36,33 +34,31 @@ type metaT struct {
 	TimeDuration string
 	ExitNum      int
 	Agent        string
-	Summary      string
 	Query        string
+	FullPrompt   string
 	Output       string
 	OutputLang   string
 }
 
-func WriteBlock(tile types.Tile, screen types.Screen) {
-	if len(screen) == 0 || screen[0].Block.Meta.Is(types.META_BLOCK_AI) {
-		return
-	}
+type TemplateWriterT func(tmpl *template.Template, data *TemplateFieldsT) error
 
-	var err error
-	defer func() {
-		if err != nil {
-			debug.Log(err)
-		}
-	}()
+func Block(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
+	if len(screen) == 0 {
+		return errors.New("invalid block")
+	}
+	if screen[0].Block.Meta.Is(types.META_BLOCK_AI) {
+		return blockAi(tile, screen, write)
+	}
 
 	cmd := firstWord(string(screen[0].Block.Query))
 	tmpl, err := template.New("cmd").Parse(mdTemplateCmd)
 	if err != nil {
-		return
+		return err
 	}
 
 	cmdLine := string(screen[0].Block.Query)
 
-	data := &metaT{
+	data := &TemplateFieldsT{
 		filename:     cmd,
 		AppName:      app.Name,
 		GroupName:    tile.GroupName(),
@@ -85,38 +81,34 @@ func WriteBlock(tile types.Tile, screen types.Screen) {
 	default:
 	}
 
-	err = write(tmpl, data)
+	return write(tmpl, data)
 }
 
-func WriteAi(agent *agent.Agent, summary, prompt, response string, start, end time.Time) {
-	var err error
-	defer func() {
-		if err != nil {
-			debug.Log(err)
-		}
-	}()
-
+// func Ai(agent *agent.Agent, summary, prompt, response string, start, end time.Time, write TemplateWriterT) error {
+func blockAi(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 	cmd := "AI Query"
 	tmpl, err := template.New("ai").Parse(mdTemplateAi)
 	if err != nil {
-		return
+		return err
 	}
 
-	tile := agent.Term().Tile()
+	if screen[0].Block.AiMeta == nil {
+		return errors.New("nil pointer for AiMeta struct")
+	}
 
-	data := &metaT{
+	data := &TemplateFieldsT{
 		filename:     cmd,
 		AppName:      app.Name,
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
-		TimeStart:    start.Format(FMT_DATE),
-		TimeEnd:      end.Format(FMT_DATE),
-		TimeDuration: end.Sub(start).String(),
-		Pwd:          agent.Meta.Pwd,
-		Agent:        agent.ServiceName(),
-		Summary:      summary,
-		Query:        prompt,
-		Output:       response,
+		TimeStart:    screen[0].Block.TimeStart.Format(FMT_DATE),
+		TimeEnd:      screen[0].Block.TimeEnd.Format(FMT_DATE),
+		TimeDuration: screen[0].Block.TimeEnd.Sub(screen[0].Block.TimeStart).String(),
+		Pwd:          screen[0].Source.Pwd,
+		Agent:        screen[0].Block.AiMeta.Agent,
+		Query:        string(screen[0].Block.Query),
+		FullPrompt:   *screen[0].Block.AiMeta.Prompt,
+		Output:       *screen[0].Block.AiMeta.Response,
 	}
 
 	// auto-hyperlink
@@ -144,15 +136,15 @@ func WriteAi(agent *agent.Agent, summary, prompt, response string, start, end ti
 			data.Output = begin + a + end
 		}
 	}
-	err = write(tmpl, data)
+	return write(tmpl, data)
 }
 
-func write(tmpl *template.Template, data *metaT) error {
+func TemplateWriter(tmpl *template.Template, data *TemplateFieldsT) error {
 	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.DirName, data.GroupName)
-	/*err := os.MkdirAll(path, 0700)
+	err := os.MkdirAll(path, 0700)
 	if err != nil {
 		return err
-	}*/
+	}
 
 	filename := fmt.Sprintf("%s/%s-%s.md", path, data.TimeStart, data.filename)
 	f, err := os.Create(filename)

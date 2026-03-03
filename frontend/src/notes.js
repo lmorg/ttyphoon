@@ -1,5 +1,5 @@
 import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
-import { BrowserOpenURL, WindowHide } from '../wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL, WindowHide, WindowShow } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -365,6 +365,19 @@ function normalizeNoteName(rawName) {
     return `${trimmed}.md`;
 }
 
+function normalizeNotePath(rawName) {
+    const fileName = normalizeNoteName(rawName);
+    if (fileName === '') {
+        return '';
+    }
+
+    if (fileName.startsWith('$NOTES/') || fileName.startsWith('$PROJ/') || fileName.startsWith('/')) {
+        return fileName;
+    }
+
+    return `$NOTES/${fileName}`;
+}
+
 async function createNewFile() {
     let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
@@ -426,6 +439,39 @@ async function createNewFile() {
     }
 }
 
+async function createAndOpenFile(filename, contents) {
+    const fileName = normalizeNotePath(filename);
+    if (fileName === '') {
+        setStatus('File name cannot be empty.', true);
+        return;
+    }
+
+    const saveFn = getWailsFunction('SaveFile');
+    if (!saveFn) {
+        setStatus('SaveFile is not available.', true);
+        return;
+    }
+
+    try {
+        await saveFn(fileName, contents || '');
+        await refreshFiles();
+        await loadFile(fileName);
+        //setViewMode('editor');
+        setViewMode('viewer');
+        setStatus(`Created ${fileName}.`, false);
+    } catch (err) {
+        setStatus(`Failed to create ${fileName}.`, true);
+        console.error(err);
+    }
+}
+
+window.createAndOpenFile = createAndOpenFile;
+
+EventsOn("notesCreateAndOpen", params => {
+    createAndOpenFile(params.filename, params.contents);
+    WindowShow();
+});
+
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
@@ -485,7 +531,7 @@ function applyWindowStyle(result) {
 
         #notes-app {
             display: grid;
-            grid-template-columns: 20% 1fr;
+            grid-template-columns: 25% 1fr;
             height: 100vh;
             overflow: hidden;
             color: var(--fg);
@@ -804,6 +850,10 @@ function applyWindowStyle(result) {
             padding-left: 16px;
         }
 
+        #notes-preview {
+            font-size: ${result.fontSize}px;
+        }
+
         .markdown-body h1,
         .markdown-body h2,
         .markdown-body h3,
@@ -829,7 +879,7 @@ function applyWindowStyle(result) {
 
         .markdown-body pre {
             border: 0;
-            border-left: 2px solid var(--fg);
+            border-left: 2px solid var(--green);
             margin: 0;
             padding: 10px 10px 10px 20px;
             overflow-x: auto;
@@ -837,7 +887,7 @@ function applyWindowStyle(result) {
 
         .markdown-body blockquote {
             border: 0;
-            border-left: 2px solid var(--fg);
+            border-left: 2px solid var(--magenta);
             margin: 0;
             padding: 1px 1px 1px 20px;
             color: var(--magenta);
@@ -925,8 +975,11 @@ GetWindowStyle().then((result) => {
 });
 
 GetParameters().then((params) => {
-    if (params && params.path) {
-        loadFile(params.path);
+    if (params.filename != '' && params.content != '') {
+        setTimeout(function() {
+            //refreshFiles();
+            window.createAndOpenFile(params.filename, params.content);
+        }, 1);
     }
 });
 

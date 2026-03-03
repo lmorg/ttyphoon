@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 type EventIgnoredCallback func()
 
 type SearchMode int
@@ -35,7 +37,7 @@ type Term interface {
 	Search(SearchMode)
 	Match(*XY)
 	GetRowId(int32) uint64
-	InsertSubTerm(string, string, uint64, BlockMetaFlag) error
+	InsertSubTerm(string, string, uint64, BlockMetaFlag, *AiMetaT, time.Time) error
 	ConvertRelativeToAbsoluteY(*XY) int32
 	FoldAtIndent(*XY) error
 	GetTermContents() []byte

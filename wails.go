@@ -56,26 +56,15 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *W
 
 	switch window {
 	case dispatcher.WindowNotes:
-		m, ok := payload.Parameters.(map[string]any)
+		params, ok := payload.Parameters.(*dispatcher.PNotesT)
 		if !ok {
-			a.projRoot = cwdOrPanic()
+			panic(fmt.Sprintf("%T", payload.Parameters))
 		}
-		a.projRoot, ok = m["projectRoot"].(string)
-		if !ok {
-			a.projRoot = cwdOrPanic()
-		}
-		a.usrNotesDir, _ = m["userNotes"].(string)
+		a.projRoot = params.ProjectRoot
+		a.usrNotesDir = params.UserNotes
 	}
 
 	return a
-}
-
-func cwdOrPanic() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	return cwd
 }
 
 func (a *WApp) GetWindowType() string {
@@ -298,7 +287,18 @@ func (a *WApp) beforeClose(ctx context.Context) bool {
 }
 
 func startWails(window dispatcher.WindowTypeT) {
-	payload := &dispatcher.PayloadT{}
+	payload := new(dispatcher.PayloadT)
+	switch window {
+	case dispatcher.WindowNotes:
+		payload.Parameters = new(dispatcher.PNotesT)
+	default:
+		//payload.Parameters = make(map[string]string)
+	}
+
+	err := dispatcher.GetPayload(payload)
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+	}
 
 	// Create an instance of the app structure
 	app := NewWailsApp(window, payload)
@@ -308,11 +308,6 @@ func startWails(window dispatcher.WindowTypeT) {
 		os.Stderr.WriteString(err.Error())
 	}
 	app.ipc = ipc
-
-	err = dispatcher.GetPayload(payload)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
 
 	// Create application with options
 	err = wails.Run(&options.App{

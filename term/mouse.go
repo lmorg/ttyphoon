@@ -1,11 +1,15 @@
 package virtualterm
 
 import (
+	"bytes"
 	"fmt"
+	"text/template"
+	"time"
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/types"
+	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
 
@@ -80,6 +84,28 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, state, callback)
 }
 
+func notesCreateAndOpen(term *Term, absBlockPos [2]int) {
+	block := append(term._scrollBuf, term._normBuf...)[absBlockPos[0]:absBlockPos[1]]
+	if len(block) == 0 {
+		return
+	}
+
+	var b []byte
+	buf := bytes.NewBuffer(b)
+
+	templateWriter := func(tmpl *template.Template, data *historymd.TemplateFieldsT) error {
+		return tmpl.Execute(buf, data)
+	}
+
+	err := historymd.Block(term.Tile(), block, templateWriter)
+	if err != nil {
+		return
+	}
+
+	filename := fmt.Sprintf("new-%d.md", time.Now().Unix())
+	term.renderer.NotesCreateAndOpen(filename, buf.String())
+}
+
 func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	absBlockPos := term.getBlockStartAndEndAbs(absPosY)
 	relBlockPos := term.getBlockStartAndEndRel(absBlockPos)
@@ -103,6 +129,16 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
+				Title: "Take notes...",
+				Icon:  0xf044,
+				Highlight: func() func() {
+					return func() {
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+					}
+				},
+				Fn: func() { notesCreateAndOpen(term, absBlockPos) },
+			},
+			{
 				Title: fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
 				Icon:  0xf544,
 				Highlight: func() func() {
@@ -111,6 +147,11 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 					}
 				},
 				Fn: func() { ai.Explain(agt, true) },
+			},
+			{
+				Title: "Write debug information to notes...",
+				Icon:  0xf188,
+				Fn:    func() { notesDebug(term, absPosY) },
 			},
 		}...)
 }

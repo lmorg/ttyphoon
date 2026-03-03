@@ -37,10 +37,17 @@ type RowSource struct {
 type BlockMeta struct {
 	Id        int64
 	Query     []rune // typically command line
+	AiMeta    *AiMetaT
 	ExitNum   int
 	TimeStart time.Time
 	TimeEnd   time.Time
 	Meta      BlockMetaFlag
+}
+
+type AiMetaT struct {
+	Agent    string
+	Prompt   *string
+	Response *string
 }
 
 type BlockMetaFlag uint16
