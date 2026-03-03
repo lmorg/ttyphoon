@@ -62,6 +62,9 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *W
 		}
 		a.projRoot = params.ProjectRoot
 		a.usrNotesDir = params.UserNotes
+		if a.projRoot == "" {
+			a.projRoot, _ = os.Getwd()
+		}
 	}
 
 	return a

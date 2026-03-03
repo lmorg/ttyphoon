@@ -60,6 +60,13 @@ app.innerHTML = `
             </div>
         </div>
     </div>
+    <div id="notes-find-bar" data-open="false" aria-hidden="true">
+        <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" />
+        <span id="notes-find-counter"></span>
+        <button id="notes-find-prev" type="button" title="Previous match">↑</button>
+        <button id="notes-find-next" type="button" title="Next match">↓</button>
+        <button id="notes-find-close" type="button" title="Close find">✕</button>
+    </div>
 `;
 
 const elements = {
@@ -80,7 +87,13 @@ const elements = {
     deleteModal: document.getElementById('notes-delete-modal'),
     deleteModalBody: document.getElementById('notes-delete-modal-body'),
     deleteCancel: document.getElementById('notes-delete-cancel'),
-    deleteConfirm: document.getElementById('notes-delete-confirm')
+    deleteConfirm: document.getElementById('notes-delete-confirm'),
+    findBar: document.getElementById('notes-find-bar'),
+    findInput: document.getElementById('notes-find-input'),
+    findCounter: document.getElementById('notes-find-counter'),
+    findPrev: document.getElementById('notes-find-prev'),
+    findNext: document.getElementById('notes-find-next'),
+    findClose: document.getElementById('notes-find-close')
 };
 
 const state = {
@@ -91,7 +104,10 @@ const state = {
     autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
-    deletingFile: null
+    deletingFile: null,
+    findMatches: [],
+    findCurrentIndex: -1,
+    findQuery: ''
 };
 
 marked.use(gfmHeadingId({}));
@@ -148,6 +164,13 @@ function renderMarkdown() {
             });*/
         }
     });
+
+    // Re-apply find highlights if find bar is open and in viewer mode
+    if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
+        setTimeout(() => {
+            performFind();
+        }, 0);
+    }
 }
 
 function scheduleRender() {
@@ -183,6 +206,11 @@ function setViewMode(mode) {
     elements.tabViewer.setAttribute('aria-selected', isEditor ? 'false' : 'true');
     elements.editorWrap.dataset.active = isEditor ? 'true' : 'false';
     elements.previewWrap.dataset.active = isEditor ? 'false' : 'true';
+    
+    // Re-perform find if find bar is open
+    if (elements.findBar.dataset.open === 'true' && state.findQuery) {
+        performFind();
+    }
 }
 
 async function refreshFiles() {
@@ -245,6 +273,11 @@ async function loadFile(file) {
         renderMarkdown();
         setDirty(false);
         renderFileList();
+        
+        // Close find bar when loading a new file
+        if (elements.findBar.dataset.open === 'true') {
+            closeFindBar();
+        }
     } catch (err) {
         setStatus(`Failed to load ${file}.`, true);
         console.error(err);
@@ -318,6 +351,188 @@ async function confirmDelete() {
     } catch (err) {
         setStatus(`Failed to delete ${fileName}.`, true);
         console.error(err);
+    }
+}
+
+function openFindBar() {
+    elements.findBar.dataset.open = 'true';
+    elements.findBar.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        elements.findInput.focus();
+        elements.findInput.select();
+    }, 0);
+}
+
+function closeFindBar() {
+    elements.findBar.dataset.open = 'false';
+    elements.findBar.setAttribute('aria-hidden', 'true');
+    clearHighlights();
+    state.findMatches = [];
+    state.findCurrentIndex = -1;
+    state.findQuery = '';
+    elements.findCounter.textContent = '';
+}
+
+function clearHighlights() {
+    // Clear highlights in viewer
+    const highlights = elements.preview.querySelectorAll('.find-highlight');
+    highlights.forEach((el) => {
+        const parent = el.parentNode;
+        parent.replaceChild(document.createTextNode(el.textContent), el);
+        parent.normalize();
+    });
+
+    // Clear editor selection
+    if (state.viewMode === 'editor') {
+        elements.editor.setSelectionRange(0, 0);
+    }
+}
+
+function performFind() {
+    const query = elements.findInput.value;
+    if (!query) {
+        closeFindBar();
+        return;
+    }
+
+    state.findQuery = query;
+    clearHighlights();
+    state.findMatches = [];
+    state.findCurrentIndex = -1;
+
+    if (state.viewMode === 'editor') {
+        findInEditor();
+    } else {
+        findInViewer();
+    }
+
+    if (state.findMatches.length > 0) {
+        state.findCurrentIndex = 0;
+        highlightCurrentMatch();
+    }
+
+    updateFindCounter();
+}
+
+function findInEditor() {
+    const text = elements.editor.value.toLowerCase();
+    const query = state.findQuery.toLowerCase();
+    let index = 0;
+
+    while ((index = text.indexOf(query, index)) !== -1) {
+        state.findMatches.push({
+            start: index,
+            end: index + query.length
+        });
+        index += query.length;
+    }
+}
+
+function findInViewer() {
+    const query = state.findQuery;
+    const walker = document.createTreeWalker(
+        elements.preview,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+    );
+
+    const nodesToProcess = [];
+    let node;
+    while ((node = walker.nextNode())) {
+        if (node.textContent.toLowerCase().includes(query.toLowerCase())) {
+            nodesToProcess.push(node);
+        }
+    }
+
+    nodesToProcess.forEach((textNode) => {
+        const text = textNode.textContent;
+        const lowerText = text.toLowerCase();
+        const lowerQuery = query.toLowerCase();
+        const parts = [];
+        let lastIndex = 0;
+        let index;
+
+        while ((index = lowerText.indexOf(lowerQuery, lastIndex)) !== -1) {
+            if (index > lastIndex) {
+                parts.push(document.createTextNode(text.substring(lastIndex, index)));
+            }
+
+            const highlight = document.createElement('span');
+            highlight.className = 'find-highlight';
+            highlight.textContent = text.substring(index, index + query.length);
+            parts.push(highlight);
+            state.findMatches.push(highlight);
+
+            lastIndex = index + query.length;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(document.createTextNode(text.substring(lastIndex)));
+        }
+
+        const parent = textNode.parentNode;
+        parts.forEach((part) => {
+            parent.insertBefore(part, textNode);
+        });
+        parent.removeChild(textNode);
+    });
+}
+
+function highlightCurrentMatch() {
+    if (state.findMatches.length === 0 || state.findCurrentIndex === -1) {
+        return;
+    }
+
+    if (state.viewMode === 'editor') {
+        const match = state.findMatches[state.findCurrentIndex];
+        elements.editor.focus();
+        elements.editor.setSelectionRange(match.start, match.end);
+        
+        // Scroll to the selection
+        const lineHeight = parseInt(getComputedStyle(elements.editor).lineHeight);
+        const textBeforeMatch = elements.editor.value.substring(0, match.start);
+        const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
+        elements.editor.scrollTop = lineNumber * lineHeight - elements.editor.clientHeight / 2;
+    } else {
+        // Clear previous active highlight
+        const prevActive = elements.preview.querySelector('.find-highlight-active');
+        if (prevActive) {
+            prevActive.classList.remove('find-highlight-active');
+        }
+
+        // Highlight current match
+        const currentMatch = state.findMatches[state.findCurrentIndex];
+        currentMatch.classList.add('find-highlight-active');
+        currentMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function nextMatch() {
+    if (state.findMatches.length === 0) {
+        return;
+    }
+
+    state.findCurrentIndex = (state.findCurrentIndex + 1) % state.findMatches.length;
+    highlightCurrentMatch();
+    updateFindCounter();
+}
+
+function prevMatch() {
+    if (state.findMatches.length === 0) {
+        return;
+    }
+
+    state.findCurrentIndex = (state.findCurrentIndex - 1 + state.findMatches.length) % state.findMatches.length;
+    highlightCurrentMatch();
+    updateFindCounter();
+}
+
+function updateFindCounter() {
+    if (state.findMatches.length === 0) {
+        elements.findCounter.textContent = 'No matches';
+    } else {
+        elements.findCounter.textContent = `${state.findCurrentIndex + 1} of ${state.findMatches.length}`;
     }
 }
 
@@ -487,11 +702,18 @@ function applyWindowStyle(result) {
             --fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             --accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
             --link: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
+            --red: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
             --green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+            --yellow: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --blue: rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue});
             --magenta: rgb(${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue});
             --cyan: rgb(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue});
-            --red: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
+            --red-bright: rgb(${result.colors.redBright.Red}, ${result.colors.redBright.Green}, ${result.colors.redBright.Blue});
+            --green-bright: rgb(${result.colors.greenBright.Red}, ${result.colors.greenBright.Green}, ${result.colors.greenBright.Blue});
+            --yellow-bright: rgb(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue});
             --blue-bright: rgb(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue});
+            --magenta-bright: rgb(${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue});
+            --cyan-bright: rgb(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue});
             --selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --error: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue});
         }
@@ -514,6 +736,7 @@ function applyWindowStyle(result) {
             width: 5px;
             height: 5px;
             background-color: var(--bg);
+            opacity: 0.2;
         }
 
         ::-webkit-scrollbar-track {
@@ -965,6 +1188,65 @@ function applyWindowStyle(result) {
             color: var(--fg);
         }
 
+        #notes-find-bar {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg);
+            border: 2px solid var(--fg);
+            z-index: 100;
+        }
+
+        #notes-find-bar[data-open="true"] {
+            display: flex;
+        }
+
+        #notes-find-input {
+            border-radius: 0;
+            border: 2px solid var(--fg);
+            background: transparent;
+            color: var(--fg);
+            padding: 4px 8px;
+            font-size: ${result.fontSize}px;
+            outline: none;
+            min-width: 200px;
+        }
+
+        #notes-find-counter {
+            font-size: ${result.fontSize - 2}px;
+            opacity: 0.8;
+            white-space: nowrap;
+        }
+
+        #notes-find-bar button {
+            border-radius: 0;
+            border: 2px solid var(--fg);
+            background: transparent;
+            color: var(--fg);
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: ${result.fontSize}px;
+        }
+
+        #notes-find-bar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .find-highlight {
+            background-color: var(--accent);
+            color: var(--bg);
+        }
+
+        .find-highlight-active {
+            background-color: var(--blue);
+            color: var(--bg);
+        }
+
     `;
 
     document.head.appendChild(style);
@@ -1030,10 +1312,31 @@ elements.deleteConfirm.addEventListener('click', () => {
     confirmDelete();
 });
 
+elements.findInput.addEventListener('input', () => {
+    performFind();
+});
+
+elements.findNext.addEventListener('click', () => {
+    nextMatch();
+});
+
+elements.findPrev.addEventListener('click', () => {
+    prevMatch();
+});
+
+elements.findClose.addEventListener('click', () => {
+    closeFindBar();
+});
+
 document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        openFindBar();
     }
 
     if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
@@ -1046,7 +1349,10 @@ document.addEventListener('keydown', (event) => {
         SendIpc("focus", {});
     }
 
-    if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
+    if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
+        event.preventDefault();
+        closeFindBar();
+    } else if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
         event.preventDefault();
         closeNewFilePrompt();
     } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
@@ -1063,6 +1369,17 @@ elements.modalInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
         event.preventDefault();
         createNewFile();
+    }
+});
+
+elements.findInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        if (event.shiftKey) {
+            prevMatch();
+        } else {
+            nextMatch();
+        }
     }
 });
 
