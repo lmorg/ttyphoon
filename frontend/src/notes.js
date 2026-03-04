@@ -171,11 +171,57 @@ function renderMarkdown() {
         }
     });
 
+    // Make checkboxes interactive
+    setupInteractiveCheckboxes();
+
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
             performFind();
         }, 0);
+    }
+}
+
+function setupInteractiveCheckboxes() {
+    const checkboxes = elements.preview.querySelectorAll('input[type="checkbox"]');
+    
+    checkboxes.forEach((checkbox, index) => {
+        // Remove disabled attribute to make clickable
+        checkbox.removeAttribute('disabled');
+        
+        checkbox.addEventListener('change', (e) => {
+            toggleCheckboxInMarkdown(index, e.target.checked);
+        });
+    });
+}
+
+function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
+    const lines = elements.editor.value.split('\n');
+    let currentCheckboxIndex = 0;
+    let modified = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Match markdown task list items: - [ ] or - [x] or - [X]
+        const checkboxMatch = line.match(/^(\s*[-*+]\s+)\[([ xX])\](.*)$/);
+        
+        if (checkboxMatch) {
+            if (currentCheckboxIndex === checkboxIndex) {
+                // Toggle the checkbox
+                const newState = isChecked ? 'x' : ' ';
+                lines[i] = `${checkboxMatch[1]}[${newState}]${checkboxMatch[3]}`;
+                modified = true;
+                break;
+            }
+            currentCheckboxIndex++;
+        }
+    }
+
+    if (modified) {
+        elements.editor.value = lines.join('\n');
+        saveFile();
+        // Don't call renderMarkdown() here as it would reset checkbox focus
+        // The file will be saved and the change is already reflected in the checkbox state
     }
 }
 
@@ -1237,6 +1283,46 @@ function applyWindowStyle(result) {
 
         .markdown-body summary {
             cursor: pointer;
+        }
+
+        .markdown-body input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            margin-right: 6px;
+            width: ${result.fontSize}px;
+            height: ${result.fontSize}px;
+            border: 2px solid var(--red);
+            background: transparent;
+            position: relative;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        .markdown-body input[type="checkbox"]:hover {
+            border-color: var(--accent);
+        }
+
+        .markdown-body input[type="checkbox"]:checked:hover {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
+        .markdown-body input[type="checkbox"]:checked {
+            background: var(--green);
+            border-color: var(--green);
+        }
+
+        .markdown-body input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            color: var(--bg);
+            font-size: ${result.fontSize}px;
+            font-weight: bold;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
 
         pre code.hljs {
