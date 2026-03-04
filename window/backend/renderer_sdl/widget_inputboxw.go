@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/ttyphoon/app"
@@ -76,7 +75,7 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 			if value != "" {
 				history = prependHistory(value, history)
 				if cacheKey != "" {
-					cache.Write(cache.NS_INPUTBOXW_HISTORY, cacheKey, &history, time.Now().Add(time.Hour*24*365))
+					cache.Write(cache.NS_INPUTBOXW_HISTORY, cacheKey, &history, cache.Days(365))
 				}
 			}
 			okFunc(value)

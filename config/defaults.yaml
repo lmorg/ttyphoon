@@ -157,6 +157,9 @@ Window:
   # recommended to leave this set to `true`
   UseGPU: true
 
+NotesWindow:
+  AlwaysOnTop: true
+
 AI:
   MaxIterations: 10
   AvailableModels:

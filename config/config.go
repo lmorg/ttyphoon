@@ -131,6 +131,10 @@ type configT struct {
 		BellPlayAudio          bool `yaml:"BellPlayAudio"`
 	} `yaml:"Window"`
 
+	NotesWindow struct {
+		AlwaysOnTop bool `yaml:"AlwaysOnTop"`
+	} `yaml:"NotesWindow"`
+
 	TypeFace struct {
 		FontName         string   `yaml:"FontName"`
 		FontSize         int      `yaml:"FontSize"`

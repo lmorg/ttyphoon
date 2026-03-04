@@ -2,10 +2,12 @@ package cache
 
 const (
 	NS_INPUTBOXW_HISTORY = "inputboxw_history"
+	NS_NOTESW_FILES      = "notesw_files"
 )
 
 func InitCache() {
 	initNamespace(NS_INPUTBOXW_HISTORY)
+	initNamespace(NS_NOTESW_FILES)
 }
 
 func initNamespace(namespace string) {

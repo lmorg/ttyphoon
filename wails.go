@@ -10,9 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	ttyphoon "github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -23,6 +25,13 @@ import (
 //go:embed all:frontend/dist
 var wailsAssets embed.FS
 
+type pStructT struct {
+	inputBox *dispatcher.PInputBoxT
+	markdown *dispatcher.PMarkdownT
+	preview  *dispatcher.PPreviewT
+	notes    *dispatcher.PNotesT
+}
+
 // App struct
 type WApp struct {
 	ctx         context.Context
@@ -31,8 +40,11 @@ type WApp struct {
 	mdBaseDir   string
 	projRoot    string
 	usrNotesDir string
+	homeDir     string
+	globalNotes string
 	ipc         *dispatcher.IpcT
 	msgPipe     chan *dispatcher.IpcMessageT
+	ps          *pStructT
 }
 
 var WWindowTsBindings = []struct {
@@ -47,24 +59,30 @@ var WWindowTsBindings = []struct {
 }
 
 // NewApp creates a new App application struct
-func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT) *WApp {
+func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps *pStructT) *WApp {
 	a := &WApp{
 		window:  window,
 		payload: payload,
 		msgPipe: make(chan *dispatcher.IpcMessageT),
+		ps:      ps,
 	}
+
+	a.homeDir, _ = os.UserHomeDir()
 
 	switch window {
 	case dispatcher.WindowNotes:
-		params, ok := payload.Parameters.(*dispatcher.PNotesT)
+		/*params, ok := payload.Parameters.(*dispatcher.PNotesT)
 		if !ok {
 			panic(fmt.Sprintf("%T", payload.Parameters))
-		}
-		a.projRoot = params.ProjectRoot
-		a.usrNotesDir = params.UserNotes
+		}*/
+		a.projRoot = ps.notes.ProjectRoot
 		if a.projRoot == "" {
 			a.projRoot, _ = os.Getwd()
 		}
+
+		sep := string(filepath.Separator)
+		a.usrNotesDir = ps.notes.UserNotes
+		a.globalNotes = filepath.Clean(fmt.Sprintf("%s%s..%s", a.usrNotesDir, sep, sep)) + sep
 	}
 
 	return a
@@ -164,16 +182,19 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
-	files, err := filepath.Glob(fmt.Sprintf("%s/*.md", a.usrNotesDir))
-	for i := range files {
-		files[i] = strings.Replace(files[i], a.usrNotesDir, "$NOTES/", 1)
-	}
+	var files []string
+
+	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
+	cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
+
+	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
+	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
 
 	if a.projRoot == "" {
 		return files
 	}
 
-	err = filepath.WalkDir(a.projRoot, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(a.projRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			log.Println(err)
 			return nil
@@ -196,9 +217,34 @@ func (a *WApp) ListFiles() []string {
 	})
 	if err != nil {
 		log.Println(err)
-		return []string{}
 	}
 	return files
+}
+
+func listFiles(path string, varName string) (files []string) {
+	glob, err := filepath.Glob(fmt.Sprintf("%s/*.md", path))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	replace := fmt.Sprintf("$%s/", varName)
+	for i := range glob {
+		files = append(files, strings.Replace(glob[i], path, replace, 1))
+	}
+	return
+}
+
+func (a *WApp) AddToFileList(filename string) {
+	var files []string
+
+	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
+	defer cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
+
+	if slices.Contains(files, filename) {
+		return
+	}
+
+	files = append([]string{filename}, files...)
 }
 
 func (a *WApp) expandMappingFunc(s string) string {
@@ -207,6 +253,10 @@ func (a *WApp) expandMappingFunc(s string) string {
 		return a.projRoot
 	case "NOTES":
 		return a.usrNotesDir
+	case "HOME":
+		return a.homeDir
+	case "GLOBAL":
+		return a.globalNotes
 	default:
 		return "error"
 	}
@@ -256,6 +306,7 @@ func (a *WApp) domReady(ctx context.Context) {
 			case msg.EventName == "notesUpdatePaths":
 				a.projRoot = msg.Parameters["projectRoot"]
 				a.usrNotesDir = msg.Parameters["userNotes"]
+				runtime.EventsEmit(a.ctx, "updateTitle", msg.Parameters["title"])
 				runtime.WindowExecJS(a.ctx, `window.refreshFiles();`)
 			default:
 				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
@@ -269,8 +320,8 @@ func (a *WApp) domReady(ctx context.Context) {
 		if err != nil {
 			log.Println(err)
 		}
-	case dispatcher.WindowInputBox:
-		//runtime.EventsEmit(a.ctx, "autoGrow")
+	case dispatcher.WindowNotes:
+		runtime.EventsEmit(a.ctx, "updateTitle", a.ps.notes.Title)
 	}
 }
 
@@ -291,9 +342,20 @@ func (a *WApp) beforeClose(ctx context.Context) bool {
 
 func startWails(window dispatcher.WindowTypeT) {
 	payload := new(dispatcher.PayloadT)
+	pStruct := &pStructT{}
 	switch window {
+	case dispatcher.WindowInputBox:
+		pStruct.inputBox = new(dispatcher.PInputBoxT)
+		payload.Parameters = pStruct.inputBox
+	case dispatcher.WindowMarkdown:
+		pStruct.markdown = new(dispatcher.PMarkdownT)
+		payload.Parameters = pStruct.markdown
+	case dispatcher.WindowPreview:
+		pStruct.preview = new(dispatcher.PPreviewT)
+		payload.Parameters = pStruct.preview
 	case dispatcher.WindowNotes:
-		payload.Parameters = new(dispatcher.PNotesT)
+		pStruct.notes = new(dispatcher.PNotesT)
+		payload.Parameters = pStruct.notes
 	default:
 		//payload.Parameters = make(map[string]string)
 	}
@@ -304,7 +366,7 @@ func startWails(window dispatcher.WindowTypeT) {
 	}
 
 	// Create an instance of the app structure
-	app := NewWailsApp(window, payload)
+	app := NewWailsApp(window, payload, pStruct)
 
 	ipc, err := dispatcher.ClientConnect(app.ipcRespFunc)
 	if err != nil {

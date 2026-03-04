@@ -1,5 +1,5 @@
 import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
-import { EventsOn, BrowserOpenURL, WindowHide, WindowShow } from '../wailsjs/runtime/runtime';
+import { EventsOn, BrowserOpenURL, WindowHide, WindowShow, LogError } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -70,6 +70,7 @@ app.innerHTML = `
 `;
 
 const elements = {
+    title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
     editor: document.getElementById('notes-editor'),
     preview: document.getElementById('notes-preview'),
@@ -586,7 +587,7 @@ function normalizeNotePath(rawName) {
         return '';
     }
 
-    if (fileName.startsWith('$NOTES/') || fileName.startsWith('$PROJ/') || fileName.startsWith('/')) {
+    if (fileName.startsWith('$') || fileName.startsWith('/')) {
         return fileName;
     }
 
@@ -602,7 +603,7 @@ async function createNewFile() {
 
     // Handle rename operation
     if (state.renamingFile) {
-        const newPath = state.renamingFile.split('/').slice(0, -1).join('/') + '/' + fileName;
+        //const newPath = state.renamingFile.split('/').slice(0, -1).join('/') + '/' + fileName;
         const renameFn = getWailsFunction('RenameFile');
         if (!renameFn) {
             setStatus('RenameFile is not available.', true);
@@ -610,13 +611,13 @@ async function createNewFile() {
         }
 
         try {
-            await renameFn(state.renamingFile, newPath);
+            await renameFn(state.renamingFile, fileName);
             await refreshFiles();
             if (state.currentFile === state.renamingFile) {
-                await loadFile(newPath);
+                await loadFile(fileName);
             }
             closeNewFilePrompt();
-            setStatus(`Renamed to ${newPath}.`, false);
+            setStatus(`Renamed to ${fileName}.`, false);
         } catch (err) {
             setStatus(`Failed to rename file.`, true);
             console.error(err);
@@ -625,7 +626,7 @@ async function createNewFile() {
     }
 
     // Handle new file creation
-    fileName = "$NOTES/" + fileName;
+    //fileName = "$NOTES/" + fileName;
 
     const exists = state.files.some((file) => file === fileName);
     if (exists) {
@@ -685,6 +686,10 @@ window.createAndOpenFile = createAndOpenFile;
 EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
     WindowShow();
+});
+
+EventsOn("updateTitle", newTitle => {
+    elements.title.innerText = "Notes: " + newTitle;
 });
 
 function applyWindowStyle(result) {
@@ -1337,6 +1342,16 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         openFindBar();
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        setViewMode('editor');
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        setViewMode('viewer');
     }
 
     if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {

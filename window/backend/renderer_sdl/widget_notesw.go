@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 )
@@ -28,11 +29,13 @@ func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) {
 	windowStyle.Pos = types.XY{}
 	x, y := sr.window.GetSize()
 	windowStyle.Size = types.XY{X: x, Y: y}
-	windowStyle.Title = "Notes"
+	windowStyle.Title = tile.GroupName()
+	windowStyle.AlwaysOnTop = config.Config.NotesWindow.AlwaysOnTop
 
 	parameters := &dispatcher.PNotesT{
 		ProjectRoot: findProjectRoot(tile.Pwd()),
 		UserNotes:   userDocs(tile, "notes"),
+		Title:       tile.GroupName(),
 		Filename:    filename,
 		Content:     content,
 	}
@@ -58,6 +61,7 @@ func (sr *sdlRender) openNotes() {
 		Parameters: map[string]string{
 			"projectRoot": findProjectRoot(tile.Pwd()),
 			"userNotes":   userDocs(tile, "notes"),
+			"title":       tile.GroupName(),
 		},
 	})
 	if err != nil {
@@ -81,6 +85,7 @@ func (sr *sdlRender) UpdateNotes(tile types.Tile) {
 		Parameters: map[string]string{
 			"projectRoot": findProjectRoot(tile.Pwd()),
 			"userNotes":   userDocs(tile, "notes"),
+			"title":       tile.GroupName(),
 		},
 	})
 	if err != nil {
