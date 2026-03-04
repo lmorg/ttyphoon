@@ -108,7 +108,12 @@ const state = {
     deletingFile: null,
     findMatches: [],
     findCurrentIndex: -1,
-    findQuery: ''
+    findQuery: '',
+    expandedCategories: {
+        '$GLOBAL': true,
+        '$NOTES': true,
+        '$PROJ': true
+    }
 };
 
 marked.use(gfmHeadingId({}));
@@ -242,24 +247,90 @@ function renderFileList() {
         return;
     }
 
+    // Group files by category
+    const categories = {
+        '$GLOBAL': [],
+        '$NOTES': [],
+        '$PROJ': []
+    };
+
     state.files.forEach((file) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'notes-file';
-        item.textContent = file;
-        item.dataset.file = file;
-        if (file === state.currentFile) {
-            item.dataset.active = 'true';
+        if (file.startsWith('$GLOBAL/')) {
+            categories['$GLOBAL'].push(file);
+        } else if (file.startsWith('$NOTES/')) {
+            categories['$NOTES'].push(file);
+        } else if (file.startsWith('$PROJ/')) {
+            categories['$PROJ'].push(file);
         }
-        item.addEventListener('click', () => {
-            loadFile(file);
-        });
-        item.addEventListener('dblclick', (e) => {
-            e.preventDefault();
-            openRenamePrompt(file);
-        });
-        elements.list.appendChild(item);
     });
+
+    // Render each category
+    Object.keys(categories).forEach((category) => {
+        const files = categories[category];
+        if (files.length === 0) {
+            return;
+        }
+
+        // Create category header
+        const categoryHeader = document.createElement('div');
+        categoryHeader.className = 'notes-category-header';
+        categoryHeader.dataset.category = category;
+        categoryHeader.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+        
+        const arrow = document.createElement('span');
+        arrow.className = 'notes-category-arrow';
+        arrow.textContent = state.expandedCategories[category] ? '▼' : '▶';
+        
+        const label = document.createElement('span');
+        label.textContent = category;
+        
+        categoryHeader.appendChild(arrow);
+        categoryHeader.appendChild(label);
+        
+        categoryHeader.addEventListener('click', () => {
+            toggleCategory(category);
+        });
+        
+        elements.list.appendChild(categoryHeader);
+
+        // Create category content container
+        const categoryContent = document.createElement('div');
+        categoryContent.className = 'notes-category-content';
+        categoryContent.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+
+        files.forEach((file) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'notes-file';
+            
+            // Display only the filename without the category prefix
+            const displayName = file.replace(/^\$[A-Z]+\//, '');
+            item.textContent = displayName;
+            item.dataset.file = file;
+            
+            if (file === state.currentFile) {
+                item.dataset.active = 'true';
+            }
+            
+            item.addEventListener('click', () => {
+                loadFile(file);
+            });
+            
+            item.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                openRenamePrompt(file);
+            });
+            
+            categoryContent.appendChild(item);
+        });
+
+        elements.list.appendChild(categoryContent);
+    });
+}
+
+function toggleCategory(category) {
+    state.expandedCategories[category] = !state.expandedCategories[category];
+    renderFileList();
 }
 
 async function loadFile(file) {
@@ -949,6 +1020,39 @@ function applyWindowStyle(result) {
             overflow-y: auto;
             overflow-x: hidden;
             flex: 1;
+        }
+
+        .notes-category-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            cursor: pointer;
+            color: var(--accent);
+            font-weight: bold;
+            border: 2px solid transparent;
+            user-select: none;
+        }
+
+        .notes-category-header:hover {
+            border-color: var(--accent);
+        }
+
+        .notes-category-arrow {
+            font-size: ${result.fontSize - 2}px;
+            width: 12px;
+            display: inline-block;
+        }
+
+        .notes-category-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-left: 18px;
+        }
+
+        .notes-category-content[data-expanded="false"] {
+            display: none;
         }
 
         .notes-file {
