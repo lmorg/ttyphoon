@@ -30,9 +30,9 @@ func (sr *sdlRender) renderFooter() {
 
 	if sr.footerText == "" {
 		if sr.termWin == nil || sr.tmux == nil {
-			sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search%s", app.Title, app.Version(), sr._footerHotkeyMessage())
+			sr.footerText = fmt.Sprintf("%s (version %s)  |  [F3] Search", app.Title, app.Version())
 		} else {
-			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search%s", sr.termWin.Active.Id(), sr.termWin.Active.Name(), sr._footerHotkeyMessage())
+			sr.footerText = fmt.Sprintf("(%s) %s  |  [F3] Search", sr.termWin.Active.Id(), sr.termWin.Active.Name())
 		}
 	}
 
@@ -51,14 +51,6 @@ tmuxIntegration:
 	}
 
 	sr._footerRenderTmuxWindowTabs(pos)
-}
-
-func (sr *sdlRender) _footerHotkeyMessage() string {
-	if sr.hk == nil {
-		return ""
-	}
-
-	return "  |  [F12] Show / hide window"
 }
 
 func (sr *sdlRender) _footerRenderStatusBar(pos *types.XY) {

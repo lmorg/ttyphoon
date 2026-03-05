@@ -9,28 +9,38 @@ import (
 	"golang.design/x/hotkey"
 )
 
-func (sr *sdlRender) _registerHotkey() {
-	hk := hotkey.New([]hotkey.Modifier{}, hotkey.KeyF12)
-	err := hk.Register()
-	if err != nil {
-		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey: %s", err.Error()))
+type hotkeyFuncT struct {
+	Key  hotkey.Key
+	Mod  []hotkey.Modifier
+	Func func()
+	hk   *hotkey.Hotkey
+}
+
+func (sr *sdlRender) _registerHotkey(hks ...*hotkeyFuncT) {
+	for _, hk := range hks {
+		hk.hk = hotkey.New(hk.Mod, hk.Key)
+		err := hk.hk.Register()
+		if err != nil {
+			sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey %s: %s", hk.hk.String(), err.Error()))
+		} else {
+			go func() {
+				for range hk.hk.Keydown() {
+					sr.hkEvent <- hk
+				}
+			}()
+		}
 	}
 }
 
-func (sr *sdlRender) pollEventHotkey() <-chan hotkey.Event {
-	if sr.hk != nil {
-		return sr.hk.Keydown()
-	}
-	return nil
-}
-
-func (sr *sdlRender) eventHotkey() {
-	if sr.hkToggle {
-		sr.hideWindow()
-	} else {
-		sr.ShowAndFocusWindow()
-	}
-	sr.hkToggle = !sr.hkToggle
+func (sr *sdlRender) eventHotkeyShowHideTerminal() {
+	sr.TriggerDeallocation(func() {
+		if sr.hkToggle {
+			sr.hideWindow()
+		} else {
+			sr.ShowAndFocusWindow()
+		}
+		sr.hkToggle = !sr.hkToggle
+	})
 }
 
 func (sr *sdlRender) hotkeys() {

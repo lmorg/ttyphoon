@@ -68,14 +68,14 @@ func (sr *sdlRender) eventLoop() {
 			}
 			sr.setRefreshInterval()
 
-		case <-sr.pollEventHotkey():
-			sr.eventHotkey()
-
 		case <-sr._redraw:
 			err := render(sr)
 			if err != nil {
 				log.Printf("ERROR: %s", err.Error())
 			}
+
+		case hk := <-sr.hkEvent:
+			hk.Func()
 
 		case fn := <-sr._deallocStack:
 			fn()

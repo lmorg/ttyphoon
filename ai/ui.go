@@ -45,7 +45,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	insertAfterRowId := agent.Term().GetRowId(agent.Term().GetCursorPosition().Y - 1)
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName())
 	sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
-	
+
 	fin := make(chan struct{})
 	var i int
 
@@ -100,7 +100,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 				return tmpl.Execute(buf, data)
 			})
 
-			filename := fmt.Sprintf("$GLOBAL/ai-%s-%s-%s-%d.md", agent.Meta.Function, agent.ServiceName(), agent.ModelName(), time.Now().Unix())
+			filename := fmt.Sprintf("$GLOBAL/%s-%s-%d.md", agent.Meta.Function, agent.ServiceName(), time.Now().Unix())
 			agent.Renderer().NotesCreateAndOpen(filename, buf.String())
 			return
 		}

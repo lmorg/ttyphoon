@@ -15,14 +15,14 @@ var notes struct {
 	mutex sync.Mutex
 }
 
-func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) {
+func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) bool {
 	if !notes.mutex.TryLock() {
 		// only run once
-		return
+		return true
 	}
 	defer notes.mutex.Unlock()
 	if notes.ipc != nil {
-		return
+		return false
 	}
 
 	windowStyle := dispatcher.NewWindowStyle()
@@ -50,11 +50,14 @@ func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) {
 			}
 		}
 	})
+	return true
 }
 
 func (sr *sdlRender) openNotes() {
 	tile := sr.termWin.Active
-	sr.startNotes(tile, "", "")
+	if sr.startNotes(tile, "", "") {
+		return
+	}
 
 	err := notes.ipc.Send(&dispatcher.IpcMessageT{
 		EventName: "notesFocus",
@@ -63,6 +66,20 @@ func (sr *sdlRender) openNotes() {
 			"userNotes":   userDocs(tile, "notes"),
 			"title":       tile.GroupName(),
 		},
+	})
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
+func (sr *sdlRender) toggleNotes() {
+	if notes.ipc == nil {
+		sr.startNotes(sr.termWin.Active, "", "")
+		return
+	}
+
+	err := notes.ipc.Send(&dispatcher.IpcMessageT{
+		EventName: "notesToggleShowHide",
 	})
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -109,8 +126,7 @@ func findProjectRoot(cwd string) string {
 }
 
 func (sr *sdlRender) NotesCreateAndOpen(filename, content string) {
-	if notes.ipc == nil {
-		sr.startNotes(sr.termWin.Active, filename, content)
+	if sr.startNotes(sr.termWin.Active, filename, content) {
 		return
 	}
 

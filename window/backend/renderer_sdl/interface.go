@@ -14,7 +14,6 @@ import (
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
 	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
-	"golang.design/x/hotkey"
 )
 
 const ( // based at compile time
@@ -81,8 +80,8 @@ type sdlRender struct {
 	_redrawRequired atomic.Bool
 	_blinkSlow      atomic.Bool
 
-	// hotkey
-	hk       *hotkey.Hotkey
+	// hotkeys
+	hkEvent  chan *hotkeyFuncT
 	hkToggle bool
 
 	// footer

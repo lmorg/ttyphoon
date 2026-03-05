@@ -1,5 +1,5 @@
-import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCustomRegexp } from '../wailsjs/go/main/WApp';
-import { EventsOn, BrowserOpenURL, WindowHide, WindowShow, LogError } from '../wailsjs/runtime/runtime';
+import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCustomRegexp, WindowShow, WindowHide } from '../wailsjs/go/main/WApp';
+import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";

@@ -44,6 +44,7 @@ type WApp struct {
 	homeDir     string
 	globalNotes string
 	historyDir  string
+	visible     bool
 	ipc         *dispatcher.IpcT
 	msgPipe     chan *dispatcher.IpcMessageT
 	ps          *pStructT
@@ -67,6 +68,7 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps
 		payload: payload,
 		msgPipe: make(chan *dispatcher.IpcMessageT),
 		ps:      ps,
+		visible: true,
 	}
 
 	a.homeDir, _ = os.UserHomeDir()
@@ -106,6 +108,27 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 	})
 	if err != nil {
 		log.Println(err)
+	}
+}
+
+func (a *WApp) WindowShow() {
+	a.visible = true
+	runtime.WindowSetPosition(a.ctx, 0, 0)
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetPosition(a.ctx, 0, 0)
+}
+
+func (a *WApp) WindowHide() {
+	a.visible = false
+	runtime.WindowHide(a.ctx)
+}
+
+func (a *WApp) WindowShowHide() {
+	a.visible = !a.visible
+	if a.visible {
+		a.WindowShow()
+	} else {
+		a.WindowHide()
 	}
 }
 
@@ -191,7 +214,7 @@ func (a *WApp) ListFiles() []string {
 
 	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
 	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
-	files = append(files, listFiles(a.historyDir, "HISTORY")...)
+	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if a.projRoot == "" {
 		return files
@@ -316,11 +339,12 @@ func (a *WApp) domReady(ctx context.Context) {
 			case msg.Error != nil:
 				runtime.EventsEmit(a.ctx, "error", msg.Error)
 			case msg.EventName == "focus":
-				runtime.WindowShow(ctx)
+				//runtime.WindowShow(ctx)
+				a.WindowShow()
+			case msg.EventName == "notesToggleShowHide":
+				a.WindowShowHide()
 			case msg.EventName == "notesFocus":
-				runtime.WindowSetPosition(a.ctx, 0, 0)
-				runtime.WindowShow(ctx)
-				runtime.WindowSetPosition(a.ctx, 0, 0)
+				a.WindowShow()
 				fallthrough
 			case msg.EventName == "notesUpdatePaths":
 				a.projRoot = msg.Parameters["projectRoot"]
@@ -352,7 +376,7 @@ func (a *WApp) beforeClose(ctx context.Context) bool {
 			log.Println(err)
 		}
 	case dispatcher.WindowNotes:
-		runtime.WindowHide(a.ctx)
+		a.WindowHide()
 		return true
 	}
 

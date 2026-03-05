@@ -3,7 +3,7 @@
 
 package rendersdl
 
-func (sr *sdlRender) registerHotkey() {
+func (sr *sdlRender) registerHotkey(hks ...*hotkeyFuncT) {
 	return // currently not supported on Linux
-	sr._registerHotkey()
+	sr._registerHotkey(hks...)
 }

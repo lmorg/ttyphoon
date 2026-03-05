@@ -12,6 +12,7 @@ import (
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
+	"golang.design/x/hotkey"
 )
 
 /*
@@ -58,6 +59,7 @@ func Initialise() (types.Renderer, *types.XY) {
 	sr._resize = make(chan *types.XY)
 	sr._deallocStack = make(chan func())
 	sr.keyIgnore = make(chan bool)
+	sr.hkEvent = make(chan *hotkeyFuncT)
 
 	sr.glyphSize = typeface.GetSize()
 	_PANE_BLOCK_HIGHLIGHT = sr.glyphSize.X / 2
@@ -162,7 +164,16 @@ func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
 
 	sr.termWin = termWin
 
-	sr.registerHotkey()
+	sr.registerHotkey(
+		&hotkeyFuncT{
+			Key:  hotkey.KeyF12,
+			Func: sr.eventHotkeyShowHideTerminal,
+		},
+		&hotkeyFuncT{
+			Key:  hotkey.KeyF10,
+			Func: sr.toggleNotes,
+		},
+	)
 	go sr.blinkSlowLoop()
 	sr.setRefreshInterval()
 
