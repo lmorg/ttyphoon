@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"fmt"
 	"runtime"
 	"slices"
 	"strings"
@@ -13,7 +14,14 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, okFunc, keyPressFunc types.InputBoxCallbackT) {
+type DisplayInputBoxWT struct {
+	Options      dispatcher.PInputBoxT
+	OkFunc       types.InputBoxCallbackT
+	OkWFunc      types.InputBoxCallbackWT
+	KeyPressFunc types.InputBoxCallbackT
+}
+
+func (sr *sdlRender) DisplayInputBoxW(parameters *DisplayInputBoxWT) {
 	sr.cancelWInputBox()
 
 	pos := new(types.XY)
@@ -41,7 +49,7 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 
 	var cacheKey string
 	// get caller
-	if history == nil {
+	if parameters.Options.History == nil {
 		pc, _, _, ok := runtime.Caller(2)
 		if !ok {
 			cacheKey = "DisplayInputBoxW()"
@@ -49,19 +57,13 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 			fn := runtime.FuncForPC(pc)
 			cacheKey = strings.Replace(fn.Name(), app.ProjectSourcePath, "", 1)
 		}
-		cacheKey += title
-		cache.Read(cache.NS_INPUTBOXW_HISTORY, cacheKey, &history)
+		cacheKey += parameters.Options.Title
+		cache.Read(cache.NS_INPUTBOXW_HISTORY, cacheKey, &parameters.Options.History)
 	}
 
 	// display
 
-	parameters := &dispatcher.PInputBoxT{
-		Title:   strings.Title(title),
-		Prefill: prefill,
-		History: history,
-	}
-
-	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
+	_, sr._cancelWInputBox = dispatcher.DisplayWindow(dispatcher.WindowInputBox, windowStyle, &parameters.Options, func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
 			sr.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 			return
@@ -73,15 +75,19 @@ func (sr *sdlRender) DisplayInputBoxW(title, prefill string, history []string, o
 		switch msg.EventName {
 		case "ok":
 			if value != "" {
-				history = prependHistory(value, history)
+				parameters.Options.History = prependHistory(value, parameters.Options.History)
 				if cacheKey != "" {
-					cache.Write(cache.NS_INPUTBOXW_HISTORY, cacheKey, &history, cache.Days(365))
+					cache.Write(cache.NS_INPUTBOXW_HISTORY, cacheKey, &parameters.Options.History, cache.Days(365))
 				}
 			}
-			okFunc(value)
+			if parameters.Options.NotesDisplay {
+				parameters.OkWFunc(value, msg.Parameters["notesDisplay"] == fmt.Sprintf("%v", true))
+			} else {
+				parameters.OkFunc(value)
+			}
 		case "keyPress":
-			if keyPressFunc != nil {
-				keyPressFunc(value)
+			if parameters.KeyPressFunc != nil {
+				parameters.KeyPressFunc(value)
 			}
 		}
 	})

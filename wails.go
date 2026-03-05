@@ -43,6 +43,7 @@ type WApp struct {
 	usrNotesDir string
 	homeDir     string
 	globalNotes string
+	historyDir  string
 	ipc         *dispatcher.IpcT
 	msgPipe     chan *dispatcher.IpcMessageT
 	ps          *pStructT
@@ -72,10 +73,6 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps
 
 	switch window {
 	case dispatcher.WindowNotes:
-		/*params, ok := payload.Parameters.(*dispatcher.PNotesT)
-		if !ok {
-			panic(fmt.Sprintf("%T", payload.Parameters))
-		}*/
 		a.projRoot = ps.notes.ProjectRoot
 		if a.projRoot == "" {
 			a.projRoot, _ = os.Getwd()
@@ -84,6 +81,7 @@ func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps
 		sep := string(filepath.Separator)
 		a.usrNotesDir = ps.notes.UserNotes
 		a.globalNotes = filepath.Clean(fmt.Sprintf("%s%s..%s", a.usrNotesDir, sep, sep)) + sep
+		a.historyDir = a.globalNotes + "history"
 	}
 
 	return a
@@ -111,10 +109,13 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 	}
 }
 
-func (a *WApp) VisualInputBox(value string) {
+func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
 	err := a.ipc.Send(&dispatcher.IpcMessageT{
-		EventName:  "ok",
-		Parameters: map[string]string{"value": value},
+		EventName: "ok",
+		Parameters: map[string]string{
+			"value":        value,
+			"notesDisplay": fmt.Sprintf("%v", notesCheckbox),
+		},
 	})
 	if err != nil {
 		log.Println(err.Error())
@@ -190,6 +191,7 @@ func (a *WApp) ListFiles() []string {
 
 	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
 	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
+	files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if a.projRoot == "" {
 		return files
@@ -258,6 +260,8 @@ func (a *WApp) expandMappingFunc(s string) string {
 		return a.homeDir
 	case "GLOBAL":
 		return a.globalNotes
+	case "HISTORY":
+		return a.historyDir
 	default:
 		return "error"
 	}

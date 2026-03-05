@@ -50,6 +50,6 @@ export function SendIpc(arg1, arg2) {
   return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }
 
-export function VisualInputBox(arg1) {
-  return window['go']['main']['WApp']['VisualInputBox'](arg1);
+export function SendVisualInputBox(arg1, arg2) {
+  return window['go']['main']['WApp']['SendVisualInputBox'](arg1, arg2);
 }

@@ -158,7 +158,7 @@ Window:
   UseGPU: true
 
 NotesWindow:
-  AlwaysOnTop: true
+  AlwaysOnTop: false
 
 AI:
   MaxIterations: 10

@@ -84,13 +84,8 @@ func Block(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 	return write(tmpl, data)
 }
 
-// func Ai(agent *agent.Agent, summary, prompt, response string, start, end time.Time, write TemplateWriterT) error {
 func blockAi(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 	cmd := "AI Query"
-	tmpl, err := template.New("ai").Parse(mdTemplateAi)
-	if err != nil {
-		return err
-	}
 
 	if screen[0].Block.AiMeta == nil {
 		return errors.New("nil pointer for AiMeta struct")
@@ -136,6 +131,16 @@ func blockAi(tile types.Tile, screen types.Screen, write TemplateWriterT) error 
 			data.Output = begin + a + end
 		}
 	}
+
+	return Ai(data, write)
+}
+
+func Ai(data *TemplateFieldsT, write TemplateWriterT) error {
+	tmpl, err := template.New("ai").Parse(mdTemplateAi)
+	if err != nil {
+		return err
+	}
+
 	return write(tmpl, data)
 }
 

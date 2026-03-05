@@ -8,9 +8,10 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/dispatcher"
 )
 
-func askAi(sr *sdlRender, pos *types.XY) {
+func askAi(sr *sdlRender) {
 	agt := agent.Get(sr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
@@ -19,7 +20,7 @@ func askAi(sr *sdlRender, pos *types.XY) {
 	}, nil)
 }
 
-func askAiSkill(sr *sdlRender, pos *types.XY) {
+func askAiSkill(sr *sdlRender) {
 	agt := agent.Get(sr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
@@ -46,13 +47,18 @@ func askAiSkill(sr *sdlRender, pos *types.XY) {
 	}
 
 	fnSelect := func(i int) {
-		/*sr.DisplayInputBox(fmt.Sprintf("/%s (%s)", skills[i].FunctionName, skills[i].Description), "", func(prompt string) {
-			ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
-		}, nil)*/
-
-		sr.DisplayInputBoxW(skills[i].Description, "", nil, func(prompt string) {
-			ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
-		}, nil)
+		parameters := &DisplayInputBoxWT{
+			Options: dispatcher.PInputBoxT{
+				Title:        strings.Title(skills[i].Description),
+				NotesDisplay: true,
+				NotesDefault: true,
+			},
+			OkWFunc: func(prompt string, notes bool) {
+				agt.Meta.NotesDisplay = notes
+				ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
+			},
+		}
+		sr.DisplayInputBoxW(parameters)
 	}
 
 	sr.DisplayMenu("Select an agent skill", slice, nil, fnSelect, nil)

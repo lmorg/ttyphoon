@@ -10,8 +10,8 @@ import (
 )
 
 func (sr *sdlRender) _registerHotkey() {
-	sr.hk = hotkey.New([]hotkey.Modifier{}, hotkey.KeyF12)
-	err := sr.hk.Register()
+	hk := hotkey.New([]hotkey.Modifier{}, hotkey.KeyF12)
+	err := hk.Register()
 	if err != nil {
 		sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey: %s", err.Error()))
 	}
@@ -67,10 +67,10 @@ func (sr *sdlRender) hotkeys() {
 			desc = "Visual editor..."
 
 		case "AskAI":
-			fn = func() { askAi(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }
+			fn = func() { askAi(sr) }
 			desc = "Ask AI..."
 		case "AgentSkills":
-			fn = func() { askAiSkill(sr, &types.XY{Y: sr.termWin.Active.GetTerm().GetSize().Y - 1}) }
+			fn = func() { askAiSkill(sr) }
 			desc = "Ask AI with Agent Skill..."
 
 		case "SearchRegex":

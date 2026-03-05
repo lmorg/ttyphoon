@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )
@@ -110,11 +111,15 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 }
 
 func (sr *sdlRender) VisualEditor() {
-	sr.DisplayInputBoxW("Visual editor", "", nil, func(value string) {
-		if value != "" {
-			sr.termWin.Active.GetTerm().Reply([]byte(value))
-		}
-	}, nil)
+	options := &DisplayInputBoxWT{
+		Options: dispatcher.PInputBoxT{Title: "Visual editor"},
+		OkFunc: func(value string) {
+			if value != "" {
+				sr.termWin.Active.GetTerm().Reply([]byte(value))
+			}
+		},
+	}
+	sr.DisplayInputBoxW(options)
 }
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
@@ -233,7 +238,7 @@ func (tw *termWidgetT) _eventMouseButtonRightClick(sr *sdlRender, pos *types.XY,
 		},
 		{
 			Title: fmt.Sprintf("Ask AI (%s)", agent.Get(sr.termWin.Active.Id()).ServiceName()),
-			Fn:    func() { askAi(sr, pos) },
+			Fn:    func() { askAi(sr) },
 			Icon:  0xe05d,
 		},
 		{

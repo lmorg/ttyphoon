@@ -28,9 +28,11 @@ type Agent struct {
 }
 
 type Meta struct {
-	CmdLine     string
-	Pwd         string
-	OutputBlock string
+	CmdLine      string
+	Pwd          string
+	OutputBlock  string
+	NotesDisplay bool
+	Function     string
 }
 
 var allTheAgents = map[string]*Agent{}

@@ -161,7 +161,6 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 			W: (bottomRightCellX * sr.glyphSize.X) + 2,
 			H: (bottomRightCellY * sr.glyphSize.Y) + 2,
 		}
-		//sr._drawHighlightRect(activeRect, highlightBorder, highlightFill, 0, 230)
 		sr._drawHighlightRect(activeRect, types.COLOR_SELECTION, types.COLOR_SELECTION, 0, 230)
 	}
 
@@ -193,7 +192,6 @@ func (sr *sdlRender) _footerRenderTmuxWindowTabs(pos *types.XY) {
 			W: (bottomRightCellX * sr.glyphSize.X),
 			H: (bottomRightCellY * sr.glyphSize.Y),
 		}
-		//sr._drawHighlightRect(highlightRect, highlightBorder, highlightFill, highlightAlphaBorder, highlightAlphaFill)
 		sr._drawHighlightRect(highlightRect, types.COLOR_SELECTION, types.COLOR_SELECTION, highlightAlphaBorder, highlightAlphaFill)
 	} else {
 		for i := range sr.windowTabs.cells {

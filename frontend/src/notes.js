@@ -112,7 +112,8 @@ const state = {
     expandedCategories: {
         '$GLOBAL': true,
         '$NOTES': true,
-        '$PROJ': true
+        '$PROJ': true,
+        '$HISTORY': false,
     }
 };
 
@@ -981,7 +982,7 @@ function applyWindowStyle(result) {
         #notes-sidebar {
             display: flex;
             flex-direction: column;
-            /* border-right: 2px solid var(--fg); */
+            /*border-right: 2px solid var(--fg); */
             padding: 16px;
             gap: 12px;
             min-height: 0;
@@ -1014,8 +1015,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--selection);
+            color: var(--selection);
         }
 
         #notes-modal {
@@ -1135,13 +1136,13 @@ function applyWindowStyle(result) {
         }
 
         #notes-modal-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--selection);
+            /*color: var(--selection);*/
         }
 
         #notes-delete-modal-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--selection);
+            /*color: var(--selection);*/
         }
 
         #notes-delete-confirm {
@@ -1176,7 +1177,7 @@ function applyWindowStyle(result) {
         }
 
         .notes-category-header:hover {
-            border-color: var(--accent);
+            border-color: var(--selection);
         }
 
         .notes-category-arrow {
@@ -1211,12 +1212,12 @@ function applyWindowStyle(result) {
         }
 
         .notes-file[data-active="true"] {
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--fg);
+            color: var(--fg);
         }
 
         .notes-file:hover {
-            border-color: var(--fg);
+            border-color: var(--selection);
         }
 
         #notes-empty {
@@ -1246,7 +1247,7 @@ function applyWindowStyle(result) {
             display: inline-flex;
             gap: 8px;
             border-bottom: 2px solid var(--fg);
-            padding-bottom: 6px;
+            /*padding-bottom: 2px;*/
             align-items: center;
         }
 
@@ -1260,12 +1261,14 @@ function applyWindowStyle(result) {
         }
 
         #notes-tabs button[aria-selected="true"] {
-            border-color: var(--accent);
-            color: var(--accent);
+            border-color: var(--fg);
+            /*color: var(--bg);
+            background: var(--fg);*/
+            border-bottom: 5px;
         }
 
         #notes-tabs button:hover {
-            border-color: var(--fg);
+            border-color: var(--selection);
         }
 
         #notes-new {
@@ -1273,8 +1276,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-new:hover {
-            border-color: var(--fg);
-            color: var(--fg);
+            border-color: var(--green) !important;
+            color: var(--green) !important;
         }
 
         #notes-delete {

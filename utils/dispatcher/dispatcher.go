@@ -16,9 +16,11 @@ const (
 )
 
 type PInputBoxT struct {
-	Title   string   `json:"title"`
-	Prefill string   `json:"prefill"`
-	History []string `json:"history"`
+	Title        string   `json:"title"`
+	Prefill      string   `json:"prefill"`
+	History      []string `json:"history"`
+	NotesDisplay bool     `json:"notesDisplay"`
+	NotesDefault bool     `json:"notesDefault"`
 }
 
 type PMarkdownT struct {

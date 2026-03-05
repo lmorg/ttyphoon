@@ -1,15 +1,19 @@
 package ai
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/prompts"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/assets"
 	"github.com/lmorg/ttyphoon/types"
+	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 )
 
 func Explain(agent *agent.Agent, promptDialogue bool) {
@@ -41,6 +45,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	insertAfterRowId := agent.Term().GetRowId(agent.Term().GetCursorPosition().Y - 1)
 	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName())
 	sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
+	
 	fin := make(chan struct{})
 	var i int
 
@@ -62,7 +67,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	}()
 
 	go func() {
-		start := time.Now()
+		startTime := time.Now()
 		result, err := agent.RunLLM(prompt, sticky)
 		fin <- struct{}{}
 		if err != nil {
@@ -73,11 +78,32 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			agent.AddHistory(title, result)
 		}
 
-		/*err = historymd.Ai(agent, title, prompt, result, start, time.Now(), historymd.TemplateWriter)
-		if err != nil {
-			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		if agent.Meta.NotesDisplay {
+			endTime := time.Now()
+			data := &historymd.TemplateFieldsT{
+				AppName:      app.Name,
+				GroupName:    agent.Term().Tile().GroupName(),
+				TileName:     agent.Term().Tile().Name(),
+				TimeStart:    startTime.Format(historymd.FMT_DATE),
+				TimeEnd:      endTime.Format(historymd.FMT_DATE),
+				TimeDuration: endTime.Sub(startTime).String(),
+				Pwd:          agent.Meta.Pwd,
+				Agent:        agent.ServiceName(),
+				Query:        query,
+				FullPrompt:   prompt,
+				Output:       result,
+			}
+
+			var b []byte
+			buf := bytes.NewBuffer(b)
+			historymd.Ai(data, func(tmpl *template.Template, data *historymd.TemplateFieldsT) error {
+				return tmpl.Execute(buf, data)
+			})
+
+			filename := fmt.Sprintf("$GLOBAL/ai-%s-%s-%s-%d.md", agent.Meta.Function, agent.ServiceName(), agent.ModelName(), time.Now().Unix())
+			agent.Renderer().NotesCreateAndOpen(filename, buf.String())
 			return
-		}*/
+		}
 
 		var markdown string
 		output := fmt.Sprintf("# Your question\n\n%s\n\n# %s's Response\n\n%s", title, agent.ServiceName(), result)
@@ -117,10 +143,11 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			Agent:    agent.ServiceName(),
 			Prompt:   &prompt,
 			Response: &result,
-		}, start)
+		}, startTime)
 		if err != nil {
 			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
+
 	}()
 }

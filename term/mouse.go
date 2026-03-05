@@ -8,6 +8,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
@@ -129,7 +130,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
-				Title: "Take notes...",
+				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name),
 				Icon:  0xf044,
 				Highlight: func() func() {
 					return func() {

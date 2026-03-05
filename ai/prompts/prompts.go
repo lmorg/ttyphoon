@@ -34,8 +34,8 @@ func GetAsk(agent *agent.Agent, userPrompt string) string {
 		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
 	}
 
-	fn = strings.TrimRight(fn[1:], " ")
-	skill := skills.ReadSkills().FromFunctionName(fn)
+	agent.Meta.Function = strings.TrimRight(fn[1:], " ")
+	skill := skills.ReadSkills().FromFunctionName(agent.Meta.Function)
 	if skill == nil {
 		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
 	}

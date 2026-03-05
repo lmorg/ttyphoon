@@ -26,4 +26,4 @@ export function SaveFile(arg1:string,arg2:string):Promise<void>;
 
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
-export function VisualInputBox(arg1:string):Promise<void>;
+export function SendVisualInputBox(arg1:string,arg2:boolean):Promise<void>;
