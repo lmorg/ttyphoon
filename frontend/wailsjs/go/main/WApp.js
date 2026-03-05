@@ -10,6 +10,10 @@ export function DeleteFile(arg1) {
   return window['go']['main']['WApp']['DeleteFile'](arg1);
 }
 
+export function GetCustomRegexp() {
+  return window['go']['main']['WApp']['GetCustomRegexp']();
+}
+
 export function GetImage(arg1) {
   return window['go']['main']['WApp']['GetImage'](arg1);
 }

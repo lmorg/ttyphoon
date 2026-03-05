@@ -1,4 +1,4 @@
-import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCustomRegexp } from '../wailsjs/go/main/WApp';
 import { EventsOn, BrowserOpenURL, WindowHide, WindowShow, LogError } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
@@ -174,6 +174,9 @@ function renderMarkdown() {
     // Make checkboxes interactive
     setupInteractiveCheckboxes();
 
+    // Apply custom regex hyperlinks
+    autoHyperlink();
+
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
@@ -193,6 +196,98 @@ function setupInteractiveCheckboxes() {
             toggleCheckboxInMarkdown(index, e.target.checked);
         });
     });
+}
+
+async function autoHyperlink() {
+    const customRegexps = await GetCustomRegexp?.() || [];
+    
+    if (!customRegexps || customRegexps.length === 0) {
+        return;
+    }
+
+    for (const custom of customRegexps) {
+        if (!custom.pattern || !custom.link) {
+            continue;
+        }
+
+        try {
+            const regex = new RegExp(custom.pattern, 'g');
+            
+            // Walk through all text nodes in the preview
+            const walker = document.createTreeWalker(
+                elements.preview,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+
+            const nodesToProcess = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                // Skip if inside an <a> tag
+                let parent = node.parentNode;
+                let insideLink = false;
+                while (parent) {
+                    if (parent.tagName === 'A') {
+                        insideLink = true;
+                        break;
+                    }
+                    parent = parent.parentNode;
+                }
+                
+                if (!insideLink && regex.test(node.textContent)) {
+                    regex.lastIndex = 0; // Reset regex state
+                    nodesToProcess.push(node);
+                }
+            }
+
+            // Process matches and create hyperlinks
+            nodesToProcess.forEach((textNode) => {
+                const text = textNode.textContent;
+                const parts = [];
+                let lastIndex = 0;
+                let match;
+                
+                regex.lastIndex = 0; // Reset for this text node
+                while ((match = regex.exec(text)) !== null) {
+                    // Add text before match
+                    if (match.index > lastIndex) {
+                        parts.push(document.createTextNode(text.substring(lastIndex, match.index)));
+                    }
+
+                    // Create hyperlink
+                    const matchedText = match[0];
+                    const link = matchedText.replace(new RegExp(custom.pattern), custom.link);
+                    const a = document.createElement('a');
+                    a.href = link;
+                    a.textContent = matchedText;
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        BrowserOpenURL(a.href);
+                    });
+                    parts.push(a);
+
+                    lastIndex = regex.lastIndex;
+                }
+
+                // Add remaining text
+                if (lastIndex < text.length) {
+                    parts.push(document.createTextNode(text.substring(lastIndex)));
+                }
+
+                // Replace original text node with parts
+                if (parts.length > 0) {
+                    const parent = textNode.parentNode;
+                    parts.forEach((part) => {
+                        parent.insertBefore(part, textNode);
+                    });
+                    parent.removeChild(textNode);
+                }
+            });
+        } catch (err) {
+            console.error('Error processing custom regex:', custom.pattern, err);
+        }
+    }
 }
 
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
@@ -1534,7 +1629,7 @@ document.addEventListener('keydown', (event) => {
         openFindBar();
     }
 
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
+    /*if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
         event.preventDefault();
         setViewMode('editor');
     }
@@ -1542,7 +1637,7 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
         event.preventDefault();
         setViewMode('viewer');
-    }
+    }*/
 
     if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
         event.preventDefault();

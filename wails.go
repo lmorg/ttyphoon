@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	ttyphoon "github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/wailsapp/wails/v2"
@@ -276,6 +277,20 @@ func (a *WApp) RenameFile(oldPath, newPath string) error {
 func (a *WApp) DeleteFile(filename string) error {
 	filename = os.Expand(filename, a.expandMappingFunc)
 	return os.Remove(filename)
+}
+
+func (a *WApp) GetCustomRegexp() []map[string]string {
+	var result []map[string]string
+	for _, custom := range config.Config.Terminal.Widgets.AutoHyperlink.CustomRegexp {
+		if custom.Rx == nil {
+			continue
+		}
+		result = append(result, map[string]string{
+			"pattern": custom.Rx.String(),
+			"link":    custom.Link,
+		})
+	}
+	return result
 }
 
 // --------------------

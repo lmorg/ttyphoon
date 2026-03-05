@@ -6,6 +6,8 @@ export function AddToFileList(arg1:string):Promise<void>;
 
 export function DeleteFile(arg1:string):Promise<void>;
 
+export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
+
 export function GetImage(arg1:string):Promise<string>;
 
 export function GetMarkdown(arg1:string):Promise<string>;
