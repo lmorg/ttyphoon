@@ -62,7 +62,6 @@ type Renderer interface {
 	GetKeyboardModifier() int
 	//ShowPreview(string)
 	//HidePreview()
-	NotesOpenFile(filename string)
 	NotesCreateAndOpen(filename, contents string)
 	Close()
 }

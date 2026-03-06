@@ -217,14 +217,9 @@ func (el *ElementHyperlink) _menuItemsSchemaFile(menuItems []types.MenuItem) []t
 	menuItems = append(menuItems,
 		types.MenuItem{
 			Title: "Copy contents to clipboard",
-			Fn:    func() { el.renderer.NotesOpenFile(el.path) },
+			Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
 			Icon:  0xf0c6,
 		},
-		/*types.MenuItem{
-			Title: fmt.Sprintf("Open in %s Notes", app.Name),
-			Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
-			Icon:  0xf31c,
-		},*/
 	)
 
 	if strings.HasSuffix(el.url, ".md") {

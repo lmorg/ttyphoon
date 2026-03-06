@@ -147,14 +147,6 @@ func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
 	runtime.Quit(a.ctx)
 }
 
-/*func (a *WApp) OpenFile(path string) (content, mime string) {
-	ext := filepath.Ext(path)
-	switch ext {
-	case ".yaml", "yml":
-
-	}
-}*/
-
 func (a *WApp) GetMarkdown(filename string) string {
 	filename = a.filePath(filename)
 
