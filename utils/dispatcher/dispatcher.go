@@ -18,6 +18,7 @@ const (
 type PInputBoxT struct {
 	Title        string   `json:"title"`
 	Prefill      string   `json:"prefill"`
+	Placeholder  string   `json:"placeholder"`
 	History      []string `json:"history"`
 	NotesDisplay bool     `json:"notesDisplay"`
 	NotesDefault bool     `json:"notesDefault"`

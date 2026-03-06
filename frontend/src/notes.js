@@ -894,6 +894,7 @@ async function createAndOpenFile(filename, contents) {
     }
 }
 
+//window.openFile = openFile;
 window.createAndOpenFile = createAndOpenFile;
 
 EventsOn("notesCreateAndOpen", params => {
@@ -1552,10 +1553,15 @@ GetWindowStyle().then((result) => {
 GetParameters().then((params) => {
     if (params.filename != '' && params.content != '') {
         setTimeout(function() {
-            //refreshFiles();
             window.createAndOpenFile(params.filename, params.content);
         }, 1);
     }
+
+    /*if (params.filename != '' && params.content == '') {
+        setTimeout(function() {
+            window.createAndOpenFile(params.filename, params.content);
+        }, 1);
+    }*/
 });
 
 refreshFiles();

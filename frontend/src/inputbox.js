@@ -21,7 +21,7 @@ window.autoGrow = autoGrow;
 document.querySelector('#app').innerHTML = `
     <h1 class="title" id="title">{{Title}}</h1>
     <div class="input-box">
-        <div id="input" class="input" contenteditable="plaintext-only" onkeydown="autoGrow();" onkeyup="autoGrow();"></div>
+        <div id="input" class="input" contenteditable="plaintext-only" onkeydown="autoGrow();" onkeyup="autoGrow();"  data-placeholder="Enter your text..."></div>
         <div id="notes-display"><input type="checkbox" id="notes-checkbox" /><label id="notes-label" for="notes-checkbox">Save to TTYphoon Notes</label></div>
         <div class="toolbar">
             <div id="btn-send" class="btn" onclick="send()">Send [ctrl+return]</div>
@@ -79,6 +79,10 @@ GetParameters().then((result) => {
             element.dropdown.appendChild(optionElement);
         });
     }
+
+    //if (result.placeholder != "") {
+    element.input.setAttribute('data-placeholder', result.placeholder);
+    //};
 });
 
 GetWindowStyle().then((result) => {    
@@ -167,6 +171,13 @@ GetWindowStyle().then((result) => {
             border: 2px;
             border-style: solid;
             border-color: var(--fg);
+        }
+
+        #input:empty::before {
+            content: attr(data-placeholder);
+            color: var(--fg);
+            opacity: 0.5;
+            pointer-events: none;
         }
 
         #notes-display {

@@ -125,6 +125,22 @@ func findProjectRoot(cwd string) string {
 	}
 }
 
+func (sr *sdlRender) NotesOpenFile(filename string) {
+	if sr.startNotes(sr.termWin.Active, filename, "") {
+		return
+	}
+
+	err := notes.ipc.Send(&dispatcher.IpcMessageT{
+		EventName: "notesOpenFile",
+		Parameters: map[string]string{
+			"filename": filename,
+		},
+	})
+	if err != nil {
+		sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
 func (sr *sdlRender) NotesCreateAndOpen(filename, content string) {
 	if sr.startNotes(sr.termWin.Active, filename, content) {
 		return

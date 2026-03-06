@@ -15,9 +15,18 @@ func askAi(sr *sdlRender) {
 	agt := agent.Get(sr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
-	sr.DisplayInputBox(fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()), "", func(prompt string) {
-		ai.AskAI(agt, prompt)
-	}, nil)
+	sr.DisplayInputBoxW(&DisplayInputBoxWT{
+		Options: dispatcher.PInputBoxT{
+			Title: fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
+			//Placeholder:  ".",
+			NotesDisplay: true,
+			NotesDefault: false,
+		},
+		OkWFunc: func(prompt string, notes bool) {
+			agt.Meta.NotesDisplay = notes
+			ai.AskAI(agt, prompt)
+		},
+	})
 }
 
 func askAiSkill(sr *sdlRender) {
