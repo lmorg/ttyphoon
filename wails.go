@@ -155,10 +155,10 @@ func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
 	}
 }*/
 
-func (a *WApp) GetMarkdown(path string) string {
-	path = os.Expand(path, a.expandMappingFunc)
+func (a *WApp) GetMarkdown(filename string) string {
+	filename = a.filePath(filename)
 
-	f, err := os.Open(path)
+	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
 		return err.Error()
@@ -170,7 +170,7 @@ func (a *WApp) GetMarkdown(path string) string {
 		return err.Error()
 	}
 
-	a.mdBaseDir = filepath.Dir(path)
+	a.mdBaseDir = filepath.Dir(filename)
 
 	return string(b)
 }
@@ -222,7 +222,7 @@ func (a *WApp) ListFiles() []string {
 
 	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
 	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
-	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
+	files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if a.projRoot == "" {
 		return files
@@ -298,19 +298,27 @@ func (a *WApp) expandMappingFunc(s string) string {
 	}
 }
 
-func (a *WApp) SaveFile(filename, contents string) error {
+func (a WApp) filePath(filename string) string {
 	filename = os.Expand(filename, a.expandMappingFunc)
+	if filepath.IsLocal(filename) {
+		filename = a.usrNotesDir + string(filepath.Separator) + filename
+	}
+	return filename
+}
+
+func (a *WApp) SaveFile(filename, contents string) error {
+	filename = a.filePath(filename)
 	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
 func (a *WApp) RenameFile(oldPath, newPath string) error {
-	oldPath = os.Expand(oldPath, a.expandMappingFunc)
-	newPath = os.Expand(newPath, a.expandMappingFunc)
+	oldPath = a.filePath(oldPath)
+	newPath = a.filePath(newPath)
 	return os.Rename(oldPath, newPath)
 }
 
 func (a *WApp) DeleteFile(filename string) error {
-	filename = os.Expand(filename, a.expandMappingFunc)
+	filename = a.filePath(filename)
 	return os.Remove(filename)
 }
 
