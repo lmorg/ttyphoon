@@ -481,6 +481,7 @@ function convertToJupyterCodeBlocks() {
         
         const outputWrapper = document.createElement('div');
         outputWrapper.className = 'jupyter-output-wrapper';
+        outputWrapper.style.display = 'none'; // Initially hidden
         
         const outputToggle = document.createElement('button');
         outputToggle.type = 'button';
@@ -517,6 +518,18 @@ async function runCodeBlockInNotes(blockId) {
     const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
     if (editableElement) {
         block.currentContent = editableElement.textContent;
+    }
+    
+    // Show the output wrapper when running
+    const outputWrapper = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output-wrapper`);
+    if (outputWrapper) {
+        outputWrapper.style.display = 'block';
+    }
+    
+    // Clear previous output
+    const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
+    if (outputBlock) {
+        outputBlock.textContent = '';
     }
     
     const runNoteFn = window.go?.main?.WApp?.RunNote;
@@ -1800,6 +1813,11 @@ function applyWindowStyle(result) {
         #notes-jupyter-wrap {
             overflow-y: auto;
             padding: 16px;
+        }
+
+        #notes-jupyter-wrap pre {
+            border-left: 0;
+            padding-left: 10px;
         }
 
         .jupyter-code-block {
