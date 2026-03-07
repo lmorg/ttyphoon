@@ -26,6 +26,7 @@ app.innerHTML = `
             <div id="notes-tabs" role="tablist">
                 <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
                 <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
+                <button id="notes-tab-jupyter" type="button" role="tab" aria-selected="false">Jupyter</button>
                 <button id="notes-new" type="button">New</button>
                 <button id="notes-delete" type="button" title="Delete current note">Delete</button>
                 <div id="notes-status" role="status"></div>
@@ -36,6 +37,9 @@ app.innerHTML = `
                 </div>
                 <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-preview"></div>
+                </div>
+                <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-jupyter"></div>
                 </div>
             </div>
         </main>
@@ -74,13 +78,16 @@ const elements = {
     list: document.getElementById('notes-list'),
     editor: document.getElementById('notes-editor'),
     preview: document.getElementById('notes-preview'),
+    jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
     delete: document.getElementById('notes-delete'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
+    tabJupyter: document.getElementById('notes-tab-jupyter'),
     editorWrap: document.getElementById('notes-editor-wrap'),
     previewWrap: document.getElementById('notes-preview-wrap'),
+    jupyterWrap: document.getElementById('notes-jupyter-wrap'),
     modal: document.getElementById('notes-modal'),
     modalInput: document.getElementById('notes-modal-input'),
     modalCancel: document.getElementById('notes-modal-cancel'),
@@ -114,7 +121,9 @@ const state = {
         '$NOTES': true,
         '$PROJ': true,
         '$HISTORY': false,
-    }
+    },
+    jupyterCodeBlocks: {},
+    jupyterBlockCounter: 0
 };
 
 marked.use(gfmHeadingId({}));
@@ -348,16 +357,250 @@ function setDirty(isDirty) {
 }
 
 function setViewMode(mode) {
-    state.viewMode = mode === 'viewer' ? 'viewer' : 'editor';
+    state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
     const isEditor = state.viewMode === 'editor';
+    const isJupyter = state.viewMode === 'jupyter';
+    const isViewer = state.viewMode === 'viewer';
+    
     elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
-    elements.tabViewer.setAttribute('aria-selected', isEditor ? 'false' : 'true');
+    elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
+    elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
+    
     elements.editorWrap.dataset.active = isEditor ? 'true' : 'false';
-    elements.previewWrap.dataset.active = isEditor ? 'false' : 'true';
+    elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
+    elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     
     // Re-perform find if find bar is open
     if (elements.findBar.dataset.open === 'true' && state.findQuery) {
         performFind();
+    }
+}
+
+function renderJupyterView() {
+    // Reset jupyter state for the new render
+    state.jupyterCodeBlocks = {};
+    state.jupyterBlockCounter = 0;
+    
+    const markdown = elements.editor.value || '';
+    elements.jupyter.innerHTML = marked.parse(markdown);
+    
+    // Apply syntax highlighting to code blocks before conversion
+    elements.jupyter.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+    
+    // Handle images with Wails URLs
+    const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
+    
+    elements.jupyter.querySelectorAll('img').forEach((img) => {
+        if (img.src.match(rxWailsUrl)) {
+            const path = img.src.replace(rxWailsUrl, '');
+            GetImage(path).then((image) => {
+                if (image.match(/^error: /)) {
+                    console.log(image);
+                } else {
+                    img.src = image;
+                }
+            });
+        }
+    });
+    
+    // Handle external links
+    let rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+    
+    elements.jupyter.querySelectorAll('a').forEach(a => {
+        if (!a.href.match(rxWailsUrl)) {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                BrowserOpenURL(a.href);
+            });
+        }
+    });
+    
+    setupInteractiveCheckboxes();
+    autoHyperlink();
+    convertToJupyterCodeBlocks();
+}
+
+function convertToJupyterCodeBlocks() {
+    const codeBlocks = elements.jupyter.querySelectorAll('pre');
+    
+    codeBlocks.forEach((pre) => {
+        const code = pre.querySelector('code');
+        if (!code) return;
+        
+        const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
+        if (!langClass) return;
+        
+        const language = langClass.replace('language-', '');
+        const blockId = `jupyter-block-${state.jupyterBlockCounter++}`;
+        const content = code.textContent;
+        
+        state.jupyterCodeBlocks[blockId] = {
+            language,
+            originalContent: content,
+            currentContent: content
+        };
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'jupyter-code-block';
+        wrapper.dataset.blockId = blockId;
+        
+        const toolbar = document.createElement('div');
+        toolbar.className = 'jupyter-toolbar';
+        
+        const runNotesBtn = document.createElement('button');
+        runNotesBtn.type = 'button';
+        runNotesBtn.className = 'jupyter-btn jupyter-run-notes';
+        runNotesBtn.textContent = 'Run in Notes';
+        runNotesBtn.addEventListener('click', () => runCodeBlockInNotes(blockId));
+        
+        const runTerminalBtn = document.createElement('button');
+        runTerminalBtn.type = 'button';
+        runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
+        runTerminalBtn.textContent = 'Run in Terminal';
+        runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'jupyter-btn jupyter-save';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', () => saveCodeBlockToMarkdown(blockId));
+        
+        toolbar.appendChild(runNotesBtn);
+        toolbar.appendChild(runTerminalBtn);
+        toolbar.appendChild(saveBtn);
+        
+        const editableCode = document.createElement('pre');
+        editableCode.className = 'jupyter-code-editable';
+        const editableCodeContent = document.createElement('div');
+        editableCodeContent.className = `language-${language}`;
+        editableCodeContent.textContent = content;
+        editableCodeContent.contentEditable = 'true';
+        editableCode.appendChild(editableCodeContent);
+        
+        const outputWrapper = document.createElement('div');
+        outputWrapper.className = 'jupyter-output-wrapper';
+        
+        const outputToggle = document.createElement('button');
+        outputToggle.type = 'button';
+        outputToggle.className = 'jupyter-output-toggle';
+        outputToggle.textContent = 'Output ▾';
+        outputToggle.dataset.collapsed = 'false';
+        
+        const outputBlock = document.createElement('pre');
+        outputBlock.className = 'jupyter-output';
+        outputBlock.textContent = '';
+        outputBlock.style.display = 'block';
+        
+        outputToggle.addEventListener('click', () => {
+            const isCollapsed = outputBlock.style.display === 'none';
+            outputBlock.style.display = isCollapsed ? 'block' : 'none';
+            outputToggle.textContent = isCollapsed ? 'Output ▾' : 'Output ▸';
+            outputToggle.dataset.collapsed = isCollapsed ? 'false' : 'true';
+        });
+        
+        outputWrapper.appendChild(outputToggle);
+        outputWrapper.appendChild(outputBlock);
+        
+        pre.replaceWith(wrapper);
+        wrapper.appendChild(toolbar);
+        wrapper.appendChild(editableCode);
+        wrapper.appendChild(outputWrapper);
+    });
+}
+
+async function runCodeBlockInNotes(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) return;
+    
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
+    if (editableElement) {
+        block.currentContent = editableElement.textContent;
+    }
+    
+    const runNoteFn = window.go?.main?.WApp?.RunNote;
+    if (runNoteFn) {
+        try {
+            await runNoteFn(blockId, block.currentContent, block.language);
+        } catch (err) {
+            console.error('Error running code:', err);
+            const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
+            if (outputBlock) {
+                outputBlock.textContent = `Error: ${err.message}`;
+            }
+        }
+    }
+}
+
+async function runCodeBlockInTerminal(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) return;
+    
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
+    if (editableElement) {
+        block.currentContent = editableElement.textContent;
+    }
+    
+    const sendIpcFn = SendIpc;
+    if (sendIpcFn) {
+        try {
+            await sendIpcFn('noteRunTerminal', {
+                blockId: blockId,
+                code: block.currentContent,
+                language: block.language
+            });
+        } catch (err) {
+            console.error('Error sending to terminal:', err);
+        }
+    }
+}
+
+function saveCodeBlockToMarkdown(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) return;
+    
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
+    if (!editableElement) return;
+    
+    const newContent = editableElement.textContent;
+    block.currentContent = newContent;
+    
+    let markdown = elements.editor.value;
+    const startPattern = `\`\`\`${block.language}`;
+    let blockIndex = 0;
+    let startIdx = -1;
+    
+    for (let i = 0; i < Object.keys(state.jupyterCodeBlocks).length; i++) {
+        const key = Object.keys(state.jupyterCodeBlocks)[i];
+        if (key === blockId) {
+            blockIndex = i;
+            break;
+        }
+    }
+    
+    let currentBlockCount = 0;
+    let pos = 0;
+    while ((pos = markdown.indexOf(startPattern, pos)) !== -1) {
+        if (currentBlockCount === blockIndex) {
+            startIdx = pos;
+            break;
+        }
+        pos += startPattern.length;
+        currentBlockCount++;
+    }
+    
+    if (startIdx >= 0) {
+        const endPos = markdown.indexOf('```', startIdx + startPattern.length);
+        if (endPos >= 0) {
+            const beforeCodeContent = markdown.substring(0, startIdx + startPattern.length);
+            const afterCodeContent = markdown.substring(endPos);
+            markdown = beforeCodeContent + '\n' + newContent + '\n' + afterCodeContent;
+            elements.editor.value = markdown;
+            block.originalContent = newContent;
+            setDirty(true);
+            setStatus(`Updated code block: ${blockId}`, false);
+        }
     }
 }
 
@@ -485,6 +728,7 @@ async function loadFile(file) {
         state.currentFile = file;
         elements.editor.value = doc || '';
         renderMarkdown();
+        renderJupyterView();
         setDirty(false);
         renderFileList();
         
@@ -906,6 +1150,15 @@ EventsOn("updateTitle", newTitle => {
     elements.title.innerText = "Notes: " + newTitle;
 });
 
+EventsOn("noteRun", (data) => {
+    const { blockId, output } = data;
+    const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
+    if (outputBlock) {
+        const currentText = outputBlock.textContent;
+        outputBlock.textContent = currentText ? `${currentText}\n${output}` : output;
+    }
+});
+
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
@@ -1297,7 +1550,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-editor-wrap,
-        #notes-preview-wrap {
+        #notes-preview-wrap,
+        #notes-jupyter-wrap {
             position: absolute;
             inset: 0;
             display: none;
@@ -1305,7 +1559,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-editor-wrap[data-active="true"],
-        #notes-preview-wrap[data-active="true"] {
+        #notes-preview-wrap[data-active="true"],
+        #notes-jupyter-wrap[data-active="true"] {
             display: block;
         }
 
@@ -1541,6 +1796,113 @@ function applyWindowStyle(result) {
             color: var(--bg);
         }
 
+        /* Jupyter UI Styles */
+        #notes-jupyter-wrap {
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .jupyter-code-block {
+            margin: 16px 0;
+            border: 2px solid var(--fg);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .jupyter-toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-bottom: 2px solid var(--fg);
+        }
+
+        .jupyter-btn {
+            padding: 6px 12px;
+            background-color: transparent;
+            border: 1px solid var(--fg);
+            color: var(--fg);
+            cursor: pointer;
+            font-size: ${result.fontSize - 2}px;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .jupyter-btn:hover {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .jupyter-btn:active {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
+        }
+
+        .jupyter-code-editable {
+            margin: 0;
+            padding: 12px;
+            background-color: var(--bg);
+            border: none;
+            color: var(--fg);
+            font-family: monospace;
+            font-size: ${result.fontSize}px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+            outline: 2px solid transparent;
+            outline-offset: -2px;
+        }
+
+        .jupyter-code-editable:focus {
+            outline-color: var(--accent);
+        }
+
+        .jupyter-code-editable pre {
+            all: unset;
+            display: block;
+            white-space: pre;
+            font-family: monospace;
+            color: var(--fg);
+            font-size: ${result.fontSize}px;
+        }
+
+        .jupyter-output-wrapper {
+            border-top: 2px solid var(--fg);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.1);
+        }
+
+        .jupyter-output-toggle {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: transparent;
+            border: none;
+            border-bottom: 1px solid var(--fg);
+            color: var(--fg);
+            cursor: pointer;
+            font-size: ${result.fontSize - 2}px;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+
+        .jupyter-output-toggle:hover {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            color: var(--accent);
+        }
+
+        .jupyter-output {
+            margin: 0;
+            padding: 12px;
+            background-color: var(--bg);
+            color: var(--fg);
+            font-family: monospace;
+            font-size: ${result.fontSize - 2}px;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: none;
+        }
+
     `;
 
     document.head.appendChild(style);
@@ -1581,6 +1943,11 @@ elements.tabEditor.addEventListener('click', () => {
 
 elements.tabViewer.addEventListener('click', () => {
     setViewMode('viewer');
+});
+
+elements.tabJupyter.addEventListener('click', () => {
+    setViewMode('jupyter');
+    renderJupyterView();
 });
 
 elements.newFile.addEventListener('click', () => {
