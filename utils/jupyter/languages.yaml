@@ -35,12 +35,33 @@
   FileExtension: sh
   ExecuteCommand: [ bash, "${FILE}" ]
 
+- Aliases: [ powershell, pwsh, ps ]
+  Description: PowerShell (pwsh)
+  Template: |-
+    {{ .Code }}
+  FileExtension: ps1
+  ExecuteCommand: [ pwsh, -NoProfile, -File, "${FILE}" ]
+
 - Aliases: [ zsh ]
   Description: Linux / Unix Shell Script
   Template: |-
     {{ .Code }}
   FileExtension: zsh
   ExecuteCommand: [ zsh, "${FILE}" ]
+
+- Aliases: [ fish ]
+  Description: Fish Shell Script
+  Template: |-
+    {{ .Code }}
+  FileExtension: fish
+  ExecuteCommand: [ fish, "${FILE}" ]
+
+- Aliases: [ nu, nushell ]
+  Description: Nushell
+  Template: |-
+    {{ .Code }}
+  FileExtension: nu
+  ExecuteCommand: [ nu, "${FILE}" ]
 
 - Aliases: [ ruby, rb ]
   Description: Ruby
@@ -56,9 +77,259 @@
   FileExtension: js
   ExecuteCommand: [ node, "${FILE}" ]
 
+- Aliases: [ kotlin, kt ]
+  Description: Kotlin (JVM)
+  Template: |-
+    {{ if contains "fun main" }}
+    {{ .Code }}
+    {{ else }}
+    fun main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: kt
+  PreRunCommand: [ kotlinc, "${FILE}", -include-runtime, -d, "${FILE}.jar" ]
+  ExecuteCommand: [ java, -jar, "${FILE}.jar" ]
+
+- Aliases: [ kts, "kotlin script" ]
+  Description: Kotlin Script
+  Template: |-
+    {{ .Code }}
+  FileExtension: kts
+  ExecuteCommand: [ kotlinc, -script, "${FILE}" ]
+
+- Aliases: [ swift ]
+  Description: Swift
+  Template: |-
+    {{ .Code }}
+  FileExtension: swift
+  ExecuteCommand: [ swift, "${FILE}" ]
+
+- Aliases: [ clojure, clj ]
+  Description: Clojure
+  Template: |-
+    {{ .Code }}
+  FileExtension: clj
+  ExecuteCommand: [ clojure, "${FILE}" ]
+
+- Aliases: [ elixir, ex ]
+  Description: Elixir
+  Template: |-
+    {{ .Code }}
+  FileExtension: exs
+  ExecuteCommand: [ elixir, "${FILE}" ]
+
+- Aliases: [ erlang, erl ]
+  Description: Erlang (escript)
+  Template: |-
+    {{ if contains "-module" }}
+    {{ .Code }}
+    {{ else }}
+    -module(main).
+    -export([main/1]).
+
+    main(_Args) ->
+        {{ .Code }}.
+    {{ end }}
+  FileExtension: escript
+  ExecuteCommand: [ escript, "${FILE}" ]
+
+- Aliases: [ julia, jl ]
+  Description: Julia
+  Template: |-
+    {{ .Code }}
+  FileExtension: jl
+  ExecuteCommand: [ julia, "${FILE}" ]
+
+- Aliases: [ haskell, hs ]
+  Description: Haskell
+  Template: |-
+    {{ if begins "main" }}
+    {{ .Code }}
+    {{ else }}
+    main = do
+        {{ .Code }}
+    {{ end }}
+  FileExtension: hs
+  ExecuteCommand: [ runghc, "${FILE}" ]
+
+- Aliases: [ ocaml, ml ]
+  Description: OCaml
+  Template: |-
+    {{ .Code }}
+  FileExtension: ml
+  ExecuteCommand: [ ocaml, "${FILE}" ]
+
+- Aliases: [ scala, sc ]
+  Description: Scala
+  Template: |-
+    {{ if contains "object" }}
+    {{ .Code }}
+    {{ else }}
+    object Main extends App {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: scala
+  ExecuteCommand: [ scala, "${FILE}" ]
+
+- Aliases: [ dart ]
+  Description: Dart
+  Template: |-
+    {{ if contains "main" }}
+    {{ .Code }}
+    {{ else }}
+    void main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: dart
+  ExecuteCommand: [ dart, "${FILE}" ]
+
+- Aliases: [ groovy, gr ]
+  Description: Groovy
+  Template: |-
+    {{ .Code }}
+  FileExtension: groovy
+  ExecuteCommand: [ groovy, "${FILE}" ]
+
+- Aliases: [ tcl ]
+  Description: Tcl
+  Template: |-
+    {{ .Code }}
+  FileExtension: tcl
+  ExecuteCommand: [ tclsh, "${FILE}" ]
+
+- Aliases: [ awk ]
+  Description: Awk
+  Template: |-
+    {{ .Code }}
+  FileExtension: awk
+  ExecuteCommand: [ awk, -f, "${FILE}" ]
+
+- Aliases: [ typescript, ts ]
+  Description: TypeScript (ts-node)
+  Template: |-
+    {{ .Code }}
+  FileExtension: ts
+  ExecuteCommand: [ ts-node, "${FILE}" ]
+
 - Aliases: [ perl, perl5 ]
   Description: Perl 5.x
   Template: |-
     {{ .Code }}
   FileExtension: pl
   ExecuteCommand: [ perl, "${FILE}" ]
+
+- Aliases: [ java ]
+  Description: Java
+  Template: |-
+    {{ if contains "class" }}
+    {{ .Code }}
+    {{ else }}
+    public class Main {
+        public static void main(String[] args) {
+            {{ .Code }}
+        }
+    }
+    {{ end }}
+  FileExtension: java
+  PreRunCommand: [ javac, "${FILE}" ]
+  ExecuteCommand: [ java, -cp, "${DIR}", Main ]
+
+- Aliases: [ c ]
+  Description: C
+  Template: |-
+    {{ if begins "#include" }}
+    {{ .Code }}
+    {{ else }}
+    #include <stdio.h>
+
+    int main(void) {
+        {{ .Code }}
+        return 0;
+    }
+    {{ end }}
+  FileExtension: c
+  PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ cpp, c++, cxx ]
+  Description: C++
+  Template: |-
+    {{ if begins "#include" }}
+    {{ .Code }}
+    {{ else }}
+    #include <iostream>
+
+    int main() {
+        {{ .Code }}
+        return 0;
+    }
+    {{ end }}
+  FileExtension: cpp
+  PreRunCommand: [ c++, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ rust, rs ]
+  Description: Rust
+  Template: |-
+    {{ if begins "fn main" }}
+    {{ .Code }}
+    {{ else }}
+    fn main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: rs
+  PreRunCommand: [ rustc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ php ]
+  Description: PHP
+  Template: |-
+    {{ if begins "<?php" }}
+    {{ .Code }}
+    {{ else }}
+    <?php
+    {{ .Code }}
+    {{ end }}
+  FileExtension: php
+  ExecuteCommand: [ php, "${FILE}" ]
+
+- Aliases: [ lua ]
+  Description: Lua
+  Template: |-
+    {{ .Code }}
+  FileExtension: lua
+  ExecuteCommand: [ lua, "${FILE}" ]
+
+- Aliases: [ r, rstats ]
+  Description: R
+  Template: |-
+    {{ .Code }}
+  FileExtension: r
+  ExecuteCommand: [ Rscript, "${FILE}" ]
+
+- Aliases: [ csharp, cs, dotnet ]
+  Description: C# (.NET)
+  Template: |-
+    {{ .Code }}
+  FileExtension: cs
+  ExecuteCommand: [ dotnet, script, "${FILE}" ]
+
+- Aliases: [ vb, vbnet, "vb.net" ]
+  Description: VB.NET (Mono)
+  Template: |-
+    {{ if contains "Module" }}
+    {{ .Code }}
+    {{ else }}
+    Module Program
+        Sub Main()
+            {{ .Code }}
+        End Sub
+    End Module
+    {{ end }}
+  FileExtension: vb
+  PreRunCommand: [ vbnc, "${FILE}", -out:"${FILE}.exe" ]
+  ExecuteCommand: [ mono, "${FILE}.exe" ]

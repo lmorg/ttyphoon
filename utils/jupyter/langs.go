@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"text/template"
@@ -113,12 +114,15 @@ func templateFuncs(code string) template.FuncMap {
 
 func expandVars(slice []string, filename string) []string {
 	s := slices.Clone(slice)
+	dir := filepath.Dir(filename)
 
 	for i := range s {
 		s[i] = os.Expand(s[i], func(val string) string {
 			switch val {
 			case "FILE":
 				return filename
+			case "DIR":
+				return dir
 			default:
 				return val
 			}
