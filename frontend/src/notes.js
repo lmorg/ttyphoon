@@ -24,10 +24,11 @@ app.innerHTML = `
         </aside>
         <main id="notes-main">
             <div id="notes-tabs" role="tablist">
-                <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">Viewer</button>
-                <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Editor</button>
-                <button id="notes-tab-jupyter" type="button" role="tab" aria-selected="false">Jupyter</button>
+                <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">View</button>
+                <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Edit</button>
+                <button id="notes-tab-jupyter" type="button" role="tab" aria-selected="false">Run</button>
                 <button id="notes-new" type="button">New</button>
+                <button id="notes-rename" type="button" title="Rename current note">Rename</button>
                 <button id="notes-delete" type="button" title="Delete current note">Delete</button>
                 <div id="notes-status" role="status"></div>
             </div>
@@ -81,6 +82,7 @@ const elements = {
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
+    rename: document.getElementById('notes-rename'),
     delete: document.getElementById('notes-delete'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -1320,6 +1322,11 @@ function applyWindowStyle(result) {
             border-color: var(--green) !important;
             color: var(--green) !important;
         }
+
+        #notes-rename:hover {
+            border-color: var(--yellow) !important;
+            color: var(--yellow) !important;
+        }
         
         #notes-modal-create:hover {
             border-color: var(--green) !important;
@@ -1490,10 +1497,6 @@ function applyWindowStyle(result) {
 
         #notes-tabs button:hover {
             border-color: var(--selection);
-        }
-
-        #notes-new {
-            margin-left: auto;
         }
 
         #notes-new:hover {
@@ -1920,6 +1923,14 @@ elements.tabJupyter.addEventListener('click', () => {
 
 elements.newFile.addEventListener('click', () => {
     openNewFilePrompt();
+});
+
+elements.rename.addEventListener('click', () => {
+    if (!state.currentFile) {
+        setStatus('Select a note to rename.', true);
+        return;
+    }
+    openRenamePrompt(state.currentFile);
 });
 
 elements.modalCancel.addEventListener('click', () => {
