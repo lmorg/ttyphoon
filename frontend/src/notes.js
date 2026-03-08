@@ -458,7 +458,7 @@ function convertToJupyterCodeBlocks() {
         const runTerminalBtn = document.createElement('button');
         runTerminalBtn.type = 'button';
         runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
-        runTerminalBtn.textContent = 'Run in Terminal';
+        runTerminalBtn.textContent = 'Send code to terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
         const languageLabel = document.createElement('span');
@@ -1030,7 +1030,6 @@ async function createNewFile() {
 
     // Handle rename operation
     if (state.renamingFile) {
-        //const newPath = state.renamingFile.split('/').slice(0, -1).join('/') + '/' + fileName;
         const renameFn = getWailsFunction('RenameFile');
         if (!renameFn) {
             setStatus('RenameFile is not available.', true);
@@ -1053,7 +1052,6 @@ async function createNewFile() {
     }
 
     // Handle new file creation
-    //fileName = "$NOTES/" + fileName;
 
     const exists = state.files.some((file) => file === fileName);
     if (exists) {
@@ -1108,7 +1106,6 @@ async function createAndOpenFile(filename, contents) {
     }
 }
 
-//window.openFile = openFile;
 window.createAndOpenFile = createAndOpenFile;
 
 EventsOn("notesCreateAndOpen", params => {
@@ -1895,12 +1892,6 @@ GetParameters().then((params) => {
             window.createAndOpenFile(params.filename, params.content);
         }, 1);
     }
-
-    /*if (params.filename != '' && params.content == '') {
-        setTimeout(function() {
-            window.createAndOpenFile(params.filename, params.content);
-        }, 1);
-    }*/
 });
 
 refreshFiles();

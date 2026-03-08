@@ -47,6 +47,13 @@ func (sr *sdlRender) startNotes(tile types.Tile, filename, content string) bool 
 			switch msg.EventName {
 			case "focus":
 				sr.TriggerDeallocation(sr.window.Raise)
+			case "noteRunTerminal":
+				sr.TriggerDeallocation(sr.window.Raise)
+				b := []byte(msg.Parameters["code"])
+				err := sr.tmux.ActivePane().Write(b)
+				if err != nil {
+					sr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				}
 			}
 		}
 	})
