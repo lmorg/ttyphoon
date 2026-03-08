@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/lmorg/ttyphoon/app"
 )
@@ -110,11 +111,15 @@ func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, bi
 	pre := expandVars(binding.PreRunCommand, tempFile.Name())
 	exe := expandVars(binding.ExecuteCommand, tempFile.Name())
 
+	var exitCode int
 	if len(pre) > 0 {
-		execute(ctx, id, pre, ch)
+		exitCode = execute(ctx, id, pre, ch)
+	}
+	if exitCode == 0 {
+		execute(ctx, id, exe, ch)
 	}
 
-	execute(ctx, id, exe, ch)
+	time.Sleep(500 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed
 	close(ch)
 }
 
@@ -146,7 +151,13 @@ func expandVars(slice []string, filename string) []string {
 	return s
 }
 
-func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) {
+func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) int {
+	select {
+	case <-ctx.Done():
+		return 1
+	default:
+	}
+
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -156,7 +167,7 @@ func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) 
 			Output: fmt.Sprintf("Error getting stdout: %v", err),
 			IsErr:  true,
 		}
-		return
+		return 1
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -166,7 +177,7 @@ func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) 
 			Output: fmt.Sprintf("Error getting stderr: %v", err),
 			IsErr:  true,
 		}
-		return
+		return 1
 	}
 
 	err = cmd.Start()
@@ -176,7 +187,7 @@ func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) 
 			Output: fmt.Sprintf("Error starting command: %v", err),
 			IsErr:  true,
 		}
-		return
+		return 1
 	}
 
 	go readAndEmit(id, ch, stdout, false)
@@ -192,6 +203,8 @@ func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) 
 			}
 		}
 	}
+
+	return cmd.ProcessState.ExitCode()
 }
 
 func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool) {
@@ -206,6 +219,10 @@ func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool)
 	}
 
 	if err := scanner.Err(); err != nil {
+		if strings.Contains(err.Error(), "file already closed") {
+			return
+		}
+
 		ch <- &OutputT{
 			Id:     id,
 			Output: fmt.Sprintf("Error reading output: %v", err),

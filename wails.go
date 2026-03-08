@@ -49,6 +49,7 @@ type WApp struct {
 	ipc         *dispatcher.IpcT
 	msgPipe     chan *dispatcher.IpcMessageT
 	ps          *pStructT
+	notesKills  map[string]func()
 }
 
 var WWindowTsBindings = []struct {
@@ -65,11 +66,12 @@ var WWindowTsBindings = []struct {
 // NewApp creates a new App application struct
 func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps *pStructT) *WApp {
 	a := &WApp{
-		window:  window,
-		payload: payload,
-		msgPipe: make(chan *dispatcher.IpcMessageT),
-		ps:      ps,
-		visible: true,
+		window:     window,
+		payload:    payload,
+		msgPipe:    make(chan *dispatcher.IpcMessageT),
+		ps:         ps,
+		visible:    true,
+		notesKills: map[string]func(){},
 	}
 
 	a.homeDir, _ = os.UserHomeDir()
@@ -155,7 +157,10 @@ func (a *WApp) GetLanguageDescriptions(language string) []string {
 func (a *WApp) RunNote(id string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
 
-	go jupyter.RunNote(a.ctx, id, code, language, ch)
+	ctx, kill := context.WithCancel(context.Background())
+	a.notesKills[id] = kill
+
+	go jupyter.RunNote(ctx, id, code, language, ch)
 
 	go func() {
 		for output := range ch {
@@ -165,7 +170,27 @@ func (a *WApp) RunNote(id string, code, language string) {
 				"isError": fmt.Sprintf("%v", output.IsErr),
 			})
 		}
+		// Emit completion event when channel closes
+		runtime.EventsEmit(a.ctx, "noteComplete", map[string]string{
+			"blockId": id,
+		})
+		delete(a.notesKills, id)
 	}()
+}
+
+func (a *WApp) StopNote(id string) {
+	fn, ok := a.notesKills[id]
+	if !ok {
+		log.Printf("cannot stop note %s because no kill function exists", id)
+	}
+
+	fn()
+
+	runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
+		"blockId": id,
+		"output":  "[process killed]",
+		"isError": fmt.Sprintf("%v", true),
+	})
 }
 
 func (a *WApp) GetMarkdown(filename string) string {

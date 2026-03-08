@@ -62,6 +62,10 @@ export function SendVisualInputBox(arg1, arg2) {
   return window['go']['main']['WApp']['SendVisualInputBox'](arg1, arg2);
 }
 
+export function StopNote(arg1) {
+  return window['go']['main']['WApp']['StopNote'](arg1);
+}
+
 export function WindowHide() {
   return window['go']['main']['WApp']['WindowHide']();
 }

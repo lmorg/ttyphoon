@@ -458,6 +458,13 @@ function convertToJupyterCodeBlocks() {
         runNotesBtn.textContent = 'Run';
         runNotesBtn.addEventListener('click', () => runCodeBlockInNotes(blockId));
         
+        const stopNotesBtn = document.createElement('button');
+        stopNotesBtn.type = 'button';
+        stopNotesBtn.className = 'jupyter-btn jupyter-stop-notes';
+        stopNotesBtn.textContent = 'Stop';
+        stopNotesBtn.style.display = 'none'; // Initially hidden
+        stopNotesBtn.addEventListener('click', () => stopCodeBlockInNotes(blockId));
+        
         const runTerminalBtn = document.createElement('button');
         runTerminalBtn.type = 'button';
         runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
@@ -507,6 +514,7 @@ function convertToJupyterCodeBlocks() {
         });
         
         toolbar.appendChild(runNotesBtn);
+        toolbar.appendChild(stopNotesBtn);
         toolbar.appendChild(runTerminalBtn);
         toolbar.appendChild(runtimeDropdown);
         
@@ -566,6 +574,12 @@ async function runCodeBlockInNotes(blockId) {
         block.currentContent = editableElement.value;
     }
     
+    // Toggle Run/Stop buttons
+    const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
+    const stopBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-stop-notes`);
+    if (runBtn) runBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'inline-block';
+    
     // Show the output wrapper when running
     const outputWrapper = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output-wrapper`);
     if (outputWrapper) {
@@ -588,8 +602,28 @@ async function runCodeBlockInNotes(blockId) {
             if (outputBlock) {
                 outputBlock.textContent = `Error: ${err.message}`;
             }
+            // Reset buttons on error
+            if (runBtn) runBtn.style.display = 'inline-block';
+            if (stopBtn) stopBtn.style.display = 'none';
         }
     }
+}
+
+async function stopCodeBlockInNotes(blockId) {
+    const stopNoteFn = window.go?.main?.WApp?.StopNote;
+    if (stopNoteFn) {
+        try {
+            await stopNoteFn(blockId);
+        } catch (err) {
+            console.error('Error stopping code:', err);
+        }
+    }
+    
+    // Toggle buttons back
+    const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
+    const stopBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-stop-notes`);
+    if (runBtn) runBtn.style.display = 'inline-block';
+    if (stopBtn) stopBtn.style.display = 'none';
 }
 
 async function runCodeBlockInTerminal(blockId) {
@@ -1176,6 +1210,15 @@ EventsOn("noteRun", (data) => {
     outputBlock.appendChild(span);
 });
 
+EventsOn("noteComplete", (data) => {
+    const { blockId } = data;
+    // Toggle buttons back to Run
+    const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
+    const stopBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-stop-notes`);
+    if (runBtn) runBtn.style.display = 'inline-block';
+    if (stopBtn) stopBtn.style.display = 'none';
+});
+
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
@@ -1213,8 +1256,8 @@ function applyWindowStyle(result) {
         }
 
         body {
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         ::selection {
@@ -1253,8 +1296,10 @@ function applyWindowStyle(result) {
         #notes-sidebar {
             display: flex;
             flex-direction: column;
-            /*border-right: 2px solid var(--fg); */
-            padding: 16px;
+            padding-left: 15px;
+            padding-top: 10px;
+            padding-right: 0px;
+            padding-bottom: 5px;
             gap: 12px;
             min-height: 0;
             overflow: hidden;
@@ -1531,7 +1576,8 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 16px;
+            padding: 5px;
+            padding-top: 10px;
             height: 100vh;
         }
 
@@ -1901,6 +1947,21 @@ function applyWindowStyle(result) {
 
         .jupyter-btn:active {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
+        }
+
+        .jupyter-stop-notes {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .jupyter-stop-notes:hover {
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .jupyter-stop-notes:active {
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
         }
 
         .jupyter-runtime-dropdown {
