@@ -33,18 +33,32 @@ type OutputT struct {
 	IsErr  bool
 }
 
-func RunNote(ctx context.Context, id, code, language string, ch chan<- *OutputT) {
+func GetLanguageDescriptions(language string) []string {
 	language = strings.ToLower(language)
 
+	var descriptions []string
 	for _, binding := range Languages {
 		if slices.Contains(binding.Aliases, language) {
-			runNote(ctx, id, code, ch, binding)
-			return
+			descriptions = append(descriptions, binding.Description)
 		}
 	}
+
+	return descriptions
+}
+
+func RunNote(ctx context.Context, id, code, langRuntime string, ch chan<- *OutputT) {
+	for _, binding := range Languages {
+		if binding.Description != langRuntime {
+			continue
+		}
+
+		runNote(ctx, id, code, ch, binding)
+		return
+	}
+
 	ch <- &OutputT{
 		Id:     id,
-		Output: fmt.Sprintf("Unsupported language: %s", language),
+		Output: fmt.Sprintf("Unsupported language: %s", langRuntime),
 		IsErr:  true,
 	}
 }

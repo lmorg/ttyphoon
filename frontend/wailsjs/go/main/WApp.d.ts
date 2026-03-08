@@ -10,6 +10,8 @@ export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
 
 export function GetImage(arg1:string):Promise<string>;
 
+export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
+
 export function GetMarkdown(arg1:string):Promise<string>;
 
 export function GetParameters():Promise<any>;
