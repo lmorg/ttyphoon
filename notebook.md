@@ -26,13 +26,10 @@ This is a Go hello world one liner
 fmt.Println("hello world!!")
 ```
 
-## Bash again
+## Shell scripts again
 
-```bash
-echo "
-1
-2
-3"
+```sh
+echo $SHELL
 ```
 
 ## Python again

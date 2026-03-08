@@ -440,6 +440,7 @@ function convertToJupyterCodeBlocks() {
         
         state.jupyterCodeBlocks[blockId] = {
             language,
+            runtime: language,
             originalContent: content,
             currentContent: content
         };
@@ -454,22 +455,60 @@ function convertToJupyterCodeBlocks() {
         const runNotesBtn = document.createElement('button');
         runNotesBtn.type = 'button';
         runNotesBtn.className = 'jupyter-btn jupyter-run-notes';
-        runNotesBtn.textContent = 'Run in Notes';
+        runNotesBtn.textContent = 'Run';
         runNotesBtn.addEventListener('click', () => runCodeBlockInNotes(blockId));
         
         const runTerminalBtn = document.createElement('button');
         runTerminalBtn.type = 'button';
         runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
-        runTerminalBtn.textContent = 'Send code to terminal';
+        runTerminalBtn.textContent = 'Send to terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
-        const languageLabel = document.createElement('span');
-        languageLabel.className = 'jupyter-language-label';
-        languageLabel.textContent = language;
+        const runtimeDropdown = document.createElement('select');
+        runtimeDropdown.className = 'jupyter-runtime-dropdown';
+        runtimeDropdown.title = 'Select runtime';
+        
+        // Populate dropdown immediately
+        (async () => {
+            const getDescriptionsFn = window.go?.main?.WApp?.GetLanguageDescriptions;
+            if (getDescriptionsFn) {
+                try {
+                    const descriptions = await getDescriptionsFn(language);
+                    runtimeDropdown.innerHTML = '';
+                    if (descriptions && descriptions.length > 0) {
+                        descriptions.forEach((desc) => {
+                            const option = document.createElement('option');
+                            option.value = desc;
+                            option.textContent = desc;
+                            runtimeDropdown.appendChild(option);
+                        });
+                        // Set runtime to the first description in the list
+                        state.jupyterCodeBlocks[blockId].runtime = descriptions[0];
+                    } else {
+                        const option = document.createElement('option');
+                        option.value = language;
+                        option.textContent = language;
+                        runtimeDropdown.appendChild(option);
+                        state.jupyterCodeBlocks[blockId].runtime = language;
+                    }
+                } catch (err) {
+                    console.error('Error fetching language descriptions:', err);
+                    const option = document.createElement('option');
+                    option.value = language;
+                    option.textContent = language;
+                    runtimeDropdown.appendChild(option);
+                    state.jupyterCodeBlocks[blockId].runtime = language;
+                }
+            }
+        })();
+        
+        runtimeDropdown.addEventListener('change', () => {
+            state.jupyterCodeBlocks[blockId].runtime = runtimeDropdown.value;
+        });
         
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(runTerminalBtn);
-        toolbar.appendChild(languageLabel);
+        toolbar.appendChild(runtimeDropdown);
         
         const editableCode = document.createElement('textarea');
         editableCode.className = 'jupyter-code-editable';
@@ -542,7 +581,7 @@ async function runCodeBlockInNotes(blockId) {
     const runNoteFn = window.go?.main?.WApp?.RunNote;
     if (runNoteFn) {
         try {
-            await runNoteFn(blockId, block.currentContent, block.language);
+            await runNoteFn(blockId, block.currentContent, block.runtime);
         } catch (err) {
             console.error('Error running code:', err);
             const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
@@ -1787,13 +1826,17 @@ function applyWindowStyle(result) {
         .jupyter-toolbar {
             display: flex;
             gap: 8px;
-            padding: 8px;
+            padding: 0px;
+            padding-left: 8px;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             border-bottom: 2px solid var(--fg);
+            align-items: center;
         }
 
         .jupyter-btn {
-            padding: 6px 12px;
+            padding: 5px 12px;
+            margin-top: 8px;
+            margin-bottom: 8px;
             background-color: transparent;
             border: 1px solid var(--fg);
             color: var(--fg);
@@ -1801,6 +1844,8 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize - 2}px;
             border-radius: 2px;
             transition: all 0.2s ease;
+            align-items: center;
+            vertical-align: middle;
         }
 
         .jupyter-btn:hover {
@@ -1813,13 +1858,42 @@ function applyWindowStyle(result) {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
         }
 
-        .jupyter-language-label {
-            margin-left: auto;
-            padding: 6px 12px;
+        .jupyter-runtime-dropdown {
+            margin: 8px;
+            padding: 5px 24px 5px 12px;
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0);
+            border: none;
             color: var(--accent);
             font-size: ${result.fontSize - 2}px;
             opacity: 0.8;
-            align-self: center;
+            cursor: pointer;
+            outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+
+            text-align: right;
+
+ 
+      
+            align-items: right;
+            vertical-align: middle;
+        }
+
+        .jupyter-runtime-dropdown:hover {
+            opacity: 1;
+            color: var(--fg);
+        }
+
+        .jupyter-runtime-dropdown:focus {
+            opacity: 1;
+            color: var(--fg);
+        }
+
+        .jupyter-runtime-dropdown option {
+            background-color: var(--bg);
+            color: var(--fg);
+            padding: 4px 8px;
         }
 
         .jupyter-code-editable {

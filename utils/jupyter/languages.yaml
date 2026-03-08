@@ -1,5 +1,5 @@
 - Aliases: [ go, golang ]
-  Description: Go v1.x
+  Description: Go (Golang)
   Template: |-
     {{ if begins "package" }}
     {{ .Code }}
@@ -43,7 +43,7 @@
   ExecuteCommand: [ ipython, "${FILE}" ]
 
 - Aliases: [ bash, sh, shell ]
-  Description: Linux / Unix Shell Script
+  Description: Bash Shell Script
   Template: |-
     {{ .Code }}
   FileExtension: sh
@@ -57,7 +57,7 @@
   ExecuteCommand: [ sh, "${FILE}" ]
 
 - Aliases: [ sh, shell, dash ]
-  Description: Dash Shell
+  Description: Dash Shell Script
   Template: |-
     {{ .Code }}
   FileExtension: sh
@@ -71,7 +71,7 @@
   ExecuteCommand: [ pwsh, -NoProfile, -File, "${FILE}" ]
 
 - Aliases: [ zsh ]
-  Description: Linux / Unix Shell Script
+  Description: Zsh Shell Script
   Template: |-
     {{ .Code }}
   FileExtension: zsh
