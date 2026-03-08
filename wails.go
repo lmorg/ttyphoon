@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"embed"
 	"encoding/base64"
@@ -9,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -19,6 +17,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
+	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -150,121 +149,18 @@ func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
 }
 
 func (a *WApp) RunNote(id string, code, language string) {
+	ch := make(chan *jupyter.OutputT)
+
+	go jupyter.RunNote(a.ctx, id, code, language, ch)
+
 	go func() {
-		// Create a temporary file for the code
-		tempDir := os.TempDir()
-		tempFile, err := os.CreateTemp(tempDir, "ttyphoon-note-*."+getFileExtension(language))
-		if err != nil {
-			a.emitNoteRun(id, fmt.Sprintf("Error creating temp file: %v", err))
-			return
-		}
-		defer os.Remove(tempFile.Name())
-
-		// Write code to temp file
-		_, err = tempFile.WriteString(code)
-		tempFile.Close()
-		if err != nil {
-			a.emitNoteRun(id, fmt.Sprintf("Error writing temp file: %v", err))
-			return
-		}
-
-		// Determine the command to run
-		var cmd *exec.Cmd
-		switch strings.ToLower(language) {
-		case "python", "python3", "py":
-			cmd = exec.CommandContext(a.ctx, "python3", tempFile.Name())
-		case "python2":
-			cmd = exec.CommandContext(a.ctx, "python2", tempFile.Name())
-		case "bash", "sh":
-			cmd = exec.CommandContext(a.ctx, "bash", tempFile.Name())
-		case "zsh":
-			cmd = exec.CommandContext(a.ctx, "zsh", tempFile.Name())
-		case "ruby", "rb":
-			cmd = exec.CommandContext(a.ctx, "ruby", tempFile.Name())
-		case "node", "javascript", "js":
-			cmd = exec.CommandContext(a.ctx, "node", tempFile.Name())
-		case "go":
-			cmd = exec.CommandContext(a.ctx, "go", "run", tempFile.Name())
-		default:
-			a.emitNoteRun(id, fmt.Sprintf("Unsupported language: %s", language))
-			return
-		}
-
-		// Get stdout and stderr pipes
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			a.emitNoteRun(id, fmt.Sprintf("Error getting stdout: %v", err))
-			return
-		}
-
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			a.emitNoteRun(id, fmt.Sprintf("Error getting stderr: %v", err))
-			return
-		}
-
-		// Start the command
-		err = cmd.Start()
-		if err != nil {
-			a.emitNoteRun(id, fmt.Sprintf("Error starting command: %v", err))
-			return
-		}
-
-		// Read output concurrently
-		go readAndEmit(a, id, stdout, false)
-		go readAndEmit(a, id, stderr, true)
-
-		// Wait for command to finish
-		err = cmd.Wait()
-		if err != nil {
-			if _, ok := err.(*exec.ExitError); !ok {
-				a.emitNoteRun(id, fmt.Sprintf("Error: %v", err))
-			}
+		for output := range ch {
+			runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
+				"blockId": output.Id,
+				"output":  output.Output,
+			})
 		}
 	}()
-}
-
-func getFileExtension(language string) string {
-	switch strings.ToLower(language) {
-	case "python", "python3", "py":
-		return "py"
-	case "python2":
-		return "py"
-	case "bash", "sh":
-		return "sh"
-	case "zsh":
-		return "zsh"
-	case "ruby", "rb":
-		return "rb"
-	case "node", "javascript", "js":
-		return "js"
-	case "go":
-		return "go"
-	default:
-		return "txt"
-	}
-}
-
-func readAndEmit(a *WApp, blockId string, reader io.Reader, isStderr bool) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		prefix := ""
-		if isStderr {
-			prefix = "[STDERR] "
-		}
-		a.emitNoteRun(blockId, prefix+line)
-	}
-	if err := scanner.Err(); err != nil {
-		a.emitNoteRun(blockId, fmt.Sprintf("Error reading output: %v", err))
-	}
-}
-
-func (a *WApp) emitNoteRun(blockId, output string) {
-	runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
-		"blockId": blockId,
-		"output":  output,
-	})
 }
 
 func (a *WApp) GetMarkdown(filename string) string {

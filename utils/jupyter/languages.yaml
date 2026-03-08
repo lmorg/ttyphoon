@@ -1,0 +1,57 @@
+- Aliases: [ go, golang ]
+  Description: Go v1.x
+  Template: |-
+    {{ if begins "package" }}
+    {{ .Code }}
+    {{ else }}
+    package main
+
+    func main() {
+    {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: go
+  PreRunCommand: [ goimports, -w, "${FILE}" ]
+  ExecuteCommand: [ go, run, "${FILE}" ]
+
+- Aliases: [ python, py, python3 ]
+  Description: Python 3.x
+  Template: |-
+    {{ .Code }}
+  FileExtension: py
+  ExecuteCommand: [ python3, "${FILE}" ]
+
+- Aliases: [ python2 ]
+  Description: Python 2 (legacy)
+  Template: |-
+    {{ .Code }}
+  FileExtension: py
+  ExecuteCommand: [ python2, "${FILE}" ]
+
+- Aliases: [ bash, sh, shell ]
+  Description: Linux / Unix Shell Script
+  Template: |-
+    {{ .Code }}
+  FileExtension: sh
+  ExecuteCommand: [ bash, "${FILE}" ]
+
+- Aliases: [ zsh ]
+  Description: Linux / Unix Shell Script
+  Template: |-
+    {{ .Code }}
+  FileExtension: zsh
+  ExecuteCommand: [ zsh, "${FILE}" ]
+
+- Aliases: [ ruby, rb ]
+  Description: Ruby
+  Template: |-
+    {{ .Code }}
+  FileExtension: rb
+  ExecuteCommand: [ ruby, "${FILE}" ]
+
+- Aliases: [ node, js, javascript ]
+  Description: Javascript (node.js)
+  Template: |-
+    {{ .Code }}
+  FileExtension: js
+  ExecuteCommand: [ node, "${FILE}" ]

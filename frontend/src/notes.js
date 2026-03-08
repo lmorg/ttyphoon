@@ -461,15 +461,8 @@ function convertToJupyterCodeBlocks() {
         runTerminalBtn.textContent = 'Run in Terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
-        const saveBtn = document.createElement('button');
-        saveBtn.type = 'button';
-        saveBtn.className = 'jupyter-btn jupyter-save';
-        saveBtn.textContent = 'Save';
-        saveBtn.addEventListener('click', () => saveCodeBlockToMarkdown(blockId));
-        
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(runTerminalBtn);
-        toolbar.appendChild(saveBtn);
         
         const editableCode = document.createElement('pre');
         editableCode.className = 'jupyter-code-editable';
@@ -515,7 +508,7 @@ async function runCodeBlockInNotes(blockId) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) return;
     
-    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable div`);
     if (editableElement) {
         block.currentContent = editableElement.textContent;
     }
@@ -550,7 +543,7 @@ async function runCodeBlockInTerminal(blockId) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) return;
     
-    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable div`);
     if (editableElement) {
         block.currentContent = editableElement.textContent;
     }
@@ -565,54 +558,6 @@ async function runCodeBlockInTerminal(blockId) {
             });
         } catch (err) {
             console.error('Error sending to terminal:', err);
-        }
-    }
-}
-
-function saveCodeBlockToMarkdown(blockId) {
-    const block = state.jupyterCodeBlocks[blockId];
-    if (!block) return;
-    
-    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable code`);
-    if (!editableElement) return;
-    
-    const newContent = editableElement.textContent;
-    block.currentContent = newContent;
-    
-    let markdown = elements.editor.value;
-    const startPattern = `\`\`\`${block.language}`;
-    let blockIndex = 0;
-    let startIdx = -1;
-    
-    for (let i = 0; i < Object.keys(state.jupyterCodeBlocks).length; i++) {
-        const key = Object.keys(state.jupyterCodeBlocks)[i];
-        if (key === blockId) {
-            blockIndex = i;
-            break;
-        }
-    }
-    
-    let currentBlockCount = 0;
-    let pos = 0;
-    while ((pos = markdown.indexOf(startPattern, pos)) !== -1) {
-        if (currentBlockCount === blockIndex) {
-            startIdx = pos;
-            break;
-        }
-        pos += startPattern.length;
-        currentBlockCount++;
-    }
-    
-    if (startIdx >= 0) {
-        const endPos = markdown.indexOf('```', startIdx + startPattern.length);
-        if (endPos >= 0) {
-            const beforeCodeContent = markdown.substring(0, startIdx + startPattern.length);
-            const afterCodeContent = markdown.substring(endPos);
-            markdown = beforeCodeContent + '\n' + newContent + '\n' + afterCodeContent;
-            elements.editor.value = markdown;
-            block.originalContent = newContent;
-            setDirty(true);
-            setStatus(`Updated code block: ${blockId}`, false);
         }
     }
 }
