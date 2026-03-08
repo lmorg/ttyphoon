@@ -464,13 +464,20 @@ function convertToJupyterCodeBlocks() {
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(runTerminalBtn);
         
-        const editableCode = document.createElement('pre');
+        const editableCode = document.createElement('textarea');
         editableCode.className = 'jupyter-code-editable';
-        const editableCodeContent = document.createElement('div');
-        editableCodeContent.className = `language-${language}`;
-        editableCodeContent.textContent = content;
-        editableCodeContent.contentEditable = 'true';
-        editableCode.appendChild(editableCodeContent);
+        editableCode.dataset.language = language;
+        editableCode.value = content;
+        editableCode.spellcheck = false;
+        
+        // Auto-resize textarea to fit content
+        const autoResize = () => {
+            editableCode.style.height = 'auto';
+            editableCode.style.height = editableCode.scrollHeight + 'px';
+        };
+        editableCode.addEventListener('input', autoResize);
+        // Set initial height
+        setTimeout(autoResize, 0);
         
         const outputWrapper = document.createElement('div');
         outputWrapper.className = 'jupyter-output-wrapper';
@@ -508,9 +515,9 @@ async function runCodeBlockInNotes(blockId) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) return;
     
-    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable div`);
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable`);
     if (editableElement) {
-        block.currentContent = editableElement.textContent;
+        block.currentContent = editableElement.value;
     }
     
     // Show the output wrapper when running
@@ -543,9 +550,9 @@ async function runCodeBlockInTerminal(blockId) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) return;
     
-    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable div`);
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable`);
     if (editableElement) {
-        block.currentContent = editableElement.textContent;
+        block.currentContent = editableElement.value;
     }
     
     const sendIpcFn = SendIpc;
@@ -1802,6 +1809,7 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-code-editable {
+            width: 100%;
             margin: 0;
             padding: 12px;
             background-color: var(--bg);
@@ -1810,23 +1818,16 @@ function applyWindowStyle(result) {
             font-family: monospace;
             font-size: ${result.fontSize}px;
             line-height: 1.5;
-            overflow-x: auto;
+            overflow: hidden;
             white-space: pre;
             outline: 2px solid transparent;
             outline-offset: -2px;
+            resize: none;
+            box-sizing: border-box;
         }
 
         .jupyter-code-editable:focus {
             outline-color: var(--accent);
-        }
-
-        .jupyter-code-editable pre {
-            all: unset;
-            display: block;
-            white-space: pre;
-            font-family: monospace;
-            color: var(--fg);
-            font-size: ${result.fontSize}px;
         }
 
         .jupyter-output-wrapper {
