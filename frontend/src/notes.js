@@ -24,9 +24,9 @@ app.innerHTML = `
         </aside>
         <main id="notes-main">
             <div id="notes-tabs" role="tablist">
-                <button id="notes-tab-viewer" type="button" role="tab" aria-selected="true">View</button>
-                <button id="notes-tab-editor" type="button" role="tab" aria-selected="false">Edit</button>
-                <button id="notes-tab-jupyter" type="button" role="tab" aria-selected="false">Run</button>
+                <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
+                <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
+                <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
                 <button id="notes-new" type="button">New</button>
                 <button id="notes-rename" type="button" title="Rename current note">Rename</button>
                 <button id="notes-delete" type="button" title="Delete current note">Delete</button>
@@ -1159,12 +1159,21 @@ EventsOn("updateTitle", newTitle => {
 });
 
 EventsOn("noteRun", (data) => {
-    const { blockId, output } = data;
+    const { blockId, output, isError } = data;
     const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
-    if (outputBlock) {
-        const currentText = outputBlock.textContent;
-        outputBlock.textContent = currentText ? `${currentText}\n${output}` : output;
+    if (!outputBlock) return;
+
+    const text = String(output ?? '');
+    const isErr = String(isError) === 'true';
+
+    if (outputBlock.childNodes.length > 0 && text.length > 0 && text[0] !== '\n' && text[0] !== '\r') {
+        outputBlock.appendChild(document.createTextNode('\n'));
     }
+
+    const span = document.createElement('span');
+    span.className = isErr ? 'jupyter-output-line-error' : 'jupyter-output-line';
+    span.textContent = text;
+    outputBlock.appendChild(span);
 });
 
 function applyWindowStyle(result) {
@@ -1319,6 +1328,7 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            border-radius: 5px;
         }
 
         #notes-delete-modal-card {
@@ -1331,6 +1341,7 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            border-radius: 5px;
         }
 
         #notes-modal-title {
@@ -1357,6 +1368,14 @@ function applyWindowStyle(result) {
             outline: none;
         }
 
+        #notes-new {
+            margin-left: 20px;
+            margin-bottom: 2px;
+        }
+        #notes-rename, #notes-delete {
+            margin-bottom: 2px;
+        }
+
         #notes-new:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
@@ -1365,8 +1384,10 @@ function applyWindowStyle(result) {
         #notes-rename:hover {
             border-color: var(--yellow) !important;
             color: var(--yellow) !important;
+            background-color: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0.2);
+            border-radius: 5px;
         }
-        
+
         #notes-modal-create:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
@@ -1385,7 +1406,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-modal-actions button {
-            border-radius: 0;
+            border-radius: 5px;
             border: 2px solid var(--fg);
             background: transparent;
             color: var(--fg);
@@ -1394,7 +1415,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-delete-modal-actions button {
-            border-radius: 0;
+            border-radius: 5px;
             border: 2px solid var(--fg);
             background: transparent;
             color: var(--fg);
@@ -1404,12 +1425,14 @@ function applyWindowStyle(result) {
 
         #notes-modal-actions button:hover {
             border-color: var(--selection);
-            /*color: var(--selection);*/
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            transition: all 0.2s ease;
         }
 
         #notes-delete-modal-actions button:hover {
             border-color: var(--selection);
-            /*color: var(--selection);*/
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            transition: all 0.2s ease;
         }
 
         #notes-delete-confirm {
@@ -1420,6 +1443,8 @@ function applyWindowStyle(result) {
         #notes-delete-confirm:hover {
             border-color: var(--error) !important;
             color: var(--error) !important;
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
+            transition: all 0.2s ease;
         }
 
         #notes-list {
@@ -1467,7 +1492,7 @@ function applyWindowStyle(result) {
         .notes-file {
             min-height: ${notesFileSize}px;
             text-align: left;
-            border-radius: 0;
+            border-radius: 5px;
             border: 2px solid transparent;
             background: transparent;
             color: var(--fg);
@@ -1514,7 +1539,6 @@ function applyWindowStyle(result) {
             display: inline-flex;
             gap: 8px;
             border-bottom: 2px solid var(--fg);
-            /*padding-bottom: 2px;*/
             align-items: center;
         }
 
@@ -1529,9 +1553,23 @@ function applyWindowStyle(result) {
 
         #notes-tabs button[aria-selected="true"] {
             border-color: var(--fg);
-            /*color: var(--bg);
-            background: var(--fg);*/
             border-bottom: 5px;
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--fg) !important;
+        }
+
+        .tab {
+            border-top-left-radius: 5px !important;
+            border-top-right-radius: 5px !important;
+            border: 2px solid !important;
+            border-bottom: 0px !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        }
+
+        .tab:hover {
+            border: 2px solid !important;
+            border-bottom: 0px !important;
+            border-color: var(--fg) !important;
         }
 
         #notes-tabs button:hover {
@@ -1541,6 +1579,8 @@ function applyWindowStyle(result) {
         #notes-new:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
+            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
+            border-radius: 5px;
         }
 
         #notes-delete {
@@ -1550,6 +1590,8 @@ function applyWindowStyle(result) {
         #notes-delete:hover {
             border-color: var(--error) !important;
             color: var(--error);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
+            border-radius: 5px;
         }
 
         #notes-panel {
@@ -1747,6 +1789,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-find-bar {
+            border-radius: 5px;
             position: absolute;
             top: 16px;
             right: 16px;
@@ -1781,7 +1824,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-find-bar button {
-            border-radius: 0;
+            border-radius: 5px;
             border: 2px solid var(--fg);
             background: transparent;
             color: var(--fg);
@@ -1793,6 +1836,8 @@ function applyWindowStyle(result) {
         #notes-find-bar button:hover {
             border-color: var(--accent);
             color: var(--accent);
+            transition: all 0.2s ease;
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
         }
 
         .find-highlight {
@@ -1819,7 +1864,7 @@ function applyWindowStyle(result) {
         .jupyter-code-block {
             margin: 16px 0;
             border: 2px solid var(--fg);
-            border-radius: 4px;
+            border-radius: 5px;
             overflow: hidden;
         }
 
@@ -1842,12 +1887,12 @@ function applyWindowStyle(result) {
             color: var(--fg);
             cursor: pointer;
             font-size: ${result.fontSize - 2}px;
-            border-radius: 2px;
+            border-radius: 5px;
             transition: all 0.2s ease;
             align-items: center;
             vertical-align: middle;
         }
-
+     
         .jupyter-btn:hover {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
             border-color: var(--accent);
@@ -1871,11 +1916,7 @@ function applyWindowStyle(result) {
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
-
             text-align: right;
-
- 
-      
             align-items: right;
             vertical-align: middle;
         }
@@ -1952,6 +1993,14 @@ function applyWindowStyle(result) {
             white-space: pre-wrap;
             word-wrap: break-word;
             border: none;
+        }
+
+        .jupyter-output-line {
+            color: var(--green);
+        }
+
+        .jupyter-output-line-error {
+            color: var(--error);
         }
 
     `;

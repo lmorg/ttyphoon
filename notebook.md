@@ -29,7 +29,9 @@ fmt.Println("hello world!!")
 ## Shell scripts again
 
 ```sh
-echo $SHELL
+echo "1
+2
+3"
 ```
 
 ## Python again

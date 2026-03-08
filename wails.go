@@ -162,6 +162,7 @@ func (a *WApp) RunNote(id string, code, language string) {
 			runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
 				"blockId": output.Id,
 				"output":  output.Output,
+				"isError": fmt.Sprintf("%v", output.IsErr),
 			})
 		}
 	}()

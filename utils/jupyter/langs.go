@@ -198,14 +198,10 @@ func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		prefix := ""
-		if isStderr {
-			prefix = "[STDERR] "
-		}
 		ch <- &OutputT{
 			Id:     id,
-			Output: prefix + line,
-			IsErr:  false,
+			Output: line,
+			IsErr:  isStderr,
 		}
 	}
 
