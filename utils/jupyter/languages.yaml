@@ -55,3 +55,10 @@
     {{ .Code }}
   FileExtension: js
   ExecuteCommand: [ node, "${FILE}" ]
+
+- Aliases: [ perl, perl5 ]
+  Description: Perl 5.x
+  Template: |-
+    {{ .Code }}
+  FileExtension: pl
+  ExecuteCommand: [ perl, "${FILE}" ]

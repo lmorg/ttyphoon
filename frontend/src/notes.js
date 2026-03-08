@@ -461,8 +461,13 @@ function convertToJupyterCodeBlocks() {
         runTerminalBtn.textContent = 'Run in Terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
+        const languageLabel = document.createElement('span');
+        languageLabel.className = 'jupyter-language-label';
+        languageLabel.textContent = language;
+        
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(runTerminalBtn);
+        toolbar.appendChild(languageLabel);
         
         const editableCode = document.createElement('textarea');
         editableCode.className = 'jupyter-code-editable';
@@ -1808,6 +1813,15 @@ function applyWindowStyle(result) {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
         }
 
+        .jupyter-language-label {
+            margin-left: auto;
+            padding: 6px 12px;
+            color: var(--accent);
+            font-size: ${result.fontSize - 2}px;
+            opacity: 0.8;
+            align-self: center;
+        }
+
         .jupyter-code-editable {
             width: 100%;
             margin: 0;
@@ -1820,14 +1834,13 @@ function applyWindowStyle(result) {
             line-height: 1.5;
             overflow: hidden;
             white-space: pre;
-            outline: 2px solid transparent;
-            outline-offset: -2px;
+            outline: none;
             resize: none;
             box-sizing: border-box;
         }
 
         .jupyter-code-editable:focus {
-            outline-color: var(--accent);
+            outline: none;
         }
 
         .jupyter-output-wrapper {
