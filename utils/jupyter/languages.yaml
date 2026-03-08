@@ -14,6 +14,21 @@
   PreRunCommand: [ goimports, -w, "${FILE}" ]
   ExecuteCommand: [ go, run, "${FILE}" ]
 
+- Aliases: [ go, golang, tinygo ]
+  Description: Go (TinyGo)
+  Template: |-
+    {{ if begins "package" }}
+    {{ .Code }}
+    {{ else }}
+    package main
+
+    func main() {
+    {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: go
+  ExecuteCommand: [ tinygo, run, "${FILE}" ]
+
 - Aliases: [ python, py, python3 ]
   Description: Python 3.x
   Template: |-
@@ -533,3 +548,26 @@
     {{ end }}
   FileExtension: vb
   ExecuteCommand: [ dotnet, script, "${FILE}" ]
+
+- Aliases: [ pascal, pas ]
+  Description: Pascal (Free Pascal)
+  Template: |-
+    {{ if begins "program" }}
+    {{ .Code }}
+    {{ else }}
+    program Main;
+    begin
+        {{ .Code }}
+    end.
+    {{ end }}
+  FileExtension: pas
+  PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ basic, bas, freebasic ]
+  Description: BASIC (FreeBASIC)
+  Template: |-
+    {{ .Code }}
+  FileExtension: bas
+  PreRunCommand: [ fbc, "${FILE}", "-x", "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
