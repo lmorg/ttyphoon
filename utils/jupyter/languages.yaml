@@ -70,6 +70,13 @@
   FileExtension: ps1
   ExecuteCommand: [ pwsh, -NoProfile, -File, "${FILE}" ]
 
+- Aliases: [ powershell, pwsh, ps ]
+  Description: PowerShell (Windows PowerShell)
+  Template: |-
+    {{ .Code }}
+  FileExtension: ps1
+  ExecuteCommand: [ powershell.exe, -NoProfile, -File, "${FILE}" ]
+
 - Aliases: [ zsh ]
   Description: Zsh Shell Script
   Template: |-
@@ -90,6 +97,14 @@
     {{ .Code }}
   FileExtension: nu
   ExecuteCommand: [ nu, "${FILE}" ]
+
+- Aliases: [ dockerfile, docker ]
+  Description: Dockerfile (build and run)
+  Template: |-
+    {{ .Code }}
+  FileExtension: Dockerfile
+  PreRunCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "${DIR}" ]
+  ExecuteCommand: [ docker, run, --rm, ttyphoon-jupyter:latest ]
 
 - Aliases: [ ruby, rb ]
   Description: Ruby

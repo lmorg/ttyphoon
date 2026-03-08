@@ -61,3 +61,24 @@ This would be autodetected by Javascript
 use warnings;
 print "hello world";
 ```
+
+## Dockerfile
+
+This builds a tiny image that prints hello world when run
+
+```dockerfile
+FROM alpine:3.20
+
+CMD ["echo", "hello world from docker"]
+```
+
+## Dockerfile (build + run output)
+
+This one shows output during build (`RUN`) and then output when the container starts (`CMD`)
+
+```dockerfile
+FROM alpine:3.20
+
+RUN echo "hello world from build step"
+CMD ["echo", "hello world from container start"]
+```
