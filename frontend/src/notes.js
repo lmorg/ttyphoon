@@ -297,8 +297,11 @@ function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     if (modified) {
         elements.editor.value = lines.join('\n');
         saveFile();
-        // Don't call renderMarkdown() here as it would reset checkbox focus
-        // The file will be saved and the change is already reflected in the checkbox state
+        // Keep viewer in sync when changes are made from jupyter mode
+        if (state.viewMode === 'jupyter') {
+            renderMarkdown();
+        }
+        // Don't re-render jupyter here to avoid resetting checkbox focus
     }
 }
 
