@@ -9,9 +9,7 @@ This will output a hello world program
 ### bash
 
 ```bash
-echo hello bash
-sleep 5
-echo goodbye cruel world
+git commit -am "jupyter: autosave code blocks"
 ```
 
 ### sh

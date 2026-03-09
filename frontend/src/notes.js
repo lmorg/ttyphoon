@@ -305,6 +305,46 @@ function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     }
 }
 
+function updateMarkdownCodeBlock(blockIndex, newContent) {
+    const markdown = elements.editor.value;
+    const rxCodeBlock = /```[^\n]*\n[\s\S]*?\n```/g;
+    let match;
+    let index = 0;
+    let lastIndex = 0;
+    let updated = false;
+    let result = '';
+
+    while ((match = rxCodeBlock.exec(markdown)) !== null) {
+        if (index === blockIndex) {
+            const block = match[0];
+            const headerEnd = block.indexOf('\n');
+            const footerStart = block.lastIndexOf('\n```');
+            if (headerEnd === -1 || footerStart === -1) {
+                return false;
+            }
+
+            const header = block.slice(0, headerEnd + 1);
+            const footer = block.slice(footerStart);
+            const trimmedContent = newContent.replace(/[\r\n]+$/, '');
+            const updatedBlock = header + trimmedContent + footer;
+
+            result += markdown.slice(lastIndex, match.index) + updatedBlock;
+            lastIndex = match.index + match[0].length;
+            updated = true;
+            break;
+        }
+        index++;
+    }
+
+    if (!updated) {
+        return false;
+    }
+
+    result += markdown.slice(lastIndex);
+    elements.editor.value = result;
+    return true;
+}
+
 function scheduleRender() {
     if (state.renderTimer) {
         clearTimeout(state.renderTimer);
@@ -482,7 +522,28 @@ function convertToJupyterCodeBlocks() {
             editableCode.style.height = 'auto';
             editableCode.style.height = editableCode.scrollHeight + 'px';
         };
-        editableCode.addEventListener('input', autoResize);
+        editableCode.addEventListener('input', () => {
+            autoResize();
+            const blockState = state.jupyterCodeBlocks[blockId];
+            if (!blockState) {
+                return;
+            }
+            blockState.currentContent = editableCode.value;
+
+            const blockIndex = parseInt(blockId.replace('jupyter-block-', ''), 10);
+            if (Number.isNaN(blockIndex)) {
+                return;
+            }
+
+            const updated = updateMarkdownCodeBlock(blockIndex, blockState.currentContent);
+            if (!updated) {
+                return;
+            }
+
+            setDirty(true);
+            scheduleRender();
+            scheduleAutoSave();
+        });
         // Set initial height
         setTimeout(autoResize, 0);
         
