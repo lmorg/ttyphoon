@@ -9,7 +9,7 @@ This will output a hello world program
 ### bash
 
 ```bash
-git commit -am "jupyter: autosave code blocks"
+git commit -am "jupyter: add line nubers to jupyter blocks"
 ```
 
 ### sh

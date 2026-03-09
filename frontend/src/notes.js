@@ -516,6 +516,17 @@ function convertToJupyterCodeBlocks() {
         editableCode.dataset.language = language;
         editableCode.value = content;
         editableCode.spellcheck = false;
+
+        const codeEditor = document.createElement('div');
+        codeEditor.className = 'jupyter-code-editor';
+
+        const lineNumbers = document.createElement('div');
+        lineNumbers.className = 'jupyter-line-numbers';
+
+        const renderLineNumbers = () => {
+            const lineCount = Math.max(1, editableCode.value.split('\n').length);
+            lineNumbers.textContent = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+        };
         
         // Auto-resize textarea to fit content
         const autoResize = () => {
@@ -524,6 +535,7 @@ function convertToJupyterCodeBlocks() {
         };
         editableCode.addEventListener('input', () => {
             autoResize();
+            renderLineNumbers();
             const blockState = state.jupyterCodeBlocks[blockId];
             if (!blockState) {
                 return;
@@ -544,8 +556,14 @@ function convertToJupyterCodeBlocks() {
             scheduleRender();
             scheduleAutoSave();
         });
+        editableCode.addEventListener('scroll', () => {
+            lineNumbers.scrollTop = editableCode.scrollTop;
+        });
         // Set initial height
-        setTimeout(autoResize, 0);
+        setTimeout(() => {
+            autoResize();
+            renderLineNumbers();
+        }, 0);
         
         const outputWrapper = document.createElement('div');
         outputWrapper.className = 'jupyter-output-wrapper';
@@ -574,7 +592,9 @@ function convertToJupyterCodeBlocks() {
         
         pre.replaceWith(wrapper);
         wrapper.appendChild(toolbar);
-        wrapper.appendChild(editableCode);
+        codeEditor.appendChild(lineNumbers);
+        codeEditor.appendChild(editableCode);
+        wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
     });
 }
@@ -1853,8 +1873,32 @@ function applyWindowStyle(result) {
             padding: 4px 8px;
         }
 
+        .jupyter-code-editor {
+            display: flex;
+            align-items: stretch;
+            background-color: var(--bg);
+        }
+
+        .jupyter-line-numbers {
+            min-width: 42px;
+            margin: 0;
+            padding: 12px 8px 12px 10px;
+            border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            color: var(--fg);
+            opacity: 0.45;
+            font-family: monospace;
+            font-size: ${result.fontSize}px;
+            line-height: 1.5;
+            text-align: right;
+            white-space: pre;
+            user-select: none;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
         .jupyter-code-editable {
-            width: 100%;
+            flex: 1;
+            width: auto;
             margin: 0;
             padding: 12px;
             background-color: var(--bg);
