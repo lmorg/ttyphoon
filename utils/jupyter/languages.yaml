@@ -301,8 +301,8 @@
         {{ .Code }}
     {{ end }}
   FileExtension: elm
-  PreRunCommand: [ elm, make, "${FILE}", --output="${FILE}.html" ]
-  ExecuteCommand: [ echo, "Compiled to ${FILE}.html" ]
+  PreRunCommand: [ elm, make, "${FILE}", '--output="${FILE}.html"' ]
+  ExecuteCommand: [ cat, "${FILE}.html" ]
 
 - Aliases: [ ocaml, ml ]
   Description: OCaml
@@ -1018,7 +1018,8 @@
   Template: |-
     {{ .Code }}
   FileExtension: asm
-  PreRunCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o", &&, ld, "${FILE}.o", -o, "${FILE}.out" ]
+  PreRunCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
+  PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
 
 - Aliases: [ yasm ]
@@ -1026,7 +1027,8 @@
   Template: |-
     {{ .Code }}
   FileExtension: asm
-  PreRunCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o", &&, ld, "${FILE}.o", -o, "${FILE}.out" ]
+  PreRunCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
+  PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
 
 - Aliases: [ fasm ]

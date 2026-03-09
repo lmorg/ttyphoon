@@ -6,16 +6,18 @@
 
 This will output a hello world program
 
+### bash
+
 ```bash
 echo hello bash
 sleep 5
 echo goodbye cruel world
 ```
 
+### sh
+
 ```sh
-echo "1
-2
-3"
+echo "123"
 ```
 
 ## Python 3

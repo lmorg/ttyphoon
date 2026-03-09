@@ -23,6 +23,7 @@ type LanguageBindingT struct {
 	Template       string   `yaml:"Template"`
 	FileExtension  string   `yaml:"FileExtension"`  // Must exclude `.` prefix
 	PreRunCommand  []string `yaml:"PreRunCommand"`  // `$FILE` is replaced with the filename
+	PreRunCommand2 []string `yaml:"PreRunCommand2"` // `$FILE` is replaced with the filename
 	ExecuteCommand []string `yaml:"ExecuteCommand"` // `$FILE` is replace with the filename
 }
 
@@ -109,14 +110,18 @@ func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, bi
 	}
 
 	pre := expandVars(binding.PreRunCommand, tempFile.Name())
+	pre2 := expandVars(binding.PreRunCommand, tempFile.Name())
 	exe := expandVars(binding.ExecuteCommand, tempFile.Name())
 
 	var exitCode int
 	if len(pre) > 0 {
 		exitCode = execute(ctx, id, pre, ch)
 	}
+	if len(pre2) > 0 && exitCode == 0 {
+		exitCode = execute(ctx, id, pre2, ch)
+	}
 	if exitCode == 0 {
-		execute(ctx, id, exe, ch)
+		_ = execute(ctx, id, exe, ch)
 	}
 
 	time.Sleep(500 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed

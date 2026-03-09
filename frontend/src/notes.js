@@ -2,8 +2,9 @@ import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCusto
 import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
-import { gfmHeadingId } from "marked-gfm-heading-id";
-import hljs from "highlight.js/lib/common";
+
+import { configureMarked, applySyntaxHighlighting, processWailsImages, processLinks } from './markdown-utils.js';
+import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
 
 const app = document.getElementById('app') || (() => {
     const root = document.createElement('div');
@@ -128,7 +129,7 @@ const state = {
     jupyterBlockCounter: 0
 };
 
-marked.use(gfmHeadingId({}));
+configureMarked();
 
 function getWailsFunction(name) {
     const fn = window && window.go && window.go.main && window.go.main.WApp && window.go.main.WApp[name];
@@ -144,44 +145,10 @@ function renderMarkdown() {
     const markdown = elements.editor.value || '';
     elements.preview.innerHTML = marked.parse(markdown);
 
-    elements.preview.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-    });
-
-    const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
-
-    elements.preview.querySelectorAll('img').forEach((img) => {
-        if (img.src.match(rxWailsUrl)) {
-            const path = img.src.replace(rxWailsUrl, '');
-            GetImage(path).then((image) => {
-                if (image.match(/^error: /)) {
-                    console.log(image);
-                } else {
-                    img.src = image;
-                }
-            });
-        }
-    });
-
-    let rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
-
-    elements.preview.querySelectorAll('a').forEach(a => {
-        if (!a.href.match(rxWailsUrl)) {
-            a.addEventListener('click', (e) => {
-                e.preventDefault();
-                BrowserOpenURL(a.href);
-            });
-        }
-
-        if (!a.href.match(rxBookmark)) {
-            /*let id = a.href.replace(rxBookmark, '');
-            console.log(id);
-            //a.href = "#"+id;
-            a.addEventListener("click", () => {
-                document.getElementById(id).scrollIntoView();
-            });*/
-        }
-    });
+    // Apply common markdown processing
+    applySyntaxHighlighting(elements.preview);
+    processWailsImages(elements.preview);
+    processLinks(elements.preview);
 
     // Make checkboxes interactive
     setupInteractiveCheckboxes();
@@ -386,42 +353,21 @@ function renderJupyterView() {
     const markdown = elements.editor.value || '';
     elements.jupyter.innerHTML = marked.parse(markdown);
     
-    // Apply syntax highlighting to code blocks before conversion
-    elements.jupyter.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-    });
-    
-    // Handle images with Wails URLs
-    const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
-    
-    elements.jupyter.querySelectorAll('img').forEach((img) => {
-        if (img.src.match(rxWailsUrl)) {
-            const path = img.src.replace(rxWailsUrl, '');
-            GetImage(path).then((image) => {
-                if (image.match(/^error: /)) {
-                    console.log(image);
-                } else {
-                    img.src = image;
-                }
-            });
-        }
-    });
-    
-    // Handle external links
-    let rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
-    
-    elements.jupyter.querySelectorAll('a').forEach(a => {
-        if (!a.href.match(rxWailsUrl)) {
-            a.addEventListener('click', (e) => {
-                e.preventDefault();
-                BrowserOpenURL(a.href);
-            });
-        }
-    });
+    // Apply common markdown processing
+    applySyntaxHighlighting(elements.jupyter);
+    processWailsImages(elements.jupyter);
+    processLinks(elements.jupyter);
     
     setupInteractiveCheckboxes();
     autoHyperlink();
     convertToJupyterCodeBlocks();
+    
+    // Re-apply find highlights if find bar is open and in jupyter mode
+    if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'jupyter') {
+        setTimeout(() => {
+            performFind();
+        }, 0);
+    }
 }
 
 function convertToJupyterCodeBlocks() {
@@ -1264,25 +1210,7 @@ function applyWindowStyle(result) {
             background-color: var(--selection);
         }
 
-        ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
-            background-color: var(--bg);
-            opacity: 0.2;
-        }
-
-        ::-webkit-scrollbar-track {
-            background-color: var(--bg);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background-color: var(--fg);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background-color: var(--accent);
-        }
+        ${getScrollbarStyles(result.colors)}
 
         #notes-app {
             display: grid;
@@ -1674,165 +1602,21 @@ function applyWindowStyle(result) {
             line-height: 1.4;
         }
 
-        #notes-preview-wrap {
+        #notes-preview-wrap,
+        #notes-jupyter-wrap {
             overflow-y: auto;
             padding-left: 16px;
         }
 
-        #notes-preview {
-            font-size: ${result.fontSize}px;
-        }
+        ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
-        .markdown-body h1,
-        .markdown-body h2,
-        .markdown-body h3,
-        .markdown-body h4,
-        .markdown-body h5,
-        .markdown-body h6 {
-            color: var(--accent);
-        }
+        ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
 
-        .markdown-body a {
-            text-decoration: none;
-            color: var(--link);
-        }
+        ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
 
-        .markdown-body a:hover {
-            text-decoration: underline;
-        }
+        ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
 
-        .markdown-body pre,
-        .markdown-body code {
-            color: var(--green);
-        }
-
-        .markdown-body pre {
-            border: 0;
-            border-left: 2px solid var(--green);
-            margin: 0;
-            padding: 10px 10px 10px 20px;
-            overflow-x: auto;
-        }
-
-        .markdown-body blockquote {
-            border: 0;
-            border-left: 2px solid var(--magenta);
-            margin: 0;
-            padding: 1px 1px 1px 20px;
-            color: var(--magenta);
-        }
-
-        .markdown-body details {
-            opacity: 0.5;
-            width: 100%;
-            border-radius: 0;
-            border-width: 2px;
-            border-style: solid;
-            padding: 5px;
-            margin-top: 5px;
-        }
-
-        .markdown-body summary {
-            cursor: pointer;
-        }
-
-        .markdown-body input[type="checkbox"] {
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            cursor: pointer;
-            margin-right: 6px;
-            width: ${result.fontSize}px;
-            height: ${result.fontSize}px;
-            border: 2px solid var(--red);
-            background: transparent;
-            position: relative;
-            vertical-align: middle;
-            flex-shrink: 0;
-        }
-
-        .markdown-body input[type="checkbox"]:hover {
-            border-color: var(--accent);
-        }
-
-        .markdown-body input[type="checkbox"]:checked:hover {
-            border-color: var(--accent);
-            background: var(--accent);
-        }
-
-        .markdown-body input[type="checkbox"]:checked {
-            background: var(--green);
-            border-color: var(--green);
-        }
-
-        .markdown-body input[type="checkbox"]:checked::after {
-            content: '✓';
-            position: absolute;
-            color: var(--bg);
-            font-size: ${result.fontSize}px;
-            font-weight: bold;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        pre code.hljs {
-            display: block;
-            overflow-x: auto;
-            background: transparent;
-            color: var(--fg);
-        }
-
-        .hljs-comment,
-        .hljs-quote {
-            color: var(--blue-bright);
-            font-style: italic;
-        }
-
-        .hljs-keyword,
-        .hljs-selector-tag,
-        .hljs-subst {
-            color: var(--magenta);
-            font-weight: bold;
-        }
-
-        .hljs-string,
-        .hljs-title,
-        .hljs-name,
-        .hljs-type,
-        .hljs-attribute,
-        .hljs-symbol,
-        .hljs-bullet,
-        .hljs-addition,
-        .hljs-built_in {
-            color: var(--green);
-        }
-
-        .hljs-number,
-        .hljs-literal,
-        .hljs-variable,
-        .hljs-template-variable {
-            color: var(--accent);
-        }
-
-        .hljs-section,
-        .hljs-meta,
-        .hljs-function,
-        .hljs-class,
-        .hljs-title.class_ {
-            color: var(--cyan);
-        }
-
-        .hljs-deletion,
-        .hljs-regexp,
-        .hljs-link {
-            color: var(--red);
-        }
-
-        .hljs-punctuation,
-        .hljs-tag {
-            color: var(--fg);
-        }
+        ${getHighlightJsTheme(result.colors, true)}
 
         #notes-find-bar {
             border-radius: 5px;
@@ -1897,10 +1681,6 @@ function applyWindowStyle(result) {
         }
 
         /* Jupyter UI Styles */
-        #notes-jupyter-wrap {
-            overflow-y: auto;
-            padding: 16px;
-        }
 
         #notes-jupyter-wrap pre {
             border-left: 0;
