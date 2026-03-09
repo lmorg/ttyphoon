@@ -150,8 +150,8 @@ function renderMarkdown() {
     processWailsImages(elements.preview);
     processLinks(elements.preview);
 
-    // Make checkboxes interactive
-    setupInteractiveCheckboxes();
+    // Keep checkboxes readonly in viewer mode
+    setupInteractiveCheckboxes(elements.preview, false);
 
     // Apply custom regex hyperlinks
     autoHyperlink();
@@ -164,13 +164,16 @@ function renderMarkdown() {
     }
 }
 
-function setupInteractiveCheckboxes() {
-    const checkboxes = elements.preview.querySelectorAll('input[type="checkbox"]');
+function setupInteractiveCheckboxes(container, isEditable) {
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
     
     checkboxes.forEach((checkbox, index) => {
-        // Remove disabled attribute to make clickable
+        if (!isEditable) {
+            checkbox.setAttribute('disabled', 'disabled');
+            return;
+        }
+
         checkbox.removeAttribute('disabled');
-        
         checkbox.addEventListener('change', (e) => {
             toggleCheckboxInMarkdown(index, e.target.checked);
         });
@@ -358,7 +361,8 @@ function renderJupyterView() {
     processWailsImages(elements.jupyter);
     processLinks(elements.jupyter);
     
-    setupInteractiveCheckboxes();
+    // Enable checkbox editing and save behavior in jupyter mode
+    setupInteractiveCheckboxes(elements.jupyter, true);
     autoHyperlink();
     convertToJupyterCodeBlocks();
     
@@ -822,13 +826,19 @@ function closeFindBar() {
     elements.findCounter.textContent = '';
 }
 
+function getActiveFindContainer() {
+    return state.viewMode === 'jupyter' ? elements.jupyter : elements.preview;
+}
+
 function clearHighlights() {
-    // Clear highlights in viewer
-    const highlights = elements.preview.querySelectorAll('.find-highlight');
-    highlights.forEach((el) => {
-        const parent = el.parentNode;
-        parent.replaceChild(document.createTextNode(el.textContent), el);
-        parent.normalize();
+    // Clear highlights in both rendered panes
+    [elements.preview, elements.jupyter].forEach((container) => {
+        const highlights = container.querySelectorAll('.find-highlight');
+        highlights.forEach((el) => {
+            const parent = el.parentNode;
+            parent.replaceChild(document.createTextNode(el.textContent), el);
+            parent.normalize();
+        });
     });
 
     // Clear editor selection
@@ -852,7 +862,7 @@ function performFind() {
     if (state.viewMode === 'editor') {
         findInEditor();
     } else {
-        findInViewer();
+        findInRenderedPane();
     }
 
     if (state.findMatches.length > 0) {
@@ -877,10 +887,11 @@ function findInEditor() {
     }
 }
 
-function findInViewer() {
+function findInRenderedPane() {
     const query = state.findQuery;
+    const container = getActiveFindContainer();
     const walker = document.createTreeWalker(
-        elements.preview,
+        container,
         NodeFilter.SHOW_TEXT,
         null,
         false
@@ -945,7 +956,7 @@ function highlightCurrentMatch() {
         elements.editor.scrollTop = lineNumber * lineHeight - elements.editor.clientHeight / 2;
     } else {
         // Clear previous active highlight
-        const prevActive = elements.preview.querySelector('.find-highlight-active');
+        const prevActive = getActiveFindContainer().querySelector('.find-highlight-active');
         if (prevActive) {
             prevActive.classList.remove('find-highlight-active');
         }
