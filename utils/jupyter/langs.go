@@ -109,13 +109,13 @@ func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, bi
 		return
 	}
 
-	pre := expandVars(binding.PreRunCommand, tempFile.Name())
+	pre1 := expandVars(binding.PreRunCommand, tempFile.Name())
 	pre2 := expandVars(binding.PreRunCommand, tempFile.Name())
 	exe := expandVars(binding.ExecuteCommand, tempFile.Name())
 
 	var exitCode int
-	if len(pre) > 0 {
-		exitCode = execute(ctx, id, pre, ch)
+	if len(pre1) > 0 {
+		exitCode = execute(ctx, id, pre1, ch)
 	}
 	if len(pre2) > 0 && exitCode == 0 {
 		exitCode = execute(ctx, id, pre2, ch)

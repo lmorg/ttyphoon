@@ -56,23 +56,40 @@ export async function processWailsImages(container) {
 /**
  * Process all links in a container, handling external links and bookmarks
  * @param {HTMLElement} container - The container element to search for links
+ * @param {Object} options - Link handling options
+ * @param {boolean} options.enableBookmarks - Enable in-document bookmark scrolling
  */
-export function processLinks(container) {
+export function processLinks(container, options = {}) {
+    const { enableBookmarks = false } = options;
+
     container.querySelectorAll('a').forEach(a => {
+        const rawHref = a.getAttribute('href') || '';
+        const isHashOnly = rawHref.startsWith('#');
+        const isBookmark = isHashOnly || a.href.match(rxBookmark);
+
+        if (enableBookmarks && isBookmark) {
+            const id = isHashOnly ? rawHref.slice(1) : a.href.replace(rxBookmark, '');
+            if (!id) {
+                return;
+            }
+
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                const safeId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
+                const target = container.querySelector(`#${safeId}`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+            return;
+        }
+
         if (!a.href.match(rxWailsUrl)) {
             // External link - open in browser
             a.addEventListener('click', (e) => {
                 e.preventDefault();
                 BrowserOpenURL(a.href);
             });
-        }
-
-        if (!a.href.match(rxBookmark)) {
-            // Could add bookmark handling here if needed
-            // const id = a.href.replace(rxBookmark, '');
-            // a.addEventListener("click", () => {
-            //     document.getElementById(id).scrollIntoView();
-            // });
         }
     });
 }
@@ -84,7 +101,7 @@ export function processLinks(container) {
 export async function processMarkdownContainer(container) {
     applySyntaxHighlighting(container);
     await processWailsImages(container);
-    processLinks(container);
+    processLinks(container, { enableBookmarks: true });
 }
 
 /**

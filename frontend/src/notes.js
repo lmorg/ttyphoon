@@ -148,7 +148,7 @@ function renderMarkdown() {
     // Apply common markdown processing
     applySyntaxHighlighting(elements.preview);
     processWailsImages(elements.preview);
-    processLinks(elements.preview);
+    processLinks(elements.preview, { enableBookmarks: true });
 
     // Keep checkboxes readonly in viewer mode
     setupInteractiveCheckboxes(elements.preview, false);
@@ -359,7 +359,7 @@ function renderJupyterView() {
     // Apply common markdown processing
     applySyntaxHighlighting(elements.jupyter);
     processWailsImages(elements.jupyter);
-    processLinks(elements.jupyter);
+    processLinks(elements.jupyter, { enableBookmarks: true });
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
