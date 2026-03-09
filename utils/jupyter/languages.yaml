@@ -135,6 +135,13 @@
   FileExtension: rb
   ExecuteCommand: [ jruby, "${FILE}" ]
 
+- Aliases: [ ruby, rb ]
+  Description: Ruby (TruffleRuby)
+  Template: |-
+    {{ .Code }}
+  FileExtension: rb
+  ExecuteCommand: [ truffleruby, "${FILE}" ]
+
 - Aliases: [ node, js, javascript ]
   Description: Javascript (node.js)
   Template: |-
@@ -184,6 +191,14 @@
   FileExtension: swift
   ExecuteCommand: [ swift, "${FILE}" ]
 
+- Aliases: [ swift ]
+  Description: Swift (swiftc)
+  Template: |-
+    {{ .Code }}
+  FileExtension: swift
+  PreRunCommand: [ swiftc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
 - Aliases: [ clojure, clj ]
   Description: Clojure
   Template: |-
@@ -213,12 +228,52 @@
   FileExtension: escript
   ExecuteCommand: [ escript, "${FILE}" ]
 
+- Aliases: [ prolog, plg ]
+  Description: Prolog (SWI-Prolog)
+  Template: |-
+    {{ .Code }}
+  FileExtension: pl
+  ExecuteCommand: [ swipl, -q, -f, "${FILE}", -t, halt ]
+
 - Aliases: [ julia, jl ]
   Description: Julia
   Template: |-
     {{ .Code }}
   FileExtension: jl
   ExecuteCommand: [ julia, "${FILE}" ]
+
+- Aliases: [ lisp, commonlisp, cl ]
+  Description: Common Lisp (SBCL)
+  Template: |-
+    {{ .Code }}
+  FileExtension: lisp
+  ExecuteCommand: [ sbcl, --script, "${FILE}" ]
+
+- Aliases: [ lisp, commonlisp, cl ]
+  Description: Common Lisp (CLISP)
+  Template: |-
+    {{ .Code }}
+  FileExtension: lisp
+  ExecuteCommand: [ clisp, "${FILE}" ]
+
+- Aliases: [ scheme, scm, racket ]
+  Description: Scheme (Racket)
+  Template: |-
+    {{ if begins "#lang" }}
+    {{ .Code }}
+    {{ else }}
+    #lang racket
+    {{ .Code }}
+    {{ end }}
+  FileExtension: rkt
+  ExecuteCommand: [ racket, "${FILE}" ]
+
+- Aliases: [ scheme, scm ]
+  Description: Scheme (Guile)
+  Template: |-
+    {{ .Code }}
+  FileExtension: scm
+  ExecuteCommand: [ guile, "${FILE}" ]
 
 - Aliases: [ haskell, hs ]
   Description: Haskell
@@ -231,6 +286,23 @@
     {{ end }}
   FileExtension: hs
   ExecuteCommand: [ runghc, "${FILE}" ]
+
+- Aliases: [ elm ]
+  Description: Elm
+  Template: |-
+    {{ if begins "module" }}
+    {{ .Code }}
+    {{ else }}
+    module Main exposing (..)
+
+    import Html exposing (text)
+
+    main =
+        {{ .Code }}
+    {{ end }}
+  FileExtension: elm
+  PreRunCommand: [ elm, make, "${FILE}", --output="${FILE}.html" ]
+  ExecuteCommand: [ echo, "Compiled to ${FILE}.html" ]
 
 - Aliases: [ ocaml, ml ]
   Description: OCaml
@@ -264,6 +336,28 @@
     {{ end }}
   FileExtension: scala
   ExecuteCommand: [ scala-cli, run, "${FILE}" ]
+
+- Aliases: [ scala, sc, ammonite ]
+  Description: Scala (Ammonite)
+  Template: |-
+    {{ .Code }}
+  FileExtension: sc
+  ExecuteCommand: [ amm, "${FILE}" ]
+
+- Aliases: [ haxe, hx ]
+  Description: Haxe
+  Template: |-
+    {{ if contains "class" }}
+    {{ .Code }}
+    {{ else }}
+    class Main {
+        static public function main() {
+            {{ .Code }}
+        }
+    }
+    {{ end }}
+  FileExtension: hx
+  ExecuteCommand: [ haxe, --interp, --main, Main, --run, "${FILE}" ]
 
 - Aliases: [ dart ]
   Description: Dart
@@ -350,6 +444,80 @@
   PreRunCommand: [ javac, "${FILE}" ]
   ExecuteCommand: [ java, -cp, "${DIR}", Main ]
 
+- Aliases: [ java, jshell ]
+  Description: Java (JShell)
+  Template: |-
+    {{ .Code }}
+  FileExtension: jsh
+  ExecuteCommand: [ jshell, "${FILE}" ]
+
+- Aliases: [ objective-c, objc, obj-c ]
+  Description: Objective-C
+  Template: |-
+    {{ if begins "#import" }}
+    {{ .Code }}
+    {{ else }}
+    #import <Foundation/Foundation.h>
+
+    int main(int argc, const char * argv[]) {
+        @autoreleasepool {
+            {{ .Code }}
+        }
+        return 0;
+    }
+    {{ end }}
+  FileExtension: m
+  PreRunCommand: [ clang, -framework, Foundation, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ d ]
+  Description: D
+  Template: |-
+    {{ if begins "import" }}
+    {{ .Code }}
+    {{ else }}
+    import std.stdio;
+
+    void main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: d
+  PreRunCommand: [ dmd, "${FILE}", "-of=${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ d ]
+  Description: D (LDC2)
+  Template: |-
+    {{ if begins "import" }}
+    {{ .Code }}
+    {{ else }}
+    import std.stdio;
+
+    void main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: d
+  PreRunCommand: [ ldc2, "${FILE}", "-of=${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ d ]
+  Description: D (GDC)
+  Template: |-
+    {{ if begins "import" }}
+    {{ .Code }}
+    {{ else }}
+    import std.stdio;
+
+    void main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: d
+  PreRunCommand: [ gdc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
 - Aliases: [ c ]
   Description: C (cc)
   Template: |-
@@ -400,6 +568,23 @@
   FileExtension: c
   PreRunCommand: [ clang, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ c ]
+  Description: C (MSVC)
+  Template: |-
+    {{ if begins "#include" }}
+    {{ .Code }}
+    {{ else }}
+    #include <stdio.h>
+
+    int main(void) {
+        {{ .Code }}
+        return 0;
+    }
+    {{ end }}
+  FileExtension: c
+  PreRunCommand: [ cl.exe, /nologo, "${FILE}", "/Fe:${FILE}.exe" ]
+  ExecuteCommand: [ "${FILE}.exe" ]
 
 - Aliases: [ cpp, c++, cxx ]
   Description: C++ (c++)
@@ -452,6 +637,23 @@
   PreRunCommand: [ clang++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
 
+- Aliases: [ cpp, c++, cxx ]
+  Description: C++ (MSVC)
+  Template: |-
+    {{ if begins "#include" }}
+    {{ .Code }}
+    {{ else }}
+    #include <iostream>
+
+    int main() {
+        {{ .Code }}
+        return 0;
+    }
+    {{ end }}
+  FileExtension: cpp
+  PreRunCommand: [ cl.exe, /nologo, /EHsc, "${FILE}", "/Fe:${FILE}.exe" ]
+  ExecuteCommand: [ "${FILE}.exe" ]
+
 - Aliases: [ rust, rs ]
   Description: Rust
   Template: |-
@@ -464,6 +666,134 @@
     {{ end }}
   FileExtension: rs
   PreRunCommand: [ rustc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ crystal, cr ]
+  Description: Crystal
+  Template: |-
+    {{ .Code }}
+  FileExtension: cr
+  ExecuteCommand: [ crystal, run, "${FILE}" ]
+
+- Aliases: [ vlang, v ]
+  Description: V
+  Template: |-
+    {{ if contains "fn main" }}
+    {{ .Code }}
+    {{ else }}
+    fn main() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: v
+  ExecuteCommand: [ v, run, "${FILE}" ]
+
+- Aliases: [ zig ]
+  Description: Zig
+  Template: |-
+    {{ if contains "pub fn main" }}
+    {{ .Code }}
+    {{ else }}
+    const std = @import("std");
+
+    pub fn main() !void {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: zig
+  ExecuteCommand: [ zig, run, "${FILE}" ]
+
+- Aliases: [ odin ]
+  Description: Odin
+  Template: |-
+    {{ if contains "package" }}
+    {{ .Code }}
+    {{ else }}
+    package main
+
+    import "core:fmt"
+
+    main :: proc() {
+        {{ .Code }}
+    }
+    {{ end }}
+  FileExtension: odin
+  ExecuteCommand: [ odin, run, "${FILE}" ]
+
+- Aliases: [ red ]
+  Description: Red
+  Template: |-
+    {{ if begins "Red" }}
+    {{ .Code }}
+    {{ else }}
+    Red []
+
+    {{ .Code }}
+    {{ end }}
+  FileExtension: red
+  ExecuteCommand: [ red, "${FILE}" ]
+
+- Aliases: [ nim ]
+  Description: Nim
+  Template: |-
+    {{ if contains "when isMainModule" }}
+    {{ .Code }}
+    {{ else }}
+    when isMainModule:
+      {{ .Code }}
+    {{ end }}
+  FileExtension: nim
+  PreRunCommand: [ nim, c, "-o:${FILE}.out", "${FILE}" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ fortran, f90, f95, f03, f08 ]
+  Description: Fortran
+  Template: |-
+    {{ if contains "program" }}
+    {{ .Code }}
+    {{ else }}
+    program main
+      {{ .Code }}
+    end program main
+    {{ end }}
+  FileExtension: f90
+  PreRunCommand: [ gfortran, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ fortran, f90, f95, f03, f08 ]
+  Description: Fortran (Flang)
+  Template: |-
+    {{ if contains "program" }}
+    {{ .Code }}
+    {{ else }}
+    program main
+      {{ .Code }}
+    end program main
+    {{ end }}
+  FileExtension: f90
+  PreRunCommand: [ flang, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ fortran, f90, f95, f03, f08 ]
+  Description: Fortran (Intel ifx)
+  Template: |-
+    {{ if contains "program" }}
+    {{ .Code }}
+    {{ else }}
+    program main
+      {{ .Code }}
+    end program main
+    {{ end }}
+  FileExtension: f90
+  PreRunCommand: [ ifx, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ cobol, cob, cbl ]
+  Description: COBOL (GnuCOBOL)
+  Template: |-
+    {{ .Code }}
+  FileExtension: cbl
+  PreRunCommand: [ cobc, -x, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
 
 - Aliases: [ php ]
@@ -490,6 +820,18 @@
   FileExtension: php
   ExecuteCommand: [ php-cgi, "${FILE}" ]
 
+- Aliases: [ php ]
+  Description: PHP (HHVM)
+  Template: |-
+    {{ if begins "<?php" }}
+    {{ .Code }}
+    {{ else }}
+    <?php
+    {{ .Code }}
+    {{ end }}
+  FileExtension: php
+  ExecuteCommand: [ hhvm, "${FILE}" ]
+
 - Aliases: [ lua ]
   Description: Lua
   Template: |-
@@ -511,12 +853,26 @@
   FileExtension: cs
   ExecuteCommand: [ dotnet, script, "${FILE}" ]
 
+- Aliases: [ forth, fth ]
+  Description: Forth (Gforth)
+  Template: |-
+    {{ .Code }}
+  FileExtension: fs
+  ExecuteCommand: [ gforth, "${FILE}" ]
+
 - Aliases: [ csharp, cs, dotnet ]
   Description: C# (C# Interactive - csi)
   Template: |-
     {{ .Code }}
   FileExtension: cs
   ExecuteCommand: [ csi, "${FILE}" ]
+
+- Aliases: [ fsharp, fs, "f#" ]
+  Description: F# (F# Interactive)
+  Template: |-
+    {{ .Code }}
+  FileExtension: fsx
+  ExecuteCommand: [ dotnet, fsi, "${FILE}" ]
 
 - Aliases: [ vb, vbnet, "vb.net" ]
   Description: VB.NET (Mono)
@@ -534,6 +890,13 @@
   PreRunCommand: [ vbnc, "${FILE}", '-out:"${FILE}.exe"' ]
   ExecuteCommand: [ mono, "${FILE}.exe" ]
 
+- Aliases: [ vbscript, vbs ]
+  Description: VBScript (Windows)
+  Template: |-
+    {{ .Code }}
+  FileExtension: vbs
+  ExecuteCommand: [ cscript.exe, //NoLogo, "${FILE}" ]
+
 - Aliases: [ vb, vbnet, "vb.net" ]
   Description: VB.NET (.NET SDK)
   Template: |-
@@ -548,6 +911,76 @@
     {{ end }}
   FileExtension: vb
   ExecuteCommand: [ dotnet, script, "${FILE}" ]
+
+- Aliases: [ ada, adb, ads ]
+  Description: Ada (GNAT)
+  Template: |-
+    {{ if begins "with" }}
+    {{ .Code }}
+    {{ else }}
+    with Ada.Text_IO; use Ada.Text_IO;
+
+    procedure Main is
+    begin
+       {{ .Code }}
+    end Main;
+    {{ end }}
+  FileExtension: adb
+  PreRunCommand: [ gnatmake, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ ada, adb, ads ]
+  Description: Ada (GPRbuild)
+  Template: |-
+    {{ if begins "with" }}
+    {{ .Code }}
+    {{ else }}
+    with Ada.Text_IO; use Ada.Text_IO;
+
+    procedure Main is
+    begin
+       {{ .Code }}
+    end Main;
+    {{ end }}
+  FileExtension: adb
+  PreRunCommand: [ gprbuild, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ smalltalk, st ]
+  Description: Smalltalk (GNU Smalltalk)
+  Template: |-
+    {{ .Code }}
+  FileExtension: st
+  ExecuteCommand: [ gst, "${FILE}" ]
+
+- Aliases: [ wolfram, mathematica, wl ]
+  Description: Wolfram Language (wolframscript)
+  Template: |-
+    {{ .Code }}
+  FileExtension: wl
+  ExecuteCommand: [ wolframscript, -file, "${FILE}" ]
+
+- Aliases: [ wolfram, mathematica, wl ]
+  Description: Wolfram Language (MathKernel)
+  Template: |-
+    {{ .Code }}
+  FileExtension: wl
+  ExecuteCommand: [ MathKernel, -script, "${FILE}" ]
+
+- Aliases: [ delphi, objectpascal, "object-pascal" ]
+  Description: Delphi / Object Pascal (Free Pascal)
+  Template: |-
+    {{ if begins "program" }}
+    {{ .Code }}
+    {{ else }}
+    program Main;
+    begin
+        {{ .Code }}
+    end.
+    {{ end }}
+  FileExtension: pas
+  PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
 
 - Aliases: [ pascal, pas ]
   Description: Pascal (Free Pascal)
@@ -571,3 +1004,43 @@
   FileExtension: bas
   PreRunCommand: [ fbc, "${FILE}", "-x", "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ asm, assembly, gas ]
+  Description: Assembly (GNU as via cc)
+  Template: |-
+    {{ .Code }}
+  FileExtension: s
+  PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ nasm ]
+  Description: Assembly (NASM)
+  Template: |-
+    {{ .Code }}
+  FileExtension: asm
+  PreRunCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o", &&, ld, "${FILE}.o", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ yasm ]
+  Description: Assembly (YASM)
+  Template: |-
+    {{ .Code }}
+  FileExtension: asm
+  PreRunCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o", &&, ld, "${FILE}.o", -o, "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ fasm ]
+  Description: Assembly (FASM)
+  Template: |-
+    {{ .Code }}
+  FileExtension: asm
+  PreRunCommand: [ fasm, "${FILE}", "${FILE}.out" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+
+- Aliases: [ goasm, goassembly, "go-asm", "go assembly" ]
+  Description: Go Assembly (Plan 9 assembler)
+  Template: |-
+    {{ .Code }}
+  FileExtension: s
+  PreRunCommand: [ go, tool, asm, -o, "${FILE}.o", "${FILE}" ]
+  ExecuteCommand: [ go, tool, objdump, "${FILE}.o" ]
