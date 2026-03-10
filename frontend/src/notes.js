@@ -1,10 +1,10 @@
-import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCustomRegexp, WindowShow, WindowHide } from '../wailsjs/go/main/WApp';
-import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { GetWindowStyle, GetMarkdown, GetParameters, SendIpc, WindowShow, WindowHide } from '../wailsjs/go/main/WApp';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
 
-import { configureMarked, applySyntaxHighlighting, processWailsImages, processLinks } from './markdown-utils.js';
+import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
 
 const app = document.getElementById('app') || (() => {
@@ -147,15 +147,10 @@ function renderMarkdown() {
     elements.preview.innerHTML = marked.parse(markdown);
 
     // Apply common markdown processing
-    applySyntaxHighlighting(elements.preview);
-    processWailsImages(elements.preview);
-    processLinks(elements.preview, { enableBookmarks: true });
+    processMarkdownContainer(elements.preview);
 
     // Keep checkboxes readonly in viewer mode
     setupInteractiveCheckboxes(elements.preview, false);
-
-    // Apply custom regex hyperlinks
-    autoHyperlink();
 
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
@@ -181,118 +176,24 @@ function setupInteractiveCheckboxes(container, isEditable) {
     });
 }
 
-async function autoHyperlink() {
-    const customRegexps = await GetCustomRegexp?.() || [];
-    
-    if (!customRegexps || customRegexps.length === 0) {
-        return;
-    }
-
-    for (const custom of customRegexps) {
-        if (!custom.pattern || !custom.link) {
-            continue;
-        }
-
-        try {
-            const regex = new RegExp(custom.pattern, 'g');
-            
-            // Walk through all text nodes in the preview
-            const walker = document.createTreeWalker(
-                elements.preview,
-                NodeFilter.SHOW_TEXT,
-                null,
-                false
-            );
-
-            const nodesToProcess = [];
-            let node;
-            while ((node = walker.nextNode())) {
-                // Skip if inside an <a> tag
-                let parent = node.parentNode;
-                let insideLink = false;
-                while (parent) {
-                    if (parent.tagName === 'A') {
-                        insideLink = true;
-                        break;
-                    }
-                    parent = parent.parentNode;
-                }
-                
-                if (!insideLink && regex.test(node.textContent)) {
-                    regex.lastIndex = 0; // Reset regex state
-                    nodesToProcess.push(node);
-                }
-            }
-
-            // Process matches and create hyperlinks
-            nodesToProcess.forEach((textNode) => {
-                const text = textNode.textContent;
-                const parts = [];
-                let lastIndex = 0;
-                let match;
-                
-                regex.lastIndex = 0; // Reset for this text node
-                while ((match = regex.exec(text)) !== null) {
-                    // Add text before match
-                    if (match.index > lastIndex) {
-                        parts.push(document.createTextNode(text.substring(lastIndex, match.index)));
-                    }
-
-                    // Create hyperlink
-                    const matchedText = match[0];
-                    const link = matchedText.replace(new RegExp(custom.pattern), custom.link);
-                    const a = document.createElement('a');
-                    a.href = link;
-                    a.textContent = matchedText;
-                    a.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        BrowserOpenURL(a.href);
-                    });
-                    parts.push(a);
-
-                    lastIndex = regex.lastIndex;
-                }
-
-                // Add remaining text
-                if (lastIndex < text.length) {
-                    parts.push(document.createTextNode(text.substring(lastIndex)));
-                }
-
-                // Replace original text node with parts
-                if (parts.length > 0) {
-                    const parent = textNode.parentNode;
-                    parts.forEach((part) => {
-                        parent.insertBefore(part, textNode);
-                    });
-                    parent.removeChild(textNode);
-                }
-            });
-        } catch (err) {
-            console.error('Error processing custom regex:', custom.pattern, err);
-        }
-    }
-}
-
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     const lines = elements.editor.value.split('\n');
     let currentCheckboxIndex = 0;
     let modified = false;
 
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // Match markdown task list items: - [ ] or - [x] or - [X]
-        const checkboxMatch = line.match(/^(\s*[-*+]\s+)\[([ xX])\](.*)$/);
-        
-        if (checkboxMatch) {
-            if (currentCheckboxIndex === checkboxIndex) {
-                // Toggle the checkbox
-                const newState = isChecked ? 'x' : ' ';
-                lines[i] = `${checkboxMatch[1]}[${newState}]${checkboxMatch[3]}`;
-                modified = true;
-                break;
-            }
-            currentCheckboxIndex++;
+        const checkboxMatch = lines[i].match(/^(\s*[-*+]?\s*)\[( |x|X)\](.*)$/);
+        if (!checkboxMatch) {
+            continue;
         }
+
+        if (currentCheckboxIndex === checkboxIndex) {
+            const newState = isChecked ? 'x' : ' ';
+            lines[i] = `${checkboxMatch[1]}[${newState}]${checkboxMatch[3]}`;
+            modified = true;
+            break;
+        }
+        currentCheckboxIndex++;
     }
 
     if (modified) {
@@ -401,13 +302,10 @@ function renderJupyterView() {
     elements.jupyter.innerHTML = marked.parse(markdown);
     
     // Apply common markdown processing
-    applySyntaxHighlighting(elements.jupyter);
-    processWailsImages(elements.jupyter);
-    processLinks(elements.jupyter, { enableBookmarks: true });
+    processMarkdownContainer(elements.jupyter);
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
-    autoHyperlink();
     convertToJupyterCodeBlocks();
     
     // Re-apply find highlights if find bar is open and in jupyter mode
