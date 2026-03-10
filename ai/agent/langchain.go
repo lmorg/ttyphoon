@@ -94,10 +94,6 @@ func (agent *Agent) RunLLM(prompt string, sticky types.Notification) (result str
 	sticky.UpdateCanceller(agent.fnCancel)
 
 	result, err = chains.Run(ctx, agent.executor, prompt, chains.WithTemperature(1))
-	/*if strings.Contains(result, "<max_iterations_reached/>") {
-		go agent.renderer.DisplayNotification(types.NOTIFY_DEBUG, "Max iterations reached, resuming with updated context")
-		return agent.RunLLM(fmt.Sprintf("%s\n\n# What's been learned so far\n%s", prompt, result), sticky)
-	}*/
 
 	if err == nil {
 		return result, nil
