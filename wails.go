@@ -154,6 +154,10 @@ func (a *WApp) GetLanguageDescriptions(language string) []string {
 	return jupyter.GetLanguageDescriptions(language)
 }
 
+func (a *WApp) GetAllLanguageDescriptions() []string {
+	return jupyter.GetAllLanguageDescriptions()
+}
+
 func (a *WApp) RunNote(id string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
 

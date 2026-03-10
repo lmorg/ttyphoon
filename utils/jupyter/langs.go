@@ -48,6 +48,20 @@ func GetLanguageDescriptions(language string) []string {
 	return descriptions
 }
 
+func GetAllLanguageDescriptions() []string {
+	var descriptions []string
+	seen := make(map[string]bool)
+	
+	for _, binding := range Languages {
+		if !seen[binding.Description] {
+			descriptions = append(descriptions, binding.Description)
+			seen[binding.Description] = true
+		}
+	}
+	
+	return descriptions
+}
+
 func RunNote(ctx context.Context, id, code, langRuntime string, ch chan<- *OutputT) {
 	for _, binding := range Languages {
 		if binding.Description != langRuntime {

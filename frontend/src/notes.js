@@ -2,6 +2,7 @@ import { GetWindowStyle, GetMarkdown, GetParameters, GetImage, SendIpc, GetCusto
 import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
+import hljs from "highlight.js/lib/common";
 
 import { configureMarked, applySyntaxHighlighting, processWailsImages, processLinks } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
@@ -425,9 +426,7 @@ function convertToJupyterCodeBlocks() {
         if (!code) return;
         
         const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
-        if (!langClass) return;
-        
-        const language = langClass.replace('language-', '');
+        const language = langClass ? langClass.replace('language-', '') : '';
         const blockId = `jupyter-block-${state.jupyterBlockCounter++}`;
         const content = code.textContent;
         
@@ -471,34 +470,87 @@ function convertToJupyterCodeBlocks() {
         // Populate dropdown immediately
         (async () => {
             const getDescriptionsFn = window.go?.main?.WApp?.GetLanguageDescriptions;
-            if (getDescriptionsFn) {
-                try {
-                    const descriptions = await getDescriptionsFn(language);
-                    runtimeDropdown.innerHTML = '';
-                    if (descriptions && descriptions.length > 0) {
-                        descriptions.forEach((desc) => {
-                            const option = document.createElement('option');
-                            option.value = desc;
-                            option.textContent = desc;
-                            runtimeDropdown.appendChild(option);
-                        });
-                        // Set runtime to the first description in the list
-                        state.jupyterCodeBlocks[blockId].runtime = descriptions[0];
+            const getAllDescriptionsFn = window.go?.main?.WApp?.GetAllLanguageDescriptions;
+
+            if (!getDescriptionsFn || !getAllDescriptionsFn) return;
+
+            try {
+                const hasLanguage = Boolean(language);
+                let descriptions = [];
+                let defaultSelection = '';
+
+                if (hasLanguage) {
+                    const matches = await getDescriptionsFn(language);
+                    if (matches && matches.length > 0) {
+                        // Markdown language exists in YAML: only show those options
+                        descriptions = matches;
+                        defaultSelection = matches[0];
                     } else {
-                        const option = document.createElement('option');
-                        option.value = language;
-                        option.textContent = language;
-                        runtimeDropdown.appendChild(option);
-                        state.jupyterCodeBlocks[blockId].runtime = language;
+                        // Markdown language not in YAML: show all options, default to markdown language
+                        descriptions = await getAllDescriptionsFn();
+                        descriptions.sort((a, b) => a.localeCompare(b));
+                        defaultSelection = language;
                     }
-                } catch (err) {
-                    console.error('Error fetching language descriptions:', err);
-                    const option = document.createElement('option');
-                    option.value = language;
-                    option.textContent = language;
-                    runtimeDropdown.appendChild(option);
-                    state.jupyterCodeBlocks[blockId].runtime = language;
+                } else {
+                    // No markdown language: autodetect using highlight.js
+                    let detectedLanguage = '';
+                    if (content) {
+                        try {
+                            const result = hljs.highlightAuto(content);
+                            if (result && result.language) {
+                                detectedLanguage = result.language;
+                            }
+                        } catch (err) {
+                            console.warn('Highlight.js autodetection failed:', err);
+                        }
+                    }
+
+                    descriptions = await getAllDescriptionsFn();
+                    descriptions.sort((a, b) => a.localeCompare(b));
+
+                    if (detectedLanguage) {
+                        const detectedMatches = await getDescriptionsFn(detectedLanguage);
+                        defaultSelection = detectedMatches && detectedMatches.length > 0
+                            ? detectedMatches[0]
+                            : 'language unknown';
+                    } else {
+                        defaultSelection = 'language unknown';
+                    }
                 }
+
+                // Populate dropdown
+                runtimeDropdown.innerHTML = '';
+
+                // If we have a custom default that's not in the list, add it first
+                if (defaultSelection && !descriptions.includes(defaultSelection)) {
+                    const option = document.createElement('option');
+                    option.value = defaultSelection;
+                    option.textContent = defaultSelection;
+                    runtimeDropdown.appendChild(option);
+                }
+
+                // Add all available descriptions
+                descriptions.forEach((desc) => {
+                    const option = document.createElement('option');
+                    option.value = desc;
+                    option.textContent = desc;
+                    if (desc === defaultSelection) {
+                        option.selected = true;
+                    }
+                    runtimeDropdown.appendChild(option);
+                });
+
+                // Set runtime state
+                state.jupyterCodeBlocks[blockId].runtime = defaultSelection
+                    || (descriptions.length > 0 ? descriptions[0] : language || 'language unknown');
+
+            } catch (err) {
+                console.error('Error fetching language descriptions:', err);
+                const option = document.createElement('option');
+                option.value = language || 'language unknown';
+                option.textContent = language || 'language unknown';
+                runtimeDropdown.appendChild(option);
+                state.jupyterCodeBlocks[blockId].runtime = language || 'language unknown';
             }
         })();
         

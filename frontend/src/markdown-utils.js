@@ -8,6 +8,64 @@ import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import hljs from "highlight.js/lib/common";
 
+const hljsLanguageLoaders = import.meta.glob('../node_modules/highlight.js/lib/languages/*.js');
+
+const hljsLanguageAliases = {
+    'c++': 'cpp',
+    'c#': 'csharp',
+    'f#': 'fsharp',
+    'objective-c': 'objectivec',
+    'obj-c': 'objectivec',
+    'sh': 'bash',
+    'shell': 'bash',
+    'docker': 'dockerfile',
+    'yml': 'yaml',
+};
+
+function normalizeLanguageName(language) {
+    const cleaned = String(language || '').trim().toLowerCase();
+    if (!cleaned) {
+        return '';
+    }
+    return hljsLanguageAliases[cleaned] || cleaned;
+}
+
+async function ensureHighlightLanguage(language) {
+    const normalized = normalizeLanguageName(language);
+    if (!normalized) {
+        return false;
+    }
+
+    if (hljs.getLanguage(normalized)) {
+        return true;
+    }
+
+    const loaderPath = Object.keys(hljsLanguageLoaders).find((path) => path.endsWith(`/${normalized}.js`));
+    if (!loaderPath) {
+        return false;
+    }
+
+    try {
+        const module = await hljsLanguageLoaders[loaderPath]();
+        if (module && typeof module.default === 'function') {
+            hljs.registerLanguage(normalized, module.default);
+            return true;
+        }
+    } catch (err) {
+        console.warn(`Unable to load highlight.js language: ${normalized}`, err);
+    }
+
+    return false;
+}
+
+function getBlockLanguage(block) {
+    const langClass = Array.from(block.classList).find((name) => name.startsWith('language-'));
+    if (!langClass) {
+        return '';
+    }
+    return normalizeLanguageName(langClass.slice('language-'.length));
+}
+
 // Configure marked with GFM heading IDs
 export function configureMarked() {
     marked.use(gfmHeadingId({}));
@@ -23,9 +81,29 @@ const rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wa
  * Apply syntax highlighting to all code blocks in a container
  * @param {HTMLElement} container - The container element to search for code blocks
  */
-export function applySyntaxHighlighting(container) {
-    container.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
+export async function applySyntaxHighlighting(container) {
+    const blocks = Array.from(container.querySelectorAll('pre code'));
+    const languages = new Set();
+
+    blocks.forEach((block) => {
+        const language = getBlockLanguage(block);
+        if (language) {
+            languages.add(language);
+        }
+    });
+
+    await Promise.all(Array.from(languages).map((language) => ensureHighlightLanguage(language)));
+
+    blocks.forEach((block) => {
+        const language = getBlockLanguage(block);
+        if (!language || hljs.getLanguage(language)) {
+            hljs.highlightElement(block);
+            return;
+        }
+
+        const highlighted = hljs.highlightAuto(block.textContent || '');
+        block.classList.add('hljs');
+        block.innerHTML = highlighted.value;
     });
 }
 
@@ -99,7 +177,7 @@ export function processLinks(container, options = {}) {
  * @param {HTMLElement} container - The container element with rendered markdown
  */
 export async function processMarkdownContainer(container) {
-    applySyntaxHighlighting(container);
+    await applySyntaxHighlighting(container);
     await processWailsImages(container);
     processLinks(container, { enableBookmarks: true });
 }
