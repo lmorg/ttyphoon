@@ -129,6 +129,38 @@ func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	return renderwebkit.GetConfiguredGlyphSize()
 }
 
+func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	state := types.BUTTON_RELEASED
+	if pressed {
+		state = types.BUTTON_PRESSED
+	}
+
+	renderer.HandleMouseButton(cellX, cellY, types.MouseButtonT(button), uint8(clicks), state)
+}
+
+func (a *WApp) TerminalMouseWheel(cellX, cellY, moveX, moveY int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleMouseWheel(cellX, cellY, moveX, moveY)
+}
+
+func (a *WApp) TerminalMouseMotion(cellX, cellY, relX, relY, state int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleMouseMotion(cellX, cellY, relX, relY, state)
+}
+
 func (a *WApp) startTerminalWindow() {
 	renderer, size := backend.Initialise()
 

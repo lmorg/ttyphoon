@@ -12,17 +12,14 @@ let cellHeight = 20;
 let fontSize = 18;
 let fontFamily = 'monospace';
 let glyphSizeCached = false;
+let lastMouseCell = { x: 0, y: 0 };
 
 function fitCanvasToWindow() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
 
-function configureFontMetricsFallback() {
-    if (!ctx) {
-        return;
-    }
-
+function applyConfiguredFontFromWindowStyle() {
     const parsed = parseInt(windowStyle?.fontSize, 10);
     if (!Number.isNaN(parsed) && parsed > 0) {
         fontSize = parsed;
@@ -31,6 +28,18 @@ function configureFontMetricsFallback() {
     if (windowStyle?.fontFamily) {
         fontFamily = windowStyle.fontFamily;
     }
+
+    if (ctx) {
+        ctx.font = `${fontSize}px ${fontFamily}`;
+    }
+}
+
+function configureFontMetricsFallback() {
+    if (!ctx) {
+        return;
+    }
+
+    applyConfiguredFontFromWindowStyle();
 
     ctx.font = `${fontSize}px ${fontFamily}`;
     const metrics = ctx.measureText('M');
@@ -124,6 +133,87 @@ function drawFrame() {
     }
 }
 
+function mouseButtonToGo(button) {
+    switch (button) {
+    case 0:
+        return 1;
+    case 1:
+        return 2;
+    case 2:
+        return 3;
+    case 3:
+        return 4;
+    case 4:
+        return 5;
+    default:
+        return 1;
+    }
+}
+
+function eventToCell(event) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((event.clientX - rect.left) / cellWidth);
+    const y = Math.floor((event.clientY - rect.top) / cellHeight);
+    return { x, y };
+}
+
+function wireMouseEvents() {
+    canvas.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+    });
+
+    canvas.addEventListener('mousedown', (event) => {
+        const pos = eventToCell(event);
+        lastMouseCell = pos;
+        window['go']['main']['WApp']['TerminalMouseButton'](
+            pos.x,
+            pos.y,
+            mouseButtonToGo(event.button),
+            event.detail || 1,
+            true,
+        ).catch(() => {});
+    });
+
+    canvas.addEventListener('mouseup', (event) => {
+        const pos = eventToCell(event);
+        lastMouseCell = pos;
+        window['go']['main']['WApp']['TerminalMouseButton'](
+            pos.x,
+            pos.y,
+            mouseButtonToGo(event.button),
+            event.detail || 1,
+            false,
+        ).catch(() => {});
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
+        const pos = eventToCell(event);
+        const relX = pos.x - lastMouseCell.x;
+        const relY = pos.y - lastMouseCell.y;
+        lastMouseCell = pos;
+        window['go']['main']['WApp']['TerminalMouseMotion'](
+            pos.x,
+            pos.y,
+            relX,
+            relY,
+            event.buttons,
+        ).catch(() => {});
+    });
+
+    canvas.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const pos = eventToCell(event);
+        const moveX = Math.sign(event.deltaX);
+        const moveY = -Math.sign(event.deltaY);
+        window['go']['main']['WApp']['TerminalMouseWheel'](
+            pos.x,
+            pos.y,
+            moveX,
+            moveY,
+        ).catch(() => {});
+    }, { passive: false });
+}
+
 async function flushDrawOps() {
     const ops = await GetTerminalDrawOps();
     if (!Array.isArray(ops) || ops.length === 0) {
@@ -152,9 +242,11 @@ GetWindowStyle().then((result) => {
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
+    applyConfiguredFontFromWindowStyle();
     fitCanvasToWindow();
     loadGlyphSizeFromGo().then(() => {
         drawFrame();
+        wireMouseEvents();
         startRendererLoop();
     });
 });

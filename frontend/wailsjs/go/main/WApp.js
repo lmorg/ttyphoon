@@ -78,6 +78,18 @@ export function StopNote(arg1) {
   return window['go']['main']['WApp']['StopNote'](arg1);
 }
 
+export function TerminalMouseButton(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['TerminalMouseButton'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TerminalMouseMotion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['TerminalMouseMotion'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TerminalMouseWheel(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['TerminalMouseWheel'](arg1, arg2, arg3, arg4);
+}
+
 export function WindowHide() {
   return window['go']['main']['WApp']['WindowHide']();
 }
