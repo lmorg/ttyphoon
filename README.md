@@ -141,6 +141,20 @@ TTYphoon to work with existing terminal applications _and_ for third parties to
 easily add support for their applications to render rich content in TTYphoon
 without breaking compatibility for legacy terminal emulators.
 
+### Experimental WebKit Renderer Scaffold
+
+TTYphoon now includes an experimental WebKit renderer scaffold behind an
+environment variable switch:
+
+```bash
+MXTTY_RENDERER=webkit ./ttyphoon
+```
+
+This path keeps terminal layout and type definitions in Go while allowing the
+rendering backend abstraction to target Wails/WebKit. The current scaffold is a
+compile-safe backend shell and frontend entry point intended for incremental
+migration work.
+
 ## Whats Left To Do
 
 In short, _a lot_!! Some of what has been detailed above is still aspirational.

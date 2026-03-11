@@ -1,12 +1,13 @@
 # Variables
 GO_FLAGS=-v
-MXTTY_WINDOW?="markdown"
+MXTTY_WINDOW?="terminal"
 export MXTTY_WINDOW
 
 # Build variables that can be overridden
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD || echo "unknown")
 BUILD_DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S' || echo "unknown")
 LDFLAGS=-ldflags "-X github.com/lmorg/ttyphoon/app.branch=${BRANCH} -X github.com/lmorg/ttyphoon/app.buildDate=${BUILD_DATE}"
+
 
 # Build the binary
 .PHONY: build
@@ -17,6 +18,11 @@ build: generate
 .PHONY: run-darwin
 run-darwin: build
 	unset MXTTY_WINDOW; ./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
+
+.PHONY: run-webkit
+run-webkit:
+	wails dev
+
 
 # Test
 .PHONY: test

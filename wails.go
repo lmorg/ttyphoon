@@ -15,9 +15,13 @@ import (
 
 	ttyphoon "github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	"github.com/lmorg/ttyphoon/window/backend"
+	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -102,6 +106,47 @@ func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
 
 func (a *WApp) GetParameters() any {
 	return a.payload.Parameters
+}
+
+func (a *WApp) GetTerminalDrawOps() []renderwebkit.DrawCommand {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return []renderwebkit.DrawCommand{}
+	}
+
+	return renderer.PopDrawCommands()
+}
+
+func (a *WApp) GetTerminalGlyphSize() *types.XY {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if ok {
+		glyphSize := renderer.GetGlyphSize()
+		if glyphSize != nil {
+			return glyphSize
+		}
+	}
+
+	return renderwebkit.GetConfiguredGlyphSize()
+}
+
+func (a *WApp) startTerminalWindow() {
+	renderer, size := backend.Initialise()
+
+	tmuxClient, err := tmux.NewStartSession(renderer, size, tmux.START_ATTACH_SESSION)
+	if err != nil {
+		if !strings.HasPrefix(err.Error(), "no sessions") {
+			log.Println(err)
+			return
+		}
+
+		tmuxClient, err = tmux.NewStartSession(renderer, size, tmux.START_NEW_SESSION)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient)
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
@@ -416,6 +461,8 @@ func (a *WApp) domReady(ctx context.Context) {
 	}()
 
 	switch a.window {
+	case dispatcher.WindowSdl:
+		go a.startTerminalWindow()
 	case dispatcher.WindowHistory:
 		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
 		if err != nil {

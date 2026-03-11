@@ -5,6 +5,10 @@ import { GetWindowType } from '../wailsjs/go/main/WApp';
 
 GetWindowType().then((result) => {
     switch(result) {
+    case "sdl":
+    case "terminal":
+        import('./terminal.js');
+        break;
     case "inputBox":
         import('./inputbox.js');
         break;

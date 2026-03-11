@@ -128,6 +128,61 @@ export namespace dispatcher {
 
 }
 
+export namespace rendererwebkit {
+	
+	export class DrawCommand {
+	    op: string;
+	    x: number;
+	    y: number;
+	    char?: string;
+	    fg?: types.Colour;
+	    bg?: types.Colour;
+	    bold?: boolean;
+	    italic?: boolean;
+	    underline?: boolean;
+	    strike?: boolean;
+	    width: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DrawCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.op = source["op"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.char = source["char"];
+	        this.fg = this.convertValues(source["fg"], types.Colour);
+	        this.bg = this.convertValues(source["bg"], types.Colour);
+	        this.bold = source["bold"];
+	        this.italic = source["italic"];
+	        this.underline = source["underline"];
+	        this.strike = source["strike"];
+	        this.width = source["width"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace types {
 	
 	export class Colour {

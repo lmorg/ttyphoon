@@ -34,6 +34,14 @@ export function GetParameters() {
   return window['go']['main']['WApp']['GetParameters']();
 }
 
+export function GetTerminalDrawOps() {
+  return window['go']['main']['WApp']['GetTerminalDrawOps']();
+}
+
+export function GetTerminalGlyphSize() {
+  return window['go']['main']['WApp']['GetTerminalGlyphSize']();
+}
+
 export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
 }

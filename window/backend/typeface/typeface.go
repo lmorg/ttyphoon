@@ -1,6 +1,8 @@
 package typeface
 
 import (
+	"fmt"
+
 	"github.com/forPelevin/gomoji"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
@@ -37,6 +39,27 @@ func Init() {
 
 func GetSize() *types.XY {
 	return harfbuzz.getSize()
+}
+
+func MeasureSize(fontName string, fontSize int) (*types.XY, error) {
+	measure := new(fontHarfbuzz)
+
+	err := measure.Init()
+	if err != nil {
+		return nil, err
+	}
+
+	err = measure.Open(fontName, fontSize)
+	if err != nil {
+		return nil, err
+	}
+
+	size := measure.getSize()
+	if size == nil {
+		return nil, fmt.Errorf("unable to measure glyph size")
+	}
+
+	return size, nil
 }
 
 func SetStyle(style types.SgrFlag) {
