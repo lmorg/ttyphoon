@@ -146,14 +146,14 @@ func (wr *webkitRender) NotesCreateAndOpen(_ string, _ string) {}
 func (wr *webkitRender) Close() {}
 
 func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {
-	wr.cmdMu.Lock()
+	//wr.cmdMu.Lock()
 	wr.drawCommands = append(wr.drawCommands, cmd)
-	wr.cmdMu.Unlock()
+	//wr.cmdMu.Unlock()
 }
 
 func (wr *webkitRender) PopDrawCommands() []DrawCommand {
-	wr.enqueueDrawCommand(DrawCommand{Op: DrawOpFrame})
-
+	//wr.enqueueDrawCommand(DrawCommand{Op: DrawOpFrame})
+	//wr.drawCommands = []DrawCommand{{Op: DrawOpFrame}}
 	if wr.termWin != nil {
 		for i := range wr.termWin.Tiles {
 			term := wr.termWin.Tiles[i].GetTerm()
@@ -164,10 +164,14 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 		}
 	}
 
-	wr.cmdMu.Lock()
-	commands := wr.drawCommands
+	if len(wr.drawCommands) == 0 {
+		return nil
+	}
+
+	//wr.cmdMu.Lock()
+	commands := append([]DrawCommand{{Op: DrawOpFrame}}, wr.drawCommands...)
 	wr.drawCommands = nil
-	wr.cmdMu.Unlock()
+	//wr.cmdMu.Unlock()
 
 	//if len(commands) == 0 {
 	//	return []DrawCommand{}

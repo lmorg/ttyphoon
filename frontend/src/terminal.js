@@ -221,18 +221,12 @@ function wireMouseEvents() {
     }, { passive: false });
 }
 
-function scheduleRaf() {
+EventsOn("terminalRedraw", ops => {
     if (rafPending) {
         return;
     }
-    rafPending = true;
-    requestAnimationFrame(() => {
-        ctx.drawImage(offscreen, 0, 0);
-        rafPending = false;
-    });
-}
+   rafPending = true;
 
-EventsOn("terminalRedraw", ops => {
     const drawOps = Array.isArray(ops?.[0]) ? ops[0] : ops;
 
     if (!Array.isArray(drawOps) || drawOps.length === 0) {
@@ -249,10 +243,10 @@ EventsOn("terminalRedraw", ops => {
         }
     }
 
-    // Schedule a blit to the visible canvas on the next display frame.
-    // Multiple events arriving between frames all draw to offscreen;
-    // only one blit happens per vsync, eliminating flicker.
-    scheduleRaf();
+    requestAnimationFrame(() => {
+        ctx.drawImage(offscreen, 0, 0);
+        rafPending = false;
+    });
 });
 
 GetWindowStyle().then((result) => {
@@ -263,7 +257,7 @@ GetWindowStyle().then((result) => {
     applyConfiguredFontFromWindowStyle();
     fitCanvasToWindow();
     loadGlyphSizeFromGo().then(() => {
-        drawFrame();
+        //drawFrame();
         wireMouseEvents();
         window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
     });
@@ -271,5 +265,5 @@ GetWindowStyle().then((result) => {
 
 window.addEventListener('resize', () => {
     fitCanvasToWindow();
-    drawFrame();
+    //drawFrame();
 });
