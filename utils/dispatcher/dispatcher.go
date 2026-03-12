@@ -7,7 +7,7 @@ const ENV_PARAMETERS = "MXTTY_PARAMETERS"
 type WindowTypeT string
 
 const (
-	WindowSdl      WindowTypeT = "sdl"
+	WindowTerminal WindowTypeT = "terminal"
 	WindowInputBox WindowTypeT = "inputBox"
 	WindowMarkdown WindowTypeT = "markdown"
 	WindowHistory  WindowTypeT = "history"

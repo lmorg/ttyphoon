@@ -1,6 +1,7 @@
 package rendersdl
 
 import (
+	"context"
 	"log"
 
 	"github.com/lmorg/ttyphoon/app"
@@ -156,7 +157,7 @@ func (sr *sdlRender) initFooter() {
 	}
 }
 
-func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any) {
+func (sr *sdlRender) Start(termWin *types.AppWindowTerms, tmuxClient any, _ context.Context) {
 	switch tmuxClient.(type) {
 	case *tmux.Tmux:
 		sr.tmux = tmuxClient.(*tmux.Tmux)

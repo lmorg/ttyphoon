@@ -1,4 +1,5 @@
-import { GetWindowStyle, GetTerminalDrawOps } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle } from '../wailsjs/go/main/WApp';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 
 document.querySelector('#app').innerHTML = `
     <canvas id="ttyphoon-terminal"></canvas>
@@ -6,6 +7,9 @@ document.querySelector('#app').innerHTML = `
 
 const canvas = document.getElementById('ttyphoon-terminal');
 const ctx = canvas.getContext('2d');
+const offscreen = document.createElement('canvas');
+//const offscreen = document.getElementById('ttyphoon-terminal-buf');
+const offCtx = offscreen.getContext('2d');
 let windowStyle;
 let cellWidth = 10;
 let cellHeight = 20;
@@ -13,10 +17,13 @@ let fontSize = 18;
 let fontFamily = 'monospace';
 let glyphSizeCached = false;
 let lastMouseCell = { x: 0, y: 0 };
+let rafPending = false;
 
 function fitCanvasToWindow() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    offscreen.width = canvas.width;
+    offscreen.height = canvas.height;
 }
 
 function applyConfiguredFontFromWindowStyle() {
@@ -29,20 +36,20 @@ function applyConfiguredFontFromWindowStyle() {
         fontFamily = windowStyle.fontFamily;
     }
 
-    if (ctx) {
-        ctx.font = `${fontSize}px ${fontFamily}`;
+    if (offCtx) {
+        offCtx.font = `${fontSize}px ${fontFamily}`;
     }
 }
 
 function configureFontMetricsFallback() {
-    if (!ctx) {
+    if (!offCtx) {
         return;
     }
 
     applyConfiguredFontFromWindowStyle();
 
-    ctx.font = `${fontSize}px ${fontFamily}`;
-    const metrics = ctx.measureText('M');
+    offCtx.font = `${fontSize}px ${fontFamily}`;
+    const metrics = offCtx.measureText('M');
     cellWidth = Math.ceil(metrics.width || fontSize * 0.6);
     cellHeight = Math.ceil((metrics.fontBoundingBoxAscent || fontSize) + (metrics.fontBoundingBoxDescent || fontSize * 0.2));
 }
@@ -69,7 +76,7 @@ async function loadGlyphSizeFromGo() {
 }
 
 function drawCell(cmd) {
-    if (!ctx) {
+    if (!offCtx) {
         return;
     }
 
@@ -82,8 +89,8 @@ function drawCell(cmd) {
     const width = widthCells * cellWidth;
 
     if (cmd.bg) {
-        ctx.fillStyle = `rgb(${cmd.bg.Red}, ${cmd.bg.Green}, ${cmd.bg.Blue})`;
-        ctx.fillRect(x, y, width, cellHeight);
+        offCtx.fillStyle = `rgb(${cmd.bg.Red}, ${cmd.bg.Green}, ${cmd.bg.Blue})`;
+        offCtx.fillRect(x, y, width, cellHeight);
     }
 
     const fontParts = [];
@@ -95,41 +102,41 @@ function drawCell(cmd) {
     }
     fontParts.push(`${fontSize}px`);
     fontParts.push(fontFamily);
-    ctx.font = fontParts.join(' ');
-    ctx.textBaseline = 'top';
+    offCtx.font = fontParts.join(' ');
+    offCtx.textBaseline = 'top';
 
     if (cmd.fg) {
-        ctx.fillStyle = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
+        offCtx.fillStyle = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
     } else {
-        ctx.fillStyle = '#ffffff';
+        offCtx.fillStyle = '#ffffff';
     }
 
     if (cmd.char) {
-        ctx.fillText(cmd.char, x, y);
+        offCtx.fillText(cmd.char, x, y);
     }
 
     if (cmd.underline) {
         const lineY = y + cellHeight - 2;
-        ctx.fillRect(x, lineY, width, 1);
+        offCtx.fillRect(x, lineY, width, 1);
     }
 
     if (cmd.strike) {
         const lineY = y + Math.floor(cellHeight / 2);
-        ctx.fillRect(x, lineY, width, 1);
+        offCtx.fillRect(x, lineY, width, 1);
     }
 }
 
 function drawFrame() {
-    if (!ctx) {
+    if (!offCtx) {
         return;
     }
 
     const bg = windowStyle?.colors?.bg;
     if (bg) {
-        ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+        offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
     } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
     }
 }
 
@@ -214,13 +221,25 @@ function wireMouseEvents() {
     }, { passive: false });
 }
 
-async function flushDrawOps() {
-    const ops = await GetTerminalDrawOps();
-    if (!Array.isArray(ops) || ops.length === 0) {
+function scheduleRaf() {
+    if (rafPending) {
+        return;
+    }
+    rafPending = true;
+    requestAnimationFrame(() => {
+        ctx.drawImage(offscreen, 0, 0);
+        rafPending = false;
+    });
+}
+
+EventsOn("terminalRedraw", ops => {
+    const drawOps = Array.isArray(ops?.[0]) ? ops[0] : ops;
+
+    if (!Array.isArray(drawOps) || drawOps.length === 0) {
         return;
     }
 
-    for (const cmd of ops) {
+    for (const cmd of drawOps) {
         if (cmd.op === 'frame') {
             drawFrame();
             continue;
@@ -229,13 +248,12 @@ async function flushDrawOps() {
             drawCell(cmd);
         }
     }
-}
 
-function startRendererLoop() {
-    setInterval(() => {
-        flushDrawOps().catch(() => {});
-    }, 16);
-}
+    // Schedule a blit to the visible canvas on the next display frame.
+    // Multiple events arriving between frames all draw to offscreen;
+    // only one blit happens per vsync, eliminating flicker.
+    scheduleRaf();
+});
 
 GetWindowStyle().then((result) => {
     windowStyle = result;
@@ -247,7 +265,7 @@ GetWindowStyle().then((result) => {
     loadGlyphSizeFromGo().then(() => {
         drawFrame();
         wireMouseEvents();
-        startRendererLoop();
+        window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
     });
 });
 

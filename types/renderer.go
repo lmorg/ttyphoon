@@ -1,5 +1,7 @@
 package types
 
+import "context"
+
 type MenuCallbackT func(int)
 
 type MenuItem struct {
@@ -26,7 +28,7 @@ type InputBoxCallbackT func(string)
 type InputBoxCallbackWT func(string, bool)
 
 type Renderer interface {
-	Start(*AppWindowTerms, any)
+	Start(*AppWindowTerms, any, context.Context)
 	ShowAndFocusWindow()
 	GetWindowSizeCells() *XY
 	GetGlyphSize() *XY

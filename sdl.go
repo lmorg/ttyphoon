@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -85,7 +86,7 @@ func tmuxSession() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient)
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, context.Background())
 }
 
 func regularSession() {

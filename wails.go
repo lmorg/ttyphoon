@@ -60,7 +60,7 @@ var WWindowTsBindings = []struct {
 	Value  dispatcher.WindowTypeT
 	TSName string
 }{
-	{dispatcher.WindowSdl, "sdl"},
+	{dispatcher.WindowTerminal, "terminal"},
 	{dispatcher.WindowInputBox, "inputBox"},
 	{dispatcher.WindowMarkdown, "markdown"},
 	{dispatcher.WindowPreview, "preview"},
@@ -108,14 +108,14 @@ func (a *WApp) GetParameters() any {
 	return a.payload.Parameters
 }
 
-func (a *WApp) GetTerminalDrawOps() []renderwebkit.DrawCommand {
+/*func (a *WApp) GetTerminalDrawOps() []renderwebkit.DrawCommand {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
 		return []renderwebkit.DrawCommand{}
 	}
 
 	return renderer.PopDrawCommands()
-}
+}*/
 
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	renderer, ok := renderwebkit.CurrentRenderer()
@@ -161,6 +161,15 @@ func (a *WApp) TerminalMouseMotion(cellX, cellY, relX, relY, state int32) {
 	renderer.HandleMouseMotion(cellX, cellY, relX, relY, state)
 }
 
+func (a *WApp) TerminalRequestRedraw() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.TriggerRedraw()
+}
+
 func (a *WApp) startTerminalWindow() {
 	renderer, size := backend.Initialise()
 
@@ -178,7 +187,7 @@ func (a *WApp) startTerminalWindow() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient)
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx)
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
@@ -493,7 +502,7 @@ func (a *WApp) domReady(ctx context.Context) {
 	}()
 
 	switch a.window {
-	case dispatcher.WindowSdl:
+	case dispatcher.WindowTerminal:
 		go a.startTerminalWindow()
 	case dispatcher.WindowHistory:
 		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})

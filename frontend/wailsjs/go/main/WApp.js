@@ -34,10 +34,6 @@ export function GetParameters() {
   return window['go']['main']['WApp']['GetParameters']();
 }
 
-export function GetTerminalDrawOps() {
-  return window['go']['main']['WApp']['GetTerminalDrawOps']();
-}
-
 export function GetTerminalGlyphSize() {
   return window['go']['main']['WApp']['GetTerminalGlyphSize']();
 }
@@ -88,6 +84,10 @@ export function TerminalMouseMotion(arg1, arg2, arg3, arg4, arg5) {
 
 export function TerminalMouseWheel(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['TerminalMouseWheel'](arg1, arg2, arg3, arg4);
+}
+
+export function TerminalRequestRedraw() {
+  return window['go']['main']['WApp']['TerminalRequestRedraw']();
 }
 
 export function WindowHide() {

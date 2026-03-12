@@ -1,6 +1,7 @@
 package rendererwebkit
 
 import (
+	"context"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/types"
@@ -17,10 +18,8 @@ type webkitRender struct {
 	statusBarText string
 	cmdMu         sync.Mutex
 	drawCommands  []DrawCommand
-}
-
-func (wr *webkitRender) Start(termWin *types.AppWindowTerms, _ any) {
-	wr.termWin = termWin
+	wapp          context.Context
+	_redraw       chan struct{}
 }
 
 func (wr *webkitRender) ShowAndFocusWindow() {}
@@ -74,10 +73,15 @@ func (wr *webkitRender) RefreshWindowList() {}
 func (wr *webkitRender) Bell() {}
 
 func (wr *webkitRender) TriggerRedraw() {
-	wr.enqueueDrawCommand(DrawCommand{Op: DrawOpFrame})
+	select {
+	case wr._redraw <- struct{}{}:
+	default:
+	}
 }
 
-func (wr *webkitRender) TriggerLazyRedraw() {}
+func (wr *webkitRender) TriggerLazyRedraw() {
+	wr.TriggerRedraw()
+}
 
 func (wr *webkitRender) TriggerDeallocation(fn func()) {
 	if fn != nil {
@@ -165,9 +169,9 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	wr.drawCommands = nil
 	wr.cmdMu.Unlock()
 
-	if len(commands) == 0 {
-		return []DrawCommand{}
-	}
+	//if len(commands) == 0 {
+	//	return []DrawCommand{}
+	//}
 
 	return commands
 }
