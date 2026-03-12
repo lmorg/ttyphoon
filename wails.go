@@ -170,6 +170,24 @@ func (a *WApp) TerminalRequestRedraw() {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) TerminalTextInput(text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleTextInput(text)
+}
+
+func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleKeyPress(key, ctrl, alt, shift, meta)
+}
+
 func (a *WApp) startTerminalWindow() {
 	renderer, size := backend.Initialise()
 

@@ -164,6 +164,55 @@ function eventToCell(event) {
     return { x, y };
 }
 
+function isEditableTarget(target) {
+    if (!target || !(target instanceof HTMLElement)) {
+        return false;
+    }
+
+    if (target.isContentEditable) {
+        return true;
+    }
+
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+function wireKeyboardEvents() {
+    canvas.tabIndex = 0;
+    canvas.style.outline = 'none';
+
+    canvas.addEventListener('mousedown', () => {
+        canvas.focus();
+    });
+
+    window.addEventListener('keydown', (event) => {
+        if (isEditableTarget(event.target) || event.isComposing) {
+            return;
+        }
+
+        const isTextInput = event.key &&
+            event.key.length === 1 &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            !event.metaKey;
+
+        if (isTextInput) {
+            event.preventDefault();
+            window['go']['main']['WApp']['TerminalTextInput'](event.key).catch(() => {});
+            return;
+        }
+
+        event.preventDefault();
+        window['go']['main']['WApp']['TerminalKeyPress'](
+            event.key,
+            event.ctrlKey,
+            event.altKey,
+            event.shiftKey,
+            event.metaKey,
+        ).catch(() => {});
+    });
+}
+
 function wireMouseEvents() {
     canvas.addEventListener('contextmenu', (event) => {
         event.preventDefault();
@@ -258,7 +307,9 @@ GetWindowStyle().then((result) => {
     fitCanvasToWindow();
     loadGlyphSizeFromGo().then(() => {
         //drawFrame();
+        wireKeyboardEvents();
         wireMouseEvents();
+        canvas.focus();
         window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
     });
 });
