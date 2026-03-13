@@ -1,5 +1,6 @@
 import { GetWindowStyle } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import { wireKeyboardEvents, wireMouseEvents } from './events';
 
 document.querySelector('#app').innerHTML = `
     <canvas id="ttyphoon-terminal"></canvas>
@@ -16,7 +17,6 @@ let cellHeight = 20;
 let fontSize = 18;
 let fontFamily = 'monospace';
 let glyphSizeCached = false;
-let lastMouseCell = { x: 0, y: 0 };
 let rafPending = false;
 
 function fitCanvasToWindow() {
@@ -140,134 +140,71 @@ function drawFrame() {
     }
 }
 
-function mouseButtonToGo(button) {
-    switch (button) {
-    case 0:
-        return 1;
-    case 1:
-        return 2;
-    case 2:
-        return 3;
-    case 3:
-        return 4;
-    case 4:
-        return 5;
-    default:
-        return 1;
+function drawGauge(cmd) {
+    if (!offCtx || !cmd?.fg || !Number.isFinite(cmd.max) || cmd.max <= 0) {
+        return;
+    }
+
+    const x = (Number.isFinite(cmd.x) ? cmd.x : 0) * cellWidth;
+    const y = (Number.isFinite(cmd.y) ? cmd.y : 0) * cellHeight;
+    const ratio = Math.max(0, Math.min(1, (Number.isFinite(cmd.value) ? cmd.value : 0) / cmd.max));
+
+    const base = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
+
+    if (cmd.op === 'gauge_h') {
+        const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 1;
+        const fullW = widthCells * cellWidth;
+
+        offCtx.globalAlpha = 0.13;
+        offCtx.fillStyle = base;
+        offCtx.fillRect(x, y, fullW, cellHeight);
+
+        offCtx.globalAlpha = 0.75;
+        offCtx.fillRect(x, y, Math.floor(fullW * ratio), cellHeight);
+        offCtx.globalAlpha = 1;
+        return;
+    }
+
+    if (cmd.op === 'gauge_v') {
+        const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
+        const fullH = heightCells * cellHeight;
+
+        offCtx.globalAlpha = 0.13;
+        offCtx.fillStyle = base;
+        offCtx.fillRect(x, y, cellWidth, fullH);
+
+        const fillH = Math.floor(fullH * ratio);
+        offCtx.globalAlpha = 0.75;
+        offCtx.fillRect(x, y, cellWidth, fillH);
+        offCtx.globalAlpha = 1;
     }
 }
 
-function eventToCell(event) {
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) / cellWidth);
-    const y = Math.floor((event.clientY - rect.top) / cellHeight);
-    return { x, y };
-}
-
-function isEditableTarget(target) {
-    if (!target || !(target instanceof HTMLElement)) {
-        return false;
+function drawBlockChrome(cmd) {
+    if (!offCtx || !cmd?.fg) {
+        return;
     }
 
-    if (target.isContentEditable) {
-        return true;
+    const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
+    const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
+
+    const x = xCell * cellWidth;
+    const y = yCell * cellHeight;
+    const h = heightCells * cellHeight;
+    const barWidth = Math.max(2, Math.floor(cellWidth * (cmd.folded ? 0.5 : 0.25)));
+
+    offCtx.fillStyle = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
+    offCtx.globalAlpha = 0.75;
+    offCtx.fillRect(x, y, barWidth, h);
+
+    if (!cmd.folded && Number.isFinite(cmd.endX) && cmd.endX >= xCell) {
+        const lineY = y + h;
+        const lineEndX = ((cmd.endX + 1) * cellWidth) - 1;
+        offCtx.fillRect(x, lineY, Math.max(1, lineEndX - x + 1), 1);
     }
 
-    const tag = target.tagName;
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function wireKeyboardEvents() {
-    canvas.tabIndex = 0;
-    canvas.style.outline = 'none';
-
-    canvas.addEventListener('mousedown', () => {
-        canvas.focus();
-    });
-
-    window.addEventListener('keydown', (event) => {
-        if (isEditableTarget(event.target) || event.isComposing) {
-            return;
-        }
-
-        const isTextInput = event.key &&
-            event.key.length === 1 &&
-            !event.ctrlKey &&
-            !event.altKey &&
-            !event.metaKey;
-
-        if (isTextInput) {
-            event.preventDefault();
-            window['go']['main']['WApp']['TerminalTextInput'](event.key).catch(() => {});
-            return;
-        }
-
-        event.preventDefault();
-        window['go']['main']['WApp']['TerminalKeyPress'](
-            event.key,
-            event.ctrlKey,
-            event.altKey,
-            event.shiftKey,
-            event.metaKey,
-        ).catch(() => {});
-    });
-}
-
-function wireMouseEvents() {
-    canvas.addEventListener('contextmenu', (event) => {
-        event.preventDefault();
-    });
-
-    canvas.addEventListener('mousedown', (event) => {
-        const pos = eventToCell(event);
-        lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseButton'](
-            pos.x,
-            pos.y,
-            mouseButtonToGo(event.button),
-            event.detail || 1,
-            true,
-        ).catch(() => {});
-    });
-
-    canvas.addEventListener('mouseup', (event) => {
-        const pos = eventToCell(event);
-        lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseButton'](
-            pos.x,
-            pos.y,
-            mouseButtonToGo(event.button),
-            event.detail || 1,
-            false,
-        ).catch(() => {});
-    });
-
-    canvas.addEventListener('mousemove', (event) => {
-        const pos = eventToCell(event);
-        const relX = pos.x - lastMouseCell.x;
-        const relY = pos.y - lastMouseCell.y;
-        lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseMotion'](
-            pos.x,
-            pos.y,
-            relX,
-            relY,
-            event.buttons,
-        ).catch(() => {});
-    });
-
-    canvas.addEventListener('wheel', (event) => {
-        event.preventDefault();
-        const pos = eventToCell(event);
-        const moveX = Math.sign(event.deltaX);
-        const moveY = -Math.sign(event.deltaY);
-        window['go']['main']['WApp']['TerminalMouseWheel'](
-            pos.x,
-            pos.y,
-            moveX,
-            moveY,
-        ).catch(() => {});
-    }, { passive: false });
+    offCtx.globalAlpha = 1;
 }
 
 EventsOn("terminalRedraw", ops => {
@@ -289,6 +226,14 @@ EventsOn("terminalRedraw", ops => {
         }
         if (cmd.op === 'cell') {
             drawCell(cmd);
+            continue;
+        }
+        if (cmd.op === 'gauge_h' || cmd.op === 'gauge_v') {
+            drawGauge(cmd);
+            continue;
+        }
+        if (cmd.op === 'block_chrome') {
+            drawBlockChrome(cmd);
         }
     }
 
@@ -307,8 +252,8 @@ GetWindowStyle().then((result) => {
     fitCanvasToWindow();
     loadGlyphSizeFromGo().then(() => {
         //drawFrame();
-        wireKeyboardEvents();
-        wireMouseEvents();
+        wireKeyboardEvents(canvas);
+        wireMouseEvents(canvas, () => ({ cellWidth, cellHeight }));
         canvas.focus();
         window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
     });

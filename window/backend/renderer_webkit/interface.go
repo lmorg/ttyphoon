@@ -40,10 +40,50 @@ func (wr *webkitRender) SetBlinkState(value bool) {
 	wr.blinkState = value
 }
 
-func (wr *webkitRender) DrawGaugeH(_ types.Tile, _ *types.XY, _ int32, _ int, _ int, _ *types.Colour) {
+func (wr *webkitRender) DrawGaugeH(tile types.Tile, topLeft *types.XY, width int32, value, max int, c *types.Colour) {
+	if tile == nil || topLeft == nil || c == nil || width <= 0 || max <= 0 {
+		return
+	}
+
+	if value < 0 {
+		value = 0
+	}
+	if value > max {
+		value = max
+	}
+
+	wr.enqueueDrawCommand(DrawCommand{
+		Op:    DrawOpGaugeH,
+		X:     topLeft.X + tile.Left() + 1,
+		Y:     topLeft.Y + tile.Top(),
+		Width: width,
+		Value: int32(value),
+		Max:   int32(max),
+		Fg:    c,
+	})
 }
 
-func (wr *webkitRender) DrawGaugeV(_ types.Tile, _ *types.XY, _ int32, _ int, _ int, _ *types.Colour) {
+func (wr *webkitRender) DrawGaugeV(tile types.Tile, topLeft *types.XY, height int32, value, max int, c *types.Colour) {
+	if tile == nil || topLeft == nil || c == nil || height <= 0 || max <= 0 {
+		return
+	}
+
+	if value < 0 {
+		value = 0
+	}
+	if value > max {
+		value = max
+	}
+
+	wr.enqueueDrawCommand(DrawCommand{
+		Op:     DrawOpGaugeV,
+		X:      topLeft.X + tile.Left(),
+		Y:      topLeft.Y + tile.Top(),
+		Height: height,
+		Value:  int32(value),
+		Max:    int32(max),
+		Fg:     c,
+	})
 }
 
 func (wr *webkitRender) DrawTable(_ types.Tile, _ *types.XY, _ int32, _ []int32) {}
@@ -53,7 +93,36 @@ func (wr *webkitRender) DrawHighlightRect(_ types.Tile, _ *types.XY, _ *types.XY
 func (wr *webkitRender) DrawRectWithColour(_ types.Tile, _ *types.XY, _ *types.XY, _ *types.Colour, _ bool) {
 }
 
-func (wr *webkitRender) DrawOutputBlockChrome(_ types.Tile, _ int32, _ int32, _ *types.Colour, _ bool) {
+func (wr *webkitRender) DrawOutputBlockChrome(tile types.Tile, _start, n int32, c *types.Colour, folded bool) {
+	if tile == nil || tile.GetTerm() == nil || c == nil {
+		return
+	}
+
+	termHeight := tile.GetTerm().GetSize().Y
+	if _start >= termHeight {
+		return
+	}
+
+	start := _start + tile.Top()
+	height := n
+	if _start+n >= termHeight {
+		height = termHeight - _start - 1
+	}
+	if height < 0 {
+		return
+	}
+
+	cmd := DrawCommand{
+		Op:     DrawOpBlockChrome,
+		X:      tile.Left(),
+		Y:      start,
+		Height: height + 1,
+		EndX:   tile.Right() + 2,
+		Fg:     c,
+		Folded: folded,
+	}
+
+	wr.enqueueDrawCommand(cmd)
 }
 
 func (wr *webkitRender) GetWindowTitle() string {

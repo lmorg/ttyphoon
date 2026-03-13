@@ -5,14 +5,19 @@ import "github.com/lmorg/ttyphoon/types"
 type DrawOp string
 
 const (
-	DrawOpFrame DrawOp = "frame"
-	DrawOpCell  DrawOp = "cell"
+	DrawOpFrame       DrawOp = "frame"
+	DrawOpCell        DrawOp = "cell"
+	DrawOpGaugeH      DrawOp = "gauge_h"
+	DrawOpGaugeV      DrawOp = "gauge_v"
+	DrawOpBlockChrome DrawOp = "block_chrome"
 )
 
 type DrawCommand struct {
 	Op        DrawOp        `json:"op"`
 	X         int32         `json:"x"`
 	Y         int32         `json:"y"`
+	Height    int32         `json:"height"`
+	EndX      int32         `json:"endX"`
 	Char      string        `json:"char,omitempty"`
 	Fg        *types.Colour `json:"fg,omitempty"`
 	Bg        *types.Colour `json:"bg,omitempty"`
@@ -21,6 +26,9 @@ type DrawCommand struct {
 	Underline bool          `json:"underline,omitempty"`
 	Strike    bool          `json:"strike,omitempty"`
 	Width     int32         `json:"width"`
+	Value     int32         `json:"value"`
+	Max       int32         `json:"max"`
+	Folded    bool          `json:"folded,omitempty"`
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {
