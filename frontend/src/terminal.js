@@ -4,6 +4,7 @@ import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
 import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
+import { initTerminalPopupMenu } from './popup_menu';
 
 document.querySelector('#app').innerHTML = `
     <canvas id="ttyphoon-terminal"></canvas>
@@ -129,6 +130,7 @@ GetWindowStyle().then((result) => {
         //drawFrame();
         wireKeyboardEvents(canvas);
         wireMouseEvents(canvas, font.getCellSize);
+        initTerminalPopupMenu(canvas);
         canvas.focus();
         window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
     });

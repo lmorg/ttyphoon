@@ -16,10 +16,16 @@ type webkitRender struct {
 	keyboardMode  types.KeyboardMode
 	keyModifier   int
 	statusBarText string
-	cmdMu         sync.Mutex
+	//cmdMu         sync.Mutex
 	drawCommands  []DrawCommand
 	wapp          context.Context
 	_redraw       chan struct{}
+	fnSchedule    []func()
+	contextMenu   types.ContextMenu
+	menuMu        sync.Mutex
+	menuNextID    int
+	menuCallbacks map[int]menuCallbacks
+	//fnScheduleM   sync.Mutex
 }
 
 func (wr *webkitRender) ShowAndFocusWindow() {}
@@ -153,9 +159,9 @@ func (wr *webkitRender) TriggerLazyRedraw() {
 }
 
 func (wr *webkitRender) TriggerDeallocation(fn func()) {
-	if fn != nil {
-		fn()
-	}
+	//wr.fnScheduleM.Lock()
+	wr.fnSchedule = append(wr.fnSchedule, fn)
+	//wr.fnScheduleM.Unlock()
 }
 
 func (wr *webkitRender) TriggerQuit() {}
@@ -178,18 +184,6 @@ func (wr *webkitRender) DisplayInputBox(_ string, _ string, ok types.InputBoxCal
 		ok("")
 	}
 }
-
-func (wr *webkitRender) DisplayMenu(_ string, items []string, _ types.MenuCallbackT, ok types.MenuCallbackT, _ types.MenuCallbackT) {
-	if len(items) > 0 && ok != nil {
-		ok(0)
-	}
-}
-
-func (wr *webkitRender) NewContextMenu() types.ContextMenu {
-	return &contextMenuStub{}
-}
-
-func (wr *webkitRender) AddToContextMenu(_ ...types.MenuItem) {}
 
 func (wr *webkitRender) GetWindowMeta() any {
 	return nil
@@ -236,6 +230,11 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	if len(wr.drawCommands) == 0 {
 		return nil
 	}
+
+	for _, fn := range wr.fnSchedule {
+		fn()
+	}
+	wr.fnSchedule = []func(){}
 
 	//wr.cmdMu.Lock()
 	commands := append([]DrawCommand{{Op: DrawOpFrame}}, wr.drawCommands...)
@@ -285,57 +284,4 @@ func (ns *notificationStub) Close() {
 	if ns.cancel != nil {
 		ns.cancel()
 	}
-}
-
-type contextMenuStub struct {
-	items []types.MenuItem
-}
-
-func (cms *contextMenuStub) Append(items ...types.MenuItem) {
-	cms.items = append(cms.items, items...)
-}
-
-func (cms *contextMenuStub) DisplayMenu(_ string) {}
-
-func (cms *contextMenuStub) Options() []string {
-	options := make([]string, len(cms.items))
-	for i := range cms.items {
-		options[i] = cms.items[i].Title
-	}
-	return options
-}
-
-func (cms *contextMenuStub) Icons() []rune {
-	icons := make([]rune, len(cms.items))
-	for i := range cms.items {
-		icons[i] = cms.items[i].Icon
-	}
-	return icons
-}
-
-func (cms *contextMenuStub) Highlight(i int) {
-	if i < 0 || i >= len(cms.items) {
-		return
-	}
-	if cms.items[i].Highlight != nil {
-		cancel := cms.items[i].Highlight()
-		if cancel != nil {
-			cancel()
-		}
-	}
-}
-
-func (cms *contextMenuStub) Callback(i int) {
-	if i < 0 || i >= len(cms.items) {
-		return
-	}
-	if cms.items[i].Fn != nil {
-		cms.items[i].Fn()
-	}
-}
-
-func (cms *contextMenuStub) Cancel(_ int) {}
-
-func (cms *contextMenuStub) MenuItems() []types.MenuItem {
-	return append([]types.MenuItem(nil), cms.items...)
 }

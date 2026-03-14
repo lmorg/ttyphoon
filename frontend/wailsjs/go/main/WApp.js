@@ -78,6 +78,18 @@ export function TerminalKeyPress(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['TerminalKeyPress'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function TerminalMenuCancel(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuCancel'](arg1, arg2);
+}
+
+export function TerminalMenuHighlight(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuHighlight'](arg1, arg2);
+}
+
+export function TerminalMenuSelect(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuSelect'](arg1, arg2);
+}
+
 export function TerminalMouseButton(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['TerminalMouseButton'](arg1, arg2, arg3, arg4, arg5);
 }

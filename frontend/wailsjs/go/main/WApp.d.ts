@@ -41,6 +41,12 @@ export function StopNote(arg1:string):Promise<void>;
 
 export function TerminalKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<void>;
 
+export function TerminalMenuCancel(arg1:number,arg2:number):Promise<void>;
+
+export function TerminalMenuHighlight(arg1:number,arg2:number):Promise<void>;
+
+export function TerminalMenuSelect(arg1:number,arg2:number):Promise<void>;
+
 export function TerminalMouseButton(arg1:number,arg2:number,arg3:number,arg4:number,arg5:boolean):Promise<void>;
 
 export function TerminalMouseMotion(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number):Promise<void>;

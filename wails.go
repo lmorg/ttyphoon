@@ -170,6 +170,33 @@ func (a *WApp) TerminalRequestRedraw() {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) TerminalMenuHighlight(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuHighlight(menuID, index)
+}
+
+func (a *WApp) TerminalMenuSelect(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuSelect(menuID, index)
+}
+
+func (a *WApp) TerminalMenuCancel(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuCancel(menuID, index)
+}
+
 func (a *WApp) TerminalTextInput(text string) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

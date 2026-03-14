@@ -16,11 +16,12 @@ func Initialise() (types.Renderer, *types.XY) {
 	glyphSize := calculateGlyphSize()
 
 	wr := &webkitRender{
-		glyphSize:    glyphSize,
-		windowCells:  &types.XY{X: 120, Y: 40},
-		windowTitle:  app.Name,
-		keyboardMode: types.KeysNormal,
-		_redraw:      make(chan struct{}, 1),
+		glyphSize:     glyphSize,
+		windowCells:   &types.XY{X: 120, Y: 40},
+		windowTitle:   app.Name,
+		keyboardMode:  types.KeysNormal,
+		_redraw:       make(chan struct{}, 1),
+		menuCallbacks: make(map[int]menuCallbacks),
 	}
 
 	currentRenderer = wr
