@@ -17,13 +17,9 @@ export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
 
 export function GetMarkdown(arg1:string):Promise<string>;
 
-export function GetParameters():Promise<any>;
-
 export function GetTerminalGlyphSize():Promise<types.XY>;
 
 export function GetWindowStyle():Promise<dispatcher.WindowStyleT>;
-
-export function GetWindowType():Promise<string>;
 
 export function ListFiles():Promise<Array<string>>;
 

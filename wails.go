@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/app"
 	ttyphoon "github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -41,8 +43,6 @@ type pStructT struct {
 // App struct
 type WApp struct {
 	ctx         context.Context
-	payload     *dispatcher.PayloadT
-	window      dispatcher.WindowTypeT
 	mdBaseDir   string
 	projRoot    string
 	usrNotesDir string
@@ -50,62 +50,56 @@ type WApp struct {
 	globalNotes string
 	historyDir  string
 	visible     bool
-	ipc         *dispatcher.IpcT
-	msgPipe     chan *dispatcher.IpcMessageT
-	ps          *pStructT
 	notesKills  map[string]func()
 }
 
-var WWindowTsBindings = []struct {
-	Value  dispatcher.WindowTypeT
-	TSName string
-}{
-	{dispatcher.WindowTerminal, "terminal"},
-	{dispatcher.WindowInputBox, "inputBox"},
-	{dispatcher.WindowMarkdown, "markdown"},
-	{dispatcher.WindowPreview, "preview"},
-	{dispatcher.WindowNotes, "notes"},
+func docsDir(function string) string {
+	path := fmt.Sprintf("%s/Documents/%s/%s/", xdg.Home, app.DirName, function)
+
+	/*err :=*/
+	_ = os.MkdirAll(path, 0700)
+	/*if err != nil {
+		return err
+	}*/
+
+	return path
+}
+
+func findProjectRoot(cwd string) string {
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+
+	pwd := cwd
+	home, _ := os.UserHomeDir()
+	for {
+		if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
+			return pwd
+		}
+		parent := filepath.Dir(cwd)
+		if parent == pwd || parent == home {
+			return ""
+		}
+		pwd = parent
+	}
 }
 
 // NewApp creates a new App application struct
-func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps *pStructT) *WApp {
+func NewWailsApp() *WApp {
 	a := &WApp{
-		window:     window,
-		payload:    payload,
-		msgPipe:    make(chan *dispatcher.IpcMessageT),
-		ps:         ps,
 		visible:    true,
 		notesKills: map[string]func(){},
-	}
-
-	a.homeDir, _ = os.UserHomeDir()
-
-	switch window {
-	case dispatcher.WindowNotes:
-		a.projRoot = ps.notes.ProjectRoot
-		if a.projRoot == "" {
-			a.projRoot, _ = os.Getwd()
-		}
-
-		sep := string(filepath.Separator)
-		a.usrNotesDir = ps.notes.UserNotes
-		a.globalNotes = filepath.Clean(fmt.Sprintf("%s%s..%s", a.usrNotesDir, sep, sep)) + sep
-		a.historyDir = a.globalNotes + "history"
+		homeDir:    xdg.Home,
+		projRoot:   findProjectRoot(""),
+		//usrNotesDir: userDocs(),
+		globalNotes: docsDir("notes"),
 	}
 
 	return a
 }
 
-func (a *WApp) GetWindowType() string {
-	return string(a.window)
-}
-
 func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
 	return *dispatcher.NewWindowStyle()
-}
-
-func (a *WApp) GetParameters() any {
-	return a.payload.Parameters
 }
 
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
@@ -227,13 +221,7 @@ func (a *WApp) startTerminalWindow() {
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
-	err := a.ipc.Send(&dispatcher.IpcMessageT{
-		EventName:  eventName,
-		Parameters: parameters,
-	})
-	if err != nil {
-		log.Println(err)
-	}
+	// todo
 }
 
 func (a *WApp) WindowShow() {
@@ -258,7 +246,8 @@ func (a *WApp) WindowShowHide() {
 }
 
 func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
-	err := a.ipc.Send(&dispatcher.IpcMessageT{
+	// todo
+	/*err := a.ipc.Send(&dispatcher.IpcMessageT{
 		EventName: "ok",
 		Parameters: map[string]string{
 			"value":        value,
@@ -269,7 +258,7 @@ func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
 		log.Println(err.Error())
 	}
 
-	runtime.Quit(a.ctx)
+	runtime.Quit(a.ctx)*/
 }
 
 func (a *WApp) GetLanguageDescriptions(language string) []string {
@@ -502,18 +491,12 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 
 // --------------------
 
-func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
-	a.msgPipe <- msg
-}
-
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
-
-	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
 }
 
 func (a *WApp) domReady(ctx context.Context) {
-	go func() {
+	/*go func() {
 		for msg := range a.msgPipe {
 			switch {
 			case msg.Error != nil:
@@ -535,77 +518,30 @@ func (a *WApp) domReady(ctx context.Context) {
 				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
 			}
 		}
-	}()
+	}()*/
 
-	switch a.window {
-	case dispatcher.WindowTerminal:
-		go a.startTerminalWindow()
-	case dispatcher.WindowHistory:
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
-		if err != nil {
-			log.Println(err)
-		}
-	case dispatcher.WindowNotes:
-		runtime.EventsEmit(a.ctx, "updateTitle", a.ps.notes.Title)
-	}
+	go a.startTerminalWindow()
 }
 
 func (a *WApp) beforeClose(ctx context.Context) bool {
-	switch a.window {
-	case dispatcher.WindowHistory:
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "closeMenu"})
-		if err != nil {
-			log.Println(err)
-		}
-	case dispatcher.WindowNotes:
+	/*case dispatcher.WindowNotes:
 		a.WindowHide()
 		return true
-	}
+	}*/
 
 	return false
 }
 
-func startWails(window dispatcher.WindowTypeT) {
-	payload := new(dispatcher.PayloadT)
-	pStruct := &pStructT{}
-	switch window {
-	case dispatcher.WindowInputBox:
-		pStruct.inputBox = new(dispatcher.PInputBoxT)
-		payload.Parameters = pStruct.inputBox
-	case dispatcher.WindowMarkdown:
-		pStruct.markdown = new(dispatcher.PMarkdownT)
-		payload.Parameters = pStruct.markdown
-	case dispatcher.WindowPreview:
-		pStruct.preview = new(dispatcher.PPreviewT)
-		payload.Parameters = pStruct.preview
-	case dispatcher.WindowNotes:
-		pStruct.notes = new(dispatcher.PNotesT)
-		payload.Parameters = pStruct.notes
-	default:
-		//payload.Parameters = make(map[string]string)
-	}
-
-	err := dispatcher.GetPayload(payload)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
-
-	// Create an instance of the app structure
-	app := NewWailsApp(window, payload, pStruct)
-
-	ipc, err := dispatcher.ClientConnect(app.ipcRespFunc)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
-	app.ipc = ipc
+func startWails() {
+	app := NewWailsApp()
 
 	// Create application with options
-	err = wails.Run(&options.App{
-		Title:              ttyphoon.Name,
+	err := wails.Run(&options.App{
+		Title: ttyphoon.Name,
 		//Width:             int(payload.Window.Size.X),
 		//Height:            int(payload.Window.Size.Y),
 		//Frameless:         payload.Window.Frameless,
-		AlwaysOnTop:       true,
+		AlwaysOnTop: true,
 		//StartHidden:       payload.Window.StartHidden,
 		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{

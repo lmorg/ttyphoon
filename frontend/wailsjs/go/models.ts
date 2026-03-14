@@ -1,12 +1,5 @@
 export namespace dispatcher {
 	
-	export enum WindowTypeT {
-	    terminal = "terminal",
-	    inputBox = "inputBox",
-	    markdown = "markdown",
-	    preview = "preview",
-	    notes = "notes",
-	}
 	export class ColoursT {
 	    fg: types.Colour;
 	    bg: types.Colour;

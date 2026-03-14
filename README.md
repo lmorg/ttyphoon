@@ -31,8 +31,7 @@
 ## Multimedia Terminal Emulator
 
 The aim of this project is to provide an easy to use terminal emulator that
-supports inlining multimedia widgets using native code as opposed to web
-technologies like Electron.
+supports inlining multimedia widgets.
 
 Currently the project is _very_ alpha.
 
@@ -118,19 +117,11 @@ Search terms can be highlighted to quickly find instances of that term
 
 ![search](images/search.png)
 
-### Plus more
-
-TTYphoon has only been in development for a little over a year and features a
-purpose built, hardware accelerated, rendering engine to facilitate this hybrid
-of text and media. So expect many more feature to come!
-
 ## How It Works
 
-TTYphoon uses SDL ([Simple DirectMedia Layer](https://en.wikipedia.org/wiki/Simple_DirectMedia_Layer))
-which is a simple hardware-assisted multimedia library. This enables the
-terminal emulator to be both performant and also cross-platform. Essentially
-providing some of the conveniences that people have come to love from tools
-like Electron while still offering the benefits of native code.
+TTYphoon native code in the backend to provide fast computation and then pushes the last mile rendering to webkit.
+
+This ensures that the terminal reuses performant existing technologies which have already been fine-tuned by larger organisations like Apple, Microsoft and Google. But without the _massive_ overhead of running Electron or other Chrome-based solutions.
 
 The multimedia and interactive components will be passed from the controlling
 terminal applications via ANSI escape sequences. Before groan, yes I agree that
@@ -140,20 +131,6 @@ design decisions no matter how archaic they might seem today. This allows
 TTYphoon to work with existing terminal applications _and_ for third parties to
 easily add support for their applications to render rich content in TTYphoon
 without breaking compatibility for legacy terminal emulators.
-
-### Experimental WebKit Renderer Scaffold
-
-TTYphoon now includes an experimental WebKit renderer scaffold behind an
-environment variable switch:
-
-```bash
-MXTTY_RENDERER=webkit ./ttyphoon
-```
-
-This path keeps terminal layout and type definitions in Go while allowing the
-rendering backend abstraction to target Wails/WebKit. The current scaffold is a
-compile-safe backend shell and frontend entry point intended for incremental
-migration work.
 
 ## Whats Left To Do
 

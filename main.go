@@ -3,7 +3,7 @@ package main
 func main() {
 	loadEnvs()
 
-	startWails(window)
+	startWails()
 
 	//startSdl()
 }

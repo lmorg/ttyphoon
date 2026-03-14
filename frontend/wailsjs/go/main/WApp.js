@@ -30,20 +30,12 @@ export function GetMarkdown(arg1) {
   return window['go']['main']['WApp']['GetMarkdown'](arg1);
 }
 
-export function GetParameters() {
-  return window['go']['main']['WApp']['GetParameters']();
-}
-
 export function GetTerminalGlyphSize() {
   return window['go']['main']['WApp']['GetTerminalGlyphSize']();
 }
 
 export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
-}
-
-export function GetWindowType() {
-  return window['go']['main']['WApp']['GetWindowType']();
 }
 
 export function ListFiles() {
