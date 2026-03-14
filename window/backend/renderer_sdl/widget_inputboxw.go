@@ -36,14 +36,14 @@ func (sr *sdlRender) DisplayInputBoxW(parameters *DisplayInputBoxWT) {
 			pos.Y -= bounds.Y
 		}
 	}
-	w, _ := sr.window.GetSize()
-	size := &types.XY{X: w, Y: 300}
+	//w, _ := sr.window.GetSize()
+	//size := &types.XY{X: w, Y: 300}
 
 	windowStyle := dispatcher.NewWindowStyle()
-	windowStyle.Pos = *pos
+	/*windowStyle.Pos = *pos
 	windowStyle.Size = *size
 	windowStyle.AlwaysOnTop = true
-	windowStyle.Frameless = true
+	windowStyle.Frameless = true*/
 
 	// get history
 

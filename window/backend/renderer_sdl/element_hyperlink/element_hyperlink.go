@@ -15,7 +15,6 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
-	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )
 
@@ -235,10 +234,10 @@ func (el *ElementHyperlink) _menuItemsSchemaFile(menuItems []types.MenuItem) []t
 
 func openMarkdownViewer(el *ElementHyperlink) {
 	windowStyle := dispatcher.NewWindowStyle()
-	windowStyle.Pos = types.XY{}
-	x, y := el.renderer.GetWindowMeta().(*sdl.Window).GetSize()
-	windowStyle.Size = types.XY{X: x, Y: y}
-	windowStyle.Title = string(el.label)
+	//windowStyle.Pos = types.XY{}
+	//x, y := el.renderer.GetWindowMeta().(*sdl.Window).GetSize()
+	//windowStyle.Size = types.XY{X: x, Y: y}
+	//windowStyle.Title = string(el.label)
 
 	parameters := &dispatcher.PMarkdownT{Path: el.path}
 

@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -19,16 +18,9 @@ type PayloadT struct {
 }
 
 type WindowStyleT struct {
-	Pos         types.XY  `json:"pos"`
-	Size        types.XY  `json:"size"`
-	AlwaysOnTop bool      `json:"alwaysOnTop"`
-	Frameless   bool      `json:"frameLess"`
-	StartHidden bool      `json:"startHidden"`
-	HideOnClose bool      `json:"hideOnClose"`
-	FontFamily  string    `json:"fontFamily"`
-	FontSize    int       `json:"fontSize"`
-	Title       string    `json:"title"`
-	Colours     *ColoursT `json:"colors"`
+	FontFamily string    `json:"fontFamily"`
+	FontSize   int       `json:"fontSize"`
+	Colours    *ColoursT `json:"colors"`
 }
 
 type ColoursT struct {
@@ -84,11 +76,8 @@ func NewWindowStyle() *WindowStyleT {
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
 		},
-		Pos:        types.XY{},
-		Size:       types.XY{X: 1024, Y: 768},
 		FontFamily: fmt.Sprintf(`"%s", monospace`, fontFamily),
 		FontSize:   config.Config.TypeFace.FontSize,
-		Title:      app.Name,
 	}
 }
 

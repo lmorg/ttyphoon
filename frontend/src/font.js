@@ -4,7 +4,7 @@ export function createFontController(offCtx) {
     let cellWidth = 10;
     let cellHeight = 20;
     let fontSize = 18;
-    let fontFamily = 'monospace';
+    let fontFamily = 'Hasklig, monospace';
     let glyphSizeCached = false;
 
     function applyConfiguredFontFromWindowStyle(windowStyle) {
