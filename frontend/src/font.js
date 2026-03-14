@@ -44,14 +44,26 @@ export function createFontController(offCtx) {
             return;
         }
 
-        // Wait for the configured web font to be ready before measuring or
-        // rendering.  Without this, canvas silently falls back to monospace
-        // because @font-face fonts load asynchronously and canvas does not
-        // participate in the CSS font loading lifecycle.
+        // Load the configured font with OpenType ligature features enabled
+        // (liga = standard ligatures, calt = contextual alternates).
+        // Using the FontFace API lets us attach feature settings that canvas
+        // will honour when calling fillText — unlike CSS font-feature-settings
+        // which canvas does not observe.  If the font is already loaded by a
+        // prior @font-face rule the browser deduplicates and this is a no-op.
         try {
-            await document.fonts.load(`${fontSize}px ${fontFamily}`);
+            const face = new FontFace(fontFamily, `local("${fontFamily}")`, {
+                featureSettings: '"liga" 1, "calt" 1',
+            });
+            await face.load();
+            document.fonts.add(face);
         } catch {
-            // non-fatal — proceed with whatever font is available
+            // If the FontFace API fails (e.g. font not installed locally),
+            // fall back to waiting for the CSS-declared face to be ready.
+            try {
+                await document.fonts.load(`${fontSize}px ${fontFamily}`);
+            } catch {
+                // non-fatal — proceed with whatever font is available
+            }
         }
 
         configureFontMetricsFallback(windowStyle);

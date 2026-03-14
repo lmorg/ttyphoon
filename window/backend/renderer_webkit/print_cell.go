@@ -102,11 +102,83 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 		length = tile.GetTerm().GetSize().X - cellPos.X
 	}
 
-	pos := &types.XY{X: cellPos.X, Y: cellPos.Y}
-	for ; pos.X < length; pos.X++ {
-		if cells[pos.X] == nil {
+	// Group adjacent cells with identical SGR style into a single draw
+	// command whose Char field holds the complete run string.  When JS passes
+	// a multi-character string to fillText() in a single call the underlying
+	// OpenType shaper applies liga/calt substitutions automatically, enabling
+	// ligatures without any bespoke pair table.
+
+	runStart := cellPos.X
+	for runStart < length {
+		// Skip nil cells at the start of a potential run.
+		if cells[runStart] == nil || cells[runStart].Sgr == nil {
+			runStart++
 			continue
 		}
-		wr.PrintCell(tile, cells[pos.X], pos)
+
+		ref := cells[runStart]
+		refFg, refBg := sgrOpts(ref.Sgr, false)
+		refFlags := ref.Sgr.Bitwise
+
+		// Accumulate printable characters that share the same style.
+		runChars := []rune{ref.Char}
+		runEnd := runStart + 1
+		for runEnd < length {
+			c := cells[runEnd]
+			if c == nil || c.Sgr == nil {
+				break
+			}
+			// Skip wide-char continuation cells (zero char) — they are already
+			// accounted for by the preceding wide character's width field.
+			if c.Char == 0 {
+				runEnd++
+				continue
+			}
+			cFg, cBg := sgrOpts(c.Sgr, false)
+			if c.Sgr.Bitwise != refFlags || cFg != refFg || cBg != refBg {
+				break
+			}
+			runChars = append(runChars, c.Char)
+			runEnd++
+		}
+
+		// Determine the pixel width of the run (in cells) accounting for
+		// wide characters.
+		width := int32(0)
+		for i := runStart; i < runEnd; i++ {
+			if cells[i] == nil {
+				continue
+			}
+			if cells[i].Sgr != nil && cells[i].Sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {
+				width += 2
+			} else {
+				width += 1
+			}
+		}
+		if width == 0 {
+			runStart = runEnd
+			continue
+		}
+
+		pos := types.XY{
+			X: runStart + tile.Left(),
+			Y: cellPos.Y + tile.Top(),
+		}
+
+		wr.enqueueDrawCommand(DrawCommand{
+			Op:        DrawOpCell,
+			X:         pos.X,
+			Y:         pos.Y,
+			Char:      string(runChars),
+			Fg:        refFg,
+			Bg:        refBg,
+			Bold:      refFlags.Is(types.SGR_BOLD),
+			Italic:    refFlags.Is(types.SGR_ITALIC),
+			Underline: refFlags.Is(types.SGR_UNDERLINE),
+			Strike:    refFlags.Is(types.SGR_STRIKETHROUGH),
+			Width:     width,
+		})
+
+		runStart = runEnd
 	}
 }

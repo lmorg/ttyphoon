@@ -18,6 +18,12 @@ git commit -am "jupyter: add line numbers to jupyter blocks"
 echo "123"
 ```
 
+### murex
+
+```murex
+echo bob -> grep bob
+```
+
 ## Python 3
 
 This is a python hello world program
