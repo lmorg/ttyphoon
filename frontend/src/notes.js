@@ -1,4 +1,9 @@
-import { GetWindowStyle, GetMarkdown, GetParameters, SendIpc, WindowShow, WindowHide } from '../wailsjs/go/main/WApp';
+import {
+    GetWindowStyle, GetMarkdown, SendIpc, WindowShow, WindowHide,
+    ListFiles, SaveFile, DeleteFile, RenameFile,
+    RunNote, StopNote,
+    GetLanguageDescriptions, GetAllLanguageDescriptions,
+} from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
@@ -7,7 +12,7 @@ import hljs from "highlight.js/lib/common";
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
 
-const app = document.getElementById('app') || (() => {
+const app = document.getElementById('notes-pane') || document.getElementById('app') || (() => {
     const root = document.createElement('div');
     root.id = 'app';
     document.body.appendChild(root);
@@ -131,11 +136,6 @@ const state = {
 };
 
 configureMarked();
-
-function getWailsFunction(name) {
-    const fn = window && window.go && window.go.main && window.go.main.WApp && window.go.main.WApp[name];
-    return typeof fn === 'function' ? fn : null;
-}
 
 function setStatus(message, isError) {
     elements.status.textContent = message || '';
@@ -367,25 +367,20 @@ function convertToJupyterCodeBlocks() {
         
         // Populate dropdown immediately
         (async () => {
-            const getDescriptionsFn = window.go?.main?.WApp?.GetLanguageDescriptions;
-            const getAllDescriptionsFn = window.go?.main?.WApp?.GetAllLanguageDescriptions;
-
-            if (!getDescriptionsFn || !getAllDescriptionsFn) return;
-
             try {
                 const hasLanguage = Boolean(language);
                 let descriptions = [];
                 let defaultSelection = '';
 
                 if (hasLanguage) {
-                    const matches = await getDescriptionsFn(language);
+                    const matches = await GetLanguageDescriptions(language);
                     if (matches && matches.length > 0) {
                         // Markdown language exists in YAML: only show those options
                         descriptions = matches;
                         defaultSelection = matches[0];
                     } else {
                         // Markdown language not in YAML: show all options, default to markdown language
-                        descriptions = await getAllDescriptionsFn();
+                        descriptions = await GetAllLanguageDescriptions();
                         descriptions.sort((a, b) => a.localeCompare(b));
                         defaultSelection = language;
                     }
@@ -403,11 +398,11 @@ function convertToJupyterCodeBlocks() {
                         }
                     }
 
-                    descriptions = await getAllDescriptionsFn();
+                    descriptions = await GetAllLanguageDescriptions();
                     descriptions.sort((a, b) => a.localeCompare(b));
 
                     if (detectedLanguage) {
-                        const detectedMatches = await getDescriptionsFn(detectedLanguage);
+                        const detectedMatches = await GetLanguageDescriptions(detectedLanguage);
                         defaultSelection = detectedMatches && detectedMatches.length > 0
                             ? detectedMatches[0]
                             : 'language unknown';
@@ -576,31 +571,25 @@ async function runCodeBlockInNotes(blockId) {
         outputBlock.textContent = '';
     }
     
-    const runNoteFn = window.go?.main?.WApp?.RunNote;
-    if (runNoteFn) {
-        try {
-            await runNoteFn(blockId, block.currentContent, block.runtime);
-        } catch (err) {
-            console.error('Error running code:', err);
-            const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
-            if (outputBlock) {
-                outputBlock.textContent = `Error: ${err.message}`;
-            }
-            // Reset buttons on error
-            if (runBtn) runBtn.style.display = 'inline-block';
-            if (stopBtn) stopBtn.style.display = 'none';
+    try {
+        await RunNote(blockId, block.currentContent, block.runtime);
+    } catch (err) {
+        console.error('Error running code:', err);
+        const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
+        if (outputBlock) {
+            outputBlock.textContent = `Error: ${err.message}`;
         }
+        // Reset buttons on error
+        if (runBtn) runBtn.style.display = 'inline-block';
+        if (stopBtn) stopBtn.style.display = 'none';
     }
 }
 
 async function stopCodeBlockInNotes(blockId) {
-    const stopNoteFn = window.go?.main?.WApp?.StopNote;
-    if (stopNoteFn) {
-        try {
-            await stopNoteFn(blockId);
-        } catch (err) {
-            console.error('Error stopping code:', err);
-        }
+    try {
+        await StopNote(blockId);
+    } catch (err) {
+        console.error('Error stopping code:', err);
     }
     
     // Toggle buttons back
@@ -634,14 +623,8 @@ async function runCodeBlockInTerminal(blockId) {
 }
 
 async function refreshFiles() {
-    const listFn = getWailsFunction('ListFiles');
-    if (!listFn) {
-        setStatus('ListFiles is not available.', true);
-        return;
-    }
-
     try {
-        const files = await listFn();
+        const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         renderFileList();
     } catch (err) {
@@ -777,14 +760,8 @@ async function saveFile() {
         return;
     }
 
-    const saveFn = getWailsFunction('SaveFile');
-    if (!saveFn) {
-        setStatus('SaveFile is not available.', true);
-        return;
-    }
-
     try {
-        await saveFn(state.currentFile, elements.editor.value);
+        await SaveFile(state.currentFile, elements.editor.value);
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -815,17 +792,11 @@ async function confirmDelete() {
         return;
     }
 
-    const deleteFn = getWailsFunction('DeleteFile');
-    if (!deleteFn) {
-        setStatus('DeleteFile is not available.', true);
-        return;
-    }
-
     const fileToDelete = state.deletingFile;
     const fileName = fileToDelete.split('/').pop();
 
     try {
-        await deleteFn(fileToDelete);
+        await DeleteFile(fileToDelete);
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
             elements.editor.value = '';
@@ -1096,14 +1067,8 @@ async function createNewFile() {
 
     // Handle rename operation
     if (state.renamingFile) {
-        const renameFn = getWailsFunction('RenameFile');
-        if (!renameFn) {
-            setStatus('RenameFile is not available.', true);
-            return;
-        }
-
         try {
-            await renameFn(state.renamingFile, fileName);
+            await RenameFile(state.renamingFile, fileName);
             await refreshFiles();
             if (state.currentFile === state.renamingFile) {
                 await loadFile(fileName);
@@ -1127,14 +1092,8 @@ async function createNewFile() {
         return;
     }
 
-    const saveFn = getWailsFunction('SaveFile');
-    if (!saveFn) {
-        setStatus('SaveFile is not available.', true);
-        return;
-    }
-
     try {
-        await saveFn(fileName, '');
+        await SaveFile(fileName, '');
         await refreshFiles();
         await loadFile(fileName);
         setViewMode('editor');
@@ -1153,14 +1112,8 @@ async function createAndOpenFile(filename, contents) {
         return;
     }
 
-    const saveFn = getWailsFunction('SaveFile');
-    if (!saveFn) {
-        setStatus('SaveFile is not available.', true);
-        return;
-    }
-
     try {
-        await saveFn(fileName, contents || '');
+        await SaveFile(fileName, contents || '');
         await refreshFiles();
         await loadFile(fileName);
         //setViewMode('editor');
@@ -1920,14 +1873,6 @@ function applyWindowStyle(result) {
 
 GetWindowStyle().then((result) => {
     applyWindowStyle(result);
-});
-
-GetParameters().then((params) => {
-    if (params.filename != '' && params.content != '') {
-        setTimeout(function() {
-            window.createAndOpenFile(params.filename, params.content);
-        }, 1);
-    }
 });
 
 refreshFiles();

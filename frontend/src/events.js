@@ -1,3 +1,11 @@
+import {
+    TerminalTextInput,
+    TerminalKeyPress,
+    TerminalMouseButton,
+    TerminalMouseMotion,
+    TerminalMouseWheel,
+} from '../wailsjs/go/main/WApp';
+
 function mouseButtonToGo(button) {
     switch (button) {
     case 0:
@@ -57,12 +65,12 @@ export function wireKeyboardEvents(canvas) {
 
         if (isTextInput) {
             event.preventDefault();
-            window['go']['main']['WApp']['TerminalTextInput'](event.key).catch(() => {});
+            TerminalTextInput(event.key).catch(() => {});
             return;
         }
 
         event.preventDefault();
-        window['go']['main']['WApp']['TerminalKeyPress'](
+        TerminalKeyPress(
             event.key,
             event.ctrlKey,
             event.altKey,
@@ -82,7 +90,7 @@ export function wireMouseEvents(canvas, getCellSize) {
     canvas.addEventListener('mousedown', (event) => {
         const pos = eventToCell(canvas, event, getCellSize);
         lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseButton'](
+        TerminalMouseButton(
             pos.x,
             pos.y,
             mouseButtonToGo(event.button),
@@ -94,7 +102,7 @@ export function wireMouseEvents(canvas, getCellSize) {
     canvas.addEventListener('mouseup', (event) => {
         const pos = eventToCell(canvas, event, getCellSize);
         lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseButton'](
+        TerminalMouseButton(
             pos.x,
             pos.y,
             mouseButtonToGo(event.button),
@@ -108,7 +116,7 @@ export function wireMouseEvents(canvas, getCellSize) {
         const relX = pos.x - lastMouseCell.x;
         const relY = pos.y - lastMouseCell.y;
         lastMouseCell = pos;
-        window['go']['main']['WApp']['TerminalMouseMotion'](
+        TerminalMouseMotion(
             pos.x,
             pos.y,
             relX,
@@ -120,9 +128,9 @@ export function wireMouseEvents(canvas, getCellSize) {
     canvas.addEventListener('wheel', (event) => {
         event.preventDefault();
         const pos = eventToCell(canvas, event, getCellSize);
-        const moveX = Math.sign(event.deltaX);
-        const moveY = -Math.sign(event.deltaY);
-        window['go']['main']['WApp']['TerminalMouseWheel'](
+        const moveX = event.deltaX; //Math.sign(event.deltaX);
+        const moveY = event.deltaY; //-Math.sign(event.deltaY);
+        TerminalMouseWheel(
             pos.x,
             pos.y,
             moveX,

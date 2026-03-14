@@ -101,21 +101,12 @@ func (a *WApp) GetWindowType() string {
 }
 
 func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
-	return a.payload.Window
+	return *dispatcher.NewWindowStyle()
 }
 
 func (a *WApp) GetParameters() any {
 	return a.payload.Parameters
 }
-
-/*func (a *WApp) GetTerminalDrawOps() []renderwebkit.DrawCommand {
-	renderer, ok := renderwebkit.CurrentRenderer()
-	if !ok {
-		return []renderwebkit.DrawCommand{}
-	}
-
-	return renderer.PopDrawCommands()
-}*/
 
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	renderer, ok := renderwebkit.CurrentRenderer()
@@ -610,27 +601,27 @@ func startWails(window dispatcher.WindowTypeT) {
 
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title:             fmt.Sprintf("%s: %s", ttyphoon.Name, payload.Window.Title),
-		Width:             int(payload.Window.Size.X),
-		Height:            int(payload.Window.Size.Y),
-		Frameless:         payload.Window.Frameless,
-		AlwaysOnTop:       payload.Window.AlwaysOnTop,
-		StartHidden:       payload.Window.StartHidden,
-		HideWindowOnClose: payload.Window.HideOnClose,
+		Title:              ttyphoon.Name,
+		//Width:             int(payload.Window.Size.X),
+		//Height:            int(payload.Window.Size.Y),
+		//Frameless:         payload.Window.Frameless,
+		AlwaysOnTop:       true,
+		//StartHidden:       payload.Window.StartHidden,
+		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},
-		BackgroundColour: &options.RGBA{
+		/*BackgroundColour: &options.RGBA{
 			R: payload.Window.Colours.Fg.Red,
 			G: payload.Window.Colours.Fg.Green,
 			B: payload.Window.Colours.Fg.Blue,
 			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
-		},
+		},*/
 		OnStartup:     app.startup,
 		OnDomReady:    app.domReady,
 		OnBeforeClose: app.beforeClose,
 		Bind:          []interface{}{app},
-		EnumBind:      []interface{}{WWindowTsBindings},
+		//EnumBind:      []interface{}{WWindowTsBindings},
 		/*Mac: &mac.Options{
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,

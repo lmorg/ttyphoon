@@ -6,7 +6,7 @@ import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 
-document.querySelector('#app').innerHTML = `
+(document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
     <canvas id="ttyphoon-terminal"></canvas>
 `;
 
@@ -20,8 +20,9 @@ let windowStyle;
 let rafPending = false;
 
 function fitCanvasToWindow() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const pane = canvas.parentElement;
+    canvas.width = pane ? pane.clientWidth : window.innerWidth;
+    canvas.height = pane ? pane.clientHeight : window.innerHeight;
     offscreen.width = canvas.width;
     offscreen.height = canvas.height;
 }

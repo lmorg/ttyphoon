@@ -7,7 +7,8 @@ GetWindowType().then((result) => {
     switch(result) {
     case "sdl":
     case "terminal":
-        import('./terminal.js');
+    case "notes":
+        import('./ttyphoon.js');
         break;
     case "inputBox":
         import('./inputbox.js');
@@ -18,9 +19,6 @@ GetWindowType().then((result) => {
         break;
     case "preview":
         import('./preview.js');
-        break;
-    case "notes":
-        import('./notes.js');
         break;
     default:
         // code block

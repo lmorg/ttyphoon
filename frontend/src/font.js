@@ -1,3 +1,5 @@
+import { GetTerminalGlyphSize } from '../wailsjs/go/main/WApp';
+
 export function createFontController(offCtx) {
     let cellWidth = 10;
     let cellHeight = 20;
@@ -38,8 +40,18 @@ export function createFontController(offCtx) {
             return;
         }
 
+        // Wait for the configured web font to be ready before measuring or
+        // rendering.  Without this, canvas silently falls back to monospace
+        // because @font-face fonts load asynchronously and canvas does not
+        // participate in the CSS font loading lifecycle.
         try {
-            const glyph = await window['go']['main']['WApp']['GetTerminalGlyphSize']();
+            await document.fonts.load(`${fontSize}px ${fontFamily}`);
+        } catch {
+            // non-fatal — proceed with whatever font is available
+        }
+
+        try {
+            const glyph = await GetTerminalGlyphSize();
             if (glyph && glyph.X > 0 && glyph.Y > 0) {
                 cellWidth = glyph.X;
                 cellHeight = glyph.Y;
