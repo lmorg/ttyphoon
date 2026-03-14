@@ -71,16 +71,11 @@ export namespace dispatcher {
 		}
 	}
 	export class WindowStyleT {
-	    pos: types.XY;
-	    size: types.XY;
-	    alwaysOnTop: boolean;
-	    frameLess: boolean;
-	    startHidden: boolean;
-	    hideOnClose: boolean;
+	    colors?: ColoursT;
 	    fontFamily: string;
 	    fontSize: number;
-	    title: string;
-	    colors?: ColoursT;
+	    adjustCellWidth: number;
+	    adjustCellHeight: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new WindowStyleT(source);
@@ -88,16 +83,11 @@ export namespace dispatcher {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.pos = this.convertValues(source["pos"], types.XY);
-	        this.size = this.convertValues(source["size"], types.XY);
-	        this.alwaysOnTop = source["alwaysOnTop"];
-	        this.frameLess = source["frameLess"];
-	        this.startHidden = source["startHidden"];
-	        this.hideOnClose = source["hideOnClose"];
+	        this.colors = this.convertValues(source["colors"], ColoursT);
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
-	        this.title = source["title"];
-	        this.colors = this.convertValues(source["colors"], ColoursT);
+	        this.adjustCellWidth = source["adjustCellWidth"];
+	        this.adjustCellHeight = source["adjustCellHeight"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

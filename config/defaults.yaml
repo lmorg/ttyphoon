@@ -100,7 +100,7 @@ TypeFace:
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
-  AdjustCellWidth:  1
+  AdjustCellWidth:  0
   AdjustCellHeight: 0
 
   # Enable or disable drop shadows on terminal. I personally like it because

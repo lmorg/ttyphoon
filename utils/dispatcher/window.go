@@ -18,9 +18,11 @@ type PayloadT struct {
 }
 
 type WindowStyleT struct {
-	FontFamily string    `json:"fontFamily"`
-	FontSize   int       `json:"fontSize"`
-	Colours    *ColoursT `json:"colors"`
+	Colours          *ColoursT `json:"colors"`
+	FontFamily       string    `json:"fontFamily"`
+	FontSize         int       `json:"fontSize"`
+	AdjustCellWidth  int       `json:"adjustCellWidth"`
+	AdjustCellHeight int       `json:"adjustCellHeight"`
 }
 
 type ColoursT struct {
@@ -50,7 +52,7 @@ type ColoursT struct {
 func NewWindowStyle() *WindowStyleT {
 	fontFamily := config.Config.TypeFace.FontName
 	if fontFamily == "" {
-		fontFamily = "Hasklig"
+		fontFamily = "Fira Code"
 	}
 	return &WindowStyleT{
 		Colours: &ColoursT{
@@ -76,8 +78,10 @@ func NewWindowStyle() *WindowStyleT {
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
 		},
-		FontFamily: fmt.Sprintf(`"%s", monospace`, fontFamily),
-		FontSize:   config.Config.TypeFace.FontSize,
+		FontFamily:       fmt.Sprintf(`"%s", monospace`, fontFamily),
+		FontSize:         config.Config.TypeFace.FontSize,
+		AdjustCellWidth:  config.Config.TypeFace.AdjustCellWidth,
+		AdjustCellHeight: config.Config.TypeFace.AdjustCellHeight,
 	}
 }
 

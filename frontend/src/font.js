@@ -1,10 +1,8 @@
-import { GetTerminalGlyphSize } from '../wailsjs/go/main/WApp';
-
 export function createFontController(offCtx) {
     let cellWidth = 10;
     let cellHeight = 20;
-    let fontSize = 18;
-    let fontFamily = 'Hasklig, monospace';
+    let fontSize = 15;
+    let fontFamily = '"Fira Code", monospace';
     let glyphSizeCached = false;
 
     function applyConfiguredFontFromWindowStyle(windowStyle) {
@@ -31,8 +29,14 @@ export function createFontController(offCtx) {
 
         offCtx.font = `${fontSize}px ${fontFamily}`;
         const metrics = offCtx.measureText('M');
-        cellWidth = Math.ceil(metrics.width || fontSize * 0.6);
-        cellHeight = Math.ceil((metrics.fontBoundingBoxAscent || fontSize) + (metrics.fontBoundingBoxDescent || fontSize * 0.2));
+        const adjustWidth = Number.isFinite(windowStyle?.adjustCellWidth) ? windowStyle.adjustCellWidth : 0;
+        const adjustHeight = Number.isFinite(windowStyle?.adjustCellHeight) ? windowStyle.adjustCellHeight : 0;
+
+        const measuredWidth = Math.ceil(metrics.width || fontSize * 0.6);
+        const measuredHeight = Math.ceil((metrics.fontBoundingBoxAscent || fontSize) + (metrics.fontBoundingBoxDescent || fontSize * 0.2));
+
+        cellWidth = Math.max(1, measuredWidth + adjustWidth);
+        cellHeight = Math.max(1, measuredHeight + adjustHeight);
     }
 
     async function loadGlyphSizeFromGo(windowStyle) {
@@ -48,18 +52,6 @@ export function createFontController(offCtx) {
             await document.fonts.load(`${fontSize}px ${fontFamily}`);
         } catch {
             // non-fatal — proceed with whatever font is available
-        }
-
-        try {
-            const glyph = await GetTerminalGlyphSize();
-            if (glyph && glyph.X > 0 && glyph.Y > 0) {
-                cellWidth = glyph.X;
-                cellHeight = glyph.Y;
-                glyphSizeCached = true;
-                return;
-            }
-        } catch {
-            // fallback below
         }
 
         configureFontMetricsFallback(windowStyle);

@@ -111,7 +111,7 @@ func (a *WApp) GetTerminalGlyphSize() *types.XY {
 		}
 	}
 
-	return renderwebkit.GetConfiguredGlyphSize()
+	return nil
 }
 
 func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
