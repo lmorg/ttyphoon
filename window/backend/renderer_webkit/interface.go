@@ -31,6 +31,11 @@ type webkitRender struct {
 	//fnScheduleM   sync.Mutex
 }
 
+var (
+	highlightBorderColour = &types.Colour{0x31, 0x6d, 0xb0, 0xff}
+	highlightFillColour   = &types.Colour{0x1c, 0x3e, 0x64, 0xff}
+)
+
 func (wr *webkitRender) ShowAndFocusWindow() {}
 
 func (wr *webkitRender) GetWindowSizeCells() *types.XY {
@@ -97,9 +102,62 @@ func (wr *webkitRender) DrawGaugeV(tile types.Tile, topLeft *types.XY, height in
 
 func (wr *webkitRender) DrawTable(_ types.Tile, _ *types.XY, _ int32, _ []int32) {}
 
-func (wr *webkitRender) DrawHighlightRect(_ types.Tile, _ *types.XY, _ *types.XY) {}
+func (wr *webkitRender) DrawHighlightRect(tile types.Tile, _topLeftCell, bottomRightCell *types.XY) {
+	if tile == nil || _topLeftCell == nil || bottomRightCell == nil {
+		return
+	}
+	if bottomRightCell.X <= 0 || bottomRightCell.Y <= 0 {
+		return
+	}
 
-func (wr *webkitRender) DrawRectWithColour(_ types.Tile, _ *types.XY, _ *types.XY, _ *types.Colour, _ bool) {
+	topLeftCell := &types.XY{
+		X: _topLeftCell.X + tile.Left(),
+		Y: _topLeftCell.Y + tile.Top(),
+	}
+
+	wr.enqueueDrawCommand(DrawCommand{
+		Op:     DrawOpHighlight,
+		X:      topLeftCell.X,
+		Y:      topLeftCell.Y,
+		Width:  bottomRightCell.X,
+		Height: bottomRightCell.Y,
+		Fg:     highlightBorderColour,
+		Bg:     highlightFillColour,
+	})
+}
+
+func (wr *webkitRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _bottomRightCell *types.XY, colour *types.Colour, _ bool) {
+	if tile == nil || _topLeftCell == nil || _bottomRightCell == nil || colour == nil {
+		return
+	}
+
+	topLeftCell := &types.XY{
+		X: _topLeftCell.X,
+		Y: max(_topLeftCell.Y, 0),
+	}
+
+	bottomRightCell := &types.XY{
+		X: _bottomRightCell.X,
+		Y: _bottomRightCell.Y + min(_topLeftCell.Y, 0),
+	}
+
+	if tile.GetTerm() != nil && bottomRightCell.Y+topLeftCell.Y > tile.GetTerm().GetSize().Y {
+		bottomRightCell.Y = tile.GetTerm().GetSize().Y - topLeftCell.Y
+	}
+
+	if bottomRightCell.X <= 0 || bottomRightCell.Y <= 0 {
+		return
+	}
+
+	wr.enqueueDrawCommand(DrawCommand{
+		Op:     DrawOpRectColour,
+		X:      topLeftCell.X + tile.Left(),
+		Y:      topLeftCell.Y + tile.Top(),
+		Width:  bottomRightCell.X,
+		Height: bottomRightCell.Y,
+		Fg:     colour,
+		Bg:     colour,
+	})
 }
 
 func (wr *webkitRender) DrawOutputBlockChrome(tile types.Tile, _start, n int32, c *types.Colour, folded bool) {

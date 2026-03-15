@@ -84,6 +84,45 @@ function drawFrame() {
     }
 }
 
+function drawHighlightRect(cmd) {
+    if (!offCtx) {
+        return;
+    }
+
+    const { cellWidth, cellHeight } = font.getCellSize();
+
+    const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
+    const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
+    const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
+
+    if (widthCells <= 0 || heightCells <= 0) {
+        return;
+    }
+
+    const x = xCell * cellWidth;
+    const y = yCell * cellHeight;
+    const width = widthCells * cellWidth;
+    const height = heightCells * cellHeight;
+
+    if (cmd.fg) {
+        offCtx.save();
+        offCtx.globalAlpha = 190 / 255;
+        offCtx.strokeStyle = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
+        offCtx.strokeRect(x - 1, y - 1, width + 2, height + 2);
+        offCtx.strokeRect(x, y, width, height);
+        offCtx.restore();
+    }
+
+    if (cmd.bg) {
+        offCtx.save();
+        offCtx.globalAlpha = 128 / 255;
+        offCtx.fillStyle = `rgb(${cmd.bg.Red}, ${cmd.bg.Green}, ${cmd.bg.Blue})`;
+        offCtx.fillRect(x + 1, y + 1, Math.max(0, width - 2), Math.max(0, height - 2));
+        offCtx.restore();
+    }
+}
+
 EventsOn("terminalRedraw", ops => {
     if (rafPending) {
         return;
@@ -111,6 +150,10 @@ EventsOn("terminalRedraw", ops => {
         }
         if (cmd.op === 'block_chrome') {
             drawBlockChrome(offCtx, font.getCellSize, cmd);
+            continue;
+        }
+        if (cmd.op === 'highlight_rect' || cmd.op === 'rect_colour') {
+            drawHighlightRect(cmd);
         }
     }
 

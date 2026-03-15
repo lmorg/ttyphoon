@@ -10,6 +10,8 @@ const (
 	DrawOpGaugeH      DrawOp = "gauge_h"
 	DrawOpGaugeV      DrawOp = "gauge_v"
 	DrawOpBlockChrome DrawOp = "block_chrome"
+	DrawOpHighlight   DrawOp = "highlight_rect"
+	DrawOpRectColour  DrawOp = "rect_colour"
 )
 
 type DrawCommand struct {
@@ -101,6 +103,9 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 	if tile.GetTerm() != nil && tile.GetTerm().GetSize().X <= cellPos.X+length {
 		length = tile.GetTerm().GetSize().X - cellPos.X
 	}
+	if length <= 0 {
+		return
+	}
 
 	// Group adjacent cells with identical SGR style into a single draw
 	// command whose Char field holds the complete run string.  When JS passes
@@ -108,7 +113,7 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 	// OpenType shaper applies liga/calt substitutions automatically, enabling
 	// ligatures without any bespoke pair table.
 
-	runStart := cellPos.X
+	runStart := int32(0)
 	for runStart < length {
 		// Skip nil cells at the start of a potential run.
 		if cells[runStart] == nil || cells[runStart].Sgr == nil {
@@ -161,7 +166,7 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 		}
 
 		pos := types.XY{
-			X: runStart + tile.Left(),
+			X: cellPos.X + runStart + tile.Left(),
 			Y: cellPos.Y + tile.Top(),
 		}
 
