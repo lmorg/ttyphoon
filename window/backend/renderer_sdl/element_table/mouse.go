@@ -107,6 +107,7 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 }
 
 func (el *ElementTable) MouseWheel(_ *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
+	defer el.renderer.TriggerLazyRedraw()
 	termX := el.tile.GetTerm().GetSize().X
 	width := el.boundaries[len(el.boundaries)-1]
 	mod := codes.Modifier(el.renderer.GetKeyboardModifier())
@@ -149,6 +150,7 @@ func (el *ElementTable) MouseWheel(_ *types.XY, movement *types.XY, callback typ
 }
 
 func (el *ElementTable) MouseMotion(_pos *types.XY, move *types.XY, callback types.EventIgnoredCallback) {
+	defer el.renderer.TriggerLazyRedraw()
 	pos := &types.XY{X: _pos.X - el.renderOffset + _RENDER_OFFSETS_OFFSET, Y: _pos.Y}
 
 	switch {
@@ -169,6 +171,7 @@ func (el *ElementTable) MouseOut() {
 }
 
 func (el *ElementTable) MouseHover(curPosTile *types.XY, curPosElement *types.XY) func() {
+	defer el.renderer.TriggerLazyRedraw()
 	var start, end int32
 
 	for i := range el.boundaries {

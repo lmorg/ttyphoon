@@ -125,14 +125,16 @@ func (wr *webkitRender) DrawHighlightRect(tile types.Tile, _topLeftCell, bottomR
 		Y: _topLeftCell.Y + tile.Top(),
 	}
 
-	wr.enqueueDrawCommand(DrawCommand{
-		Op:     DrawOpHighlight,
-		X:      topLeftCell.X,
-		Y:      topLeftCell.Y,
-		Width:  bottomRightCell.X,
-		Height: bottomRightCell.Y,
-		Fg:     highlightBorderColour,
-		Bg:     highlightFillColour,
+	wr.TriggerDeallocation(func() {
+		wr.enqueueDrawCommand(DrawCommand{
+			Op:     DrawOpHighlight,
+			X:      topLeftCell.X,
+			Y:      topLeftCell.Y,
+			Width:  bottomRightCell.X,
+			Height: bottomRightCell.Y,
+			Fg:     highlightBorderColour,
+			Bg:     highlightFillColour,
+		})
 	})
 }
 
@@ -164,14 +166,16 @@ func (wr *webkitRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _botto
 		leftOffset = 0
 	}
 
-	wr.enqueueDrawCommand(DrawCommand{
-		Op:     DrawOpRectColour,
-		X:      topLeftCell.X + tile.Left() + leftOffset,
-		Y:      topLeftCell.Y + tile.Top(),
-		Width:  bottomRightCell.X,
-		Height: bottomRightCell.Y,
-		Fg:     colour,
-		Bg:     colour,
+	wr.TriggerDeallocation(func() {
+		wr.enqueueDrawCommand(DrawCommand{
+			Op:     DrawOpRectColour,
+			X:      topLeftCell.X + tile.Left() + leftOffset,
+			Y:      topLeftCell.Y + tile.Top(),
+			Width:  bottomRightCell.X,
+			Height: bottomRightCell.Y,
+			Fg:     colour,
+			Bg:     colour,
+		})
 	})
 }
 
