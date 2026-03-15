@@ -16,11 +16,13 @@ func (wr *webkitRender) HandleTextInput(text string) {
 	b := []byte(text)
 	if len(b) == 1 {
 		if wr.hotkey(codes.KeyCode(b[0]), 0) {
+			wr.TriggerRedraw()
 			return
 		}
 	}
 
 	term.Reply(b)
+	wr.TriggerRedraw()
 }
 
 func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) {
@@ -47,12 +49,14 @@ func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) 
 	}
 
 	if wr.hotkey(keyCode, mod) {
+		wr.TriggerRedraw()
 		return
 	}
 
 	b := codes.GetAnsiEscSeq(wr.keyboardMode, keyCode, mod)
 	if len(b) > 0 {
 		term.Reply(b)
+		wr.TriggerRedraw()
 	}
 }
 
