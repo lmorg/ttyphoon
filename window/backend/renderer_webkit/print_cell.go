@@ -12,6 +12,7 @@ const (
 	DrawOpBlockChrome DrawOp = "block_chrome"
 	DrawOpHighlight   DrawOp = "highlight_rect"
 	DrawOpRectColour  DrawOp = "rect_colour"
+	DrawOpTileOverlay DrawOp = "tile_overlay"
 )
 
 type DrawCommand struct {
@@ -31,6 +32,7 @@ type DrawCommand struct {
 	Value     int32         `json:"value"`
 	Max       int32         `json:"max"`
 	Folded    bool          `json:"folded,omitempty"`
+	Alpha     uint8         `json:"alpha,omitempty"`
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {
@@ -68,7 +70,7 @@ func (wr *webkitRender) PrintCell(tile types.Tile, cell *types.Cell, cellPos *ty
 	}
 
 	pos := types.XY{
-		X: cellPos.X + tile.Left(),
+		X: cellPos.X + tile.Left() + 1,
 		Y: cellPos.Y + tile.Top(),
 	}
 
@@ -166,7 +168,7 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 		}
 
 		pos := types.XY{
-			X: cellPos.X + runStart + tile.Left(),
+			X: cellPos.X + runStart + tile.Left() + 1,
 			Y: cellPos.Y + tile.Top(),
 		}
 

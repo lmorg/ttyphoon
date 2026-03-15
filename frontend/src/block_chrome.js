@@ -9,7 +9,7 @@ export function drawBlockChrome(offCtx, getCellSize, cmd) {
     const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
     const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
 
-    const x = 0; //xCell * cellWidth;
+    const x = xCell * cellWidth;
     const y = yCell * cellHeight;
     const h = heightCells * cellHeight;
     const barWidth = cellWidth / 2; //Math.max(2, Math.floor(cellWidth * (cmd.folded ? 0.5 : 0.25)));

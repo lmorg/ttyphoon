@@ -119,7 +119,7 @@ func (wr *webkitRender) DrawHighlightRect(tile types.Tile, _topLeftCell, bottomR
 	}
 
 	topLeftCell := &types.XY{
-		X: _topLeftCell.X + tile.Left(),
+		X: _topLeftCell.X + tile.Left() + 1,
 		Y: _topLeftCell.Y + tile.Top(),
 	}
 
@@ -134,7 +134,7 @@ func (wr *webkitRender) DrawHighlightRect(tile types.Tile, _topLeftCell, bottomR
 	})
 }
 
-func (wr *webkitRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _bottomRightCell *types.XY, colour *types.Colour, _ bool) {
+func (wr *webkitRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _bottomRightCell *types.XY, colour *types.Colour, incLeftMargin bool) {
 	if tile == nil || _topLeftCell == nil || _bottomRightCell == nil || colour == nil {
 		return
 	}
@@ -157,9 +157,14 @@ func (wr *webkitRender) DrawRectWithColour(tile types.Tile, _topLeftCell, _botto
 		return
 	}
 
+	leftOffset := int32(1)
+	if incLeftMargin {
+		leftOffset = 0
+	}
+
 	wr.enqueueDrawCommand(DrawCommand{
 		Op:     DrawOpRectColour,
-		X:      topLeftCell.X + tile.Left(),
+		X:      topLeftCell.X + tile.Left() + leftOffset,
 		Y:      topLeftCell.Y + tile.Top(),
 		Width:  bottomRightCell.X,
 		Height: bottomRightCell.Y,
@@ -365,6 +370,8 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 			}
 			_ = term.Render()
 		}
+
+		wr.enqueueInactiveTileOverlays()
 	}
 
 	if len(wr.drawCommands) == 0 {
@@ -386,6 +393,37 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	//}
 
 	return commands
+}
+
+func (wr *webkitRender) enqueueInactiveTileOverlays() {
+	if wr.termWin == nil || len(wr.termWin.Tiles) <= 1 || wr.termWin.Active == nil {
+		return
+	}
+
+	for i := range wr.termWin.Tiles {
+		tile := wr.termWin.Tiles[i]
+		if tile == nil || tile.GetTerm() == nil {
+			continue
+		}
+
+		if tile.Id() == wr.termWin.Active.Id() {
+			continue
+		}
+
+		termSize := tile.GetTerm().GetSize()
+		if termSize == nil || termSize.X <= 0 || termSize.Y <= 0 {
+			continue
+		}
+
+		wr.enqueueDrawCommand(DrawCommand{
+			Op:     DrawOpTileOverlay,
+			X:      tile.Left(),
+			Y:      tile.Top(),
+			Width:  termSize.X + 1,
+			Height: termSize.Y,
+			Alpha:  51,
+		})
+	}
 }
 
 type elementStub struct{}
