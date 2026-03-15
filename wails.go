@@ -588,9 +588,7 @@ func startWails() {
 		Title: ttyphoon.Name,
 		//Width:             int(payload.Window.Size.X),
 		//Height:            int(payload.Window.Size.Y),
-		//Frameless:         payload.Window.Frameless,
-		AlwaysOnTop: true,
-		//StartHidden:       payload.Window.StartHidden,
+		AlwaysOnTop:       true,
 		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
@@ -604,13 +602,14 @@ func startWails() {
 		OnStartup:     app.startup,
 		OnDomReady:    app.domReady,
 		OnBeforeClose: app.beforeClose,
-		Bind:          []interface{}{app},
-		//EnumBind:      []interface{}{WWindowTsBindings},
+		Bind:          []any{app},
+		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		/*Mac: &mac.Options{
-			WebviewIsTransparent: true,
+			TitleBar:             mac.TitleBarHiddenInset(),
 			WindowIsTranslucent:  true,
-		},
-		Linux: &linux.Options{
+			WebviewIsTransparent: true,
+		},*/
+		/*Linux: &linux.Options{
 			WindowIsTranslucent: true,
 		},
 

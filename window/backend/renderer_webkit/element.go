@@ -1,0 +1,33 @@
+package rendererwebkit
+
+import (
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_codeblock"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_hyperlink"
+	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_table"
+)
+
+func (sr *webkitRender) NewElement(tile types.Tile, id types.ElementID) types.Element {
+	switch id {
+	//case types.ELEMENT_ID_IMAGE:
+	//	return element_image.NewBitmap(sr, tile, sr.loadImage)
+
+	//case types.ELEMENT_ID_SIXEL:
+	//	return element_image.NewSixel(sr, tile, sr.loadImage)
+
+	case types.ELEMENT_ID_CSV:
+		return element_table.NewCsv(sr, tile)
+
+	case types.ELEMENT_ID_MARKDOWN_TABLE:
+		return element_table.NewMarkdown(sr, tile)
+
+	case types.ELEMENT_ID_HYPERLINK:
+		return element_hyperlink.New(sr, tile)
+
+	case types.ELEMENT_ID_CODEBLOCK:
+		return element_codeblock.New(sr, tile)
+
+	default:
+		return &elementStub{}
+	}
+}

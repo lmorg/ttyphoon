@@ -295,10 +295,6 @@ func (wr *webkitRender) TriggerDeallocation(fn func()) {
 
 func (wr *webkitRender) TriggerQuit() {}
 
-func (wr *webkitRender) NewElement(_ types.Tile, _ types.ElementID) types.Element {
-	return &elementStub{}
-}
-
 func (wr *webkitRender) GetWindowMeta() any {
 	return nil
 }

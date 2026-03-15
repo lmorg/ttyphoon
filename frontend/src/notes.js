@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetMarkdown, SendIpc, WindowShow, WindowHide,
+    GetWindowStyle, GetMarkdown, SendIpc, WindowShow,
     ListFiles, SaveFile, DeleteFile, RenameFile,
     RunNote, StopNote,
     GetLanguageDescriptions, GetAllLanguageDescriptions,
@@ -1991,10 +1991,6 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
         event.preventDefault();
         closeDeletePrompt();
-    } else if (event.key === 'Escape') {
-        event.preventDefault();
-        SendIpc('focus', {})
-        WindowHide();
     }
 });
 

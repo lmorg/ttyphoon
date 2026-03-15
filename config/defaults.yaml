@@ -96,12 +96,12 @@ TypeFace:
   # Source Code Pro.
   #FontName: "Fira Code"
   #FontName: "Hack"
-  FontSize: 14
+  FontSize: 15
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
   AdjustCellWidth:  0
-  AdjustCellHeight: 0
+  AdjustCellHeight: 2
 
   # Enable or disable drop shadows on terminal. I personally like it because
   # it makes the text pop. YMMV
