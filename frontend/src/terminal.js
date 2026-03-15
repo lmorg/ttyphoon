@@ -524,7 +524,14 @@ const notifContainer = document.getElementById('terminal-notifications');
 
 const _notifyBg = ['#316db0', '#99c0d3', '#f2b71f', '#de333b', '#316db0', '#74953c'];
 const _notifyFg = ['#000000', '#000000', '#000000', '#000000', '#000000', '#000000'];
-const _notifyLabel = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'SCROLL', '?'];
+const _notifyIcon = [
+    'src/assets/images/icon-message.png', // DEBUG
+    'src/assets/images/icon-info.png',    // INFO
+    'src/assets/images/icon-warn.png',    // WARN
+    'src/assets/images/icon-error.png',   // ERROR
+    'src/assets/images/icon-down.png',    // SCROLL
+    'src/assets/images/icon-question.png' // fallback
+];
 
 EventsOn('terminalNotification', payload => {
     const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
@@ -540,13 +547,13 @@ EventsOn('terminalNotification', payload => {
     const type  = p.type ?? 1;
     const bg    = _notifyBg[type] ?? _notifyBg[1];
     const fg    = _notifyFg[type] ?? '#000000';
-    const label = _notifyLabel[type] ?? 'INFO';
+    const icon  = _notifyIcon[type] ?? _notifyIcon[5];
 
     const el = document.createElement('div');
     el.className = 'terminal-notification';
     el.dataset.notifId = p.id;
     el.style.cssText = `background:${bg};color:${fg};`;
-    el.innerHTML = `<span class="notif-label">${label}</span><span class="notif-msg"></span>`;
+    el.innerHTML = `<img class="notif-icon" src="${icon}" alt="notification icon" /><span class="notif-msg"></span>`;
     el.querySelector('.notif-msg').textContent = p.message;
 
     if (!p.sticky) {
