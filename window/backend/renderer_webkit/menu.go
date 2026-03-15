@@ -19,10 +19,14 @@ type terminalMenuEvent struct {
 }
 
 func (wr *webkitRender) DisplayMenu(title string, items []string, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
-	wr.openMenu(title, items, nil, highlight, ok, cancel)
+	wr.openMenu("terminalListMenu", title, items, nil, highlight, ok, cancel)
 }
 
-func (wr *webkitRender) openMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
+func (wr *webkitRender) DisplayContextMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
+	wr.openMenu("terminalContextMenu", title, items, icons, highlight, ok, cancel)
+}
+
+func (wr *webkitRender) openMenu(eventName, title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
 	if len(items) == 0 {
 		return
 	}
@@ -48,7 +52,7 @@ func (wr *webkitRender) openMenu(title string, items []string, icons []rune, hig
 		return
 	}
 
-	runtime.EventsEmit(wr.wapp, "terminalMenu", terminalMenuEvent{
+	runtime.EventsEmit(wr.wapp, eventName, terminalMenuEvent{
 		MenuID:  menuID,
 		Title:   title,
 		Options: append([]string(nil), items...),
@@ -126,7 +130,7 @@ func (cms *contextMenuStub) DisplayMenu(title string) {
 		return
 	}
 
-	cms.renderer.openMenu(title, cms.Options(), cms.Icons(),
+	cms.renderer.DisplayContextMenu(title, cms.Options(), cms.Icons(),
 		func(i int) { cms.Highlight(i) },
 		func(i int) { cms.Callback(i) },
 		func(i int) { cms.Cancel(i) },

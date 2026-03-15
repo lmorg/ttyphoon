@@ -1,7 +1,18 @@
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { TerminalMenuHighlight, TerminalMenuSelect, TerminalMenuCancel } from '../wailsjs/go/main/WApp';
 
-const MENU_ROOT_ID = 'ttyphoon-popup-menu';
+const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
+const CONTEXT_ROOT_ID = 'ttyphoon-context-menu';
+
+function normalizeMenuPayload(payload) {
+    if (Array.isArray(payload?.[0])) {
+        return payload[0];
+    }
+    if (Array.isArray(payload)) {
+        return payload[0] || payload;
+    }
+    return payload;
+}
 
 function toIconText(icon) {
     if (!Number.isFinite(icon) || icon <= 0) {
@@ -15,18 +26,66 @@ function toIconText(icon) {
     }
 }
 
-function normalizeMenuPayload(payload) {
-    if (Array.isArray(payload?.[0])) {
-        return payload[0];
-    }
-    if (Array.isArray(payload)) {
-        return payload[0] || payload;
-    }
-    return payload;
+function isSeparatorTitle(title) {
+    return title === '-';
 }
 
-function isSeparator(item) {
-    return item?.title === '-';
+function tokenizeQuery(q) {
+    return (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+}
+
+function buildFilteredItems(items, query) {
+    const tokens = tokenizeQuery(query);
+
+    const raw = items.map((item) => {
+        if (item.separator) {
+            return { ...item, visible: true };
+        }
+
+        if (tokens.length === 0) {
+            return { ...item, visible: true };
+        }
+
+        const value = item.title.toLowerCase();
+        const visible = tokens.every((token) => value.includes(token));
+        return { ...item, visible };
+    });
+
+    // Remove separators with no visible selectable items around them.
+    const result = [];
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
+        if (!item.visible) {
+            continue;
+        }
+
+        if (!item.separator) {
+            result.push(item);
+            continue;
+        }
+
+        let hasBefore = false;
+        for (let j = result.length - 1; j >= 0; j--) {
+            if (!result[j].separator) {
+                hasBefore = true;
+                break;
+            }
+        }
+
+        let hasAfter = false;
+        for (let j = i + 1; j < raw.length; j++) {
+            if (raw[j].visible && !raw[j].separator) {
+                hasAfter = true;
+                break;
+            }
+        }
+
+        if (hasBefore && hasAfter) {
+            result.push(item);
+        }
+    }
+
+    return result;
 }
 
 export function initTerminalPopupMenu(canvas) {
@@ -36,51 +95,65 @@ export function initTerminalPopupMenu(canvas) {
 
     let mouseX = 8;
     let mouseY = 8;
-    let activeMenuId = null;
 
-    const root = document.createElement('div');
-    root.id = MENU_ROOT_ID;
-    root.style.position = 'fixed';
-    root.style.zIndex = '10000';
-    root.style.minWidth = '280px';
-    root.style.maxWidth = '420px';
-    root.style.background = '#1a1a1a';
-    root.style.border = '1px solid #3c3c3c';
-    root.style.borderRadius = '8px';
-    root.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)';
-    root.style.padding = '8px';
-    root.style.display = 'none';
-    root.style.userSelect = 'none';
-    root.style.fontFamily = 'Hasklig, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    root.style.fontSize = '13px';
+    let activeListMenuId = null;
+    let activeContextMenuId = null;
 
-    const title = document.createElement('div');
-    title.style.padding = '6px 8px';
-    title.style.color = '#a8a8a8';
-    title.style.fontWeight = '600';
-    title.style.borderBottom = '1px solid #2f2f2f';
-    title.style.marginBottom = '6px';
+    let listItems = [];
+    let filteredItems = [];
+    let highlightVisibleIndex = -1;
+    let query = '';
 
-    const list = document.createElement('div');
-    list.style.display = 'flex';
-    list.style.flexDirection = 'column';
-    list.style.gap = '2px';
+    const listRoot = document.createElement('div');
+    listRoot.id = LISTBOX_ROOT_ID;
+    listRoot.className = 'tty-menu tty-listbox';
+    listRoot.style.display = 'none';
 
-    root.appendChild(title);
-    root.appendChild(list);
-    document.body.appendChild(root);
+    const listTitle = document.createElement('div');
+    listTitle.className = 'tty-menu-title';
 
-    function hideMenu(cancel = true) {
-        if (activeMenuId !== null && cancel) {
-            TerminalMenuCancel(activeMenuId, -1).catch(() => {});
-        }
+    const listSearchWrap = document.createElement('div');
+    listSearchWrap.className = 'tty-listbox-search';
+    listSearchWrap.style.display = 'none';
 
-        activeMenuId = null;
-        root.style.display = 'none';
-        list.replaceChildren();
+    const listSearchInput = document.createElement('input');
+    listSearchInput.type = 'text';
+    listSearchInput.className = 'tty-listbox-search-input';
+    listSearchInput.placeholder = 'Filter...';
+    listSearchWrap.appendChild(listSearchInput);
+
+    const listBody = document.createElement('div');
+    listBody.className = 'tty-menu-list';
+
+    listRoot.appendChild(listTitle);
+    listRoot.appendChild(listSearchWrap);
+    listRoot.appendChild(listBody);
+    document.body.appendChild(listRoot);
+
+    const contextRoot = document.createElement('div');
+    contextRoot.id = CONTEXT_ROOT_ID;
+    contextRoot.className = 'tty-menu tty-context';
+    contextRoot.style.display = 'none';
+
+    const contextTitle = document.createElement('div');
+    contextTitle.className = 'tty-menu-title';
+
+    const contextBody = document.createElement('div');
+    contextBody.className = 'tty-menu-list';
+
+    contextRoot.appendChild(contextTitle);
+    contextRoot.appendChild(contextBody);
+    document.body.appendChild(contextRoot);
+
+    function menuConstraints() {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            maxWidth: Math.max(280, Math.floor(rect.width * 0.92)),
+            maxHeight: Math.max(160, Math.floor(rect.height * 0.78)),
+        };
     }
 
-    function positionMenu() {
+    function positionMenu(root) {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const rect = root.getBoundingClientRect();
@@ -88,10 +161,10 @@ export function initTerminalPopupMenu(canvas) {
         let x = mouseX;
         let y = mouseY;
 
-        if (x+rect.width > vw - 8) {
+        if (x + rect.width > vw - 8) {
             x = Math.max(8, vw - rect.width - 8);
         }
-        if (y+rect.height > vh - 8) {
+        if (y + rect.height > vh - 8) {
             y = Math.max(8, vh - rect.height - 8);
         }
 
@@ -99,81 +172,247 @@ export function initTerminalPopupMenu(canvas) {
         root.style.top = `${y}px`;
     }
 
-    function showMenu(menu) {
-        activeMenuId = menu.menuId;
+    function applyMenuSizing(root, listEl, reserveHeaderPx = 0) {
+        const { maxWidth, maxHeight } = menuConstraints();
+        root.style.maxWidth = `${maxWidth}px`;
+        root.style.width = `${Math.min(Math.max(300, maxWidth * 0.66), maxWidth)}px`;
+        listEl.style.maxHeight = `${Math.max(80, maxHeight - reserveHeaderPx)}px`;
+    }
 
-        title.textContent = menu.title || 'Menu';
-        title.style.display = menu.title ? 'block' : 'none';
+    function hideListMenu(cancel = true) {
+        if (activeListMenuId !== null && cancel) {
+            TerminalMenuCancel(activeListMenuId, -1).catch(() => {});
+        }
 
-        const items = (menu.options || []).map((opt, i) => ({
-            title: opt,
-            icon: menu.icons?.[i],
-            index: i,
-        }));
+        activeListMenuId = null;
+        listItems = [];
+        filteredItems = [];
+        highlightVisibleIndex = -1;
+        query = '';
+        listSearchInput.value = '';
+        listSearchWrap.style.display = 'none';
+        listRoot.style.display = 'none';
+        listBody.replaceChildren();
+    }
 
-        list.replaceChildren();
+    function hideContextMenu(cancel = true) {
+        if (activeContextMenuId !== null && cancel) {
+            TerminalMenuCancel(activeContextMenuId, -1).catch(() => {});
+        }
 
-        for (const item of items) {
-            if (isSeparator(item)) {
+        activeContextMenuId = null;
+        contextRoot.style.display = 'none';
+        contextBody.replaceChildren();
+    }
+
+    function hideMenus(cancel = true) {
+        hideListMenu(cancel);
+        hideContextMenu(cancel);
+    }
+
+    function visibleSelectableIndexes() {
+        const indexes = [];
+        for (let i = 0; i < filteredItems.length; i++) {
+            if (!filteredItems[i].separator) {
+                indexes.push(i);
+            }
+        }
+        return indexes;
+    }
+
+    function ensureValidHighlight() {
+        const selectable = visibleSelectableIndexes();
+        if (selectable.length === 0) {
+            highlightVisibleIndex = -1;
+            return;
+        }
+
+        if (!selectable.includes(highlightVisibleIndex)) {
+            highlightVisibleIndex = selectable[0];
+        }
+    }
+
+    function setHighlightByVisibleIndex(visibleIndex) {
+        if (visibleIndex < 0 || visibleIndex >= filteredItems.length) {
+            return;
+        }
+        if (filteredItems[visibleIndex].separator) {
+            return;
+        }
+
+        highlightVisibleIndex = visibleIndex;
+        const item = filteredItems[visibleIndex];
+
+        if (activeListMenuId !== null) {
+            TerminalMenuHighlight(activeListMenuId, item.index).catch(() => {});
+        }
+
+        const row = listBody.querySelector(`[data-visible-index="${visibleIndex}"]`);
+        if (row) {
+            row.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function cycleHighlight(direction) {
+        const selectable = visibleSelectableIndexes();
+        if (selectable.length === 0) {
+            return;
+        }
+
+        if (highlightVisibleIndex === -1) {
+            setHighlightByVisibleIndex(direction > 0 ? selectable[0] : selectable[selectable.length - 1]);
+            return;
+        }
+
+        const current = selectable.indexOf(highlightVisibleIndex);
+        const next = (current + direction + selectable.length) % selectable.length;
+        setHighlightByVisibleIndex(selectable[next]);
+    }
+
+    function renderListbox() {
+        filteredItems = buildFilteredItems(listItems, query);
+        ensureValidHighlight();
+
+        listBody.replaceChildren();
+
+        for (let i = 0; i < filteredItems.length; i++) {
+            const item = filteredItems[i];
+
+            if (item.separator) {
                 const hr = document.createElement('div');
-                hr.style.height = '1px';
-                hr.style.margin = '4px 6px';
-                hr.style.background = '#2f2f2f';
-                list.appendChild(hr);
+                hr.className = 'tty-menu-separator';
+                listBody.appendChild(hr);
                 continue;
             }
 
             const row = document.createElement('button');
             row.type = 'button';
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.width = '100%';
-            row.style.border = '0';
-            row.style.background = 'transparent';
-            row.style.color = '#e6e6e6';
-            row.style.padding = '7px 8px';
-            row.style.borderRadius = '6px';
-            row.style.textAlign = 'left';
-            row.style.cursor = 'default';
+            row.className = 'tty-menu-row';
+            row.dataset.visibleIndex = String(i);
+            row.title = item.title;
+
+            const text = document.createElement('span');
+            text.className = 'tty-menu-row-label';
+            text.textContent = item.title;
+            row.appendChild(text);
+
+            if (i === highlightVisibleIndex) {
+                row.classList.add('is-active');
+            }
+
+            row.addEventListener('mouseenter', () => {
+                setHighlightByVisibleIndex(i);
+                renderListbox();
+            });
+
+            row.addEventListener('click', () => {
+                if (activeListMenuId !== null) {
+                    TerminalMenuSelect(activeListMenuId, item.index).catch(() => {});
+                }
+                hideListMenu(false);
+            });
+
+            listBody.appendChild(row);
+        }
+
+        const reserveHeader = 78 + (listSearchWrap.style.display === 'none' ? 0 : 44);
+        applyMenuSizing(listRoot, listBody, reserveHeader);
+        listRoot.style.display = 'block';
+        positionMenu(listRoot);
+    }
+
+    function showListMenu(menu) {
+        hideContextMenu(true);
+
+        activeListMenuId = menu.menuId;
+        listTitle.textContent = menu.title || 'Select an item';
+        listTitle.style.display = menu.title ? 'block' : 'none';
+
+        listItems = (menu.options || []).map((title, index) => ({
+            title,
+            index,
+            separator: isSeparatorTitle(title),
+        }));
+
+        const firstSelectable = listItems.find((item) => !item.separator);
+        if (firstSelectable && activeListMenuId !== null) {
+            TerminalMenuHighlight(activeListMenuId, firstSelectable.index).catch(() => {});
+        }
+
+        query = '';
+        listSearchInput.value = '';
+        listSearchWrap.style.display = 'none';
+        highlightVisibleIndex = -1;
+
+        renderListbox();
+    }
+
+    function showContextMenu(menu) {
+        hideListMenu(true);
+
+        activeContextMenuId = menu.menuId;
+
+        contextTitle.textContent = menu.title || 'Menu';
+        contextTitle.style.display = menu.title ? 'block' : 'none';
+
+        const items = (menu.options || []).map((title, index) => ({
+            title,
+            index,
+            icon: menu.icons?.[index],
+            separator: isSeparatorTitle(title),
+        }));
+
+        contextBody.replaceChildren();
+
+        for (const item of items) {
+            if (item.separator) {
+                const hr = document.createElement('div');
+                hr.className = 'tty-menu-separator';
+                contextBody.appendChild(hr);
+                continue;
+            }
+
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'tty-menu-row';
 
             const icon = document.createElement('span');
+            icon.className = 'tty-menu-row-icon';
             icon.textContent = toIconText(item.icon);
-            icon.style.display = 'inline-block';
-            icon.style.width = '18px';
-            icon.style.marginRight = '8px';
             icon.style.opacity = icon.textContent ? '0.9' : '0';
             icon.style.fontFamily = '"Font Awesome 6 Free Solid", "Font Awesome 6 Free", Hasklig, monospace';
             icon.style.fontWeight = '900';
 
             const text = document.createElement('span');
+            text.className = 'tty-menu-row-label';
             text.textContent = item.title;
-
             row.appendChild(icon);
             row.appendChild(text);
 
             row.addEventListener('mouseenter', () => {
-                row.style.background = '#2d4f87';
-                if (activeMenuId !== null) {
-                    TerminalMenuHighlight(activeMenuId, item.index).catch(() => {});
+                row.classList.add('is-active');
+                if (activeContextMenuId !== null) {
+                    TerminalMenuHighlight(activeContextMenuId, item.index).catch(() => {});
                 }
             });
 
             row.addEventListener('mouseleave', () => {
-                row.style.background = 'transparent';
+                row.classList.remove('is-active');
             });
 
             row.addEventListener('click', () => {
-                if (activeMenuId !== null) {
-                    TerminalMenuSelect(activeMenuId, item.index).catch(() => {});
+                if (activeContextMenuId !== null) {
+                    TerminalMenuSelect(activeContextMenuId, item.index).catch(() => {});
                 }
-                hideMenu(false);
+                hideContextMenu(false);
             });
 
-            list.appendChild(row);
+            contextBody.appendChild(row);
         }
 
-        root.style.display = 'block';
-        positionMenu();
+        applyMenuSizing(contextRoot, contextBody, 74);
+        contextRoot.style.display = 'block';
+        positionMenu(contextRoot);
     }
 
     window.addEventListener('mousemove', (event) => {
@@ -182,38 +421,96 @@ export function initTerminalPopupMenu(canvas) {
     });
 
     window.addEventListener('mousedown', (event) => {
-        if (root.style.display === 'none') {
+        const listOpen = listRoot.style.display !== 'none';
+        const contextOpen = contextRoot.style.display !== 'none';
+        if (!listOpen && !contextOpen) {
             return;
         }
 
-        if (!root.contains(event.target)) {
-            hideMenu(true);
+        if (!listRoot.contains(event.target) && !contextRoot.contains(event.target)) {
+            hideMenus(true);
         }
     });
 
     window.addEventListener('keydown', (event) => {
-        if (root.style.display === 'none') {
+        if (listRoot.style.display !== 'none') {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                hideListMenu(true);
+                return;
+            }
+
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (highlightVisibleIndex >= 0 && highlightVisibleIndex < filteredItems.length) {
+                    const item = filteredItems[highlightVisibleIndex];
+                    if (!item.separator && activeListMenuId !== null) {
+                        TerminalMenuSelect(activeListMenuId, item.index).catch(() => {});
+                        hideListMenu(false);
+                    }
+                }
+                return;
+            }
+
+            if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+                event.preventDefault();
+                cycleHighlight(1);
+                renderListbox();
+                return;
+            }
+
+            if (event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey)) {
+                event.preventDefault();
+                cycleHighlight(-1);
+                renderListbox();
+                return;
+            }
+
+            const isTypeable = event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey;
+            if (isTypeable) {
+                query += event.key;
+                listSearchInput.value = query;
+                listSearchWrap.style.display = 'block';
+                renderListbox();
+                return;
+            }
+
+            if (event.key === 'Backspace') {
+                event.preventDefault();
+                query = query.slice(0, -1);
+                listSearchInput.value = query;
+                listSearchWrap.style.display = query.length > 0 ? 'block' : 'none';
+                renderListbox();
+            }
+
             return;
         }
 
-        if (event.key === 'Escape') {
+        if (contextRoot.style.display !== 'none' && event.key === 'Escape') {
             event.preventDefault();
-            hideMenu(true);
+            hideContextMenu(true);
         }
     });
 
     window.addEventListener('blur', () => {
-        if (root.style.display !== 'none') {
-            hideMenu(true);
+        if (listRoot.style.display !== 'none' || contextRoot.style.display !== 'none') {
+            hideMenus(true);
         }
     });
 
-    EventsOn('terminalMenu', (payload) => {
+    EventsOn('terminalListMenu', (payload) => {
         const menu = normalizeMenuPayload(payload);
         if (!menu || !Array.isArray(menu.options) || menu.options.length === 0) {
             return;
         }
+        showListMenu(menu);
+    });
 
-        showMenu(menu);
+    EventsOn('terminalContextMenu', (payload) => {
+        const menu = normalizeMenuPayload(payload);
+        if (!menu || !Array.isArray(menu.options) || menu.options.length === 0) {
+            return;
+        }
+        showContextMenu(menu);
     });
 }

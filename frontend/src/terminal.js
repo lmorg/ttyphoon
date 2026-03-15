@@ -31,7 +31,6 @@ const tabsEl = document.getElementById('terminal-tabs');
 const canvas = document.getElementById('ttyphoon-terminal');
 const ctx = canvas.getContext('2d');
 const offscreen = document.createElement('canvas');
-//const offscreen = document.getElementById('ttyphoon-terminal-buf');
 const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
