@@ -37,6 +37,31 @@ notesPane.style.cssText = [
     'flex-shrink:0',
 ].join(';');
 
+const splitHandle = document.createElement('div');
+splitHandle.id = 'notes-terminal-split';
+splitHandle.style.cssText = [
+    'width:8px',
+    'height:100%',
+    'cursor:col-resize',
+    'background:transparent',
+    'position:relative',
+    'flex-shrink:0',
+    'user-select:none',
+    'touch-action:none',
+].join(';');
+
+const splitHandleLine = document.createElement('div');
+splitHandleLine.style.cssText = [
+    'position:absolute',
+    'left:50%',
+    'top:0',
+    'transform:translateX(-50%)',
+    'width:1px',
+    'height:100%',
+    'background:rgba(255,255,255,0.16)',
+].join(';');
+splitHandle.appendChild(splitHandleLine);
+
 const terminalPane = document.createElement('div');
 terminalPane.id = 'terminal-pane';
 terminalPane.style.cssText = [
@@ -48,7 +73,57 @@ terminalPane.style.cssText = [
 ].join(';');
 
 app.appendChild(notesPane);
+app.appendChild(splitHandle);
 app.appendChild(terminalPane);
+
+let isDraggingSplit = false;
+
+function setSplitFromClientX(clientX) {
+    const rect = app.getBoundingClientRect();
+    if (rect.width <= 0) {
+        return;
+    }
+
+    const minPanePx = Math.max(240, Math.round(rect.width * 0.15));
+    const maxNotesPx = rect.width - minPanePx - splitHandle.offsetWidth;
+    const rawNotesPx = clientX - rect.left;
+    const notesPx = Math.min(Math.max(rawNotesPx, minPanePx), maxNotesPx);
+    const notesPercent = (notesPx / rect.width) * 100;
+
+    notesPane.style.width = `${notesPercent}%`;
+
+    // Terminal renderer listens for window resize to recompute canvas/rows.
+    window.dispatchEvent(new Event('resize'));
+}
+
+splitHandle.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) {
+        return;
+    }
+
+    isDraggingSplit = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    event.preventDefault();
+});
+
+window.addEventListener('mousemove', (event) => {
+    if (!isDraggingSplit) {
+        return;
+    }
+
+    setSplitFromClientX(event.clientX);
+});
+
+window.addEventListener('mouseup', () => {
+    if (!isDraggingSplit) {
+        return;
+    }
+
+    isDraggingSplit = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+});
 
 // Dynamic imports — the promises resolve asynchronously, but the resolution
 // microtask queue starts only after this synchronous module body finishes.
