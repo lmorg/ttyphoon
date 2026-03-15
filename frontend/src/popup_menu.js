@@ -30,6 +30,32 @@ function isSeparatorTitle(title) {
     return title === '-';
 }
 
+function measureIdealWidth(items, title, withIcons) {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    ctx.font = '13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+    let maxTextW = 0;
+    for (const item of items) {
+        if (!item.separator) {
+            const w = ctx.measureText(item.title).width;
+            if (w > maxTextW) maxTextW = w;
+        }
+    }
+
+    // row padding 8px*2, list padding 6px*2, border 1px*2, scrollbar reserve ~12px
+    const rowOverhead = 16 + 12 + 2 + 12 + (withIcons ? 26 : 0);
+    const itemWidth = Math.ceil(maxTextW) + rowOverhead;
+
+    // title uses padding 8px 10px (20px horizontal) + border 1px*2 + list padding 6px*2
+    let titleWidth = 0;
+    if (title) {
+        titleWidth = Math.ceil(ctx.measureText(title).width) + 20 + 2 + 12;
+    }
+
+    return Math.max(itemWidth, titleWidth, 300);
+}
+
 function tokenizeQuery(q) {
     return (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
 }
@@ -95,6 +121,8 @@ export function initTerminalPopupMenu(canvas) {
 
     let mouseX = 8;
     let mouseY = 8;
+    let anchorX = 8;
+    let anchorY = 8;
 
     let activeListMenuId = null;
     let activeContextMenuId = null;
@@ -159,8 +187,8 @@ export function initTerminalPopupMenu(canvas) {
         const vh = window.innerHeight;
         const rect = root.getBoundingClientRect();
 
-        let x = mouseX;
-        let y = mouseY;
+        let x = anchorX;
+        let y = anchorY;
 
         if (x + rect.width > vw - 8) {
             x = Math.max(8, vw - rect.width - 8);
@@ -173,10 +201,13 @@ export function initTerminalPopupMenu(canvas) {
         root.style.top = `${y}px`;
     }
 
-    function applyMenuSizing(root, listEl, reserveHeaderPx = 0) {
+    function applyMenuSizing(root, listEl, reserveHeaderPx = 0, idealWidth = null) {
         const { maxWidth, maxHeight } = menuConstraints();
+        const targetWidth = idealWidth !== null
+            ? Math.min(Math.max(300, idealWidth), maxWidth)
+            : Math.min(Math.max(300, maxWidth * 0.66), maxWidth);
         root.style.maxWidth = `${maxWidth}px`;
-        root.style.width = `${Math.min(Math.max(300, maxWidth * 0.66), maxWidth)}px`;
+        root.style.width = `${targetWidth}px`;
         listEl.style.maxHeight = `${Math.max(80, maxHeight - reserveHeaderPx)}px`;
     }
 
@@ -328,7 +359,8 @@ export function initTerminalPopupMenu(canvas) {
         }
 
         const reserveHeader = 78 + (listSearchWrap.style.display === 'none' ? 0 : 44);
-        applyMenuSizing(listRoot, listBody, reserveHeader);
+        const idealWidth = measureIdealWidth(filteredItems, listTitle.textContent, hasIcons);
+        applyMenuSizing(listRoot, listBody, reserveHeader, idealWidth);
         listRoot.style.display = 'block';
         positionMenu(listRoot);
     }
@@ -336,6 +368,8 @@ export function initTerminalPopupMenu(canvas) {
     function showListMenu(menu) {
         hideContextMenu(true);
 
+        anchorX = mouseX;
+        anchorY = mouseY;
         activeListMenuId = menu.menuId;
         listTitle.textContent = menu.title || 'Select an item';
         listTitle.style.display = menu.title ? 'block' : 'none';
@@ -436,6 +470,9 @@ export function initTerminalPopupMenu(canvas) {
     });
 
     window.addEventListener('mousedown', (event) => {
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+
         const listOpen = listRoot.style.display !== 'none';
         const contextOpen = contextRoot.style.display !== 'none';
         if (!listOpen && !contextOpen) {
