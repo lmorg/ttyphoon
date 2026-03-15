@@ -4,11 +4,14 @@ import (
 	"context"
 	"sync"
 
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 )
 
 type webkitRender struct {
 	termWin       *types.AppWindowTerms
+	tmux          *tmux.Tmux
 	glyphSize     *types.XY
 	windowCells   *types.XY
 	windowTitle   string
@@ -194,6 +197,24 @@ func (wr *webkitRender) ResizeWindow(size *types.XY) {
 		return
 	}
 	wr.windowCells = size
+}
+
+func (wr *webkitRender) WindowResized(cols, rows int32) {
+	size := &types.XY{X: cols, Y: rows}
+	wr.windowCells = size
+
+	if wr.tmux != nil {
+		_ = wr.tmux.RefreshClient(size)
+		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)
+		return
+	}
+
+	if !config.Config.Tmux.Enabled && wr.termWin != nil && wr.termWin.Active != nil {
+		term := wr.termWin.Active.GetTerm()
+		if term != nil {
+			term.Resize(size)
+		}
+	}
 }
 
 func (wr *webkitRender) SetKeyboardFnMode(mode types.KeyboardMode) {

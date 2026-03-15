@@ -1,4 +1,4 @@
-import { GetWindowStyle } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, TerminalRequestRedraw, TerminalResize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -133,11 +133,23 @@ GetWindowStyle().then((result) => {
         wireMouseEvents(canvas, font.getCellSize);
         initTerminalPopupMenu(canvas);
         canvas.focus();
-        window['go']['main']['WApp']['TerminalRequestRedraw']().catch(() => {});
+        TerminalRequestRedraw().catch(() => {});
     });
 });
 
+let resizeTimer = null;
 window.addEventListener('resize', () => {
     fitCanvasToWindow();
-    //drawFrame();
+    // Debounce so we don't spam Go on every pixel of a drag-resize.
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        const { cellWidth, cellHeight } = font.getCellSize();
+        if (cellWidth > 0 && cellHeight > 0) {
+            const cols = Math.floor(canvas.width / cellWidth);
+            const rows = Math.floor(canvas.height / cellHeight);
+            if (cols > 0 && rows > 0) {
+                TerminalResize(cols, rows).catch(() => {});
+            }
+        }
+    }, 100);
 });

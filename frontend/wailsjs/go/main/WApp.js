@@ -98,6 +98,10 @@ export function TerminalRequestRedraw() {
   return window['go']['main']['WApp']['TerminalRequestRedraw']();
 }
 
+export function TerminalResize(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalResize'](arg1, arg2);
+}
+
 export function TerminalTextInput(arg1) {
   return window['go']['main']['WApp']['TerminalTextInput'](arg1);
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -25,9 +26,13 @@ func Initialise() (types.Renderer, *types.XY) {
 	return wr, wr.windowCells
 }
 
-func (wr *webkitRender) Start(termWin *types.AppWindowTerms, _ any, wapp context.Context) {
+func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wapp context.Context) {
 	wr.termWin = termWin
 	wr.wapp = wapp
+
+	if tc, ok := tmuxClient.(*tmux.Tmux); ok {
+		wr.tmux = tc
+	}
 
 	go func() {
 		for {

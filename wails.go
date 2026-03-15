@@ -191,6 +191,16 @@ func (a *WApp) TerminalTextInput(text string) {
 	renderer.HandleTextInput(text)
 }
 
+func (a *WApp) TerminalResize(cols, rows int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.WindowResized(cols, rows)
+	renderer.TriggerRedraw()
+}
+
 func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

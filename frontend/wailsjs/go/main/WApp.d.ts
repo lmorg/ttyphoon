@@ -51,6 +51,8 @@ export function TerminalMouseWheel(arg1:number,arg2:number,arg3:number,arg4:numb
 
 export function TerminalRequestRedraw():Promise<void>;
 
+export function TerminalResize(arg1:number,arg2:number):Promise<void>;
+
 export function TerminalTextInput(arg1:string):Promise<void>;
 
 export function WindowHide():Promise<void>;
