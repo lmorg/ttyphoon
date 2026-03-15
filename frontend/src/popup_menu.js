@@ -102,6 +102,7 @@ export function initTerminalPopupMenu(canvas) {
     let listItems = [];
     let filteredItems = [];
     let highlightVisibleIndex = -1;
+    let hasIcons = false;
     let query = '';
 
     const listRoot = document.createElement('div');
@@ -188,6 +189,7 @@ export function initTerminalPopupMenu(canvas) {
         listItems = [];
         filteredItems = [];
         highlightVisibleIndex = -1;
+        hasIcons = false;
         query = '';
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
@@ -291,6 +293,16 @@ export function initTerminalPopupMenu(canvas) {
             row.dataset.visibleIndex = String(i);
             row.title = item.title;
 
+            if (hasIcons) {
+                const icon = document.createElement('span');
+                icon.className = 'tty-menu-row-icon';
+                icon.textContent = toIconText(item.icon);
+                icon.style.opacity = icon.textContent ? '0.9' : '0';
+                icon.style.fontFamily = '"Font Awesome 6 Free Solid", "Font Awesome 6 Free", Hasklig, monospace';
+                icon.style.fontWeight = '900';
+                row.appendChild(icon);
+            }
+
             const text = document.createElement('span');
             text.className = 'tty-menu-row-label';
             text.textContent = item.title;
@@ -328,9 +340,12 @@ export function initTerminalPopupMenu(canvas) {
         listTitle.textContent = menu.title || 'Select an item';
         listTitle.style.display = menu.title ? 'block' : 'none';
 
+        hasIcons = Array.isArray(menu.icons) && menu.icons.length > 0;
+
         listItems = (menu.options || []).map((title, index) => ({
             title,
             index,
+            icon: menu.icons?.[index],
             separator: isSeparatorTitle(title),
         }));
 
