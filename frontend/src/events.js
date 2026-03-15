@@ -128,8 +128,8 @@ export function wireMouseEvents(canvas, getCellSize) {
     canvas.addEventListener('wheel', (event) => {
         event.preventDefault();
         const pos = eventToCell(canvas, event, getCellSize);
-        const moveX = event.deltaX; //Math.sign(event.deltaX);
-        const moveY = event.deltaY; //-Math.sign(event.deltaY);
+        const moveX = Math.sign(event.deltaX);
+        const moveY = -Math.sign(event.deltaY);
         TerminalMouseWheel(
             pos.x,
             pos.y,

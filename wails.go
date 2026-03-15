@@ -201,6 +201,35 @@ func (a *WApp) TerminalResize(cols, rows int32) {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) TerminalGetTabs() []map[string]any {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return nil
+	}
+
+	tabs := renderer.GetWindowTabs()
+	out := make([]map[string]any, 0, len(tabs))
+	for i := range tabs {
+		out = append(out, map[string]any{
+			"id":     tabs[i].ID,
+			"name":   tabs[i].Name,
+			"index":  tabs[i].Index,
+			"active": tabs[i].Active,
+		})
+	}
+
+	return out
+}
+
+func (a *WApp) TerminalSelectWindow(windowID string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.SelectWindow(windowID)
+}
+
 func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

@@ -1,4 +1,4 @@
-import { GetWindowStyle, TerminalRequestRedraw, TerminalResize } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -7,9 +7,15 @@ import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 
 (document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
-    <canvas id="ttyphoon-terminal"></canvas>
+    <div id="terminal-app">
+        <div id="terminal-tabs" role="tablist" aria-label="tmux windows"></div>
+        <div id="terminal-viewport">
+            <canvas id="ttyphoon-terminal"></canvas>
+        </div>
+    </div>
 `;
 
+const tabsEl = document.getElementById('terminal-tabs');
 const canvas = document.getElementById('ttyphoon-terminal');
 const ctx = canvas.getContext('2d');
 const offscreen = document.createElement('canvas');
@@ -18,6 +24,112 @@ const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
+let tabState = [];
+
+function renderTerminalTabs(tabs) {
+    if (!tabsEl) {
+        return;
+    }
+
+    tabState = Array.isArray(tabs) ? [...tabs].sort((a, b) => (a?.index ?? 0) - (b?.index ?? 0)) : [];
+    tabsEl.innerHTML = '';
+
+    for (const tab of tabState) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tab terminal-tab';
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-selected', tab.active ? 'true' : 'false');
+        button.dataset.windowId = tab.id || '';
+        button.textContent = tab.name || tab.id || 'window';
+        button.title = tab.id || button.textContent;
+
+        button.addEventListener('click', () => {
+            if (!tab.id) {
+                return;
+            }
+            TerminalSelectWindow(tab.id).catch(() => {});
+        });
+
+        tabsEl.appendChild(button);
+    }
+
+    tabsEl.style.display = tabState.length > 0 ? 'flex' : 'none';
+}
+
+function applyTerminalStyles(result) {
+    const existing = document.getElementById('terminal-theme');
+    if (existing) {
+        existing.remove();
+    }
+
+    const style = document.createElement('style');
+    style.id = 'terminal-theme';
+    style.textContent = `
+        #terminal-app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            min-height: 0;
+        }
+
+        #terminal-tabs {
+            display: none;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 8px 0 8px;
+            border-bottom: 2px solid rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            box-sizing: border-box;
+        }
+
+        #terminal-tabs button {
+            border-radius: 0;
+            border: 2px solid transparent;
+            background: transparent;
+            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            padding: 6px 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        #terminal-tabs button[aria-selected="true"] {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}) !important;
+        }
+
+        .terminal-tab {
+            border-top-left-radius: 5px !important;
+            border-top-right-radius: 5px !important;
+            border: 2px solid !important;
+            border-bottom: 0 !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        }
+
+        .terminal-tab:hover {
+            border-color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}) !important;
+        }
+
+        #terminal-viewport {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #ttyphoon-terminal {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 function fitCanvasToWindow() {
     const pane = canvas.parentElement;
@@ -127,7 +239,7 @@ EventsOn("terminalRedraw", ops => {
     if (rafPending) {
         return;
     }
-   rafPending = true;
+    rafPending = true;
 
     const drawOps = Array.isArray(ops?.[0]) ? ops[0] : ops;
 
@@ -163,11 +275,18 @@ EventsOn("terminalRedraw", ops => {
     });
 });
 
+EventsOn("terminalTabs", payload => {
+    const tabs = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    renderTerminalTabs(tabs);
+    fitCanvasToWindow();
+});
+
 GetWindowStyle().then((result) => {
     windowStyle = result;
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
+    applyTerminalStyles(result);
     font.applyConfiguredFontFromWindowStyle(windowStyle);
     fitCanvasToWindow();
     font.loadGlyphSizeFromGo(windowStyle).then(() => {
@@ -176,6 +295,12 @@ GetWindowStyle().then((result) => {
         wireMouseEvents(canvas, font.getCellSize);
         initTerminalPopupMenu(canvas);
         canvas.focus();
+
+        TerminalGetTabs().then((tabs) => {
+            renderTerminalTabs(tabs);
+            fitCanvasToWindow();
+        }).catch(() => {});
+
         TerminalRequestRedraw().catch(() => {});
     });
 });

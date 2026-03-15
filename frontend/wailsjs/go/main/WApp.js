@@ -66,6 +66,10 @@ export function StopNote(arg1) {
   return window['go']['main']['WApp']['StopNote'](arg1);
 }
 
+export function TerminalGetTabs() {
+  return window['go']['main']['WApp']['TerminalGetTabs']();
+}
+
 export function TerminalKeyPress(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['TerminalKeyPress'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -100,6 +104,10 @@ export function TerminalRequestRedraw() {
 
 export function TerminalResize(arg1, arg2) {
   return window['go']['main']['WApp']['TerminalResize'](arg1, arg2);
+}
+
+export function TerminalSelectWindow(arg1) {
+  return window['go']['main']['WApp']['TerminalSelectWindow'](arg1);
 }
 
 export function TerminalTextInput(arg1) {

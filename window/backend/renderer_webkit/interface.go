@@ -7,7 +7,15 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+type terminalTab struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Index  int    `json:"index"`
+	Active bool   `json:"active"`
+}
 
 type webkitRender struct {
 	termWin       *types.AppWindowTerms
@@ -204,7 +212,60 @@ func (wr *webkitRender) StatusBarText(text string) {
 	wr.statusBarText = text
 }
 
-func (wr *webkitRender) RefreshWindowList() {}
+func (wr *webkitRender) tmuxTabs() []terminalTab {
+	if wr.termWin == nil {
+		return nil
+	}
+
+	tabs := make([]terminalTab, 0, len(wr.termWin.Tabs))
+	for i := range wr.termWin.Tabs {
+		tab := wr.termWin.Tabs[i]
+		tabs = append(tabs, terminalTab{
+			ID:     tab.Id(),
+			Name:   tab.Name(),
+			Index:  tab.Index(),
+			Active: tab.Active(),
+		})
+	}
+
+	return tabs
+}
+
+func (wr *webkitRender) RefreshWindowList() {
+	if wr.tmux != nil {
+		wr.termWin = wr.tmux.GetTermTiles()
+	}
+
+	if wr.wapp != nil {
+		runtime.EventsEmit(wr.wapp, "terminalTabs", wr.tmuxTabs())
+	}
+
+	wr.TriggerRedraw()
+}
+
+func (wr *webkitRender) GetWindowTabs() []terminalTab {
+	if wr.tmux != nil {
+		wr.termWin = wr.tmux.GetTermTiles()
+	}
+
+	return wr.tmuxTabs()
+}
+
+func (wr *webkitRender) SelectWindow(windowID string) {
+	if windowID == "" || wr.tmux == nil {
+		return
+	}
+
+	if wr.windowCells == nil {
+		wr.windowCells = &types.XY{X: 120, Y: 40}
+	}
+
+	if err := wr.tmux.SelectAndResizeWindow(windowID, wr.windowCells); err != nil {
+		return
+	}
+
+	wr.RefreshWindowList()
+}
 
 func (wr *webkitRender) Bell() {}
 

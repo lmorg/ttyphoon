@@ -35,6 +35,8 @@ export function SendVisualInputBox(arg1:string,arg2:boolean):Promise<void>;
 
 export function StopNote(arg1:string):Promise<void>;
 
+export function TerminalGetTabs():Promise<Array<Record<string, any>>>;
+
 export function TerminalKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<void>;
 
 export function TerminalMenuCancel(arg1:number,arg2:number):Promise<void>;
@@ -52,6 +54,8 @@ export function TerminalMouseWheel(arg1:number,arg2:number,arg3:number,arg4:numb
 export function TerminalRequestRedraw():Promise<void>;
 
 export function TerminalResize(arg1:number,arg2:number):Promise<void>;
+
+export function TerminalSelectWindow(arg1:string):Promise<void>;
 
 export function TerminalTextInput(arg1:string):Promise<void>;
 
