@@ -12,6 +12,7 @@ import { initTerminalPopupMenu } from './popup_menu';
         <div id="terminal-viewport">
             <canvas id="ttyphoon-terminal"></canvas>
         </div>
+        <div id="terminal-notifications"></div>
     </div>
 `;
 
@@ -459,6 +460,55 @@ GetWindowStyle().then((result) => {
         TerminalRequestRedraw().catch(() => {});
     });
 });
+
+// ------------------------------------------------------------------
+// Notification overlay
+// ------------------------------------------------------------------
+
+const notifContainer = document.getElementById('terminal-notifications');
+
+const _notifyBg = ['#316db0', '#99c0d3', '#f2b71f', '#de333b', '#316db0', '#74953c'];
+const _notifyFg = ['#000000', '#000000', '#000000', '#000000', '#000000', '#000000'];
+const _notifyLabel = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'SCROLL', '?'];
+
+EventsOn('terminalNotification', payload => {
+    const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (!p || !notifContainer) return;
+
+    // update message if already shown (e.g. SetMessage)
+    const existing = notifContainer.querySelector(`[data-notif-id="${p.id}"]`);
+    if (existing) {
+        existing.querySelector('.notif-msg').textContent = p.message;
+        return;
+    }
+
+    const type  = p.type ?? 1;
+    const bg    = _notifyBg[type] ?? _notifyBg[1];
+    const fg    = _notifyFg[type] ?? '#000000';
+    const label = _notifyLabel[type] ?? 'INFO';
+
+    const el = document.createElement('div');
+    el.className = 'terminal-notification';
+    el.dataset.notifId = p.id;
+    el.style.cssText = `background:${bg};color:${fg};`;
+    el.innerHTML = `<span class="notif-label">${label}</span><span class="notif-msg"></span>`;
+    el.querySelector('.notif-msg').textContent = p.message;
+
+    if (!p.sticky) {
+        el.addEventListener('click', () => el.remove());
+    }
+
+    notifContainer.appendChild(el);
+});
+
+EventsOn('terminalNotificationClose', payload => {
+    const id = Array.isArray(payload) ? payload[0] : payload;
+    if (!notifContainer) return;
+    const el = notifContainer.querySelector(`[data-notif-id="${id}"]`);
+    if (el) el.remove();
+});
+
+// ------------------------------------------------------------------
 
 let resizeTimer = null;
 window.addEventListener('resize', () => {

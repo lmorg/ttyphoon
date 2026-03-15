@@ -36,6 +36,7 @@ type webkitRender struct {
 	menuMu        sync.Mutex
 	menuNextID    int
 	menuCallbacks map[int]menuCallbacks
+	notifications notifyT
 	//fnScheduleM   sync.Mutex
 }
 
@@ -297,14 +298,7 @@ func (wr *webkitRender) NewElement(_ types.Tile, _ types.ElementID) types.Elemen
 	return &elementStub{}
 }
 
-func (wr *webkitRender) DisplayNotification(_ types.NotificationType, _ string) {}
 
-func (wr *webkitRender) DisplaySticky(_ types.NotificationType, _ string, cancel func()) types.Notification {
-	if cancel == nil {
-		cancel = func() {}
-	}
-	return &notificationStub{cancel: cancel}
-}
 
 func (wr *webkitRender) DisplayInputBox(_ string, _ string, ok types.InputBoxCallbackT, _ types.InputBoxCallbackT) {
 	if ok != nil {
@@ -442,25 +436,4 @@ func (es *elementStub) MouseMotion(_ *types.XY, _ *types.XY, _ types.EventIgnore
 func (es *elementStub) MouseHover(_ *types.XY, _ *types.XY) func() { return func() {} }
 func (es *elementStub) MouseOut()                                  {}
 
-type notificationStub struct {
-	message string
-	cancel  func()
-}
 
-func (ns *notificationStub) SetMessage(message string) {
-	ns.message = message
-}
-
-func (ns *notificationStub) UpdateCanceller(cancel func()) {
-	if cancel == nil {
-		ns.cancel = func() {}
-		return
-	}
-	ns.cancel = cancel
-}
-
-func (ns *notificationStub) Close() {
-	if ns.cancel != nil {
-		ns.cancel()
-	}
-}
