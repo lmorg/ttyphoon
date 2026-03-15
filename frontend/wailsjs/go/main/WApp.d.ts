@@ -37,6 +37,8 @@ export function StopNote(arg1:string):Promise<void>;
 
 export function TerminalGetTabs():Promise<Array<Record<string, any>>>;
 
+export function TerminalInputBoxSubmit(arg1:number,arg2:string,arg3:boolean):Promise<void>;
+
 export function TerminalKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<void>;
 
 export function TerminalMenuCancel(arg1:number,arg2:number):Promise<void>;

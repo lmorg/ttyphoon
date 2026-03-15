@@ -37,6 +37,7 @@ type webkitRender struct {
 	menuNextID    int
 	menuCallbacks map[int]menuCallbacks
 	notifications notifyT
+	inputBoxes    inputBoxesT
 	//fnScheduleM   sync.Mutex
 }
 
@@ -300,12 +301,6 @@ func (wr *webkitRender) NewElement(_ types.Tile, _ types.ElementID) types.Elemen
 
 
 
-func (wr *webkitRender) DisplayInputBox(_ string, _ string, ok types.InputBoxCallbackT, _ types.InputBoxCallbackT) {
-	if ok != nil {
-		ok("")
-	}
-}
-
 func (wr *webkitRender) GetWindowMeta() any {
 	return nil
 }
@@ -435,5 +430,3 @@ func (es *elementStub) MouseMotion(_ *types.XY, _ *types.XY, _ types.EventIgnore
 }
 func (es *elementStub) MouseHover(_ *types.XY, _ *types.XY) func() { return func() {} }
 func (es *elementStub) MouseOut()                                  {}
-
-

@@ -239,6 +239,15 @@ func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
 	renderer.HandleKeyPress(key, ctrl, alt, shift, meta)
 }
 
+func (a *WApp) TerminalInputBoxSubmit(id int64, value string, isOk bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.InputBoxSubmit(id, value, isOk)
+}
+
 func (a *WApp) startTerminalWindow() {
 	renderer, size := backend.Initialise()
 

@@ -70,6 +70,10 @@ export function TerminalGetTabs() {
   return window['go']['main']['WApp']['TerminalGetTabs']();
 }
 
+export function TerminalInputBoxSubmit(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['TerminalInputBoxSubmit'](arg1, arg2, arg3);
+}
+
 export function TerminalKeyPress(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['TerminalKeyPress'](arg1, arg2, arg3, arg4, arg5);
 }
