@@ -330,6 +330,7 @@ func (wr *webkitRender) WindowResized(cols, rows int32) {
 	if wr.tmux != nil {
 		_ = wr.tmux.RefreshClient(size)
 		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)
+		go wr.RefreshWindowList()
 		return
 	}
 
