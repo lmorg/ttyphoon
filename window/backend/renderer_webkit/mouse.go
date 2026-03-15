@@ -3,11 +3,6 @@ package rendererwebkit
 import "github.com/lmorg/ttyphoon/types"
 
 func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.MouseButtonT, clicks uint8, state types.ButtonStateT) {
-	if button == types.MOUSE_BUTTON_RIGHT && state == types.BUTTON_PRESSED {
-		wr.showRightClickContextMenu()
-		return
-	}
-
 	tile := wr.getTileFromCellOrActive(cellX, cellY)
 	if tile == nil || tile.GetTerm() == nil {
 		return
@@ -23,19 +18,18 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	}
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})
-}
+	switch button {
+	case types.MOUSE_BUTTON_RIGHT:
+		wr.contextMenu = wr.NewContextMenu() // reset term-provided context menu items for this click
+		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {
+			if state == types.BUTTON_RELEASED {
+				wr.showRightClickContextMenu(wr.convertCellToTileXY(tile, cellX, cellY), true)
+			}
+		})
 
-func (wr *webkitRender) showRightClickContextMenu() {
-	menu := wr.NewContextMenu()
-	menu.Append(
-		types.MenuItem{Title: "Copy", Icon: '\U0001F4CB'},
-		types.MenuItem{Title: "Paste", Icon: '\U0001F4CB'},
-		types.MenuItem{Title: "Select All", Icon: '\u2714'},
-		types.MenuItem{Title: types.MENU_SEPARATOR},
-		types.MenuItem{Title: "Clear Screen", Icon: '\U0001F5D1'},
-	)
-	menu.DisplayMenu("Terminal")
+	default:
+		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})
+	}
 }
 
 func (wr *webkitRender) HandleMouseWheel(cellX, cellY, moveX, moveY int32) {

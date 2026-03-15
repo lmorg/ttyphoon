@@ -299,8 +299,6 @@ func (wr *webkitRender) NewElement(_ types.Tile, _ types.ElementID) types.Elemen
 	return &elementStub{}
 }
 
-
-
 func (wr *webkitRender) GetWindowMeta() any {
 	return nil
 }

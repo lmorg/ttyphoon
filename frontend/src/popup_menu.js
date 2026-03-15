@@ -142,6 +142,8 @@ export function initTerminalPopupMenu(canvas) {
             icon.style.width = '18px';
             icon.style.marginRight = '8px';
             icon.style.opacity = icon.textContent ? '0.9' : '0';
+            icon.style.fontFamily = '"Font Awesome 6 Free Solid", "Font Awesome 6 Free", Hasklig, monospace';
+            icon.style.fontWeight = '900';
 
             const text = document.createElement('span');
             text.textContent = item.title;

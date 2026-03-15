@@ -17,6 +17,14 @@ body {
     url("assets/fonts/Hasklig-Regular.ttf") format("ttf");
 }
 
+@font-face {
+    font-family: "Font Awesome 6 Free Solid";
+    font-style: normal;
+    font-weight: 900;
+    src: local(""),
+    url("assets/fonts/Font Awesome 6 Free-Solid-900.otf") format("opentype");
+}
+
 #app {
     overflow: visible;
 }
