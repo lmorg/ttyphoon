@@ -199,7 +199,7 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		'\'': _tmuxKeyResponse(`"'"`),    // 27, single quote
 		//'-':  _tmuxKeyResponse(`-`),      // 2d, hyphen
 		//'_':  _tmuxKeyResponse(`_`),      // 5f, underscore
-		127: _tmuxKeyResponse(`Delete`), // 7f, del
+		127: _tmuxKeyResponse(`BSpace`), // 7f, del (browser backspace key)
 
 		AnsiUp:       _tmuxKeyResponse("Up"),
 		AnsiDown:     _tmuxKeyResponse("Down"),
