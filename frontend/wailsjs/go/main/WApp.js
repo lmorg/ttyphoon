@@ -14,6 +14,10 @@ export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
 
+export function GetAppName() {
+  return window['go']['main']['WApp']['GetAppName']();
+}
+
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }

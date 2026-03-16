@@ -9,6 +9,8 @@ export function DeleteFile(arg1:string):Promise<void>;
 
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
+export function GetAppName():Promise<string>;
+
 export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
 
 export function GetImage(arg1:string):Promise<string>;

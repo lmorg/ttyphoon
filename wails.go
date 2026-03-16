@@ -27,6 +27,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -580,6 +581,10 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 	return result
 }
 
+func (a *WApp) GetAppName() string {
+	return app.Name
+}
+
 // --------------------
 
 func (a *WApp) startup(ctx context.Context) {
@@ -659,15 +664,15 @@ func startWails() {
 			B: payload.Window.Colours.Fg.Blue,
 			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
 		},*/
-		OnStartup:  app.startup,
-		OnDomReady: app.domReady,
-		Bind:       []any{app},
-		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
-		/*Mac: &mac.Options{
-			TitleBar:             mac.TitleBarHiddenInset(),
-			WindowIsTranslucent:  true,
-			WebviewIsTransparent: true,
-		},*/
+		OnStartup:        app.startup,
+		OnDomReady:       app.domReady,
+		Bind:             []any{app},
+		BackgroundColour: &options.RGBA{0, 0, 0, 0},
+		Mac: &mac.Options{
+			TitleBar: mac.TitleBarHiddenInset(),
+			//WindowIsTranslucent:  true,
+			//WebviewIsTransparent: true,
+		},
 		/*Linux: &linux.Options{
 			WindowIsTranslucent: true,
 		},

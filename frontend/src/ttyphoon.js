@@ -1,6 +1,7 @@
 import './style.css';
 import './app.css';
 import { ScreenGetAll, WindowGetPosition, WindowGetSize, WindowSetPosition, WindowSetSize } from '../wailsjs/runtime/runtime';
+import { GetWindowStyle, GetAppName } from '../wailsjs/go/main/WApp';
 
 // Remove any body margin/padding immediately so there is no layout flash.
 document.body.style.margin = '0';
@@ -9,12 +10,60 @@ document.body.style.overflow = 'hidden';
 
 const app = document.getElementById('app') || document.body;
 
-// The split layout: notes on the left half, terminal on the right half.
-// Both panes are created synchronously here.  notes.js and terminal.js are
-// loaded as dynamic imports below, so their module bodies run *after* this
-// synchronous code — they will find #notes-pane and #terminal-pane in the DOM.
+// Setup titlebar with app name and styling
+async function setupTitlebar() {
+    let appName = 'TTyphoon';
+    let bgColor = 'rgba(30,30,30,1)';
+    let fgColor = 'rgba(255,255,255,0.87)';
+    
+    try {
+        appName = await GetAppName();
+    } catch (err) {
+        console.warn('Failed to fetch app name:', err);
+    }
+    
+    try {
+        const style = await GetWindowStyle();
+        if (style?.colors?.bg) {
+            bgColor = `rgb(${style.colors.bg.Red}, ${style.colors.bg.Green}, ${style.colors.bg.Blue})`;
+        }
+        if (style?.colors?.fg) {
+            fgColor = `rgb(${style.colors.fg.Red}, ${style.colors.fg.Green}, ${style.colors.fg.Blue})`;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch window style:', err);
+    }
+    
+    const titlebar = document.createElement('div');
+    titlebar.id = 'custom-titlebar';
+    titlebar.style.cssText = [
+        'width:100%',
+        'height:32px',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        `background:${bgColor}`,
+        'border-bottom:1px solid rgba(0,0,0,0.5)',
+        'user-select:none',
+        '-webkit-user-select:none',
+        'cursor:default',
+        '-webkit-app-region:drag',
+        'flex-shrink:0',
+        'font-family:system-ui, -apple-system, sans-serif',
+        'font-size:13px',
+        'font-weight:500',
+        `color:${fgColor}`,
+        'letter-spacing:0.3px',
+        '--wails-draggable:drag',
+    ].join(';');
+    titlebar.textContent = appName;
+    
+    return titlebar;
+}
+
 app.style.cssText = [
     'display:flex',
+    'flex-direction:column',
     'width:100vw',
     'height:100vh',
     'margin:0',
@@ -23,7 +72,56 @@ app.style.cssText = [
     'box-sizing:border-box',
 ].join(';');
 
-const notesPane = document.createElement('div');
+// Initialize titlebar and continue setup
+let titlebar;
+let contentWrapper;
+let notesPane;
+let splitHandle;
+let splitToggle;
+let terminalPane;
+
+let isDraggingSplit = false;
+let notesCollapsed = false;
+let lastNotesWidthPercent = 50;
+let lastCollapseDeltaPx = 0;
+
+(async () => {
+    //let bgColor = 'rgb(30,30,30)';
+    let borderColor = 'rgba(0,0,0,0.2)';
+    
+    titlebar = await setupTitlebar();
+    app.appendChild(titlebar);
+    
+    try {
+        const style = await GetWindowStyle();
+        if (style?.colors?.bg) {
+            const bg = style.colors.bg;
+            borderColor = `rgba(${bg.Red}, ${bg.Green}, ${bg.Blue}, 0.2)`;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch window style for borders:', err);
+    }
+
+// Content wrapper for borders and split layout
+contentWrapper = document.createElement('div');
+contentWrapper.id = 'content-wrapper';
+contentWrapper.style.cssText = [
+    'flex:1',
+    'display:flex',
+    'width:100%',
+    'height:calc(100% - 32px)',
+    `border-left:3px solid ${borderColor}`,
+    `border-right:3px solid ${borderColor}`,
+    `border-bottom:3px solid ${borderColor}`,
+    'box-sizing:border-box',
+    'overflow:hidden',
+].join(';');
+
+// The split layout: notes on the left half, terminal on the right half.
+// Both panes are created synchronously here.  notes.js and terminal.js are
+// loaded as dynamic imports below, so their module bodies run *after* this
+// synchronous code — they will find #notes-pane and #terminal-pane in the DOM.
+notesPane = document.createElement('div');
 notesPane.id = 'notes-pane';
 notesPane.style.cssText = [
     'width:50%',
@@ -38,7 +136,7 @@ notesPane.style.cssText = [
     'flex-shrink:0',
 ].join(';');
 
-const splitHandle = document.createElement('div');
+splitHandle = document.createElement('div');
 splitHandle.id = 'notes-terminal-split';
 splitHandle.style.cssText = [
     'width:8px',
@@ -63,7 +161,7 @@ splitHandleLine.style.cssText = [
 ].join(';');
 splitHandle.appendChild(splitHandleLine);
 
-const splitToggle = document.createElement('button');
+splitToggle = document.createElement('button');
 splitToggle.type = 'button';
 splitToggle.id = 'notes-terminal-toggle';
 splitToggle.setAttribute('aria-label', 'Collapse notes pane');
@@ -85,10 +183,11 @@ splitToggle.style.cssText = [
     'line-height:1',
     'cursor:pointer',
     'z-index:2',
+    '-webkit-app-region:no-drag',
 ].join(';');
 splitHandle.appendChild(splitToggle);
 
-const terminalPane = document.createElement('div');
+terminalPane = document.createElement('div');
 terminalPane.id = 'terminal-pane';
 terminalPane.style.cssText = [
     'flex:1',
@@ -98,14 +197,34 @@ terminalPane.style.cssText = [
     'min-width:0',
 ].join(';');
 
-app.appendChild(notesPane);
-app.appendChild(splitHandle);
-app.appendChild(terminalPane);
+contentWrapper.appendChild(notesPane);
+contentWrapper.appendChild(splitHandle);
+contentWrapper.appendChild(terminalPane);
 
-let isDraggingSplit = false;
-let notesCollapsed = false;
-let lastNotesWidthPercent = 50;
-let lastCollapseDeltaPx = 0;
+app.appendChild(contentWrapper);
+
+// Setup event listeners after DOM elements are created
+splitHandle.addEventListener('mousedown', (event) => {
+    if (event.target === splitToggle) {
+        return;
+    }
+
+    if (event.button !== 0) {
+        return;
+    }
+
+    isDraggingSplit = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    event.preventDefault();
+});
+
+splitToggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleNotesPaneCollapsed();
+});
+})();
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -230,21 +349,6 @@ function toggleNotesPaneCollapsed() {
     //window.dispatchEvent(new Event('resize'));
 }
 
-splitHandle.addEventListener('mousedown', (event) => {
-    if (event.target === splitToggle) {
-        return;
-    }
-
-    if (event.button !== 0) {
-        return;
-    }
-
-    isDraggingSplit = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    event.preventDefault();
-});
-
 window.addEventListener('mousemove', (event) => {
     if (!isDraggingSplit) {
         return;
@@ -261,12 +365,6 @@ window.addEventListener('mouseup', () => {
     isDraggingSplit = false;
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-});
-
-splitToggle.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    toggleNotesPaneCollapsed();
 });
 
 // Dynamic imports — the promises resolve asynchronously, but the resolution
