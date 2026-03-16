@@ -39,6 +39,7 @@ type webkitRender struct {
 	menuCallbacks  map[int]menuCallbacks
 	notifications  notifyT
 	inputBoxes     inputBoxesT
+	nextImageID    atomic.Int64
 	lastMouseCellX atomic.Int32
 	lastMouseCellY atomic.Int32
 	lastMouseValid atomic.Bool
@@ -58,6 +59,14 @@ func (wr *webkitRender) GetWindowSizeCells() *types.XY {
 
 func (wr *webkitRender) GetGlyphSize() *types.XY {
 	return wr.glyphSize
+}
+
+func (wr *webkitRender) SetGlyphSize(width, height int32) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+
+	wr.glyphSize = &types.XY{X: width, Y: height}
 }
 
 func (wr *webkitRender) GetBlinkState() bool {

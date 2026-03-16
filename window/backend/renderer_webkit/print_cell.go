@@ -7,6 +7,7 @@ type DrawOp string
 const (
 	DrawOpFrame       DrawOp = "frame"
 	DrawOpCell        DrawOp = "cell"
+	DrawOpImage       DrawOp = "image"
 	DrawOpGaugeH      DrawOp = "gauge_h"
 	DrawOpGaugeV      DrawOp = "gauge_v"
 	DrawOpBlockChrome DrawOp = "block_chrome"
@@ -33,6 +34,11 @@ type DrawCommand struct {
 	Max       int32         `json:"max"`
 	Folded    bool          `json:"folded,omitempty"`
 	Alpha     uint8         `json:"alpha,omitempty"`
+	ImageID   int64         `json:"imageId,omitempty"`
+	SrcWidth  int32         `json:"srcWidth,omitempty"`
+	SrcHeight int32         `json:"srcHeight,omitempty"`
+	SrcScaleX float64       `json:"srcScaleX,omitempty"`
+	SrcScaleY float64       `json:"srcScaleY,omitempty"`
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {

@@ -118,6 +118,10 @@ export function TerminalSelectWindow(arg1) {
   return window['go']['main']['WApp']['TerminalSelectWindow'](arg1);
 }
 
+export function TerminalSetGlyphSize(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalSetGlyphSize'](arg1, arg2);
+}
+
 export function TerminalTextInput(arg1) {
   return window['go']['main']['WApp']['TerminalTextInput'](arg1);
 }

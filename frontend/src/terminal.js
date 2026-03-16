@@ -1,4 +1,4 @@
-import { GetWindowStyle, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -26,6 +26,7 @@ const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
 let tabState = [];
+const imageCache = new Map();
 
 if (tabsEl) {
     // Convert wheel up/down into horizontal scrolling so hidden tabs are reachable.
@@ -234,6 +235,15 @@ function getCommandBoundsCells(cmd) {
         return { x, y, width, height: height + 1 };
     }
 
+    case 'image': {
+        const width = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
+        const height = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+        return { x, y, width, height };
+    }
+
     case 'highlight_rect':
     case 'rect_colour':
     case 'tile_overlay': {
@@ -248,6 +258,62 @@ function getCommandBoundsCells(cmd) {
     default:
         return null;
     }
+}
+
+function getOrLoadImageById(imageId) {
+    if (!Number.isFinite(imageId)) {
+        return null;
+    }
+
+    return imageCache.get(imageId) || null;
+}
+
+function drawImageCommand(cmd) {
+    if (!offCtx) {
+        return;
+    }
+
+    const imageId = Number.isFinite(cmd.imageId) ? cmd.imageId : Number.NaN;
+    const img = getOrLoadImageById(imageId);
+    if (!img || !img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+        return;
+    }
+
+    const { cellWidth, cellHeight } = font.getCellSize();
+    const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
+    const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
+    const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
+
+    if (widthCells <= 0 || heightCells <= 0) {
+        return;
+    }
+
+    const scaleX = Number.isFinite(cmd.srcScaleX) && cmd.srcScaleX > 0
+        ? Math.min(1, cmd.srcScaleX)
+        : null;
+    const scaleY = Number.isFinite(cmd.srcScaleY) && cmd.srcScaleY > 0
+        ? Math.min(1, cmd.srcScaleY)
+        : null;
+
+    const srcWidth = scaleX !== null
+        ? Math.max(1, Math.round(img.naturalWidth * scaleX))
+        : (Number.isFinite(cmd.srcWidth) && cmd.srcWidth > 0 ? cmd.srcWidth : img.naturalWidth);
+    const srcHeight = scaleY !== null
+        ? Math.max(1, Math.round(img.naturalHeight * scaleY))
+        : (Number.isFinite(cmd.srcHeight) && cmd.srcHeight > 0 ? cmd.srcHeight : img.naturalHeight);
+
+    offCtx.drawImage(
+        img,
+        0,
+        0,
+        Math.min(srcWidth, img.naturalWidth),
+        Math.min(srcHeight, img.naturalHeight),
+        xCell * cellWidth,
+        yCell * cellHeight,
+        widthCells * cellWidth,
+        heightCells * cellHeight,
+    );
 }
 
 function getDrawOpsBoundsCells(drawOps) {
@@ -410,6 +476,37 @@ EventsOn("setCursor", css => {
     canvas.style.cursor = css;
 });
 
+EventsOn("terminalImageCachePut", payload => {
+    const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    const imageId = Number(data?.id);
+    const imageData = data?.data;
+
+    if (!Number.isFinite(imageId) || typeof imageData !== 'string' || imageData.length === 0) {
+        return;
+    }
+
+    const img = new Image();
+    imageCache.set(imageId, img);
+    img.onload = () => {
+        TerminalRequestRedraw().catch(() => {});
+    };
+    img.src = imageData;
+});
+
+EventsOn("terminalImageCacheDelete", payload => {
+    const raw = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    const imageId = Number(raw);
+    if (!Number.isFinite(imageId)) {
+        return;
+    }
+
+    const img = imageCache.get(imageId);
+    if (img) {
+        img.src = '';
+    }
+    imageCache.delete(imageId);
+});
+
 EventsOn("terminalRedraw", ops => {
     if (rafPending) {
         return;
@@ -432,6 +529,10 @@ EventsOn("terminalRedraw", ops => {
         }
         if (cmd.op === 'cell') {
             drawCell(cmd);
+            continue;
+        }
+        if (cmd.op === 'image') {
+            drawImageCommand(cmd);
             continue;
         }
         if (cmd.op === 'gauge_h' || cmd.op === 'gauge_v') {
@@ -472,6 +573,9 @@ GetWindowStyle().then((result) => {
     font.applyConfiguredFontFromWindowStyle(windowStyle);
     fitCanvasToWindow();
     font.loadGlyphSizeFromGo(windowStyle).then(() => {
+        const { cellWidth, cellHeight } = font.getCellSize();
+        TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+
         //drawFrame();
         wireKeyboardEvents(canvas);
         wireMouseEvents(canvas, font.getCellSize);

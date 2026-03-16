@@ -281,6 +281,15 @@ func (a *WApp) TerminalResize(cols, rows int32) {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) TerminalSetGlyphSize(width, height int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.SetGlyphSize(width, height)
+}
+
 func (a *WApp) TerminalGetTabs() []map[string]any {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
