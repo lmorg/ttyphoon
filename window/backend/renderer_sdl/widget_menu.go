@@ -167,6 +167,9 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 	sr.displayMenu(title, options, nil, highlightCallback, selectCallback, cancelCallback)
 }
 
+func (sr *sdlRender) DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32) {
+	// No-op for SDL renderer. SDL fullscreen display would need separate window management.
+}
 func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	if len(options) == 0 {
 		sr.DisplayNotification(types.NOTIFY_WARN, "Nothing to show in menu")

@@ -64,6 +64,7 @@ type Renderer interface {
 	//ShowPreview(string)
 	//HidePreview()
 	NotesCreateAndOpen(filename, contents string)
+	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	Close()
 }
 

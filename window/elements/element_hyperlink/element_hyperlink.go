@@ -360,7 +360,7 @@ func (el *ElementHyperlink) MouseOut() {
 }
 
 func (el *ElementHyperlink) MouseHover(_ *types.XY, _ *types.XY) func() {
-	if !config.Config.Window.HoverEffectHighlight {
+	if el == nil || !config.Config.Window.HoverEffectHighlight {
 		return func() {}
 	}
 

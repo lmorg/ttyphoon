@@ -217,6 +217,16 @@ func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 	})
 }
 
+func (wr *webkitRender) DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32) {
+	if wr.wapp == nil || dataURL == "" {
+		return
+	}
+	runtime.EventsEmit(wr.wapp, "imageDisplayFullscreen", map[string]any{
+		"dataURL":      dataURL,
+		"sourceWidth":  sourceWidth,
+		"sourceHeight": sourceHeight,
+	})
+}
 func (wr *webkitRender) Close() {}
 
 func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {

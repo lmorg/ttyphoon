@@ -1,89 +1,31 @@
 package element_image
 
-import (
-	"fmt"
 
-	"github.com/lmorg/ttyphoon/app"
-	"github.com/veandco/go-sdl2/sdl"
-)
-
+// fullscreen displays the image in a fullscreen overlay for WebKit.
+//
+// The image asset is extracted and displayed in a scrollable, fullscreen overlay
+// in the frontend (JavaScript). The overlay can be closed by pressing ESC or
+// clicking outside the image. All keystrokes are captured by the overlay.
+//
+// This implementation is portable and can be reused for other overlays (e.g., notes).
 func (el *ElementImage) fullscreen() error {
-	mouseX, mouseY, _ := sdl.GetGlobalMouseState()
-	window, err := sdl.CreateWindow(
-		app.Name,
-		mouseX, mouseY, 0, 0,
-		sdl.WINDOW_SHOWN|sdl.WINDOW_FULLSCREEN_DESKTOP|sdl.WINDOW_ALWAYS_ON_TOP,
-	)
-	if err != nil {
-		return err
-	}
-	defer el.renderer.ShowAndFocusWindow()
-	defer window.Destroy()
-
-	winID, _ := window.GetID()
-
-	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
-	if err != nil {
-		return err
-	}
-	defer renderer.Destroy()
-
-	imgSurface, ok := el.image.Asset().(*sdl.Surface)
-	if !ok {
-		return fmt.Errorf("image asset is not a surface")
-	}
-	//defer imgSurface.Free() // don't free because it's a pointer
-
-	texture, err := renderer.CreateTextureFromSurface(imgSurface)
-	if err != nil {
-		return err
+	if el.image == nil {
+		return nil
 	}
 
-	winW, winH := window.GetSize()
-	srcRect := &sdl.Rect{W: imgSurface.W, H: imgSurface.H}
-
-	imgH := winH
-	imgW := int32((float64(imgSurface.W) / float64(imgSurface.H)) * float64(winH))
-
-	if imgW > winW {
-		imgW = winW
-		imgH = int32((float64(imgSurface.H) / float64(imgSurface.W)) * float64(winW))
+	// Extract data URL and dimensions from the image
+	dataURL, ok := el.image.Asset().(string)
+	if !ok || dataURL == "" {
+		return nil
 	}
 
-	x := (winW / 2) - (imgW / 2)
-	y := (winH / 2) - (imgH / 2)
-	destRect := &sdl.Rect{X: x, Y: y, W: imgW, H: imgH}
-
-	err = renderer.Copy(texture, srcRect, destRect)
-	if err != nil {
-		return err
+	size := el.image.Size()
+	if size == nil {
+		return nil
 	}
 
-	renderer.Present()
-
-	for {
-		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch evt := event.(type) {
-
-			case sdl.QuitEvent:
-				return nil
-
-			case sdl.KeyboardEvent:
-				return nil
-
-			case sdl.MouseButtonEvent:
-				if evt.State == sdl.PRESSED {
-					continue
-				}
-				return nil
-
-			case sdl.WindowEvent:
-				if evt.Event == sdl.WINDOWEVENT_FOCUS_LOST && evt.WindowID == winID {
-					return nil
-				}
-			}
-		}
-
-		sdl.Delay(15)
-	}
+	el.renderer.DisplayImageFullscreen(dataURL, size.X, size.Y)
+	// Display the fullscreen overlay through the renderer
+	el.renderer.DisplayImageFullscreen(dataURL, size.X, size.Y)
+	return nil
 }
