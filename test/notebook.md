@@ -9,7 +9,7 @@ This will output a hello world program
 ### bash
 
 ```bash
-git commit -am "jupyter: add line numbers to jupyter blocks"
+git status
 ```
 
 ### sh
