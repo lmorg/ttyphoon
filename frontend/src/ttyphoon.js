@@ -10,30 +10,8 @@ document.body.style.overflow = 'hidden';
 
 const app = document.getElementById('app') || document.body;
 
-// Setup titlebar with app name and styling
-async function setupTitlebar() {
-    let appName = 'loading...';
-    let bgColor = 'rgba(30,30,30,1)';
-    let fgColor = 'rgba(255,255,255,0.87)';
-    
-    try {
-        appName = await GetAppTitle();
-    } catch (err) {
-        console.warn('Failed to fetch app name:', err);
-    }
-    
-    try {
-        const style = await GetWindowStyle();
-        if (style?.colors?.bg) {
-            bgColor = `rgb(${style.colors.bg.Red}, ${style.colors.bg.Green}, ${style.colors.bg.Blue})`;
-        }
-        if (style?.colors?.fg) {
-            fgColor = `rgb(${style.colors.fg.Red}, ${style.colors.fg.Green}, ${style.colors.fg.Blue})`;
-        }
-    } catch (err) {
-        console.warn('Failed to fetch window style:', err);
-    }
-    
+// Setup titlebar shell synchronously to avoid startup race conditions.
+function setupTitlebar() {
     const titlebar = document.createElement('div');
     titlebar.id = 'custom-titlebar';
     titlebar.style.cssText = [
@@ -42,7 +20,7 @@ async function setupTitlebar() {
         'display:flex',
         'align-items:center',
         'justify-content:center',
-        `background:${bgColor}`,
+        'background:rgba(30,30,30,1)',
         'border-bottom:1px solid rgba(0,0,0,0.5)',
         'user-select:none',
         '-webkit-user-select:none',
@@ -52,13 +30,52 @@ async function setupTitlebar() {
         'font-family:system-ui, -apple-system, sans-serif',
         'font-size:13px',
         'font-weight:500',
-        `color:${fgColor}`,
+        'color:rgba(255,255,255,0.87)',
         'letter-spacing:0.3px',
         '--wails-draggable:drag',
     ].join(';');
-    titlebar.textContent = appName;
+    titlebar.textContent = 'loading...';
     
     return titlebar;
+}
+
+async function hydrateTitlebarAndBorders() {
+    let appName = 'TTYphoon';
+    let bgColor = 'rgba(30,30,30,1)';
+    let fgColor = 'rgba(255,255,255,0.87)';
+    let borderColor = 'rgba(0,0,0,0.2)';
+
+    try {
+        appName = await GetAppTitle();
+    } catch (err) {
+        console.warn('Failed to fetch app name:', err);
+    }
+
+    try {
+        const style = await GetWindowStyle();
+        if (style?.colors?.bg) {
+            const bg = style.colors.bg;
+            bgColor = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+            borderColor = `rgba(${bg.Red}, ${bg.Green}, ${bg.Blue}, 0.2)`;
+        }
+        if (style?.colors?.fg) {
+            fgColor = `rgb(${style.colors.fg.Red}, ${style.colors.fg.Green}, ${style.colors.fg.Blue})`;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch window style:', err);
+    }
+
+    if (titlebar) {
+        titlebar.textContent = appName;
+        titlebar.style.background = bgColor;
+        titlebar.style.color = fgColor;
+    }
+
+    if (contentWrapper) {
+        contentWrapper.style.borderLeft = `3px solid ${borderColor}`;
+        contentWrapper.style.borderRight = `3px solid ${borderColor}`;
+        contentWrapper.style.borderBottom = `3px solid ${borderColor}`;
+    }
 }
 
 app.style.cssText = [
@@ -86,21 +103,8 @@ let lastNotesWidthPercent = 50;
 let lastCollapseDeltaPx = 0;
 
 (async () => {
-    //let bgColor = 'rgb(30,30,30)';
-    let borderColor = 'rgba(0,0,0,0.2)';
-    
-    titlebar = await setupTitlebar();
+    titlebar = setupTitlebar();
     app.appendChild(titlebar);
-    
-    try {
-        const style = await GetWindowStyle();
-        if (style?.colors?.bg) {
-            const bg = style.colors.bg;
-            borderColor = `rgba(${bg.Red}, ${bg.Green}, ${bg.Blue}, 0.2)`;
-        }
-    } catch (err) {
-        console.warn('Failed to fetch window style for borders:', err);
-    }
 
 // Content wrapper for borders and split layout
 contentWrapper = document.createElement('div');
@@ -110,9 +114,9 @@ contentWrapper.style.cssText = [
     'display:flex',
     'width:100%',
     'height:calc(100% - 32px)',
-    `border-left:3px solid ${borderColor}`,
-    `border-right:3px solid ${borderColor}`,
-    `border-bottom:3px solid ${borderColor}`,
+    'border-left:3px solid rgba(0,0,0,0.2)',
+    'border-right:3px solid rgba(0,0,0,0.2)',
+    'border-bottom:3px solid rgba(0,0,0,0.2)',
     'box-sizing:border-box',
     'overflow:hidden',
 ].join(';');
@@ -224,6 +228,9 @@ splitToggle.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleNotesPaneCollapsed();
 });
+
+    // Update titlebar text and colors asynchronously after shell render.
+    void hydrateTitlebarAndBorders();
 })();
 
 function clamp(value, min, max) {

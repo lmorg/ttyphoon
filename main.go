@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/app"
@@ -11,6 +12,13 @@ import (
 )
 
 func main() {
+	if runtime.GOOS == "darwin" {
+		err := os.Setenv("PATH", "PATH="+os.Getenv("PATH")+":/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin")
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	loadEnvs()
 
 	/*switch dispatcher.AppTypeT(os.Getenv(dispatcher.ENV_APP)) {
