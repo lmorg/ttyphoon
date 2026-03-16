@@ -1,4 +1,4 @@
-package rendersdl
+package rendererwebkit
 
 import (
 	"fmt"
@@ -6,22 +6,21 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
-	"golang.design/x/hotkey"
 )
 
-type hotkeyFuncT struct {
+/*type hotkeyFuncT struct {
 	Key  hotkey.Key
 	Mod  []hotkey.Modifier
 	Func func()
 	hk   *hotkey.Hotkey
-}
+}*/
 
-func (sr *sdlRender) _registerHotkey(hks ...*hotkeyFuncT) {
+/*func (wr *webkitRender) _registerHotkey(hks ...*hotkeyFuncT) {
 	for _, hk := range hks {
 		hk.hk = hotkey.New(hk.Mod, hk.Key)
 		err := hk.hk.Register()
 		if err != nil {
-			sr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey %s: %s", hk.hk.String(), err.Error()))
+			wr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey %s: %s", hk.hk.String(), err.Error()))
 		} else {
 			go func() {
 				for range hk.hk.Keydown() {
@@ -30,9 +29,9 @@ func (sr *sdlRender) _registerHotkey(hks ...*hotkeyFuncT) {
 			}()
 		}
 	}
-}
+}*/
 
-func (sr *sdlRender) eventHotkeyShowHideTerminal() {
+/*func (wr *webkitRender) eventHotkeyShowHideTerminal() {
 	sr.TriggerDeallocation(func() {
 		if sr.hkToggle {
 			sr.hideWindow()
@@ -41,9 +40,9 @@ func (sr *sdlRender) eventHotkeyShowHideTerminal() {
 		}
 		sr.hkToggle = !sr.hkToggle
 	})
-}
+}*/
 
-func (sr *sdlRender) hotkeys() {
+func (wr *webkitRender) hotkeys() {
 	var (
 		conf = config.Config.Hotkeys.Functions.Scan()
 		fn   func()
@@ -53,7 +52,7 @@ func (sr *sdlRender) hotkeys() {
 	for _, hk := range conf {
 
 		switch hk.Function {
-		case "Settings":
+		/*case "Settings":
 			fn = func() { sr.UpdateConfig() }
 			desc = "Settings..."
 		case "ReloadSettings":
@@ -67,46 +66,46 @@ func (sr *sdlRender) hotkeys() {
 				sr.cacheBgTexture.Destroy(sr)
 				sr.DisplayNotification(types.NOTIFY_INFO, "Settings have been reloaded from disk")
 			}
-			desc = "Reload settings from disk"
+			desc = "Reload settings from disk"*/
 
-		case "Paste":
+		/*case "Paste":
 			fn = func() { sr.clipboardPaste() }
 			desc = "Paste from clipboard"
 		case "VisualEditor":
 			fn = func() { sr.VisualEditor() }
-			desc = "Visual editor..."
+			desc = "Visual editor..."*/
 
-		case "AskAI":
+		/*case "AskAI":
 			fn = func() { askAi(sr) }
 			desc = "Ask AI..."
 		case "AgentSkills":
 			fn = func() { askAiSkill(sr) }
-			desc = "Ask AI with Agent Skill..."
+			desc = "Ask AI with Agent Skill..."*/
 
 		case "SearchRegex":
-			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }
+			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }
 			desc = "Search terminal output for regex match..."
 		case "SearchResults":
-			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_RESULTS) }
+			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_RESULTS) }
 			desc = "View search results..."
 		case "SearchClear":
-			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CLEAR) }
+			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_CLEAR) }
 			desc = "Clear search results"
 		case "SearchAIPrompts":
-			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_AI_PROMPTS) }
+			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_AI_PROMPTS) }
 			desc = "Search AI prompts..."
 		case "SearchCommandLines":
-			fn = func() { sr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
+			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
 			desc = "Search command line history..."
-		case "OpenHistory":
-			fn = func() { sr.OpenHistory(sr.termWin.Active) }
+		/*case "OpenHistory":
+			fn = func() { wr.OpenHistory(sr.termWin.Active) }
 			desc = "Open history..."
 		case "OpenNotes":
-			fn = func() { sr.openNotes() }
-			desc = "Open notes..."
+			fn = func() { wr.openNotes() }
+			desc = "Open notes..."*/
 
 		default:
-			sr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
+			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
 			continue
 		}
 		hotkeys.Add(hk.Prefix, hk.Hotkey, fn, desc)

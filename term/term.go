@@ -356,6 +356,8 @@ func (term *Term) updateScrollback() {
 	if term._scrollOffset < 0 {
 		term._scrollOffset = 0
 	}
+
+	term.renderer.TriggerRedraw()
 }
 
 func (term *Term) HasFocus(state bool) {

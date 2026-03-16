@@ -34,6 +34,8 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 		wr.tmux = tc
 	}
 
+	wr.hotkeys()
+
 	go func() {
 		for {
 			select {
