@@ -2,27 +2,16 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 
-	"github.com/adrg/xdg"
-	"github.com/lmorg/ttyphoon/app"
-	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
-	"github.com/lmorg/ttyphoon/debug/pprof"
-	"github.com/lmorg/ttyphoon/tmux"
-	"github.com/lmorg/ttyphoon/utils/cache"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/utils/file"
-	"github.com/lmorg/ttyphoon/window/backend"
-	"github.com/lmorg/ttyphoon/window/backend/typeface"
 )
 
+/*
 func startSdl() {
 	pprof.Start()
 	defer pprof.CleanUp()
@@ -114,8 +103,8 @@ func regularSession() {
 
 	   tile.Term.Start(pty)
 	   backend.Start(renderer, appWin, nil)
-	*/
-}
+*/
+//}
 
 func loadEnvs() {
 	files := file.GetConfigFiles("/", ".env")

@@ -2,14 +2,10 @@ package rendersdl
 
 import (
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_codeblock"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_hyperlink"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_image"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_table"
 )
 
 func (sr *sdlRender) NewElement(tile types.Tile, id types.ElementID) types.Element {
-	switch id {
+	/*switch id {
 	case types.ELEMENT_ID_IMAGE:
 		return element_image.NewBitmap(sr, tile, sr.loadImage)
 
@@ -26,9 +22,9 @@ func (sr *sdlRender) NewElement(tile types.Tile, id types.ElementID) types.Eleme
 		return element_hyperlink.New(sr, tile)
 
 	case types.ELEMENT_ID_CODEBLOCK:
-		return element_codeblock.New(sr, tile)
+		return element_codeblock.New(sr, tile)*/
 
-	default:
-		return nil
-	}
+	//default:
+	return nil
+	//}
 }

@@ -1,4 +1,4 @@
-export namespace dispatcher {
+export namespace main {
 	
 	export class ColoursT {
 	    fg: types.Colour;

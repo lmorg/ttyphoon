@@ -29,10 +29,10 @@ func Explain(agent *agent.Agent, promptDialogue bool) {
 	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
-const _STICKY_MESSAGE = "Asking %s.... "
+const _STICKY_MESSAGE = "Asking %s.... %s"
 
 var _STICKY_SPINNER = []string{
-	"🤔", "",
+	"⣾", "⡥", "⡤", "⢀", "⡴", "⡪", "⢔", "⢙", "⢼", "⣊", "⣥", "⡼", "⡹", "⡵", "⠿",
 }
 
 func AskAI(agent *agent.Agent, prompt string) {
@@ -43,11 +43,14 @@ func AskAI(agent *agent.Agent, prompt string) {
 
 func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	insertAfterRowId := agent.Term().GetRowId(agent.Term().GetCursorPosition().Y - 1)
-	stickyMessage := fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName())
-	sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, stickyMessage, func() {})
+	sticky := agent.Renderer().DisplaySticky(
+		types.NOTIFY_INFO,
+		fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName(), _STICKY_SPINNER[0]),
+		func() {},
+	)
 
 	fin := make(chan struct{})
-	var i int
+	i := 1
 
 	go func() {
 		for {
@@ -56,7 +59,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 				sticky.Close()
 				return
 			case <-time.After(500 * time.Millisecond):
-				sticky.SetMessage(fmt.Sprintf("%s %s", stickyMessage, _STICKY_SPINNER[i]))
+				sticky.SetMessage(fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName(), _STICKY_SPINNER[i]))
 				agent.Renderer().TriggerRedraw()
 				i++
 				if i >= len(_STICKY_SPINNER) {

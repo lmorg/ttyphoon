@@ -12,7 +12,9 @@ import (
 
 func askAi(wr *webkitRender) {
 	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &agent.Meta{
+		NotesDisplay: true,
+	}
 
 	wr.DisplayInputBoxW(&DisplayInputBoxWT{
 		Options: DisplayInputBoxWTOptions{

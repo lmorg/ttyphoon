@@ -1,39 +1,69 @@
 package dispatcher
 
-const ENV_WINDOW = "MXTTY_WINDOW"
-
-const ENV_PARAMETERS = "MXTTY_PARAMETERS"
-
-type WindowTypeT string
-
-const (
-	WindowTerminal WindowTypeT = "terminal"
-	WindowInputBox WindowTypeT = "inputBox"
-	WindowMarkdown WindowTypeT = "markdown"
-	WindowHistory  WindowTypeT = "history"
-	WindowPreview  WindowTypeT = "preview"
-	WindowNotes    WindowTypeT = "notes"
+import (
+	"fmt"
+	"os"
+	"os/exec"
 )
 
-type PInputBoxT struct {
-	Title        string   `json:"title"`
-	Prefill      string   `json:"prefill"`
-	Placeholder  string   `json:"placeholder"`
-	History      []string `json:"history"`
-	NotesDisplay bool     `json:"notesDisplay"`
-	NotesDefault bool     `json:"notesDefault"`
+const ENV_APP = "MXTTY_APP"
+
+type AppTypeT string
+
+const (
+	AppGlobalHotkeys AppTypeT = "globalHotkeys"
+)
+
+func StartApp(app AppTypeT, callback RespFunc) (*IpcT, func()) {
+	exe, err := os.Executable()
+	if err != nil {
+		callback(&IpcMessageT{Error: err})
+		return nil, nil
+	}
+
+	cmd := exec.Command(exe)
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("%s=%s", ENV_APP, app),
+	)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		panic(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		panic(err)
+	}
+
+	ipc := &IpcT{
+		r:        stdout,
+		w:        stdin,
+		respFunc: callback,
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		callback(&IpcMessageT{Error: err})
+		return nil, nil
+	}
+
+	cleanUp := func() { _ = cmd.Process.Kill() }
+	cleanUpFuncs = append(cleanUpFuncs, cleanUp)
+
+	go ipc.listen()
+
+	return ipc, cleanUp
 }
 
-type PMarkdownT struct {
-	Path string `json:"path"`
-}
+func GetIpc(callback RespFunc) *IpcT {
+	ipc := &IpcT{
+		r:        os.Stdin,
+		w:        os.Stdout,
+		respFunc: callback,
+	}
 
-type PPreviewT struct{}
+	go ipc.listen()
 
-type PNotesT struct {
-	ProjectRoot string `json:"projectRoot"`
-	UserNotes   string `json:"userNotes"`
-	Title       string `json:"title"`
-	Filename    string `json:"filename"`
-	Content     string `json:"content"`
+	return ipc
 }

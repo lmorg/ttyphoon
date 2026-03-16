@@ -8,40 +8,6 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-/*type hotkeyFuncT struct {
-	Key  hotkey.Key
-	Mod  []hotkey.Modifier
-	Func func()
-	hk   *hotkey.Hotkey
-}*/
-
-/*func (wr *webkitRender) _registerHotkey(hks ...*hotkeyFuncT) {
-	for _, hk := range hks {
-		hk.hk = hotkey.New(hk.Mod, hk.Key)
-		err := hk.hk.Register()
-		if err != nil {
-			wr.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Unable to set hotkey %s: %s", hk.hk.String(), err.Error()))
-		} else {
-			go func() {
-				for range hk.hk.Keydown() {
-					sr.hkEvent <- hk
-				}
-			}()
-		}
-	}
-}*/
-
-/*func (wr *webkitRender) eventHotkeyShowHideTerminal() {
-	sr.TriggerDeallocation(func() {
-		if sr.hkToggle {
-			sr.hideWindow()
-		} else {
-			sr.ShowAndFocusWindow()
-		}
-		sr.hkToggle = !sr.hkToggle
-	})
-}*/
-
 func (wr *webkitRender) hotkeys() {
 	var (
 		conf = config.Config.Hotkeys.Functions.Scan()

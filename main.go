@@ -13,6 +13,12 @@ import (
 func main() {
 	loadEnvs()
 
+	/*switch dispatcher.AppTypeT(os.Getenv(dispatcher.ENV_APP)) {
+	case dispatcher.AppGlobalHotkeys:
+		globalhotkeys.Register()
+		return
+	}*/
+
 	cacheDbFile := "cache.db"
 	cacheDbPath, err := xdg.CacheFile(cacheDbFile)
 	if err != nil {
@@ -22,7 +28,7 @@ func main() {
 	cache.SetPath(cacheDbPath)
 	cache.InitCache()
 
-	startWails()
+	//defer dispatcher.CleanUp()
 
-	//startSdl()
+	startWails()
 }

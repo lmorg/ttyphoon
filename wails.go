@@ -20,7 +20,7 @@ import (
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
+	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/window/backend"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
@@ -32,13 +32,6 @@ import (
 
 //go:embed all:frontend/dist
 var wailsAssets embed.FS
-
-type pStructT struct {
-	inputBox *dispatcher.PInputBoxT
-	markdown *dispatcher.PMarkdownT
-	preview  *dispatcher.PPreviewT
-	notes    *dispatcher.PNotesT
-}
 
 // App struct
 type WApp struct {
@@ -98,8 +91,76 @@ func NewWailsApp() *WApp {
 	return a
 }
 
-func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
-	return *dispatcher.NewWindowStyle()
+type WindowStyleT struct {
+	Colours          *ColoursT `json:"colors"`
+	FontFamily       string    `json:"fontFamily"`
+	FontSize         int       `json:"fontSize"`
+	AdjustCellWidth  int       `json:"adjustCellWidth"`
+	AdjustCellHeight int       `json:"adjustCellHeight"`
+}
+
+type ColoursT struct {
+	Fg            types.Colour `json:"fg"`
+	Bg            types.Colour `json:"bg"`
+	Black         types.Colour `json:"black"`
+	Red           types.Colour `json:"red"`
+	Green         types.Colour `json:"green"`
+	Yellow        types.Colour `json:"yellow"`
+	Blue          types.Colour `json:"blue"`
+	Magenta       types.Colour `json:"magenta"`
+	Cyan          types.Colour `json:"cyan"`
+	White         types.Colour `json:"white"`
+	BlackBright   types.Colour `json:"blackBright"`
+	RedBright     types.Colour `json:"redBright"`
+	GreenBright   types.Colour `json:"greenBright"`
+	YellowBright  types.Colour `json:"yellowBright"`
+	BlueBright    types.Colour `json:"blueBright"`
+	MagentaBright types.Colour `json:"magentaBright"`
+	CyanBright    types.Colour `json:"cyanBright"`
+	WhiteBright   types.Colour `json:"whiteBright"`
+	Selection     types.Colour `json:"selection"`
+	Link          types.Colour `json:"link"`
+	Error         types.Colour `json:"error"`
+}
+
+func NewWindowStyle() *WindowStyleT {
+	fontFamily := config.Config.TypeFace.FontName
+	if fontFamily == "" {
+		fontFamily = "Fira Code"
+	}
+	return &WindowStyleT{
+		Colours: &ColoursT{
+			Fg:            *types.SGR_DEFAULT.Fg,
+			Bg:            *types.SGR_DEFAULT.Bg,
+			Black:         *types.SGR_COLOR_BLACK,
+			Red:           *types.SGR_COLOR_RED,
+			Green:         *types.SGR_COLOR_GREEN,
+			Yellow:        *types.SGR_COLOR_YELLOW,
+			Blue:          *types.SGR_COLOR_BLUE,
+			Magenta:       *types.SGR_COLOR_MAGENTA,
+			Cyan:          *types.SGR_COLOR_CYAN,
+			White:         *types.SGR_COLOR_WHITE,
+			BlackBright:   *types.SGR_COLOR_BLACK_BRIGHT,
+			RedBright:     *types.SGR_COLOR_RED_BRIGHT,
+			GreenBright:   *types.SGR_COLOR_GREEN_BRIGHT,
+			YellowBright:  *types.SGR_COLOR_YELLOW_BRIGHT,
+			BlueBright:    *types.SGR_COLOR_BLUE_BRIGHT,
+			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
+			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
+			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
+			Selection:     *types.COLOR_SELECTION,
+			Link:          *types.SGR_COLOR_BLUE,
+			Error:         *types.COLOR_ERROR,
+		},
+		FontFamily:       fmt.Sprintf(`"%s", monospace`, fontFamily),
+		FontSize:         config.Config.TypeFace.FontSize,
+		AdjustCellWidth:  config.Config.TypeFace.AdjustCellWidth,
+		AdjustCellHeight: config.Config.TypeFace.AdjustCellHeight,
+	}
+}
+
+func (a *WApp) GetWindowStyle() WindowStyleT {
+	return *NewWindowStyle()
 }
 
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
@@ -112,6 +173,25 @@ func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	}
 
 	return nil
+}
+
+func (a *WApp) WindowShow() {
+	a.visible = true
+	runtime.WindowShow(a.ctx)
+}
+
+func (a *WApp) WindowHide() {
+	a.visible = false
+	runtime.WindowHide(a.ctx)
+}
+
+func (a *WApp) WindowShowHide() {
+	a.visible = !a.visible
+	if a.visible {
+		a.WindowShow()
+	} else {
+		a.WindowHide()
+	}
 }
 
 func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
@@ -270,43 +350,6 @@ func (a *WApp) startTerminalWindow() {
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 	// todo
-}
-
-func (a *WApp) WindowShow() {
-	a.visible = true
-	runtime.WindowSetPosition(a.ctx, 0, 0)
-	runtime.WindowShow(a.ctx)
-	runtime.WindowSetPosition(a.ctx, 0, 0)
-}
-
-func (a *WApp) WindowHide() {
-	a.visible = false
-	runtime.WindowHide(a.ctx)
-}
-
-func (a *WApp) WindowShowHide() {
-	a.visible = !a.visible
-	if a.visible {
-		a.WindowShow()
-	} else {
-		a.WindowHide()
-	}
-}
-
-func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
-	// todo
-	/*err := a.ipc.Send(&dispatcher.IpcMessageT{
-		EventName: "ok",
-		Parameters: map[string]string{
-			"value":        value,
-			"notesDisplay": fmt.Sprintf("%v", notesCheckbox),
-		},
-	})
-	if err != nil {
-		log.Println(err.Error())
-	}
-
-	runtime.Quit(a.ctx)*/
 }
 
 func (a *WApp) GetLanguageDescriptions(language string) []string {
@@ -571,17 +614,33 @@ func (a *WApp) domReady(ctx context.Context) {
 	go a.startTerminalWindow()
 }
 
-func (a *WApp) beforeClose(ctx context.Context) bool {
-	/*case dispatcher.WindowNotes:
-		a.WindowHide()
-		return true
-	}*/
-
-	return false
-}
-
 func startWails() {
 	app := NewWailsApp()
+
+	/*dispatcherCallback := func(msg *dispatcher.IpcMessageT) {
+		if msg.Error != nil {
+			_, _ = os.Stderr.WriteString(msg.Error.Error())
+		}
+
+		switch msg.EventName {
+		case "started":
+			log.Println("Global hotkeys registered successfully")
+		case "F12":
+			app.WindowShowHide()
+		}
+	}
+	var closeHotkeys func()
+	_, closeHotkeys = dispatcher.StartApp(dispatcher.AppGlobalHotkeys, dispatcherCallback)
+	*/
+
+	hotkeyCallback := func(key string) {
+		switch key {
+		case "F12":
+			app.WindowShowHide()
+		}
+	}
+
+	globalhotkeys.Register(hotkeyCallback)
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -590,6 +649,7 @@ func startWails() {
 		//Height:            int(payload.Window.Size.Y),
 		AlwaysOnTop:       true,
 		HideWindowOnClose: true,
+		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},
@@ -599,10 +659,9 @@ func startWails() {
 			B: payload.Window.Colours.Fg.Blue,
 			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
 		},*/
-		OnStartup:     app.startup,
-		OnDomReady:    app.domReady,
-		OnBeforeClose: app.beforeClose,
-		Bind:          []any{app},
+		OnStartup:  app.startup,
+		OnDomReady: app.domReady,
+		Bind:       []any{app},
 		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		/*Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
@@ -622,6 +681,7 @@ func startWails() {
 	})
 
 	if err != nil {
+		//closeHotkeys()
 		panic(err)
 	}
 }

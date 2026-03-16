@@ -13,7 +13,6 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"golang.design/x/clipboard"
 )
@@ -221,18 +220,18 @@ func (el *ElementHyperlink) _menuItemsSchemaFile(menuItems []types.MenuItem) []t
 		},
 	)
 
-	if strings.HasSuffix(el.url, ".md") {
+	/*if strings.HasSuffix(el.url, ".md") {
 		menuItems = append(menuItems, types.MenuItem{
 			Title: "Open in markdown viewer",
 			Fn:    func() { openMarkdownViewer(el) },
 			Icon:  0xf1ea,
 		})
-	}
+	}*/
 
 	return menuItems
 }
 
-func openMarkdownViewer(el *ElementHyperlink) {
+/*func openMarkdownViewer(el *ElementHyperlink) {
 	windowStyle := dispatcher.NewWindowStyle()
 	//windowStyle.Pos = types.XY{}
 	//x, y := el.renderer.GetWindowMeta().(*sdl.Window).GetSize()
@@ -246,7 +245,7 @@ func openMarkdownViewer(el *ElementHyperlink) {
 			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
 		}
 	})
-}
+}*/
 
 func (el *ElementHyperlink) schemaOrPath() string {
 	if el.scheme == "file" {

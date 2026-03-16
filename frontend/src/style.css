@@ -61,15 +61,24 @@ body {
 }
 
 .notif-icon {
+    display: inline-block;
     width: 50px;
     height: 50px;
     min-width: 50px;
-    object-fit: contain;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
     opacity: 0.9;
-    image-rendering: auto;
     margin: 0px;
     padding: 0px;
 }
+
+[data-notif-type="0"] .notif-icon { background-image: url('./assets/images/icon-message.png'); }
+[data-notif-type="1"] .notif-icon { background-image: url('./assets/images/icon-info.png'); }
+[data-notif-type="2"] .notif-icon { background-image: url('./assets/images/icon-warn.png'); }
+[data-notif-type="3"] .notif-icon { background-image: url('./assets/images/icon-error.png'); }
+[data-notif-type="4"] .notif-icon { background-image: url('./assets/images/icon-down.png'); }
+[data-notif-type="5"] .notif-icon { background-image: url('./assets/images/icon-question.png'); }
 
 .notif-msg {
     flex: 1;

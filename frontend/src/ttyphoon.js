@@ -68,7 +68,7 @@ splitToggle.type = 'button';
 splitToggle.id = 'notes-terminal-toggle';
 splitToggle.setAttribute('aria-label', 'Collapse notes pane');
 splitToggle.title = 'Collapse notes pane';
-splitToggle.textContent = '◀';
+splitToggle.textContent = '▶';
 splitToggle.style.cssText = [
     'position:absolute',
     'left:50%',
@@ -218,7 +218,7 @@ function toggleNotesPaneCollapsed() {
 
         notesPane.style.width = `${restored}%`;
         notesPane.style.borderRight = '1px solid rgba(255,255,255,0.12)';
-        splitToggle.textContent = '◀';
+        splitToggle.textContent = '▶';
         splitToggle.setAttribute('aria-label', 'Collapse notes pane');
         splitToggle.title = 'Collapse notes pane';
 

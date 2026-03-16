@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetMarkdown, SendIpc, WindowShow,
+    GetWindowStyle, GetMarkdown,
     ListFiles, SaveFile, DeleteFile, RenameFile,
     RunNote, StopNote,
     GetLanguageDescriptions, GetAllLanguageDescriptions,
@@ -608,7 +608,7 @@ async function runCodeBlockInTerminal(blockId) {
         block.currentContent = editableElement.value;
     }
     
-    const sendIpcFn = SendIpc;
+    /*const sendIpcFn = SendIpc;
     if (sendIpcFn) {
         try {
             await sendIpcFn('noteRunTerminal', {
@@ -619,7 +619,7 @@ async function runCodeBlockInTerminal(blockId) {
         } catch (err) {
             console.error('Error sending to terminal:', err);
         }
-    }
+    }*/
 }
 
 async function refreshFiles() {
@@ -1125,11 +1125,8 @@ async function createAndOpenFile(filename, contents) {
     }
 }
 
-window.createAndOpenFile = createAndOpenFile;
-
 EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
-    WindowShow();
 });
 
 EventsOn("updateTitle", newTitle => {
@@ -1975,11 +1972,6 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
         event.preventDefault();
         openRenamePrompt(state.currentFile);
-    }
-
-    if (event.key === 'Tab') {
-        event.preventDefault();
-        SendIpc("focus", {});
     }
 
     if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {

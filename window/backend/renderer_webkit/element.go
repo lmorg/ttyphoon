@@ -2,9 +2,9 @@ package rendererwebkit
 
 import (
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_codeblock"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_hyperlink"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/element_table"
+	"github.com/lmorg/ttyphoon/window/elements/element_codeblock"
+	"github.com/lmorg/ttyphoon/window/elements/element_hyperlink"
+	"github.com/lmorg/ttyphoon/window/elements/element_table"
 )
 
 func (wr *webkitRender) NewElement(tile types.Tile, id types.ElementID) types.Element {

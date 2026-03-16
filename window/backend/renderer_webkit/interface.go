@@ -338,7 +338,12 @@ func (wr *webkitRender) GetKeyboardModifier() int {
 	return wr.keyModifier
 }
 
-func (wr *webkitRender) NotesCreateAndOpen(_ string, _ string) {}
+func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
+	runtime.EventsEmit(wr.wapp, "notesCreateAndOpen", map[string]string{
+		"filename": filename,
+		"contents": content,
+	})
+}
 
 func (wr *webkitRender) Close() {}
 
@@ -349,8 +354,6 @@ func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {
 }
 
 func (wr *webkitRender) PopDrawCommands() []DrawCommand {
-	//wr.enqueueDrawCommand(DrawCommand{Op: DrawOpFrame})
-	//wr.drawCommands = []DrawCommand{{Op: DrawOpFrame}}
 	if wr.termWin != nil {
 		for i := range wr.termWin.Tiles {
 			term := wr.termWin.Tiles[i].GetTerm()
