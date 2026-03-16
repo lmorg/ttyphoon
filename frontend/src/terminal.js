@@ -369,7 +369,7 @@ function drawHighlightRect(cmd) {
     if (cmd.bg) {
         offCtx.save();
         offCtx.globalAlpha = 128 / 255;
-        offCtx.fillStyle = `rgb(${cmd.bg.Red}, ${cmd.bg.Green}, ${cmd.bg.Blue})`;
+        offCtx.fillStyle = `rgba(${cmd.bg.Red}, ${cmd.bg.Green}, ${cmd.bg.Blue}, 0.2)`;
         offCtx.fillRect(x + 1, y + 1, Math.max(0, width - 2), Math.max(0, height - 2));
         offCtx.restore();
     }
