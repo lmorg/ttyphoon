@@ -1,10 +1,11 @@
-import { GetWindowStyle, TerminalGetTabs, TerminalInputBoxSubmit, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
 import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
+import { initInputBox } from './inputbox';
 
 (document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
     <div id="terminal-app">
@@ -13,17 +14,6 @@ import { initTerminalPopupMenu } from './popup_menu';
             <canvas id="ttyphoon-terminal"></canvas>
         </div>
         <div id="terminal-notifications"></div>
-        <div id="terminal-inputbox" class="inputbox-overlay" style="display:none">
-            <div class="inputbox-dialog">
-                <div class="inputbox-title" id="inputbox-title"></div>
-                <input class="inputbox-input" id="inputbox-input" type="text" autocomplete="off" spellcheck="false" />
-                <div class="inputbox-hint">Return to confirm &nbsp;&nbsp; Escape to cancel</div>
-                <div class="inputbox-buttons">
-                    <button class="inputbox-btn inputbox-ok" id="inputbox-ok">OK</button>
-                    <button class="inputbox-btn inputbox-cancel" id="inputbox-cancel">Cancel</button>
-                </div>
-            </div>
-        </div>
     </div>
 `;
 
@@ -493,50 +483,7 @@ GetWindowStyle().then((result) => {
     });
 });
 
-// ------------------------------------------------------------------
-// Input box modal
-// ------------------------------------------------------------------
-
-const inputboxOverlay = document.getElementById('terminal-inputbox');
-const inputboxInput   = document.getElementById('inputbox-input');
-const inputboxTitle   = document.getElementById('inputbox-title');
-const inputboxOkBtn   = document.getElementById('inputbox-ok');
-const inputboxCancel  = document.getElementById('inputbox-cancel');
-let   inputboxId      = null;
-
-function inputboxSubmit(isOk) {
-    if (inputboxId === null) return;
-    const value = inputboxInput.value;
-    const id = inputboxId;
-    inputboxId = null;
-    inputboxOverlay.style.display = 'none';
-    canvas.focus();
-    TerminalInputBoxSubmit(id, value, isOk).catch(() => {});
-}
-
-inputboxOkBtn.addEventListener('click', () => inputboxSubmit(true));
-inputboxCancel.addEventListener('click', () => inputboxSubmit(false));
-
-inputboxInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); inputboxSubmit(true); }
-    if (e.key === 'Escape') { e.preventDefault(); inputboxSubmit(false); }
-    e.stopPropagation();
-});
-
-// Clicks on the backdrop (outside the dialog) cancel
-inputboxOverlay.addEventListener('click', e => {
-    if (e.target === inputboxOverlay) inputboxSubmit(false);
-});
-
-EventsOn('terminalInputBox', payload => {
-    const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
-    if (!p) return;
-    inputboxId = p.id;
-    inputboxTitle.textContent = p.title ?? '';
-    inputboxInput.value = p.defaultValue ?? '';
-    inputboxOverlay.style.display = 'flex';
-    setTimeout(() => { inputboxInput.focus(); inputboxInput.select(); }, 0);
-});
+initInputBox(canvas);
 
 // ------------------------------------------------------------------
 // Notification overlay

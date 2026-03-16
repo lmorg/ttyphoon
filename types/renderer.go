@@ -25,7 +25,6 @@ type ContextMenu interface {
 const MENU_SEPARATOR = "-"
 
 type InputBoxCallbackT func(string)
-type InputBoxCallbackWT func(string, bool)
 
 type Renderer interface {
 	Start(*AppWindowTerms, any, context.Context)

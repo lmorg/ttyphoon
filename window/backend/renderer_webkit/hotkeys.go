@@ -68,19 +68,19 @@ func (wr *webkitRender) hotkeys() {
 			}
 			desc = "Reload settings from disk"*/
 
-		/*case "Paste":
-			fn = func() { sr.clipboardPaste() }
+		case "Paste":
+			fn = func() { wr.clipboardPaste() }
 			desc = "Paste from clipboard"
-		case "VisualEditor":
-			fn = func() { sr.VisualEditor() }
-			desc = "Visual editor..."*/
+		/*case "VisualEditor":
+		fn = func() { wr.VisualEditor() }
+		desc = "Visual editor..."*/
 
-		/*case "AskAI":
-			fn = func() { askAi(sr) }
+		case "AskAI":
+			fn = func() { askAi(wr) }
 			desc = "Ask AI..."
 		case "AgentSkills":
-			fn = func() { askAiSkill(sr) }
-			desc = "Ask AI with Agent Skill..."*/
+			fn = func() { askAiSkill(wr) }
+			desc = "Ask AI with Agent Skill..."
 
 		case "SearchRegex":
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }
