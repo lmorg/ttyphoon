@@ -35,20 +35,18 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 	}
 
 	wr.hotkeys()
+	go wr.blinkSlowLoop()
 
 	go func() {
-		for {
-			select {
-			case <-wr._redraw:
-				commands := wr.PopDrawCommands()
-				if len(commands) == 0 {
-					continue
-				}
-				runtime.EventsEmit(wapp, "terminalRedraw", commands)
-				//case <-time.After(15 * time.Millisecond):
-				//	runtime.EventsEmit(wapp, "terminalRedraw", wr.PopDrawCommands())
-				//wr.TriggerRedraw()
+		for range wr._redraw {
+			commands := wr.PopDrawCommands()
+			if len(commands) == 0 {
+				continue
 			}
+			runtime.EventsEmit(wapp, "terminalRedraw", commands)
+			//case <-time.After(15 * time.Millisecond):
+			//	runtime.EventsEmit(wapp, "terminalRedraw", wr.PopDrawCommands())
+			//wr.TriggerRedraw()
 		}
 	}()
 }

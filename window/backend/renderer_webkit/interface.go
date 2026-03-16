@@ -3,6 +3,7 @@ package rendererwebkit
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -23,7 +24,7 @@ type webkitRender struct {
 	glyphSize     *types.XY
 	windowCells   *types.XY
 	windowTitle   string
-	blinkState    bool
+	blinkState    atomic.Bool
 	keyboardMode  types.KeyboardMode
 	keyModifier   int
 	statusBarText string
@@ -57,11 +58,11 @@ func (wr *webkitRender) GetGlyphSize() *types.XY {
 }
 
 func (wr *webkitRender) GetBlinkState() bool {
-	return wr.blinkState
+	return wr.blinkState.Load()
 }
 
 func (wr *webkitRender) SetBlinkState(value bool) {
-	wr.blinkState = value
+	wr.blinkState.Store(value)
 }
 
 func (wr *webkitRender) DrawGaugeH(tile types.Tile, topLeft *types.XY, width int32, value, max int, c *types.Colour) {
