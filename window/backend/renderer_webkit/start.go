@@ -6,6 +6,7 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -33,6 +34,10 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 	if tc, ok := tmuxClient.(*tmux.Tmux); ok {
 		wr.tmux = tc
 	}
+
+	cursor.Register(func(css string) {
+		runtime.EventsEmit(wapp, "setCursor", css)
+	})
 
 	wr.hotkeys()
 	go wr.blinkSlowLoop()

@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 	"github.com/lmorg/ttyphoon/window/backend/typeface"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
@@ -81,6 +82,17 @@ func Initialise() (types.Renderer, *types.XY) {
 	updateBlendMode()
 
 	sr.winTile = &winTileT{sr: sr}
+
+	cursor.Register(func(css string) {
+		switch css {
+		case "text":
+			sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_IBEAM))
+		case "pointer":
+			sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_HAND))
+		default:
+			sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_ARROW))
+		}
+	})
 
 	return sr, sr.GetWindowSizeCells()
 }

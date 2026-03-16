@@ -406,6 +406,10 @@ function drawTileOverlay(cmd) {
     offCtx.restore();
 }
 
+EventsOn("setCursor", css => {
+    canvas.style.cursor = css;
+});
+
 EventsOn("terminalRedraw", ops => {
     if (rafPending) {
         return;

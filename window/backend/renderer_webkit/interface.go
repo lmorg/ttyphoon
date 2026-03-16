@@ -281,8 +281,6 @@ func (wr *webkitRender) SelectWindow(windowID string) {
 		return
 	}
 
-	_ = wr.tmux.RefreshClient(wr.windowCells)
-
 	wr.RefreshWindowList()
 }
 

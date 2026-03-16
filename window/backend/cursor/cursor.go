@@ -1,38 +1,25 @@
 package cursor
 
-import "github.com/veandco/go-sdl2/sdl"
-
-var cursor int
-
-const (
-	arrow int = iota + 1
-	ibeam
-	hand
+var (
+	fn      func(string)
+	current string
 )
 
-func Arrow() {
-	if cursor == arrow {
-		return
-	}
-
-	sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_ARROW))
-	cursor = arrow
+// Register sets the backend function that receives CSS cursor name changes.
+// Call this once during renderer initialisation.
+func Register(setCursor func(cursorCSS string)) {
+	fn = setCursor
+	current = ""
 }
 
-func Ibeam() {
-	if cursor == ibeam {
+func set(css string) {
+	if current == css || fn == nil {
 		return
 	}
-
-	sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_IBEAM))
-	cursor = ibeam
+	fn(css)
+	current = css
 }
 
-func Hand() {
-	if cursor == hand {
-		return
-	}
-
-	sdl.SetCursor(sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_HAND))
-	cursor = hand
-}
+func Arrow() { set("default") }
+func Ibeam() { set("text") }
+func Hand()  { set("pointer") }
