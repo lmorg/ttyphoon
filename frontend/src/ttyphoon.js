@@ -1,7 +1,7 @@
 import './style.css';
 import './app.css';
 import { ScreenGetAll, WindowGetPosition, WindowGetSize, WindowSetPosition, WindowSetSize } from '../wailsjs/runtime/runtime';
-import { GetWindowStyle, GetAppName } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, GetAppTitle } from '../wailsjs/go/main/WApp';
 
 // Remove any body margin/padding immediately so there is no layout flash.
 document.body.style.margin = '0';
@@ -12,12 +12,12 @@ const app = document.getElementById('app') || document.body;
 
 // Setup titlebar with app name and styling
 async function setupTitlebar() {
-    let appName = 'TTyphoon';
+    let appName = 'loading...';
     let bgColor = 'rgba(30,30,30,1)';
     let fgColor = 'rgba(255,255,255,0.87)';
     
     try {
-        appName = await GetAppName();
+        appName = await GetAppTitle();
     } catch (err) {
         console.warn('Failed to fetch app name:', err);
     }

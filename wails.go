@@ -15,7 +15,6 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/app"
-	ttyphoon "github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
@@ -581,9 +580,7 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 	return result
 }
 
-func (a *WApp) GetAppName() string {
-	return app.Name
-}
+func (a *WApp) GetAppTitle() string { return appTitle() }
 
 // --------------------
 
@@ -619,8 +616,15 @@ func (a *WApp) domReady(ctx context.Context) {
 	go a.startTerminalWindow()
 }
 
+func appTitle() string {
+	return fmt.Sprintf("%s: %s", app.Name, app.TagLine)
+}
+
+//go:embed build/appicon.png
+var appIcon []byte
+
 func startWails() {
-	app := NewWailsApp()
+	wapp := NewWailsApp()
 
 	/*dispatcherCallback := func(msg *dispatcher.IpcMessageT) {
 		if msg.Error != nil {
@@ -641,7 +645,7 @@ func startWails() {
 	hotkeyCallback := func(key string) {
 		switch key {
 		case "F12":
-			app.WindowShowHide()
+			wapp.WindowShowHide()
 		}
 	}
 
@@ -649,7 +653,7 @@ func startWails() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title: ttyphoon.Name,
+		Title: appTitle(),
 		//Width:             int(payload.Window.Size.X),
 		//Height:            int(payload.Window.Size.Y),
 		AlwaysOnTop:       true,
@@ -664,20 +668,25 @@ func startWails() {
 			B: payload.Window.Colours.Fg.Blue,
 			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
 		},*/
-		OnStartup:        app.startup,
-		OnDomReady:       app.domReady,
-		Bind:             []any{app},
+		OnStartup:        wapp.startup,
+		OnDomReady:       wapp.domReady,
+		Bind:             []any{wapp},
 		BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 			//WindowIsTranslucent:  true,
 			//WebviewIsTransparent: true,
+			About: &mac.AboutInfo{
+				Title:   app.Name,
+				Message: fmt.Sprintf("%s\n\nVersion: %s\n\n%s\n%s", app.TagLine, app.Version(), app.Copyright, app.License),
+				Icon:    appIcon,
+			},
 		},
 		/*Linux: &linux.Options{
 			WindowIsTranslucent: true,
-		},
+		},*/
 
-		Windows: &windows.Options{
+		/*Windows: &windows.Options{
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 		},*/
