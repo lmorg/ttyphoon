@@ -48,13 +48,40 @@ func (wr *webkitRender) HandleMouseMotion(cellX, cellY, relX, relY, state int32)
 		return
 	}
 
+	wr.setLastMouseCell(cellX, cellY)
+
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
+
 	callback := func() {}
 	if state == 0 {
 		callback = wr.termMouseMotionCallback
 	}
 
 	tile.GetTerm().MouseMotion(pos, &types.XY{X: relX, Y: relY}, callback)
+
+	wr.TriggerRedraw()
+}
+
+func (wr *webkitRender) setLastMouseCell(cellX, cellY int32) {
+	wr.lastMouseCellX.Store(cellX)
+	wr.lastMouseCellY.Store(cellY)
+	wr.lastMouseValid.Store(true)
+}
+
+func (wr *webkitRender) applyMouseHoverFromLastPosition() {
+	if !wr.lastMouseValid.Load() {
+		return
+	}
+
+	cellX := wr.lastMouseCellX.Load()
+	cellY := wr.lastMouseCellY.Load()
+	tile := wr.getTileFromCellOrActive(cellX, cellY)
+	if tile == nil || tile.GetTerm() == nil {
+		return
+	}
+
+	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
+	tile.GetTerm().MouseHover(pos)
 }
 
 func (wr *webkitRender) termMouseMotionCallback() {}

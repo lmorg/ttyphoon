@@ -29,16 +29,19 @@ type webkitRender struct {
 	keyModifier   int
 	statusBarText string
 	//cmdMu         sync.Mutex
-	drawCommands  []DrawCommand
-	wapp          context.Context
-	_redraw       chan struct{}
-	fnSchedule    []func()
-	contextMenu   types.ContextMenu
-	menuMu        sync.Mutex
-	menuNextID    int
-	menuCallbacks map[int]menuCallbacks
-	notifications notifyT
-	inputBoxes    inputBoxesT
+	drawCommands   []DrawCommand
+	wapp           context.Context
+	_redraw        chan struct{}
+	fnSchedule     []func()
+	contextMenu    types.ContextMenu
+	menuMu         sync.Mutex
+	menuNextID     int
+	menuCallbacks  map[int]menuCallbacks
+	notifications  notifyT
+	inputBoxes     inputBoxesT
+	lastMouseCellX atomic.Int32
+	lastMouseCellY atomic.Int32
+	lastMouseValid atomic.Bool
 	//fnScheduleM   sync.Mutex
 }
 
@@ -367,6 +370,8 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 			}
 			_ = term.Render()
 		}
+
+		wr.applyMouseHoverFromLastPosition()
 
 		wr.enqueueInactiveTileOverlays()
 	}
