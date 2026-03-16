@@ -13,7 +13,7 @@ export function getScrollbarStyles(colors) {
             width: 5px;
             height: 5px;
             background-color: var(--bg);
-            opacity: 0.2;
+            opacity: 0.5;
         }
         ::-webkit-scrollbar-track {
             background-color: var(--bg);

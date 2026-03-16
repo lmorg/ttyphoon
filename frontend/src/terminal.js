@@ -37,6 +37,23 @@ let windowStyle;
 let rafPending = false;
 let tabState = [];
 
+if (tabsEl) {
+    // Convert wheel up/down into horizontal scrolling so hidden tabs are reachable.
+    tabsEl.addEventListener('wheel', (event) => {
+        if (tabsEl.scrollWidth <= tabsEl.clientWidth) {
+            return;
+        }
+
+        const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+        if (delta === 0) {
+            return;
+        }
+
+        tabsEl.scrollLeft += delta;
+        event.preventDefault();
+    }, { passive: false });
+}
+
 function renderTerminalTabs(tabs) {
     if (!tabsEl) {
         return;
@@ -94,8 +111,13 @@ function applyTerminalStyles(result) {
             flex-wrap: nowrap;
             overflow-x: auto;
             overflow-y: hidden;
-            scrollbar-width: thin;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             box-sizing: border-box;
+        }
+
+        #terminal-tabs::-webkit-scrollbar {
+            display: none;
         }
 
         #terminal-tabs button {
