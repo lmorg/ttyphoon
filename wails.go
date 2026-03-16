@@ -459,6 +459,14 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if ok {
+		tile := renderer.ActiveTile()
+		a.projRoot = findProjectRoot(tile.Pwd())
+		a.globalNotes = docsDir("notes")
+		a.usrNotesDir = a.globalNotes + tile.GroupName() + "/"
+	}
+
 	var files []string
 
 	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
@@ -500,6 +508,10 @@ func (a *WApp) ListFiles() []string {
 }
 
 func listFiles(path string, varName string) (files []string) {
+	if path == "" {
+		return []string{}
+	}
+
 	glob, err := filepath.Glob(fmt.Sprintf("%s/*.md", path))
 	if err != nil {
 		log.Println(err)
@@ -580,6 +592,15 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 	return result
 }
 
+func (a *WApp) SendToTerminal(content string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.ActiveTile().GetTerm().Reply([]byte(content))
+}
+
 func (a *WApp) GetAppTitle() string { return appTitle() }
 
 // --------------------
@@ -593,20 +614,9 @@ func (a *WApp) domReady(ctx context.Context) {
 		for msg := range a.msgPipe {
 			switch {
 			case msg.Error != nil:
-				runtime.EventsEmit(a.ctx, "error", msg.Error)
-			case msg.EventName == "focus":
-				//runtime.WindowShow(ctx)
-				a.WindowShow()
-			case msg.EventName == "notesToggleShowHide":
-				a.WindowShowHide()
-			case msg.EventName == "notesFocus":
-				a.WindowShow()
-				fallthrough
+
 			case msg.EventName == "notesUpdatePaths":
-				a.projRoot = msg.Parameters["projectRoot"]
-				a.usrNotesDir = msg.Parameters["userNotes"]
-				runtime.EventsEmit(a.ctx, "updateTitle", msg.Parameters["title"])
-				runtime.WindowExecJS(a.ctx, `window.refreshFiles();`)
+
 			default:
 				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
 			}

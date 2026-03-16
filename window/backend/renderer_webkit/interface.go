@@ -253,6 +253,11 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	wr.TriggerRedraw()
+	wr.updateNotes()
+}
+
+func (wr *webkitRender) updateNotes() {
+	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
 }
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
@@ -416,6 +421,10 @@ func (wr *webkitRender) enqueueInactiveTileOverlays() {
 			Alpha:  51,
 		})
 	}
+}
+
+func (wr *webkitRender) ActiveTile() types.Tile {
+	return wr.termWin.Active
 }
 
 type elementStub struct{}

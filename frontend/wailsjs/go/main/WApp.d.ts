@@ -33,6 +33,8 @@ export function SaveFile(arg1:string,arg2:string):Promise<void>;
 
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
+export function SendToTerminal(arg1:string):Promise<void>;
+
 export function StopNote(arg1:string):Promise<void>;
 
 export function TerminalGetTabs():Promise<Array<Record<string, any>>>;

@@ -62,6 +62,10 @@ export function SendIpc(arg1, arg2) {
   return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }
 
+export function SendToTerminal(arg1) {
+  return window['go']['main']['WApp']['SendToTerminal'](arg1);
+}
+
 export function StopNote(arg1) {
   return window['go']['main']['WApp']['StopNote'](arg1);
 }

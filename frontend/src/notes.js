@@ -1,7 +1,7 @@
 import {
     GetWindowStyle, GetMarkdown,
     ListFiles, SaveFile, DeleteFile, RenameFile,
-    RunNote, StopNote,
+    RunNote, StopNote, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
@@ -608,18 +608,11 @@ async function runCodeBlockInTerminal(blockId) {
         block.currentContent = editableElement.value;
     }
     
-    /*const sendIpcFn = SendIpc;
-    if (sendIpcFn) {
         try {
-            await sendIpcFn('noteRunTerminal', {
-                blockId: blockId,
-                code: block.currentContent,
-                language: block.language
-            });
+            await SendToTerminal(block.currentContent);
         } catch (err) {
             console.error('Error sending to terminal:', err);
         }
-    }*/
 }
 
 async function refreshFiles() {
@@ -1129,8 +1122,9 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("updateTitle", newTitle => {
-    elements.title.innerText = "Notes: " + newTitle;
+EventsOn("notesUpdate", group => {
+    elements.title.innerText = group;
+    refreshFiles();
 });
 
 EventsOn("noteRun", (data) => {
@@ -1969,10 +1963,10 @@ document.addEventListener('keydown', (event) => {
         setViewMode('viewer');
     }*/
 
-    if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
+    /*if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
         event.preventDefault();
         openRenamePrompt(state.currentFile);
-    }
+    }*/
 
     if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
         event.preventDefault();
