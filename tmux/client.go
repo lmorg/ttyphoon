@@ -3,6 +3,7 @@ package tmux
 import (
 	"fmt"
 
+	"github.com/creack/pty"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -54,8 +55,17 @@ func (tmux *Tmux) RefreshClient(size *types.XY) error {
 	if err != nil {
 		return err
 	}*/
+
+	err := pty.Setsize(tmux.tty, &pty.Winsize{
+		X: uint16(size.X),
+		Y: uint16(size.Y),
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	strSize := fmt.Sprintf("%s -C %dx%d", CMD_CLIENT_REFRESH, size.X, size.Y)
-	_, err := tmux.SendCommand([]byte(strSize))
+	_, err = tmux.SendCommand([]byte(strSize))
 	if err != nil {
 		return err
 	}
