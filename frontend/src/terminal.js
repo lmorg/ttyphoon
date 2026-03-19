@@ -206,60 +206,6 @@ function drawCell(cmd) {
     }
 }
 
-function getCommandBoundsCells(cmd) {
-    const x = Number.isFinite(cmd?.x) ? cmd.x : 0;
-    const y = Number.isFinite(cmd?.y) ? cmd.y : 0;
-
-    switch (cmd?.op) {
-    case 'cell': {
-        const width = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 1;
-        return { x, y, width, height: 1 };
-    }
-
-    case 'gauge_h': {
-        const width = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 1;
-        return { x, y, width, height: 1 };
-    }
-
-    case 'gauge_v': {
-        const height = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
-        return { x, y, width: 1, height };
-    }
-
-    case 'block_chrome': {
-        const height = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
-        let width = 1;
-        if (!cmd.folded && Number.isFinite(cmd.endX) && cmd.endX >= x) {
-            width = (cmd.endX - x) + 1;
-        }
-        return { x, y, width, height: height + 1 };
-    }
-
-    case 'image': {
-        const width = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
-        const height = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
-        if (width <= 0 || height <= 0) {
-            return null;
-        }
-        return { x, y, width, height };
-    }
-
-    case 'highlight_rect':
-    case 'rect_colour':
-    case 'tile_overlay': {
-        const width = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
-        const height = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
-        if (width <= 0 || height <= 0) {
-            return null;
-        }
-        return { x, y, width, height };
-    }
-
-    default:
-        return null;
-    }
-}
-
 function getOrLoadImageById(imageId) {
     if (!Number.isFinite(imageId)) {
         return null;
@@ -316,81 +262,37 @@ function drawImageCommand(cmd) {
     );
 }
 
-function getDrawOpsBoundsCells(drawOps) {
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-
-    for (const cmd of drawOps) {
-        if (cmd?.op === 'frame') {
-            continue;
-        }
-
-        const bounds = getCommandBoundsCells(cmd);
-        if (!bounds) {
-            continue;
-        }
-
-        minX = Math.min(minX, bounds.x);
-        minY = Math.min(minY, bounds.y);
-        maxX = Math.max(maxX, bounds.x + bounds.width);
-        maxY = Math.max(maxY, bounds.y + bounds.height);
-    }
-
-    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-        return null;
-    }
-
-    return {
-        x: Math.max(0, minX),
-        y: Math.max(0, minY),
-        width: Math.max(0, maxX - Math.max(0, minX)),
-        height: Math.max(0, maxY - Math.max(0, minY)),
-    };
-}
-
-function drawFrame(boundsCells = null) {
+function drawFrame(cmd = null) {
     if (!offCtx) {
         return;
     }
 
     const { cellWidth, cellHeight } = font.getCellSize();
 
-    let x = 0;
-    let y = 0;
+    const xCell = Number.isFinite(cmd?.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd?.y) ? cmd.y : 0;
+    const widthCells = Number.isFinite(cmd?.width) && cmd.width > 0 ? cmd.width : null;
+    const heightCells = Number.isFinite(cmd?.height) && cmd.height > 0 ? cmd.height : null;
+
+    const x = Math.max(0, Math.floor(xCell * cellWidth));
+    const y = Math.max(0, Math.floor(yCell * cellHeight));
+
     let width = offscreen.width;
     let height = offscreen.height;
 
-    if (boundsCells && cellWidth > 0 && cellHeight > 0) {
-        x = Math.floor(boundsCells.x * cellWidth);
-        y = Math.floor(boundsCells.y * cellHeight);
-        width = Math.ceil(boundsCells.width * cellWidth);
-        height = Math.ceil(boundsCells.height * cellHeight);
+    if (cellWidth > 0 && cellHeight > 0) {
+        const cols = widthCells ?? Math.floor(offscreen.width / cellWidth);
+        const rows = heightCells ?? Math.floor(offscreen.height / cellHeight);
 
-        // Cursor/highlight strokes and antialiasing can paint a couple of
-        // pixels outside the nominal cell box. Pad clears to avoid ghosting.
-        const bleedPx = 2;
-        x -= bleedPx;
-        y -= bleedPx;
-        width += bleedPx * 2;
-        height += bleedPx * 2;
+        width = Math.max(0, cols * cellWidth);
+        height = Math.max(0, rows * cellHeight);
+    }
 
-        if (x < 0) {
-            width += x;
-            x = 0;
-        }
-        if (y < 0) {
-            height += y;
-            y = 0;
-        }
+    width = Math.min(width, Math.max(0, offscreen.width-x));
+    height = Math.min(height, Math.max(0, offscreen.height-y));
 
-        width = Math.min(width, offscreen.width - x);
-        height = Math.min(height, offscreen.height - y);
-
-        if (width <= 0 || height <= 0) {
-            return;
-        }
+    if (width <= 0 || height <= 0) {
+        return;
     }
 
     const bg = windowStyle?.colors?.bg;
@@ -520,11 +422,9 @@ EventsOn("terminalRedraw", ops => {
         return;
     }
 
-    const frameBounds = getDrawOpsBoundsCells(drawOps);
-
     for (const cmd of drawOps) {
         if (cmd.op === 'frame') {
-            drawFrame(frameBounds);
+            drawFrame(cmd);
             continue;
         }
         if (cmd.op === 'cell') {

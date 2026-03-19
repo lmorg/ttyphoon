@@ -35,6 +35,7 @@ type Renderer interface {
 	SetBlinkState(bool)
 	PrintCell(Tile, *Cell, *XY)
 	PrintRow(Tile, []*Cell, *XY)
+	DrawFrame(tile Tile)
 	DrawGaugeH(tile Tile, topLeft *XY, width int32, value, max int, c *Colour)
 	DrawGaugeV(tile Tile, topLeft *XY, height int32, value, max int, c *Colour)
 	DrawTable(Tile, *XY, int32, []int32)

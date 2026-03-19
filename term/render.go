@@ -6,10 +6,12 @@ import (
 )
 
 func (term *Term) Render() bool {
-	if term.Pty.BufSize() > 0 /*&& term._ssLargeBuf.Add(1) < 1000*/ {
+	if term.Pty.BufSize() > 0 && term._ssLargeBuf.Add(1) < 1000 {
 		return false
 	}
-	//term._ssLargeBuf.Store(0)
+	term._ssLargeBuf.Store(0)
+
+	term.renderer.DrawFrame(term.tile)
 
 	term._mutex.Lock()
 	defer term._mutex.Unlock()

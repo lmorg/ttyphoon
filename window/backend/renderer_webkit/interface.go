@@ -236,19 +236,40 @@ func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {
 }
 
 func (wr *webkitRender) PopDrawCommands() []DrawCommand {
-	if wr.termWin != nil {
-		for i := range wr.termWin.Tiles {
-			term := wr.termWin.Tiles[i].GetTerm()
-			if term == nil {
-				continue
-			}
-			_ = term.Render()
+	for _, tile := range wr.termWin.Tiles {
+		//tile := wr.termWin.Tiles[i]
+		/*if tile == nil {
+			continue
+		}*/
+
+		//term := tile.GetTerm()
+		//
+		//if !term.Render() {
+		//	fullFrame = false
+		//}
+
+		if !tile.GetTerm().Render() || tile.Id() == wr.termWin.Active.Id() {
+			continue
 		}
 
-		wr.applyMouseHoverFromLastPosition()
+		termSize := tile.GetTerm().GetSize()
+		/*if termSize == nil || termSize.X <= 0 || termSize.Y <= 0 {
+			continue
+		}*/
 
-		wr.enqueueInactiveTileOverlays()
+		wr.enqueueDrawCommand(DrawCommand{
+			Op:     DrawOpTileOverlay,
+			X:      tile.Left(),
+			Y:      tile.Top(),
+			Width:  termSize.X + 1,
+			Height: termSize.Y,
+			Alpha:  51,
+		})
 	}
+
+	wr.applyMouseHoverFromLastPosition()
+
+	//wr.enqueueInactiveTileOverlays()
 
 	if len(wr.drawCommands) == 0 {
 		return nil
@@ -260,7 +281,10 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	wr.fnSchedule = []func(){}
 
 	//wr.cmdMu.Lock()
-	commands := append([]DrawCommand{{Op: DrawOpFrame}}, wr.drawCommands...)
+	//var commands []DrawCommand
+	//commands = append([]DrawCommand{{Op: DrawOpFrame}}, wr.drawCommands...)
+	commands := wr.drawCommands
+
 	wr.drawCommands = nil
 	//wr.cmdMu.Unlock()
 
@@ -271,7 +295,7 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	return commands
 }
 
-func (wr *webkitRender) enqueueInactiveTileOverlays() {
+/*func (wr *webkitRender) enqueueInactiveTileOverlays() {
 	if wr.termWin == nil || len(wr.termWin.Tiles) <= 1 || wr.termWin.Active == nil {
 		return
 	}
@@ -300,7 +324,7 @@ func (wr *webkitRender) enqueueInactiveTileOverlays() {
 			Alpha:  51,
 		})
 	}
-}
+}*/
 
 func (wr *webkitRender) ActiveTile() types.Tile {
 	return wr.termWin.Active
