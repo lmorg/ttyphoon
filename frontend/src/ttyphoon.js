@@ -1,6 +1,15 @@
 import './style.css';
 import './app.css';
-import { ScreenGetAll, WindowGetPosition, WindowGetSize, WindowSetPosition, WindowSetSize } from '../wailsjs/runtime/runtime';
+import {
+    ScreenGetAll,
+    WindowGetPosition,
+    WindowGetSize,
+    WindowIsMaximised,
+    WindowMaximise,
+    WindowUnmaximise,
+    WindowSetPosition,
+    WindowSetSize,
+} from '../wailsjs/runtime/runtime';
 import { GetWindowStyle, GetAppTitle } from '../wailsjs/go/main/WApp';
 
 // Remove any body margin/padding immediately so there is no layout flash.
@@ -35,8 +44,26 @@ function setupTitlebar() {
         '--wails-draggable:drag',
     ].join(';');
     titlebar.textContent = 'loading...';
+
+    titlebar.addEventListener('dblclick', () => {
+        void maximizeWindowFromTitlebar();
+    });
     
     return titlebar;
+}
+
+async function maximizeWindowFromTitlebar() {
+    try {
+        const isMaximised = await WindowIsMaximised();
+        if (isMaximised) {
+            WindowUnmaximise();
+            return;
+        }
+
+        WindowMaximise();
+    } catch {
+        // Ignore runtime errors from window manager integration.
+    }
 }
 
 async function hydrateTitlebarAndBorders() {
