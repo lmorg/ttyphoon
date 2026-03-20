@@ -468,7 +468,14 @@ function toggleNotesPaneCollapsed() {
 
     refreshStatusBarLayout();
 
-    //window.dispatchEvent(new Event('resize'));
+    requestTerminalResizeAfterLayout();
+}
+
+function requestTerminalResizeAfterLayout() {
+    // Wait for layout to settle before notifying terminal.js to recompute rows/cols.
+    requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'));
+    });
 }
 
 window.addEventListener('mousemove', (event) => {
@@ -487,6 +494,7 @@ window.addEventListener('mouseup', () => {
     isDraggingSplit = false;
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    requestTerminalResizeAfterLayout();
 });
 
 // Dynamic imports — the promises resolve asynchronously, but the resolution
