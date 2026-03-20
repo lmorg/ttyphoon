@@ -17,6 +17,19 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 		wr.termWin.Active = tile
 	}
 
+	posSelection := wr.convertCellToTileXY(tile, cellX, cellY)
+	if button == types.MOUSE_BUTTON_LEFT {
+		switch state {
+		case types.BUTTON_PRESSED:
+			wr.beginSelection(tile, posSelection, button)
+		case types.BUTTON_RELEASED:
+			if wr.endSelection(tile, posSelection) {
+				wr.TriggerRedraw()
+				return
+			}
+		}
+	}
+
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
 	switch button {
 	case types.MOUSE_BUTTON_RIGHT:
@@ -51,6 +64,9 @@ func (wr *webkitRender) HandleMouseMotion(cellX, cellY, relX, relY, state int32)
 	wr.setLastMouseCell(cellX, cellY)
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
+	if state&1 != 0 {
+		wr.updateSelection(tile, wr.convertCellToTileXY(tile, cellX, cellY))
+	}
 
 	callback := func() {}
 	if state == 0 {

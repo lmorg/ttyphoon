@@ -28,6 +28,7 @@ type webkitRender struct {
 	keyboardMode  types.KeyboardMode
 	keyModifier   int
 	statusBarText string
+	selection     *selectionState
 	//cmdMu         sync.Mutex
 	drawCommands   []DrawCommand
 	wapp           context.Context
@@ -255,6 +256,8 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 			Alpha:  51,
 		})
 	}
+
+	wr.drawSelectionPreview()
 
 	wr.applyMouseHoverFromLastPosition()
 

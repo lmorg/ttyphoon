@@ -164,6 +164,57 @@ function fitCanvasToWindow() {
     offscreen.height = canvas.height;
 }
 
+async function copyCanvasSelectionAsPng(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return;
+    }
+
+    const { cellWidth, cellHeight } = font.getCellSize();
+    if (cellWidth <= 0 || cellHeight <= 0) {
+        return;
+    }
+
+    const xCells = Number.isFinite(payload.x) ? payload.x : 0;
+    const yCells = Number.isFinite(payload.y) ? payload.y : 0;
+    const widthCells = Number.isFinite(payload.width) ? payload.width : 0;
+    const heightCells = Number.isFinite(payload.height) ? payload.height : 0;
+    if (widthCells <= 0 || heightCells <= 0) {
+        return;
+    }
+
+    const sx = Math.max(0, Math.floor(xCells * cellWidth));
+    const sy = Math.max(0, Math.floor(yCells * cellHeight));
+    const sw = Math.min(canvas.width - sx, Math.ceil(widthCells * cellWidth));
+    const sh = Math.min(canvas.height - sy, Math.ceil(heightCells * cellHeight));
+    if (sw <= 0 || sh <= 0) {
+        return;
+    }
+
+    const copyCanvas = document.createElement('canvas');
+    copyCanvas.width = sw;
+    copyCanvas.height = sh;
+    const copyCtx = copyCanvas.getContext('2d');
+    if (!copyCtx) {
+        return;
+    }
+
+    copyCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    const blob = await new Promise((resolve) => {
+        copyCanvas.toBlob(resolve, 'image/png');
+    });
+
+    if (!blob || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
+        return;
+    }
+
+    await navigator.clipboard.write([
+        new ClipboardItem({
+            'image/png': blob,
+        }),
+    ]);
+}
+
 function drawCell(cmd) {
     if (!offCtx) {
         return;
@@ -344,6 +395,41 @@ function drawHighlightRect(cmd) {
     }
 }
 
+// Fill-only rect using the supplied colour — no stroke border.
+// Used for selection highlights and hover fills where a border would be intrusive.
+function drawRectColour(cmd) {
+    if (!offCtx) {
+        return;
+    }
+
+    const { cellWidth, cellHeight } = font.getCellSize();
+
+    const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
+    const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 0;
+    const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 0;
+
+    if (widthCells <= 0 || heightCells <= 0) {
+        return;
+    }
+
+    const colour = cmd.bg || cmd.fg;
+    if (!colour) {
+        return;
+    }
+
+    const x = xCell * cellWidth;
+    const y = yCell * cellHeight;
+    const width = widthCells * cellWidth;
+    const height = heightCells * cellHeight;
+
+    offCtx.save();
+    offCtx.globalAlpha = 0.4;
+    offCtx.fillStyle = `rgb(${colour.Red}, ${colour.Green}, ${colour.Blue})`;
+    offCtx.fillRect(x, y, width, height);
+    offCtx.restore();
+}
+
 function drawTileOverlay(cmd) {
     if (!offCtx) {
         return;
@@ -448,8 +534,12 @@ EventsOn("terminalRedraw", ops => {
             drawTileOverlay(cmd);
             continue;
         }
-        if (cmd.op === 'highlight_rect' || cmd.op === 'rect_colour') {
+        if (cmd.op === 'highlight_rect') {
             drawHighlightRect(cmd);
+            continue;
+        }
+        if (cmd.op === 'rect_colour') {
+            drawRectColour(cmd);
         }
     }
 
@@ -472,6 +562,11 @@ EventsOn("terminalStatusBarText", payload => {
 
     const text = Array.isArray(payload?.[0]) ? payload[0] : payload;
     terminalStatusEl.textContent = typeof text === 'string' ? text : '';
+});
+
+EventsOn("terminalCopyImageSelection", payload => {
+    const data = Array.isArray(payload) ? payload[0] : payload;
+    copyCanvasSelectionAsPng(data).catch(() => {});
 });
 
 GetWindowStyle().then((result) => {

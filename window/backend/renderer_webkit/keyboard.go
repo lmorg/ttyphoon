@@ -32,12 +32,13 @@ func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) 
 	}
 
 	wr.SetBlinkState(true)
+	mod := keyEventModToCodesModifier(ctrl, alt, shift, meta)
+	wr.keyModifier = int(mod)
 
 	if isModifierOnlyKey(key) {
 		return
 	}
 
-	mod := keyEventModToCodesModifier(ctrl, alt, shift, meta)
 	keyCode := webKeyCodeLookup(key)
 	if keyCode == 0 {
 		return

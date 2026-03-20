@@ -18,11 +18,11 @@ body {
 }
 
 @font-face {
-    font-family: "Font Awesome 6 Free Solid";
+    font-family: "Font Awesome Solid";
     font-style: normal;
     font-weight: 900;
     src: local(""),
-    url("assets/fonts/Font Awesome 6 Free-Solid-900.otf") format("opentype");
+    url("assets/fonts/Font Awesome 7 Free-Solid-900.otf") format("opentype");
 }
 
 #app {

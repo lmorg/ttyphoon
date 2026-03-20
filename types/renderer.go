@@ -41,6 +41,7 @@ type Renderer interface {
 	DrawTable(Tile, *XY, int32, []int32)
 	DrawHighlightRect(Tile, *XY, *XY)
 	DrawRectWithColour(Tile, *XY, *XY, *Colour, bool)
+	DrawRectWithColourAndBorder(Tile, *XY, *XY, *Colour, bool, bool)
 	DrawOutputBlockChrome(Tile, int32, int32, *Colour, bool)
 	GetWindowTitle() string
 	SetWindowTitle(string)

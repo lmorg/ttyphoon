@@ -301,7 +301,7 @@ export function initTerminalPopupMenu(canvas) {
                 icon.className = 'tty-menu-row-icon';
                 icon.textContent = toIconText(item.icon);
                 icon.style.opacity = icon.textContent ? '0.9' : '0';
-                icon.style.fontFamily = '"Font Awesome 6 Free Solid", "Font Awesome 6 Free", Hasklig, monospace';
+                icon.style.fontFamily = '"Font Awesome Solid", "Font Awesome';
                 icon.style.fontWeight = '900';
                 row.appendChild(icon);
             }
