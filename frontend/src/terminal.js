@@ -1,4 +1,4 @@
-import { GetWindowStyle, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -200,19 +200,12 @@ async function copyCanvasSelectionAsPng(payload) {
 
     copyCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-    const blob = await new Promise((resolve) => {
-        copyCanvas.toBlob(resolve, 'image/png');
-    });
-
-    if (!blob || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
+    const dataURL = copyCanvas.toDataURL('image/png');
+    if (typeof dataURL !== 'string' || dataURL.length === 0) {
         return;
     }
 
-    await navigator.clipboard.write([
-        new ClipboardItem({
-            'image/png': blob,
-        }),
-    ]);
+    await TerminalCopyImageDataURL(dataURL);
 }
 
 function drawCell(cmd) {

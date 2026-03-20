@@ -37,6 +37,8 @@ export function SendToTerminal(arg1:string):Promise<void>;
 
 export function StopNote(arg1:string):Promise<void>;
 
+export function TerminalCopyImageDataURL(arg1:string):Promise<void>;
+
 export function TerminalGetTabs():Promise<Array<Record<string, any>>>;
 
 export function TerminalInputBoxSubmit(arg1:number,arg2:string,arg3:boolean):Promise<void>;

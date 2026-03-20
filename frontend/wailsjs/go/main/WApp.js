@@ -70,6 +70,10 @@ export function StopNote(arg1) {
   return window['go']['main']['WApp']['StopNote'](arg1);
 }
 
+export function TerminalCopyImageDataURL(arg1) {
+  return window['go']['main']['WApp']['TerminalCopyImageDataURL'](arg1);
+}
+
 export function TerminalGetTabs() {
   return window['go']['main']['WApp']['TerminalGetTabs']();
 }

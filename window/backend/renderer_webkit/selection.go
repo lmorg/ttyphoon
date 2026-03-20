@@ -25,6 +25,7 @@ type selectionState struct {
 	start       *types.XY
 	end         *types.XY
 	moved       bool
+	released    bool
 	button      types.MouseButtonT
 	previewMode selectionPreviewMode
 	showFill    bool
@@ -121,6 +122,7 @@ func (wr *webkitRender) endSelection(tile types.Tile, pos *types.XY) bool {
 	}
 
 	selection.end = cloneXY(pos)
+	selection.released = true
 	if !selection.moved {
 		selection.moved = isSelectionDragged(selection.start, selection.end)
 	}
@@ -216,13 +218,6 @@ func (wr *webkitRender) showSelectionContextMenu(selection *selectionState) {
 						"height": bottom - top + 1,
 					})
 				}
-				wr.clearSelectionState()
-			},
-		},
-		{
-			Title: "Cancel",
-			Icon:  0xf00d,
-			Fn: func() {
 				wr.clearSelectionState()
 			},
 		},
@@ -325,6 +320,11 @@ func (wr *webkitRender) drawSelectionPreview() {
 		fallthrough
 	default:
 		drawWrappedSelectionPreview(wr, wr.selection.tile, start, end, termSize.X, wr.selection.showFill, wr.selection.showBorder)
+	}
+
+	if !wr.selection.released {
+		// While dragging, always show the image-copy rectangular bounds as an extra border overlay.
+		drawSquareSelectionPreview(wr, wr.selection.tile, start, end, false, true)
 	}
 }
 

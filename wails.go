@@ -290,6 +290,34 @@ func (a *WApp) TerminalSetGlyphSize(width, height int32) {
 	renderer.SetGlyphSize(width, height)
 }
 
+func (a *WApp) TerminalCopyImageDataURL(dataURL string) error {
+	if dataURL == "" {
+		return fmt.Errorf("empty image data URL")
+	}
+
+	comma := strings.IndexByte(dataURL, ',')
+	if comma <= 0 || comma >= len(dataURL)-1 {
+		return fmt.Errorf("invalid image data URL")
+	}
+
+	meta := dataURL[:comma]
+	if !strings.Contains(meta, ";base64") {
+		return fmt.Errorf("image data URL is not base64 encoded")
+	}
+
+	png, err := base64.StdEncoding.DecodeString(dataURL[comma+1:])
+	if err != nil {
+		return fmt.Errorf("decode image data URL: %w", err)
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer unavailable")
+	}
+
+	return renderer.CopyImageToClipboard(png)
+}
+
 func (a *WApp) TerminalGetTabs() []map[string]any {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
