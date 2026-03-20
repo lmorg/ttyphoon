@@ -1203,7 +1203,7 @@ function applyWindowStyle(result) {
         #notes-app {
             display: grid;
             grid-template-columns: 25% 1fr;
-            height: 100vh;
+            height: 100%;
             overflow: hidden;
             color: var(--fg);
             background: var(--bg);
@@ -1493,7 +1493,8 @@ function applyWindowStyle(result) {
             gap: 12px;
             padding: 5px;
             padding-top: 10px;
-            height: 100vh;
+            height: 100%;
+            min-height: 0;
         }
 
         #notes-tabs {
