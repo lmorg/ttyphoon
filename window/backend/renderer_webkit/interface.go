@@ -89,6 +89,9 @@ func (wr *webkitRender) SetWindowTitle(title string) {
 
 func (wr *webkitRender) StatusBarText(text string) {
 	wr.statusBarText = text
+	if wr.wapp != nil {
+		runtime.EventsEmit(wr.wapp, "terminalStatusBarText", text)
+	}
 }
 
 func (wr *webkitRender) tmuxTabs() []terminalTab {

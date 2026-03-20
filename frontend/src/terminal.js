@@ -27,6 +27,7 @@ let windowStyle;
 let rafPending = false;
 let tabState = [];
 const imageCache = new Map();
+const terminalStatusEl = document.getElementById('terminal-status');
 
 if (tabsEl) {
     // Convert wheel up/down into horizontal scrolling so hidden tabs are reachable.
@@ -462,6 +463,15 @@ EventsOn("terminalTabs", payload => {
     const tabs = Array.isArray(payload?.[0]) ? payload[0] : payload;
     renderTerminalTabs(tabs);
     fitCanvasToWindow();
+});
+
+EventsOn("terminalStatusBarText", payload => {
+    if (!terminalStatusEl) {
+        return;
+    }
+
+    const text = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    terminalStatusEl.textContent = typeof text === 'string' ? text : '';
 });
 
 GetWindowStyle().then((result) => {

@@ -37,7 +37,6 @@ app.innerHTML = `
                 <button id="notes-new" type="button">New</button>
                 <button id="notes-rename" type="button" title="Rename current note">Rename</button>
                 <button id="notes-delete" type="button" title="Delete current note">Delete</button>
-                <div id="notes-status" role="status"></div>
             </div>
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
@@ -1481,8 +1480,7 @@ function applyWindowStyle(result) {
         #notes-status {
             font-size: ${notesStatusFontSize}px;
             opacity: 0.8;
-            align-self: center;
-            margin-left: auto;
+            color: var(--fg);
         }
 
         #notes-status[data-state="error"] {

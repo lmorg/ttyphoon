@@ -18,6 +18,7 @@ document.body.style.padding = '0';
 document.body.style.overflow = 'hidden';
 
 const app = document.getElementById('app') || document.body;
+const INACTIVE_PANE_OVERLAY_ALPHA = 51 / 255;
 
 // Setup titlebar shell synchronously to avoid startup race conditions.
 function setupTitlebar() {
@@ -101,7 +102,15 @@ async function hydrateTitlebarAndBorders() {
     if (contentWrapper) {
         contentWrapper.style.borderLeft = `3px solid ${borderColor}`;
         contentWrapper.style.borderRight = `3px solid ${borderColor}`;
-        contentWrapper.style.borderBottom = `3px solid ${borderColor}`;
+    }
+
+    if (statusBar) {
+        statusBar.style.background = `linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), ${bgColor}`;
+        statusBar.style.color = fgColor;
+        statusBar.style.borderLeft = `3px solid ${borderColor}`;
+        statusBar.style.borderRight = `3px solid ${borderColor}`;
+        statusBar.style.borderBottom = `3px solid ${borderColor}`;
+        statusBar.style.borderTop = `1px solid ${borderColor}`;
     }
 }
 
@@ -123,6 +132,9 @@ let notesPane;
 let splitHandle;
 let splitToggle;
 let terminalPane;
+let statusBar;
+let notesStatusWrap;
+let terminalStatus;
 
 let isDraggingSplit = false;
 let notesCollapsed = false;
@@ -140,10 +152,9 @@ contentWrapper.style.cssText = [
     'flex:1',
     'display:flex',
     'width:100%',
-    'height:calc(100% - 32px)',
+    'height:100%',
     'border-left:3px solid rgba(0,0,0,0.2)',
     'border-right:3px solid rgba(0,0,0,0.2)',
-    'border-bottom:3px solid rgba(0,0,0,0.2)',
     'box-sizing:border-box',
     'overflow:hidden',
 ].join(';');
@@ -234,6 +245,69 @@ contentWrapper.appendChild(terminalPane);
 
 app.appendChild(contentWrapper);
 
+statusBar = document.createElement('div');
+statusBar.id = 'app-statusbar';
+statusBar.style.cssText = [
+    'height:24px',
+    'display:flex',
+    'align-items:center',
+    'width:100%',
+    `background:linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), rgba(30,30,30,1)`,
+    'border-left:3px solid rgba(0,0,0,0.2)',
+    'border-right:3px solid rgba(0,0,0,0.2)',
+    'border-bottom:3px solid rgba(0,0,0,0.2)',
+    'border-top:1px solid rgba(0,0,0,0.3)',
+    'box-sizing:border-box',
+    'overflow:hidden',
+    'font-size:12px',
+    'line-height:1',
+    'padding:0',
+].join(';');
+
+notesStatusWrap = document.createElement('div');
+notesStatusWrap.id = 'notes-status-wrap';
+notesStatusWrap.style.cssText = [
+    'width:50%',
+    'height:100%',
+    'display:flex',
+    'align-items:center',
+    'padding:0 10px',
+    'min-width:0',
+    'box-sizing:border-box',
+].join(';');
+
+const notesStatus = document.createElement('div');
+notesStatus.id = 'notes-status';
+notesStatus.setAttribute('role', 'status');
+notesStatus.style.cssText = [
+    'width:100%',
+    'white-space:nowrap',
+    'overflow:hidden',
+    'text-overflow:ellipsis',
+    'opacity:0.85',
+].join(';');
+notesStatusWrap.appendChild(notesStatus);
+
+terminalStatus = document.createElement('div');
+terminalStatus.id = 'terminal-status';
+terminalStatus.style.cssText = [
+    'flex:1',
+    'height:100%',
+    'display:flex',
+    'align-items:center',
+    'padding:0 10px',
+    'min-width:0',
+    'white-space:nowrap',
+    'overflow:hidden',
+    'text-overflow:ellipsis',
+    'opacity:0.85',
+    'box-sizing:border-box',
+].join(';');
+
+statusBar.appendChild(notesStatusWrap);
+statusBar.appendChild(terminalStatus);
+app.appendChild(statusBar);
+
 // Setup event listeners after DOM elements are created
 splitHandle.addEventListener('mousedown', (event) => {
     if (event.target === splitToggle) {
@@ -256,9 +330,19 @@ splitToggle.addEventListener('click', (event) => {
     toggleNotesPaneCollapsed();
 });
 
+refreshStatusBarLayout();
+
     // Update titlebar text and colors asynchronously after shell render.
     void hydrateTitlebarAndBorders();
 })();
+
+function refreshStatusBarLayout() {
+    if (!notesPane || !notesStatusWrap) {
+        return;
+    }
+
+    notesStatusWrap.style.width = notesPane.style.width || '50%';
+}
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -338,6 +422,8 @@ function setSplitFromClientX(clientX) {
     splitToggle.setAttribute('aria-label', 'Collapse notes pane');
     splitToggle.title = 'Collapse notes pane';
 
+    refreshStatusBarLayout();
+
     // Terminal renderer listens for window resize to recompute canvas/rows.
     //window.dispatchEvent(new Event('resize'));
 }
@@ -379,6 +465,8 @@ function toggleNotesPaneCollapsed() {
             void adjustWindowFrameBy(lastCollapseDeltaPx);
         }
     }
+
+    refreshStatusBarLayout();
 
     //window.dispatchEvent(new Event('resize'));
 }

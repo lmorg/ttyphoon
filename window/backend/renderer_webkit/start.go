@@ -39,6 +39,8 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 		runtime.EventsEmit(wapp, "setCursor", css)
 	})
 
+	runtime.EventsEmit(wapp, "terminalStatusBarText", wr.statusBarText)
+
 	wr.hotkeys()
 	go wr.blinkSlowLoop()
 
