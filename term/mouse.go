@@ -257,7 +257,7 @@ func (term *Term) MouseHover(pos *types.XY) {
 			term._mousePosRenderer.Set(func() {
 				term.renderer.DrawRectWithColour(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
-					&types.XY{X: term.size.X, Y: 1},
+					&types.XY{X: term.size.X + 1, Y: 1},
 					colour, true,
 				)
 			})
@@ -274,7 +274,7 @@ func (term *Term) MouseHover(pos *types.XY) {
 		term._mousePosRenderer.Set(func() {
 			term.renderer.DrawRectWithColour(term.tile,
 				&types.XY{X: 0, Y: relBlockPos[0]},
-				&types.XY{X: term.size.X, Y: relBlockPos[1]},
+				&types.XY{X: term.size.X + 1, Y: relBlockPos[1]},
 				colour, true,
 			)
 		})
