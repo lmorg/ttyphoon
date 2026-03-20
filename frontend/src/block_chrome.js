@@ -12,7 +12,7 @@ export function drawBlockChrome(offCtx, getCellSize, cmd) {
     const x = xCell * cellWidth;
     const y = yCell * cellHeight;
     const h = heightCells * cellHeight;
-    const barWidth = cellWidth / 2; //Math.max(2, Math.floor(cellWidth * (cmd.folded ? 0.5 : 0.25)));
+    const barWidth = Math.max(2, Math.floor(cellWidth * (cmd.folded ? 1 : 0.5)));
 
     offCtx.fillStyle = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
     offCtx.globalAlpha = 0.75;
@@ -20,8 +20,8 @@ export function drawBlockChrome(offCtx, getCellSize, cmd) {
 
     if (!cmd.folded && Number.isFinite(cmd.endX) && cmd.endX >= xCell) {
         const lineY = y + h;
-        const lineEndX = ((cmd.endX + 1) * cellWidth) - 1;
-        offCtx.fillRect(x, lineY, Math.max(1, lineEndX - x + 1), 1);
+        const lineEndX = (cmd.endX * cellWidth);
+        offCtx.fillRect(x, lineY, Math.max(1, lineEndX - x), 1);
     }
 
     offCtx.globalAlpha = 1;

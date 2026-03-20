@@ -289,8 +289,8 @@ function drawFrame(cmd = null) {
         height = Math.max(0, rows * cellHeight);
     }
 
-    width = Math.min(width, Math.max(0, offscreen.width-x));
-    height = Math.min(height, Math.max(0, offscreen.height-y));
+    width = Math.min(width, Math.max(0, offscreen.width-x)) + 2;
+    height = Math.min(height, Math.max(0, offscreen.height-y)) + 2;
 
     if (width <= 0 || height <= 0) {
         return;
