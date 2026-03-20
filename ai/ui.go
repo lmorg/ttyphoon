@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"text/template"
@@ -71,7 +72,16 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 
 	go func() {
 		startTime := time.Now()
-		result, err := agent.RunLLM(prompt, sticky)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		sticky.UpdateCanceller(cancel)
+		defer cancel()
+
+		result, err := agent.RunLLMWithStream(ctx, prompt, func(chunk string) {
+			if chunk == "" {
+				return
+			}
+			agent.Renderer().EmitAIResponseChunk(chunk)
+		})
 		fin <- struct{}{}
 		if err != nil {
 			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())

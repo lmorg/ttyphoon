@@ -221,6 +221,13 @@ func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 	})
 }
 
+func (wr *webkitRender) EmitAIResponseChunk(chunk string) {
+	if wr.wapp == nil || chunk == "" {
+		return
+	}
+	runtime.EventsEmit(wr.wapp, "aiResponseStream", chunk)
+}
+
 func (wr *webkitRender) DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32) {
 	if wr.wapp == nil || dataURL == "" {
 		return

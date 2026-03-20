@@ -27,6 +27,8 @@ export function ListFiles():Promise<Array<string>>;
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
+export function RunAIAgentWithStream(arg1:string,arg2:string):Promise<void>;
+
 export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveFile(arg1:string,arg2:string):Promise<void>;

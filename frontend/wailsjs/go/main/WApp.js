@@ -50,6 +50,10 @@ export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
+export function RunAIAgentWithStream(arg1, arg2) {
+  return window['go']['main']['WApp']['RunAIAgentWithStream'](arg1, arg2);
+}
+
 export function RunNote(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['RunNote'](arg1, arg2, arg3);
 }

@@ -4,10 +4,7 @@ import (
 	"context"
 	"log"
 	"strings"
-	"time"
 
-	"github.com/lmorg/ttyphoon/debug"
-	"github.com/lmorg/ttyphoon/types"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
@@ -66,16 +63,16 @@ func initLLM(agent *Agent) error {
 
 const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
-// RunLLM calls the LLM with the prompt string.
+// RunLLMWithStream calls the LLM with the prompt string and streams responses.
 // Use `ai` package to create specific prompts.
-func (agent *Agent) RunLLM(prompt string, sticky types.Notification) (result string, err error) {
-	if debug.Trace {
-		log.Printf("RunLLM prompt:\n%s", prompt)
+func (agent *Agent) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (result string, err error) {
+	/*if debug.Trace {
+		log.Printf("RunLLMWithStream prompt:\n%s", prompt)
 		defer func() {
-			log.Printf("RunLLM result:\n%s", result)
-			log.Printf("RunLLM error: %v", err)
+			log.Printf("RunLLMWithStream result:\n%s", result)
+			log.Printf("RunLLMWithStream error: %v", err)
 		}()
-	}
+	}*/
 
 	if agent.fnCancel != nil {
 		agent.fnCancel()
@@ -89,11 +86,18 @@ func (agent *Agent) RunLLM(prompt string, sticky types.Notification) (result str
 		}
 	}
 
-	var ctx context.Context
-	ctx, agent.fnCancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	sticky.UpdateCanceller(agent.fnCancel)
-
-	result, err = chains.Run(ctx, agent.executor, prompt, chains.WithTemperature(1))
+	result, err = chains.Run(
+		ctx,
+		agent.executor,
+		prompt,
+		chains.WithTemperature(1),
+		chains.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+			if streamCallback != nil && len(chunk) > 0 {
+				streamCallback(string(chunk))
+			}
+			return nil
+		}),
+	)
 
 	if err == nil {
 		return result, nil
@@ -101,7 +105,11 @@ func (agent *Agent) RunLLM(prompt string, sticky types.Notification) (result str
 
 	if strings.HasPrefix(err.Error(), _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT) {
 		log.Println(err)
-		return err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):], nil // bit of a kludge this one
+		response := err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):]
+		if streamCallback != nil {
+			streamCallback(response)
+		}
+		return response, nil
 	}
 	return result, err
 }

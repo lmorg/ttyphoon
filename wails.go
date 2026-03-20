@@ -12,8 +12,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -316,6 +318,24 @@ func (a *WApp) TerminalCopyImageDataURL(dataURL string) error {
 	}
 
 	return renderer.CopyImageToClipboard(png)
+}
+
+func (a *WApp) RunAIAgentWithStream(tileID, prompt string) error {
+	agt := agent.Get(tileID)
+	if agt == nil {
+		return fmt.Errorf("agent not found for tile %s", tileID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	_, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "aiResponseStream", chunk)
+		}
+	})
+
+	return err
 }
 
 func (a *WApp) TerminalGetTabs() []map[string]any {

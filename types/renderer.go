@@ -66,6 +66,7 @@ type Renderer interface {
 	//ShowPreview(string)
 	//HidePreview()
 	NotesCreateAndOpen(filename, contents string)
+	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	Close()
 }

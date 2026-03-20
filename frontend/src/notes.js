@@ -48,6 +48,14 @@ app.innerHTML = `
                 <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-jupyter"></div>
                 </div>
+                <div id="notes-ai-panel" class="notes-ai-panel" data-collapsed="true">
+                    <div class="notes-ai-header">
+                        <button id="notes-ai-toggle" type="button" class="notes-ai-toggle" title="Toggle AI panel">AI ▾</button>
+                        <button id="notes-ai-clear" type="button" class="notes-ai-clear" title="Clear AI output">Clear</button>
+                    </div>
+                    <div id="notes-ai-output" class="notes-ai-output"></div>
+                </div>
+                <button id="notes-ai-restore" type="button" class="notes-ai-restore" title="Show AI panel">AI</button>
             </div>
         </main>
     </div>
@@ -109,7 +117,12 @@ const elements = {
     findCounter: document.getElementById('notes-find-counter'),
     findPrev: document.getElementById('notes-find-prev'),
     findNext: document.getElementById('notes-find-next'),
-    findClose: document.getElementById('notes-find-close')
+    findClose: document.getElementById('notes-find-close'),
+    aiPanel: document.getElementById('notes-ai-panel'),
+    aiToggle: document.getElementById('notes-ai-toggle'),
+    aiClear: document.getElementById('notes-ai-clear'),
+    aiOutput: document.getElementById('notes-ai-output'),
+    aiRestore: document.getElementById('notes-ai-restore')
 };
 
 const state = {
@@ -1153,6 +1166,61 @@ EventsOn("noteComplete", (data) => {
     if (stopBtn) stopBtn.style.display = 'none';
 });
 
+// AI Panel Event Handlers
+function setAIPanelCollapsed(collapsed) {
+    const isCollapsed = collapsed === true;
+    elements.aiPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
+    elements.aiToggle.textContent = isCollapsed ? 'AI ▲' : 'AI ▼';
+    if (elements.aiRestore) {
+        elements.aiRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
+    }
+    localStorage.setItem('notes-ai-panel-collapsed', String(isCollapsed));
+}
+
+function toggleAIPanel() {
+    const isCollapsed = elements.aiPanel.dataset.collapsed === 'true';
+    setAIPanelCollapsed(!isCollapsed);
+}
+
+function clearAIOutput() {
+    elements.aiOutput.textContent = '';
+}
+
+function appendAIText(text) {
+    if (elements.aiOutput.textContent === 'No AI response yet') {
+        elements.aiOutput.textContent = '';
+    }
+    elements.aiOutput.appendChild(document.createTextNode(text));
+    elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+}
+
+// Event listener for streaming AI responses
+EventsOn("aiResponseStream", (chunk) => {
+    const text = String(chunk ?? '');
+    if (text) {
+        appendAIText(text);
+        // Auto-expand AI panel when response starts
+        if (elements.aiPanel.dataset.collapsed === 'true') {
+            toggleAIPanel();
+        }
+    }
+});
+
+// Setup AI panel listeners
+if (elements.aiToggle) {
+    elements.aiToggle.addEventListener('click', toggleAIPanel);
+}
+if (elements.aiClear) {
+    elements.aiClear.addEventListener('click', clearAIOutput);
+}
+if (elements.aiRestore) {
+    elements.aiRestore.addEventListener('click', () => setAIPanelCollapsed(false));
+}
+
+// Restore AI panel state from localStorage
+const savedCollapsedState = localStorage.getItem('notes-ai-panel-collapsed');
+setAIPanelCollapsed(savedCollapsedState !== 'false');
+
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
@@ -1560,21 +1628,116 @@ function applyWindowStyle(result) {
             position: relative;
             flex: 1;
             min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         #notes-editor-wrap,
         #notes-preview-wrap,
         #notes-jupyter-wrap {
-            position: absolute;
-            inset: 0;
+            flex: 1;
             display: none;
             min-height: 0;
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
         }
 
         #notes-editor-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
         #notes-jupyter-wrap[data-active="true"] {
             display: block;
+        }
+
+        .notes-ai-panel {
+            display: flex;
+            flex-direction: column;
+            border-top: 2px solid var(--fg);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .notes-ai-panel[data-collapsed="false"] {
+            flex: 0 1 35%;
+            overflow-y: auto;
+        }
+
+        .notes-ai-panel[data-collapsed="true"] {
+            flex: 0 0 0;
+            min-height: 0;
+            border-top: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .notes-ai-restore {
+            display: none;
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            z-index: 2;
+            border-radius: 999px;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.4);
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.9);
+            color: var(--fg);
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: ${result.fontSize - 2}px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notes-ai-restore:hover {
+            border-color: var(--fg);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 1);
+        }
+
+        .notes-ai-header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.1);
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            flex-shrink: 0;
+        }
+
+        .notes-ai-header button {
+            border-radius: 3px;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
+            background: transparent;
+            color: var(--fg);
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: ${result.fontSize - 2}px;
+            transition: all 0.2s ease;
+        }
+
+        .notes-ai-header button:hover {
+            border-color: var(--fg);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+        }
+
+        #notes-ai-clear:hover {
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        #notes-ai-output {
+            flex: 1;
+            padding: 12px;
+            font-size: ${result.fontSize}px;
+            line-height: 1.5;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace;
+            color: var(--fg);
+        }
+
+        #notes-ai-output:empty::before {
+            content: "No AI response yet";
+            opacity: 0.5;
+            font-style: italic;
         }
 
         #notes-editor {

@@ -142,6 +142,8 @@ func (sr *sdlRender) _triggerRedraw() {
 	sr._redraw <- true
 }
 
+func (sr *sdlRender) EmitAIResponseChunk(_ string) {}
+
 func (sr *sdlRender) Close() {
 	typeface.Close()
 	sr.window.Destroy()
