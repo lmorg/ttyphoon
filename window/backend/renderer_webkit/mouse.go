@@ -9,10 +9,10 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	}
 
 	if wr.termWin != nil && wr.termWin.Active != nil && wr.termWin.Active.GetTerm() != nil {
-		wr.termWin.Active.GetTerm().HasFocus(false)
+		wr.termWin.Active.GetTerm().SetFocus(false)
 	}
 
-	tile.GetTerm().HasFocus(true)
+	tile.GetTerm().SetFocus(true)
 	if wr.termWin != nil {
 		wr.termWin.Active = tile
 	}

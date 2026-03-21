@@ -144,8 +144,8 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
-	sr.termWin.Active.GetTerm().HasFocus(false)
-	tile.GetTerm().HasFocus(true)
+	sr.termWin.Active.GetTerm().SetFocus(false)
+	tile.GetTerm().SetFocus(true)
 	sr.termWin.Active = tile
 	sr.cacheBgTexture.Destroy(sr)
 	if sr.tmux != nil {

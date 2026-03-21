@@ -13,7 +13,7 @@ func (term *Term) _renderCursor() {
 		return
 	}
 
-	if !term._hasFocus || term.renderer.GetBlinkState() {
+	if !term._isFocused || term.renderer.GetBlinkState() {
 		var w int32 = 1
 		sgr := term.currentCell().Sgr
 		if sgr != nil && sgr.Bitwise.Is(types.SGR_WIDE_CHAR) {

@@ -10,7 +10,10 @@ import {
     WindowSetPosition,
     WindowSetSize,
 } from '../wailsjs/runtime/runtime';
-import { GetWindowStyle, GetAppTitle } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, GetAppTitle, TerminalSetFocus } from '../wailsjs/go/main/WApp';
+
+// Global terminal focus state for canvas dimming
+window.terminalFocusedState = true;
 
 // Remove any body margin/padding immediately so there is no layout flash.
 document.body.style.margin = '0';
@@ -140,6 +143,7 @@ let isDraggingSplit = false;
 let notesCollapsed = false;
 let lastNotesWidthPercent = 50;
 let lastCollapseDeltaPx = 0;
+let terminalFocusState = true;
 
 (async () => {
     titlebar = setupTitlebar();
@@ -330,6 +334,22 @@ splitToggle.addEventListener('click', (event) => {
     toggleNotesPaneCollapsed();
 });
 
+notesPane.addEventListener('focusin', () => {
+    setTerminalFocusState(false);
+});
+
+notesPane.addEventListener('mousedown', () => {
+    setTerminalFocusState(true);
+});
+
+terminalPane.addEventListener('focusin', () => {
+    setTerminalFocusState(true);
+});
+
+terminalPane.addEventListener('mousedown', () => {
+    setTerminalFocusState(true);
+});
+
 refreshStatusBarLayout();
 
     // Update titlebar text and colors asynchronously after shell render.
@@ -476,6 +496,16 @@ function requestTerminalResizeAfterLayout() {
     requestAnimationFrame(() => {
         window.dispatchEvent(new Event('resize'));
     });
+}
+
+function setTerminalFocusState(focused) {
+    if (terminalFocusState === focused) {
+        return;
+    }
+
+    terminalFocusState = focused;
+    window.terminalFocusedState = focused;
+    TerminalSetFocus(focused).catch(() => {});
 }
 
 window.addEventListener('mousemove', (event) => {

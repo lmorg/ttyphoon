@@ -524,7 +524,9 @@ EventsOn("terminalRedraw", ops => {
             continue;
         }
         if (cmd.op === 'tile_overlay') {
-            drawTileOverlay(cmd);
+            if (window.terminalFocusedState === true) {
+                drawTileOverlay(cmd);
+            }
             continue;
         }
         if (cmd.op === 'highlight_rect') {
@@ -537,7 +539,22 @@ EventsOn("terminalRedraw", ops => {
     }
 
     requestAnimationFrame(() => {
+        // Fill canvas with theme background
+        const bg = windowStyle?.colors?.bg;
+        if (bg) {
+            ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Draw terminal content
         ctx.drawImage(offscreen, 0, 0);
+        
+        // Apply dim overlay if terminal is not focused
+        if (window.terminalFocusedState === false) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
         rafPending = false;
     });
 });

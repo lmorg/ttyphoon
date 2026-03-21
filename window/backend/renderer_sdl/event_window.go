@@ -21,7 +21,7 @@ func (sr *sdlRender) eventWindow(evt *sdl.WindowEvent) {
 
 	case sdl.WINDOWEVENT_FOCUS_GAINED:
 		sr.cancelWInputBox()
-		sr.termWin.Active.GetTerm().HasFocus(true)
+		sr.termWin.Active.GetTerm().SetFocus(true)
 		sr.window.SetWindowOpacity(float32(config.Config.Window.Opacity) / 100)
 		sr.hkToggle = true
 		if config.Config.Tmux.Enabled {
@@ -29,7 +29,7 @@ func (sr *sdlRender) eventWindow(evt *sdl.WindowEvent) {
 		}
 
 	case sdl.WINDOWEVENT_FOCUS_LOST:
-		sr.termWin.Active.GetTerm().HasFocus(false)
+		sr.termWin.Active.GetTerm().SetFocus(false)
 		sr.window.SetWindowOpacity(float32(config.Config.Window.InactiveOpacity) / 100)
 		sr.hkToggle = false
 	}

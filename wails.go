@@ -228,6 +228,21 @@ func (a *WApp) TerminalMouseMotion(cellX, cellY, relX, relY, state int32) {
 	renderer.HandleMouseMotion(cellX, cellY, relX, relY, state)
 }
 
+func (a *WApp) TerminalSetFocus(focused bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	tile := renderer.ActiveTile()
+	if tile == nil || tile.GetTerm() == nil {
+		return
+	}
+
+	tile.GetTerm().SetFocus(focused)
+	renderer.TriggerRedraw()
+}
+
 func (a *WApp) TerminalRequestRedraw() {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

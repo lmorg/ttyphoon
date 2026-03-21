@@ -212,7 +212,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	pane.curPath = info.CurPath
 	if pane.term != nil {
 		pane.term.MakeVisible(info.WinActive)
-		pane.term.HasFocus(info.Active)
+		pane.term.SetFocus(info.Active)
 		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 	}
 

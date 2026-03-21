@@ -69,7 +69,7 @@ type Term struct {
 	// state
 	_vtMode          _stateVtMode
 	_insertOrReplace _stateIrmT
-	_hasFocus        bool
+	_isFocused       bool
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
@@ -360,10 +360,14 @@ func (term *Term) updateScrollback() {
 	term.renderer.TriggerRedraw()
 }
 
-func (term *Term) HasFocus(state bool) {
-	term._hasFocus = state
+func (term *Term) SetFocus(state bool) {
+	term._isFocused = state
 	//term._slowBlinkState = true
 	term.renderer.SetBlinkState(true)
+}
+
+func (term *Term) IsFocused() bool {
+	return term._isFocused
 }
 
 func (term *Term) MakeVisible(visible bool) {
