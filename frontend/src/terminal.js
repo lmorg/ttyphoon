@@ -86,6 +86,16 @@ function applyTerminalStyles(result) {
     const style = document.createElement('style');
     style.id = 'terminal-theme';
     style.textContent = `
+        :root {
+            --terminal-menu-bg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            --terminal-menu-fg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
+            --terminal-menu-border: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+            --terminal-menu-separator: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.3);
+            --terminal-menu-hover: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.4);
+            --terminal-menu-font: ${result.fontFamily};
+            --terminal-menu-font-size: 14px;
+        }
+
         #terminal-app {
             display: flex;
             flex-direction: column;

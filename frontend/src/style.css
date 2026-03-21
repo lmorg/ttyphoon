@@ -10,14 +10,6 @@ body {
 }
 
 @font-face {
-    font-family: "Hasklig";
-    font-style: normal;
-    font-weight: 400;
-    src: local(""),
-    url("assets/fonts/Hasklig-Regular.ttf") format("ttf");
-}
-
-@font-face {
     font-family: "Font Awesome Solid";
     font-style: normal;
     font-weight: 900;
@@ -143,22 +135,25 @@ body {
 .tty-menu {
     position: fixed;
     z-index: 10000;
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: var(--terminal-menu-bg);
+    border: 1px solid var(--terminal-menu-border);
     border-radius: 8px;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-    color: #c9d1d9;
+    color: var(--terminal-menu-fg);
     user-select: none;
-    font-family: Hasklig, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
+    font-family: var(--terminal-menu-font);
+    font-size: var(--terminal-menu-font-size, 14px);
     overflow: hidden;
 }
 
 .tty-menu-title {
     padding: 8px 10px;
-    color: #8b949e;
+    color: var(--terminal-menu-fg);
+    opacity: 0.7;
     font-weight: 600;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--terminal-menu-separator);
+    cursor: default;
+    text-align: center;
 }
 
 .tty-menu-list {
@@ -168,28 +163,44 @@ body {
     overflow-x: hidden;
     padding: 6px;
     gap: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--terminal-menu-fg) transparent;
+}
+
+.tty-menu-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tty-menu-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tty-menu-list::-webkit-scrollbar-thumb {
+    background-color: var(--terminal-menu-fg);
+    border-radius: 3px;
+    opacity: 0.5;
 }
 
 .tty-listbox-search {
     padding: 8px 10px 6px 10px;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--terminal-menu-separator);
 }
 
 .tty-listbox-search-input {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid #30363d;
+    border: 1px solid var(--terminal-menu-border);
     border-radius: 6px;
-    background: #161b22;
-    color: #c9d1d9;
+    background: var(--terminal-menu-fg);
+    color: var(--terminal-menu-bg);
     padding: 6px 8px;
-    font-family: Hasklig, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
+    font-family: var(--terminal-menu-font);
+    font-size: var(--terminal-menu-font-size, 14px);
     outline: none;
 }
 
 .tty-listbox-search-input:focus {
-    border-color: #58a6ff;
+    border-color: var(--terminal-menu-fg);
 }
 
 .tty-menu-row {
@@ -200,15 +211,17 @@ body {
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: #c9d1d9;
+    color: var(--terminal-menu-fg);
+    font-family: inherit;
+    font-size: inherit;
     text-align: left;
     padding: 7px 8px;
-    cursor: default;
+    cursor: pointer;
 }
 
 .tty-menu-row.is-active,
 .tty-menu-row:hover {
-    background: #1f6feb33;
+    background: var(--terminal-menu-hover);
 }
 
 .tty-menu-row-icon {
@@ -227,6 +240,6 @@ body {
 .tty-menu-separator {
     height: 1px;
     margin: 4px 8px;
-    background: #21262d;
+    background: var(--terminal-menu-separator);
 }
 

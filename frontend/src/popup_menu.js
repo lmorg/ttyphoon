@@ -32,7 +32,13 @@ function isSeparatorTitle(title) {
 function measureIdealWidth(items, title, withIcons) {
     const c = document.createElement('canvas');
     const ctx = c.getContext('2d');
-    ctx.font = '13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    const rootStyle = getComputedStyle(document.documentElement);
+    const fontFamily = rootStyle.getPropertyValue('--terminal-menu-font').trim()
+        || 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    const fontSizeVar = rootStyle.getPropertyValue('--terminal-menu-font-size').trim();
+    const parsedFontSize = Number.parseFloat(fontSizeVar);
+    const fontSize = Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14;
+    ctx.font = `${fontSize}px ${fontFamily}`;
 
     let maxTextW = 0;
     for (const item of items) {
