@@ -30,7 +30,8 @@ func Explain(agent *agent.Agent, promptDialogue bool) {
 const _STICKY_MESSAGE = "Asking %s.... %s"
 
 var _STICKY_SPINNER = []string{
-	"⣾", "⡥", "⡤", "⢀", "⡴", "⡪", "⢔", "⢙", "⢼", "⣊", "⣥", "⡼", "⡹", "⡵", "⠿",
+	"⣾", "⡥", "⡤", "⢀", "⡴", "⡪", "⢔", "⢙", "⢼", "⣊", "⣥", "⡼", "⡹", "⡵",
+	"⠿", "⣇", "⠇", "⠧", "⣓", "⠻", "⢿", "⣴", "⣦", "⢷", "⡶", "⠛", "⠾", "⣟",
 }
 
 func AskAI(agent *agent.Agent, prompt string) {
@@ -55,7 +56,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			case <-fin:
 				sticky.Close()
 				return
-			case <-time.After(500 * time.Millisecond):
+			case <-time.After(100 * time.Millisecond):
 				sticky.SetMessage(fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName(), _STICKY_SPINNER[i]))
 				agent.Renderer().TriggerRedraw()
 				i++

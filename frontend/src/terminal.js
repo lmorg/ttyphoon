@@ -28,6 +28,19 @@ let rafPending = false;
 let tabState = [];
 const imageCache = new Map();
 const terminalStatusEl = document.getElementById('terminal-status');
+const notifContainer = document.getElementById('terminal-notifications');
+
+function updateNotificationOffset() {
+    if (!notifContainer) {
+        return;
+    }
+
+    const tabsHeight = tabsEl && tabsEl.style.display !== 'none'
+        ? Math.ceil(tabsEl.getBoundingClientRect().height)
+        : 0;
+
+    notifContainer.style.top = `${tabsHeight + 8}px`;
+}
 
 if (tabsEl) {
     // Convert wheel up/down into horizontal scrolling so hidden tabs are reachable.
@@ -75,6 +88,7 @@ function renderTerminalTabs(tabs) {
     }
 
     tabsEl.style.display = tabState.length > 0 ? 'flex' : 'none';
+    updateNotificationOffset();
 }
 
 function applyTerminalStyles(result) {
@@ -102,6 +116,7 @@ function applyTerminalStyles(result) {
             height: 100%;
             width: 100%;
             min-height: 0;
+            position: relative;
         }
 
         #terminal-tabs {
@@ -621,8 +636,6 @@ initInputBox(canvas);
 // ------------------------------------------------------------------
 // Notification overlay
 // ------------------------------------------------------------------
-
-const notifContainer = document.getElementById('terminal-notifications');
 
 const _notifyBg = ['#316db0', '#99c0d3', '#f2b71f', '#de333b', '#316db0', '#74953c'];
 const _notifyFg = ['#000000', '#000000', '#000000', '#000000', '#000000', '#000000'];
