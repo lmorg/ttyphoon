@@ -641,9 +641,29 @@ EventsOn('terminalNotification', payload => {
     el.querySelector('.notif-msg').textContent = p.message;
 
     if (!p.sticky) {
-        el.addEventListener('click', () => {
+        // Add timer bar for non-sticky notifications
+        const timerBar = document.createElement('div');
+        timerBar.className = 'notif-timer';
+        el.appendChild(timerBar);
+
+        const dismissTimeout = setTimeout(() => {
             el.classList.add('fade-out');
             el.addEventListener('animationend', () => el.remove(), { once: true });
+        }, 5000);
+
+        // Store timeout on element for cleanup
+        el._dismissTimeout = dismissTimeout;
+
+        el.addEventListener('click', () => {
+            clearTimeout(el._dismissTimeout);
+            el.classList.add('fade-out');
+            el.addEventListener('animationend', () => el.remove(), { once: true });
+        });
+
+        // Start the countdown animation after the element is added to DOM
+        requestAnimationFrame(() => {
+            timerBar.classList.add('active');
+            timerBar.style.animationDuration = '5s';
         });
     }
 
@@ -655,6 +675,11 @@ EventsOn('terminalNotificationClose', payload => {
     if (!notifContainer) return;
     const el = notifContainer.querySelector(`[data-notif-id="${id}"]`);
     if (el) {
+        // Clear any pending timeout
+        if (el._dismissTimeout) {
+            clearTimeout(el._dismissTimeout);
+        }
+        
         el.classList.add('fade-out');
         el.addEventListener('animationend', () => el.remove(), { once: true });
     }

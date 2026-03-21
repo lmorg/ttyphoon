@@ -52,6 +52,15 @@ body {
     }
 }
 
+@keyframes notif-countdown {
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0%;
+    }
+}
+
 #terminal-notifications {
     position: fixed;
     bottom: 12px;
@@ -82,10 +91,24 @@ body {
     margin: 0px;
     padding: 0px;
     animation: notif-fade-in 0.3s ease-out;
+    position: relative;
 }
 
 .terminal-notification.fade-out {
     animation: notif-fade-out 0.3s ease-out forwards;
+}
+
+.notif-timer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 0 0 4px 0;
+}
+
+.notif-timer.active {
+    animation: notif-countdown linear forwards;
 }
 
 .notif-icon {
