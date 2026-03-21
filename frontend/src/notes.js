@@ -1217,10 +1217,8 @@ if (elements.aiRestore) {
     elements.aiRestore.addEventListener('click', () => setAIPanelCollapsed(false));
 }
 
-// Restore AI panel state from localStorage (default to minimized)
-const savedCollapsedState = localStorage.getItem('notes-ai-panel-collapsed');
-const shouldBeCollapsed = savedCollapsedState === 'false' ? false : true;
-setAIPanelCollapsed(shouldBeCollapsed);
+// Always start minimized on application launch.
+setAIPanelCollapsed(true);
 
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
