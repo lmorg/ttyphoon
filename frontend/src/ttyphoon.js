@@ -255,6 +255,7 @@ statusBar.style.cssText = [
     'height:24px',
     'display:flex',
     'align-items:center',
+    'justify-content:space-between',
     'width:100%',
     `background:linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), rgba(30,30,30,1)`,
     'border-left:3px solid rgba(0,0,0,0.2)',
@@ -264,7 +265,7 @@ statusBar.style.cssText = [
     'box-sizing:border-box',
     'overflow:hidden',
     'font-size:12px',
-    'line-height:1',
+    'line-height:1.2',
     'padding:0',
 ].join(';');
 
@@ -530,5 +531,15 @@ window.addEventListener('mouseup', () => {
 // Dynamic imports — the promises resolve asynchronously, but the resolution
 // microtask queue starts only after this synchronous module body finishes.
 // By then #notes-pane and #terminal-pane exist, so each module finds its root.
-import('./notes.js');
-import('./terminal.js');
+Promise.all([
+    import('./notes.js'),
+    import('./terminal.js')
+]).then(() => {
+    // After all modules have loaded, trigger a resize event to ensure
+    // proper sizing of all components (file list, terminal tabs, tmux, etc.)
+    requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'));
+    });
+}).catch((err) => {
+    console.error('Failed to load modules:', err);
+});
