@@ -1651,7 +1651,6 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             border-top: 2px solid var(--fg);
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05);
             transition: all 0.3s ease;
             overflow: hidden;
         }
@@ -1727,11 +1726,15 @@ function applyWindowStyle(result) {
             padding: 12px;
             font-size: ${result.fontSize}px;
             line-height: 1.5;
+            overflow-x: hidden;
             overflow-y: auto;
             white-space: pre-wrap;
             word-wrap: break-word;
+            overflow-wrap: anywhere;
+            word-break: break-word;
             font-family: monospace;
             color: var(--fg);
+            background-color: rgba(0, 0, 0, 0.2);
         }
 
         #notes-ai-output:empty::before {
@@ -1745,12 +1748,23 @@ function applyWindowStyle(result) {
             height: 100%;
             resize: none;
             border-radius: 0;
-            border: 2px solid var(--fg);
+            /*border: 2px solid var(--fg);*/
+            border: 0;
             background: transparent;
             color: var(--fg);
             padding: 10px;
             font-size: ${result.fontSize}px;
             line-height: 1.4;
+        }
+
+        #notes-editor:focus {
+            outline: none;
+            box-shadow: none;
+            border-color: var(--fg);
+        }
+
+        #notes-editor:not(:focus) {
+            background-color: rgba(0, 0, 0, 0.2);
         }
 
         #notes-preview-wrap,
@@ -1972,6 +1986,10 @@ function applyWindowStyle(result) {
 
         .jupyter-code-editable:focus {
             outline: none;
+        }
+
+        .jupyter-code-editable:not(:focus) {
+            background-color: rgba(0, 0, 0, 0.2);
         }
 
         .jupyter-output-wrapper {
