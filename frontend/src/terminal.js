@@ -641,7 +641,10 @@ EventsOn('terminalNotification', payload => {
     el.querySelector('.notif-msg').textContent = p.message;
 
     if (!p.sticky) {
-        el.addEventListener('click', () => el.remove());
+        el.addEventListener('click', () => {
+            el.classList.add('fade-out');
+            el.addEventListener('animationend', () => el.remove(), { once: true });
+        });
     }
 
     notifContainer.appendChild(el);
@@ -651,7 +654,10 @@ EventsOn('terminalNotificationClose', payload => {
     const id = Array.isArray(payload) ? payload[0] : payload;
     if (!notifContainer) return;
     const el = notifContainer.querySelector(`[data-notif-id="${id}"]`);
-    if (el) el.remove();
+    if (el) {
+        el.classList.add('fade-out');
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+    }
 });
 
 // Fullscreen image overlay
