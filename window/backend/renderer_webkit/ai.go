@@ -12,9 +12,7 @@ import (
 
 func askAi(wr *webkitRender) {
 	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{
-		NotesDisplay: true,
-	}
+	agt.Meta = &agent.Meta{}
 
 	wr.DisplayInputBoxW(&DisplayInputBoxWT{
 		Options: DisplayInputBoxWTOptions{
@@ -29,14 +27,13 @@ func askAi(wr *webkitRender) {
 
 func askAiSkill(wr *webkitRender) {
 	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{
-		NotesDisplay: true,
-	}
+	agt.Meta = &agent.Meta{}
 
 	skills := skills.ReadSkills()
 
 	if len(skills) == 0 {
 		wr.DisplayNotification(types.NOTIFY_WARN, "You don't have any Agent Skills available to use")
+		return
 	}
 
 	var padFunc, padName int

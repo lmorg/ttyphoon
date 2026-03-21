@@ -24,11 +24,14 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	}
 
 	menu := wr.NewContextMenu()
-	menu.Append(types.MenuItem{
-		Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
-		Fn:    wr.clipboardPaste,
-		Icon:  0xf0ea,
-	})
+	//menu := wr.contextMenu
+	menu.Append([]types.MenuItem{
+		{
+			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),
+			Fn:    wr.clipboardPaste,
+			Icon:  0xf0ea,
+		},
+	}...)
 
 	if wr.contextMenu != nil && len(wr.contextMenu.MenuItems()) > 0 {
 		menu.Append(wr.contextMenu.MenuItems()...)
@@ -74,6 +77,7 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	}
 
 	menu.DisplayMenu("Select an action")
+	//wr.contextMenu = wr.NewContextMenu()
 }
 
 func (wr *webkitRender) askAi() {

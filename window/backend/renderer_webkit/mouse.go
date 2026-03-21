@@ -31,14 +31,20 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	}
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
+	/*if pos.X == -1 {
+		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})
+		return
+	}*/
+
 	switch button {
 	case types.MOUSE_BUTTON_RIGHT:
 		wr.contextMenu = wr.NewContextMenu() // reset term-provided context menu items for this click
-		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {
-			if state == types.BUTTON_RELEASED {
+		if state == types.BUTTON_RELEASED {
+			wr.contextMenu = wr.NewContextMenu()
+			tile.GetTerm().MouseClick(pos, button, clicks, state, func() {
 				wr.showRightClickContextMenu(wr.convertCellToTileXY(tile, cellX, cellY), true)
-			}
-		})
+			})
+		}
 
 	default:
 		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})

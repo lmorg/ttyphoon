@@ -58,7 +58,6 @@ func (wr *webkitRender) openMenu(title string, items []string, icons []rune, hig
 
 func (wr *webkitRender) NewContextMenu() types.ContextMenu {
 	menu := &contextMenuStub{renderer: wr}
-	wr.contextMenu = menu
 	return menu
 }
 

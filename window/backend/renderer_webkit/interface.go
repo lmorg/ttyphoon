@@ -244,17 +244,3 @@ func (wr *webkitRender) ActiveTile() types.Tile {
 	return wr.termWin.Active
 }
 
-type elementStub struct{}
-
-func (es *elementStub) Generate(_ *types.ApcSlice) error { return nil }
-func (es *elementStub) Write(_ rune) error               { return nil }
-func (es *elementStub) Rune(_ *types.XY) rune            { return 0 }
-func (es *elementStub) Size() *types.XY                  { return &types.XY{} }
-func (es *elementStub) Draw(_ *types.XY)                 {}
-func (es *elementStub) MouseClick(_ *types.XY, _ types.MouseButtonT, _ uint8, _ types.ButtonStateT, _ types.EventIgnoredCallback) {
-}
-func (es *elementStub) MouseWheel(_ *types.XY, _ *types.XY, _ types.EventIgnoredCallback) {}
-func (es *elementStub) MouseMotion(_ *types.XY, _ *types.XY, _ types.EventIgnoredCallback) {
-}
-func (es *elementStub) MouseHover(_ *types.XY, _ *types.XY) func() { return func() {} }
-func (es *elementStub) MouseOut()                                  {}

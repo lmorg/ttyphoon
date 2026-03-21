@@ -29,11 +29,10 @@ type Agent struct {
 }
 
 type Meta struct {
-	CmdLine      string
-	Pwd          string
-	OutputBlock  string
-	NotesDisplay bool
-	Function     string
+	CmdLine     string
+	Pwd         string
+	OutputBlock string
+	Function    string
 }
 
 type allTheAgentsT struct {
