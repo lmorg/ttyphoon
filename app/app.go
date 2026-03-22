@@ -18,7 +18,7 @@ const (
 	version  = "%d.%d.%d"
 	Major    = 0
 	Minor    = 20
-	Revision = 1000
+	Revision = 3000
 )
 
 const TagLine = "The Next Generation Terminal Emulator"
