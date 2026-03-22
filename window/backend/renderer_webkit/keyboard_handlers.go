@@ -54,7 +54,7 @@ func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) 
 		return
 	}
 
-	b := codes.GetAnsiEscSeq(wr.keyboardMode, keyCode, mod)
+	b := codes.GetAnsiEscSeq(wr.keyboardMode.Get(), keyCode, mod)
 	if len(b) > 0 {
 		term.Reply(b)
 		wr.TriggerRedraw()
@@ -71,22 +71,8 @@ func (wr *webkitRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	return true
 }
 
-func (wr *webkitRender) activeTerm() interface{ Reply([]byte) } {
-	if wr.termWin == nil {
-		return nil
-	}
-
-	if wr.termWin.Active != nil && wr.termWin.Active.GetTerm() != nil {
-		return wr.termWin.Active.GetTerm()
-	}
-
-	for _, tile := range wr.termWin.Tiles {
-		if tile != nil && tile.GetTerm() != nil {
-			return tile.GetTerm()
-		}
-	}
-
-	return nil
+func (wr *webkitRender) GetKeyboardModifier() int {
+	return wr.keyModifier
 }
 
 func keyEventModToCodesModifier(ctrl, alt, shift, meta bool) codes.Modifier {

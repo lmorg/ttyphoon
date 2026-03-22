@@ -25,7 +25,7 @@ type webkitRender struct {
 	windowCells   *types.XY
 	windowTitle   string
 	blinkState    atomic.Bool
-	keyboardMode  types.KeyboardMode
+	keyboardMode  keyboardModeT
 	keyModifier   int
 	statusBarText string
 	selection     *selectionState
@@ -282,14 +282,6 @@ func (wr *webkitRender) WindowResized(cols, rows int32) {
 	}
 }
 
-func (wr *webkitRender) SetKeyboardFnMode(mode types.KeyboardMode) {
-	wr.keyboardMode = mode
-}
-
-func (wr *webkitRender) GetKeyboardModifier() int {
-	return wr.keyModifier
-}
-
 func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 	runtime.EventsEmit(wr.wapp, "notesCreateAndOpen", map[string]string{
 		"filename": filename,
@@ -318,4 +310,22 @@ func (wr *webkitRender) Close() {}
 
 func (wr *webkitRender) ActiveTile() types.Tile {
 	return wr.termWin.Active
+}
+
+func (wr *webkitRender) activeTerm() types.Term {
+	if wr.termWin == nil {
+		return nil
+	}
+
+	if wr.termWin.Active != nil && wr.termWin.Active.GetTerm() != nil {
+		return wr.termWin.Active.GetTerm()
+	}
+
+	for _, tile := range wr.termWin.Tiles {
+		if tile != nil && tile.GetTerm() != nil {
+			return tile.GetTerm()
+		}
+	}
+
+	return nil
 }
