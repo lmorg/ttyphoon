@@ -49,7 +49,11 @@ export function initInputBox(canvas) {
 
     function autoGrowTextarea(textarea) {
         textarea.style.height = 'auto';
-        textarea.style.height = `${textarea.scrollHeight + 2}px`;
+        const maxHeight = Math.max(120, window.innerHeight - 220);
+        const nextHeight = Math.min(textarea.scrollHeight + 2, maxHeight);
+        textarea.style.maxHeight = `${maxHeight}px`;
+        textarea.style.height = `${nextHeight}px`;
+        textarea.style.overflowY = textarea.scrollHeight + 2 > maxHeight ? 'auto' : 'hidden';
     }
 
     function inputboxSubmit(isOk) {
