@@ -2045,6 +2045,13 @@ GetWindowStyle().then((result) => {
     applyWindowStyle(result);
 });
 
+EventsOn('terminalStyleUpdate', payload => {
+    const result = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (result && result.colors) {
+        applyWindowStyle(result);
+    }
+});
+
 refreshFiles();
 window.refreshFiles = refreshFiles;
 

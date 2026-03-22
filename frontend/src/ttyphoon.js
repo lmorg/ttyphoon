@@ -11,6 +11,7 @@ import {
     WindowSetSize,
 } from '../wailsjs/runtime/runtime';
 import { GetWindowStyle, GetAppTitle, TerminalSetFocus } from '../wailsjs/go/main/WApp';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 
 // Global terminal focus state for canvas dimming
 window.terminalFocusedState = true;
@@ -82,22 +83,33 @@ async function hydrateTitlebarAndBorders() {
         console.warn('Failed to fetch app name:', err);
     }
 
+    if (titlebar) {
+        titlebar.textContent = appName;
+    }
+
     try {
         const style = await GetWindowStyle();
-        if (style?.colors?.bg) {
-            const bg = style.colors.bg;
-            bgColor = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-            borderColor = `rgba(${bg.Red}, ${bg.Green}, ${bg.Blue}, 0.2)`;
-        }
-        if (style?.colors?.fg) {
-            fgColor = `rgb(${style.colors.fg.Red}, ${style.colors.fg.Green}, ${style.colors.fg.Blue})`;
-        }
+        applyChromePalette(style);
     } catch (err) {
         console.warn('Failed to fetch window style:', err);
     }
+}
+
+function applyChromePalette(style) {
+    let bgColor = 'rgba(30,30,30,1)';
+    let fgColor = 'rgba(255,255,255,0.87)';
+    let borderColor = 'rgba(0,0,0,0.2)';
+
+    if (style?.colors?.bg) {
+        const bg = style.colors.bg;
+        bgColor = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+        borderColor = `rgba(${bg.Red}, ${bg.Green}, ${bg.Blue}, 0.2)`;
+    }
+    if (style?.colors?.fg) {
+        fgColor = `rgb(${style.colors.fg.Red}, ${style.colors.fg.Green}, ${style.colors.fg.Blue})`;
+    }
 
     if (titlebar) {
-        titlebar.textContent = appName;
         titlebar.style.background = bgColor;
         titlebar.style.color = fgColor;
     }
@@ -542,4 +554,11 @@ Promise.all([
     });
 }).catch((err) => {
     console.error('Failed to load modules:', err);
+});
+
+EventsOn('terminalStyleUpdate', payload => {
+    const result = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (result && result.colors) {
+        applyChromePalette(result);
+    }
 });

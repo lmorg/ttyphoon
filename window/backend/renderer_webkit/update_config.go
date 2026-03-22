@@ -157,12 +157,12 @@ func (wr *webkitRender) updateThemeMenu() {
 			filename = "~" + themes[i][len(home):]
 		}
 		config.Config.Terminal.ColorTheme = filename
-		wr.RefreshWindowList()
+		wr.EmitStyleUpdate()
 	}
 
 	fnSelect := func(int) {
 		wr.UpdateConfig()
 	}
 
-	wr.DisplayMenu("Settings > Select a theme", themes, fnHighlight, fnSelect, fnSelect)
+	wr.DisplayMenu("Select a theme", themes, fnHighlight, fnSelect, fnSelect)
 }

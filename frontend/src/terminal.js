@@ -820,6 +820,16 @@ function stopStickySpinner(notifID) {
     }
 }
 
+EventsOn('terminalStyleUpdate', payload => {
+    const result = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (!result || !result.colors) {
+        return;
+    }
+    windowStyle = result;
+    applyTerminalStyles(result);
+    TerminalRequestRedraw().catch(() => {});
+});
+
 EventsOn('terminalNotification', payload => {
     const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
     if (!p || !notifContainer) return;
