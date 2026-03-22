@@ -103,40 +103,12 @@ TypeFace:
   AdjustCellWidth:  0
   AdjustCellHeight: 2
 
-  # Enable or disable drop shadows on terminal. I personally like it because
-  # it makes the text pop. YMMV
-  DropShadow: true
-
   # Ligatures are characters can be combined to make prettier versions of
   # themselves. This requires a supporting font to be used.
-  # Ligatures increases system requirements slightly
   Ligatures: true
-  LigaturePairs:
-    - "->"
-    #- ">>"
-    - "|>"
-    - "=>"
-    - "=="
-    - ">="
-    - "<="
-    - "!="
-    - "||"
-    - "&&"
-    - "?:"
-    #- ".."
-    - "::"
 
 Window:
-  # Window transparency. Some people like it, others do not.
-  # Value is a percentage.
-  # `100` disables transparency
-  Opacity: 100
-  InactiveOpacity: 95
-
   StatusBar: true
-  TabBarFrame: false
-  TabBarActiveHighlight: true
-  TileHighlightFill: true
 
   HoverEffectHighlight: true
 
@@ -150,15 +122,10 @@ Window:
   # Value is time in milliseconds to wait between each refresh.
   # `0` disables a timer-based refresh entirely.
   # Terminal.JumpScrollLineCount also affects the window updates
-  RefreshInterval: 200
+  #RefreshInterval: 200
 
-  # Set this to `false` to switch to software rendering.
-  # Disabling GPU will run slower and consume more system resources, so it is
-  # recommended to leave this set to `true`
-  UseGPU: true
 
 NotesWindow:
-  AlwaysOnTop: false
 
 AI:
   MaxIterations: 10

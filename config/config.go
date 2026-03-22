@@ -118,31 +118,22 @@ type configT struct {
 	} `yaml:"Terminal"`
 
 	Window struct {
-		Opacity                int  `yaml:"Opacity"`
-		InactiveOpacity        int  `yaml:"InactiveOpacity"`
 		StatusBar              bool `yaml:"StatusBar"`
-		TabBarFrame            bool `yaml:"TabBarFrame"`
-		TabBarActiveHighlight  bool `yaml:"TabBarActiveHighlight"`
 		HoverEffectHighlight   bool `yaml:"HoverEffectHighlight"`
-		TileHighlightFill      bool `yaml:"TileHighlightFill"`
 		RefreshInterval        int  `yaml:"RefreshInterval"`
-		UseGPU                 bool `yaml:"UseGPU"`
 		BellVisualNotification bool `yaml:"BellVisualNotification"`
 		BellPlayAudio          bool `yaml:"BellPlayAudio"`
 	} `yaml:"Window"`
 
 	NotesWindow struct {
-		AlwaysOnTop bool `yaml:"AlwaysOnTop"`
 	} `yaml:"NotesWindow"`
 
 	TypeFace struct {
-		FontName         string   `yaml:"FontName"`
-		FontSize         int      `yaml:"FontSize"`
-		Ligatures        bool     `yaml:"Ligatures"`
-		LigaturePairs    []string `yaml:"LigaturePairs"`
-		DropShadow       bool     `yaml:"DropShadow"`
-		AdjustCellWidth  int      `yaml:"AdjustCellWidth"`
-		AdjustCellHeight int      `yaml:"AdjustCellHeight"`
+		FontName         string `yaml:"FontName"`
+		FontSize         int    `yaml:"FontSize"`
+		Ligatures        bool   `yaml:"Ligatures"`
+		AdjustCellWidth  int    `yaml:"AdjustCellWidth"`
+		AdjustCellHeight int    `yaml:"AdjustCellHeight"`
 	} `yaml:"TypeFace"`
 
 	Ai struct {
