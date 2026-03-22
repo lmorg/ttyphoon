@@ -1,5 +1,5 @@
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { TerminalMenuHighlight, TerminalMenuSelect, TerminalMenuCancel } from '../wailsjs/go/main/WApp';
+import { TerminalMenuHighlight, TerminalMenuSelect, TerminalMenuCancel, TerminalRequestRedraw } from '../wailsjs/go/main/WApp';
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
 
@@ -256,6 +256,7 @@ export function initTerminalPopupMenu(canvas) {
 
         if (activeListMenuId !== null) {
             TerminalMenuHighlight(activeListMenuId, item.index).catch(() => {});
+            TerminalRequestRedraw().catch(() => {});
         }
 
         const row = listBody.querySelector(`[data-visible-index="${visibleIndex}"]`);
@@ -328,6 +329,7 @@ export function initTerminalPopupMenu(canvas) {
                 highlightVisibleIndex = i;
                 if (activeListMenuId !== null) {
                     TerminalMenuHighlight(activeListMenuId, item.index).catch(() => {});
+                    TerminalRequestRedraw().catch(() => {});
                 }
             });
 
@@ -367,6 +369,7 @@ export function initTerminalPopupMenu(canvas) {
         const firstSelectable = listItems.find((item) => !item.separator);
         if (firstSelectable && activeListMenuId !== null) {
             TerminalMenuHighlight(activeListMenuId, firstSelectable.index).catch(() => {});
+            TerminalRequestRedraw().catch(() => {});
         }
 
         query = '';

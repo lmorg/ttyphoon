@@ -25,6 +25,7 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	}
 
 	wr.drawSelectionPreview()
+	wr.applyMenuHover()
 
 	wr.applyMouseHoverFromLastPosition()
 

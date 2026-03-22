@@ -65,6 +65,13 @@ func (wr *webkitRender) AddToContextMenu(menuItems ...types.MenuItem) {
 	if wr.contextMenu == nil {
 		wr.contextMenu = wr.NewContextMenu()
 	}
+
+	for i := range menuItems {
+		if menuItems[i].Highlight != nil {
+			menuItems[i].WebkitContextHighlightPersistent = true
+		}
+	}
+
 	wr.contextMenu.Append(menuItems...)
 }
 
@@ -111,9 +118,8 @@ func (wr *webkitRender) MenuCancel(menuID int, index int) {
 }
 
 type contextMenuStub struct {
-	items         []types.MenuItem
-	renderer      *webkitRender
-	hoverCanceler func()
+	items    []types.MenuItem
+	renderer *webkitRender
 }
 
 func (cms *contextMenuStub) Append(items ...types.MenuItem) {
@@ -159,7 +165,19 @@ func (cms *contextMenuStub) Highlight(i int) {
 		return
 	}
 
-	cms.hoverCanceler = cms.items[i].Highlight()
+	hoverFn := cms.items[i].Highlight()
+	if cms.renderer == nil {
+		return
+	}
+
+	if cms.items[i].WebkitContextHighlightPersistent {
+		cms.renderer.setMenuHover(hoverFn, nil, true)
+		cms.renderer.TriggerRedraw()
+		return
+	}
+
+	cms.renderer.setMenuHover(nil, hoverFn, false)
+	cms.renderer.TriggerRedraw()
 }
 
 func (cms *contextMenuStub) Callback(i int) {
@@ -182,8 +200,45 @@ func (cms *contextMenuStub) MenuItems() []types.MenuItem {
 }
 
 func (cms *contextMenuStub) clearHover() {
-	if cms.hoverCanceler != nil {
-		cms.hoverCanceler()
-		cms.hoverCanceler = nil
+	if cms.renderer != nil {
+		cms.renderer.clearMenuHover()
+	}
+}
+
+func (wr *webkitRender) setMenuHover(drawFn, clearFn func(), drawn bool) {
+	wr.menuMu.Lock()
+	wr.menuHoverFn = drawFn
+	wr.menuHoverClear = clearFn
+	wr.menuHoverDrawn = drawn
+	wr.menuMu.Unlock()
+}
+
+func (wr *webkitRender) clearMenuHover() {
+	wr.menuMu.Lock()
+	drawFn := wr.menuHoverFn
+	clearFn := wr.menuHoverClear
+	drawn := wr.menuHoverDrawn
+	wr.menuHoverFn = nil
+	wr.menuHoverClear = nil
+	wr.menuHoverDrawn = false
+	wr.menuMu.Unlock()
+
+	if !drawn && clearFn != nil {
+		clearFn()
+	}
+
+	if drawn && drawFn != nil {
+		wr.TriggerRedraw()
+	}
+}
+
+func (wr *webkitRender) applyMenuHover() {
+	wr.menuMu.Lock()
+	drawFn := wr.menuHoverFn
+	drawn := wr.menuHoverDrawn
+	wr.menuMu.Unlock()
+
+	if drawn && drawFn != nil {
+		drawFn()
 	}
 }

@@ -149,11 +149,11 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				},
 				Fn: func() { ai.Explain(agt, true) },
 			},
-			{
+			/*{
 				Title: "Write debug information to notes...",
 				Icon:  0xf188,
 				Fn:    func() { notesDebug(term, absPosY) },
-			},
+			},*/
 		}...)
 }
 

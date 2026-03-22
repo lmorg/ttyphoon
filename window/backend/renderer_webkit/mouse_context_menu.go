@@ -24,7 +24,6 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	}
 
 	menu := wr.NewContextMenu()
-	//menu := wr.contextMenu
 	menu.Append([]types.MenuItem{
 		{
 			Title: fmt.Sprintf("Paste from clipboard [%s+v]", types.KEY_STR_META),

@@ -38,6 +38,9 @@ type webkitRender struct {
 	menuMu         sync.Mutex
 	menuNextID     int
 	menuCallbacks  map[int]menuCallbacks
+	menuHoverFn    func()
+	menuHoverClear func()
+	menuHoverDrawn bool
 	notifications  notifyT
 	inputBoxes     inputBoxesT
 	nextImageID    atomic.Int64
@@ -243,4 +246,3 @@ func (wr *webkitRender) Close() {}
 func (wr *webkitRender) ActiveTile() types.Tile {
 	return wr.termWin.Active
 }
-
