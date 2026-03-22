@@ -220,7 +220,7 @@ function drawCursorPulseOverlay(targetCtx) {
             targetCtx.globalAlpha = animatedAlpha;
             // Invert underlying pixels so glyph/background always contrast.
             targetCtx.globalCompositeOperation = 'difference';
-            targetCtx.fillStyle = 'rgb(255, 255, 255)';
+            targetCtx.fillStyle = colour;
             targetCtx.fillRect(cursorRect.x, cursorRect.y, cursorRect.width, cursorRect.height);
         } else {
             // Inactive panes: static hollow box cursor.
