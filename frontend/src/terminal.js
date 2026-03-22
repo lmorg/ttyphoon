@@ -29,6 +29,8 @@ let tabState = [];
 const imageCache = new Map();
 const terminalStatusEl = document.getElementById('terminal-status');
 const notifContainer = document.getElementById('terminal-notifications');
+let cursorRects = [];
+let cursorPulseRaf = 0;
 
 function updateNotificationOffset() {
     if (!notifContainer) {
@@ -194,6 +196,121 @@ function fitCanvasToWindow() {
     canvas.height = pane ? pane.clientHeight : window.innerHeight;
     offscreen.width = canvas.width;
     offscreen.height = canvas.height;
+}
+
+function drawCursorPulseOverlay(targetCtx) {
+    if (!Array.isArray(cursorRects) || cursorRects.length === 0) {
+        return;
+    }
+
+    const fg = windowStyle?.colors?.fg;
+    const colour = fg ? `rgb(${fg.Red}, ${fg.Green}, ${fg.Blue})` : 'rgb(255, 255, 255)';
+
+    // Smooth pulse between 30% and 100% alpha over 1.2s.
+    const phase = (performance.now() % 1200) / 1200;
+    const animatedAlpha = 0.3 + (0.7 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+
+    for (const cursorRect of cursorRects) {
+        if (!cursorRect) {
+            continue;
+        }
+
+        targetCtx.save();
+        if (cursorRect.animated) {
+            targetCtx.globalAlpha = animatedAlpha;
+            targetCtx.fillStyle = colour;
+            targetCtx.fillRect(cursorRect.x, cursorRect.y, cursorRect.width, cursorRect.height);
+        } else {
+            // Inactive panes: static hollow box cursor.
+            targetCtx.globalAlpha = 1;
+            targetCtx.strokeStyle = colour;
+            targetCtx.lineWidth = 1;
+            targetCtx.strokeRect(cursorRect.x + 0.5, cursorRect.y + 0.5, Math.max(1, cursorRect.width - 1), Math.max(1, cursorRect.height - 1));
+        }
+        targetCtx.restore();
+    }
+}
+
+function paintTerminalCanvas() {
+    // Fill canvas with theme background
+    const bg = windowStyle?.colors?.bg;
+    if (bg) {
+        ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Draw terminal content
+    ctx.drawImage(offscreen, 0, 0);
+
+    // Apply dim overlay if terminal is not focused
+    if (window.terminalFocusedState === false) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    drawCursorPulseOverlay(ctx);
+}
+
+function ensureCursorPulseLoop() {
+    if (!Array.isArray(cursorRects) || !cursorRects.some((cursor) => cursor?.animated) || cursorPulseRaf !== 0) {
+        return;
+    }
+
+    const tick = () => {
+        if (!Array.isArray(cursorRects) || cursorRects.length === 0) {
+            cursorPulseRaf = 0;
+            return;
+        }
+
+        if (!cursorRects.some((cursor) => cursor?.animated)) {
+            cursorPulseRaf = 0;
+            return;
+        }
+
+        paintTerminalCanvas();
+        cursorPulseRaf = requestAnimationFrame(tick);
+    };
+
+    cursorPulseRaf = requestAnimationFrame(tick);
+}
+
+function syncCursorLoopState() {
+    if (!cursorRects.some((cursor) => cursor?.animated) && cursorPulseRaf !== 0) {
+        cancelAnimationFrame(cursorPulseRaf);
+        cursorPulseRaf = 0;
+    }
+    ensureCursorPulseLoop();
+}
+
+function sameHighlightRect(a, b) {
+    return a && b &&
+        a.op === 'highlight_rect' &&
+        b.op === 'highlight_rect' &&
+        a.x === b.x &&
+        a.y === b.y &&
+        a.width === b.width &&
+        a.height === b.height;
+}
+
+function isCursorMarkerRect(cmd) {
+    if (!cmd || cmd.op !== 'highlight_rect') {
+        return false;
+    }
+
+    const width = Number.isFinite(cmd.width) ? cmd.width : 0;
+    const height = Number.isFinite(cmd.height) ? cmd.height : 0;
+    if (height !== 1 || width < 1 || width > 2) {
+        return false;
+    }
+
+    // Cursor marker emits same fg/bg colour values.
+    const fg = cmd.fg;
+    const bg = cmd.bg;
+    if (!fg || !bg) {
+        return false;
+    }
+
+    return fg.Red === bg.Red && fg.Green === bg.Green && fg.Blue === bg.Blue;
 }
 
 async function copyCanvasSelectionAsPng(payload) {
@@ -534,7 +651,10 @@ EventsOn("terminalRedraw", ops => {
         return;
     }
 
-    for (const cmd of drawOps) {
+    cursorRects = [];
+
+    for (let i = 0; i < drawOps.length; i++) {
+        const cmd = drawOps[i];
         if (cmd.op === 'frame') {
             drawFrame(cmd);
             continue;
@@ -562,6 +682,21 @@ EventsOn("terminalRedraw", ops => {
             continue;
         }
         if (cmd.op === 'highlight_rect') {
+            if (isCursorMarkerRect(cmd)) {
+                const { cellWidth, cellHeight } = font.getCellSize();
+                const animated = isCursorMarkerRect(drawOps[i + 1]) && sameHighlightRect(cmd, drawOps[i + 1]);
+                cursorRects.push({
+                    x: (Number.isFinite(cmd.x) ? cmd.x : 0) * cellWidth,
+                    y: (Number.isFinite(cmd.y) ? cmd.y : 0) * cellHeight,
+                    width: (Number.isFinite(cmd.width) ? cmd.width : 1) * cellWidth,
+                    height: (Number.isFinite(cmd.height) ? cmd.height : 1) * cellHeight,
+                    animated,
+                });
+                if (animated) {
+                    i += 1;
+                }
+                continue;
+            }
             drawHighlightRect(cmd);
             continue;
         }
@@ -571,22 +706,9 @@ EventsOn("terminalRedraw", ops => {
     }
 
     requestAnimationFrame(() => {
-        // Fill canvas with theme background
-        const bg = windowStyle?.colors?.bg;
-        if (bg) {
-            ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        // Draw terminal content
-        ctx.drawImage(offscreen, 0, 0);
-        
-        // Apply dim overlay if terminal is not focused
-        if (window.terminalFocusedState === false) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        
+        paintTerminalCanvas();
+        syncCursorLoopState();
+
         rafPending = false;
     });
 });
