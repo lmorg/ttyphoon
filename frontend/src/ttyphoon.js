@@ -540,6 +540,10 @@ window.addEventListener('mouseup', () => {
     requestTerminalResizeAfterLayout();
 });
 
+EventsOn('toggleNotesPane', () => {
+    toggleNotesPaneCollapsed();
+});
+
 // Dynamic imports — the promises resolve asynchronously, but the resolution
 // microtask queue starts only after this synchronous module body finishes.
 // By then #notes-pane and #terminal-pane exist, so each module finds its root.

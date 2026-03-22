@@ -26,3 +26,11 @@ func (wr *webkitRender) StatusBarText(text string) {
 		runtime.EventsEmit(wr.wapp, "terminalStatusBarText", text)
 	}
 }
+
+func (wr *webkitRender) toggleNotesPane() {
+	if wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "toggleNotesPane")
+}

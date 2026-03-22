@@ -18,21 +18,21 @@ Hotkeys:
   # How many milliseconds to wait before ignoring any chained key presses
   RepeatTTL: 1000
   Functions:
-    "F2::s": Settings
+    "F2::s":  Settings
     "F2::C-r": ReloadSettings
-    "M-v": Paste
-    "C-S-v": Paste
-    "F2::v": VisualEditor
-    "F2::a": AskAI
-    "F2::/": AgentSkills
-    "F2::h": OpenHistory
-    "F2::n": OpenNotes
-    "M-f": SearchRegex
+    "M-v":    Paste
+    "C-S-v":  Paste
+    "F2::v":  VisualEditor
+    "F2::a":  AskAI
+    "F2::/":  AgentSkills
+    "F2::h":  OpenHistory
+    "F2::n":  ShowHideNotes
+    "M-f":    SearchRegex
     "F3::F3": SearchRegex
-    "F3::d": SearchResults
-    "F3::c": SearchClear
-    "F3::a": SearchAIPrompts
-    "F3::h": SearchCommandLines
+    "F3::d":  SearchResults
+    "F3::c":  SearchClear
+    #"F3::a":  SearchAIPrompts
+    "F3::h":  SearchCommandLines
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
