@@ -7,7 +7,6 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -96,14 +95,6 @@ func (sr *sdlRender) drawBg() {
 	}
 }
 
-func (sr *sdlRender) AddToElementStack(item *layer.RenderStackT) {
-	sr._elementStack = append(sr._elementStack, item)
-}
-
-func (sr *sdlRender) AddToOverlayStack(item *layer.RenderStackT) {
-	sr._overlayStack = append(sr._overlayStack, item)
-}
-
 func (sr *sdlRender) createRendererTexture() *sdl.Texture {
 	w, h, err := sr.renderer.GetOutputSize()
 	if err != nil {
@@ -126,60 +117,6 @@ func (sr *sdlRender) createRendererTexture() *sdl.Texture {
 		return nil
 	}
 	return texture
-}
-
-func (sr *sdlRender) restoreRendererTexture() {
-	texture := sr.renderer.GetRenderTarget()
-	sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
-	err := sr.renderer.SetRenderTarget(nil)
-	if err != nil {
-		log.Printf("ERROR: %v", err)
-	}
-}
-
-func (sr *sdlRender) restoreRendererTextureCrop(tile types.Tile) {
-	if tile.GetTerm() == nil {
-		sr.restoreRendererTexture()
-		return
-	}
-
-	size := tile.GetTerm().GetSize()
-
-	src := &sdl.Rect{
-		X: _PANE_LEFT_MARGIN,
-		Y: _PANE_TOP_MARGIN,
-		W: size.X * sr.glyphSize.X,
-		H: size.Y * sr.glyphSize.Y,
-	}
-
-	dst := &sdl.Rect{
-		X: tile.Left()*sr.glyphSize.X + _PANE_LEFT_MARGIN,
-		Y: tile.Top()*sr.glyphSize.Y + _PANE_TOP_MARGIN,
-		W: size.X * sr.glyphSize.X,
-		H: size.Y * sr.glyphSize.Y,
-	}
-
-	texture := sr.renderer.GetRenderTarget()
-	sr.AddToElementStack(&layer.RenderStackT{texture, src, dst, true})
-	err := sr.renderer.SetRenderTarget(nil)
-	if err != nil {
-		log.Printf("ERROR: %v", err)
-	}
-}
-
-func (sr *sdlRender) renderStack(stack *[]*layer.RenderStackT) {
-	var err error
-	for _, item := range *stack {
-		err = sr.renderer.Copy(item.Texture, item.SrcRect, item.DstRect)
-		if err != nil {
-			log.Printf("ERROR: %v", err)
-		}
-		if item.Destroy {
-			_ = item.Texture.Destroy()
-			//sr.TriggerDeallocation(func() { item.Texture.Destroy() })
-		}
-	}
-	*stack = make([]*layer.RenderStackT, 0) // clear image stack
 }
 
 func (sr *sdlRender) isMouseInsideWindow() bool {
@@ -205,7 +142,7 @@ func render(sr *sdlRender) error {
 	rect := &sdl.Rect{W: x, H: y}
 
 	sr.drawBg()
-	sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture._texture, nil, nil, false})
+	//sr.AddToElementStack(&layer.RenderStackT{sr.cacheBgTexture._texture, nil, nil, false})
 
 	for _, tile := range sr.termWin.Tiles {
 		ok := tile.GetTerm().Render()

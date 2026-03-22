@@ -7,11 +7,8 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/creack/pty v1.1.24
 	github.com/forPelevin/gomoji v1.4.1
-	github.com/go-text/render v0.2.0
-	github.com/go-text/typesetting v0.3.2
 	github.com/lmorg/mcp-web-scraper v1.0.1
 	github.com/lmorg/murex v0.0.0-20260111231928-c71002785e97
-	github.com/lmorg/readline/v4 v4.2.2
 	github.com/mark3labs/mcp-go v0.44.0-beta.2
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/mattn/go-sixel v0.0.8
@@ -87,8 +84,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
-	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
-	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect

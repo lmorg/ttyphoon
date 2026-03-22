@@ -2,7 +2,6 @@ package rendersdl
 
 import (
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -29,7 +28,7 @@ func (sr *sdlRender) drawGaugeH(rect *sdl.Rect, value, max int, c *types.Colour)
 	_ = sr.renderer.FillRect(rect)
 
 	sr.renderer.SetRenderTarget(nil)
-	sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
+	//Stack(&layer.RenderStackT{texture, nil, nil, true})
 }
 
 func (sr *sdlRender) DrawGaugeV(tile types.Tile, topLeft *types.XY, height int32, value, max int, c *types.Colour) {
@@ -54,5 +53,5 @@ func (sr *sdlRender) drawGaugeV(rect *sdl.Rect, value, max int, c *types.Colour)
 	_ = sr.renderer.FillRect(rect)
 
 	sr.renderer.SetRenderTarget(nil)
-	sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
+	//sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
 }

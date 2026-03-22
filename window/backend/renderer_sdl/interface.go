@@ -10,8 +10,6 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
-	"github.com/lmorg/ttyphoon/window/backend/typeface"
 	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -68,9 +66,9 @@ type sdlRender struct {
 	menu             *menuWidgetT
 
 	// render function stacks
-	_elementStack []*layer.RenderStackT
-	_overlayStack []*layer.RenderStackT
-	contextMenu   types.ContextMenu
+	//_elementStack []*layer.RenderStackT
+	//_overlayStack []*layer.RenderStackT
+	contextMenu types.ContextMenu
 
 	// state
 	keyboardMode    keyboardModeT
@@ -145,7 +143,7 @@ func (sr *sdlRender) _triggerRedraw() {
 func (sr *sdlRender) EmitAIResponseChunk(_ string) {}
 
 func (sr *sdlRender) Close() {
-	typeface.Close()
+	//typeface.Close()
 	sr.window.Destroy()
 
 	if sr.bell != nil {

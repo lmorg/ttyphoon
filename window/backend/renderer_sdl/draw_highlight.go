@@ -5,7 +5,6 @@ import (
 
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -103,5 +102,5 @@ func (sr *sdlRender) _drawHighlightRect(rect *sdl.Rect, colourBorder, colourFill
 	rect.H -= 2
 	sr.renderer.FillRect(rect)
 
-	sr.AddToOverlayStack(&layer.RenderStackT{texture, nil, nil, true})
+	//.RenderStackT{texture, nil, nil, true})
 }
