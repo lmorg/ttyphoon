@@ -21,18 +21,15 @@ func (wr *webkitRender) hotkeys() {
 		case "Settings":
 			fn = func() { wr.UpdateConfig() }
 			desc = "Settings..."
-		/*case "ReloadSettings":
-		fn = func() {
-			if err := config.LoadConfig(); err != nil {
-				sr.DisplayNotification(types.NOTIFY_DEBUG, err.Error())
+		case "ReloadSettings":
+			fn = func() {
+				if err := config.LoadConfig(); err != nil {
+					wr.DisplayNotification(types.NOTIFY_DEBUG, err.Error())
+				}
+				wr.EmitStyleUpdate()
+				wr.DisplayNotification(types.NOTIFY_INFO, "Settings have been reloaded from disk")
 			}
-			sr.initFooter()
-			updateBlendMode()
-			sr.fontCache.Reallocate()
-			sr.cacheBgTexture.Destroy(sr)
-			sr.DisplayNotification(types.NOTIFY_INFO, "Settings have been reloaded from disk")
-		}
-		desc = "Reload settings from disk"*/
+			desc = "Reload settings from disk"
 
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }
