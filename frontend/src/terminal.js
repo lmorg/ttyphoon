@@ -639,6 +639,55 @@ initInputBox(canvas);
 
 const _notifyBg = ['#316db0', '#99c0d3', '#f2b71f', '#de333b', '#316db0', '#74953c'];
 const _notifyFg = ['#000000', '#000000', '#000000', '#000000', '#000000', '#000000'];
+const _stickySpinnerFrames = [
+    "⣾", "⡥", "⡤", "⢀", "⡴", "⡪", "⢔", "⢙", "⢼", "⣊", "⣥", "⡼", "⡹", "⡵",
+	"⠿", "⣇", "⠇", "⠧", "⣓", "⠻", "⢿", "⣴", "⣦", "⢷", "⡶", "⠛", "⠾", "⣟",
+];
+const _stickySpinnerTimers = new Map();
+
+function sanitizeStickyMessage(message) {
+    if (typeof message !== 'string') {
+        return '';
+    }
+
+    // Strip an existing trailing braille spinner glyph from legacy sticky messages.
+    return message.replace(/\s[\u2800-\u28FF]$/u, '');
+}
+
+function startStickySpinner(el, notifID) {
+    if (!el) {
+        return;
+    }
+
+    let spinner = el.querySelector('.notif-spinner');
+    if (!spinner) {
+        spinner = document.createElement('span');
+        spinner.className = 'notif-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        el.appendChild(spinner);
+    }
+
+    const existingTimer = _stickySpinnerTimers.get(notifID);
+    if (existingTimer) {
+        return;
+    }
+
+    let i = 0;
+    spinner.textContent = _stickySpinnerFrames[i];
+    const timer = setInterval(() => {
+        i = (i + 1) % _stickySpinnerFrames.length;
+        spinner.textContent = _stickySpinnerFrames[i];
+    }, 100);
+    _stickySpinnerTimers.set(notifID, timer);
+}
+
+function stopStickySpinner(notifID) {
+    const timer = _stickySpinnerTimers.get(notifID);
+    if (timer) {
+        clearInterval(timer);
+        _stickySpinnerTimers.delete(notifID);
+    }
+}
 
 EventsOn('terminalNotification', payload => {
     const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
@@ -647,7 +696,12 @@ EventsOn('terminalNotification', payload => {
     // update message if already shown (e.g. SetMessage)
     const existing = notifContainer.querySelector(`[data-notif-id="${p.id}"]`);
     if (existing) {
-        existing.querySelector('.notif-msg').textContent = p.message;
+        const message = p.sticky ? sanitizeStickyMessage(p.message) : p.message;
+        existing.querySelector('.notif-msg').textContent = message;
+        if (p.sticky) {
+            existing.classList.add('is-sticky');
+            startStickySpinner(existing, p.id);
+        }
         return;
     }
 
@@ -661,32 +715,48 @@ EventsOn('terminalNotification', payload => {
     el.dataset.notifType = String(type);
     el.style.cssText = `background:${bg};color:${fg};`;
     el.innerHTML = `<span class="notif-icon" role="img" aria-label="notification icon"></span><span class="notif-msg"></span>`;
-    el.querySelector('.notif-msg').textContent = p.message;
+    const message = p.sticky ? sanitizeStickyMessage(p.message) : p.message;
+    el.querySelector('.notif-msg').textContent = message;
+
+    if (p.sticky) {
+        el.classList.add('is-sticky');
+        startStickySpinner(el, p.id);
+    }
 
     if (!p.sticky) {
-        // Add timer bar for non-sticky notifications
-        const timerBar = document.createElement('div');
-        timerBar.className = 'notif-timer';
-        el.appendChild(timerBar);
+        // Add pie progress indicator for non-sticky notifications.
+        const progress = document.createElement('span');
+        progress.className = 'notif-progress';
+        progress.setAttribute('aria-hidden', 'true');
+        progress.style.setProperty('--progress-deg', '0deg');
+        el.appendChild(progress);
+
+        const durationMs = 5000;
+        const startAt = Date.now();
+        const progressInterval = setInterval(() => {
+            const elapsed = Date.now() - startAt;
+            const ratio = Math.max(0, Math.min(1, elapsed / durationMs));
+            progress.style.setProperty('--progress-deg', `${Math.round(ratio * 360)}deg`);
+            if (ratio >= 1) {
+                clearInterval(progressInterval);
+            }
+        }, 50);
 
         const dismissTimeout = setTimeout(() => {
+            clearInterval(progressInterval);
             el.classList.add('fade-out');
             el.addEventListener('animationend', () => el.remove(), { once: true });
-        }, 5000);
+        }, durationMs);
 
-        // Store timeout on element for cleanup
+        // Store timers on element for cleanup.
         el._dismissTimeout = dismissTimeout;
+        el._progressInterval = progressInterval;
 
         el.addEventListener('click', () => {
             clearTimeout(el._dismissTimeout);
+            clearInterval(el._progressInterval);
             el.classList.add('fade-out');
             el.addEventListener('animationend', () => el.remove(), { once: true });
-        });
-
-        // Start the countdown animation after the element is added to DOM
-        requestAnimationFrame(() => {
-            timerBar.classList.add('active');
-            timerBar.style.animationDuration = '5s';
         });
     }
 
@@ -696,11 +766,15 @@ EventsOn('terminalNotification', payload => {
 EventsOn('terminalNotificationClose', payload => {
     const id = Array.isArray(payload) ? payload[0] : payload;
     if (!notifContainer) return;
+    stopStickySpinner(id);
     const el = notifContainer.querySelector(`[data-notif-id="${id}"]`);
     if (el) {
         // Clear any pending timeout
         if (el._dismissTimeout) {
             clearTimeout(el._dismissTimeout);
+        }
+        if (el._progressInterval) {
+            clearInterval(el._progressInterval);
         }
         
         el.classList.add('fade-out');

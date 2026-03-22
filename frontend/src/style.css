@@ -44,15 +44,6 @@ body {
     }
 }
 
-@keyframes notif-countdown {
-    from {
-        width: 100%;
-    }
-    to {
-        width: 0%;
-    }
-}
-
 #terminal-notifications {
     position: absolute;
     top: 8px;
@@ -91,17 +82,17 @@ body {
     animation: notif-fade-out 0.3s ease-out forwards;
 }
 
-.notif-timer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 2px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 0 0 4px 0;
-}
-
-.notif-timer.active {
-    animation: notif-countdown linear forwards;
+.notif-progress {
+    --progress-deg: 0deg;
+    margin-left: auto;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border-radius: 50%;
+    align-self: center;
+    margin-right: 10px;
+    background: conic-gradient(rgba(0, 0, 0, 0.55) var(--progress-deg), rgba(0, 0, 0, 0.15) 0deg);
+    border: 1px solid rgba(0, 0, 0, 0.35);
 }
 
 .notif-icon {
@@ -130,6 +121,16 @@ body {
     align-self: center;
     padding-right: 16px;
     font-size: 15px;
+}
+
+.notif-spinner {
+    margin-left: auto;
+    min-width: 1.2em;
+    text-align: center;
+    font-size: 18px;
+    line-height: 1;
+    align-self: center;
+    padding-right: 10px;
 }
 
 /* WebKit listbox/context menus */

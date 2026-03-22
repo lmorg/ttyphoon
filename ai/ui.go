@@ -27,12 +27,7 @@ func Explain(agent *agent.Agent, promptDialogue bool) {
 	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
-const _STICKY_MESSAGE = "Asking %s.... %s"
-
-var _STICKY_SPINNER = []string{
-	"⣾", "⡥", "⡤", "⢀", "⡴", "⡪", "⢔", "⢙", "⢼", "⣊", "⣥", "⡼", "⡹", "⡵",
-	"⠿", "⣇", "⠇", "⠧", "⣓", "⠻", "⢿", "⣴", "⣦", "⢷", "⡶", "⠛", "⠾", "⣟",
-}
+const _STICKY_MESSAGE = "Asking %s...."
 
 func AskAI(agent *agent.Agent, prompt string) {
 	go func() {
@@ -43,29 +38,9 @@ func AskAI(agent *agent.Agent, prompt string) {
 func askAI(agent *agent.Agent, prompt string, title string, query string) {
 	sticky := agent.Renderer().DisplaySticky(
 		types.NOTIFY_INFO,
-		fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName(), _STICKY_SPINNER[0]),
+		fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName()),
 		func() {},
 	)
-
-	fin := make(chan struct{})
-	i := 1
-
-	go func() {
-		for {
-			select {
-			case <-fin:
-				sticky.Close()
-				return
-			case <-time.After(100 * time.Millisecond):
-				sticky.SetMessage(fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName(), _STICKY_SPINNER[i]))
-				agent.Renderer().TriggerRedraw()
-				i++
-				if i >= len(_STICKY_SPINNER) {
-					i = 0
-				}
-			}
-		}
-	}()
 
 	go func() {
 		startTime := time.Now()
@@ -79,7 +54,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			}
 			agent.Renderer().EmitAIResponseChunk(chunk)
 		})
-		fin <- struct{}{}
+		sticky.Close()
 		if err != nil {
 			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
