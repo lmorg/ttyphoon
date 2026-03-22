@@ -55,8 +55,6 @@ var (
 	highlightFillColour   = &types.Colour{0x1c, 0x3e, 0x64, 0xff}
 )
 
-func (wr *webkitRender) ShowAndFocusWindow() {}
-
 func (wr *webkitRender) GetWindowSizeCells() *types.XY {
 	return wr.windowCells
 }
@@ -82,21 +80,6 @@ func (wr *webkitRender) SetBlinkState(value bool) {
 }
 
 func (wr *webkitRender) DrawTable(_ types.Tile, _ *types.XY, _ int32, _ []int32) {}
-
-func (wr *webkitRender) GetWindowTitle() string {
-	return wr.windowTitle
-}
-
-func (wr *webkitRender) SetWindowTitle(title string) {
-	wr.windowTitle = title
-}
-
-func (wr *webkitRender) StatusBarText(text string) {
-	wr.statusBarText = text
-	if wr.wapp != nil {
-		runtime.EventsEmit(wr.wapp, "terminalStatusBarText", text)
-	}
-}
 
 func (wr *webkitRender) EmitStyleUpdate() {
 	if wr.wapp == nil {

@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/veandco/go-sdl2/mix"
@@ -74,14 +73,4 @@ type sdlRender struct {
 
 	// caching
 	cacheBgTexture bgT
-}
-
-type tabListT struct {
-	tabs       *[]types.Tab
-	boundaries []int32
-	offset     *types.XY
-	active     int
-	mouseOver  int
-	cells      []*types.Cell
-	last       int
 }

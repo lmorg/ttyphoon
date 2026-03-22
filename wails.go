@@ -531,15 +531,21 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
+	files := []string{}
+
 	renderer, ok := renderwebkit.CurrentRenderer()
-	if ok {
-		tile := renderer.ActiveTile()
-		a.projRoot = findProjectRoot(tile.Pwd())
-		a.globalNotes = docsDir("notes")
-		a.usrNotesDir = a.globalNotes + tile.GroupName() + "/"
+	if !ok {
+		return files
 	}
 
-	var files []string
+	tile := renderer.ActiveTile()
+	if tile == nil {
+		return files
+	}
+
+	a.projRoot = findProjectRoot(tile.Pwd())
+	a.globalNotes = docsDir("notes")
+	a.usrNotesDir = a.globalNotes + tile.GroupName() + "/"
 
 	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
 	cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
@@ -708,22 +714,6 @@ var appIcon []byte
 func startWails() {
 	wapp := NewWailsApp()
 
-	/*dispatcherCallback := func(msg *dispatcher.IpcMessageT) {
-		if msg.Error != nil {
-			_, _ = os.Stderr.WriteString(msg.Error.Error())
-		}
-
-		switch msg.EventName {
-		case "started":
-			log.Println("Global hotkeys registered successfully")
-		case "F12":
-			app.WindowShowHide()
-		}
-	}
-	var closeHotkeys func()
-	_, closeHotkeys = dispatcher.StartApp(dispatcher.AppGlobalHotkeys, dispatcherCallback)
-	*/
-
 	hotkeyCallback := func(key string) {
 		switch key {
 		case "F12":
@@ -744,16 +734,16 @@ func startWails() {
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},
-		/*BackgroundColour: &options.RGBA{
-			R: payload.Window.Colours.Fg.Red,
-			G: payload.Window.Colours.Fg.Green,
-			B: payload.Window.Colours.Fg.Blue,
-			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
-		},*/
-		OnStartup:        wapp.startup,
-		OnDomReady:       wapp.domReady,
-		Bind:             []any{wapp},
-		BackgroundColour: &options.RGBA{0, 0, 0, 0},
+		BackgroundColour: &options.RGBA{
+			R: types.SGR_DEFAULT.Bg.Red,
+			G: types.SGR_DEFAULT.Bg.Green,
+			B: types.SGR_DEFAULT.Bg.Blue,
+			A: 255,
+		},
+		OnStartup:  wapp.startup,
+		OnDomReady: wapp.domReady,
+		Bind:       []any{wapp},
+		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
 			//WindowIsTranslucent:  true,

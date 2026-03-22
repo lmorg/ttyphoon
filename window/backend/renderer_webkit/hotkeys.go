@@ -37,9 +37,9 @@ func (wr *webkitRender) hotkeys() {
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }
 			desc = "Paste from clipboard"
-		/*case "VisualEditor":
-		fn = func() { wr.VisualEditor() }
-		desc = "Visual editor..."*/
+		case "VisualEditor":
+			fn = func() { wr.VisualEditor() }
+			desc = "Visual editor..."
 
 		case "AskAI":
 			fn = func() { askAi(wr) }
