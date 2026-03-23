@@ -184,9 +184,11 @@ func (term *Term) reset(size *types.XY) {
 	term._normBuf = term.makeScreen()
 	term._altBuf = term.makeScreen()
 	term.eraseScrollBack()
-	term.historyDb = sbh.New(term.tile.Id(), func(err error) {
-		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	})
+	if term.tile != nil {
+		term.historyDb = sbh.New(term.tile.Id(), func(err error) {
+			term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		})
+	}
 
 	term._tabWidth = 8
 	term.csiResetTabStops()

@@ -129,3 +129,19 @@ func TestReadChar_ConsumesBatTerminalQueryReplies(t *testing.T) {
 		}
 	}
 }
+
+func TestReadChar_ConsumesPrivateCsiDaResponseInStream(t *testing.T) {
+	term := newParserTestTerm()
+	pty := term.Pty.(*parserTestPty)
+
+	stream := "A\x1b[?65;1;6;15;17;22;28;29cB"
+	pty.FeedInput([]byte(stream))
+
+	drainMockPtyInput(t, term, len(stream)*2)
+
+	first := (*term.screen)[0].Cells[0].Char
+	second := (*term.screen)[0].Cells[1].Char
+	if first != 'A' || second != 'B' {
+		t.Fatalf("expected visible text to remain around private CSI response, got %q %q", first, second)
+	}
+}

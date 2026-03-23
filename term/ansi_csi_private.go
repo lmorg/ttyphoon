@@ -19,6 +19,13 @@ func lookupPrivateCsi(term *Term, code []rune) {
 	debug.Log(param)
 
 	switch r {
+	case 'c':
+		// Device Attributes response (DA), e.g. "CSI ? 65;... c".
+		// This is typically terminal output and does not change local parser state.
+		// Accept and ignore it so we do not leak warnings when this response is
+		// looped back through intermediate PTY layers.
+		//log.Println("INFO: Device Attributes response (DA) (lookupPrivateCsi() c) swallowed")
+
 	case 'h':
 		// DEC Private Mode Set (DECSET).
 		switch param {
