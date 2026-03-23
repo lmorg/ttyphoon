@@ -244,7 +244,7 @@ func (term *Term) parseCsiCodes() {
 
 		case 'm':
 			// Character Attributes (SGR).
-			lookupSgr(term.sgr, stack[0], stack)
+			lookupSgr(term.sgr, stack)
 
 		case 'M':
 			// Delete Ps Line(s) (default = 1) (DL).
