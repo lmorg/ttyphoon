@@ -3,6 +3,47 @@ import { TerminalMenuHighlight, TerminalMenuSelect, TerminalMenuCancel, Terminal
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
 
+// Registry for pure-JS context menus with negative IDs (never forwarded to Go).
+const _localCallbacks = new Map();
+let _localNextId = -1;
+let _showListMenuFn = null;
+let _setAnchorFn = null;
+let _menuOperationInProgress = false;
+let _localMenuReturnFocus = null;
+
+function menuHighlight(id, index) {
+    if (id < 0) {
+        _localCallbacks.get(id)?.highlight?.(index);
+        return;
+    }
+    TerminalMenuHighlight(id, index).catch(() => {});
+    TerminalRequestRedraw().catch(() => {});
+}
+
+function menuSelect(id, index) {
+    if (id < 0) {
+        const returnTo = _localMenuReturnFocus;
+        _localMenuReturnFocus = null;
+        _localCallbacks.get(id)?.select?.(index);
+        _localCallbacks.delete(id);
+        if (returnTo) returnTo.focus();
+        return;
+    }
+    TerminalMenuSelect(id, index).catch(() => {});
+}
+
+function menuCancel(id, index) {
+    if (id < 0) {
+        const returnTo = _localMenuReturnFocus;
+        _localMenuReturnFocus = null;
+        _localCallbacks.get(id)?.cancel?.(index);
+        _localCallbacks.delete(id);
+        if (returnTo) returnTo.focus();
+        return;
+    }
+    TerminalMenuCancel(id, index).catch(() => {});
+}
+
 function normalizeMenuPayload(payload) {
     if (Array.isArray(payload?.[0])) {
         return payload[0];
@@ -202,7 +243,7 @@ export function initTerminalPopupMenu(canvas) {
 
     function hideListMenu(cancel = true) {
         if (activeListMenuId !== null && cancel) {
-            TerminalMenuCancel(activeListMenuId, -1).catch(() => {});
+            menuCancel(activeListMenuId, -1);
         }
 
         activeListMenuId = null;
@@ -255,8 +296,7 @@ export function initTerminalPopupMenu(canvas) {
         const item = filteredItems[visibleIndex];
 
         if (activeListMenuId !== null) {
-            TerminalMenuHighlight(activeListMenuId, item.index).catch(() => {});
-            TerminalRequestRedraw().catch(() => {});
+            menuHighlight(activeListMenuId, item.index);
         }
 
         const row = listBody.querySelector(`[data-visible-index="${visibleIndex}"]`);
@@ -328,16 +368,22 @@ export function initTerminalPopupMenu(canvas) {
                 row.classList.add('is-active');
                 highlightVisibleIndex = i;
                 if (activeListMenuId !== null) {
-                    TerminalMenuHighlight(activeListMenuId, item.index).catch(() => {});
-                    TerminalRequestRedraw().catch(() => {});
+                    menuHighlight(activeListMenuId, item.index);
                 }
             });
 
-            row.addEventListener('click', () => {
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                _menuOperationInProgress = true;
                 if (activeListMenuId !== null) {
-                    TerminalMenuSelect(activeListMenuId, item.index).catch(() => {});
+                    menuSelect(activeListMenuId, item.index);
                 }
                 hideListMenu(false);
+                // Allow async clipboard/IO operations to complete, then clear flag
+                setTimeout(() => {
+                    _menuOperationInProgress = false;
+                }, 500);
             });
 
             listBody.appendChild(row);
@@ -368,8 +414,7 @@ export function initTerminalPopupMenu(canvas) {
 
         const firstSelectable = listItems.find((item) => !item.separator);
         if (firstSelectable && activeListMenuId !== null) {
-            TerminalMenuHighlight(activeListMenuId, firstSelectable.index).catch(() => {});
-            TerminalRequestRedraw().catch(() => {});
+            menuHighlight(activeListMenuId, firstSelectable.index);
         }
 
         query = '';
@@ -417,7 +462,7 @@ export function initTerminalPopupMenu(canvas) {
                 if (highlightVisibleIndex >= 0 && highlightVisibleIndex < filteredItems.length) {
                     const item = filteredItems[highlightVisibleIndex];
                     if (!item.separator && activeListMenuId !== null) {
-                        TerminalMenuSelect(activeListMenuId, item.index).catch(() => {});
+                        menuSelect(activeListMenuId, item.index);
                         hideListMenu(false);
                     }
                 }
@@ -490,6 +535,9 @@ export function initTerminalPopupMenu(canvas) {
         }
     });
 
+    _showListMenuFn = showListMenu;
+    _setAnchorFn = (x, y) => { mouseX = x; mouseY = y; };
+
     EventsOn('terminalListMenu', (payload) => {
         const menu = normalizeMenuPayload(payload);
         if (!menu || !Array.isArray(menu.options) || menu.options.length === 0) {
@@ -505,4 +553,46 @@ export function initTerminalPopupMenu(canvas) {
         }
         showContextMenu(menu);
     });
+
+    // Suppress native context menus during menu operations
+    document.addEventListener('contextmenu', (e) => {
+        if (_menuOperationInProgress) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true); // Use capture phase to intercept early
 }
+
+/**
+ * Show the terminal popup menu with pure-JS callbacks.
+ * Uses negative menu IDs so no Go backend calls are ever made.
+ *
+ * @param {object} options
+ * @param {string|null} [options.title]          - Optional header title
+ * @param {string[]}     options.options          - Item labels; '-' produces a separator
+ * @param {number[]}    [options.icons]           - Optional icon codepoints
+ * @param {number}       options.x               - Client X anchor
+ * @param {number}       options.y               - Client Y anchor
+ * @param {function(number):void} [options.onSelect]    - Called with item index on selection
+ * @param {function(number):void} [options.onHighlight] - Called with item index on hover
+ * @param {function(number):void} [options.onCancel]    - Called on dismiss
+ */
+export function showLocalMenu({ title = null, options = [], icons = [], x = 8, y = 8, onSelect, onHighlight, onCancel } = {}) {
+    if (!_showListMenuFn || !_setAnchorFn || options.length === 0) {
+        return;
+    }
+
+    _localMenuReturnFocus = document.activeElement || null;
+
+    const id = _localNextId--;
+    _localCallbacks.set(id, {
+        select: onSelect || null,
+        highlight: onHighlight || null,
+        cancel: onCancel || null,
+    });
+
+    _setAnchorFn(x, y);
+    _showListMenuFn({ menuId: id, title: title || '', options, icons });
+}
+
+

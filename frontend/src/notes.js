@@ -5,6 +5,8 @@ import {
     GetLanguageDescriptions, GetAllLanguageDescriptions,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import { showLocalMenu } from './popup_menu';
+import { ClipboardGetText, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -1094,6 +1096,70 @@ function buildImagePaths(notePath, epoch, extension) {
     };
 }
 
+function getMarkdownImageAtCursor(markdown, cursor) {
+    if (!markdown || !Number.isFinite(cursor)) {
+        return null;
+    }
+
+    const imageRegex = /!\[[^\]]*\]\(([^)]+)\)/g;
+    let match;
+
+    while ((match = imageRegex.exec(markdown)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        if (cursor < start || cursor > end) {
+            continue;
+        }
+
+        const rawTarget = (match[1] || '').trim();
+        if (rawTarget === '') {
+            return null;
+        }
+
+        let imagePath = rawTarget;
+        if (rawTarget.startsWith('<') && rawTarget.endsWith('>')) {
+            imagePath = rawTarget.slice(1, -1).trim();
+        } else {
+            const splitAt = rawTarget.search(/\s/);
+            if (splitAt !== -1) {
+                imagePath = rawTarget.slice(0, splitAt).trim();
+            }
+        }
+
+        return {
+            markdown: match[0],
+            markdownStart: start,
+            markdownEnd: end,
+            imagePath,
+        };
+    }
+
+    return null;
+}
+
+function isRelativeMarkdownImagePath(imagePath) {
+    if (!imagePath) {
+        return false;
+    }
+
+    if (imagePath.startsWith('/') || imagePath.startsWith('$') || imagePath.startsWith('//')) {
+        return false;
+    }
+
+    // Exclude schemes like http:, https:, data:, file:, etc.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(imagePath)) {
+        return false;
+    }
+
+    return true;
+}
+
+function resolveRelativeAssetPath(notePath, relativePath) {
+    const slash = notePath.lastIndexOf('/');
+    const dir = slash === -1 ? '' : notePath.slice(0, slash + 1);
+    return `${dir}${relativePath}`;
+}
+
 async function createNewFile() {
     let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
@@ -2170,6 +2236,118 @@ if (elements.editor) {
     });
 }
 
+elements.editor.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+
+    const menuItems = [
+        {
+            title: 'Copy',
+            icon: 0xf0c5,
+            onSelect: () => {
+                const start = elements.editor.selectionStart;
+                const end = elements.editor.selectionEnd;
+                const selected = elements.editor.value.slice(start, end);
+                if (selected) {
+                    ClipboardSetText(selected).catch(() => {});
+                }
+            },
+        },
+        {
+            title: 'Paste',
+            icon: 0xf0ea,
+            onSelect: () => {
+                ClipboardGetText().then((text) => {
+                    if (text === '') return;
+                    const start = elements.editor.selectionStart;
+                    const end = elements.editor.selectionEnd;
+                    const value = elements.editor.value;
+                    elements.editor.value = value.slice(0, start) + text + value.slice(end);
+                    elements.editor.selectionStart = start + text.length;
+                    elements.editor.selectionEnd = start + text.length;
+                    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                }).catch(() => {});
+            },
+        },
+        { title: '-' },
+        {
+            title: 'Find text...',
+            icon: 0xf002,
+            onSelect: () => {
+                openFindBar();
+            },
+        },
+        { title: '-' },
+        {
+            title: 'Insert checkbox',
+            icon: 0xf14a,
+            onSelect: () => {
+                const value = elements.editor.value;
+                const cursor = elements.editor.selectionStart;
+                const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
+                const checkbox = '- [ ] ';
+                elements.editor.value = value.slice(0, lineStart) + checkbox + value.slice(lineStart);
+                elements.editor.selectionStart = lineStart + checkbox.length;
+                elements.editor.selectionEnd = lineStart + checkbox.length;
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+        },
+        {
+            title: 'Insert code block',
+            icon: 0xf121,
+            onSelect: () => {
+                const value = elements.editor.value;
+                const cursor = elements.editor.selectionStart;
+                const selected = value.slice(elements.editor.selectionStart, elements.editor.selectionEnd);
+                const block = '```\n' + selected + '\n```';
+                elements.editor.value = value.slice(0, cursor) + block + value.slice(elements.editor.selectionEnd);
+                // Place cursor on the opening fence line so the user can type a language
+                elements.editor.selectionStart = cursor + 3;
+                elements.editor.selectionEnd = cursor + 3;
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+        },
+    ];
+
+    const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
+    if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
+        menuItems.push({
+            title: 'Delete image from disk',
+            icon: 0xf2ed,
+            onSelect: async () => {
+                const imageDiskPath = resolveRelativeAssetPath(state.currentFile, imageAtCursor.imagePath);
+
+                try {
+                    await DeleteFile(imageDiskPath);
+
+                    const value = elements.editor.value;
+                    elements.editor.value = value.slice(0, imageAtCursor.markdownStart) + value.slice(imageAtCursor.markdownEnd);
+                    elements.editor.selectionStart = imageAtCursor.markdownStart;
+                    elements.editor.selectionEnd = imageAtCursor.markdownStart;
+                    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                    setStatus(`Deleted image ${imageAtCursor.imagePath}.`, false);
+                } catch (err) {
+                    setStatus(`Failed to delete image ${imageAtCursor.imagePath}.`, true);
+                    console.error(err);
+                }
+            },
+        });
+    }
+
+    showLocalMenu({
+        title: 'Select an action',
+        options: menuItems.map((item) => item.title),
+        icons: menuItems.map((item) => item.icon),
+        x: e.clientX,
+        y: e.clientY,
+        onSelect: (index) => {
+            const item = menuItems[index];
+            if (item && typeof item.onSelect === 'function') {
+                item.onSelect();
+            }
+        },
+    });
+});
+
 elements.tabEditor.addEventListener('click', () => {
     setViewMode('editor');
 });
@@ -2246,10 +2424,10 @@ document.addEventListener('keydown', (event) => {
         saveFile();
     }
 
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+    /*if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         openFindBar();
-    }
+    }*/
 
     /*if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
         event.preventDefault();

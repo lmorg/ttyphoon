@@ -117,7 +117,7 @@ function applyTerminalStyles(result) {
             --terminal-menu-separator: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.3);
             --terminal-menu-hover: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.4);
             --terminal-menu-font: ${result.fontFamily};
-            --terminal-menu-font-size: 14px;
+            --terminal-menu-font-size: 12px;
         }
 
         #terminal-app {
