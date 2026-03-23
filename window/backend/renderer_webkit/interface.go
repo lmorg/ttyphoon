@@ -239,32 +239,6 @@ func (wr *webkitRender) GetWindowMeta() any {
 	return nil
 }
 
-func (wr *webkitRender) ResizeWindow(size *types.XY) {
-	if size == nil {
-		return
-	}
-	wr.windowCells = size
-}
-
-func (wr *webkitRender) WindowResized(cols, rows int32) {
-	size := &types.XY{X: cols, Y: rows}
-	wr.windowCells = size
-
-	if wr.tmux != nil {
-		_ = wr.tmux.RefreshClient(size)
-		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)
-		go wr.RefreshWindowList()
-		return
-	}
-
-	if !config.Config.Tmux.Enabled && wr.termWin != nil && wr.termWin.Active != nil {
-		term := wr.termWin.Active.GetTerm()
-		if term != nil {
-			term.Resize(size)
-		}
-	}
-}
-
 func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 	runtime.EventsEmit(wr.wapp, "notesCreateAndOpen", map[string]string{
 		"filename": filename,

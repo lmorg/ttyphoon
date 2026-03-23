@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -33,4 +35,31 @@ func (wr *webkitRender) toggleNotesPane() {
 	}
 
 	runtime.EventsEmit(wr.wapp, "toggleNotesPane")
+}
+
+func (wr *webkitRender) ResizeWindow(size *types.XY) {
+	if size == nil {
+		return
+	}
+	wr.windowCells = size
+
+	if wr.tmux != nil {
+		_ = wr.tmux.RefreshClient(size)
+		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)
+	}
+}
+
+func (wr *webkitRender) WindowResized(cols, rows int32) {
+	size := &types.XY{X: cols, Y: rows}
+
+	wr.ResizeWindow(size)
+
+	if !config.Config.Tmux.Enabled && wr.termWin != nil && wr.termWin.Active != nil {
+		term := wr.termWin.Active.GetTerm()
+		if term != nil {
+			term.Resize(size)
+		}
+	}
+
+	go wr.RefreshWindowList()
 }
