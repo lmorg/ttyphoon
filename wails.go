@@ -552,7 +552,7 @@ func (a *WApp) ListFiles() []string {
 
 	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
 	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
-	files = append(files, listFiles(a.historyDir, "HISTORY")...)
+	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if a.projRoot == "" {
 		return files
