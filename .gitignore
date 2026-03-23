@@ -4,6 +4,8 @@ mxtty
 mxtty.exe
 *.pprof
 .env
+.vscode
+.local
 
 # Wails
 
