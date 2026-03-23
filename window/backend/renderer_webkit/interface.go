@@ -292,6 +292,9 @@ func (wr *webkitRender) DisplayImageFullscreen(dataURL string, sourceWidth, sour
 func (wr *webkitRender) Close() {}
 
 func (wr *webkitRender) ActiveTile() types.Tile {
+	if wr == nil || wr.termWin == nil {
+		return nil
+	}
 	return wr.termWin.Active
 }
 
