@@ -2,11 +2,11 @@ import {
     GetWindowStyle, GetMarkdown,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendToTerminal,
-    GetLanguageDescriptions, GetAllLanguageDescriptions,
+    GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL, SaveImageDialog
 } from '../wailsjs/go/main/WApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn, ClipboardGetText, ClipboardSetText } from '../wailsjs/runtime/runtime';
+
 import { showLocalMenu } from './popup_menu';
-import { ClipboardGetText, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -163,6 +163,9 @@ function renderMarkdown() {
     // Apply common markdown processing
     processMarkdownContainer(elements.preview);
 
+    // Enable context menus on images
+    enableImageContextMenus(elements.preview);
+
     // Keep checkboxes readonly in viewer mode
     setupInteractiveCheckboxes(elements.preview, false);
 
@@ -317,6 +320,9 @@ function renderJupyterView() {
     
     // Apply common markdown processing
     processMarkdownContainer(elements.jupyter);
+
+    // Enable context menus on images
+    enableImageContextMenus(elements.jupyter);
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
@@ -1160,6 +1166,56 @@ function resolveRelativeAssetPath(notePath, relativePath) {
     return `${dir}${relativePath}`;
 }
 
+function enableImageContextMenus(container) {
+    const images = container.querySelectorAll('img');
+    images.forEach((img) => {
+        img.addEventListener('contextmenu', async (e) => {
+            e.preventDefault();
+            
+            const src = img.src;
+            if (!src) return;
+            
+            // Use the original filename from the data attribute if available
+            let filename = img.dataset.originalFilename || 'Image';
+            
+            // For relative image paths (from note markdown images), convert to dataURL
+            let dataURLToCopy = src;
+            if (src.startsWith('file://') || (!src.startsWith('data:') && !src.startsWith('http'))) {
+                // It's a file path, we need to fetch and convert to dataURL
+                try {
+                    const response = await fetch(src);
+                    const blob = await response.blob();
+                    dataURLToCopy = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (err) {
+                    console.error('Failed to load image for clipboard:', err);
+                    return;
+                }
+            }
+            
+            showLocalMenu({
+                title: filename,
+                options: ['Copy image to clipboard', 'Save image...'],
+                x: e.clientX,
+                y: e.clientY,
+                icons: [0xf0c5, 0xf0c7],
+                onSelect: (index) => {
+                    if (index === 0) {
+                        TerminalCopyImageDataURL(dataURLToCopy).catch(() => {
+                            setStatus('Failed to copy image to clipboard.', true);
+                        });
+                    } else if (index === 1) {
+                        saveImageToFile(filename, dataURLToCopy);
+                    }
+                },
+            });
+        });
+    });
+}
+
 async function createNewFile() {
     let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
@@ -1224,6 +1280,31 @@ async function createAndOpenFile(filename, contents) {
     } catch (err) {
         setStatus(`Failed to create ${fileName}.`, true);
         console.error(err);
+    }
+}
+
+async function saveImageToFile(filename, dataURL) {
+    try {
+        // Open save dialog via Wails runtime API (through Go binding)
+        const savedPath = await SaveImageDialog(filename);
+        
+        if (!savedPath) {
+            return; // User cancelled
+        }
+        
+        // Extract base64 data from dataURL
+        const base64Data = dataURL.split(',')[1];
+        if (!base64Data) {
+            setStatus('Failed to extract image data.', true);
+            return;
+        }
+        
+        // Save the file
+        await SaveBinaryFile(savedPath, base64Data);
+        setStatus(`Image saved to ${savedPath}.`, false);
+    } catch (err) {
+        setStatus(`Failed to save image: ${err.message || err}`, true);
+        console.error('Error saving image:', err);
     }
 }
 
@@ -2317,7 +2398,9 @@ elements.editor.addEventListener('contextmenu', (e) => {
 
     const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
     if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
-        menuItems.push({
+        menuItems.push(
+        { title: '-' },
+        {
             title: 'Delete image from disk',
             icon: 0xf2ed,
             onSelect: async () => {

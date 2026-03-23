@@ -66,6 +66,10 @@ export function SaveFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
 }
 
+export function SaveImageDialog(arg1) {
+  return window['go']['main']['WApp']['SaveImageDialog'](arg1);
+}
+
 export function SendIpc(arg1, arg2) {
   return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }

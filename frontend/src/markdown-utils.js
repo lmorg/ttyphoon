@@ -118,6 +118,9 @@ export async function processWailsImages(container) {
     for (const img of images) {
         if (img.src.match(rxWailsUrl)) {
             const path = img.src.replace(rxWailsUrl, '');
+            // Extract filename from path and store as data attribute
+            const filename = path.split('/').pop() || 'Image';
+            img.dataset.originalFilename = filename;
             try {
                 const imageData = await GetImage(path);
                 if (!imageData.match(/^error: /)) {

@@ -48,6 +48,12 @@ func Register(callbackFunc func(string)) {
 }
 
 func _registerHotkey(hks ...*hotkeyFuncT) {
+	defer func() {
+		if r := recover(); r != nil {
+			os.Stderr.WriteString("Panic recovered in _registerHotkey\n")
+		}
+	}()
+
 	for _, hk := range hks {
 		hk.hk = hotkey.New(hk.Mod, hk.Key)
 		//os.Stderr.WriteString("regestering...\n")

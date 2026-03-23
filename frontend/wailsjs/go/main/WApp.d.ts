@@ -35,6 +35,8 @@ export function SaveBinaryFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveFile(arg1:string,arg2:string):Promise<void>;
 
+export function SaveImageDialog(arg1:string):Promise<string>;
+
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SendToTerminal(arg1:string):Promise<void>;

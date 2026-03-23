@@ -656,6 +656,24 @@ func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
 	return os.WriteFile(filename, b, 0644)
 }
 
+func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save Image",
+		DefaultFilename: defaultFilename,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Images",
+				Pattern:     "*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
+
 func (a *WApp) RenameFile(oldPath, newPath string) error {
 	oldPath = a.filePath(oldPath)
 	newPath = a.filePath(newPath)

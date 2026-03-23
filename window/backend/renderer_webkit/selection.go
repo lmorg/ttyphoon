@@ -203,7 +203,7 @@ func (wr *webkitRender) showSelectionContextMenu(selection *selectionState) {
 			},
 		},
 		{
-			Title: "Copy image to clipboard",
+			Title: "Copy region as image",
 			Icon:  0xf03e,
 			Highlight: func() func() {
 				return wr.setSelectionPreview(selectionPreviewImage, false, true)
