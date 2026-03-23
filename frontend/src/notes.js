@@ -2275,13 +2275,8 @@ elements.editor.addEventListener('contextmenu', (e) => {
             onSelect: () => {
                 ClipboardGetText().then((text) => {
                     if (text === '') return;
-                    const start = elements.editor.selectionStart;
-                    const end = elements.editor.selectionEnd;
-                    const value = elements.editor.value;
-                    elements.editor.value = value.slice(0, start) + text + value.slice(end);
-                    elements.editor.selectionStart = start + text.length;
-                    elements.editor.selectionEnd = start + text.length;
-                    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                    elements.editor.focus();
+                    document.execCommand('insertText', false, text);
                 }).catch(() => {});
             },
         },
@@ -2298,29 +2293,24 @@ elements.editor.addEventListener('contextmenu', (e) => {
             title: 'Insert checkbox',
             icon: 0xf14a,
             onSelect: () => {
-                const value = elements.editor.value;
-                const cursor = elements.editor.selectionStart;
-                const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
-                const checkbox = '- [ ] ';
-                elements.editor.value = value.slice(0, lineStart) + checkbox + value.slice(lineStart);
-                elements.editor.selectionStart = lineStart + checkbox.length;
-                elements.editor.selectionEnd = lineStart + checkbox.length;
-                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
+                elements.editor.focus();
+                elements.editor.selectionStart = lineStart;
+                elements.editor.selectionEnd = lineStart;
+                document.execCommand('insertText', false, '- [ ] ');
             },
         },
         {
             title: 'Insert code block',
             icon: 0xf121,
             onSelect: () => {
-                const value = elements.editor.value;
-                const cursor = elements.editor.selectionStart;
-                const selected = value.slice(elements.editor.selectionStart, elements.editor.selectionEnd);
-                const block = '```\n' + selected + '\n```';
-                elements.editor.value = value.slice(0, cursor) + block + value.slice(elements.editor.selectionEnd);
-                // Place cursor on the opening fence line so the user can type a language
-                elements.editor.selectionStart = cursor + 3;
-                elements.editor.selectionEnd = cursor + 3;
-                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                const selStart = elements.editor.selectionStart;
+                const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
+                elements.editor.focus();
+                document.execCommand('insertText', false, '```\n' + selected + '\n```');
+                // Move cursor to after the opening ``` so the user can type a language
+                elements.editor.selectionStart = selStart + 3;
+                elements.editor.selectionEnd = selStart + 3;
             },
         },
     ];
@@ -2336,11 +2326,10 @@ elements.editor.addEventListener('contextmenu', (e) => {
                 try {
                     await DeleteFile(imageDiskPath);
 
-                    const value = elements.editor.value;
-                    elements.editor.value = value.slice(0, imageAtCursor.markdownStart) + value.slice(imageAtCursor.markdownEnd);
+                    elements.editor.focus();
                     elements.editor.selectionStart = imageAtCursor.markdownStart;
-                    elements.editor.selectionEnd = imageAtCursor.markdownStart;
-                    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+                    elements.editor.selectionEnd = imageAtCursor.markdownEnd;
+                    document.execCommand('insertText', false, '');
                     setStatus(`Deleted image ${imageAtCursor.imagePath}.`, false);
                 } catch (err) {
                     setStatus(`Failed to delete image ${imageAtCursor.imagePath}.`, true);
