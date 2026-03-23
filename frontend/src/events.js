@@ -53,6 +53,11 @@ export function wireKeyboardEvents(canvas) {
     });
 
     window.addEventListener('keydown', (event) => {
+        // Block keyboard input if fullscreen image overlay is open
+        if (document.getElementById('fullscreen-image-overlay')) {
+            return;
+        }
+
         if (isEditableTarget(event.target) || event.isComposing) {
             return;
         }

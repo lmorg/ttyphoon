@@ -23,3 +23,4 @@ func set(css string) {
 func Arrow() { set("default") }
 func Ibeam() { set("text") }
 func Hand()  { set("pointer") }
+func Zoom()  { set("zoom-in") }

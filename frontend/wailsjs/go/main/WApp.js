@@ -58,6 +58,10 @@ export function RunNote(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['RunNote'](arg1, arg2, arg3);
 }
 
+export function SaveBinaryFile(arg1, arg2) {
+  return window['go']['main']['WApp']['SaveBinaryFile'](arg1, arg2);
+}
+
 export function SaveFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
 }

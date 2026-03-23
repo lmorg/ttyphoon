@@ -4,6 +4,7 @@
 
 import { GetImage, GetCustomRegexp } from '../wailsjs/go/main/WApp';
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import hljs from "highlight.js/lib/common";
@@ -129,6 +130,29 @@ export async function processWailsImages(container) {
             }
         }
     }
+}
+
+export function enableFullscreenImages(container) {
+    const images = container.querySelectorAll('img');
+    images.forEach((img) => {
+        if (img.dataset.fullscreenBound === 'true') {
+            return;
+        }
+
+        img.dataset.fullscreenBound = 'true';
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const sourceWidth = img.naturalWidth || img.width || 0;
+            const sourceHeight = img.naturalHeight || img.height || 0;
+            showFullscreenImageOverlay({
+                dataURL: img.src,
+                sourceWidth,
+                sourceHeight,
+            });
+        });
+    });
 }
 
 /**
@@ -266,6 +290,7 @@ export async function autoHyperlink(container) {
 export async function processMarkdownContainer(container) {
     await applySyntaxHighlighting(container);
     await processWailsImages(container);
+    enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });
     await autoHyperlink(container);
 }

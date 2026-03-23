@@ -6,6 +6,7 @@ import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
+import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 
 (document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
     <div id="terminal-app">
@@ -927,97 +928,13 @@ EventsOn('terminalNotificationClose', payload => {
 EventsOn('imageDisplayFullscreen', payload => {
     if (!payload || !payload.dataURL) return;
 
-    const existingOverlay = document.getElementById('fullscreen-image-overlay');
-    if (existingOverlay) {
-        existingOverlay.remove();
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'fullscreen-image-overlay';
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 999999;
-        overflow: auto;
-        padding: 20px;
-        box-sizing: border-box;
-    `;
-
-    const container = document.createElement('div');
-    container.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        max-width: 100%;
-        max-height: 100%;
-    `;
-
-    const img = document.createElement('img');
-    img.src = payload.dataURL;
-    img.style.cssText = `
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-        box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
-        border-radius: 8px;
-    `;
-
-    // Info text
-    const info = document.createElement('div');
-    info.style.cssText = `
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 12px;
-        font-family: monospace;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 8px 12px;
-        border-radius: 4px;
-    `;
-    info.textContent = `${payload.sourceWidth}×${payload.sourceHeight} | Press ESC to close`;
-
-    container.appendChild(img);
-    overlay.appendChild(container);
-    overlay.appendChild(info);
-    document.body.appendChild(overlay);
-
-    const closeOverlay = () => {
-        document.removeEventListener('keydown', handleKey, true);
-        overlay.removeEventListener('click', handleClick);
-        overlay.remove();
-        canvas.focus();
-    };
-
-    // Handle keyboard: ESC to close, capture all keys to prevent terminal input
-    const handleKey = (e) => {
-        // Always consume keystrokes while overlay is open so nothing reaches terminal.
-        e.stopPropagation();
-        e.preventDefault();
-
-        if (e.key === 'Escape') {
-            closeOverlay();
-            return;
-        }
-    };
-
-    // Handle click outside to close
-    const handleClick = (e) => {
-        if (e.target === overlay) {
-            closeOverlay();
-        }
-    };
-
-    document.addEventListener('keydown', handleKey, true);
-    overlay.addEventListener('click', handleClick);
-    canvas.blur();
+    showFullscreenImageOverlay({
+        dataURL: payload.dataURL,
+        sourceWidth: payload.sourceWidth,
+        sourceHeight: payload.sourceHeight,
+        onOpen: () => canvas.blur(),
+        onClose: () => canvas.focus(),
+    });
 });
 // ------------------------------------------------------------------
 

@@ -503,9 +503,9 @@ func (a *WApp) GetImage(path string) string {
 		return "error: extension not found"
 	}
 
-	if path[0] != '/' {
-		// TODO: this isn't Windows compatible
-		path = a.mdBaseDir + "/" + path
+	path = string(filepath.Separator) + path
+	if _, err := os.Stat(path); err != nil {
+		path = a.mdBaseDir + path
 	}
 
 	f, err := os.Open(path)
@@ -643,6 +643,17 @@ func (a WApp) filePath(filename string) string {
 func (a *WApp) SaveFile(filename, contents string) error {
 	filename = a.filePath(filename)
 	return os.WriteFile(filename, []byte(contents), 0644)
+}
+
+func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
+	filename = a.filePath(filename)
+
+	b, err := base64.StdEncoding.DecodeString(base64Contents)
+	if err != nil {
+		return fmt.Errorf("decode base64 file contents: %w", err)
+	}
+
+	return os.WriteFile(filename, b, 0644)
 }
 
 func (a *WApp) RenameFile(oldPath, newPath string) error {

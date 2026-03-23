@@ -1,6 +1,6 @@
 import {
     GetWindowStyle, GetMarkdown,
-    ListFiles, SaveFile, DeleteFile, RenameFile,
+    ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions,
 } from '../wailsjs/go/main/WApp';
@@ -1063,6 +1063,37 @@ function normalizeNotePath(rawName) {
     return `$NOTES/${fileName}`;
 }
 
+function deriveImageExtension(mimeType) {
+    if (!mimeType) {
+        return 'png';
+    }
+
+    const subtype = mimeType.split('/')[1] || '';
+    const normalized = subtype.toLowerCase().split('+')[0];
+    if (normalized === 'jpeg') {
+        return 'jpg';
+    }
+
+    if (/^[a-z0-9]+$/.test(normalized)) {
+        return normalized;
+    }
+
+    return 'png';
+}
+
+function buildImagePaths(notePath, epoch, extension) {
+    const slash = notePath.lastIndexOf('/');
+    const dir = slash === -1 ? '' : notePath.slice(0, slash + 1);
+    const file = slash === -1 ? notePath : notePath.slice(slash + 1);
+    const stem = file.replace(/\.[^/.]+$/, '');
+
+    const imageFileName = `${stem}.${epoch}.${extension}`;
+    return {
+        imagePath: `${dir}${imageFileName}`,
+        imageFileName,
+    };
+}
+
 async function createNewFile() {
     let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
@@ -1782,6 +1813,12 @@ function applyWindowStyle(result) {
 
         ${getHighlightJsTheme(result.colors, true)}
 
+        #notes-preview img,
+        #notes-jupyter img {
+            max-width: 100%;
+            height: auto;
+        }
+
         #notes-find-bar {
             border-radius: 5px;
             position: absolute;
@@ -2061,6 +2098,76 @@ if (elements.editor) {
         scheduleRender();
         scheduleAutoSave();
     });
+
+    elements.editor.addEventListener('paste', (event) => {
+        if (state.viewMode !== 'editor') {
+            return;
+        }
+
+        const items = event.clipboardData && event.clipboardData.items;
+        if (!items) {
+            return;
+        }
+
+        for (const item of items) {
+            if (!item.type.startsWith('image/')) {
+                continue;
+            }
+
+            event.preventDefault();
+
+            const file = item.getAsFile();
+            if (!file) {
+                continue;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                if (!state.currentFile) {
+                    setStatus('Select a note before pasting an image.', true);
+                    return;
+                }
+
+                const dataUrl = String(e.target.result || '');
+                const comma = dataUrl.indexOf(',');
+                if (comma <= 0 || comma >= dataUrl.length - 1) {
+                    setStatus('Clipboard image format is invalid.', true);
+                    return;
+                }
+
+                const base64Payload = dataUrl.slice(comma + 1);
+                const epoch = Math.floor(Date.now() / 1000);
+                const ext = deriveImageExtension(file.type);
+                const paths = buildImagePaths(state.currentFile, epoch, ext);
+
+                try {
+                    await SaveBinaryFile(paths.imagePath, base64Payload);
+
+                    const alt = String(epoch);
+                    const markdownImage = `![${alt}](${paths.imageFileName})`;
+                    const start = elements.editor.selectionStart;
+                    const end = elements.editor.selectionEnd;
+                    const value = elements.editor.value;
+
+                    elements.editor.value = value.slice(0, start) + markdownImage + value.slice(end);
+                    elements.editor.selectionStart = start + markdownImage.length;
+                    elements.editor.selectionEnd = start + markdownImage.length;
+
+                    setDirty(true);
+                    scheduleRender();
+                    scheduleAutoSave();
+                    setStatus(`Saved image ${paths.imageFileName}.`, false);
+                } catch (err) {
+                    setStatus('Failed to save pasted image.', true);
+                    console.error(err);
+                }
+            };
+            reader.readAsDataURL(file);
+
+            // Only handle the first image item
+            break;
+        }
+    });
 }
 
 elements.tabEditor.addEventListener('click', () => {
@@ -2129,6 +2236,11 @@ elements.findClose.addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', (event) => {
+    // Block keyboard shortcuts if fullscreen image overlay is open
+    if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
