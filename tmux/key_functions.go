@@ -3,7 +3,6 @@ package tmux
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/hotkeys"
@@ -43,43 +42,71 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 		windowNames[i] = tmux.appWindow.Tabs[i].Name()
 	}
 
-	_highlightCallback := func(i int) {
-		if tmux.activeWindow.id == tmux.appWindow.Tabs[i].Id() {
+	activeWindow := tmux.activeWindow.id
+	previewWindowID := ""
+
+	restorePreviewCursor := func() {
+		if previewWindowID == "" {
 			return
 		}
 
-		oldTerm := tmux.activeWindow.activePane.term
-		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
+		win := tmux.wins.Get(previewWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
+		}
+
+		previewWindowID = ""
+	}
+
+	_highlightCallback := func(i int) {
+		targetWindowID := tmux.appWindow.Tabs[i].Id()
+		if tmux.activeWindow.id == targetWindowID {
+			return
+		}
+
+		// Ensure the previously previewed window cursor is restored before
+		// previewing another one.
+		restorePreviewCursor()
+
+		err := tmux.SelectAndResizeWindow(targetWindowID, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 
-		win := tmux.wins.Get(tmux.appWindow.Tabs[i].Id())
-		if win != nil {
+		win := tmux.wins.Get(targetWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
 			win.activePane.term.ShowCursor(false)
+			previewWindowID = targetWindowID
 		}
-
-		//windows[i].activePane.Term().ShowCursor(false)
-		go func() {
-			// this is a kludge to avoid the cursor showing as you switch windows
-			time.Sleep(500 * time.Millisecond)
-			oldTerm.ShowCursor(true)
-		}()
 	}
 
 	_chooseCallback := func(i int) {
-		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
+		restorePreviewCursor()
+
+		targetWindowID := tmux.appWindow.Tabs[i].Id()
+		err := tmux.SelectAndResizeWindow(targetWindowID, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+
+		win := tmux.wins.Get(targetWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
 		}
 		//tmux.renderer.UpdateNotes(tmux.activeWindow.ActivePane())
 	}
 
-	activeWindow := tmux.activeWindow.id
 	_cancelCallback := func(_ int) {
+		restorePreviewCursor()
+
 		err := tmux.selectWindow(activeWindow)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+
+		win := tmux.wins.Get(activeWindow)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
 		}
 	}
 
