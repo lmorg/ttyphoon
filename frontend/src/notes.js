@@ -2236,7 +2236,24 @@ if (elements.editor) {
     });
 }
 
+let _editorSelectionBeforeContextMenu = null;
+
+elements.editor.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+        _editorSelectionBeforeContextMenu = {
+            start: elements.editor.selectionStart,
+            end: elements.editor.selectionEnd,
+        };
+    }
+});
+
 elements.editor.addEventListener('contextmenu', (e) => {
+    // Restore selection that WebKit changed on right-click
+    if (_editorSelectionBeforeContextMenu !== null) {
+        elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
+        elements.editor.selectionEnd = _editorSelectionBeforeContextMenu.end;
+        _editorSelectionBeforeContextMenu = null;
+    }
     e.preventDefault();
 
     const menuItems = [
