@@ -736,22 +736,16 @@ func (a *WApp) GetAppTitle() string { return appTitle() }
 
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	globalhotkeys.Register(func(key string) {
+		switch key {
+		case "F12":
+			a.WindowShowHide()
+		}
+	})
 }
 
 func (a *WApp) domReady(ctx context.Context) {
-	/*go func() {
-		for msg := range a.msgPipe {
-			switch {
-			case msg.Error != nil:
-
-			case msg.EventName == "notesUpdatePaths":
-
-			default:
-				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
-			}
-		}
-	}()*/
-
 	go a.startTerminalWindow()
 }
 
@@ -764,15 +758,6 @@ var appIcon []byte
 
 func startWails() {
 	wapp := NewWailsApp()
-
-	hotkeyCallback := func(key string) {
-		switch key {
-		case "F12":
-			wapp.WindowShowHide()
-		}
-	}
-
-	globalhotkeys.Register(hotkeyCallback)
 
 	// Create application with options
 	err := wails.Run(&options.App{

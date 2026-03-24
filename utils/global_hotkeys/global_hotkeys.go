@@ -13,14 +13,9 @@ type hotkeyFuncT struct {
 	hk   *hotkey.Hotkey
 }
 
-var (
-	event = make(chan *hotkeyFuncT)
-	//ipc   *dispatcher.IpcT
-)
+var event = make(chan *hotkeyFuncT)
 
 func Register(callbackFunc func(string)) {
-	/*dispatcherCallback := func(_ *dispatcher.IpcMessageT) {}
-	ipc = dispatcher.GetIpc(dispatcherCallback)*/
 	hotkeyCallback := func(key string) func() {
 		return func() { callbackFunc(key) }
 	}
@@ -36,10 +31,6 @@ func Register(callbackFunc func(string)) {
 	},*/
 	)
 
-	/*ipc.Send(&dispatcher.IpcMessageT{
-		EventName: "started",
-	})*/
-
 	go func() {
 		for hk := range event {
 			hk.Func()
@@ -47,22 +38,12 @@ func Register(callbackFunc func(string)) {
 	}()
 }
 
-func _registerHotkey(hks ...*hotkeyFuncT) {
-	defer func() {
-		if r := recover(); r != nil {
-			os.Stderr.WriteString("Panic recovered in _registerHotkey\n")
-		}
-	}()
-
+func registerHotkey(hks ...*hotkeyFuncT) {
 	for _, hk := range hks {
 		hk.hk = hotkey.New(hk.Mod, hk.Key)
-		//os.Stderr.WriteString("regestering...\n")
 		err := hk.hk.Register()
 		if err != nil {
 			os.Stderr.WriteString(err.Error())
-			/*ipc.Send(&dispatcher.IpcMessageT{
-				Error: fmt.Errorf("unable to set hotkey %s: %s", hk.hk.String(), err.Error()),
-			})*/
 			continue
 		}
 
