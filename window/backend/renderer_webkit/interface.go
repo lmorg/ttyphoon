@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -189,6 +190,10 @@ func (wr *webkitRender) RefreshWindowList() {
 }
 
 func (wr *webkitRender) updateNotes() {
+	if wr.termWin == nil {
+		// bit of a hack but this should only happen on application startup
+		time.Sleep(500 * time.Millisecond)
+	}
 	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
 }
 

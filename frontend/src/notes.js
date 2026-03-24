@@ -1873,8 +1873,7 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 5px;
-            padding-top: 10px;
+            padding: 2px 4px;
             height: 100%;
             min-height: 0;
         }
@@ -1882,8 +1881,10 @@ function applyWindowStyle(result) {
         #notes-tabs {
             display: flex;
             gap: 8px;
+            padding: 1px 0px 0 8px;
             border-bottom: 2px solid var(--fg);
             align-items: center;
+            box-sizing: border-box;
         }
 
         #notes-tabs button {
@@ -1906,13 +1907,13 @@ function applyWindowStyle(result) {
             border-top-left-radius: 5px !important;
             border-top-right-radius: 5px !important;
             border: 2px solid !important;
-            border-bottom: 0px !important;
+            border-bottom: 0 !important;
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .tab:hover {
             border: 2px solid !important;
-            border-bottom: 0px !important;
+            border-bottom: 0 !important;
             border-color: var(--fg) !important;
         }
 
