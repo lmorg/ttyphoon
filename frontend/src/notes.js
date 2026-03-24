@@ -15,6 +15,14 @@ import hljs from "highlight.js/lib/common";
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
 
+const CONTEXT_ICON_COPY = 0xf0c5;
+const CONTEXT_ICON_PASTE = 0xf0ea;
+const CONTEXT_ICON_FIND = 0xf002;
+const CONTEXT_ICON_PRINT = 0xf02f;
+const CONTEXT_ICON_CHECKBOX = 0xf14a;
+const CONTEXT_ICON_CODE = 0xf121;
+const CONTEXT_ICON_DELETE = 0xf2ed;
+
 const app = document.getElementById('notes-pane') || document.getElementById('app') || (() => {
     const root = document.createElement('div');
     root.id = 'app';
@@ -1217,6 +1225,106 @@ function enableImageContextMenus(container) {
     });
 }
 
+function copyTextToClipboard(text) {
+    if (!text) {
+        return;
+    }
+
+    ClipboardSetText(text).catch(() => {});
+}
+
+function getEditorSelectionText() {
+    const start = elements.editor.selectionStart;
+    const end = elements.editor.selectionEnd;
+    return elements.editor.value.slice(start, end);
+}
+
+function getRenderedSelectionText(container) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return '';
+    }
+
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+    const selectionInContainer =
+        (anchorNode && container.contains(anchorNode)) ||
+        (focusNode && container.contains(focusNode));
+
+    if (!selectionInContainer) {
+        return '';
+    }
+
+    return selection.toString();
+}
+
+function createCopyMenuItem(getText, title = 'Copy') {
+    return {
+        title,
+        icon: CONTEXT_ICON_COPY,
+        onSelect: () => {
+            copyTextToClipboard(getText());
+        },
+    };
+}
+
+function createFindMenuItem(title = 'Find text...') {
+    return {
+        title,
+        icon: CONTEXT_ICON_FIND,
+        onSelect: () => {
+            openFindBar();
+        },
+    };
+}
+
+function createPrintMenuItem(title = 'Print...') {
+    return {
+        title,
+        icon: CONTEXT_ICON_PRINT,
+        onSelect: () => {
+            WindowPrint();
+        },
+    };
+}
+
+function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
+    showLocalMenu({
+        title,
+        options: menuItems.map((item) => item.title),
+        icons: menuItems.map((item) => item.icon),
+        x,
+        y,
+        onSelect: (index) => {
+            const item = menuItems[index];
+            if (item && typeof item.onSelect === 'function') {
+                item.onSelect();
+            }
+        },
+    });
+}
+
+function initRenderedNotesContextMenu(container, viewMode) {
+    container.addEventListener('contextmenu', (e) => {
+        if (state.viewMode !== viewMode) {
+            return;
+        }
+
+        if (e.target instanceof Element && e.target.closest('img')) {
+            return;
+        }
+
+        e.preventDefault();
+
+        showNotesLocalMenu([
+            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+            { title: '-' },
+            createFindMenuItem('Find'),
+            createPrintMenuItem('Print'),
+        ], e.clientX, e.clientY);
+    });
+}
+
 async function createNewFile() {
     let fileName = normalizeNoteName(elements.modalInput.value);
     if (fileName === '') {
@@ -2387,44 +2495,21 @@ elements.editor.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 
     const menuItems = [
-        {
-            title: 'Copy',
-            icon: 0xf0c5,
-            onSelect: () => {
-                const start = elements.editor.selectionStart;
-                const end = elements.editor.selectionEnd;
-                const selected = elements.editor.value.slice(start, end);
-                if (selected) {
-                    ClipboardSetText(selected).catch(() => {});
-                }
-            },
-        },
+        createCopyMenuItem(() => getEditorSelectionText(), 'Copy'),
         {
             title: 'Paste',
-            icon: 0xf0ea,
+            icon: CONTEXT_ICON_PASTE,
             onSelect: async () => {
                 await pasteFromGoClipboard();
             },
         },
         { title: '-' },
-        {
-            title: 'Find text...',
-            icon: 0xf002,
-            onSelect: () => {
-                openFindBar();
-            },
-        },
-        {
-            title: 'Print...',
-            icon: 0xf02f,
-            onSelect: () => {
-                WindowPrint();
-            },
-        },
+        createFindMenuItem('Find text...'),
+        createPrintMenuItem('Print...'),
         { title: '-' },
         {
             title: 'Insert checkbox',
-            icon: 0xf14a,
+            icon: CONTEXT_ICON_CHECKBOX,
             onSelect: () => {
                 const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
                 elements.editor.focus();
@@ -2435,7 +2520,7 @@ elements.editor.addEventListener('contextmenu', (e) => {
         },
         {
             title: 'Insert code block',
-            icon: 0xf121,
+            icon: CONTEXT_ICON_CODE,
             onSelect: () => {
                 const selStart = elements.editor.selectionStart;
                 const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
@@ -2454,7 +2539,7 @@ elements.editor.addEventListener('contextmenu', (e) => {
         { title: '-' },
         {
             title: 'Delete image from disk',
-            icon: 0xf2ed,
+            icon: CONTEXT_ICON_DELETE,
             onSelect: async () => {
                 const imageDiskPath = resolveRelativeAssetPath(state.currentFile, imageAtCursor.imagePath);
 
@@ -2474,20 +2559,11 @@ elements.editor.addEventListener('contextmenu', (e) => {
         });
     }
 
-    showLocalMenu({
-        title: 'Select an action',
-        options: menuItems.map((item) => item.title),
-        icons: menuItems.map((item) => item.icon),
-        x: e.clientX,
-        y: e.clientY,
-        onSelect: (index) => {
-            const item = menuItems[index];
-            if (item && typeof item.onSelect === 'function') {
-                item.onSelect();
-            }
-        },
-    });
+    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
+
+initRenderedNotesContextMenu(elements.preview, 'viewer');
+initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
 
 elements.tabEditor.addEventListener('click', () => {
     setViewMode('editor');

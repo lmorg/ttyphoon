@@ -78,7 +78,7 @@ function measureIdealWidth(items, title, withIcons) {
         || 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
     const fontSizeVar = rootStyle.getPropertyValue('--terminal-menu-font-size').trim();
     const parsedFontSize = Number.parseFloat(fontSizeVar);
-    const fontSize = Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14;
+    const fontSize = (Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14) - 1;
     ctx.font = `${fontSize}px ${fontFamily}`;
 
     let maxTextW = 0;
@@ -341,7 +341,6 @@ export function initTerminalPopupMenu(canvas) {
             row.type = 'button';
             row.className = 'tty-menu-row';
             row.dataset.visibleIndex = String(i);
-            row.title = item.title;
 
             if (hasIcons) {
                 const icon = document.createElement('span');
