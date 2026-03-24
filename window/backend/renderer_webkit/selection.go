@@ -131,7 +131,6 @@ func (wr *webkitRender) endSelection(tile types.Tile, pos *types.XY) bool {
 		return false
 	}
 
-	webkitClipboardInit.Do(func() { _ = clipboard.Init() })
 	wr.StatusBarText("Select copy action")
 	wr.showSelectionContextMenu(selection)
 	wr.TriggerRedraw()

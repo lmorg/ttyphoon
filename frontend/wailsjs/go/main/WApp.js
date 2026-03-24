@@ -18,6 +18,10 @@ export function GetAppTitle() {
   return window['go']['main']['WApp']['GetAppTitle']();
 }
 
+export function GetClipboardData() {
+  return window['go']['main']['WApp']['GetClipboardData']();
+}
+
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
@@ -148,6 +152,10 @@ export function TerminalTextInput(arg1) {
 
 export function WindowHide() {
   return window['go']['main']['WApp']['WindowHide']();
+}
+
+export function WindowPrint() {
+  return window['go']['main']['WApp']['WindowPrint']();
 }
 
 export function WindowShow() {

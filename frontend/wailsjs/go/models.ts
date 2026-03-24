@@ -1,5 +1,19 @@
 export namespace main {
 	
+	export class ClipboardData {
+	    text: string;
+	    image: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipboardData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.image = source["image"];
+	    }
+	}
 	export class ColoursT {
 	    fg: types.Colour;
 	    bg: types.Colour;

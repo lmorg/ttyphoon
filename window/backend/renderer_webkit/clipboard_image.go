@@ -12,7 +12,6 @@ func (wr *webkitRender) CopyImageToClipboard(png []byte) error {
 		return errors.New("empty image data")
 	}
 
-	webkitClipboardInit.Do(func() { _ = clipboard.Init() })
 	clipboard.Write(clipboard.FmtImage, png)
 
 	if wr != nil {

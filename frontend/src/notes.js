@@ -2,9 +2,10 @@ import {
     GetWindowStyle, GetMarkdown,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendToTerminal,
-    GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL, SaveImageDialog
+    GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
+    SaveImageDialog, WindowPrint, GetClipboardData
 } from '../wailsjs/go/main/WApp';
-import { EventsOn, ClipboardGetText, ClipboardSetText } from '../wailsjs/runtime/runtime';
+import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
 import { showLocalMenu } from './popup_menu';
 
@@ -2239,6 +2240,120 @@ EventsOn('terminalStyleUpdate', payload => {
 refreshFiles();
 window.refreshFiles = refreshFiles;
 
+function insertEditorText(text) {
+    if (!text) {
+        return;
+    }
+
+    elements.editor.focus();
+    document.execCommand('insertText', false, text);
+}
+
+async function savePastedImageDataUrl(dataUrl, mimeType) {
+    if (!state.currentFile) {
+        setStatus('Select a note before pasting an image.', true);
+        return;
+    }
+
+    const comma = dataUrl.indexOf(',');
+    if (comma <= 0 || comma >= dataUrl.length - 1) {
+        setStatus('Clipboard image format is invalid.', true);
+        return;
+    }
+
+    const base64Payload = dataUrl.slice(comma + 1);
+    const epoch = Math.floor(Date.now() / 1000);
+    const ext = deriveImageExtension(mimeType || 'image/png');
+    const paths = buildImagePaths(state.currentFile, epoch, ext);
+
+    try {
+        await SaveBinaryFile(paths.imagePath, base64Payload);
+
+        const alt = String(epoch);
+        const markdownImage = `![${alt}](${paths.imageFileName})`;
+        const start = elements.editor.selectionStart;
+        const end = elements.editor.selectionEnd;
+        const value = elements.editor.value;
+
+        elements.editor.value = value.slice(0, start) + markdownImage + value.slice(end);
+        elements.editor.selectionStart = start + markdownImage.length;
+        elements.editor.selectionEnd = start + markdownImage.length;
+
+        setDirty(true);
+        scheduleRender();
+        scheduleAutoSave();
+        setStatus(`Saved image ${paths.imageFileName}.`, false);
+    } catch (err) {
+        setStatus('Failed to save pasted image.', true);
+        console.error(err);
+    }
+}
+
+function handleEditorImagePaste(event) {
+    if (state.viewMode !== 'editor') {
+        return;
+    }
+
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items) {
+        return;
+    }
+
+    for (const item of items) {
+        if (!item.type.startsWith('image/')) {
+            continue;
+        }
+
+        event.preventDefault();
+
+        const file = item.getAsFile();
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const dataUrl = String(e.target.result || '');
+            await savePastedImageDataUrl(dataUrl, file.type);
+        };
+        reader.readAsDataURL(file);
+
+        // Only handle the first image item
+        return;
+    }
+}
+
+function decodeClipboardPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return { text: '', image: '' };
+    }
+
+    return {
+        text: String(payload.text || ''),
+        image: String(payload.image || ''),
+    };
+}
+
+async function pasteFromGoClipboard() {
+    try {
+        const payload = await GetClipboardData();
+        const { text, image } = decodeClipboardPayload(payload);
+
+        if (image !== '') {
+            const dataUrl = `data:image/png;base64,${image}`;
+            await savePastedImageDataUrl(dataUrl, 'image/png');
+            return;
+        }
+
+        if (text !== '') {
+            insertEditorText(text);
+        }
+    } catch (err) {
+        setStatus('Failed to paste from clipboard.', true);
+        console.error(err);
+    }
+}
+
 if (elements.editor) {
     elements.editor.addEventListener('input', () => {
         setDirty(true);
@@ -2247,73 +2362,7 @@ if (elements.editor) {
     });
 
     elements.editor.addEventListener('paste', (event) => {
-        if (state.viewMode !== 'editor') {
-            return;
-        }
-
-        const items = event.clipboardData && event.clipboardData.items;
-        if (!items) {
-            return;
-        }
-
-        for (const item of items) {
-            if (!item.type.startsWith('image/')) {
-                continue;
-            }
-
-            event.preventDefault();
-
-            const file = item.getAsFile();
-            if (!file) {
-                continue;
-            }
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                if (!state.currentFile) {
-                    setStatus('Select a note before pasting an image.', true);
-                    return;
-                }
-
-                const dataUrl = String(e.target.result || '');
-                const comma = dataUrl.indexOf(',');
-                if (comma <= 0 || comma >= dataUrl.length - 1) {
-                    setStatus('Clipboard image format is invalid.', true);
-                    return;
-                }
-
-                const base64Payload = dataUrl.slice(comma + 1);
-                const epoch = Math.floor(Date.now() / 1000);
-                const ext = deriveImageExtension(file.type);
-                const paths = buildImagePaths(state.currentFile, epoch, ext);
-
-                try {
-                    await SaveBinaryFile(paths.imagePath, base64Payload);
-
-                    const alt = String(epoch);
-                    const markdownImage = `![${alt}](${paths.imageFileName})`;
-                    const start = elements.editor.selectionStart;
-                    const end = elements.editor.selectionEnd;
-                    const value = elements.editor.value;
-
-                    elements.editor.value = value.slice(0, start) + markdownImage + value.slice(end);
-                    elements.editor.selectionStart = start + markdownImage.length;
-                    elements.editor.selectionEnd = start + markdownImage.length;
-
-                    setDirty(true);
-                    scheduleRender();
-                    scheduleAutoSave();
-                    setStatus(`Saved image ${paths.imageFileName}.`, false);
-                } catch (err) {
-                    setStatus('Failed to save pasted image.', true);
-                    console.error(err);
-                }
-            };
-            reader.readAsDataURL(file);
-
-            // Only handle the first image item
-            break;
-        }
+        handleEditorImagePaste(event);
     });
 }
 
@@ -2353,12 +2402,8 @@ elements.editor.addEventListener('contextmenu', (e) => {
         {
             title: 'Paste',
             icon: 0xf0ea,
-            onSelect: () => {
-                ClipboardGetText().then((text) => {
-                    if (text === '') return;
-                    elements.editor.focus();
-                    document.execCommand('insertText', false, text);
-                }).catch(() => {});
+            onSelect: async () => {
+                await pasteFromGoClipboard();
             },
         },
         { title: '-' },
@@ -2367,6 +2412,13 @@ elements.editor.addEventListener('contextmenu', (e) => {
             icon: 0xf002,
             onSelect: () => {
                 openFindBar();
+            },
+        },
+        {
+            title: 'Print...',
+            icon: 0xf02f,
+            onSelect: () => {
+                WindowPrint();
             },
         },
         { title: '-' },

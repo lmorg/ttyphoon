@@ -30,6 +30,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.design/x/clipboard"
 )
 
 //go:embed all:frontend/dist
@@ -672,6 +673,25 @@ func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
 	}
 
 	return path, nil
+}
+
+func (a *WApp) WindowPrint() {
+	runtime.WindowPrint(a.ctx)
+}
+
+type ClipboardData struct {
+	Text  string `json:"text"`
+	Image string `json:"image"`
+}
+
+// GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
+func (a *WApp) GetClipboardData() ClipboardData {
+	b := clipboard.Read(clipboard.FmtImage)
+	if len(b) != 0 {
+		return ClipboardData{Image: base64.StdEncoding.EncodeToString(b)}
+	}
+
+	return ClipboardData{Text: string(clipboard.Read(clipboard.FmtText))}
 }
 
 func (a *WApp) RenameFile(oldPath, newPath string) error {

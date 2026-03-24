@@ -2,8 +2,8 @@ package rendererwebkit
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"sync"
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -11,7 +11,12 @@ import (
 	"golang.design/x/clipboard"
 )
 
-var webkitClipboardInit sync.Once
+func init() {
+	err := clipboard.Init()
+	if err != nil {
+		log.Println(err)
+	}
+}
 
 func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	if wr.termWin == nil || wr.termWin.Active == nil {
@@ -106,8 +111,6 @@ func (wr *webkitRender) clipboardPaste() {
 		return
 	}
 
-	webkitClipboardInit.Do(func() { _ = clipboard.Init() })
-
 	b := clipboard.Read(clipboard.FmtText)
 	if len(b) != 0 {
 		term.Reply(b)
@@ -145,8 +148,6 @@ func (wr *webkitRender) writeToTemp() {
 	if wr.termWin == nil || wr.termWin.Active == nil || wr.termWin.Active.GetTerm() == nil {
 		return
 	}
-
-	webkitClipboardInit.Do(func() { _ = clipboard.Init() })
 
 	file, err := os.CreateTemp("", "*.txt")
 	if err != nil {

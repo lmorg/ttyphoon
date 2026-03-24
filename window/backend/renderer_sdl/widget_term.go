@@ -110,17 +110,6 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 }
 
-func (sr *sdlRender) VisualEditor() {
-	options := &DisplayInputBoxWT{
-		Options: dispatcher.PInputBoxT{Title: "Visual editor"},
-		OkFunc: func(value string) {
-			if value != "" {
-				sr.termWin.Active.GetTerm().Reply([]byte(value))
-			}
-		},
-	}
-	sr.DisplayInputBoxW(options)
-}
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	fn := hotkeys.KeyPress(keyCode, mod)
