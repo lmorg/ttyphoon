@@ -369,12 +369,31 @@ splitToggle.addEventListener('click', (event) => {
     toggleNotesPaneCollapsed();
 });
 
-notesPane.addEventListener('focusin', () => {
-    setTerminalFocusState(false);
+function shouldKeepTerminalFocusedForNotesTarget(target) {
+    const mode = notesPane.dataset.viewMode;
+
+    if (mode === 'editor') {
+        return false;
+    }
+
+    if (mode === 'viewer') {
+        return true;
+    }
+
+    // In jupyter mode, code blocks are editable and should keep keyboard ownership in notes.
+    const targetEl = target instanceof Element ? target : null;
+    const inJupyterCodeBlock = Boolean(targetEl && targetEl.closest('.jupyter-code-block'));
+    return !inJupyterCodeBlock;
+}
+
+notesPane.addEventListener('focusin', (event) => {
+    // Mode-aware focus bridge: viewer -> terminal, editor -> notes, jupyter -> depends on target.
+    setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
 });
 
-notesPane.addEventListener('mousedown', () => {
-    setTerminalFocusState(true);
+notesPane.addEventListener('mousedown', (event) => {
+    // Handle repeat clicks where focusin might not fire again.
+    setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
 });
 
 terminalPane.addEventListener('focusin', () => {

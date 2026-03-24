@@ -305,6 +305,8 @@ function setDirty(isDirty) {
 
 function setViewMode(mode) {
     state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
+    // Share active notes mode with ttyphoon.js so cross-pane focus behavior can follow mode intent.
+    app.dataset.viewMode = state.viewMode;
     const isEditor = state.viewMode === 'editor';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
