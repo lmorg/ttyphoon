@@ -73,9 +73,9 @@ async function maximizeWindowFromTitlebar() {
 
 async function hydrateTitlebarAndBorders() {
     let appName = 'TTYphoon';
-    let bgColor = 'rgba(30,30,30,1)';
+    /*let bgColor = 'rgba(30,30,30,1)';
     let fgColor = 'rgba(255,255,255,0.87)';
-    let borderColor = 'rgba(0,0,0,0.2)';
+    let borderColor = 'rgba(0,0,0,0.2)';*/
 
     try {
         appName = await GetAppTitle();
@@ -99,6 +99,8 @@ function applyChromePalette(style) {
     let bgColor = 'rgba(30,30,30,1)';
     let fgColor = 'rgba(255,255,255,0.87)';
     let borderColor = 'rgba(0,0,0,0.2)';
+    const showStatusBar = style?.statusBar !== false;
+    const statusFontSize = Math.max(8, Number(style?.fontSize || 14) - 2);
 
     if (style?.colors?.bg) {
         const bg = style.colors.bg;
@@ -117,15 +119,27 @@ function applyChromePalette(style) {
     if (contentWrapper) {
         contentWrapper.style.borderLeft = `3px solid ${borderColor}`;
         contentWrapper.style.borderRight = `3px solid ${borderColor}`;
+        contentWrapper.style.borderBottom = showStatusBar ? '0' : `3px solid ${borderColor}`;
     }
 
     if (statusBar) {
+        statusBar.style.display = showStatusBar ? 'flex' : 'none';
+        statusBar.style.fontSize = `${statusFontSize}px`;
         statusBar.style.background = `linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), ${bgColor}`;
         statusBar.style.color = fgColor;
         statusBar.style.borderLeft = `3px solid ${borderColor}`;
         statusBar.style.borderRight = `3px solid ${borderColor}`;
         statusBar.style.borderBottom = `3px solid ${borderColor}`;
-        statusBar.style.borderTop = `1px solid ${borderColor}`;
+            statusBar.style.borderTop = '1px solid rgba(255, 255, 255, 0.18)';
+            statusBar.style.boxShadow = 'inset 0 1px 0 rgba(255, 255, 255, 0.12)';
+    }
+
+    if (notesStatusWrap) {
+        notesStatusWrap.style.fontSize = `${statusFontSize}px`;
+    }
+
+    if (terminalStatus) {
+        terminalStatus.style.fontSize = `${statusFontSize}px`;
     }
 }
 
@@ -273,12 +287,16 @@ statusBar.style.cssText = [
     'border-left:3px solid rgba(0,0,0,0.2)',
     'border-right:3px solid rgba(0,0,0,0.2)',
     'border-bottom:3px solid rgba(0,0,0,0.2)',
-    'border-top:1px solid rgba(0,0,0,0.3)',
+    'border-top:1px solid rgba(255,255,255,0.18)',
+    'box-shadow:inset 0 1px 0 rgba(255,255,255,0.12)',
     'box-sizing:border-box',
     'overflow:hidden',
     'font-size:12px',
-    'line-height:1.2',
+    'line-height:1',
     'padding:0',
+    'padding-top:4px',
+    '--wails-draggable:drag',
+    'cursor:arrow'
 ].join(';');
 
 notesStatusWrap = document.createElement('div');
@@ -297,6 +315,9 @@ const notesStatus = document.createElement('div');
 notesStatus.id = 'notes-status';
 notesStatus.setAttribute('role', 'status');
 notesStatus.style.cssText = [
+    'height:100%',
+    'display:flex',
+    'align-items:center',
     'width:100%',
     'white-space:nowrap',
     'overflow:hidden',
@@ -312,6 +333,7 @@ terminalStatus.style.cssText = [
     'height:100%',
     'display:flex',
     'align-items:center',
+    'line-height:1',
     'padding:0 10px',
     'min-width:0',
     'white-space:nowrap',
@@ -370,11 +392,20 @@ refreshStatusBarLayout();
 })();
 
 function refreshStatusBarLayout() {
-    if (!notesPane || !notesStatusWrap) {
+    if (!notesPane || !notesStatusWrap || !terminalStatus) {
         return;
     }
 
-    notesStatusWrap.style.width = notesPane.style.width || '50%';
+    const notesWidthPx = notesCollapsed
+        ? 0
+        : Math.max(0, Math.round(notesPane.getBoundingClientRect().width));
+    const collapsed = notesWidthPx <= 1;
+
+    notesStatusWrap.style.width = `${notesWidthPx}px`;
+    notesStatusWrap.style.padding = collapsed ? '0' : '0 10px';
+
+    // Keep terminal status text closer to the left edge when notes are collapsed.
+    terminalStatus.style.paddingLeft = collapsed ? '4px' : '10px';
 }
 
 function clamp(value, min, max) {
@@ -481,25 +512,33 @@ function toggleNotesPaneCollapsed() {
         splitToggle.setAttribute('aria-label', 'Expand notes pane');
         splitToggle.title = 'Expand notes pane';
 
-        void adjustWindowFrameBy(-lastCollapseDeltaPx);
+        void adjustWindowFrameBy(-lastCollapseDeltaPx).finally(() => {
+            requestAnimationFrame(() => {
+                refreshStatusBarLayout();
+            });
+        });
     } else {
-        notesCollapsed = false;
         const minPercent = (Math.max(240, Math.round(rect.width * 0.15)) / rect.width) * 100;
         const maxPercent = ((rect.width - Math.max(240, Math.round(rect.width * 0.15)) - splitHandle.offsetWidth) / rect.width) * 100;
         const restored = Math.min(Math.max(lastNotesWidthPercent, minPercent), maxPercent);
 
-        notesPane.style.width = `${restored}%`;
-        notesPane.style.borderRight = '1px solid rgba(255,255,255,0.12)';
-        splitToggle.textContent = '▶';
-        splitToggle.setAttribute('aria-label', 'Collapse notes pane');
-        splitToggle.title = 'Collapse notes pane';
+        // Reuse divider logic so pane and status layout stay in sync.
+        const restoredPx = (restored / 100) * rect.width;
+        setSplitFromClientX(rect.left + restoredPx);
 
         if (lastCollapseDeltaPx > 0) {
-            void adjustWindowFrameBy(lastCollapseDeltaPx);
+            void adjustWindowFrameBy(lastCollapseDeltaPx).finally(() => {
+                requestAnimationFrame(() => {
+                    refreshStatusBarLayout();
+                });
+            });
         }
     }
 
     refreshStatusBarLayout();
+    requestAnimationFrame(() => {
+        refreshStatusBarLayout();
+    });
 
     requestTerminalResizeAfterLayout();
 }

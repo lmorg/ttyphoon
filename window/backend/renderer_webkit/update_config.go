@@ -79,6 +79,7 @@ func (wr *webkitRender) UpdateConfig() {
 			Title: fmt.Sprintf("%s == %v", "Window.StatusBar", config.Config.Window.StatusBar),
 			Fn: func() {
 				config.Config.Window.StatusBar = !config.Config.Window.StatusBar
+				wr.EmitStyleUpdate()
 				wr.UpdateConfig()
 			},
 			Icon: 0xe59a,

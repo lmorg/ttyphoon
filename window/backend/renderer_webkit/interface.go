@@ -93,6 +93,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 
 	style := struct {
 		Colours          *coloursPayload `json:"colors"`
+		StatusBar        bool            `json:"statusBar"`
 		FontFamily       string          `json:"fontFamily"`
 		FontSize         int             `json:"fontSize"`
 		AdjustCellWidth  int             `json:"adjustCellWidth"`
@@ -121,6 +122,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
 		},
+		StatusBar:        config.Config.Window.StatusBar,
 		FontFamily:       fontFamily,
 		FontSize:         config.Config.TypeFace.FontSize,
 		AdjustCellWidth:  config.Config.TypeFace.AdjustCellWidth,

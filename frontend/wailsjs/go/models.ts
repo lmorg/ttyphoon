@@ -86,6 +86,7 @@ export namespace main {
 	}
 	export class WindowStyleT {
 	    colors?: ColoursT;
+	    statusBar: boolean;
 	    fontFamily: string;
 	    fontSize: number;
 	    adjustCellWidth: number;
@@ -98,6 +99,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.colors = this.convertValues(source["colors"], ColoursT);
+	        this.statusBar = source["statusBar"];
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
 	        this.adjustCellWidth = source["adjustCellWidth"];
