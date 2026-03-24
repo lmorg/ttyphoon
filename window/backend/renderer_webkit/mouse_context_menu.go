@@ -38,6 +38,7 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	}...)
 
 	if wr.contextMenu != nil && len(wr.contextMenu.MenuItems()) > 0 {
+		menu.Append(types.MenuItem{Title: "-"})
 		menu.Append(wr.contextMenu.MenuItems()...)
 	}
 

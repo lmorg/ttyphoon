@@ -124,7 +124,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Icon:  0xf0c5,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
@@ -134,7 +134,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Icon:  0xf044,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { notesCreateAndOpen(term, absBlockPos) },
@@ -144,7 +144,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { ai.Explain(agt, true) },

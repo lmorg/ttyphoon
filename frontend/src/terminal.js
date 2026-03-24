@@ -208,8 +208,8 @@ function drawCursorPulseOverlay(targetCtx) {
     const colour = fg ? `rgb(${fg.Red}, ${fg.Green}, ${fg.Blue})` : 'rgb(255, 255, 255)';
 
     // Smooth pulse between 30% and 100% alpha over 1.2s.
-    const phase = (performance.now() % 1200) / 1200;
-    const animatedAlpha = 0.3 + (0.7 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+    const phase = (performance.now() % 1000) / 1000;
+    const animatedAlpha = 0.1 + (0.7 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
 
     for (const cursorRect of cursorRects) {
         if (!cursorRect) {
