@@ -45,9 +45,12 @@ app.innerHTML = `
                 <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
                 <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
                 <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
-                <button id="notes-new" type="button">New</button>
-                <button id="notes-rename" type="button" title="Rename current note">Rename</button>
-                <button id="notes-delete" type="button" title="Delete current note">Delete</button>
+                <div id="notes-toolbar" class="notes-toolbar">
+                    <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
+                    <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
+                    <button id="notes-delete" type="button" class="notes-toolbar-btn" title="Delete" aria-label="Delete current note">&#xf2ed;</button>
+                    <button id="notes-find" type="button" class="notes-toolbar-btn" title="Find" aria-label="Find">&#xf002;</button>
+                </div>
             </div>
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
@@ -109,6 +112,7 @@ const elements = {
     newFile: document.getElementById('notes-new'),
     rename: document.getElementById('notes-rename'),
     delete: document.getElementById('notes-delete'),
+    find: document.getElementById('notes-find'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
     tabJupyter: document.getElementById('notes-tab-jupyter'),
@@ -1683,24 +1687,48 @@ function applyWindowStyle(result) {
             outline: none;
         }
 
-        #notes-new {
-            margin-left: 20px;
-            margin-bottom: 2px;
-        }
-        #notes-rename, #notes-delete {
-            margin-bottom: 2px;
+        .notes-toolbar {
+            display: flex;
+            gap: 4px;
+            margin-left: auto;
+            align-items: center;
         }
 
+        .notes-toolbar-btn {
+            border: none;
+            background: transparent;
+            color: var(--fg);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 900;
+            transition: color 0.2s, background-color 0.2s;
+            border-width: 1px !important;
+        }
+
+        /*.notes-toolbar-btn:hover {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+            color: var(--fg);
+        }*/
+
         #notes-new:hover {
-            border-color: var(--green) !important;
             color: var(--green) !important;
         }
 
-        #notes-rename:hover {
-            border-color: var(--yellow) !important;
+        #notes-rename:hover, #notes-find:hover {
             color: var(--yellow) !important;
-            background-color: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0.2);
             border-radius: 5px;
+            border-color: var(--yellow) !important;
+            background-color: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0.3);
+        }
+
+        #notes-delete:hover {
+            color: var(--red) !important;
         }
 
         #notes-modal-create:hover {
@@ -1852,7 +1880,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-tabs {
-            display: inline-flex;
+            display: flex;
             gap: 8px;
             border-bottom: 2px solid var(--fg);
             align-items: center;
@@ -2604,6 +2632,10 @@ elements.delete.addEventListener('click', () => {
         return;
     }
     openDeletePrompt(state.currentFile);
+});
+
+elements.find.addEventListener('click', () => {
+    openFindBar();
 });
 
 elements.deleteCancel.addEventListener('click', () => {
