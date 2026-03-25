@@ -205,7 +205,19 @@ export function initTerminalPopupMenu(canvas) {
     document.body.appendChild(listRoot);
 
     function menuConstraints() {
-        const rect = canvas.getBoundingClientRect();
+        let rect = canvas?.getBoundingClientRect();
+
+        // When notes are embedded, the terminal canvas can be hidden (0x0).
+        // Fall back to the visible host so menu sizing does not collapse.
+        if (!rect || rect.width < 120 || rect.height < 120) {
+            const embeddedNotesHost = document.getElementById('terminal-jupyter-host');
+            const hostVisible = embeddedNotesHost && embeddedNotesHost.style.display !== 'none';
+            const fallbackRoot = hostVisible
+                ? embeddedNotesHost
+                : (document.getElementById('terminal-viewport') || document.getElementById('notes-pane') || document.body);
+            rect = fallbackRoot.getBoundingClientRect();
+        }
+
         return {
             maxWidth: Math.max(280, Math.floor(rect.width * 0.92)),
             maxHeight: Math.max(160, Math.floor(rect.height * 0.78)),

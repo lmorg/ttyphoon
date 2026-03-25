@@ -303,6 +303,14 @@ function setDirty(isDirty) {
     elements.status.textContent = isDirty ? `${label} (unsaved)` : label;
 }
 
+function emitCurrentFileName() {
+    const fileName = state.currentFile ? state.currentFile.split('/').pop() : '';
+    app.dataset.currentFileName = fileName;
+    window.dispatchEvent(new CustomEvent('notes-current-file', {
+        detail: { fileName }
+    }));
+}
+
 function setViewMode(mode) {
     state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
     // Share active notes mode with ttyphoon.js so cross-pane focus behavior can follow mode intent.
@@ -766,6 +774,7 @@ async function loadFile(file) {
     try {
         const doc = await GetMarkdown(file);
         state.currentFile = file;
+        emitCurrentFileName();
         elements.editor.value = doc || '';
         renderMarkdown();
         renderJupyterView();
@@ -827,6 +836,7 @@ async function confirmDelete() {
         await DeleteFile(fileToDelete);
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
+            emitCurrentFileName();
             elements.editor.value = '';
             renderMarkdown();
             setDirty(false);
@@ -2173,13 +2183,14 @@ function applyWindowStyle(result) {
         #notes-jupyter-wrap pre {
             border-left: 0;
             padding-left: 10px;
+            /*white-space: pre-wrap;
+            word-wrap: break-word;*/
         }
 
         .jupyter-code-block {
             margin: 16px 0;
             border: 2px solid var(--fg);
             border-radius: 5px;
-            overflow: hidden;
         }
 
         .jupyter-toolbar {
@@ -2300,11 +2311,12 @@ function applyWindowStyle(result) {
             font-family: monospace;
             font-size: ${result.fontSize}px;
             line-height: 1.5;
-            overflow: hidden;
-            white-space: pre;
+            overflow-x: auto;
+            overflow-y: hidden;
             outline: none;
             resize: none;
             box-sizing: border-box;
+            white-space: pre;
         }
 
         .jupyter-code-editable:focus {

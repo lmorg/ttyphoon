@@ -153,7 +153,7 @@ body {
     color: var(--terminal-menu-fg);
     opacity: 0.7;
     font-weight: 600;
-    border-bottom: 1px solid var(--terminal-menu-separator);
+    border-bottom: 1px solid var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
     cursor: default;
     text-align: center;
 }
@@ -185,7 +185,7 @@ body {
 
 .tty-listbox-search {
     padding: 8px 10px 6px 10px;
-    border-bottom: 1px solid var(--terminal-menu-separator);
+    border-bottom: 1px solid var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
 }
 
 .tty-listbox-search-input {
@@ -242,6 +242,6 @@ body {
 .tty-menu-separator {
     height: 1px;
     margin: 4px 8px;
-    background: var(--terminal-menu-separator);
+    background: var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
 }
 

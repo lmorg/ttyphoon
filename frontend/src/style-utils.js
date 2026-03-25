@@ -96,6 +96,8 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
             margin: 0;
             padding: 10px 10px 10px 20px;
             overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         ${prefix}blockquote {

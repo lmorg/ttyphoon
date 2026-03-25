@@ -32,6 +32,16 @@ const terminalStatusEl = document.getElementById('terminal-status');
 const notifContainer = document.getElementById('terminal-notifications');
 let cursorRects = [];
 let cursorPulseRaf = 0;
+let jupyterTabEnabled = false;
+let jupyterTabActive = false;
+let jupyterTabTitle = 'Notes';
+
+function formatNotesTabTitle(fileName) {
+    if (typeof fileName !== 'string' || fileName.length === 0) {
+        return 'Notes';
+    }
+    return `${fileName} (Notes)`;
+}
 
 function updateNotificationOffset() {
     if (!notifContainer) {
@@ -75,23 +85,58 @@ function renderTerminalTabs(tabs) {
         button.type = 'button';
         button.className = 'tab terminal-tab';
         button.setAttribute('role', 'tab');
-        button.setAttribute('aria-selected', tab.active ? 'true' : 'false');
+        button.setAttribute('aria-selected', (!jupyterTabActive && tab.active) ? 'true' : 'false');
         button.dataset.windowId = tab.id || '';
         button.textContent = tab.name || tab.id || 'window';
         button.title = tab.id || button.textContent;
 
         button.addEventListener('click', () => {
+            jupyterTabActive = false;
+            applyEmbeddedJupyterVisibility();
             if (!tab.id) {
                 return;
             }
             TerminalSelectWindow(tab.id).catch(() => {});
+            renderTerminalTabs(tabState);
         });
 
         tabsEl.appendChild(button);
     }
 
-    tabsEl.style.display = tabState.length > 0 ? 'flex' : 'none';
+    if (jupyterTabEnabled) {
+        const jupyterButton = document.createElement('button');
+        jupyterButton.type = 'button';
+        jupyterButton.className = 'tab terminal-tab';
+        jupyterButton.setAttribute('role', 'tab');
+        jupyterButton.dataset.windowId = '__jupyter__';
+        jupyterButton.textContent = jupyterTabTitle || 'Notes';
+        jupyterButton.title = jupyterButton.textContent;
+        jupyterButton.setAttribute('aria-selected', jupyterTabActive ? 'true' : 'false');
+        jupyterButton.addEventListener('click', () => {
+            jupyterTabActive = true;
+            applyEmbeddedJupyterVisibility();
+            renderTerminalTabs(tabState);
+        });
+        tabsEl.appendChild(jupyterButton);
+    }
+
+    tabsEl.style.display = (tabState.length > 0 || jupyterTabEnabled) ? 'flex' : 'none';
     updateNotificationOffset();
+}
+
+function applyEmbeddedJupyterVisibility() {
+    const jupyterHost = document.getElementById('terminal-jupyter-host');
+    const showJupyter = jupyterTabEnabled && jupyterTabActive;
+
+    if (jupyterHost) {
+        jupyterHost.style.display = showJupyter ? 'block' : 'none';
+    }
+
+    canvas.style.display = showJupyter ? 'none' : 'block';
+
+    if (!showJupyter) {
+        TerminalRequestRedraw().catch(() => {});
+    }
 }
 
 function applyTerminalStyles(result) {
@@ -264,7 +309,6 @@ function ensureCursorPulseLoop() {
             cursorPulseRaf = 0;
             return;
         }
-
         if (!cursorRects.some((cursor) => cursor?.animated)) {
             cursorPulseRaf = 0;
             return;
@@ -953,4 +997,29 @@ window.addEventListener('resize', () => {
             }
         }
     }, 100);
+});
+
+window.addEventListener('ttyphoon-jupyter-tab-mode', (event) => {
+    const enabled = event?.detail?.enabled === true;
+    const active = event?.detail?.active !== false;
+    const title = typeof event?.detail?.title === 'string' && event.detail.title.length > 0
+        ? event.detail.title
+        : 'Notes';
+
+    jupyterTabEnabled = enabled;
+    jupyterTabActive = enabled ? active : false;
+    jupyterTabTitle = formatNotesTabTitle(title === 'Notes' ? '' : title);
+
+    applyEmbeddedJupyterVisibility();
+    renderTerminalTabs(tabState);
+    updateNotificationOffset();
+});
+
+window.addEventListener('notes-current-file', (event) => {
+    const fileName = typeof event?.detail?.fileName === 'string' ? event.detail.fileName : '';
+    jupyterTabTitle = formatNotesTabTitle(fileName);
+
+    if (jupyterTabEnabled) {
+        renderTerminalTabs(tabState);
+    }
 });

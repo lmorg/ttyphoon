@@ -159,17 +159,21 @@ let titlebar;
 let contentWrapper;
 let notesPane;
 let splitHandle;
-let splitToggle;
 let terminalPane;
 let statusBar;
 let notesStatusWrap;
 let terminalStatus;
+let terminalJupyterHost;
+let notesOriginalParent;
+let notesOriginalNextSibling;
+let notesOriginalStyle;
 
 let isDraggingSplit = false;
 let notesCollapsed = false;
 let lastNotesWidthPercent = 50;
-let lastCollapseDeltaPx = 0;
 let terminalFocusState = true;
+const MIN_NOTES_PX = 240;
+const MIN_NOTES_EMBED_PX = 96;
 
 (async () => {
     titlebar = setupTitlebar();
@@ -220,6 +224,7 @@ splitHandle.style.cssText = [
     'user-select:none',
     'touch-action:none',
 ].join(';');
+splitHandle.title = 'Drag to resize notes';
 
 const splitHandleLine = document.createElement('div');
 splitHandleLine.style.cssText = [
@@ -232,32 +237,6 @@ splitHandleLine.style.cssText = [
     'background:rgba(255,255,255,0.16)',
 ].join(';');
 splitHandle.appendChild(splitHandleLine);
-
-splitToggle = document.createElement('button');
-splitToggle.type = 'button';
-splitToggle.id = 'notes-terminal-toggle';
-splitToggle.setAttribute('aria-label', 'Collapse notes pane');
-splitToggle.title = 'Collapse notes pane';
-splitToggle.textContent = '▶';
-splitToggle.style.cssText = [
-    'position:absolute',
-    'left:50%',
-    'top:50%',
-    'transform:translate(-50%, -50%)',
-    'width:16px',
-    'height:40px',
-    'padding:0',
-    'border:1px solid rgba(255,255,255,0.25)',
-    'border-radius:8px',
-    'background:rgba(0,0,0,0.35)',
-    'color:rgba(255,255,255,0.8)',
-    'font-size:11px',
-    'line-height:1',
-    'cursor:pointer',
-    'z-index:2',
-    '-webkit-app-region:no-drag',
-].join(';');
-splitHandle.appendChild(splitToggle);
 
 terminalPane = document.createElement('div');
 terminalPane.id = 'terminal-pane';
@@ -349,11 +328,12 @@ app.appendChild(statusBar);
 
 // Setup event listeners after DOM elements are created
 splitHandle.addEventListener('mousedown', (event) => {
-    if (event.target === splitToggle) {
+    if (event.button !== 0) {
         return;
     }
 
-    if (event.button !== 0) {
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    if (notesCollapsed || embeddedInTerminal) {
         return;
     }
 
@@ -363,10 +343,10 @@ splitHandle.addEventListener('mousedown', (event) => {
     event.preventDefault();
 });
 
-splitToggle.addEventListener('click', (event) => {
+splitHandle.addEventListener('dblclick', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    toggleNotesPaneCollapsed();
+    void toggleNotesPaneCollapsed();
 });
 
 function shouldKeepTerminalFocusedForNotesTarget(target) {
@@ -405,10 +385,22 @@ terminalPane.addEventListener('mousedown', () => {
 });
 
 refreshStatusBarLayout();
+updateSplitHandleTooltip();
 
     // Update titlebar text and colors asynchronously after shell render.
     void hydrateTitlebarAndBorders();
 })();
+
+function updateSplitHandleTooltip() {
+    if (!splitHandle) {
+        return;
+    }
+
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    splitHandle.title = (notesCollapsed || embeddedInTerminal)
+        ? 'Double-click to expand notes'
+        : 'Drag to resize notes. Double-click to collapse notes';
+}
 
 function refreshStatusBarLayout() {
     if (!notesPane || !notesStatusWrap || !terminalStatus) {
@@ -427,8 +419,160 @@ function refreshStatusBarLayout() {
     terminalStatus.style.paddingLeft = collapsed ? '4px' : '10px';
 }
 
-function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
+function ensureTerminalJupyterHost() {
+    if (terminalJupyterHost) {
+        return terminalJupyterHost;
+    }
+
+    const terminalViewport = document.getElementById('terminal-viewport');
+    if (!terminalViewport) {
+        return null;
+    }
+
+    terminalJupyterHost = document.createElement('div');
+    terminalJupyterHost.id = 'terminal-jupyter-host';
+    terminalJupyterHost.style.cssText = [
+        'display:none',
+        'position:absolute',
+        'inset:0',
+        'min-height:0',
+        'overflow:auto',
+        'z-index:2',
+    ].join(';');
+    terminalViewport.appendChild(terminalJupyterHost);
+    return terminalJupyterHost;
+}
+
+function getCurrentNoteFileName() {
+    const fileName = notesPane?.dataset?.currentFileName;
+    return fileName && fileName.length > 0 ? fileName : 'Notes';
+}
+
+function setTerminalJupyterMode(enabled) {
+    const host = ensureTerminalJupyterHost();
+    if (!notesPane) {
+        return;
+    }
+
+    if (enabled) {
+        if (!host) {
+            return;
+        }
+
+        if (!notesOriginalParent) {
+            notesOriginalParent = notesPane.parentElement;
+            notesOriginalNextSibling = notesPane.nextElementSibling;
+            notesOriginalStyle = {
+                width: notesPane.style.width,
+                height: notesPane.style.height,
+                borderRight: notesPane.style.borderRight,
+                overflow: notesPane.style.overflow,
+                position: notesPane.style.position,
+                flexShrink: notesPane.style.flexShrink,
+            };
+        }
+
+        if (notesPane.parentElement !== host) {
+            host.appendChild(notesPane);
+        }
+
+        notesPane.style.width = '100%';
+        notesPane.style.height = '100%';
+        notesPane.style.borderRight = '0';
+        notesPane.style.overflow = 'hidden';
+        notesPane.style.position = 'relative';
+        notesPane.style.flexShrink = '1';
+        host.style.display = 'none';
+        window.dispatchEvent(new CustomEvent('ttyphoon-jupyter-tab-mode', {
+            detail: {
+                enabled: true,
+                active: true,
+                title: getCurrentNoteFileName(),
+            }
+        }));
+        return;
+    }
+
+    if (host) {
+        host.style.display = 'none';
+    }
+
+    if (notesOriginalParent && notesPane.parentElement !== notesOriginalParent) {
+        if (notesOriginalNextSibling && notesOriginalNextSibling.parentElement === notesOriginalParent) {
+            notesOriginalParent.insertBefore(notesPane, notesOriginalNextSibling);
+        } else {
+            notesOriginalParent.appendChild(notesPane);
+        }
+    } else if (contentWrapper && splitHandle && notesPane.parentElement !== contentWrapper) {
+        // Fallback: always dock notes back to the left of terminal split.
+        contentWrapper.insertBefore(notesPane, splitHandle);
+    }
+
+    if (notesOriginalStyle) {
+        notesPane.style.width = notesOriginalStyle.width;
+        notesPane.style.height = notesOriginalStyle.height;
+        notesPane.style.borderRight = notesOriginalStyle.borderRight;
+        notesPane.style.overflow = notesOriginalStyle.overflow;
+        notesPane.style.position = notesOriginalStyle.position;
+        notesPane.style.flexShrink = notesOriginalStyle.flexShrink;
+    }
+
+    window.dispatchEvent(new CustomEvent('ttyphoon-jupyter-tab-mode', {
+        detail: {
+            enabled: false,
+            active: false,
+            title: getCurrentNoteFileName(),
+        }
+    }));
+}
+
+function setSplitFromClientX(clientX) {
+    const rect = app.getBoundingClientRect();
+    if (rect.width <= 0) {
+        return;
+    }
+
+    const minPanePx = Math.max(MIN_NOTES_PX, Math.round(rect.width * 0.15));
+    const maxNotesPx = rect.width - minPanePx - splitHandle.offsetWidth;
+    const rawNotesPx = clientX - rect.left;
+    const notesPx = Math.min(Math.max(rawNotesPx, minPanePx), maxNotesPx);
+
+    if (rawNotesPx <= MIN_NOTES_EMBED_PX) {
+        collapseNotesIntoTerminal();
+        return;
+    }
+
+    const notesPercent = (notesPx / rect.width) * 100;
+
+    // Ensure notes pane is docked back into the split layout before sizing it.
+    setTerminalJupyterMode(false);
+
+    notesCollapsed = false;
+    lastNotesWidthPercent = notesPercent;
+    notesPane.style.width = `${notesPercent}%`;
+    notesPane.style.borderRight = '1px solid rgba(255,255,255,0.12)';
+    updateSplitHandleTooltip();
+
+    refreshStatusBarLayout();
+
+    // Terminal renderer listens for window resize to recompute canvas/rows.
+    //window.dispatchEvent(new Event('resize'));
+}
+
+function collapseNotesIntoTerminal() {
+    const rect = app.getBoundingClientRect();
+    if (rect.width > 0) {
+        const currentPx = notesPane.getBoundingClientRect().width;
+        if (currentPx > 0) {
+            lastNotesWidthPercent = (currentPx / rect.width) * 100;
+        }
+    }
+
+    // Move notes into terminal host first so original split styles are preserved.
+    setTerminalJupyterMode(true);
+    notesCollapsed = true;
+    updateSplitHandleTooltip();
+    refreshStatusBarLayout();
 }
 
 function getScreenBounds(screen) {
@@ -439,119 +583,72 @@ function getScreenBounds(screen) {
     return { x, y, width, height };
 }
 
-async function adjustWindowFrameBy(deltaPx) {
-    if (!Number.isFinite(deltaPx) || deltaPx === 0) {
-        return;
-    }
-
-    try {
-        const [size, pos, screens] = await Promise.all([
-            WindowGetSize(),
-            WindowGetPosition(),
-            ScreenGetAll().catch(() => [])
-        ]);
-
-        const width = Number.isFinite(size?.w) ? size.w : window.innerWidth;
-        const height = Number.isFinite(size?.h) ? size.h : window.innerHeight;
-        const x = Number.isFinite(pos?.x) ? pos.x : 0;
-        const y = Number.isFinite(pos?.y) ? pos.y : 0;
-
-        const targetWidth = Math.max(480, Math.round(width + deltaPx));
-        const appliedDelta = targetWidth - width;
-        let targetX = Math.round(x - appliedDelta);
-        let targetY = y;
-
-        const allScreens = Array.isArray(screens) ? screens : [];
-        const currentScreen = allScreens.find((s) => s?.isCurrent) || allScreens.find((s) => s?.isPrimary) || allScreens[0];
-        const bounds = getScreenBounds(currentScreen);
-
-        const minX = bounds.x;
-        const maxX = bounds.x + Math.max(0, bounds.width-targetWidth);
-        targetX = clamp(targetX, minX, maxX);
-
-        const minY = bounds.y;
-        const maxY = bounds.y + Math.max(0, bounds.height-height);
-        targetY = clamp(targetY, minY, maxY);
-
-        if (targetWidth !== width) {
-            WindowSetSize(targetWidth, height);
-        }
-
-        if (targetX !== x || targetY !== y) {
-            WindowSetPosition(targetX, targetY);
-        }
-    } catch {
-        // Ignore runtime errors; pane collapse/expand still works without frame resize.
-    }
+function clampToScreenX(x, width, bounds) {
+    const minX = bounds.x;
+    const maxX = bounds.x + Math.max(0, bounds.width - width);
+    return Math.min(Math.max(x, minX), maxX);
 }
 
-function setSplitFromClientX(clientX) {
+async function getCurrentWindowAndScreen() {
+    const [size, pos, screens] = await Promise.all([
+        WindowGetSize(),
+        WindowGetPosition(),
+        ScreenGetAll().catch(() => []),
+    ]);
+
+    const width = Number.isFinite(size?.w) ? size.w : window.innerWidth;
+    const height = Number.isFinite(size?.h) ? size.h : window.innerHeight;
+    const x = Number.isFinite(pos?.x) ? pos.x : window.screenX;
+    const y = Number.isFinite(pos?.y) ? pos.y : window.screenY;
+
+    const allScreens = Array.isArray(screens) ? screens : [];
+    const currentScreen = allScreens.find((s) => s?.isCurrent) || allScreens.find((s) => s?.isPrimary) || allScreens[0];
+    const bounds = getScreenBounds(currentScreen);
+    return { width, height, x, y, bounds };
+}
+
+async function toggleNotesPaneCollapsed() {
     const rect = app.getBoundingClientRect();
     if (rect.width <= 0) {
         return;
     }
 
-    const minPanePx = Math.max(240, Math.round(rect.width * 0.15));
-    const maxNotesPx = rect.width - minPanePx - splitHandle.offsetWidth;
-    const rawNotesPx = clientX - rect.left;
-    const notesPx = Math.min(Math.max(rawNotesPx, minPanePx), maxNotesPx);
-    const notesPercent = (notesPx / rect.width) * 100;
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
 
-    notesCollapsed = false;
-    lastNotesWidthPercent = notesPercent;
-    notesPane.style.width = `${notesPercent}%`;
-    notesPane.style.borderRight = '1px solid rgba(255,255,255,0.12)';
-    splitToggle.textContent = '▶';
-    splitToggle.setAttribute('aria-label', 'Collapse notes pane');
-    splitToggle.title = 'Collapse notes pane';
-
-    refreshStatusBarLayout();
-
-    // Terminal renderer listens for window resize to recompute canvas/rows.
-    //window.dispatchEvent(new Event('resize'));
-}
-
-function toggleNotesPaneCollapsed() {
-    const rect = app.getBoundingClientRect();
-    if (rect.width <= 0) {
-        return;
-    }
-
-    if (!notesCollapsed) {
+    if (!notesCollapsed && !embeddedInTerminal) {
         const currentPx = notesPane.getBoundingClientRect().width;
         if (currentPx > 0) {
             lastNotesWidthPercent = (currentPx / rect.width) * 100;
-            lastCollapseDeltaPx = Math.round(currentPx);
         }
 
-        notesCollapsed = true;
-        notesPane.style.width = '0';
-        notesPane.style.borderRight = '0';
-        splitToggle.textContent = '◀';
-        splitToggle.setAttribute('aria-label', 'Expand notes pane');
-        splitToggle.title = 'Expand notes pane';
+        const frame = await getCurrentWindowAndScreen();
+        const collapsedWidth = Math.max(480, Math.round(frame.width / 2));
+        const rightEdge = frame.x + frame.width;
+        const collapsedX = clampToScreenX(rightEdge - collapsedWidth, collapsedWidth, frame.bounds);
 
-        void adjustWindowFrameBy(-lastCollapseDeltaPx).finally(() => {
-            requestAnimationFrame(() => {
-                refreshStatusBarLayout();
-            });
+        collapseNotesIntoTerminal();
+        WindowSetSize(collapsedWidth, frame.height);
+        WindowSetPosition(collapsedX, frame.y);
+        requestAnimationFrame(() => {
+            refreshStatusBarLayout();
         });
     } else {
-        const minPercent = (Math.max(240, Math.round(rect.width * 0.15)) / rect.width) * 100;
-        const maxPercent = ((rect.width - Math.max(240, Math.round(rect.width * 0.15)) - splitHandle.offsetWidth) / rect.width) * 100;
-        const restored = Math.min(Math.max(lastNotesWidthPercent, minPercent), maxPercent);
+        const frame = await getCurrentWindowAndScreen();
+        const expandedWidth = Math.min(frame.bounds.width, Math.max(480, Math.round(frame.width * 2)));
+        const expandedX = clampToScreenX(frame.x, expandedWidth, frame.bounds);
 
-        // Reuse divider logic so pane and status layout stay in sync.
-        const restoredPx = (restored / 100) * rect.width;
-        setSplitFromClientX(rect.left + restoredPx);
+        setTerminalJupyterMode(false);
+        notesCollapsed = false;
+        updateSplitHandleTooltip();
+        WindowSetSize(expandedWidth, frame.height);
+        WindowSetPosition(expandedX, frame.y);
 
-        if (lastCollapseDeltaPx > 0) {
-            void adjustWindowFrameBy(lastCollapseDeltaPx).finally(() => {
-                requestAnimationFrame(() => {
-                    refreshStatusBarLayout();
-                });
-            });
-        }
+        requestAnimationFrame(() => {
+            const nextRect = app.getBoundingClientRect();
+            // Expanded state should restore with divider at exact midpoint.
+            setSplitFromClientX(nextRect.left + (nextRect.width / 2));
+            refreshStatusBarLayout();
+        });
     }
 
     refreshStatusBarLayout();
@@ -599,7 +696,7 @@ window.addEventListener('mouseup', () => {
 });
 
 EventsOn('toggleNotesPane', () => {
-    toggleNotesPaneCollapsed();
+    void toggleNotesPaneCollapsed();
 });
 
 window.addEventListener('resize', () => {
@@ -613,6 +710,8 @@ Promise.all([
     import('./notes.js'),
     import('./terminal.js')
 ]).then(() => {
+    setTerminalJupyterMode(notesCollapsed);
+
     // After all modules have loaded, trigger a resize event to ensure
     // proper sizing of all components (file list, terminal tabs, tmux, etc.)
     requestAnimationFrame(() => {
