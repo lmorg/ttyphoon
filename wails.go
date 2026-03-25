@@ -413,6 +413,8 @@ func (a *WApp) startTerminalWindow() {
 			return
 		}
 
+		cdHome()
+
 		tmuxClient, err = tmux.NewStartSession(renderer, size, tmux.START_NEW_SESSION)
 		if err != nil {
 			log.Println(err)
