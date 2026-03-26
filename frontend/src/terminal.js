@@ -1,4 +1,4 @@
-import { GetWindowStyle, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -35,6 +35,15 @@ let cursorPulseRaf = 0;
 let jupyterTabEnabled = false;
 let jupyterTabActive = false;
 let jupyterTabTitle = 'Notes';
+
+function syncAuxTerminalTabState() {
+    SendIpc('terminal-extra-tab-state', {
+        id: 'notes',
+        enabled: jupyterTabEnabled ? 'true' : 'false',
+        active: (jupyterTabEnabled && jupyterTabActive) ? 'true' : 'false',
+        name: jupyterTabTitle || 'Notes',
+    }).catch(() => {});
+}
 
 function formatNotesTabTitle(fileName) {
     if (typeof fileName !== 'string' || fileName.length === 0) {
@@ -93,6 +102,7 @@ function renderTerminalTabs(tabs) {
         button.addEventListener('click', () => {
             jupyterTabActive = false;
             applyEmbeddedJupyterVisibility();
+            syncAuxTerminalTabState();
             if (!tab.id) {
                 return;
             }
@@ -115,6 +125,7 @@ function renderTerminalTabs(tabs) {
         jupyterButton.addEventListener('click', () => {
             jupyterTabActive = true;
             applyEmbeddedJupyterVisibility();
+            syncAuxTerminalTabState();
             renderTerminalTabs(tabState);
         });
         tabsEl.appendChild(jupyterButton);
@@ -1011,6 +1022,7 @@ window.addEventListener('ttyphoon-jupyter-tab-mode', (event) => {
     jupyterTabTitle = formatNotesTabTitle(title === 'Notes' ? '' : title);
 
     applyEmbeddedJupyterVisibility();
+    syncAuxTerminalTabState();
     renderTerminalTabs(tabState);
     updateNotificationOffset();
 });
@@ -1020,6 +1032,28 @@ window.addEventListener('notes-current-file', (event) => {
     jupyterTabTitle = formatNotesTabTitle(fileName);
 
     if (jupyterTabEnabled) {
+        syncAuxTerminalTabState();
         renderTerminalTabs(tabState);
     }
+});
+
+EventsOn('terminalActivateAuxTab', payload => {
+    const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    const tabID = p?.id;
+    if (tabID === '__tmux__') {
+        jupyterTabActive = false;
+        applyEmbeddedJupyterVisibility();
+        syncAuxTerminalTabState();
+        renderTerminalTabs(tabState);
+        return;
+    }
+
+    if (tabID !== 'notes' || !jupyterTabEnabled) {
+        return;
+    }
+
+    jupyterTabActive = true;
+    applyEmbeddedJupyterVisibility();
+    syncAuxTerminalTabState();
+    renderTerminalTabs(tabState);
 });

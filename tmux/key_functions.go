@@ -9,6 +9,11 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
+type terminalPaneTabsProvider interface {
+	TerminalPaneTabs() []types.TerminalPaneTab
+	ActivateTerminalPaneTab(string)
+}
+
 func fnKeyNewWindow(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("new-window"))
 	return err
@@ -37,9 +42,41 @@ func fnKeyRenameWindow(tmux *Tmux) error {
 }
 
 func fnKeyChooseWindowFromList(tmux *Tmux) error {
-	windowNames := make([]string, len(tmux.appWindow.Tabs))
+	type menuEntry struct {
+		name string
+		id   string
+		aux  bool
+	}
+
+	entries := make([]menuEntry, 0, len(tmux.appWindow.Tabs)+1)
 	for i := range tmux.appWindow.Tabs {
-		windowNames[i] = tmux.appWindow.Tabs[i].Name()
+		entries = append(entries, menuEntry{
+			name: tmux.appWindow.Tabs[i].Name(),
+			id:   tmux.appWindow.Tabs[i].Id(),
+		})
+	}
+
+	if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+		extraTabs := provider.TerminalPaneTabs()
+		for i := range extraTabs {
+			if extraTabs[i].ID == "" {
+				continue
+			}
+			entries = append(entries, menuEntry{
+				name: extraTabs[i].Name,
+				id:   extraTabs[i].ID,
+				aux:  true,
+			})
+		}
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	windowNames := make([]string, len(entries))
+	for i := range entries {
+		windowNames[i] = entries[i].name
 	}
 
 	activeWindow := tmux.activeWindow.id
@@ -59,7 +96,24 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 	}
 
 	_highlightCallback := func(i int) {
-		targetWindowID := tmux.appWindow.Tabs[i].Id()
+		if i < 0 || i >= len(entries) {
+			return
+		}
+
+		entry := entries[i]
+		if entry.aux {
+			restorePreviewCursor()
+			if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+				provider.ActivateTerminalPaneTab(entry.id)
+			}
+			return
+		}
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
+
+		targetWindowID := entry.id
 		if tmux.activeWindow.id == targetWindowID {
 			return
 		}
@@ -81,9 +135,25 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 	}
 
 	_chooseCallback := func(i int) {
+		if i < 0 || i >= len(entries) {
+			return
+		}
+
 		restorePreviewCursor()
 
-		targetWindowID := tmux.appWindow.Tabs[i].Id()
+		entry := entries[i]
+		if entry.aux {
+			if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+				provider.ActivateTerminalPaneTab(entry.id)
+			}
+			return
+		}
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
+
+		targetWindowID := entry.id
 		err := tmux.SelectAndResizeWindow(targetWindowID, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -98,6 +168,10 @@ func fnKeyChooseWindowFromList(tmux *Tmux) error {
 
 	_cancelCallback := func(_ int) {
 		restorePreviewCursor()
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
 
 		err := tmux.selectWindow(activeWindow)
 		if err != nil {

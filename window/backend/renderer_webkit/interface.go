@@ -20,16 +20,18 @@ type terminalTab struct {
 }
 
 type webkitRender struct {
-	termWin       *types.AppWindowTerms
-	tmux          *tmux.Tmux
-	glyphSize     *types.XY
-	windowCells   *types.XY
-	windowTitle   string
-	blinkState    atomic.Bool
-	keyboardMode  keyboardModeT
-	keyModifier   int
-	statusBarText string
-	selection     *selectionState
+	termWin         *types.AppWindowTerms
+	tmux            *tmux.Tmux
+	auxTabsMu       sync.RWMutex
+	auxTerminalTabs []types.TerminalPaneTab
+	glyphSize       *types.XY
+	windowCells     *types.XY
+	windowTitle     string
+	blinkState      atomic.Bool
+	keyboardMode    keyboardModeT
+	keyModifier     int
+	statusBarText   string
+	selection       *selectionState
 	//cmdMu         sync.Mutex
 	drawCommands   []DrawCommand
 	wapp           context.Context
@@ -243,7 +245,32 @@ func (wr *webkitRender) TriggerDeallocation(fn func()) {
 func (wr *webkitRender) TriggerQuit() {}
 
 func (wr *webkitRender) GetWindowMeta() any {
-	return nil
+	return wr.TerminalPaneTabs()
+}
+
+func (wr *webkitRender) SetTerminalPaneTabs(tabs []types.TerminalPaneTab) {
+	wr.auxTabsMu.Lock()
+	wr.auxTerminalTabs = append([]types.TerminalPaneTab(nil), tabs...)
+	wr.auxTabsMu.Unlock()
+}
+
+func (wr *webkitRender) TerminalPaneTabs() []types.TerminalPaneTab {
+	wr.auxTabsMu.RLock()
+	defer wr.auxTabsMu.RUnlock()
+
+	if len(wr.auxTerminalTabs) == 0 {
+		return nil
+	}
+
+	return append([]types.TerminalPaneTab(nil), wr.auxTerminalTabs...)
+}
+
+func (wr *webkitRender) ActivateTerminalPaneTab(tabID string) {
+	if wr.wapp == nil || tabID == "" {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "terminalActivateAuxTab", map[string]string{"id": tabID})
 }
 
 func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {

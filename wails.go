@@ -426,7 +426,36 @@ func (a *WApp) startTerminalWindow() {
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
-	// todo
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	switch eventName {
+	case "terminal-extra-tab-state":
+		tabID := strings.TrimSpace(parameters["id"])
+		if tabID == "" {
+			return
+		}
+
+		enabled := strings.EqualFold(parameters["enabled"], "true")
+		if !enabled {
+			renderer.SetTerminalPaneTabs(nil)
+			return
+		}
+
+		tabName := strings.TrimSpace(parameters["name"])
+		if tabName == "" {
+			tabName = tabID
+		}
+
+		active := strings.EqualFold(parameters["active"], "true")
+		renderer.SetTerminalPaneTabs([]types.TerminalPaneTab{{
+			ID:     tabID,
+			Name:   tabName,
+			Active: active,
+		}})
+	}
 }
 
 func (a *WApp) GetLanguageDescriptions(language string) []string {
