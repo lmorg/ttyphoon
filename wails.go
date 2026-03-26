@@ -455,6 +455,23 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 			Name:   tabName,
 			Active: active,
 		}})
+
+	case "terminal-notify":
+		message := strings.TrimSpace(parameters["message"])
+		if message == "" {
+			return
+		}
+
+		switch strings.ToLower(strings.TrimSpace(parameters["level"])) {
+		case "error":
+			renderer.DisplayNotification(types.NOTIFY_ERROR, message)
+		case "warn", "warning":
+			renderer.DisplayNotification(types.NOTIFY_WARN, message)
+		case "debug":
+			renderer.DisplayNotification(types.NOTIFY_DEBUG, message)
+		default:
+			renderer.DisplayNotification(types.NOTIFY_INFO, message)
+		}
 	}
 }
 

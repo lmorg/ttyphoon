@@ -1,7 +1,7 @@
 import {
     GetWindowStyle, GetMarkdown,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
-    RunNote, StopNote, SendToTerminal,
+    RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     SaveImageDialog, WindowPrint, GetClipboardData
 } from '../wailsjs/go/main/WApp';
@@ -167,6 +167,17 @@ configureMarked();
 function setStatus(message, isError) {
     elements.status.textContent = message || '';
     elements.status.dataset.state = isError ? 'error' : 'ok';
+}
+
+function notifyTerminal(message, level = 'info') {
+    if (!message) {
+        return;
+    }
+
+    SendIpc('terminal-notify', {
+        level,
+        message,
+    }).catch(() => {});
 }
 
 function renderMarkdown() {
@@ -2593,9 +2604,9 @@ elements.editor.addEventListener('contextmenu', (e) => {
                     elements.editor.selectionStart = imageAtCursor.markdownStart;
                     elements.editor.selectionEnd = imageAtCursor.markdownEnd;
                     document.execCommand('insertText', false, '');
-                    setStatus(`Deleted image ${imageAtCursor.imagePath}.`, false);
+                    notifyTerminal(`Deleted image ${imageAtCursor.imagePath}.`, 'info');
                 } catch (err) {
-                    setStatus(`Failed to delete image ${imageAtCursor.imagePath}.`, true);
+                    notifyTerminal(`Failed to delete image ${imageAtCursor.imagePath}.`, 'error');
                     console.error(err);
                 }
             },
@@ -2627,7 +2638,7 @@ elements.newFile.addEventListener('click', () => {
 
 elements.rename.addEventListener('click', () => {
     if (!state.currentFile) {
-        setStatus('Select a note to rename.', true);
+        notifyTerminal('Select a note to rename.', 'warn');
         return;
     }
     openRenamePrompt(state.currentFile);
@@ -2643,7 +2654,7 @@ elements.modalCreate.addEventListener('click', () => {
 
 elements.delete.addEventListener('click', () => {
     if (!state.currentFile) {
-        setStatus('Select a note to delete.', true);
+        notifyTerminal('Select a note to delete.', 'warn');
         return;
     }
     openDeletePrompt(state.currentFile);
