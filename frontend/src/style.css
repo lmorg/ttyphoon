@@ -91,8 +91,8 @@ body {
     border-radius: 50%;
     align-self: center;
     margin-right: 10px;
-    background: conic-gradient(rgba(0, 0, 0, 0.55) var(--progress-deg), rgba(0, 0, 0, 0.15) 0deg);
-    border: 1px solid rgba(0, 0, 0, 0.35);
+    background: conic-gradient(rgba(0, 0, 0, 0.8) var(--progress-deg), rgba(0, 0, 0, 0.1) 0deg);
+    border: 1px solid rgba(0, 0, 0, 0.8);
 }
 
 .notif-icon {

@@ -2086,8 +2086,7 @@ function applyWindowStyle(result) {
             height: 100%;
             resize: none;
             border-radius: 0;
-            /*border: 2px solid var(--fg);*/
-            border: 0;
+            border: 2px solid var(--bg);
             background: transparent;
             color: var(--fg);
             padding: 10px;
@@ -2098,7 +2097,7 @@ function applyWindowStyle(result) {
         #notes-editor:focus {
             outline: none;
             box-shadow: none;
-            border-color: var(--fg);
+            border: 2px solid var(--selection);
         }
 
         #notes-editor:not(:focus) {
