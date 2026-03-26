@@ -29,6 +29,10 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 				Title: "Copy view to clipboard (CSV)",
 				Fn:    el.ExportCsv,
 				Icon:  0xf0c5,
+			}, types.MenuItem{
+				Title: "Copy view to clipboard (Markdown)",
+				Fn:    el.ExportMarkdown,
+				Icon:  0xf0c5,
 			})
 			callback()
 			return

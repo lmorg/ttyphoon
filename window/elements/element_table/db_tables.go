@@ -126,30 +126,27 @@ func _strToAnyPtr(s *[]string, max int) []any {
 	return slice
 }
 
-func (el *ElementTable) ExportCsv() {
-	var b []byte
-	buf := bytes.NewBuffer(b)
-	w := csv.NewWriter(buf)
-
-	line := make([]string, len(el.headings))
+func (el *ElementTable) exportHeadings() []string {
+	headings := make([]string, len(el.headings))
 	for i := range el.headings {
-		line[i] = string(el.headings[i])
+		headings[i] = string(el.headings[i])
 	}
 
-	err := w.Write(line)
-	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v", err))
-		return
-	}
+	return headings
+}
 
+func (el *ElementTable) exportRows() (string, [][]string, error) {
 	query := el.sqlString()
 	dbRows, err := el.db.Query(query)
 	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot query table: %v\nSQL: %s", err, query))
-		return
+		return query, nil, fmt.Errorf("cannot query table: %v", err)
 	}
+	defer func() {
+		_ = dbRows.Close()
+	}()
 
-	var l = len(el.headings)
+	rows := make([][]string, 0)
+	l := len(el.headings)
 
 	for dbRows.Next() {
 		row := make([]string, l)
@@ -157,18 +154,97 @@ func (el *ElementTable) ExportCsv() {
 
 		err = dbRows.Scan(slice...)
 		if err != nil {
+			return query, nil, fmt.Errorf("cannot read table row: %v", err)
+		}
+
+		rows = append(rows, row)
+	}
+
+	if err = dbRows.Err(); err != nil {
+		return query, nil, fmt.Errorf("cannot read table row: %v", err)
+	}
+
+	return query, rows, nil
+}
+
+func writeMarkdownTable(buf *bytes.Buffer, headings []string, rows [][]string) {
+	if len(headings) == 0 {
+		return
+	}
+
+	writeMarkdownRow := func(cols []string) {
+		buf.WriteString("| ")
+		for i := range cols {
+			if i > 0 {
+				buf.WriteString(" | ")
+			}
+			cell := strings.ReplaceAll(cols[i], "\\", "\\\\")
+			cell = strings.ReplaceAll(cell, "|", "\\|")
+			cell = strings.ReplaceAll(cell, "\n", "<br>")
+			buf.WriteString(cell)
+		}
+		buf.WriteString(" |\n")
+	}
+
+	writeMarkdownRow(headings)
+
+	buf.WriteString("| ")
+	for i := range headings {
+		if i > 0 {
+			buf.WriteString(" | ")
+		}
+		buf.WriteString("---")
+	}
+	buf.WriteString(" |\n")
+
+	for i := range rows {
+		writeMarkdownRow(rows[i])
+	}
+}
+
+func (el *ElementTable) ExportCsv() {
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	w := csv.NewWriter(buf)
+
+	line := el.exportHeadings()
+
+	err := w.Write(line)
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v", err))
+		return
+	}
+
+	query, rows, err := el.exportRows()
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("%v\nSQL: %s", err, query))
+		return
+	}
+
+	for i := range rows {
+		if err = w.Write(rows[i]); err != nil {
 			el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err, query))
 			return
 		}
-
-		w.Write(row)
 	}
 
 	w.Flush()
-	if w.Error() != nil {
+	if err = w.Error(); err != nil {
 		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("cannot read table row: %v\nSQL: %s", err, query))
 		return
 	}
 
+	clipboard.Write(clipboard.FmtText, buf.Bytes())
+}
+
+func (el *ElementTable) ExportMarkdown() {
+	query, rows, err := el.exportRows()
+	if err != nil {
+		el.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("%v\nSQL: %s", err, query))
+		return
+	}
+
+	buf := bytes.NewBuffer(nil)
+	writeMarkdownTable(buf, el.exportHeadings(), rows)
 	clipboard.Write(clipboard.FmtText, buf.Bytes())
 }
