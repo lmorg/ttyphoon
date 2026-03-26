@@ -798,7 +798,7 @@ func (a *WApp) domReady(ctx context.Context) {
 }
 
 func appTitle() string {
-	return fmt.Sprintf("%s: %s", app.Name, app.TagLine)
+	return fmt.Sprintf("%s: %s", app.Name(), app.TagLine())
 }
 
 //go:embed build/appicon.png
@@ -833,8 +833,8 @@ func startWails() {
 			//WindowIsTranslucent:  true,
 			//WebviewIsTransparent: true,
 			About: &mac.AboutInfo{
-				Title:   app.Name,
-				Message: fmt.Sprintf("%s\n\nVersion: %s\n\n%s\n%s", app.TagLine, app.Version(), app.Copyright, app.License),
+				Title:   app.Name(),
+				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
 				Icon:    appIcon,
 			},
 		},

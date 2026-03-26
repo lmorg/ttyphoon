@@ -16,7 +16,7 @@ func Initialise() (types.Renderer, *types.XY) {
 	wr := &webkitRender{
 		glyphSize:     nil,
 		windowCells:   &types.XY{X: 120, Y: 40},
-		windowTitle:   app.Name,
+		windowTitle:   app.Name(),
 		_redraw:       make(chan struct{}, 1),
 		menuCallbacks: make(map[int]menuCallbacks),
 	}

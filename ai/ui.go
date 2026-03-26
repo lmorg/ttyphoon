@@ -65,7 +65,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 
 		endTime := time.Now()
 		data := &historymd.TemplateFieldsT{
-			AppName:      app.Name,
+			AppName:      app.Name(),
 			GroupName:    agent.Term().Tile().GroupName(),
 			TileName:     agent.Term().Tile().Name(),
 			TimeStart:    startTime.Format(historymd.FMT_DATE),

@@ -15,7 +15,7 @@ func (wr *webkitRender) GetWindowTitle() string {
 
 func (wr *webkitRender) SetWindowTitle(title string) {
 	wr.windowTitle = title
-	runtime.WindowSetTitle(wr.wapp, fmt.Sprintf("%s: %s", app.Name, title))
+	runtime.WindowSetTitle(wr.wapp, fmt.Sprintf("%s: %s", app.Name(), title))
 }
 
 func (wr *webkitRender) ShowAndFocusWindow() {

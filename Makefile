@@ -1,23 +1,32 @@
 # Variables
 GO_FLAGS=-v
-MXTTY_WINDOW?="terminal"
-export MXTTY_WINDOW
 
 # Build variables that can be overridden
+APP_NAME=$(shell jq -r '.name' wails.json || echo "unknown")
+TAG_LINE=$(shell jq -r '.info.comments' wails.json || echo "unknown")
+VERSION=$(shell jq -r '.info.productVersion' wails.json || echo "unknown")
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD || echo "unknown")
 BUILD_DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S' || echo "unknown")
-LDFLAGS=-ldflags "-X github.com/lmorg/ttyphoon/app.branch=${BRANCH} -X github.com/lmorg/ttyphoon/app.buildDate=${BUILD_DATE}"
+COPYRIGHT=$(shell jq -r '.info.copyright' wails.json || echo "unknown")
+
+PKG_PATH="github.com/lmorg/ttyphoon"
+LDFLAGS="-X '${PKG_PATH}/app.name=${APP_NAME}' -X '${PKG_PATH}/app.tagLine=${TAG_LINE}' -X '${PKG_PATH}/app.version=${VERSION}' -X '${PKG_PATH}/app.branch=${BRANCH}' -X '${PKG_PATH}/app.buildDate=${BUILD_DATE}' -X '${PKG_PATH}/app.copyright=${COPYRIGHT}'"
 
 
 # Build the binary
 .PHONY: build
 build: generate
-	wails build
+	wails build -ldflags ${LDFLAGS}
+
+# Clean build the binary
+.PHONY: clean
+clean: generate
+	wails build -clean -ldflags ${LDFLAGS}
 
 # Run the application
 .PHONY: run-darwin
 run-darwin: build
-	unset MXTTY_WINDOW; ./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
+	./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
 
 .PHONY: run-webkit
 run-webkit:
@@ -51,63 +60,11 @@ generate:
 # List available build tags
 .PHONY: list-build-tags
 list-build-tags:
-	export MXTTY_WINDOW
 	@find . -name "*.go" -exec grep "//go:build" {} \; \
 	| grep -v -E '(ignore|js|windows|linux|darwin|plan9|solaris|freebsd|openbsd|netbsd|dragonfly|aix)' \
 	| sed -e 's,//go:build ,,;s,!,,;' \
 	| sort -u
 	@echo "sqlite_omit_load_extension\nosusergo\nnetgo"
-
-# readline package development
-local_readline  = .local/readline
-remote_readline = lmorg/readline
-
-.PHONY: 
-local-dev-readline:
-ifneq "$(wildcard $(local_readline)/.)" ""
-	cd $(local_readline)
-	git pull
-else
-	@mkdir -p local
-	git clone git@github.com:$(remote_readline).git $(local_readline)
-endif
-	cd $(local_readline)
-	go mod edit -replace "github.com/$(remote_readline)/v4=./$(local_readline)"
-	go mod tidy
-	@echo ""
-	@echo "Before you push any changes of Ttyphoon, you will need to run:"
-	@echo "    make remote-readline"
-
-.PHONY:
-remote-readline:
-	go mod edit -dropreplace=github.com/$(remote_readline)/v4
-	go mod tidy
-
-# glamour package development
-
-local_glamour  = .local/glamour
-remote_glamour = charmbracelet/glamour
-
-.PHONY: 
-local-dev-glamour:
-ifneq "$(wildcard $(local_glamour)/.)" ""
-	cd $(local_glamour)
-	git pull
-else
-	@mkdir -p local
-	git clone git@github.com:$(remote_glamour).git $(local_glamour)
-endif
-	cd $(local_glamour)
-	go mod edit -replace "github.com/$(remote_glamour)/v4=./$(local_glamour)"
-	go mod tidy
-	@echo ""
-	@echo "Before you push any changes of Ttyphoon, you will need to run:"
-	@echo "    make remote-readline"
-
-.PHONY:
-remote-glamour:
-	go mod edit -dropreplace=github.com/$(remote_glamour)/v4
-	go mod tidy
 
 # Help
 .PHONY: help

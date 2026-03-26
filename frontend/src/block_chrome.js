@@ -19,7 +19,7 @@ export function drawBlockChrome(offCtx, getCellSize, cmd) {
     offCtx.fillRect(x, y, barWidth, h);
 
     if (!cmd.folded && Number.isFinite(cmd.endX) && cmd.endX >= xCell) {
-        const lineY = y + h;
+        const lineY = y + h - 1;
         const lineEndX = (cmd.endX * cellWidth);
         offCtx.fillRect(x, lineY, Math.max(1, lineEndX - x), 1);
     }

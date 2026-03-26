@@ -76,7 +76,7 @@ func Block(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 
 	data := &TemplateFieldsT{
 		filename:     cmd,
-		AppName:      app.Name,
+		AppName:      app.Name(),
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
 		TimeStart:    screen[0].Block.TimeStart.Format(FMT_DATE),
@@ -109,7 +109,7 @@ func blockAi(tile types.Tile, screen types.Screen, write TemplateWriterT) error 
 
 	data := &TemplateFieldsT{
 		filename:     cmd,
-		AppName:      app.Name,
+		AppName:      app.Name(),
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
 		TimeStart:    screen[0].Block.TimeStart.Format(FMT_DATE),

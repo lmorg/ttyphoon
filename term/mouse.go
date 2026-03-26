@@ -130,7 +130,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name),
+				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name()),
 				Icon:  0xf044,
 				Highlight: func() func() {
 					return func() {
