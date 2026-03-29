@@ -13,7 +13,12 @@ import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
 
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
-import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles } from './style-utils.js';
+import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
+import { 
+    isSwaggerFile, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
+    extractPaths, generateEndpointListHTML
+} from './swagger-utils.js';
+import { renderJsonViewer } from './json-viewer.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -45,6 +50,9 @@ app.innerHTML = `
                 <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
                 <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
                 <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
+                <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
+                <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
+                <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
@@ -61,6 +69,21 @@ app.innerHTML = `
                 </div>
                 <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-jupyter"></div>
+                </div>
+                <div id="notes-swagger-edit-wrap" role="tabpanel" style="display: none;">
+                    <textarea id="notes-swagger-editor" spellcheck="false"></textarea>
+                </div>
+                <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
+                    <div id="notes-swagger-view" class="json-viewer"></div>
+                </div>
+                <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
+                    <div id="notes-swagger-layout" class="swagger-layout">
+                        <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
+                        <section id="notes-swagger-main" class="swagger-main-pane">
+                            <div id="notes-swagger-request-builder"></div>
+                            <div id="notes-swagger-response"></div>
+                        </section>
+                    </div>
                 </div>
                 <div id="notes-ai-panel" class="notes-ai-panel" data-collapsed="true">
                     <div class="notes-ai-header">
@@ -116,9 +139,20 @@ const elements = {
     tabEditor: document.getElementById('notes-tab-editor'),
     tabViewer: document.getElementById('notes-tab-viewer'),
     tabJupyter: document.getElementById('notes-tab-jupyter'),
+    tabSwaggerView: document.getElementById('notes-tab-swagger-view'),
+    tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
+    tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
     editorWrap: document.getElementById('notes-editor-wrap'),
     previewWrap: document.getElementById('notes-preview-wrap'),
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
+    swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
+    swaggerEditWrap: document.getElementById('notes-swagger-edit-wrap'),
+    swaggerRunWrap: document.getElementById('notes-swagger-run-wrap'),
+    swaggerView: document.getElementById('notes-swagger-view'),
+    swaggerEndpoints: document.getElementById('notes-swagger-endpoints'),
+    swaggerEditor: document.getElementById('notes-swagger-editor'),
+    swaggerRequestBuilder: document.getElementById('notes-swagger-request-builder'),
+    swaggerResponse: document.getElementById('notes-swagger-response'),
     modal: document.getElementById('notes-modal'),
     modalInput: document.getElementById('notes-modal-input'),
     modalCancel: document.getElementById('notes-modal-cancel'),
@@ -143,6 +177,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
+    currentFileType: 'markdown',  // 'markdown' or 'swagger'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -159,7 +194,10 @@ const state = {
         '$HISTORY': false,
     },
     jupyterCodeBlocks: {},
-    jupyterBlockCounter: 0
+    jupyterBlockCounter: 0,
+    swaggerSpec: null,
+    swaggerSelectedEndpoint: null,
+    swaggerEndpointFilter: ''
 };
 
 configureMarked();
@@ -323,9 +361,21 @@ function emitCurrentFileName() {
 }
 
 function setViewMode(mode) {
-    state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
+    // Determine the mode based on current file type
+    if (state.currentFileType === 'swagger') {
+        if (mode === 'swagger-view' || mode === 'swagger-edit' || mode === 'swagger-run') {
+            state.viewMode = mode;
+        } else {
+            state.viewMode = 'swagger-view';
+        }
+    } else {
+        state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
+    }
+    
     // Share active notes mode with ttyphoon.js so cross-pane focus behavior can follow mode intent.
     app.dataset.viewMode = state.viewMode;
+    
+    // Markdown tabs
     const isEditor = state.viewMode === 'editor';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
@@ -337,6 +387,19 @@ function setViewMode(mode) {
     elements.editorWrap.dataset.active = isEditor ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
+    
+    // Swagger tabs
+    const isSwaggerView = state.viewMode === 'swagger-view';
+    const isSwaggerEdit = state.viewMode === 'swagger-edit';
+    const isSwaggerRun = state.viewMode === 'swagger-run';
+    
+    elements.tabSwaggerView.setAttribute('aria-selected', isSwaggerView ? 'true' : 'false');
+    elements.tabSwaggerEdit.setAttribute('aria-selected', isSwaggerEdit ? 'true' : 'false');
+    elements.tabSwaggerRun.setAttribute('aria-selected', isSwaggerRun ? 'true' : 'false');
+    
+    elements.swaggerViewWrap.dataset.active = isSwaggerView ? 'true' : 'false';
+    elements.swaggerEditWrap.dataset.active = isSwaggerEdit ? 'true' : 'false';
+    elements.swaggerRunWrap.dataset.active = isSwaggerRun ? 'true' : 'false';
     
     // Re-perform find if find bar is open
     if (elements.findBar.dataset.open === 'true' && state.findQuery) {
@@ -777,6 +840,158 @@ function toggleCategory(category) {
     renderFileList();
 }
 
+/**
+ * Show/hide tabs based on file type
+ */
+function updateTabVisibility(fileType) {
+    const isSwagger = fileType === 'swagger';
+    
+    // Hide/show markdown tabs
+    elements.tabViewer.style.display = isSwagger ? 'none' : '';
+    elements.tabEditor.style.display = isSwagger ? 'none' : '';
+    elements.tabJupyter.style.display = isSwagger ? 'none' : '';
+    
+    // Hide/show swagger tabs
+    elements.tabSwaggerView.style.display = isSwagger ? '' : 'none';
+    elements.tabSwaggerEdit.style.display = isSwagger ? '' : 'none';
+    elements.tabSwaggerRun.style.display = isSwagger ? '' : 'none';
+}
+
+function renderSwaggerJsonView() {
+    if (!elements.swaggerView || !elements.swaggerEditor) {
+        return;
+    }
+
+    renderJsonViewer(elements.swaggerView, elements.swaggerEditor.value || '{}');
+}
+
+/**
+ * Render the Swagger/OpenAPI UI in the Run tab
+ */
+function renderSwaggerUI() {
+    if (!state.swaggerSpec || !elements.swaggerEndpoints || !elements.swaggerRequestBuilder || !elements.swaggerResponse) {
+        return;
+    }
+    
+    // If no endpoint selected, select the first one
+    if (!state.swaggerSelectedEndpoint) {
+        const paths = extractPaths(state.swaggerSpec);
+        if (paths.length > 0 && paths[0].methods.length > 0) {
+            state.swaggerSelectedEndpoint = {
+                path: paths[0].path,
+                method: paths[0].methods[0].method
+            };
+        }
+    }
+
+    const endpointListHtml = generateEndpointListHTML(
+        state.swaggerSpec,
+        state.swaggerSelectedEndpoint,
+        state.swaggerEndpointFilter
+    );
+
+    elements.swaggerEndpoints.innerHTML = `
+        <div class="swagger-endpoints-header">Operations</div>
+        <input
+            id="notes-swagger-endpoint-filter"
+            class="swagger-endpoint-filter"
+            type="text"
+            placeholder="Filter operations..."
+            autocomplete="off"
+            value="${state.swaggerEndpointFilter.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;')}"
+        />
+        ${endpointListHtml}
+    `;
+    
+    // Render request builder and response
+    elements.swaggerRequestBuilder.innerHTML = generateRequestBuilderHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
+    elements.swaggerResponse.innerHTML = generateResponseHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
+    
+    // Add tab switching logic for nested tabs
+    setupSwaggerTabSwitching();
+    setupSwaggerEndpointSelection();
+}
+
+function setupSwaggerEndpointSelection() {
+    const filterInput = elements.swaggerEndpoints.querySelector('#notes-swagger-endpoint-filter');
+    if (filterInput) {
+        filterInput.addEventListener('input', (event) => {
+            state.swaggerEndpointFilter = event.target.value || '';
+            renderSwaggerUI();
+        });
+    }
+
+    const endpointButtons = elements.swaggerEndpoints.querySelectorAll('.swagger-endpoint-item');
+    endpointButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const path = button.getAttribute('data-path') || '';
+            const method = button.getAttribute('data-method') || '';
+            if (!path || !method) {
+                return;
+            }
+
+            state.swaggerSelectedEndpoint = { path, method };
+            renderSwaggerUI();
+        });
+    });
+}
+
+/**
+ * Setup event listeners for nested tabs in swagger UI
+ */
+function setupSwaggerTabSwitching() {
+    // Request tabs
+    const requestTabs = elements.swaggerRequestBuilder.querySelectorAll('.swagger-request-tab');
+    const requestPanels = elements.swaggerRequestBuilder.querySelectorAll('.swagger-request-panel');
+    
+    requestTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const panelName = tab.getAttribute('data-tab');
+            
+            // Hide all panels
+            requestPanels.forEach(panel => {
+                panel.classList.remove('swagger-request-panel-active');
+                panel.setAttribute('data-panel', panel.getAttribute('data-panel'));
+            });
+            
+            // Show selected panel
+            const selectedPanel = elements.swaggerRequestBuilder.querySelector(`.swagger-request-panel[data-panel="${panelName}"]`);
+            if (selectedPanel) {
+                selectedPanel.classList.add('swagger-request-panel-active');
+            }
+            
+            // Update tab selection
+            requestTabs.forEach(t => t.setAttribute('aria-selected', 'false'));
+            tab.setAttribute('aria-selected', 'true');
+        });
+    });
+    
+    // Response tabs
+    const responseTabs = elements.swaggerResponse.querySelectorAll('.swagger-response-tab');
+    const responsePanels = elements.swaggerResponse.querySelectorAll('.swagger-response-panel');
+    
+    responseTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const panelName = tab.getAttribute('data-tab');
+            
+            // Hide all panels
+            responsePanels.forEach(panel => {
+                panel.classList.remove('swagger-response-panel-active');
+            });
+            
+            // Show selected panel
+            const selectedPanel = elements.swaggerResponse.querySelector(`.swagger-response-panel[data-panel="${panelName}"]`);
+            if (selectedPanel) {
+                selectedPanel.classList.add('swagger-response-panel-active');
+            }
+            
+            // Update tab selection
+            responseTabs.forEach(t => t.setAttribute('aria-selected', 'false'));
+            tab.setAttribute('aria-selected', 'true');
+        });
+    });
+}
+
 async function loadFile(file) {
     if (!file) {
         return;
@@ -786,9 +1001,46 @@ async function loadFile(file) {
         const doc = await GetMarkdown(file);
         state.currentFile = file;
         emitCurrentFileName();
-        elements.editor.value = doc || '';
-        renderMarkdown();
-        renderJupyterView();
+        
+        // Detect file type
+        if (isSwaggerFile(file)) {
+            state.currentFileType = 'swagger';
+            state.swaggerSpec = parseSwaggerSpec(doc);
+            state.swaggerSelectedEndpoint = null;
+            state.swaggerEndpointFilter = '';
+            
+            // Update UI for swagger
+            updateTabVisibility('swagger');
+            
+            // Set editor content
+            elements.swaggerEditor.value = doc || '';
+
+            // Render JSON tree view
+            renderSwaggerJsonView();
+            
+            // Render swagger UI
+            renderSwaggerUI();
+            
+            // Set default view mode to swagger viewer
+            setViewMode('swagger-view');
+        } else {
+            state.currentFileType = 'markdown';
+            state.swaggerSpec = null;
+            
+            // Update UI for markdown
+            updateTabVisibility('markdown');
+            
+            // Set editor content
+            elements.editor.value = doc || '';
+            
+            // Render markdown views
+            renderMarkdown();
+            renderJupyterView();
+            
+            // Set default view mode to viewer
+            setViewMode('viewer');
+        }
+        
         setDirty(false);
         renderFileList();
         
@@ -809,7 +1061,11 @@ async function saveFile() {
     }
 
     try {
-        await SaveFile(state.currentFile, elements.editor.value);
+        const content = state.currentFileType === 'swagger' 
+            ? elements.swaggerEditor.value 
+            : elements.editor.value;
+        
+        await SaveFile(state.currentFile, content);
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -849,6 +1105,8 @@ async function confirmDelete() {
             state.currentFile = '';
             emitCurrentFileName();
             elements.editor.value = '';
+            elements.swaggerEditor.value = '';
+            elements.swaggerView.innerHTML = '';
             renderMarkdown();
             setDirty(false);
         }
@@ -1979,10 +2237,25 @@ function applyWindowStyle(result) {
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
         }
 
+        #notes-swagger-edit-wrap,
+        #notes-swagger-view-wrap,
+        #notes-swagger-run-wrap {
+            flex: 1;
+            display: none;
+            min-height: 0;
+            overflow: hidden;
+        }
+
         #notes-editor-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
         #notes-jupyter-wrap[data-active="true"] {
             display: block;
+        }
+
+        #notes-swagger-view-wrap[data-active="true"],
+        #notes-swagger-edit-wrap[data-active="true"],
+        #notes-swagger-run-wrap[data-active="true"] {
+            display: flex !important;
         }
 
         .notes-ai-panel {
@@ -2382,6 +2655,153 @@ function applyWindowStyle(result) {
             color: var(--error);
         }
 
+        /* Swagger Editor */
+        #notes-swagger-editor {
+            width: 100%;
+            height: 100%;
+            padding: 12px;
+            border: none;
+            background-color: var(--bg);
+            color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: ${result.fontSize}px;
+            resize: none;
+            overflow: auto;
+        }
+
+        #notes-swagger-editor:not(:focus) {
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        #notes-swagger-view-wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: auto;
+            padding: 10px;
+        }
+
+        #notes-swagger-view {
+            overflow: auto;
+            padding-right: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+            font-size: ${result.fontSize}px;
+            line-height: 1.45;
+        }
+
+        .json-viewer-error {
+            color: var(--error);
+            border: 1px solid rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.4);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.12);
+            border-radius: 4px;
+            padding: 10px;
+            white-space: pre-wrap;
+        }
+
+        .json-node {
+            color: var(--fg);
+        }
+
+        .json-node[data-expanded="false"] > .json-children {
+            display: none;
+        }
+
+        .json-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            min-height: 22px;
+            white-space: nowrap;
+        }
+
+        .json-toggle,
+        .json-toggle-placeholder {
+            width: 16px;
+            min-width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .json-toggle {
+            border: none;
+            background: transparent;
+            color: var(--green);
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .json-node[data-expanded="false"] > .json-row > .json-toggle {
+            color: var(--red);
+        }
+
+        .json-toggle:hover {
+            filter: brightness(1.15);
+        }
+
+        .json-toggle::before {
+            content: "\\f146";
+            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 900;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .json-node[data-expanded="false"] > .json-row > .json-toggle::before {
+            content: "\\f0fe";
+        }
+
+        .json-key {
+            color: var(--accent);
+        }
+
+        .json-colon,
+        .json-brace {
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.85);
+        }
+
+        .json-meta {
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.55);
+            margin-left: 6px;
+            font-style: italic;
+            font-size: ${Math.max(result.fontSize - 2, 10)}px;
+        }
+
+        .json-value-string {
+            color: var(--green);
+        }
+
+        .json-value-number {
+            color: var(--cyan);
+        }
+
+        .json-value-boolean {
+            color: var(--yellow);
+        }
+
+        .json-value-null {
+            color: var(--magenta);
+        }
+
+        #notes-swagger-edit-wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #notes-swagger-run-wrap {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            padding: 12px;
+        }
+
+        ${getSwaggerUIStyles(result.colors, result.fontSize)}
+
     `;
 
     document.head.appendChild(style);
@@ -2527,6 +2947,23 @@ if (elements.editor) {
     });
 }
 
+if (elements.swaggerEditor) {
+    elements.swaggerEditor.addEventListener('input', () => {
+        setDirty(true);
+        scheduleAutoSave();
+        // Revalidate and refresh the swagger UI
+        try {
+            state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
+            renderSwaggerJsonView();
+            if (state.viewMode === 'swagger-run') {
+                renderSwaggerUI();
+            }
+        } catch (err) {
+            console.error('Failed to parse swagger spec:', err);
+        }
+    });
+}
+
 let _editorSelectionBeforeContextMenu = null;
 
 elements.editor.addEventListener('mousedown', (e) => {
@@ -2629,6 +3066,20 @@ elements.tabViewer.addEventListener('click', () => {
 elements.tabJupyter.addEventListener('click', () => {
     setViewMode('jupyter');
     renderJupyterView();
+});
+
+elements.tabSwaggerView.addEventListener('click', () => {
+    setViewMode('swagger-view');
+    renderSwaggerJsonView();
+});
+
+elements.tabSwaggerEdit.addEventListener('click', () => {
+    setViewMode('swagger-edit');
+});
+
+elements.tabSwaggerRun.addEventListener('click', () => {
+    setViewMode('swagger-run');
+    renderSwaggerUI();
 });
 
 elements.newFile.addEventListener('click', () => {

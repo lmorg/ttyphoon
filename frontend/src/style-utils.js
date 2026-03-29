@@ -300,3 +300,484 @@ export function getAllMarkdownStyles(windowStyleResult, options = {}) {
 
     return styles;
 }
+
+/**
+ * Generate Swagger/OpenAPI UI styles (Postman-like interface)
+ * @param {Object} colors - Color palette from GetWindowStyle
+ * @param {number} fontSize - Base font size
+ * @returns {string} CSS text for Swagger UI styling
+ */
+export function getSwaggerUIStyles(colors, fontSize) {
+    const fgRgb = `${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}`;
+    const greenRgb = `${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue}`;
+    const redRgb = `${colors.red.Red}, ${colors.red.Green}, ${colors.red.Blue}`;
+    const cyanRgb = `${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue}`;
+    const yellowRgb = `${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue}`;
+    const blueBrightRgb = `${colors.blueBright.Red}, ${colors.blueBright.Green}, ${colors.blueBright.Blue}`;
+
+    return `
+        /* Swagger UI Container */
+        .swagger-ui {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            gap: 12px;
+            color: var(--fg);
+            background-color: var(--bg);
+            overflow: hidden;
+        }
+
+        .swagger-layout {
+            display: grid;
+            grid-template-columns: minmax(220px, 320px) 1fr;
+            gap: 12px;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .swagger-endpoints-pane {
+            min-height: 0;
+            overflow: auto;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 4px;
+            background-color: rgba(${fgRgb}, 0.03);
+            padding: 8px;
+        }
+
+        .swagger-endpoints-header {
+            font-size: 0.85em;
+            font-weight: bold;
+            color: var(--accent);
+            margin: 2px 0 8px;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .swagger-endpoint-filter {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid rgba(${fgRgb}, 0.25);
+            background: rgba(${fgRgb}, 0.04);
+            color: var(--fg);
+            border-radius: 4px;
+            padding: 7px 9px;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            outline: none;
+        }
+
+        .swagger-endpoint-filter:focus {
+            border-color: var(--accent);
+            background: rgba(${fgRgb}, 0.07);
+        }
+
+        .swagger-endpoint-filter::placeholder {
+            color: rgba(${fgRgb}, 0.55);
+        }
+
+        .swagger-main-pane {
+            min-height: 0;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-right: 4px;
+        }
+
+        /* Empty State */
+        .swagger-empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100px;
+            color: rgba(${fgRgb}, 0.5);
+            font-style: italic;
+        }
+
+        .swagger-empty-field {
+            margin: 0;
+            color: rgba(${fgRgb}, 0.5);
+            font-size: 0.9em;
+        }
+
+        /* Method + URL Bar */
+        .swagger-method-url-bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px;
+            background-color: rgba(${fgRgb}, 0.05);
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 4px;
+        }
+
+        .swagger-method-selector {
+            padding: 6px 12px;
+            border: 1px solid rgba(${fgRgb}, 0.3);
+            border-radius: 3px;
+            background-color: var(--bg);
+            color: var(--fg);
+            font-weight: bold;
+            cursor: not-allowed;
+            opacity: 0.7;
+            min-width: 80px;
+            font-family: monospace;
+        }
+
+        .swagger-url-input {
+            flex: 1;
+            padding: 6px 12px;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            background-color: rgba(${fgRgb}, 0.05);
+            color: var(--fg);
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .swagger-send-btn {
+            padding: 6px 16px;
+            background-color: rgba(${greenRgb}, 0.3);
+            color: rgb(${greenRgb});
+            border: 1px solid rgb(${greenRgb});
+            border-radius: 3px;
+            cursor: not-allowed;
+            opacity: 0.5;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        /* Request/Response Tabs */
+        .swagger-request-tabs,
+        .swagger-response-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid rgba(${fgRgb}, 0.2);
+            margin-bottom: 8px;
+        }
+
+        .swagger-request-tab,
+        .swagger-response-tab {
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            color: rgba(${fgRgb}, 0.6);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            font-size: 0.95em;
+        }
+
+        .swagger-request-tab:hover,
+        .swagger-response-tab:hover {
+            color: var(--fg);
+        }
+
+        .swagger-request-tab[aria-selected="true"],
+        .swagger-response-tab[aria-selected="true"] {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Tab Panels */
+        .swagger-request-panel,
+        .swagger-response-panel {
+            display: none;
+            padding: 8px 0;
+        }
+
+        .swagger-request-panel-active,
+        .swagger-response-panel-active {
+            display: block !important;
+        }
+
+        /* Headers List */
+        .swagger-headers-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .swagger-header-item {
+            display: flex;
+            gap: 12px;
+            padding: 6px 8px;
+            background-color: rgba(${fgRgb}, 0.03);
+            border-radius: 2px;
+            font-family: monospace;
+            font-size: 0.85em;
+            border-left: 2px solid rgba(${yellowRgb}, 0.3);
+        }
+
+        .swagger-header-name {
+            font-weight: bold;
+            color: var(--accent);
+            min-width: 150px;
+            flex-shrink: 0;
+        }
+
+        .swagger-header-value {
+            color: var(--fg);
+            flex: 1;
+            overflow: auto;
+            word-break: break-all;
+        }
+
+        /* Body Editor */
+        .swagger-body-editor {
+            width: 100%;
+            min-height: 120px;
+            max-height: 300px;
+            padding: 8px;
+            background-color: rgba(${fgRgb}, 0.02);
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 3px;
+            color: rgb(${greenRgb});
+            font-family: monospace;
+            font-size: 0.85em;
+            resize: vertical;
+        }
+
+        /* Parameters Table */
+        .swagger-params-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .swagger-params-table thead {
+            background-color: rgba(${yellowRgb}, 0.1);
+            color: var(--accent);
+        }
+
+        .swagger-params-table th {
+            padding: 6px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(${fgRgb}, 0.2);
+        }
+
+        .swagger-params-table td {
+            padding: 6px;
+            border-bottom: 1px solid rgba(${fgRgb}, 0.1);
+            font-family: monospace;
+        }
+
+        .swagger-params-table tr:hover {
+            background-color: rgba(${fgRgb}, 0.03);
+        }
+
+        /* Response Section */
+        .swagger-response-section {
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 4px;
+            background-color: rgba(${fgRgb}, 0.03);
+            padding: 12px;
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        .swagger-response-header {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(${fgRgb}, 0.15);
+        }
+
+        .swagger-status-badge {
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+
+        .swagger-status-2xx {
+            background-color: rgba(${greenRgb}, 0.2);
+            color: rgb(${greenRgb});
+        }
+
+        .swagger-status-3xx {
+            background-color: rgba(${cyanRgb}, 0.2);
+            color: rgb(${cyanRgb});
+        }
+
+        .swagger-status-4xx {
+            background-color: rgba(${redRgb}, 0.2);
+            color: rgb(${redRgb});
+        }
+
+        .swagger-status-5xx {
+            background-color: rgba(${redRgb}, 0.2);
+            color: rgb(${redRgb});
+        }
+
+        .swagger-response-meta {
+            font-size: 0.85em;
+            color: rgba(${fgRgb}, 0.6);
+            font-style: italic;
+        }
+
+        /* Response Body Display */
+        .swagger-response-body {
+            margin: 0;
+            padding: 8px;
+            background-color: rgba(${fgRgb}, 0.05);
+            border: 1px solid rgba(${fgRgb}, 0.15);
+            border-radius: 3px;
+            color: rgb(${greenRgb});
+            font-family: monospace;
+            font-size: 0.85em;
+            overflow: auto;
+            max-height: 200px;
+        }
+
+        /* Method Badges for Endpoints List */
+        .swagger-method-badge {
+            padding: 2px 8px;
+            border-radius: 2px;
+            font-weight: bold;
+            font-size: 0.8em;
+            flex-shrink: 0;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .swagger-method-get {
+            background-color: rgba(${blueBrightRgb}, 0.3);
+            color: rgb(${blueBrightRgb});
+        }
+
+        .swagger-method-post {
+            background-color: rgba(${greenRgb}, 0.3);
+            color: rgb(${greenRgb});
+        }
+
+        .swagger-method-put {
+            background-color: rgba(${cyanRgb}, 0.3);
+            color: rgb(${cyanRgb});
+        }
+
+        .swagger-method-delete {
+            background-color: rgba(${redRgb}, 0.3);
+            color: rgb(${redRgb});
+        }
+
+        .swagger-method-patch {
+            background-color: rgba(${yellowRgb}, 0.3);
+            color: rgb(${yellowRgb});
+        }
+
+        .swagger-method-head,
+        .swagger-method-options {
+            background-color: rgba(${fgRgb}, 0.2);
+            color: var(--fg);
+        }
+
+        /* Endpoints List */
+        .swagger-endpoints-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .swagger-endpoint-item {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid rgba(${fgRgb}, 0.15);
+            border-radius: 3px;
+            background-color: rgba(${fgRgb}, 0.02);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+            width: 100%;
+            color: inherit;
+        }
+
+        .swagger-endpoint-item:hover {
+            background-color: rgba(${fgRgb}, 0.05);
+            border-color: rgba(${fgRgb}, 0.25);
+        }
+
+        .swagger-endpoint-selected {
+            background-color: rgba(${yellowRgb}, 0.1);
+            border-color: var(--accent);
+        }
+
+        .swagger-endpoint-path {
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--fg);
+            flex: 1;
+        }
+
+        .swagger-endpoint-summary {
+            font-size: 0.85em;
+            color: rgba(${fgRgb}, 0.6);
+            font-style: italic;
+        }
+
+        /* Request Builder */
+        .swagger-request-builder {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 0 1 auto;
+            padding-right: 8px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 900px) {
+            .swagger-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .swagger-endpoints-pane {
+                max-height: 180px;
+            }
+        }
+
+        /* Collapsible Sections */
+        .swagger-section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            color: var(--accent);
+            font-weight: bold;
+            padding: 8px;
+            user-select: none;
+            border-radius: 3px;
+            transition: background-color 0.2s ease;
+        }
+
+        .swagger-section-title:hover {
+            background-color: rgba(${yellowRgb}, 0.1);
+        }
+
+        .swagger-section-title::before {
+            content: '▶';
+            transition: transform 0.2s ease;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .swagger-section-title[data-expanded="true"]::before {
+            transform: rotate(90deg);
+        }
+
+        .swagger-section-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .swagger-section-content[data-expanded="true"] {
+            max-height: 1000px;
+        }
+    `;
+}

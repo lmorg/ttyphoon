@@ -637,11 +637,18 @@ func (a *WApp) ListFiles() []string {
 }
 
 func listFiles(path string, varName string) (files []string) {
+	files = listFilesWithGlob(path, varName, "*.md")
+	files = append(files, listFilesWithGlob(path, varName, "*swagger*.json")...)
+	slices.Sort(files)
+	return files
+}
+
+func listFilesWithGlob(path string, varName string, pattern string) (files []string) {
 	if path == "" {
 		return []string{}
 	}
 
-	glob, err := filepath.Glob(fmt.Sprintf("%s/*.md", path))
+	glob, err := filepath.Glob(fmt.Sprintf("%s/%s", path, pattern))
 	if err != nil {
 		log.Println(err)
 		return
