@@ -805,5 +805,65 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-section-content[data-expanded="true"] {
             max-height: 1000px;
         }
+
+        /* Parameters Form */
+        .swagger-params-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .swagger-param-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .swagger-param-label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            cursor: pointer;
+        }
+
+        .swagger-param-name {
+            font-weight: bold;
+            color: var(--accent);
+            font-size: 0.95em;
+        }
+
+        .swagger-param-meta {
+            font-size: 0.8em;
+            color: rgba(${fgRgb}, 0.5);
+            font-family: monospace;
+        }
+
+        .swagger-param-input {
+            padding: 6px 8px;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            background-color: rgba(${fgRgb}, 0.05);
+            color: var(--fg);
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+            transition: border-color 0.2s ease;
+        }
+
+        .swagger-param-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background-color: rgba(${fgRgb}, 0.08);
+        }
+
+        .swagger-param-input:required {
+            border-left: 3px solid rgb(${blueBrightRgb});
+        }
+
+        .swagger-param-description {
+            font-size: 0.8em;
+            color: rgba(${fgRgb}, 0.5);
+            font-style: italic;
+            padding: 2px 0;
+        }
     `;
 }

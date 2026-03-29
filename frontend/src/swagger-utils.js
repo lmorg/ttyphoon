@@ -287,37 +287,35 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
     `;
 
     if (parameters.length > 0) {
-        html += `
-            <table class="swagger-params-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>In</th>
-                        <th>Required</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        html += `<div class="swagger-params-form">`;
 
         parameters.forEach(param => {
             const schemaType = typeof param.schema === 'string' ? param.schema : param.schema.type || 'string';
+            const required = param.required ? ' *' : '';
+            const requiredAttr = param.required ? ' required' : '';
+
             html += `
-                <tr>
-                    <td><code>${escapeHtml(param.name)}</code></td>
-                    <td><code>${escapeHtml(schemaType)}</code></td>
-                    <td>${escapeHtml(param.in)}</td>
-                    <td>${param.required ? '✓' : ''}</td>
-                    <td>${escapeHtml(param.description)}</td>
-                </tr>
+                <div class="swagger-param-item">
+                    <label class="swagger-param-label">
+                        <span class="swagger-param-name">${escapeHtml(param.name)}${required}</span>
+                        <span class="swagger-param-meta">${escapeHtml(param.in)} • ${escapeHtml(schemaType)}</span>
+                    </label>
+                    <input
+                        type="text"
+                        class="swagger-param-input"
+                        data-param-name="${escapeHtml(param.name)}"
+                        data-param-in="${escapeHtml(param.in)}"
+                        data-param-type="${escapeHtml(schemaType)}"
+                        placeholder="${param.example ? 'e.g., ' + escapeHtml(param.example) : 'Enter value'}"
+                        value="${param.example ? escapeHtml(param.example) : ''}"
+                        ${requiredAttr}
+                    />
+                    ${param.description ? `<span class="swagger-param-description">${escapeHtml(param.description)}</span>` : ''}
+                </div>
             `;
         });
 
-        html += `
-                </tbody>
-            </table>
-        `;
+        html += `</div>`;
     } else {
         html += `<p class="swagger-empty-field">No parameters for this operation</p>`;
     }
@@ -506,16 +504,53 @@ function escapeHtml(str) {
 }
 
 /**
- * Build the full request URL from spec + selected endpoint.
+ * Build the full request URL from spec + selected endpoint + parameters.
  * @param {Object} spec - Parsed Swagger spec
  * @param {Object} endpoint - {path, method}
+ * @param {Object} parameters - {paramName: value} for all parameters
  * @returns {string} Full URL
  */
-export function buildRequestUrl(spec, endpoint) {
+export function buildRequestUrl(spec, endpoint, parameters = {}) {
     if (!spec || !endpoint) return '';
+    
     const base = getBaseUrl(spec).replace(/\/$/, '');
-    const path = (endpoint.path || '').replace(/^\/?/, '/');
-    return base + path;
+    let path = (endpoint.path || '').replace(/^\/?/, '/');
+    
+    // Substitute path parameters (e.g., {id} → value)
+    Object.entries(parameters).forEach(([name, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            path = path.replace(`{${name}}`, encodeURIComponent(String(value)));
+        }
+    });
+    
+    // Collect query parameters
+    const queryParams = new URLSearchParams();
+    const operationParams = extractParameters(getOperationFromEndpoint(spec, endpoint));
+    
+    operationParams.forEach(param => {
+        if (param.in === 'query' && parameters[param.name]) {
+            const value = parameters[param.name];
+            if (value !== undefined && value !== null && value !== '') {
+                queryParams.set(param.name, value);
+            }
+        }
+    });
+    
+    const queryString = queryParams.toString();
+    const fullPath = path + (queryString ? `?${queryString}` : '');
+    
+    return base + fullPath;
+}
+
+/**
+ * Helper to get operation object from spec and endpoint
+ * @private
+ */
+function getOperationFromEndpoint(spec, endpoint) {
+    if (!spec || !spec.paths || !endpoint) return {};
+    const pathItem = spec.paths[endpoint.path];
+    if (!pathItem) return {};
+    return pathItem[endpoint.method.toLowerCase()] || {};
 }
 
 /**

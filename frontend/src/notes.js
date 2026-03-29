@@ -1036,7 +1036,18 @@ async function sendSwaggerRequest() {
     const bodyTextarea = elements.swaggerRequestBuilder.querySelector('.swagger-body-editor');
     const body = bodyTextarea ? bodyTextarea.value : '';
 
-    const url = buildRequestUrl(state.swaggerSpec, state.swaggerSelectedEndpoint);
+    // Collect parameter values from the form inputs
+    const parameters = {};
+    elements.swaggerRequestBuilder.querySelectorAll('.swagger-param-input').forEach((input) => {
+        const paramName = input.dataset.paramName;
+        const paramIn = input.dataset.paramIn;
+        const value = input.value?.trim();
+        if (paramName && value) {
+            parameters[paramName] = value;
+        }
+    });
+
+    const url = buildRequestUrl(state.swaggerSpec, state.swaggerSelectedEndpoint, parameters);
 
     try {
         const response = await SwaggerRequest({
