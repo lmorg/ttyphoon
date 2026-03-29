@@ -218,6 +218,36 @@ function notifyTerminal(message, level = 'info') {
     }).catch(() => {});
 }
 
+function openStickyProgress(id, message) {
+    SendIpc('terminal-sticky-create', {
+        id: String(id),
+        message,
+        level: 'info',
+    }).catch(() => {});
+}
+
+function updateStickyProgress(id, message) {
+    SendIpc('terminal-sticky-update', {
+        id: String(id),
+        message,
+    }).catch(() => {});
+}
+
+function closeStickyProgress(id, finalMessage, level = 'info') {
+    SendIpc('terminal-sticky-close', {
+        id: String(id),
+    }).catch(() => {});
+    if (finalMessage) {
+        notifyTerminal(finalMessage, level);
+    }
+}
+
+function yieldToUI() {
+    return new Promise((resolve) => {
+        setTimeout(resolve, 0);
+    });
+}
+
 function renderMarkdown() {
     const markdown = elements.editor.value || '';
     elements.preview.innerHTML = marked.parse(markdown);
@@ -1027,14 +1057,30 @@ async function loadFile(file) {
     }
 
     try {
+        const loadingSwagger = isSwaggerFile(file);
+        const stickyId = loadingSwagger ? Date.now() : null;
+        const fileName = file ? file.split('/').pop() : 'swagger file';
+
+        if (loadingSwagger) {
+            openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
+        }
+
         const doc = await GetMarkdown(file);
+
         state.currentFile = file;
         emitCurrentFileName();
         
         // Detect file type
-        if (isSwaggerFile(file)) {
+        if (loadingSwagger) {
             state.currentFileType = 'swagger';
+            updateStickyProgress(stickyId, `Loading ${fileName}… parsing spec`);
+            await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
+
+            if (!state.swaggerSpec) {
+                closeStickyProgress(stickyId, `Failed to parse ${fileName}`, 'warn');
+            }
+
             state.swaggerSelectedEndpoint = null;
             state.swaggerEndpointFilter = '';
             
@@ -1045,13 +1091,18 @@ async function loadFile(file) {
             elements.swaggerEditor.value = doc || '';
 
             // Render JSON tree view
+            updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
+            await yieldToUI();
             renderSwaggerJsonView();
             
             // Render swagger UI
+            updateStickyProgress(stickyId, `Loading ${fileName}… rendering run view`);
+            await yieldToUI();
             renderSwaggerUI();
             
             // Set default view mode to swagger viewer
             setViewMode('swagger-view');
+            closeStickyProgress(stickyId);
         } else {
             state.currentFileType = 'markdown';
             state.swaggerSpec = null;
@@ -1078,6 +1129,9 @@ async function loadFile(file) {
             closeFindBar();
         }
     } catch (err) {
+        if (stickyId) {
+            closeStickyProgress(stickyId, `Failed to load ${file.split('/').pop()}`, 'error');
+        }
         setStatus(`Failed to load ${file}.`, true);
         console.error(err);
     }

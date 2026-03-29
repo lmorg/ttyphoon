@@ -38,15 +38,16 @@ var wailsAssets embed.FS
 
 // App struct
 type WApp struct {
-	ctx         context.Context
-	mdBaseDir   string
-	projRoot    string
-	usrNotesDir string
-	homeDir     string
-	globalNotes string
-	historyDir  string
-	visible     bool
-	notesKills  map[string]func()
+	ctx           context.Context
+	mdBaseDir     string
+	projRoot      string
+	usrNotesDir   string
+	homeDir       string
+	globalNotes   string
+	historyDir    string
+	visible       bool
+	notesKills    map[string]func()
+	notesStickies map[string]types.Notification
 }
 
 func docsDir(function string) string {
@@ -83,10 +84,11 @@ func findProjectRoot(cwd string) string {
 // NewApp creates a new App application struct
 func NewWailsApp() *WApp {
 	a := &WApp{
-		visible:    true,
-		notesKills: map[string]func(){},
-		homeDir:    xdg.Home,
-		projRoot:   findProjectRoot(""),
+		visible:       true,
+		notesKills:    map[string]func(){},
+		notesStickies: map[string]types.Notification{},
+		homeDir:       xdg.Home,
+		projRoot:      findProjectRoot(""),
 		//usrNotesDir: userDocs(),
 		globalNotes: docsDir("notes"),
 	}
@@ -471,6 +473,48 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 			renderer.DisplayNotification(types.NOTIFY_DEBUG, message)
 		default:
 			renderer.DisplayNotification(types.NOTIFY_INFO, message)
+		}
+
+	case "terminal-sticky-create":
+		id := strings.TrimSpace(parameters["id"])
+		message := strings.TrimSpace(parameters["message"])
+		if id == "" || message == "" {
+			return
+		}
+		var notifType types.NotificationType
+		switch strings.ToLower(strings.TrimSpace(parameters["level"])) {
+		case "error":
+			notifType = types.NOTIFY_ERROR
+		case "warn", "warning":
+			notifType = types.NOTIFY_WARN
+		default:
+			notifType = types.NOTIFY_INFO
+		}
+		if existing, ok := a.notesStickies[id]; ok {
+			existing.Close()
+			delete(a.notesStickies, id)
+		}
+		sticky := renderer.DisplaySticky(notifType, message, func() {})
+		a.notesStickies[id] = sticky
+
+	case "terminal-sticky-update":
+		id := strings.TrimSpace(parameters["id"])
+		message := strings.TrimSpace(parameters["message"])
+		if id == "" || message == "" {
+			return
+		}
+		if sticky, ok := a.notesStickies[id]; ok {
+			sticky.SetMessage(message)
+		}
+
+	case "terminal-sticky-close":
+		id := strings.TrimSpace(parameters["id"])
+		if id == "" {
+			return
+		}
+		if sticky, ok := a.notesStickies[id]; ok {
+			sticky.Close()
+			delete(a.notesStickies, id)
 		}
 	}
 }
