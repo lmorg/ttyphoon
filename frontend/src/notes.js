@@ -16,7 +16,7 @@ import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
 import { 
     isSwaggerFile, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
-    extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML
+    extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
 
@@ -77,6 +77,7 @@ app.innerHTML = `
                     <div id="notes-swagger-view" class="json-viewer"></div>
                 </div>
                 <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
+                    <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
                     <div id="notes-swagger-layout" class="swagger-layout">
                         <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
                         <section id="notes-swagger-main" class="swagger-main-pane">
@@ -917,6 +918,24 @@ function renderSwaggerUI() {
         return;
     }
 
+    const swaggerInfoEl = document.getElementById('notes-swagger-info');
+    if (swaggerInfoEl) {
+        const info = state.swaggerSpec.info || {};
+        const title = typeof info.title === 'string' && info.title.trim() ? info.title.trim() : '';
+        const description = typeof info.description === 'string' && info.description.trim() ? info.description.trim() : '';
+        if (title || description) {
+            swaggerInfoEl.innerHTML =
+                (title ? `<h1 class="swagger-info-title">${escapeInfoText(title)}</h1>` : '') +
+                (description ? `<div class="swagger-info-description markdown-body">${marked.parse(description)}</div>` : '');
+            const descEl = swaggerInfoEl.querySelector('.swagger-info-description');
+            if (descEl) processMarkdownContainer(descEl);
+            swaggerInfoEl.style.display = '';
+        } else {
+            swaggerInfoEl.innerHTML = '';
+            swaggerInfoEl.style.display = 'none';
+        }
+    }
+
     const currentFilterInput = elements.swaggerEndpoints.querySelector('#notes-swagger-endpoint-filter');
     const restoreFilterFocus = document.activeElement === currentFilterInput;
     const filterSelectionStart = restoreFilterFocus ? currentFilterInput.selectionStart : null;
@@ -955,6 +974,13 @@ function renderSwaggerUI() {
     // Render request builder and response
     elements.swaggerRequestBuilder.innerHTML = generateRequestBuilderHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
     elements.swaggerResponse.innerHTML = generateResponseHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
+
+    // Render parameter descriptions using the same markdown pipeline as preview/info.
+    elements.swaggerRequestBuilder.querySelectorAll('.swagger-param-description[data-markdown]').forEach((descEl) => {
+        const markdown = descEl.getAttribute('data-markdown') || '';
+        descEl.innerHTML = marked.parse(markdown);
+        processMarkdownContainer(descEl);
+    });
     
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
@@ -1023,10 +1049,13 @@ async function sendSwaggerRequest() {
     }
 
     // Collect headers from the displayed header items
+    // Values may be <input>, <select> (interactive) or <span> (static)
     const headers = {};
     elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-item').forEach((item) => {
         const name = item.querySelector('.swagger-header-name')?.textContent?.trim();
-        const value = item.querySelector('.swagger-header-value')?.textContent?.trim();
+        const valueEl = item.querySelector('.swagger-header-value');
+        if (!name || !valueEl) return;
+        const value = ('value' in valueEl ? valueEl.value : valueEl.textContent)?.trim();
         if (name && value) {
             headers[name] = value;
         }
@@ -1997,11 +2026,12 @@ function applyWindowStyle(result) {
             --cyan-bright: rgb(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue});
             --selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --error: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue});
+            --font-family: ${result.fontFamily};
         }
 
         * {
             box-sizing: border-box;
-            font-family: ${result.fontFamily};
+            font-family: var(--font-family);
         }
 
         body {
@@ -2562,6 +2592,10 @@ function applyWindowStyle(result) {
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-swagger-request-builder .swagger-param-description', result.fontSize)}
 
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
 

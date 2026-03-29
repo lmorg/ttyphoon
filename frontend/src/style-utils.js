@@ -328,20 +328,46 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-layout {
-            display: grid;
-            grid-template-columns: minmax(220px, 320px) 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 12px;
             height: 100%;
             min-height: 0;
+            overflow: auto;
         }
 
         .swagger-endpoints-pane {
             min-height: 0;
+            max-height: 180px;
             overflow: auto;
             border: 1px solid rgba(${fgRgb}, 0.2);
             border-radius: 4px;
             background-color: rgba(${fgRgb}, 0.03);
             padding: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Spec Info Header */
+        .swagger-info {
+            padding: 4px 0 8px;
+            border-bottom: 1px solid rgba(${fgRgb}, 0.15);
+            margin-bottom: 4px;
+        }
+
+        .swagger-info-title {
+            margin: 0 0 4px;
+        }
+
+        .swagger-info-description {
+            margin: 0;
+        }
+
+        .swagger-info-description p {
+            margin: 0 0 6px;
+        }
+
+        .swagger-info-description p:last-child {
+            margin-bottom: 0;
         }
 
         .swagger-endpoints-header {
@@ -421,7 +447,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             cursor: not-allowed;
             opacity: 0.7;
             min-width: 80px;
-            font-family: monospace;
+            font-family: var(--font-family);
         }
 
         .swagger-url-input {
@@ -431,7 +457,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             background-color: rgba(${fgRgb}, 0.05);
             color: var(--fg);
             border-radius: 3px;
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: 0.9em;
         }
 
@@ -532,7 +558,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             padding: 6px 8px;
             background-color: rgba(${fgRgb}, 0.03);
             border-radius: 2px;
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: 0.85em;
             border-left: 2px solid rgba(${yellowRgb}, 0.3);
         }
@@ -551,6 +577,26 @@ export function getSwaggerUIStyles(colors, fontSize) {
             word-break: break-all;
         }
 
+        .swagger-header-input,
+        .swagger-header-select {
+            flex: 1;
+            padding: 3px 6px;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            background-color: rgba(${fgRgb}, 0.05);
+            color: var(--fg);
+            border-radius: 3px;
+            font-family: var(--font-family);
+            font-size: 0.85em;
+            outline: none;
+            min-width: 0;
+        }
+
+        .swagger-header-input:focus,
+        .swagger-header-select:focus {
+            border-color: var(--accent);
+            background-color: rgba(${fgRgb}, 0.08);
+        }
+
         /* Body Editor */
         .swagger-body-editor {
             width: 100%;
@@ -561,7 +607,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             border: 1px solid rgba(${fgRgb}, 0.2);
             border-radius: 3px;
             color: rgb(${greenRgb});
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: 0.85em;
             resize: vertical;
         }
@@ -588,7 +634,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-params-table td {
             padding: 6px;
             border-bottom: 1px solid rgba(${fgRgb}, 0.1);
-            font-family: monospace;
+            font-family: var(--font-family);
         }
 
         .swagger-params-table tr:hover {
@@ -656,7 +702,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             border: 1px solid rgba(${fgRgb}, 0.15);
             border-radius: 3px;
             color: rgb(${greenRgb});
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: 0.85em;
             overflow: auto;
             max-height: 200px;
@@ -737,7 +783,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-endpoint-path {
-            font-family: monospace;
+            font-family: var(--font-family);
             font-weight: bold;
             color: var(--fg);
             flex: 1;
@@ -757,14 +803,6 @@ export function getSwaggerUIStyles(colors, fontSize) {
             flex: 0 1 auto;
             padding-right: 8px;
             overflow-y: auto;
-        }
-
-        .swagger-ui[data-layout="compact"] .swagger-layout {
-            grid-template-columns: 1fr;
-        }
-
-        .swagger-ui[data-layout="compact"] .swagger-endpoints-pane {
-            max-height: 180px;
         }
 
         /* Collapsible Sections */
@@ -835,7 +873,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-param-meta {
             font-size: 0.8em;
             color: rgba(${fgRgb}, 0.5);
-            font-family: monospace;
+            font-family: var(--font-family);
         }
 
         .swagger-param-input {
@@ -844,7 +882,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             background-color: rgba(${fgRgb}, 0.05);
             color: var(--fg);
             border-radius: 3px;
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: 0.9em;
             transition: border-color 0.2s ease;
         }
@@ -860,10 +898,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-param-description {
-            font-size: 0.8em;
             color: rgba(${fgRgb}, 0.5);
-            font-style: italic;
-            padding: 2px 0;
+            padding: 2px 0 !important;
+            margin-top: -16px !important;
         }
     `;
 }

@@ -28,6 +28,172 @@ export function parseSwaggerSpec(jsonContent) {
     }
 }
 
+function decodeJsonPointerToken(token) {
+    return token.replace(/~1/g, '/').replace(/~0/g, '~');
+}
+
+function resolveSpecRef(spec, ref) {
+    if (!spec || typeof ref !== 'string' || !ref.startsWith('#/')) {
+        return null;
+    }
+
+    return ref
+        .slice(2)
+        .split('/')
+        .map(decodeJsonPointerToken)
+        .reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), spec) || null;
+}
+
+function resolveMaybeRef(spec, item) {
+    if (!item || typeof item !== 'object') {
+        return item;
+    }
+
+    if (typeof item.$ref === 'string') {
+        return resolveSpecRef(spec, item.$ref) || item;
+    }
+
+    return item;
+}
+
+function getOperationParameters(operation, pathItem, spec) {
+    const pathParams = Array.isArray(pathItem?.parameters) ? pathItem.parameters : [];
+    const opParams = Array.isArray(operation?.parameters) ? operation.parameters : [];
+    return [...pathParams, ...opParams].map((param) => resolveMaybeRef(spec, param)).filter(Boolean);
+}
+
+function extractSchemaPrimitiveHint(schema) {
+    const resolved = resolveMaybeRef(null, schema);
+    if (typeof resolved === 'string') {
+        return resolved;
+    }
+    return resolved?.type || 'string';
+}
+
+function buildSchemaExampleValue(schema, spec, visitedRefs = new Set()) {
+    if (!schema || typeof schema !== 'object') {
+        return undefined;
+    }
+
+    if (schema.$ref && typeof schema.$ref === 'string') {
+        if (visitedRefs.has(schema.$ref)) {
+            return undefined;
+        }
+        visitedRefs.add(schema.$ref);
+        const resolved = resolveSpecRef(spec, schema.$ref);
+        return buildSchemaExampleValue(resolved, spec, visitedRefs);
+    }
+
+    if (schema.example !== undefined) {
+        return schema.example;
+    }
+
+    if (schema.default !== undefined) {
+        return schema.default;
+    }
+
+    if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+        return schema.enum[0];
+    }
+
+    if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+        return buildSchemaExampleValue(schema.oneOf[0], spec, visitedRefs);
+    }
+
+    if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+        return buildSchemaExampleValue(schema.anyOf[0], spec, visitedRefs);
+    }
+
+    if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+        const merged = {};
+        let hasValues = false;
+        schema.allOf.forEach((part) => {
+            const partValue = buildSchemaExampleValue(part, spec, visitedRefs);
+            if (partValue && typeof partValue === 'object' && !Array.isArray(partValue)) {
+                Object.assign(merged, partValue);
+                hasValues = true;
+            }
+        });
+        if (hasValues) {
+            return merged;
+        }
+    }
+
+    const type = schema.type;
+
+    if (type === 'object' || schema.properties) {
+        const obj = {};
+        let hasValues = false;
+        const properties = schema.properties || {};
+        for (const [key, propSchema] of Object.entries(properties)) {
+            const value = buildSchemaExampleValue(propSchema, spec, visitedRefs);
+            if (value !== undefined) {
+                obj[key] = value;
+                hasValues = true;
+            }
+        }
+
+        if (!hasValues && Array.isArray(schema.required)) {
+            schema.required.forEach((key) => {
+                if (!(key in obj)) {
+                    obj[key] = '';
+                }
+            });
+            hasValues = schema.required.length > 0;
+        }
+
+        return hasValues ? obj : {};
+    }
+
+    if (type === 'array') {
+        const itemExample = buildSchemaExampleValue(schema.items || {}, spec, visitedRefs);
+        return itemExample === undefined ? [] : [itemExample];
+    }
+
+    if (type === 'number' || type === 'integer') {
+        return 0;
+    }
+
+    if (type === 'boolean') {
+        return false;
+    }
+
+    if (type === 'string') {
+        return '';
+    }
+
+    return undefined;
+}
+
+function getParameterExampleValue(param, spec) {
+    if (!param || typeof param !== 'object') {
+        return '';
+    }
+
+    if (param.example !== undefined) {
+        return String(param.example);
+    }
+
+    if (param.default !== undefined) {
+        return String(param.default);
+    }
+
+    const schema = resolveMaybeRef(spec, param.schema || null);
+    if (schema && schema.example !== undefined) {
+        return String(schema.example);
+    }
+
+    if (schema && schema.default !== undefined) {
+        return String(schema.default);
+    }
+
+    if (schema && Array.isArray(schema.enum) && schema.enum.length > 0) {
+        return String(schema.enum[0]);
+    }
+
+    return '';
+}
+
 /**
  * Extract all paths and methods from spec
  * @param {Object} spec - Parsed Swagger spec
@@ -63,17 +229,21 @@ export function extractPaths(spec) {
  * @param {Object} operation - Operation object from spec
  * @returns {Array} Array of parameters
  */
-export function extractParameters(operation) {
-    if (!operation || !operation.parameters) return [];
-    
-    return operation.parameters.map(param => ({
-        name: param.name,
-        in: param.in,
-        required: param.required || false,
-        description: param.description || '',
-        schema: param.schema || param.type || 'string',
-        example: param.example || ''
-    }));
+export function extractParameters(operation, pathItem = null, spec = null) {
+    const params = getOperationParameters(operation, pathItem, spec);
+    if (params.length === 0) return [];
+
+    return params.map(param => {
+        const schema = resolveMaybeRef(spec, param.schema || null) || param.type || 'string';
+        return {
+            name: param.name,
+            in: param.in,
+            required: param.required || false,
+            description: param.description || '',
+            schema,
+            example: getParameterExampleValue(param, spec)
+        };
+    });
 }
 
 /**
@@ -81,24 +251,35 @@ export function extractParameters(operation) {
  * @param {Object} operation - Operation object from spec
  * @returns {Object} Body schema and content type
  */
-export function extractRequestBody(operation) {
+export function extractRequestBody(operation, spec = null) {
     if (!operation || !operation.requestBody) {
         return null;
     }
-    
-    const requestBody = operation.requestBody;
+
+    const requestBody = resolveMaybeRef(spec, operation.requestBody);
     const content = requestBody.content || {};
-    
+
     // Prefer application/json
-    const jsonContent = content['application/json'];
+    const jsonContent = content['application/json'] || Object.entries(content).find(([key]) => key.includes('json'))?.[1];
     if (!jsonContent) {
         return null;
     }
-    
+
+    const schema = resolveMaybeRef(spec, jsonContent.schema || {});
+    const explicitExample = jsonContent.example !== undefined
+        ? jsonContent.example
+        : (jsonContent.examples && typeof jsonContent.examples === 'object'
+            ? Object.values(jsonContent.examples).find((item) => item?.value !== undefined)?.value
+            : undefined);
+
+    const bodyExample = explicitExample !== undefined
+        ? explicitExample
+        : buildSchemaExampleValue(schema, spec);
+
     return {
         required: requestBody.required || false,
-        schema: jsonContent.schema || {},
-        example: jsonContent.example || generateSchemaExample(jsonContent.schema)
+        schema,
+        example: typeof bodyExample === 'string' ? bodyExample : JSON.stringify(bodyExample ?? {}, null, 2)
     };
 }
 
@@ -123,24 +304,33 @@ export function extractResponses(operation) {
  * @param {Object} operation - Operation object from spec
  * @returns {Array} Array of {name, value}
  */
-export function extractHeaders(operation) {
+export function extractHeaders(operation, pathItem = null, spec = null) {
     const headers = [];
-    
-    // Add Content-Type if request body exists
+
+    // Add Content-Type derived from the spec's requestBody.content MIME keys
     if (operation.requestBody) {
+        const requestBody = resolveMaybeRef(spec, operation.requestBody);
+        const contentTypes = Object.keys(requestBody.content || {});
+
+        const preferred = contentTypes.includes('application/json')
+            ? 'application/json'
+            : (contentTypes[0] || 'application/json');
+
         headers.push({
             name: 'Content-Type',
-            value: 'application/json'
+            value: preferred,
+            options: contentTypes.length > 1 ? contentTypes : null
         });
     }
     
     // Add specific headers from parameters marked as 'header'
-    if (operation.parameters) {
-        const headerParams = operation.parameters.filter(p => p.in === 'header');
+    const mergedParams = getOperationParameters(operation, pathItem, spec);
+    if (mergedParams.length > 0) {
+        const headerParams = mergedParams.filter(p => p.in === 'header');
         headerParams.forEach(param => {
             headers.push({
                 name: param.name,
-                value: param.example || `{${param.name}}`,
+                value: getParameterExampleValue(param, spec) || `{${param.name}}`,
                 required: param.required || false
             });
         });
@@ -154,29 +344,18 @@ export function extractHeaders(operation) {
  * @param {Object} schema - JSON Schema object
  * @returns {string} JSON string of example
  */
-export function generateSchemaExample(schema) {
+export function generateSchemaExample(schema, spec = null) {
     if (!schema) return '{}';
-    
-    const example = {};
-    
-    if (schema.properties) {
-        for (const [key, prop] of Object.entries(schema.properties)) {
-            if (prop.example !== undefined) {
-                example[key] = prop.example;
-            } else if (prop.type === 'string') {
-                example[key] = `"${key}"`;
-            } else if (prop.type === 'number' || prop.type === 'integer') {
-                example[key] = 0;
-            } else if (prop.type === 'boolean') {
-                example[key] = true;
-            } else if (prop.type === 'array') {
-                example[key] = [];
-            } else {
-                example[key] = null;
-            }
-        }
+
+    const example = buildSchemaExampleValue(schema, spec);
+    if (example === undefined) {
+        return '{}';
     }
-    
+
+    if (typeof example === 'string') {
+        return example;
+    }
+
     return JSON.stringify(example, null, 2);
 }
 
@@ -219,9 +398,9 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
         `;
     }
     
-    const parameters = extractParameters(operation);
-    const requestBody = extractRequestBody(operation);
-    const headers = extractHeaders(operation);
+    const parameters = extractParameters(operation, pathItem, spec);
+    const requestBody = extractRequestBody(operation, spec);
+    const headers = extractHeaders(operation, pathItem, spec);
     
     let html = `
         <div class="swagger-request-builder">
@@ -255,10 +434,22 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
         html += `<p class="swagger-empty-field">No headers</p>`;
     } else {
         headers.forEach(header => {
+            let valueHtml;
+            if (header.options) {
+                // Multiple MIME types — render a select
+                valueHtml = `<select class="swagger-header-value swagger-header-select" data-header-name="${escapeHtml(header.name)}">`
+                    + header.options.map(opt =>
+                        `<option value="${escapeHtml(opt)}"${opt === header.value ? ' selected' : ''}>${escapeHtml(opt)}</option>`
+                    ).join('')
+                    + `</select>`;
+            } else {
+                // Editable single-value input
+                valueHtml = `<input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />`;
+            }
             html += `
                 <div class="swagger-header-item">
                     <span class="swagger-header-name">${escapeHtml(header.name)}</span>
-                    <span class="swagger-header-value">${escapeHtml(header.value)}</span>
+                    ${valueHtml}
                 </div>
             `;
         });
@@ -290,7 +481,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
         html += `<div class="swagger-params-form">`;
 
         parameters.forEach(param => {
-            const schemaType = typeof param.schema === 'string' ? param.schema : param.schema.type || 'string';
+            const schemaType = extractSchemaPrimitiveHint(param.schema);
             const required = param.required ? ' *' : '';
             const requiredAttr = param.required ? ' required' : '';
 
@@ -310,7 +501,9 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                         value="${param.example ? escapeHtml(param.example) : ''}"
                         ${requiredAttr}
                     />
-                    ${param.description ? `<span class="swagger-param-description">${escapeHtml(param.description)}</span>` : ''}
+                    ${param.description
+                        ? `<div class="swagger-param-description markdown-body" data-markdown="${escapeHtml(param.description)}"></div>`
+                        : ''}
                 </div>
             `;
         });
@@ -399,7 +592,7 @@ export function generateResponseHTML(spec, selectedEndpoint) {
             </div>
             
             <div class="swagger-response-panel swagger-response-panel-active" data-panel="body" role="tabpanel">
-                <pre class="swagger-response-body"><code>${escapeHtml(generateSchemaExample(successResponse.schema))}</code></pre>
+                <pre class="swagger-response-body"><code>${escapeHtml(generateSchemaExample(successResponse.schema, spec))}</code></pre>
             </div>
             
             <div class="swagger-response-panel" data-panel="headers" role="tabpanel">
@@ -503,6 +696,10 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+export function escapeInfoText(str) {
+    return escapeHtml(str);
+}
+
 /**
  * Build the full request URL from spec + selected endpoint + parameters.
  * @param {Object} spec - Parsed Swagger spec
@@ -525,7 +722,9 @@ export function buildRequestUrl(spec, endpoint, parameters = {}) {
     
     // Collect query parameters
     const queryParams = new URLSearchParams();
-    const operationParams = extractParameters(getOperationFromEndpoint(spec, endpoint));
+    const operation = getOperationFromEndpoint(spec, endpoint);
+    const pathItem = spec.paths?.[endpoint.path] || null;
+    const operationParams = extractParameters(operation, pathItem, spec);
     
     operationParams.forEach(param => {
         if (param.in === 'query' && parameters[param.name]) {
