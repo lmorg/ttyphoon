@@ -309,6 +309,7 @@ export function getAllMarkdownStyles(windowStyleResult, options = {}) {
  */
 export function getSwaggerUIStyles(colors, fontSize) {
     const fgRgb = `${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}`;
+    const bgRgb = `${colors.bg.Red}, ${colors.bg.Green}, ${colors.bg.Blue}`;
     const greenRgb = `${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue}`;
     const redRgb = `${colors.red.Red}, ${colors.red.Green}, ${colors.red.Blue}`;
     const cyanRgb = `${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue}`;
@@ -337,7 +338,8 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-endpoints-pane {
             min-height: 0;
-            max-height: 180px;
+            height: 250px;
+            max-height: 250px;
             overflow: auto;
             border: 1px solid rgba(${fgRgb}, 0.2);
             border-radius: 4px;
@@ -401,25 +403,25 @@ export function getSwaggerUIStyles(colors, fontSize) {
             color: var(--accent);
             margin: 2px 0 8px;
             letter-spacing: 0.03em;
-            text-transform: uppercase;
         }
 
         .swagger-endpoint-filter {
             width: 100%;
             box-sizing: border-box;
             border: 1px solid rgba(${fgRgb}, 0.25);
-            background: rgba(${fgRgb}, 0.04);
+            background: rgba(${bgRgb}, 1);
             color: var(--fg);
             border-radius: 4px;
             padding: 7px 9px;
             margin-bottom: 8px;
             font-size: 0.9em;
             outline: none;
+            top: 0;
+            position: sticky;
         }
 
         .swagger-endpoint-filter:focus {
             border-color: var(--accent);
-            background: rgba(${fgRgb}, 0.07);
         }
 
         .swagger-endpoint-filter::placeholder {
@@ -460,6 +462,8 @@ export function getSwaggerUIStyles(colors, fontSize) {
             min-height: 100px;
             color: rgba(${fgRgb}, 0.5);
             font-style: italic;
+            top: 0;
+            z-index: 1;
         }
 
         .swagger-empty-field {
@@ -691,6 +695,10 @@ export function getSwaggerUIStyles(colors, fontSize) {
             padding: 12px;
             max-height: 300px;
             overflow: auto;*/
+        }
+
+        .swagger-response-section .markdown-body h2 {
+            margin: 0 0 10px;
         }
 
         .swagger-response-header {

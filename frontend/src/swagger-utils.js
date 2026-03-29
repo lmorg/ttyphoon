@@ -572,6 +572,9 @@ export function generateResponseHTML(spec, selectedEndpoint) {
     
     let html = `
         <div class="swagger-response-section">
+            <div class="markdown-body">
+                <h2>Example Response</h2>
+            </div>
             <div class="swagger-response-header">
     `;
     
@@ -792,6 +795,9 @@ export function generateLiveResponseHTML(response) {
 
     return `
         <div class="swagger-response-section swagger-live-response">
+            <div class="markdown-body">
+                <h2>Response</h2>
+            </div>
             <div class="swagger-response-header">
                 <span class="swagger-status-badge ${statusClass}">${escapeHtml(String(response.status || statusCode))}</span>
                 <span class="swagger-response-meta swagger-live-badge">Live</span>
