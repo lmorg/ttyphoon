@@ -318,20 +318,14 @@ export function getSwaggerUIStyles(colors, fontSize) {
     return `
         /* Swagger UI Container */
         .swagger-ui {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
             gap: 12px;
             color: var(--fg);
             background-color: var(--bg);
-            overflow: hidden;
+            overflow: auto;
         }
 
         .swagger-layout {
-            display: flex;
-            flex-direction: column;
             gap: 12px;
-            height: 100%;
             min-height: 0;
             overflow: auto;
         }
@@ -368,6 +362,32 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-info-description p:last-child {
             margin-bottom: 0;
+        }
+
+        .swagger-info-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .swagger-info-meta-item {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: baseline;
+        }
+
+        .swagger-info-meta-label {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .swagger-info-meta-value {
+            color: rgba(${fgRgb}, 0.8);
+            min-width: 0;
+            word-break: break-word;
         }
 
         .swagger-endpoints-header {

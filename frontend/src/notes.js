@@ -896,6 +896,94 @@ function renderSwaggerJsonView() {
     renderJsonViewer(elements.swaggerView, elements.swaggerEditor.value || '{}');
 }
 
+
+function safeSwaggerInfoUrl(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    const trimmed = value.trim();
+    return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+}
+
+function renderSwaggerInfoMetaValue(label, value) {
+    if (!value) {
+        return '';
+    }
+
+    return `
+        <div class="swagger-info-meta-item">
+            <span class="swagger-info-meta-label">${label}</span>
+            <span class="swagger-info-meta-value">${value}</span>
+        </div>
+    `;
+}
+
+function renderSwaggerInfoMetadata(info) {
+    if (!info || typeof info !== 'object') {
+        return '';
+    }
+
+    const items = [];
+
+    if (typeof info.summary === 'string' && info.summary.trim()) {
+        items.push(renderSwaggerInfoMetaValue('Summary', escapeInfoText(info.summary.trim())));
+    }
+
+    if (typeof info.version === 'string' && info.version.trim()) {
+        items.push(renderSwaggerInfoMetaValue('Version', escapeInfoText(info.version.trim())));
+    }
+
+    const termsUrl = safeSwaggerInfoUrl(info.termsOfService);
+    if (termsUrl) {
+        items.push(renderSwaggerInfoMetaValue(
+            'Terms',
+            `<a href="${escapeInfoText(termsUrl)}" target="_blank" rel="noopener noreferrer">${escapeInfoText(termsUrl)}</a>`
+        ));
+    }
+
+    if (info.contact && typeof info.contact === 'object') {
+        const contactParts = [];
+        if (typeof info.contact.name === 'string' && info.contact.name.trim()) {
+            contactParts.push(escapeInfoText(info.contact.name.trim()));
+        }
+
+        const contactUrl = safeSwaggerInfoUrl(info.contact.url);
+        if (contactUrl) {
+            contactParts.push(`<a href="${escapeInfoText(contactUrl)}" target="_blank" rel="noopener noreferrer">${escapeInfoText(contactUrl)}</a>`);
+        }
+
+        if (typeof info.contact.email === 'string' && info.contact.email.trim()) {
+            const email = info.contact.email.trim();
+            contactParts.push(`<a href="mailto:${encodeURIComponent(email)}">${escapeInfoText(email)}</a>`);
+        }
+
+        if (contactParts.length > 0) {
+            items.push(renderSwaggerInfoMetaValue('Contact', contactParts.join(' · ')));
+        }
+    }
+
+    if (info.license && typeof info.license === 'object') {
+        const licenseName = typeof info.license.name === 'string' && info.license.name.trim()
+            ? info.license.name.trim()
+            : '';
+        const licenseUrl = safeSwaggerInfoUrl(info.license.url);
+
+        if (licenseName || licenseUrl) {
+            const licenseValue = licenseUrl
+                ? `<a href="${escapeInfoText(licenseUrl)}" target="_blank" rel="noopener noreferrer">${escapeInfoText(licenseName || licenseUrl)}</a>`
+                : escapeInfoText(licenseName);
+            items.push(renderSwaggerInfoMetaValue('License', licenseValue));
+        }
+    }
+
+    if (items.length === 0) {
+        return '';
+    }
+
+    return `<div class="swagger-info-meta">${items.join('')}</div>`;
+}
+
 function updateSwaggerLayoutMode() {
     if (!elements.swaggerRunWrap) {
         return;
@@ -923,12 +1011,13 @@ function renderSwaggerUI() {
         const info = state.swaggerSpec.info || {};
         const title = typeof info.title === 'string' && info.title.trim() ? info.title.trim() : '';
         const description = typeof info.description === 'string' && info.description.trim() ? info.description.trim() : '';
-        if (title || description) {
+        const metadata = renderSwaggerInfoMetadata(info);
+        if (title || description || metadata) {
             swaggerInfoEl.innerHTML =
                 (title ? `<h1 class="swagger-info-title">${escapeInfoText(title)}</h1>` : '') +
-                (description ? `<div class="swagger-info-description markdown-body">${marked.parse(description)}</div>` : '');
-            const descEl = swaggerInfoEl.querySelector('.swagger-info-description');
-            if (descEl) processMarkdownContainer(descEl);
+                (description ? `<div class="swagger-info-description markdown-body">${marked.parse(description)}</div>` : '') +
+                metadata;
+            processMarkdownContainer(swaggerInfoEl);
             swaggerInfoEl.style.display = '';
         } else {
             swaggerInfoEl.innerHTML = '';
