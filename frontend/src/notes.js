@@ -77,8 +77,8 @@ app.innerHTML = `
                     <div id="notes-swagger-view" class="json-viewer"></div>
                 </div>
                 <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
-                    <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
                     <div id="notes-swagger-layout" class="swagger-layout">
+                        <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
                         <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
                         <section id="notes-swagger-main" class="swagger-main-pane">
                             <div id="notes-swagger-request-builder"></div>

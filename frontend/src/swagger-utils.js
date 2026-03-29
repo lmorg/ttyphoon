@@ -401,27 +401,33 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
     const parameters = extractParameters(operation, pathItem, spec);
     const requestBody = extractRequestBody(operation, spec);
     const headers = extractHeaders(operation, pathItem, spec);
+    const endpointTitle = operation.summary || operation.description || `${selectedEndpoint.method} ${selectedEndpoint.path}`;
     
     let html = `
         <div class="swagger-request-builder">
-            <div class="swagger-method-url-bar">
-                <select class="swagger-method-selector" disabled>
-                    <option selected>${selectedEndpoint.method}</option>
-                </select>
-                <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
-                <button class="swagger-send-btn">Send</button>
-            </div>
-            
-            <div class="swagger-request-tabs" role="tablist">
-                <button class="swagger-request-tab" role="tab" data-tab="headers" aria-selected="true">
-                    Headers
-                </button>
-                <button class="swagger-request-tab" role="tab" data-tab="body" aria-selected="false">
-                    Body
-                </button>
-                <button class="swagger-request-tab" role="tab" data-tab="params" aria-selected="false">
-                    Parameters
-                </button>
+            <div class="swagger-endpoint-sticky">
+                <div class="swagger-endpoint-heading markdown-body">
+                    <h2 class="swagger-endpoint-title">${escapeHtml(endpointTitle)}</h2>
+                </div>
+                <div class="swagger-method-url-bar">
+                    <select class="swagger-method-selector" disabled>
+                        <option selected>${selectedEndpoint.method}</option>
+                    </select>
+                    <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
+                    <button class="swagger-send-btn">Send</button>
+                </div>
+                
+                <div class="swagger-request-tabs" role="tablist">
+                    <button class="swagger-request-tab" role="tab" data-tab="headers" aria-selected="true">
+                        Headers
+                    </button>
+                    <button class="swagger-request-tab" role="tab" data-tab="body" aria-selected="false">
+                        Body
+                    </button>
+                    <button class="swagger-request-tab" role="tab" data-tab="params" aria-selected="false">
+                        Parameters
+                    </button>
+                </div>
             </div>`;
     
     // Headers Panel

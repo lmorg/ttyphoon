@@ -318,15 +318,20 @@ export function getSwaggerUIStyles(colors, fontSize) {
     return `
         /* Swagger UI Container */
         .swagger-ui {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
             gap: 12px;
             color: var(--fg);
             background-color: var(--bg);
-            overflow: auto;
         }
-
+            
         .swagger-layout {
+            display: flex;
+            flex-direction: column;
             gap: 12px;
-            min-height: 0;
+            min-height: auto;
+            height: 100%;
             overflow: auto;
         }
 
@@ -339,12 +344,12 @@ export function getSwaggerUIStyles(colors, fontSize) {
             background-color: rgba(${fgRgb}, 0.03);
             padding: 8px;
             flex-shrink: 0;
+            margin-bottom: 20px;
         }
 
         /* Spec Info Header */
         .swagger-info {
             padding: 4px 0 8px;
-            border-bottom: 1px solid rgba(${fgRgb}, 0.15);
             margin-bottom: 4px;
         }
 
@@ -422,12 +427,29 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-main-pane {
-            min-height: 0;
-            overflow: auto;
+            min-height: auto;
+            overflow: visible;
             display: flex;
             flex-direction: column;
             gap: 12px;
             padding-right: 4px;
+        }
+
+        .swagger-endpoint-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background-color: var(--bg);
+            padding-bottom: 8px;
+        }
+
+        .swagger-endpoint-heading {
+            margin: 0;
+            margin-bottom: 10px;
+        }
+
+        .swagger-endpoint-title {
+            margin: 0;
         }
 
         /* Empty State */
@@ -663,12 +685,12 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         /* Response Section */
         .swagger-response-section {
-            border: 1px solid rgba(${fgRgb}, 0.2);
+            /*border: 1px solid rgba(${fgRgb}, 0.2);
             border-radius: 4px;
             background-color: rgba(${fgRgb}, 0.03);
             padding: 12px;
             max-height: 300px;
-            overflow: auto;
+            overflow: auto;*/
         }
 
         .swagger-response-header {
@@ -822,7 +844,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             gap: 12px;
             flex: 0 1 auto;
             padding-right: 8px;
-            overflow-y: auto;
+            overflow: visible;
         }
 
         /* Collapsible Sections */
