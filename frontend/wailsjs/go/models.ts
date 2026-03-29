@@ -127,6 +127,49 @@ export namespace main {
 
 }
 
+export namespace swagger {
+	
+	export class RequestT {
+	    method: string;
+	    url: string;
+	    headers: Record<string, string>;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RequestT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.headers = source["headers"];
+	        this.body = source["body"];
+	    }
+	}
+	export class ResponseT {
+	    statusCode: number;
+	    status: string;
+	    headers: Record<string, string>;
+	    body: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResponseT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.statusCode = source["statusCode"];
+	        this.status = source["status"];
+	        this.headers = source["headers"];
+	        this.body = source["body"];
+	        this.error = source["error"];
+	    }
+	}
+
+}
+
 export namespace types {
 	
 	export class Colour {

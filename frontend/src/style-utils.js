@@ -437,14 +437,42 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-send-btn {
             padding: 6px 16px;
-            background-color: rgba(${greenRgb}, 0.3);
+            background-color: rgba(${greenRgb}, 0.15);
             color: rgb(${greenRgb});
             border: 1px solid rgb(${greenRgb});
             border-radius: 3px;
-            cursor: not-allowed;
-            opacity: 0.5;
+            cursor: pointer;
             font-weight: bold;
             font-size: 0.9em;
+            transition: background-color 0.2s ease;
+        }
+
+        .swagger-send-btn:hover {
+            background-color: rgba(${greenRgb}, 0.3);
+        }
+
+        .swagger-send-btn:disabled,
+        .swagger-send-btn[data-sending="true"] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .swagger-live-badge {
+            font-size: 0.75em;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background-color: rgba(${greenRgb}, 0.15);
+            color: rgb(${greenRgb});
+            border: 1px solid rgba(${greenRgb}, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .swagger-status-error {
+            background-color: rgba(${redRgb}, 0.2);
+            color: rgb(${redRgb});
+            border-color: rgba(${redRgb}, 0.4);
         }
 
         /* Request/Response Tabs */

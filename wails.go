@@ -23,6 +23,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/window/backend"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
@@ -827,6 +828,12 @@ func (a *WApp) SendToTerminal(content string) {
 	}
 
 	renderer.ActiveTile().GetTerm().Reply([]byte(content))
+}
+
+// SwaggerRequest executes an HTTP request for a Swagger/OpenAPI endpoint.
+// All request logic lives in utils/swagger; this method is a thin binding.
+func (a *WApp) SwaggerRequest(req swagger.RequestT) swagger.ResponseT {
+	return swagger.Execute(a.ctx, req)
 }
 
 func (a *WApp) GetAppTitle() string { return appTitle() }

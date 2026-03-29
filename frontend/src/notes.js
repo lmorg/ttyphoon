@@ -3,7 +3,7 @@ import {
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
-    SaveImageDialog, WindowPrint, GetClipboardData
+    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -16,7 +16,7 @@ import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
 import { 
     isSwaggerFile, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
-    extractPaths, generateEndpointListHTML
+    extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML
 } from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
 
@@ -959,6 +959,7 @@ function renderSwaggerUI() {
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
     setupSwaggerEndpointSelection();
+    setupSwaggerSendButton();
 
     if (restoreFilterFocus) {
         const nextFilterInput = elements.swaggerEndpoints.querySelector('#notes-swagger-endpoint-filter');
@@ -991,6 +992,87 @@ function setupSwaggerEndpointSelection() {
 
             state.swaggerSelectedEndpoint = { path, method };
             renderSwaggerUI();
+        });
+    });
+}
+
+/**
+ * Wire up the Send button to execute the current endpoint via the Go backend.
+ */
+function setupSwaggerSendButton() {
+    const sendBtn = elements.swaggerRequestBuilder.querySelector('.swagger-send-btn');
+    if (!sendBtn) {
+        return;
+    }
+
+    sendBtn.addEventListener('click', () => {
+        sendSwaggerRequest();
+    });
+}
+
+async function sendSwaggerRequest() {
+    if (!state.swaggerSpec || !state.swaggerSelectedEndpoint) {
+        return;
+    }
+
+    const sendBtn = elements.swaggerRequestBuilder.querySelector('.swagger-send-btn');
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.dataset.sending = 'true';
+        sendBtn.textContent = 'Sending…';
+    }
+
+    // Collect headers from the displayed header items
+    const headers = {};
+    elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-item').forEach((item) => {
+        const name = item.querySelector('.swagger-header-name')?.textContent?.trim();
+        const value = item.querySelector('.swagger-header-value')?.textContent?.trim();
+        if (name && value) {
+            headers[name] = value;
+        }
+    });
+
+    // Collect body from the editable textarea
+    const bodyTextarea = elements.swaggerRequestBuilder.querySelector('.swagger-body-editor');
+    const body = bodyTextarea ? bodyTextarea.value : '';
+
+    const url = buildRequestUrl(state.swaggerSpec, state.swaggerSelectedEndpoint);
+
+    try {
+        const response = await SwaggerRequest({
+            method: state.swaggerSelectedEndpoint.method,
+            url,
+            headers,
+            body,
+        });
+
+        elements.swaggerResponse.innerHTML = generateLiveResponseHTML(response);
+        setupSwaggerResponseTabs();
+    } catch (err) {
+        elements.swaggerResponse.innerHTML = generateLiveResponseHTML({
+            error: String(err?.message || err),
+        });
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.dataset.sending = 'false';
+            sendBtn.textContent = 'Send';
+        }
+    }
+}
+
+function setupSwaggerResponseTabs() {
+    const responseTabs = elements.swaggerResponse.querySelectorAll('.swagger-response-tab');
+    const responsePanels = elements.swaggerResponse.querySelectorAll('.swagger-response-panel');
+
+    responseTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const panelName = tab.getAttribute('data-tab');
+            responsePanels.forEach(panel => panel.classList.remove('swagger-response-panel-active'));
+            const selectedPanel = elements.swaggerResponse.querySelector(`.swagger-response-panel[data-panel="${panelName}"]`);
+            if (selectedPanel) selectedPanel.classList.add('swagger-response-panel-active');
+            responseTabs.forEach(t => t.setAttribute('aria-selected', 'false'));
+            tab.setAttribute('aria-selected', 'true');
         });
     });
 }
