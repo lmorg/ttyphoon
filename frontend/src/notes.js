@@ -865,6 +865,20 @@ function renderSwaggerJsonView() {
     renderJsonViewer(elements.swaggerView, elements.swaggerEditor.value || '{}');
 }
 
+function updateSwaggerLayoutMode() {
+    if (!elements.swaggerRunWrap) {
+        return;
+    }
+
+    const width = elements.swaggerRunWrap.getBoundingClientRect().width;
+    if (width <= 0) {
+        return;
+    }
+
+    const compact = width <= 900;
+    elements.swaggerRunWrap.setAttribute('data-layout', compact ? 'compact' : 'wide');
+}
+
 /**
  * Render the Swagger/OpenAPI UI in the Run tab
  */
@@ -872,6 +886,11 @@ function renderSwaggerUI() {
     if (!state.swaggerSpec || !elements.swaggerEndpoints || !elements.swaggerRequestBuilder || !elements.swaggerResponse) {
         return;
     }
+
+    const currentFilterInput = elements.swaggerEndpoints.querySelector('#notes-swagger-endpoint-filter');
+    const restoreFilterFocus = document.activeElement === currentFilterInput;
+    const filterSelectionStart = restoreFilterFocus ? currentFilterInput.selectionStart : null;
+    const filterSelectionEnd = restoreFilterFocus ? currentFilterInput.selectionEnd : null;
     
     // If no endpoint selected, select the first one
     if (!state.swaggerSelectedEndpoint) {
@@ -910,6 +929,16 @@ function renderSwaggerUI() {
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
     setupSwaggerEndpointSelection();
+
+    if (restoreFilterFocus) {
+        const nextFilterInput = elements.swaggerEndpoints.querySelector('#notes-swagger-endpoint-filter');
+        if (nextFilterInput) {
+            nextFilterInput.focus();
+            const start = typeof filterSelectionStart === 'number' ? filterSelectionStart : nextFilterInput.value.length;
+            const end = typeof filterSelectionEnd === 'number' ? filterSelectionEnd : start;
+            nextFilterInput.setSelectionRange(start, end);
+        }
+    }
 }
 
 function setupSwaggerEndpointSelection() {
@@ -3079,6 +3108,7 @@ elements.tabSwaggerEdit.addEventListener('click', () => {
 
 elements.tabSwaggerRun.addEventListener('click', () => {
     setViewMode('swagger-run');
+    updateSwaggerLayoutMode();
     renderSwaggerUI();
 });
 
@@ -3200,3 +3230,14 @@ elements.findInput.addEventListener('keydown', (event) => {
 });
 
 setViewMode('viewer');
+
+if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {
+    const swaggerPaneResizeObserver = new ResizeObserver(() => {
+        updateSwaggerLayoutMode();
+    });
+    swaggerPaneResizeObserver.observe(elements.swaggerRunWrap);
+} else {
+    window.addEventListener('resize', () => {
+        updateSwaggerLayoutMode();
+    });
+}

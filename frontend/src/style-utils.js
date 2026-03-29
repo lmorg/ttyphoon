@@ -731,14 +731,12 @@ export function getSwaggerUIStyles(colors, fontSize) {
             overflow-y: auto;
         }
 
-        @media (max-width: 900px) {
-            .swagger-layout {
-                grid-template-columns: 1fr;
-            }
+        .swagger-ui[data-layout="compact"] .swagger-layout {
+            grid-template-columns: 1fr;
+        }
 
-            .swagger-endpoints-pane {
-                max-height: 180px;
-            }
+        .swagger-ui[data-layout="compact"] .swagger-endpoints-pane {
+            max-height: 180px;
         }
 
         /* Collapsible Sections */
