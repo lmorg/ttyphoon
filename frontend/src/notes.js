@@ -2840,14 +2840,15 @@ function applyWindowStyle(result) {
 
         .notes-tree-indent {
             display: inline-flex;
-            align-self: center;
+            align-self: stretch;
         }
 
         .notes-tree-branch {
             position: relative;
-            display: inline-block;
+            display: block;
+            align-self: stretch;
             width: 2ch;
-            height: 1.25em;
+            height: auto;
             color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.65);
         }
 
@@ -2857,8 +2858,8 @@ function applyWindowStyle(result) {
             content: '';
             position: absolute;
             left: 0.8ch;
-            top: 0;
-            bottom: 0;
+            top: -1px;
+            bottom: -1px;
             border-left: 1px solid currentColor;
         }
 
@@ -2873,7 +2874,7 @@ function applyWindowStyle(result) {
         }
 
         .notes-tree-branch-end::before {
-            bottom: 50%;
+            bottom: calc(50% - 1px);
         }
 
         .notes-tree-label {
