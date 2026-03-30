@@ -15,7 +15,7 @@ import hljs from "highlight.js/lib/common";
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
 import { 
-    isJsonFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
+    isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
@@ -894,7 +894,7 @@ function renderSwaggerJsonView() {
         return;
     }
 
-    renderJsonViewer(elements.swaggerView, elements.swaggerEditor.value || '{}');
+    renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.swaggerEditor.value || '{}'));
 }
 
 
@@ -1269,7 +1269,7 @@ async function loadFile(file) {
     }
 
     try {
-        const loadingJson = isJsonFile(file);
+        const loadingJson = isStructuredDataFile(file);
         const stickyId = loadingJson ? Date.now() : null;
         const fileName = file ? file.split('/').pop() : 'json file';
 

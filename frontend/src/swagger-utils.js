@@ -3,23 +3,32 @@
  * Handles spec parsing and Postman-like UI generation
  */
 
+import YAML from 'yaml';
+
 /**
- * Detect if a filename is a JSON file
+ * Detect if a filename is a JSON or YAML file
  * @param {string} filename - File path
- * @returns {boolean} True if file ends with .json
+ * @returns {boolean} True if file ends with .json, .yml, or .yaml
  */
-export function isJsonFile(filename) {
+export function isStructuredDataFile(filename) {
     if (!filename) return false;
-    return filename.toLowerCase().endsWith('.json');
+    const lower = filename.toLowerCase();
+    return lower.endsWith('.json') || lower.endsWith('.yml') || lower.endsWith('.yaml');
 }
 
 /**
- * Check whether a parsed JSON document has a top-level swagger key.
+ * Check whether a parsed JSON/YAML document has a top-level Swagger/OpenAPI key.
  * @param {Object|null} spec - Parsed JSON object
- * @returns {boolean} True if the top-level swagger key exists
+ * @returns {boolean} True if the top-level swagger or openapi key exists
  */
 export function hasSwaggerKey(spec) {
-    return !!(spec && typeof spec === 'object' && !Array.isArray(spec) && Object.prototype.hasOwnProperty.call(spec, 'swagger'));
+    return !!(
+        spec &&
+        typeof spec === 'object' &&
+        !Array.isArray(spec) &&
+        (Object.prototype.hasOwnProperty.call(spec, 'swagger') ||
+            Object.prototype.hasOwnProperty.call(spec, 'openapi'))
+    );
 }
 
 /**
@@ -30,9 +39,13 @@ export function hasSwaggerKey(spec) {
 export function parseSwaggerSpec(jsonContent) {
     try {
         return JSON.parse(jsonContent);
-    } catch (err) {
-        console.error('Failed to parse Swagger spec:', err);
-        return null;
+    } catch (_) {
+        try {
+            return YAML.parse(jsonContent);
+        } catch (err) {
+            console.error('Failed to parse structured spec:', err);
+            return null;
+        }
     }
 }
 
@@ -424,7 +437,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                     <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
                     <button class="swagger-send-btn">Send</button>
                 </div>
-                
+                <div class="markdown-body"><h3>Request</h3></div>
                 <div class="swagger-request-tabs" role="tablist">
                     <button class="swagger-request-tab" role="tab" data-tab="headers" aria-selected="true">
                         Headers
@@ -581,7 +594,7 @@ export function generateResponseHTML(spec, selectedEndpoint) {
     let html = `
         <div class="swagger-response-section">
             <div class="markdown-body">
-                <h2>Example Response</h2>
+                <h3>Example Response</h3>
             </div>
             <div class="swagger-response-header">
     `;
@@ -804,7 +817,7 @@ export function generateLiveResponseHTML(response) {
     return `
         <div class="swagger-response-section swagger-live-response">
             <div class="markdown-body">
-                <h2>Response</h2>
+                <h3>Response</h3>
             </div>
             <div class="swagger-response-header">
                 <span class="swagger-status-badge ${statusClass}">${escapeHtml(String(response.status || statusCode))}</span>

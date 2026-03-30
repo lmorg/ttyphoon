@@ -442,7 +442,8 @@ export function getSwaggerUIStyles(colors, fontSize) {
             top: 0;
             z-index: 2;
             background-color: var(--bg);
-            padding-bottom: 8px;
+            padding-bottom: 0px;
+            margin-bottom: -10px;
         }
 
         .swagger-endpoint-heading {
