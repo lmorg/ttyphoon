@@ -46,7 +46,7 @@
 }
 
 .inputbox-input:focus {
-    border-color: var(--terminal-selection, #99c0d3);
+    border-color: var(--terminal-accent);
 }
 
 .inputbox-history {
@@ -71,7 +71,7 @@
 
 .inputbox-history:focus {
     outline: none;
-    border-color: var(--terminal-selection, #99c0d3);
+    border-color: var(--terminal-accent);
 }
 
 .inputbox-hint {

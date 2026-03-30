@@ -2413,6 +2413,10 @@ function applyWindowStyle(result) {
             outline: none;
         }
 
+        #notes-modal-input:focus {
+            border-color: var(--accent);
+        }
+
         .notes-toolbar {
             display: flex;
             gap: 4px;
@@ -2815,7 +2819,7 @@ function applyWindowStyle(result) {
         #notes-editor:focus {
             outline: none;
             box-shadow: none;
-            border: 2px solid var(--selection);
+            border: 2px solid var(--accent);
         }
 
         #notes-editor:not(:focus) {
@@ -2875,6 +2879,10 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize}px;
             outline: none;
             min-width: 200px;
+        }
+
+        #notes-find-input:focus {
+            border-color: var(--accent);
         }
 
         #notes-find-counter {
@@ -3038,7 +3046,7 @@ function applyWindowStyle(result) {
             margin: 0;
             padding: 12px;
             background-color: var(--bg);
-            border: none;
+            border: 2px solid transparent;
             color: var(--fg);
             font-family: monospace;
             font-size: ${result.fontSize}px;
@@ -3053,6 +3061,7 @@ function applyWindowStyle(result) {
 
         .jupyter-code-editable:focus {
             outline: none;
+            border-color: var(--accent);
         }
 
         .jupyter-code-editable:not(:focus) {
@@ -3109,13 +3118,19 @@ function applyWindowStyle(result) {
             width: 100%;
             height: 100%;
             padding: 12px;
-            border: none;
+            border: 2px solid transparent;
             background-color: var(--bg);
             color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
             font-size: ${result.fontSize}px;
             resize: none;
             overflow: auto;
+            box-sizing: border-box;
+        }
+
+        #notes-swagger-editor:focus {
+            outline: none;
+            border-color: var(--accent);
         }
 
         #notes-swagger-editor:not(:focus) {
@@ -3232,6 +3247,10 @@ function applyWindowStyle(result) {
             box-sizing: border-box;
             outline: none;
             box-shadow: 0 0 0 1px rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
+        }
+
+        .json-inline-editor:focus {
+            border-color: var(--accent);
         }
 
         .json-colon,

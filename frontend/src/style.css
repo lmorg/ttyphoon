@@ -202,7 +202,7 @@ body {
 }
 
 .tty-listbox-search-input:focus {
-    border-color: var(--terminal-menu-fg);
+    border-color: var(--terminal-accent);
 }
 
 .tty-menu-row {

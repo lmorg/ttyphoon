@@ -508,6 +508,11 @@ export function getSwaggerUIStyles(colors, fontSize) {
             font-size: 0.9em;
         }
 
+        .swagger-url-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
         .swagger-send-btn {
             padding: 6px 16px;
             background-color: rgba(${greenRgb}, 0.15);
@@ -657,6 +662,11 @@ export function getSwaggerUIStyles(colors, fontSize) {
             font-family: var(--font-family);
             font-size: 0.85em;
             resize: vertical;
+        }
+
+        .swagger-body-editor:focus {
+            outline: none;
+            border-color: var(--accent);
         }
 
         /* Parameters Table */
