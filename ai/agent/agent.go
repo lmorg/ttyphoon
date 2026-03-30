@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
@@ -28,14 +29,37 @@ type Agent struct {
 }
 
 type Meta struct {
-	CmdLine      string
-	Pwd          string
-	OutputBlock  string
-	NotesDisplay bool
-	Function     string
+	CmdLine     string
+	Pwd         string
+	OutputBlock string
+	Function    string
 }
 
-var allTheAgents = map[string]*Agent{}
+type allTheAgentsT struct {
+	_map   map[string]*Agent
+	_mutex sync.Mutex
+}
+
+func (ata *allTheAgentsT) Get(key string) (*Agent, bool) {
+	ata._mutex.Lock()
+	defer ata._mutex.Unlock()
+	agent, ok := ata._map[key]
+	return agent, ok
+}
+
+func (ata *allTheAgentsT) Set(key string, agent *Agent) {
+	ata._mutex.Lock()
+	defer ata._mutex.Unlock()
+	ata._map[key] = agent
+}
+
+func (ata *allTheAgentsT) Delete(key string) {
+	ata._mutex.Lock()
+	defer ata._mutex.Unlock()
+	delete(ata._map, key)
+}
+
+var allTheAgents = allTheAgentsT{_map: map[string]*Agent{}}
 
 func New(renderer types.Renderer, tile types.Tile) {
 	agent := &Agent{
@@ -48,11 +72,11 @@ func New(renderer types.Renderer, tile types.Tile) {
 	agent.setDefaultModels()
 	agent.toolsInit()
 
-	allTheAgents[tile.Id()] = agent
+	allTheAgents.Set(tile.Id(), agent)
 }
 
 func Get(tileId string) *Agent {
-	agent, ok := allTheAgents[tileId]
+	agent, ok := allTheAgents.Get(tileId)
 	if !ok {
 		panic("agent not initialized")
 	}
@@ -81,7 +105,7 @@ func (agent *Agent) Renderer() types.Renderer { return agent.renderer }
 func (agent *Agent) Term() types.Term         { return agent.term }
 
 func Close(tileId string) {
-	agent, ok := allTheAgents[tileId]
+	agent, ok := allTheAgents.Get(tileId)
 	if !ok {
 		return
 	}

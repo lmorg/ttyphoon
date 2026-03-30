@@ -3,12 +3,16 @@ package tmux
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
 )
+
+type terminalPaneTabsProvider interface {
+	TerminalPaneTabs() []types.TerminalPaneTab
+	ActivateTerminalPaneTab(string)
+}
 
 func fnKeyNewWindow(tmux *Tmux) error {
 	_, err := tmux.SendCommand([]byte("new-window"))
@@ -38,48 +42,145 @@ func fnKeyRenameWindow(tmux *Tmux) error {
 }
 
 func fnKeyChooseWindowFromList(tmux *Tmux) error {
-	windowNames := make([]string, len(tmux.appWindow.Tabs))
-	for i := range tmux.appWindow.Tabs {
-		windowNames[i] = tmux.appWindow.Tabs[i].Name()
+	type menuEntry struct {
+		name string
+		id   string
+		aux  bool
 	}
 
-	_highlightCallback := func(i int) {
-		if tmux.activeWindow.id == tmux.appWindow.Tabs[i].Id() {
+	entries := make([]menuEntry, 0, len(tmux.appWindow.Tabs)+1)
+	for i := range tmux.appWindow.Tabs {
+		entries = append(entries, menuEntry{
+			name: tmux.appWindow.Tabs[i].Name(),
+			id:   tmux.appWindow.Tabs[i].Id(),
+		})
+	}
+
+	if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+		extraTabs := provider.TerminalPaneTabs()
+		for i := range extraTabs {
+			if extraTabs[i].ID == "" {
+				continue
+			}
+			entries = append(entries, menuEntry{
+				name: extraTabs[i].Name,
+				id:   extraTabs[i].ID,
+				aux:  true,
+			})
+		}
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	windowNames := make([]string, len(entries))
+	for i := range entries {
+		windowNames[i] = entries[i].name
+	}
+
+	activeWindow := tmux.activeWindow.id
+	previewWindowID := ""
+
+	restorePreviewCursor := func() {
+		if previewWindowID == "" {
 			return
 		}
 
-		oldTerm := tmux.activeWindow.activePane.term
-		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
+		win := tmux.wins.Get(previewWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
+		}
+
+		previewWindowID = ""
+	}
+
+	_highlightCallback := func(i int) {
+		if i < 0 || i >= len(entries) {
+			return
+		}
+
+		entry := entries[i]
+		if entry.aux {
+			restorePreviewCursor()
+			if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+				provider.ActivateTerminalPaneTab(entry.id)
+			}
+			return
+		}
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
+
+		targetWindowID := entry.id
+		if tmux.activeWindow.id == targetWindowID {
+			return
+		}
+
+		// Ensure the previously previewed window cursor is restored before
+		// previewing another one.
+		restorePreviewCursor()
+
+		err := tmux.SelectAndResizeWindow(targetWindowID, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		}
 
-		win := tmux.wins.Get(tmux.appWindow.Tabs[i].Id())
-		if win != nil {
+		win := tmux.wins.Get(targetWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
 			win.activePane.term.ShowCursor(false)
+			previewWindowID = targetWindowID
 		}
-
-		//windows[i].activePane.Term().ShowCursor(false)
-		go func() {
-			// this is a kludge to avoid the cursor showing as you switch windows
-			time.Sleep(500 * time.Millisecond)
-			oldTerm.ShowCursor(true)
-		}()
 	}
 
 	_chooseCallback := func(i int) {
-		err := tmux.SelectAndResizeWindow(tmux.appWindow.Tabs[i].Id(), tmux.renderer.GetWindowSizeCells())
+		if i < 0 || i >= len(entries) {
+			return
+		}
+
+		restorePreviewCursor()
+
+		entry := entries[i]
+		if entry.aux {
+			if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+				provider.ActivateTerminalPaneTab(entry.id)
+			}
+			return
+		}
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
+
+		targetWindowID := entry.id
+		err := tmux.SelectAndResizeWindow(targetWindowID, tmux.renderer.GetWindowSizeCells())
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+
+		win := tmux.wins.Get(targetWindowID)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
 		}
 		//tmux.renderer.UpdateNotes(tmux.activeWindow.ActivePane())
 	}
 
-	activeWindow := tmux.activeWindow.id
 	_cancelCallback := func(_ int) {
+		restorePreviewCursor()
+
+		if provider, ok := tmux.renderer.(terminalPaneTabsProvider); ok {
+			provider.ActivateTerminalPaneTab("__tmux__")
+		}
+
 		err := tmux.selectWindow(activeWindow)
 		if err != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+
+		win := tmux.wins.Get(activeWindow)
+		if win != nil && win.activePane != nil && win.activePane.term != nil {
+			win.activePane.term.ShowCursor(true)
 		}
 	}
 

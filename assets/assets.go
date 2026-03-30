@@ -25,27 +25,11 @@ const (
 	ICON_ERROR    = "icon-error.bmp"
 	ICON_DOWN     = "icon-down.bmp"
 	ICON_QUESTION = "icon-question.bmp"
-
-	TYPEFACE    = "Hasklig-Regular.ttf"
-	TYPEFACE_B  = "Hasklig-Bold.ttf"
-	TYPEFACE_BI = "Hasklig-BoldIt.ttf"
-	TYPEFACE_I  = "Hasklig-It.ttf"
-	TYPEFACE_L  = "Hasklig-Light.ttf"
-	TYPEFACE_LI = "Hasklig-LightIt.ttf"
-
-	EMOJI        = "NotoColorEmoji-emojicompat.ttf"
-	FONT_AWESOME = "Font Awesome 6 Free-Solid-900.otf"
-
-	GLAMOUR_STYLE_DARK  = "md-glamour-dark.json"
-	GLAMOUR_STYLE_LIGHT = "md-glamour-light.json"
 )
 
 //go:embed bell.mp3
 //go:embed icon.bmp
-//go:embed *.ttf
-//go:embed *.otf
 //go:embed icon-*.bmp
-//go:embed *.json
 var embedFs embed.FS
 
 var assets map[string][]byte

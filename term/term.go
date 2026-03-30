@@ -69,7 +69,7 @@ type Term struct {
 	// state
 	_vtMode          _stateVtMode
 	_insertOrReplace _stateIrmT
-	_hasFocus        bool
+	_isFocused       bool
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
@@ -184,9 +184,11 @@ func (term *Term) reset(size *types.XY) {
 	term._normBuf = term.makeScreen()
 	term._altBuf = term.makeScreen()
 	term.eraseScrollBack()
-	term.historyDb = sbh.New(term.tile.Id(), func(err error) {
-		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	})
+	if term.tile != nil {
+		term.historyDb = sbh.New(term.tile.Id(), func(err error) {
+			term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		})
+	}
 
 	term._tabWidth = 8
 	term.csiResetTabStops()
@@ -356,12 +358,18 @@ func (term *Term) updateScrollback() {
 	if term._scrollOffset < 0 {
 		term._scrollOffset = 0
 	}
+
+	term.renderer.TriggerRedraw()
 }
 
-func (term *Term) HasFocus(state bool) {
-	term._hasFocus = state
+func (term *Term) SetFocus(state bool) {
+	term._isFocused = state
 	//term._slowBlinkState = true
 	term.renderer.SetBlinkState(true)
+}
+
+func (term *Term) IsFocused() bool {
+	return term._isFocused
 }
 
 func (term *Term) MakeVisible(visible bool) {

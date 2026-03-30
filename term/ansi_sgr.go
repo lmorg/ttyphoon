@@ -12,9 +12,10 @@ import (
 	- https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
 */
 
-func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
-	for _, i := range stack {
-		switch i {
+func lookupSgr(sgr *types.Sgr, stack []int32) {
+	for i := 0; i < len(stack); i++ {
+		n := stack[i]
+		switch n {
 		case -1, 0: // Normal (default), VT100
 			sgr.Reset()
 
@@ -91,11 +92,12 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			sgr.Fg = types.SGR_COLOR_WHITE
 
 		case 38:
-			colour := _sgrEnhancedColour(n, stack)
+			colour, consume := _sgrEnhancedColour(stack, i)
 			if colour != nil {
 				sgr.Fg = colour
 			}
-			return
+			i += consume
+			continue
 
 		case 39: // fg default
 			sgr.Fg = types.SGR_COLOR_FOREGROUND
@@ -129,11 +131,12 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 			sgr.Bg = types.SGR_COLOR_WHITE
 
 		case 48:
-			colour := _sgrEnhancedColour(n, stack)
+			colour, consume := _sgrEnhancedColour(stack, i)
 			if colour != nil {
 				sgr.Bg = colour
 			}
-			return
+			i += consume
+			continue
 
 		case 49: // bg default
 			sgr.Bg = types.SGR_COLOR_BACKGROUND
@@ -200,34 +203,44 @@ func lookupSgr(sgr *types.Sgr, n int32, stack []int32) {
 	}
 }
 
-func _sgrEnhancedColour(n int32, stack []int32) *types.Colour {
-	if len(stack) < 2 {
+func _sgrEnhancedColour(stack []int32, index int) (*types.Colour, int) {
+	n := stack[index]
+
+	if len(stack) <= index+1 {
 		log.Printf("SGR error: too few parameters in %d: %v", n, stack)
-		return nil
+		return nil, 0
 	}
-	switch stack[1] {
+
+	switch stack[index+1] {
 	case 5:
-		colour, ok := types.SGR_COLOR_256[stack[2]]
+		if len(stack) <= index+2 {
+			log.Printf("WARNING: SGR error: too few parameters in %d (256): %v", n, stack)
+			return nil, 0
+		}
+
+		colour, ok := types.SGR_COLOR_256[stack[index+2]]
 		if !ok {
 			log.Printf("WARNING: SGR error: 256 value does not exist in %d: %v", n, stack)
-			return nil
+			return nil, 0
 		}
-		return colour
+
+		return colour, 2
 
 	case 2:
-		if len(stack) != 5 {
+		if len(stack) <= index+4 {
 			log.Printf("WARNING: SGR error: too few parameters in %d (24bit): %v", n, stack)
-			return nil
+			return nil, 0
 		}
+
 		return &types.Colour{
-			Red:   byte(stack[2]),
-			Green: byte(stack[3]),
-			Blue:  byte(stack[4]),
-		}
+			Red:   byte(stack[index+2]),
+			Green: byte(stack[index+3]),
+			Blue:  byte(stack[index+4]),
+		}, 4
 
 	default:
 		log.Printf("WARNING: SGR error: unexpected value in %d: %v", n, stack)
-		return nil
+		return nil, 0
 	}
 
 }

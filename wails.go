@@ -12,113 +12,180 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
-	ttyphoon "github.com/lmorg/ttyphoon/app"
+	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
+	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	"github.com/lmorg/ttyphoon/utils/swagger"
+	"github.com/lmorg/ttyphoon/window/backend"
+	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.design/x/clipboard"
 )
 
 //go:embed all:frontend/dist
 var wailsAssets embed.FS
 
-type pStructT struct {
-	inputBox *dispatcher.PInputBoxT
-	markdown *dispatcher.PMarkdownT
-	preview  *dispatcher.PPreviewT
-	notes    *dispatcher.PNotesT
-}
-
 // App struct
 type WApp struct {
-	ctx         context.Context
-	payload     *dispatcher.PayloadT
-	window      dispatcher.WindowTypeT
-	mdBaseDir   string
-	projRoot    string
-	usrNotesDir string
-	homeDir     string
-	globalNotes string
-	historyDir  string
-	visible     bool
-	ipc         *dispatcher.IpcT
-	msgPipe     chan *dispatcher.IpcMessageT
-	ps          *pStructT
-	notesKills  map[string]func()
+	ctx           context.Context
+	mdBaseDir     string
+	projRoot      string
+	usrNotesDir   string
+	homeDir       string
+	globalNotes   string
+	historyDir    string
+	visible       bool
+	notesKills    map[string]func()
+	notesStickies map[string]types.Notification
 }
 
-var WWindowTsBindings = []struct {
-	Value  dispatcher.WindowTypeT
-	TSName string
-}{
-	{dispatcher.WindowSdl, "sdl"},
-	{dispatcher.WindowInputBox, "inputBox"},
-	{dispatcher.WindowMarkdown, "markdown"},
-	{dispatcher.WindowPreview, "preview"},
-	{dispatcher.WindowNotes, "notes"},
+func docsDir(function string) string {
+	path := fmt.Sprintf("%s/Documents/%s/%s/", xdg.Home, app.DirName, function)
+
+	/*err :=*/
+	_ = os.MkdirAll(path, 0700)
+	/*if err != nil {
+		return err
+	}*/
+
+	return path
+}
+
+func findProjectRoot(cwd string) string {
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+
+	pwd := cwd
+	home, _ := os.UserHomeDir()
+	for {
+		if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
+			return pwd
+		}
+		parent := filepath.Dir(cwd)
+		if parent == pwd || parent == home {
+			return ""
+		}
+		pwd = parent
+	}
 }
 
 // NewApp creates a new App application struct
-func NewWailsApp(window dispatcher.WindowTypeT, payload *dispatcher.PayloadT, ps *pStructT) *WApp {
+func NewWailsApp() *WApp {
 	a := &WApp{
-		window:     window,
-		payload:    payload,
-		msgPipe:    make(chan *dispatcher.IpcMessageT),
-		ps:         ps,
-		visible:    true,
-		notesKills: map[string]func(){},
-	}
-
-	a.homeDir, _ = os.UserHomeDir()
-
-	switch window {
-	case dispatcher.WindowNotes:
-		a.projRoot = ps.notes.ProjectRoot
-		if a.projRoot == "" {
-			a.projRoot, _ = os.Getwd()
-		}
-
-		sep := string(filepath.Separator)
-		a.usrNotesDir = ps.notes.UserNotes
-		a.globalNotes = filepath.Clean(fmt.Sprintf("%s%s..%s", a.usrNotesDir, sep, sep)) + sep
-		a.historyDir = a.globalNotes + "history"
+		visible:       true,
+		notesKills:    map[string]func(){},
+		notesStickies: map[string]types.Notification{},
+		homeDir:       xdg.Home,
+		projRoot:      findProjectRoot(""),
+		//usrNotesDir: userDocs(),
+		globalNotes: docsDir("notes"),
 	}
 
 	return a
 }
 
-func (a *WApp) GetWindowType() string {
-	return string(a.window)
+type WindowStyleT struct {
+	Colours          *ColoursT `json:"colors"`
+	StatusBar        bool      `json:"statusBar"`
+	FontFamily       string    `json:"fontFamily"`
+	FontSize         int       `json:"fontSize"`
+	AdjustCellWidth  int       `json:"adjustCellWidth"`
+	AdjustCellHeight int       `json:"adjustCellHeight"`
 }
 
-func (a *WApp) GetWindowStyle() dispatcher.WindowStyleT {
-	return a.payload.Window
+type ColoursT struct {
+	Fg            types.Colour `json:"fg"`
+	Bg            types.Colour `json:"bg"`
+	Black         types.Colour `json:"black"`
+	Red           types.Colour `json:"red"`
+	Green         types.Colour `json:"green"`
+	Yellow        types.Colour `json:"yellow"`
+	Blue          types.Colour `json:"blue"`
+	Magenta       types.Colour `json:"magenta"`
+	Cyan          types.Colour `json:"cyan"`
+	White         types.Colour `json:"white"`
+	BlackBright   types.Colour `json:"blackBright"`
+	RedBright     types.Colour `json:"redBright"`
+	GreenBright   types.Colour `json:"greenBright"`
+	YellowBright  types.Colour `json:"yellowBright"`
+	BlueBright    types.Colour `json:"blueBright"`
+	MagentaBright types.Colour `json:"magentaBright"`
+	CyanBright    types.Colour `json:"cyanBright"`
+	WhiteBright   types.Colour `json:"whiteBright"`
+	Selection     types.Colour `json:"selection"`
+	Link          types.Colour `json:"link"`
+	Error         types.Colour `json:"error"`
 }
 
-func (a *WApp) GetParameters() any {
-	return a.payload.Parameters
-}
-
-func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
-	err := a.ipc.Send(&dispatcher.IpcMessageT{
-		EventName:  eventName,
-		Parameters: parameters,
-	})
-	if err != nil {
-		log.Println(err)
+func NewWindowStyle() *WindowStyleT {
+	fontFamily := config.Config.TypeFace.FontName
+	if fontFamily == "" {
+		fontFamily = "Fira Code"
 	}
+	return &WindowStyleT{
+		Colours: &ColoursT{
+			Fg:            *types.SGR_DEFAULT.Fg,
+			Bg:            *types.SGR_DEFAULT.Bg,
+			Black:         *types.SGR_COLOR_BLACK,
+			Red:           *types.SGR_COLOR_RED,
+			Green:         *types.SGR_COLOR_GREEN,
+			Yellow:        *types.SGR_COLOR_YELLOW,
+			Blue:          *types.SGR_COLOR_BLUE,
+			Magenta:       *types.SGR_COLOR_MAGENTA,
+			Cyan:          *types.SGR_COLOR_CYAN,
+			White:         *types.SGR_COLOR_WHITE,
+			BlackBright:   *types.SGR_COLOR_BLACK_BRIGHT,
+			RedBright:     *types.SGR_COLOR_RED_BRIGHT,
+			GreenBright:   *types.SGR_COLOR_GREEN_BRIGHT,
+			YellowBright:  *types.SGR_COLOR_YELLOW_BRIGHT,
+			BlueBright:    *types.SGR_COLOR_BLUE_BRIGHT,
+			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
+			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
+			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
+			Selection:     *types.COLOR_SELECTION,
+			Link:          *types.SGR_COLOR_BLUE,
+			Error:         *types.COLOR_ERROR,
+		},
+		StatusBar:        config.Config.Window.StatusBar,
+		FontFamily:       fmt.Sprintf(`"%s", monospace`, fontFamily),
+		FontSize:         config.Config.TypeFace.FontSize,
+		AdjustCellWidth:  config.Config.TypeFace.AdjustCellWidth,
+		AdjustCellHeight: config.Config.TypeFace.AdjustCellHeight,
+	}
+}
+
+func (a *WApp) GetWindowStyle() WindowStyleT {
+	return *NewWindowStyle()
+}
+
+func (a *WApp) GetTerminalGlyphSize() *types.XY {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if ok {
+		glyphSize := renderer.GetGlyphSize()
+		if glyphSize != nil {
+			return glyphSize
+		}
+	}
+
+	return nil
 }
 
 func (a *WApp) WindowShow() {
 	a.visible = true
-	runtime.WindowSetPosition(a.ctx, 0, 0)
 	runtime.WindowShow(a.ctx)
-	runtime.WindowSetPosition(a.ctx, 0, 0)
 }
 
 func (a *WApp) WindowHide() {
@@ -135,19 +202,322 @@ func (a *WApp) WindowShowHide() {
 	}
 }
 
-func (a *WApp) SendVisualInputBox(value string, notesCheckbox bool) {
-	err := a.ipc.Send(&dispatcher.IpcMessageT{
-		EventName: "ok",
-		Parameters: map[string]string{
-			"value":        value,
-			"notesDisplay": fmt.Sprintf("%v", notesCheckbox),
-		},
-	})
-	if err != nil {
-		log.Println(err.Error())
+func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
 	}
 
-	runtime.Quit(a.ctx)
+	state := types.BUTTON_RELEASED
+	if pressed {
+		state = types.BUTTON_PRESSED
+	}
+
+	renderer.HandleMouseButton(cellX, cellY, types.MouseButtonT(button), uint8(clicks), state)
+}
+
+func (a *WApp) TerminalMouseWheel(cellX, cellY, moveX, moveY int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleMouseWheel(cellX, cellY, moveX, moveY)
+}
+
+func (a *WApp) TerminalMouseMotion(cellX, cellY, relX, relY, state int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleMouseMotion(cellX, cellY, relX, relY, state)
+}
+
+func (a *WApp) TerminalSetFocus(focused bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	tile := renderer.ActiveTile()
+	if tile == nil || tile.GetTerm() == nil {
+		return
+	}
+
+	tile.GetTerm().SetFocus(focused)
+	renderer.TriggerRedraw()
+}
+
+func (a *WApp) TerminalRequestRedraw() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.TriggerRedraw()
+}
+
+func (a *WApp) TerminalMenuHighlight(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuHighlight(menuID, index)
+}
+
+func (a *WApp) TerminalMenuSelect(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuSelect(menuID, index)
+}
+
+func (a *WApp) TerminalMenuCancel(menuID, index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.MenuCancel(menuID, index)
+}
+
+func (a *WApp) TerminalTextInput(text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleTextInput(text)
+}
+
+func (a *WApp) TerminalResize(cols, rows int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.WindowResized(cols, rows)
+	renderer.TriggerRedraw()
+}
+
+func (a *WApp) TerminalSetGlyphSize(width, height int32) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.SetGlyphSize(width, height)
+}
+
+func (a *WApp) TerminalCopyImageDataURL(dataURL string) error {
+	if dataURL == "" {
+		return fmt.Errorf("empty image data URL")
+	}
+
+	comma := strings.IndexByte(dataURL, ',')
+	if comma <= 0 || comma >= len(dataURL)-1 {
+		return fmt.Errorf("invalid image data URL")
+	}
+
+	meta := dataURL[:comma]
+	if !strings.Contains(meta, ";base64") {
+		return fmt.Errorf("image data URL is not base64 encoded")
+	}
+
+	png, err := base64.StdEncoding.DecodeString(dataURL[comma+1:])
+	if err != nil {
+		return fmt.Errorf("decode image data URL: %w", err)
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer unavailable")
+	}
+
+	return renderer.CopyImageToClipboard(png)
+}
+
+func (a *WApp) RunAIAgentWithStream(tileID, prompt string) error {
+	agt := agent.Get(tileID)
+	if agt == nil {
+		return fmt.Errorf("agent not found for tile %s", tileID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	_, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "aiResponseStream", chunk)
+		}
+	})
+
+	return err
+}
+
+func (a *WApp) TerminalGetTabs() []map[string]any {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return nil
+	}
+
+	tabs := renderer.GetWindowTabs()
+	out := make([]map[string]any, 0, len(tabs))
+	for i := range tabs {
+		out = append(out, map[string]any{
+			"id":     tabs[i].ID,
+			"name":   tabs[i].Name,
+			"index":  tabs[i].Index,
+			"active": tabs[i].Active,
+		})
+	}
+
+	return out
+}
+
+func (a *WApp) TerminalSelectWindow(windowID string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.SelectWindow(windowID)
+}
+
+func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.HandleKeyPress(key, ctrl, alt, shift, meta)
+}
+
+func (a *WApp) TerminalInputBoxSubmit(id int64, value string, isOk bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.InputBoxSubmit(id, value, isOk)
+}
+
+func (a *WApp) startTerminalWindow() {
+	renderer, size := backend.Initialise()
+
+	tmuxClient, err := tmux.NewStartSession(renderer, size, tmux.START_ATTACH_SESSION)
+	if err != nil {
+		if !strings.HasPrefix(err.Error(), "no sessions") {
+			log.Println(err)
+			return
+		}
+
+		cdHome()
+
+		tmuxClient, err = tmux.NewStartSession(renderer, size, tmux.START_NEW_SESSION)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx)
+}
+
+func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	switch eventName {
+	case "terminal-extra-tab-state":
+		tabID := strings.TrimSpace(parameters["id"])
+		if tabID == "" {
+			return
+		}
+
+		enabled := strings.EqualFold(parameters["enabled"], "true")
+		if !enabled {
+			renderer.SetTerminalPaneTabs(nil)
+			return
+		}
+
+		tabName := strings.TrimSpace(parameters["name"])
+		if tabName == "" {
+			tabName = tabID
+		}
+
+		active := strings.EqualFold(parameters["active"], "true")
+		renderer.SetTerminalPaneTabs([]types.TerminalPaneTab{{
+			ID:     tabID,
+			Name:   tabName,
+			Active: active,
+		}})
+
+	case "terminal-notify":
+		message := strings.TrimSpace(parameters["message"])
+		if message == "" {
+			return
+		}
+
+		switch strings.ToLower(strings.TrimSpace(parameters["level"])) {
+		case "error":
+			renderer.DisplayNotification(types.NOTIFY_ERROR, message)
+		case "warn", "warning":
+			renderer.DisplayNotification(types.NOTIFY_WARN, message)
+		case "debug":
+			renderer.DisplayNotification(types.NOTIFY_DEBUG, message)
+		default:
+			renderer.DisplayNotification(types.NOTIFY_INFO, message)
+		}
+
+	case "terminal-sticky-create":
+		id := strings.TrimSpace(parameters["id"])
+		message := strings.TrimSpace(parameters["message"])
+		if id == "" || message == "" {
+			return
+		}
+		var notifType types.NotificationType
+		switch strings.ToLower(strings.TrimSpace(parameters["level"])) {
+		case "error":
+			notifType = types.NOTIFY_ERROR
+		case "warn", "warning":
+			notifType = types.NOTIFY_WARN
+		default:
+			notifType = types.NOTIFY_INFO
+		}
+		if existing, ok := a.notesStickies[id]; ok {
+			existing.Close()
+			delete(a.notesStickies, id)
+		}
+		sticky := renderer.DisplaySticky(notifType, message, func() {})
+		a.notesStickies[id] = sticky
+
+	case "terminal-sticky-update":
+		id := strings.TrimSpace(parameters["id"])
+		message := strings.TrimSpace(parameters["message"])
+		if id == "" || message == "" {
+			return
+		}
+		if sticky, ok := a.notesStickies[id]; ok {
+			sticky.SetMessage(message)
+		}
+
+	case "terminal-sticky-close":
+		id := strings.TrimSpace(parameters["id"])
+		if id == "" {
+			return
+		}
+		if sticky, ok := a.notesStickies[id]; ok {
+			sticky.Close()
+			delete(a.notesStickies, id)
+		}
+	}
 }
 
 func (a *WApp) GetLanguageDescriptions(language string) []string {
@@ -229,9 +599,9 @@ func (a *WApp) GetImage(path string) string {
 		return "error: extension not found"
 	}
 
-	if path[0] != '/' {
-		// TODO: this isn't Windows compatible
-		path = a.mdBaseDir + "/" + path
+	path = string(filepath.Separator) + path
+	if _, err := os.Stat(path); err != nil {
+		path = a.mdBaseDir + path
 	}
 
 	f, err := os.Open(path)
@@ -257,14 +627,28 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
-	var files []string
+	files := []string{}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return files
+	}
+
+	tile := renderer.ActiveTile()
+	if tile == nil {
+		return files
+	}
+
+	a.projRoot = findProjectRoot(tile.Pwd())
+	a.globalNotes = docsDir("notes")
+	a.usrNotesDir = a.globalNotes + tile.GroupName() + "/"
 
 	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
 	cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
 
 	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
 	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
-	files = append(files, listFiles(a.historyDir, "HISTORY")...)
+	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if a.projRoot == "" {
 		return files
@@ -285,7 +669,8 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
+			strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
 			filename := strings.Replace(path, a.projRoot, "$PROJ", 1)
 			files = append(files, filename)
 		}
@@ -298,7 +683,20 @@ func (a *WApp) ListFiles() []string {
 }
 
 func listFiles(path string, varName string) (files []string) {
-	glob, err := filepath.Glob(fmt.Sprintf("%s/*.md", path))
+	files = listFilesWithGlob(path, varName, "*.md")
+	files = append(files, listFilesWithGlob(path, varName, "*.json")...)
+	files = append(files, listFilesWithGlob(path, varName, "*.yaml")...)
+	files = append(files, listFilesWithGlob(path, varName, "*.yml")...)
+	slices.Sort(files)
+	return files
+}
+
+func listFilesWithGlob(path string, varName string, pattern string) (files []string) {
+	if path == "" {
+		return []string{}
+	}
+
+	glob, err := filepath.Glob(fmt.Sprintf("%s/%s", path, pattern))
 	if err != nil {
 		log.Println(err)
 		return
@@ -353,6 +751,54 @@ func (a *WApp) SaveFile(filename, contents string) error {
 	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
+func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
+	filename = a.filePath(filename)
+
+	b, err := base64.StdEncoding.DecodeString(base64Contents)
+	if err != nil {
+		return fmt.Errorf("decode base64 file contents: %w", err)
+	}
+
+	return os.WriteFile(filename, b, 0644)
+}
+
+func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save Image",
+		DefaultFilename: defaultFilename,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Images",
+				Pattern:     "*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
+
+func (a *WApp) WindowPrint() {
+	runtime.WindowPrint(a.ctx)
+}
+
+type ClipboardData struct {
+	Text  string `json:"text"`
+	Image string `json:"image"`
+}
+
+// GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
+func (a *WApp) GetClipboardData() ClipboardData {
+	b := clipboard.Read(clipboard.FmtImage)
+	if len(b) != 0 {
+		return ClipboardData{Image: base64.StdEncoding.EncodeToString(b)}
+	}
+
+	return ClipboardData{Text: string(clipboard.Read(clipboard.FmtText))}
+}
+
 func (a *WApp) RenameFile(oldPath, newPath string) error {
 	oldPath = a.filePath(oldPath)
 	newPath = a.filePath(newPath)
@@ -378,135 +824,86 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 	return result
 }
 
-// --------------------
+func (a *WApp) SendToTerminal(content string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
 
-func (a *WApp) ipcRespFunc(msg *dispatcher.IpcMessageT) {
-	a.msgPipe <- msg
+	renderer.ActiveTile().GetTerm().Reply([]byte(content))
 }
+
+// SwaggerRequest executes an HTTP request for a Swagger/OpenAPI endpoint.
+// All request logic lives in utils/swagger; this method is a thin binding.
+func (a *WApp) SwaggerRequest(req swagger.RequestT) swagger.ResponseT {
+	return swagger.Execute(a.ctx, req)
+}
+
+func (a *WApp) GetAppTitle() string { return appTitle() }
+
+// --------------------
 
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	runtime.WindowSetPosition(ctx, int(a.payload.Window.Pos.X), int(a.payload.Window.Pos.Y))
+	globalhotkeys.Register(func(key string) {
+		switch key {
+		case "F12":
+			a.WindowShowHide()
+		}
+	})
 }
 
 func (a *WApp) domReady(ctx context.Context) {
-	go func() {
-		for msg := range a.msgPipe {
-			switch {
-			case msg.Error != nil:
-				runtime.EventsEmit(a.ctx, "error", msg.Error)
-			case msg.EventName == "focus":
-				//runtime.WindowShow(ctx)
-				a.WindowShow()
-			case msg.EventName == "notesToggleShowHide":
-				a.WindowShowHide()
-			case msg.EventName == "notesFocus":
-				a.WindowShow()
-				fallthrough
-			case msg.EventName == "notesUpdatePaths":
-				a.projRoot = msg.Parameters["projectRoot"]
-				a.usrNotesDir = msg.Parameters["userNotes"]
-				runtime.EventsEmit(a.ctx, "updateTitle", msg.Parameters["title"])
-				runtime.WindowExecJS(a.ctx, `window.refreshFiles();`)
-			default:
-				runtime.EventsEmit(a.ctx, msg.EventName, msg.Parameters)
-			}
-		}
-	}()
-
-	switch a.window {
-	case dispatcher.WindowHistory:
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "focus"})
-		if err != nil {
-			log.Println(err)
-		}
-	case dispatcher.WindowNotes:
-		runtime.EventsEmit(a.ctx, "updateTitle", a.ps.notes.Title)
-	}
+	go a.startTerminalWindow()
 }
 
-func (a *WApp) beforeClose(ctx context.Context) bool {
-	switch a.window {
-	case dispatcher.WindowHistory:
-		err := a.ipc.Send(&dispatcher.IpcMessageT{EventName: "closeMenu"})
-		if err != nil {
-			log.Println(err)
-		}
-	case dispatcher.WindowNotes:
-		a.WindowHide()
-		return true
-	}
-
-	return false
+func appTitle() string {
+	return fmt.Sprintf("%s: %s", app.Name(), app.TagLine())
 }
 
-func startWails(window dispatcher.WindowTypeT) {
-	payload := new(dispatcher.PayloadT)
-	pStruct := &pStructT{}
-	switch window {
-	case dispatcher.WindowInputBox:
-		pStruct.inputBox = new(dispatcher.PInputBoxT)
-		payload.Parameters = pStruct.inputBox
-	case dispatcher.WindowMarkdown:
-		pStruct.markdown = new(dispatcher.PMarkdownT)
-		payload.Parameters = pStruct.markdown
-	case dispatcher.WindowPreview:
-		pStruct.preview = new(dispatcher.PPreviewT)
-		payload.Parameters = pStruct.preview
-	case dispatcher.WindowNotes:
-		pStruct.notes = new(dispatcher.PNotesT)
-		payload.Parameters = pStruct.notes
-	default:
-		//payload.Parameters = make(map[string]string)
-	}
+//go:embed build/appicon.png
+var appIcon []byte
 
-	err := dispatcher.GetPayload(payload)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
-
-	// Create an instance of the app structure
-	app := NewWailsApp(window, payload, pStruct)
-
-	ipc, err := dispatcher.ClientConnect(app.ipcRespFunc)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
-	app.ipc = ipc
+func startWails() {
+	wapp := NewWailsApp()
 
 	// Create application with options
-	err = wails.Run(&options.App{
-		Title:             fmt.Sprintf("%s: %s", ttyphoon.Name, payload.Window.Title),
-		Width:             int(payload.Window.Size.X),
-		Height:            int(payload.Window.Size.Y),
-		Frameless:         payload.Window.Frameless,
-		AlwaysOnTop:       payload.Window.AlwaysOnTop,
-		StartHidden:       payload.Window.StartHidden,
-		HideWindowOnClose: payload.Window.HideOnClose,
+	err := wails.Run(&options.App{
+		Title: appTitle(),
+		//Width:             int(payload.Window.Size.X),
+		//Height:            int(payload.Window.Size.Y),
+		AlwaysOnTop:       true,
+		HideWindowOnClose: true,
+		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: wailsAssets,
 		},
 		BackgroundColour: &options.RGBA{
-			R: payload.Window.Colours.Fg.Red,
-			G: payload.Window.Colours.Fg.Green,
-			B: payload.Window.Colours.Fg.Blue,
-			A: 255, //uint8(config.Config.Window.Opacity/100) * 255,
+			R: types.SGR_DEFAULT.Bg.Red,
+			G: types.SGR_DEFAULT.Bg.Green,
+			B: types.SGR_DEFAULT.Bg.Blue,
+			A: 255,
 		},
-		OnStartup:     app.startup,
-		OnDomReady:    app.domReady,
-		OnBeforeClose: app.beforeClose,
-		Bind:          []interface{}{app},
-		EnumBind:      []interface{}{WWindowTsBindings},
-		/*Mac: &mac.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
+		OnStartup:  wapp.startup,
+		OnDomReady: wapp.domReady,
+		Bind:       []any{wapp},
+		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
+		Mac: &mac.Options{
+			TitleBar: mac.TitleBarHiddenInset(),
+			//WindowIsTranslucent:  true,
+			//WebviewIsTransparent: true,
+			About: &mac.AboutInfo{
+				Title:   app.Name(),
+				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
+				Icon:    appIcon,
+			},
 		},
-		Linux: &linux.Options{
+		/*Linux: &linux.Options{
 			WindowIsTranslucent: true,
-		},
+		},*/
 
-		Windows: &windows.Options{
+		/*Windows: &windows.Options{
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 		},*/
@@ -515,6 +912,7 @@ func startWails(window dispatcher.WindowTypeT) {
 	})
 
 	if err != nil {
+		//closeHotkeys()
 		panic(err)
 	}
 }

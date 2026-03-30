@@ -1,0 +1,118 @@
+/* Input box modal */
+.inputbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inputbox-dialog {
+    background: var(--terminal-bg, #1e2228);
+    border: 2px solid var(--terminal-fg, #316db0);
+    color: var(--terminal-fg, #e6edf3);
+    border-radius: 5px;
+    padding: 20px 24px;
+    min-width: 360px;
+    max-width: 560px;
+    width: 50%;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-family: var(--terminal-menu-font);
+}
+
+.inputbox-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--terminal-accent, #99c0d3);
+    word-break: break-word;
+}
+
+.inputbox-input {
+    background: transparent;
+    color: var(--terminal-fg, #e6edf3);
+    border: 1px solid var(--terminal-fg, #316db0);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.inputbox-input:focus {
+    border-color: var(--terminal-accent);
+}
+
+.inputbox-history {
+    background: transparent;
+    color: var(--terminal-fg, #e6edf3);
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 50%;
+    font-family: inherit;
+    font-size: 13px;
+    box-sizing: border-box;
+    display: none;
+    
+    padding: 5px 18px;
+    border-radius: 4px;
+    border: 1px solid var(--terminal-fg, #316db0);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.inputbox-history:focus {
+    outline: none;
+    border-color: var(--terminal-accent);
+}
+
+.inputbox-hint {
+    font-size: 11px;
+    color: var(--terminal-fg, #666);
+    opacity: 0.75;
+}
+
+.inputbox-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.inputbox-btn {
+    padding: 5px 18px;
+    border-radius: 4px;
+    border: 2px solid var(--terminal-fg, #316db0);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--terminal-fg, #e6edf3);
+}
+
+.inputbox-ok {
+    border-color: var(--terminal-fg, #316db0);
+}
+
+.inputbox-ok:hover {
+    border-color: var(--terminal-green, #3d7fc7);
+    color: var(--terminal-green, #3d7fc7);
+    background: var(--terminal-green-20, rgba(61, 127, 199, 0.2));
+}
+
+.inputbox-cancel {
+    border-color: var(--terminal-fg, #99c0d3);
+    color: var(--terminal-fg, #99c0d3);
+}
+
+.inputbox-cancel:hover {
+    border-color: var(--terminal-selection, #316db0);
+    background: var(--terminal-selection-20, rgba(49, 109, 176, 0.2));
+}

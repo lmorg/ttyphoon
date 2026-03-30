@@ -32,7 +32,8 @@ type Term interface {
 	MouseMotion(*XY, *XY, EventIgnoredCallback)
 	MouseHover(*XY)
 	ShowCursor(bool)
-	HasFocus(bool)
+	SetFocus(bool)
+	IsFocused() bool
 	MakeVisible(bool)
 	Search(SearchMode)
 	Match(*XY)

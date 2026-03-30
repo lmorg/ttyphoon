@@ -115,7 +115,7 @@ func (term *Term) csiMoveCursorUpwards(i int32) (overflow int32) {
 	}
 
 	pos := term.curPos()
-	top, _ := term.getScrollingRegionIncOrigin()
+	top, _ := term.getScrollingRegionExcOrigin()
 
 	term._curPos.Y = pos.Y - i
 	if term._curPos.Y < top {
@@ -164,7 +164,7 @@ func (term *Term) csiMoveCursorDownwards(i int32) (overflow int32) {
 	pos := term.curPos()
 	term._curPos.Y = pos.Y + i
 
-	_, bottom := term.getScrollingRegionIncOrigin()
+	_, bottom := term.getScrollingRegionExcOrigin()
 
 	if term._curPos.Y > bottom {
 		overflow = term._curPos.Y - bottom
@@ -270,10 +270,10 @@ func (term *Term) setScrollingRegion(region []int32) {
 	}
 
 	pos := term.curPos()
-	if pos.Y <= region[0] {
+	if pos.Y < term._scrollRegion.Top {
 		term._curPos.Y = term._scrollRegion.Top
 	}
-	if pos.Y >= region[1] {
+	if pos.Y > term._scrollRegion.Bottom {
 		term._curPos.Y = term._scrollRegion.Bottom
 	}
 }
@@ -361,8 +361,8 @@ func (term *Term) _scrollDown(top, bottom, shift int32) {
 
 	screen := term.makeScreen()
 
-	if shift > bottom-top {
-		shift = bottom - top
+	if shift > bottom-top+1 {
+		shift = bottom - top + 1
 	}
 
 	copy(screen[top+shift:], (*term.screen)[top:bottom+1])

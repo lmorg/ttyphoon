@@ -39,7 +39,7 @@ func initClient(c *client.Client) (*Client, error) {
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    app.Name,
+		Name:    app.Name(),
 		Version: app.Version(),
 	}
 

@@ -9,13 +9,19 @@ This will output a hello world program
 ### bash
 
 ```bash
-git commit -am "jupyter: add line numbers to jupyter blocks"
+git status
 ```
 
 ### sh
 
 ```sh
 echo "123"
+```
+
+### murex
+
+```murex
+echo bob -> grep bob
 ```
 
 ## Python 3
@@ -31,7 +37,7 @@ print("hello world")
 This is a Go hello world one-liner
 
 ```go
-log.Println("hello world")
+fmt.Println("hello world")
 ```
 
 And here is a complete program

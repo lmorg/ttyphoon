@@ -2,7 +2,6 @@ package rendersdl
 
 import (
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -18,7 +17,7 @@ func (sr *sdlRender) DrawOutputBlockChrome(tile types.Tile, _start, n int32, c *
 		return
 	}
 	defer sr.renderer.SetRenderTarget(nil)
-	defer sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
+	//defer sr.AddToElementStack(&layer.RenderStackT{texture, nil, nil, true})
 
 	height := n
 	if _start+n >= tile.GetTerm().GetSize().Y {

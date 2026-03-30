@@ -110,17 +110,6 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 	}
 }
 
-func (sr *sdlRender) VisualEditor() {
-	options := &DisplayInputBoxWT{
-		Options: dispatcher.PInputBoxT{Title: "Visual editor"},
-		OkFunc: func(value string) {
-			if value != "" {
-				sr.termWin.Active.GetTerm().Reply([]byte(value))
-			}
-		},
-	}
-	sr.DisplayInputBoxW(options)
-}
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	fn := hotkeys.KeyPress(keyCode, mod)
@@ -144,8 +133,8 @@ func (tw *termWidgetT) eventMouseButton(sr *sdlRender, evt *sdl.MouseButtonEvent
 	}
 
 	tile := sr.getTileFromPxOrActive(evt.X, evt.Y)
-	sr.termWin.Active.GetTerm().HasFocus(false)
-	tile.GetTerm().HasFocus(true)
+	sr.termWin.Active.GetTerm().SetFocus(false)
+	tile.GetTerm().SetFocus(true)
 	sr.termWin.Active = tile
 	sr.cacheBgTexture.Destroy(sr)
 	if sr.tmux != nil {

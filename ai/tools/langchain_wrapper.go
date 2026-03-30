@@ -76,7 +76,7 @@ func (t *Wrapper) Call(ctx context.Context, input string) (response string, err 
 }*/
 
 func invokeDDG() (tools.Tool, error) {
-	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name, app.Version()))
+	return duckduckgo.New(10, fmt.Sprintf("%s/%s", app.Name(), app.Version()))
 }
 
 func invokeScraper() (tools.Tool, error) {

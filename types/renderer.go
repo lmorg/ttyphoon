@@ -1,12 +1,18 @@
 package types
 
+import "context"
+
 type MenuCallbackT func(int)
 
 type MenuItem struct {
 	Title     string
 	Fn        func()
 	Highlight func() func()
-	Icon      rune
+	// WebkitContextHighlightPersistent is set by the webkit renderer for
+	// AddToContextMenu() items so Highlight()'s returned function is treated as a
+	// per-frame draw callback while the item is highlighted.
+	WebkitContextHighlightPersistent bool
+	Icon                             rune
 }
 
 type ContextMenu interface {
@@ -23,10 +29,9 @@ type ContextMenu interface {
 const MENU_SEPARATOR = "-"
 
 type InputBoxCallbackT func(string)
-type InputBoxCallbackWT func(string, bool)
 
 type Renderer interface {
-	Start(*AppWindowTerms, any)
+	Start(*AppWindowTerms, any, context.Context)
 	ShowAndFocusWindow()
 	GetWindowSizeCells() *XY
 	GetGlyphSize() *XY
@@ -34,11 +39,13 @@ type Renderer interface {
 	SetBlinkState(bool)
 	PrintCell(Tile, *Cell, *XY)
 	PrintRow(Tile, []*Cell, *XY)
+	DrawFrame(tile Tile)
 	DrawGaugeH(tile Tile, topLeft *XY, width int32, value, max int, c *Colour)
 	DrawGaugeV(tile Tile, topLeft *XY, height int32, value, max int, c *Colour)
 	DrawTable(Tile, *XY, int32, []int32)
 	DrawHighlightRect(Tile, *XY, *XY)
 	DrawRectWithColour(Tile, *XY, *XY, *Colour, bool)
+	DrawRectWithColourAndBorder(Tile, *XY, *XY, *Colour, bool, bool)
 	DrawOutputBlockChrome(Tile, int32, int32, *Colour, bool)
 	GetWindowTitle() string
 	SetWindowTitle(string)
@@ -60,9 +67,9 @@ type Renderer interface {
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
-	//ShowPreview(string)
-	//HidePreview()
 	NotesCreateAndOpen(filename, contents string)
+	EmitAIResponseChunk(chunk string)
+	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	Close()
 }
 

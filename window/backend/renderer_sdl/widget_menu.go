@@ -10,7 +10,6 @@ import (
 	"github.com/lmorg/ttyphoon/utils/find"
 	"github.com/lmorg/ttyphoon/utils/runewidth"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
-	"github.com/lmorg/ttyphoon/window/backend/renderer_sdl/layer"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -167,6 +166,9 @@ func (sr *sdlRender) DisplayMenu(title string, options []string, highlightCallba
 	sr.displayMenu(title, options, nil, highlightCallback, selectCallback, cancelCallback)
 }
 
+func (sr *sdlRender) DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32) {
+	// No-op for SDL renderer. SDL fullscreen display would need separate window management.
+}
 func (sr *sdlRender) displayMenu(title string, options []string, icons []rune, highlightCallback, selectCallback, cancelCallback types.MenuCallbackT) {
 	if len(options) == 0 {
 		sr.DisplayNotification(types.NOTIFY_WARN, "Nothing to show in menu")
@@ -695,7 +697,7 @@ func (sr *sdlRender) renderMenu(windowRect *sdl.Rect) {
 		}
 	}
 
-	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
+	//sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
 
 	if len(sr.menu._menuOptions) > sr.menu.maxHeight && sr.menu.opacity == _INPUT_ALPHA {
@@ -782,7 +784,7 @@ func (menu *menuWidgetT) _renderInputBox(filter string, curPos int32, sr *sdlRen
 	sr._renderNotificationSurface(surface, rect)
 	//width = int32(runewidth.StringWidth(sr.menu.filter)) * (sr.glyphSize.X + dropShadowOffset)
 
-	sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
+	//sr.AddToOverlayStack(&layer.RenderStackT{texture, windowRect, windowRect, false})
 	sr.restoreRendererTexture()
 
 	if sr.GetBlinkState() {

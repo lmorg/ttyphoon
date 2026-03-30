@@ -42,6 +42,22 @@ type TemplateFieldsT struct {
 
 type TemplateWriterT func(tmpl *template.Template, data *TemplateFieldsT) error
 
+func host(row *types.Row) string {
+	if row == nil || row.Source == nil {
+		return ""
+	}
+
+	return row.Source.Host
+}
+
+func pwd(row *types.Row) string {
+	if row == nil || row.Source == nil {
+		return ""
+	}
+
+	return row.Source.Pwd
+}
+
 func Block(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 	if len(screen) == 0 {
 		return errors.New("invalid block")
@@ -60,14 +76,14 @@ func Block(tile types.Tile, screen types.Screen, write TemplateWriterT) error {
 
 	data := &TemplateFieldsT{
 		filename:     cmd,
-		AppName:      app.Name,
+		AppName:      app.Name(),
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
 		TimeStart:    screen[0].Block.TimeStart.Format(FMT_DATE),
 		TimeEnd:      screen[0].Block.TimeEnd.Format(FMT_DATE),
 		TimeDuration: screen[0].Block.TimeEnd.Sub(screen[0].Block.TimeStart).String(),
-		Host:         screen[0].Source.Host,
-		Pwd:          screen[0].Source.Pwd,
+		Host:         host(screen[0]),
+		Pwd:          pwd(screen[0]),
 		Query:        cmdLine,
 		ExitNum:      screen[0].Block.ExitNum,
 		Output:       screen.PhraseAll(),
@@ -93,13 +109,14 @@ func blockAi(tile types.Tile, screen types.Screen, write TemplateWriterT) error 
 
 	data := &TemplateFieldsT{
 		filename:     cmd,
-		AppName:      app.Name,
+		AppName:      app.Name(),
 		GroupName:    tile.GroupName(),
 		TileName:     tile.Name(),
 		TimeStart:    screen[0].Block.TimeStart.Format(FMT_DATE),
 		TimeEnd:      screen[0].Block.TimeEnd.Format(FMT_DATE),
 		TimeDuration: screen[0].Block.TimeEnd.Sub(screen[0].Block.TimeStart).String(),
-		Pwd:          screen[0].Source.Pwd,
+		Host:         host(screen[0]),
+		Pwd:          pwd(screen[0]),
 		Agent:        screen[0].Block.AiMeta.Agent,
 		Query:        string(screen[0].Block.Query),
 		FullPrompt:   *screen[0].Block.AiMeta.Prompt,

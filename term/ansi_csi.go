@@ -153,6 +153,56 @@ func (term *Term) parseCsiCodes() {
 				// Ps = 1 2  ⇒  Send/receive (SRM).
 				// Ps = 2 0  ⇒  Automatic Newline (LNM).
 
+			case 34:
+				// Normal Cursor Visibility
+				/*
+					This is not one of the standard ECMA-48 ANSI SM modes that
+					xterm documents. xterm’s non-private CSI Pm h list is only
+					2, 4, 12, and 20; 34 is not in that list. ECMA-48 also
+					treats modes as a deprecated, sparsely used mechanism, with
+					implementations free to have private or nonstandard
+					extensions. ￼
+
+					The important part is that GNU Screen defines
+					CSI 34 h / CSI 34 l as a cursor-visibility extension in its
+					own terminal emulation docs:
+					- CSI 34 h = Normal Cursor Visibility
+					- CSI 34 l = paired opposite state used by screen’s
+					  emulation model. ￼
+
+					That lines up with the tmux-256color terminfo used by
+					tmux-family terminals. In the published tmux-256color
+					entry, the capabilities are:
+					- cnorm=\E[34h\E[?25h
+					- cvvis=\E[34l
+					- civis=\E[?25l
+
+					So if we are inside tmux control mode and seeing CSI 34 h,
+					this usually means an application is asking for “normal
+					cursor” via terminfo,
+
+					What that means in practice:
+
+					tmux can absolutely be involved, because its terminal type
+					and terminfo entry define cnorm using CSI 34 h. ￼
+					Vim can also be the immediate emitter, if it calls terminfo
+					cnorm/cvvis while running under TERM=tmux* or TERM=screen*.
+					In that case Vim is not “inventing” 34 itself; it is using
+					the terminal description it was given. That follows directly
+					from the terminfo mapping above. ￼
+
+					A very likely explanation for capture is:
+
+					app inside tmux asks for cursor normalization/visibility,
+					ncurses/Vim emits terminfo cnorm, with tmux-256color or
+					screen-*, that becomes CSI 34 h followed by CSI ?25 h.
+
+					If you want to confirm it quickly, check the pane’s TERM.
+					If it is screen, screen-256color, tmux, or tmux-256color,
+					then CSI 34 h is entirely consistent with that terminfo
+					lineage.
+				*/
+
 			default:
 				log.Printf("WARNING: Unknown Set Mode (SM) sequence: %s", string(cache))
 			}
@@ -244,7 +294,7 @@ func (term *Term) parseCsiCodes() {
 
 		case 'm':
 			// Character Attributes (SGR).
-			lookupSgr(term.sgr, stack[0], stack)
+			lookupSgr(term.sgr, stack)
 
 		case 'M':
 			// Delete Ps Line(s) (default = 1) (DL).

@@ -1,9 +1,11 @@
 .DS_Store
 sdl-examples/
-mxtty
-mxtty.exe
+ttyphoon
+ttyphoon.exe
 *.pprof
 .env
+.vscode
+.local
 
 # Wails
 

@@ -10,7 +10,10 @@
   - [Images](#images)
   - [Tmux Support](#tmux-support)
   - [Highlighted Search Results](#highlighted-search-results)
-  - [Plus more](#plus-more)
+  - [Markdown Viewer](#markdown-viewer)
+  - [Config Files](#config-files)
+  - [Swagger](#swagger)
+  - [Non-Intrusive AI](#non-intrusive-ai)
 - [How It Works](#how-it-works)
 - [Whats Left To Do](#whats-left-to-do)
   - [Escape Codes](#escape-codes)
@@ -31,8 +34,7 @@
 ## Multimedia Terminal Emulator
 
 The aim of this project is to provide an easy to use terminal emulator that
-supports inlining multimedia widgets using native code as opposed to web
-technologies like Electron.
+supports inlining multimedia widgets.
 
 Currently the project is _very_ alpha.
 
@@ -118,19 +120,39 @@ Search terms can be highlighted to quickly find instances of that term
 
 ![search](images/search.png)
 
-### Plus more
+### Markdown Viewer
 
-TTYphoon has only been in development for a little over a year and features a
-purpose built, hardware accelerated, rendering engine to facilitate this hybrid
-of text and media. So expect many more feature to come!
+You can write notes in markdown alongside your terminal sessions. View readme's, have your documentation with you instead of switching between windows
+
+![markdown](images/markdown.png)
+
+And you can even execute the code blocks inline. Bringing you the flexibility of Jupyter Notebooks and the power of a full terminal emulator
+
+![markdown](images/jupyter.png)
+
+### Config Files
+
+Work with JSON and YAML config files more easily
+
+![jsonyaml](images/jsonyaml.png)
+
+### Swagger
+
+Native support for Swagger and OpenAPI files. So you don't need to be a `curl` expert all of the time
+
+![swagger](images/swagger.png)
+
+### Non-Intrusive AI
+
+AI is crammed everywhere - even where you don't want it. TTYphoon integrates AI but does so non-intrusively. It's there if you need to quickly debug something. Or want to quickly generate code. Or not there if you prefer. It isn't a clown constantly fighting you for your attention.
+
+![ai-explain](images/ai-explain.png)
 
 ## How It Works
 
-TTYphoon uses SDL ([Simple DirectMedia Layer](https://en.wikipedia.org/wiki/Simple_DirectMedia_Layer))
-which is a simple hardware-assisted multimedia library. This enables the
-terminal emulator to be both performant and also cross-platform. Essentially
-providing some of the conveniences that people have come to love from tools
-like Electron while still offering the benefits of native code.
+TTYphoon native code in the backend to provide fast computation and then pushes the last mile rendering to webkit.
+
+This ensures that the terminal reuses performant existing technologies which have already been fine-tuned by larger organisations like Apple, Microsoft and Google. But without the _massive_ overhead of running Electron or other Chrome-based solutions.
 
 The multimedia and interactive components will be passed from the controlling
 terminal applications via ANSI escape sequences. Before groan, yes I agree that
@@ -289,12 +311,9 @@ Currently TTYphoon can only be compiled from source.
 To do so you will need the following installed:
 - C compiler (eg GNU C)
 - Go compiler
-- SDL libraries
-  - sdl2
-  - sdl2_mixer
-- `pkg-config`
+- wails
 
-Aside from that, it's as easy as running `go build .` from the git repository
+Aside from that, it's as easy as running `make build` from the git repository
 root directory.
 
 ### VT Debugging

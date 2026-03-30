@@ -1,49 +1,26 @@
 package app
 
-import (
-	"fmt"
-
-	"github.com/lmorg/murex/utils/semver"
-)
-
-// Name is the name of the $TERM
-const Name = "TTYphoon"
-
 // DirName is the name in which config files et al are stored
 const DirName = "ttyphoon"
 
-// Version number of $TERM
-// Format of version string should be "(major).(minor).(revision) DESCRIPTION"
-const (
-	version  = "%d.%d.%d"
-	Major    = 0
-	Minor    = 20
-	Revision = 1000
+const undefined = "undef"
+
+var (
+	name      = DirName
+	tagLine   = undefined
+	version   = undefined
+	branch    = undefined
+	buildDate = undefined
+	copyright = undefined
+	license   = "GPL v2"
 )
 
-const Title = "Ttyphoon: The Next Generation Terminal Emulator"
-
-// Copyright is the copyright owner string
-const Copyright = "© 2023-2026 Laurence Morgan"
-
-// License is the projects software license
-const License = "License GPL v2"
-
-func init() {
-	v = fmt.Sprintf(version, Major, Minor, Revision)
-	sv, _ = semver.Parse(v)
-}
-
-var v string
-
-func Version() string {
-	return v
-}
-
-var sv *semver.Version
-
-func Semver() *semver.Version {
-	return sv
-}
+func Name() string      { return name }
+func TagLine() string   { return tagLine }
+func Version() string   { return version }
+func Branch() string    { return branch }
+func BuildDate() string { return buildDate }
+func Copyright() string { return copyright }
+func License() string   { return license }
 
 const ProjectSourcePath = "github.com/lmorg/ttyphoon/"

@@ -1,11 +1,18 @@
-export namespace dispatcher {
+export namespace main {
 	
-	export enum WindowTypeT {
-	    sdl = "sdl",
-	    inputBox = "inputBox",
-	    markdown = "markdown",
-	    preview = "preview",
-	    notes = "notes",
+	export class ClipboardData {
+	    text: string;
+	    image: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipboardData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.image = source["image"];
+	    }
 	}
 	export class ColoursT {
 	    fg: types.Colour;
@@ -78,16 +85,12 @@ export namespace dispatcher {
 		}
 	}
 	export class WindowStyleT {
-	    pos: types.XY;
-	    size: types.XY;
-	    alwaysOnTop: boolean;
-	    frameLess: boolean;
-	    startHidden: boolean;
-	    hideOnClose: boolean;
+	    colors?: ColoursT;
+	    statusBar: boolean;
 	    fontFamily: string;
 	    fontSize: number;
-	    title: string;
-	    colors?: ColoursT;
+	    adjustCellWidth: number;
+	    adjustCellHeight: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new WindowStyleT(source);
@@ -95,16 +98,12 @@ export namespace dispatcher {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.pos = this.convertValues(source["pos"], types.XY);
-	        this.size = this.convertValues(source["size"], types.XY);
-	        this.alwaysOnTop = source["alwaysOnTop"];
-	        this.frameLess = source["frameLess"];
-	        this.startHidden = source["startHidden"];
-	        this.hideOnClose = source["hideOnClose"];
+	        this.colors = this.convertValues(source["colors"], ColoursT);
+	        this.statusBar = source["statusBar"];
 	        this.fontFamily = source["fontFamily"];
 	        this.fontSize = source["fontSize"];
-	        this.title = source["title"];
-	        this.colors = this.convertValues(source["colors"], ColoursT);
+	        this.adjustCellWidth = source["adjustCellWidth"];
+	        this.adjustCellHeight = source["adjustCellHeight"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -124,6 +123,49 @@ export namespace dispatcher {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace swagger {
+	
+	export class RequestT {
+	    method: string;
+	    url: string;
+	    headers: Record<string, string>;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RequestT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.method = source["method"];
+	        this.url = source["url"];
+	        this.headers = source["headers"];
+	        this.body = source["body"];
+	    }
+	}
+	export class ResponseT {
+	    statusCode: number;
+	    status: string;
+	    headers: Record<string, string>;
+	    body: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResponseT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.statusCode = source["statusCode"];
+	        this.status = source["status"];
+	        this.headers = source["headers"];
+	        this.body = source["body"];
+	        this.error = source["error"];
+	    }
 	}
 
 }

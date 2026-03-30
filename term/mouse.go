@@ -124,17 +124,17 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Icon:  0xf0c5,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name),
+				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name()),
 				Icon:  0xf044,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { notesCreateAndOpen(term, absBlockPos) },
@@ -144,16 +144,16 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Icon:  0xf544,
 				Highlight: func() func() {
 					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
 					}
 				},
 				Fn: func() { ai.Explain(agt, true) },
 			},
-			{
+			/*{
 				Title: "Write debug information to notes...",
 				Icon:  0xf188,
 				Fn:    func() { notesDebug(term, absPosY) },
-			},
+			},*/
 		}...)
 }
 
@@ -255,10 +255,10 @@ func (term *Term) MouseHover(pos *types.XY) {
 		if len(screen[pos.Y].Hidden) > 0 {
 			colour := _outputBlockChromeColour(screen[pos.Y].Hidden[len(screen[pos.Y].Hidden)-1].Block.Meta)
 			term._mousePosRenderer.Set(func() {
-				term.renderer.DrawRectWithColour(term.tile,
+				term.renderer.DrawRectWithColourAndBorder(term.tile,
 					&types.XY{X: 0, Y: pos.Y},
-					&types.XY{X: term.size.X, Y: 1},
-					colour, true,
+					&types.XY{X: term.size.X + 1, Y: 1},
+					colour, true, true,
 				)
 			})
 			return
@@ -272,10 +272,10 @@ func (term *Term) MouseHover(pos *types.XY) {
 		colour := _outputBlockChromeColour(screen[pos.Y].Block.Meta)
 		relBlockPos := term.getBlockStartAndEndRel(term.getBlockStartAndEndAbs(int(term.convertRelPosToAbsPos(pos).Y)))
 		term._mousePosRenderer.Set(func() {
-			term.renderer.DrawRectWithColour(term.tile,
+			term.renderer.DrawRectWithColourAndBorder(term.tile,
 				&types.XY{X: 0, Y: relBlockPos[0]},
-				&types.XY{X: term.size.X, Y: relBlockPos[1]},
-				colour, true,
+				&types.XY{X: term.size.X + 1, Y: relBlockPos[1]},
+				colour, true, true,
 			)
 		})
 		return
@@ -292,10 +292,10 @@ func (term *Term) MouseHover(pos *types.XY) {
 		term.renderer.StatusBarText("[Click] Fold branch")
 		term._mousePosRenderer.Set(func() {
 			h := min(height-pos.Y, term.size.Y-pos.Y)
-			term.renderer.DrawRectWithColour(term.tile,
+			term.renderer.DrawRectWithColourAndBorder(term.tile,
 				&types.XY{X: pos.X, Y: pos.Y},
 				&types.XY{X: term.size.X - pos.X, Y: h},
-				types.COLOR_FOLDED, false,
+				types.COLOR_FOLDED, false, true,
 			)
 		})
 		return

@@ -9,10 +9,11 @@ import (
 )
 
 func (term *Term) Resize(size *types.XY) {
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
 	xDiff := int32(size.X - term.size.X)
 	yDiff := int(size.Y - term.size.Y)
-
-	term._mutex.Lock()
 
 	debug.Log(term.size)
 	debug.Log(size)
@@ -46,8 +47,6 @@ func (term *Term) Resize(size *types.XY) {
 	}
 
 	term.resizePty()
-
-	term._mutex.Unlock()
 }
 
 func (term *Term) _resizeFromTop(max int) {

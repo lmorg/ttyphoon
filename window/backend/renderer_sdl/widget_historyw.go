@@ -49,10 +49,10 @@ func (sr *sdlRender) OpenHistory(tile types.Tile) {
 
 	// start webview
 	windowStyle := dispatcher.NewWindowStyle()
-	windowStyle.Pos = types.XY{}
+	/*windowStyle.Pos = types.XY{}
 	x, y := sr.window.GetSize()
 	windowStyle.Size = types.XY{X: x, Y: y}
-	windowStyle.Title = string(files[0])
+	windowStyle.Title = string(files[0])*/
 
 	parameters := &dispatcher.PMarkdownT{Path: path + files[0]}
 

@@ -14,6 +14,14 @@ export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
 
+export function GetAppTitle() {
+  return window['go']['main']['WApp']['GetAppTitle']();
+}
+
+export function GetClipboardData() {
+  return window['go']['main']['WApp']['GetClipboardData']();
+}
+
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
@@ -30,16 +38,12 @@ export function GetMarkdown(arg1) {
   return window['go']['main']['WApp']['GetMarkdown'](arg1);
 }
 
-export function GetParameters() {
-  return window['go']['main']['WApp']['GetParameters']();
+export function GetTerminalGlyphSize() {
+  return window['go']['main']['WApp']['GetTerminalGlyphSize']();
 }
 
 export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
-}
-
-export function GetWindowType() {
-  return window['go']['main']['WApp']['GetWindowType']();
 }
 
 export function ListFiles() {
@@ -50,28 +54,112 @@ export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
+export function RunAIAgentWithStream(arg1, arg2) {
+  return window['go']['main']['WApp']['RunAIAgentWithStream'](arg1, arg2);
+}
+
 export function RunNote(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['RunNote'](arg1, arg2, arg3);
+}
+
+export function SaveBinaryFile(arg1, arg2) {
+  return window['go']['main']['WApp']['SaveBinaryFile'](arg1, arg2);
 }
 
 export function SaveFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
 }
 
+export function SaveImageDialog(arg1) {
+  return window['go']['main']['WApp']['SaveImageDialog'](arg1);
+}
+
 export function SendIpc(arg1, arg2) {
   return window['go']['main']['WApp']['SendIpc'](arg1, arg2);
 }
 
-export function SendVisualInputBox(arg1, arg2) {
-  return window['go']['main']['WApp']['SendVisualInputBox'](arg1, arg2);
+export function SendToTerminal(arg1) {
+  return window['go']['main']['WApp']['SendToTerminal'](arg1);
 }
 
 export function StopNote(arg1) {
   return window['go']['main']['WApp']['StopNote'](arg1);
 }
 
+export function SwaggerRequest(arg1) {
+  return window['go']['main']['WApp']['SwaggerRequest'](arg1);
+}
+
+export function TerminalCopyImageDataURL(arg1) {
+  return window['go']['main']['WApp']['TerminalCopyImageDataURL'](arg1);
+}
+
+export function TerminalGetTabs() {
+  return window['go']['main']['WApp']['TerminalGetTabs']();
+}
+
+export function TerminalInputBoxSubmit(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['TerminalInputBoxSubmit'](arg1, arg2, arg3);
+}
+
+export function TerminalKeyPress(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['TerminalKeyPress'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TerminalMenuCancel(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuCancel'](arg1, arg2);
+}
+
+export function TerminalMenuHighlight(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuHighlight'](arg1, arg2);
+}
+
+export function TerminalMenuSelect(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalMenuSelect'](arg1, arg2);
+}
+
+export function TerminalMouseButton(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['TerminalMouseButton'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TerminalMouseMotion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['TerminalMouseMotion'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TerminalMouseWheel(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['TerminalMouseWheel'](arg1, arg2, arg3, arg4);
+}
+
+export function TerminalRequestRedraw() {
+  return window['go']['main']['WApp']['TerminalRequestRedraw']();
+}
+
+export function TerminalResize(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalResize'](arg1, arg2);
+}
+
+export function TerminalSelectWindow(arg1) {
+  return window['go']['main']['WApp']['TerminalSelectWindow'](arg1);
+}
+
+export function TerminalSetFocus(arg1) {
+  return window['go']['main']['WApp']['TerminalSetFocus'](arg1);
+}
+
+export function TerminalSetGlyphSize(arg1, arg2) {
+  return window['go']['main']['WApp']['TerminalSetGlyphSize'](arg1, arg2);
+}
+
+export function TerminalTextInput(arg1) {
+  return window['go']['main']['WApp']['TerminalTextInput'](arg1);
+}
+
 export function WindowHide() {
   return window['go']['main']['WApp']['WindowHide']();
+}
+
+export function WindowPrint() {
+  return window['go']['main']['WApp']['WindowPrint']();
 }
 
 export function WindowShow() {

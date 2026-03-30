@@ -11,7 +11,10 @@ func (term *Term) Render() bool {
 	}
 	term._ssLargeBuf.Store(0)
 
+	term.renderer.DrawFrame(term.tile)
+
 	term._mutex.Lock()
+	defer term._mutex.Unlock()
 
 	screen := term.visibleScreen()
 
@@ -32,8 +35,6 @@ func (term *Term) Render() bool {
 	term._renderOutputBlockChrome(screen)
 
 	term._renderCursor()
-
-	term._mutex.Unlock()
 
 	return true
 }

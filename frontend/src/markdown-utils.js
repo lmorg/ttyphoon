@@ -2,8 +2,9 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetImage } from '../wailsjs/go/main/WApp';
+import { GetImage, GetCustomRegexp } from '../wailsjs/go/main/WApp';
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
+import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
 import hljs from "highlight.js/lib/common";
@@ -117,6 +118,9 @@ export async function processWailsImages(container) {
     for (const img of images) {
         if (img.src.match(rxWailsUrl)) {
             const path = img.src.replace(rxWailsUrl, '');
+            // Extract filename from path and store as data attribute
+            const filename = path.split('/').pop() || 'Image';
+            img.dataset.originalFilename = filename;
             try {
                 const imageData = await GetImage(path);
                 if (!imageData.match(/^error: /)) {
@@ -129,6 +133,29 @@ export async function processWailsImages(container) {
             }
         }
     }
+}
+
+export function enableFullscreenImages(container) {
+    const images = container.querySelectorAll('img');
+    images.forEach((img) => {
+        if (img.dataset.fullscreenBound === 'true') {
+            return;
+        }
+
+        img.dataset.fullscreenBound = 'true';
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const sourceWidth = img.naturalWidth || img.width || 0;
+            const sourceHeight = img.naturalHeight || img.height || 0;
+            showFullscreenImageOverlay({
+                dataURL: img.src,
+                sourceWidth,
+                sourceHeight,
+            });
+        });
+    });
 }
 
 /**
@@ -173,13 +200,102 @@ export function processLinks(container, options = {}) {
 }
 
 /**
+ * Apply custom regex hyperlinking to text nodes in the container
+ * @param {HTMLElement} container - The container element to process
+ */
+export async function autoHyperlink(container) {
+    const customRegexps = await GetCustomRegexp?.() || [];
+
+    if (!customRegexps || customRegexps.length === 0) {
+        return;
+    }
+
+    for (const custom of customRegexps) {
+        if (!custom.pattern || !custom.link) {
+            continue;
+        }
+
+        let regex;
+        try {
+            regex = new RegExp(custom.pattern, 'g');
+        } catch (err) {
+            console.warn('Invalid custom regexp:', custom.pattern, err);
+            continue;
+        }
+
+        const walker = document.createTreeWalker(
+            container,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+
+        const nodesToProcess = [];
+        let node;
+        while ((node = walker.nextNode())) {
+            let parent = node.parentNode;
+            let insideLink = false;
+            while (parent) {
+                if (parent.tagName === 'A') {
+                    insideLink = true;
+                    break;
+                }
+                parent = parent.parentNode;
+            }
+
+            if (!insideLink && regex.test(node.textContent)) {
+                regex.lastIndex = 0;
+                nodesToProcess.push(node);
+            }
+        }
+
+        nodesToProcess.forEach((textNode) => {
+            const text = textNode.textContent;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+
+            regex.lastIndex = 0;
+            while ((match = regex.exec(text)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(document.createTextNode(text.substring(lastIndex, match.index)));
+                }
+
+                const matchedText = match[0];
+                const link = matchedText.replace(new RegExp(custom.pattern), custom.link);
+                const a = document.createElement('a');
+                a.href = link;
+                a.textContent = matchedText;
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    BrowserOpenURL(a.href);
+                });
+                parts.push(a);
+
+                lastIndex = regex.lastIndex;
+            }
+
+            if (lastIndex < text.length) {
+                parts.push(document.createTextNode(text.substring(lastIndex)));
+            }
+
+            const fragment = document.createDocumentFragment();
+            parts.forEach(part => fragment.appendChild(part));
+            textNode.parentNode.replaceChild(fragment, textNode);
+        });
+    }
+}
+
+/**
  * Complete markdown processing pipeline - applies all common transformations
  * @param {HTMLElement} container - The container element with rendered markdown
  */
 export async function processMarkdownContainer(container) {
     await applySyntaxHighlighting(container);
     await processWailsImages(container);
+    enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });
+    await autoHyperlink(container);
 }
 
 /**

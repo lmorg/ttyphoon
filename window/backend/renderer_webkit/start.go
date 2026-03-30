@@ -1,0 +1,66 @@
+package rendererwebkit
+
+import (
+	"context"
+
+	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/tmux"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+var currentRenderer *webkitRender
+
+func Initialise() (types.Renderer, *types.XY) {
+	wr := &webkitRender{
+		glyphSize:     nil,
+		windowCells:   &types.XY{X: 120, Y: 40},
+		windowTitle:   app.Name(),
+		_redraw:       make(chan struct{}, 1),
+		menuCallbacks: make(map[int]menuCallbacks),
+	}
+
+	currentRenderer = wr
+
+	return wr, wr.windowCells
+}
+
+func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wapp context.Context) {
+	wr.termWin = termWin
+	wr.wapp = wapp
+
+	if tc, ok := tmuxClient.(*tmux.Tmux); ok {
+		wr.tmux = tc
+	}
+
+	cursor.Register(func(css string) {
+		runtime.EventsEmit(wapp, "setCursor", css)
+	})
+
+	runtime.EventsEmit(wapp, "terminalStatusBarText", wr.statusBarText)
+
+	wr.hotkeys()
+	go wr.blinkSlowLoop()
+
+	go func() {
+		for range wr._redraw {
+			commands := wr.PopDrawCommands()
+			if len(commands) == 0 {
+				continue
+			}
+			runtime.EventsEmit(wapp, "terminalRedraw", commands)
+			//case <-time.After(15 * time.Millisecond):
+			//	runtime.EventsEmit(wapp, "terminalRedraw", wr.PopDrawCommands())
+			//wr.TriggerRedraw()
+		}
+	}()
+}
+
+func CurrentRenderer() (*webkitRender, bool) {
+	if currentRenderer == nil {
+		return nil, false
+	}
+
+	return currentRenderer, true
+}
