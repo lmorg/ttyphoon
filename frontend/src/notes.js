@@ -307,10 +307,8 @@ function createTreeIndent(depth, ancestorHasNext = [], isLast = false) {
         segment.className = 'notes-tree-branch';
         if (isCurrentLevel) {
             segment.classList.add(isLast ? 'notes-tree-branch-end' : 'notes-tree-branch-elbow');
-        } else if (ancestorHasNext[index]) {
-            segment.classList.add('notes-tree-branch-continue');
         } else {
-            segment.classList.add('notes-tree-branch-empty');
+            segment.classList.add(ancestorHasNext[index] ? 'notes-tree-branch-continue' : 'notes-tree-branch-empty');
         }
 
         indent.appendChild(segment);
@@ -334,15 +332,10 @@ function renderTreeNodes(container, category, nodes, depth = 0, ancestorHasNext 
             folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
             folder.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
 
-            const arrow = document.createElement('span');
-            arrow.className = 'notes-tree-arrow';
-            arrow.textContent = expanded ? '▼' : '▶';
-
             const label = document.createElement('span');
             label.className = 'notes-tree-label';
             label.textContent = node.name;
 
-            folder.appendChild(arrow);
             folder.appendChild(label);
             folder.addEventListener('click', () => {
                 toggleFolder(folderKey);
@@ -361,15 +354,10 @@ function renderTreeNodes(container, category, nodes, depth = 0, ancestorHasNext 
         item.dataset.file = node.file;
         item.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
 
-        const spacer = document.createElement('span');
-        spacer.className = 'notes-tree-arrow notes-tree-arrow-placeholder';
-        spacer.textContent = '•';
-
         const label = document.createElement('span');
         label.className = 'notes-tree-label';
         label.textContent = node.name;
 
-        item.appendChild(spacer);
         item.appendChild(label);
 
         if (node.file === state.currentFile) {
@@ -2760,17 +2748,20 @@ function applyWindowStyle(result) {
         #notes-list {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 3px;
             overflow-y: auto;
             overflow-x: hidden;
             flex: 1;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.25;
         }
 
         .notes-category-header {
             display: flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 8px;
+            padding: 3px 6px;
             cursor: pointer;
             color: var(--accent);
             font-weight: bold;
@@ -2792,7 +2783,7 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 0;
-            padding-left: 18px;
+            padding-left: 6px;
         }
 
         .notes-category-content[data-expanded="false"] {
@@ -2800,57 +2791,64 @@ function applyWindowStyle(result) {
         }
 
         .notes-file {
-            min-height: ${notesFileSize}px;
+            min-height: 0;
             text-align: left;
             border-radius: 5px;
-            border: 2px solid transparent;
+            border: none;
             background: transparent;
             color: var(--fg);
-            padding: 6px 8px;
+            padding: 1px 6px;
             cursor: pointer;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.25;
         }
 
         .notes-tree-folder,
         .notes-tree-file {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 2px;
             width: 100%;
             min-width: 0;
         }
 
         .notes-tree-folder {
-            min-height: ${notesFileSize}px;
+            min-height: 0;
             text-align: left;
             border-radius: 5px;
-            border: 2px solid transparent;
+            border: none;
             background: transparent;
-            color: var(--fg);
-            padding: 6px 8px;
+            color: var(--yellow);
+            padding: 1px 6px;
             cursor: pointer;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.25;
         }
 
         .notes-tree-folder:hover {
-            border-color: var(--selection);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
-        .notes-tree-indent,
-        .notes-tree-arrow {
+        .notes-tree-indent {
             flex: 0 0 auto;
         }
 
         .notes-tree-indent {
             display: inline-flex;
-            align-self: stretch;
+            align-self: center;
         }
 
         .notes-tree-branch {
             position: relative;
-            width: 14px;
-            align-self: stretch;
+            display: inline-block;
+            width: 2ch;
+            height: 1.25em;
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.65);
         }
 
         .notes-tree-branch-continue::before,
@@ -2858,36 +2856,24 @@ function applyWindowStyle(result) {
         .notes-tree-branch-end::before {
             content: '';
             position: absolute;
-            left: 6px;
+            left: 0.8ch;
             top: 0;
             bottom: 0;
-            border-left: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.22);
+            border-left: 1px solid currentColor;
         }
 
         .notes-tree-branch-elbow::after,
         .notes-tree-branch-end::after {
             content: '';
             position: absolute;
-            left: 6px;
-            top: 50%;
-            width: 8px;
-            border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.22);
+            left: 0.8ch;
+            top: calc(50% - 0.5px);
+            width: 1.1ch;
+            border-top: 1px solid currentColor;
         }
 
         .notes-tree-branch-end::before {
             bottom: 50%;
-        }
-
-        .notes-tree-arrow {
-            width: 12px;
-            display: inline-flex;
-            justify-content: center;
-            color: var(--accent);
-            font-size: ${result.fontSize - 2}px;
-        }
-
-        .notes-tree-arrow-placeholder {
-            color: transparent;
         }
 
         .notes-tree-label {
@@ -2895,15 +2881,18 @@ function applyWindowStyle(result) {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.25;
         }
 
         .notes-file[data-active="true"] {
-            border-color: var(--fg);
-            color: var(--fg);
+            background-color: var(--accent);
+            color: var(--bg);
         }
 
         .notes-file:hover {
-            border-color: var(--selection);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
         #notes-empty {
