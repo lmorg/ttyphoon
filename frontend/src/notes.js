@@ -1764,18 +1764,21 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
     if (editorEl) {
         const match = state.findMatches[state.findCurrentIndex];
 
-        // Scroll to the match without stealing focus (used during incremental search)
-        const cs = getComputedStyle(editorEl);
-        const fontSize = parseFloat(cs.fontSize) || 16;
-        const lineHeightRaw = cs.lineHeight;
-        const lineHeight = lineHeightRaw === 'normal' ? fontSize * 1.2 : parseFloat(lineHeightRaw);
-        const paddingTop = parseFloat(cs.paddingTop) || 0;
-        const lineNumber = (editorEl.value.substring(0, match.start).match(/\n/g) || []).length;
-        editorEl.scrollTop = Math.max(0, lineNumber * lineHeight + paddingTop - editorEl.clientHeight / 2);
-
         if (focusEditor) {
             editorEl.focus();
             editorEl.setSelectionRange(match.start, match.end);
+        } else {
+            // Scroll to the match without permanently stealing focus.
+            // Temporarily focus the editor (preventScroll keeps the page from
+            // jumping), then setSelectionRange lets the browser natively scroll
+            // the textarea to the selection, then restore focus to the previous
+            // element (e.g. the find input).
+            const prevFocused = document.activeElement;
+            editorEl.focus({ preventScroll: true });
+            editorEl.setSelectionRange(match.start, match.end);
+            if (prevFocused && prevFocused !== editorEl) {
+                prevFocused.focus({ preventScroll: true });
+            }
         }
     } else {
         const activeContainer = getActiveFindContainer();
@@ -3212,13 +3215,17 @@ function applyWindowStyle(result) {
         #notes-swagger-view-wrap {
             display: flex;
             flex-direction: column;
-            height: 100%;
-            overflow: auto;
-            padding: 10px;
+            /*height: 100%;
+            width: 100%;
+            overflow: scroll;*/
+            padding: 0px;
         }
 
         #notes-swagger-view {
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+            height: 100%;
             padding-right: 8px;
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
@@ -3245,9 +3252,9 @@ function applyWindowStyle(result) {
         .json-row {
             display: flex;
             align-items: baseline;
+            flex-wrap: wrap;
             gap: 6px;
             min-height: 22px;
-            white-space: nowrap;
         }
 
         .json-toggle,
@@ -3291,6 +3298,8 @@ function applyWindowStyle(result) {
 
         .json-key {
             color: var(--accent);
+            word-break: break-all;
+            overflow-wrap: anywhere;
         }
 
         .json-editable {
@@ -3339,6 +3348,8 @@ function applyWindowStyle(result) {
 
         .json-value-string {
             color: var(--green);
+            word-break: break-all;
+            overflow-wrap: anywhere;
         }
 
         .json-value-number {
