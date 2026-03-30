@@ -60,7 +60,7 @@ export function showFullscreenImageOverlay(options = {}) {
         right: 20px;
         color: rgba(255, 255, 255, 0.7);
         font-size: 12px;
-        font-family: monospace;
+        font-family: var(--terminal-menu-font);
         background: rgba(0, 0, 0, 0.5);
         padding: 8px 12px;
         border-radius: 4px;

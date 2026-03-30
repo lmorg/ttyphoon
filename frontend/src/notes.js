@@ -2405,7 +2405,7 @@ function applyWindowStyle(result) {
 
         #notes-modal-input {
             border-radius: 0;
-            border: 2px solid var(--fg);
+            border: 1px solid var(--fg);
             background: transparent;
             color: var(--fg);
             padding: 8px;
@@ -2792,7 +2792,7 @@ function applyWindowStyle(result) {
             word-wrap: break-word;
             overflow-wrap: anywhere;
             word-break: break-word;
-            font-family: monospace;
+            font-family: var(--font-family);
             color: var(--fg);
             background-color: rgba(0, 0, 0, 0.2);
         }
@@ -2808,7 +2808,7 @@ function applyWindowStyle(result) {
             height: 100%;
             resize: none;
             border-radius: 0;
-            border: 2px solid var(--bg);
+            border: 1px solid var(--bg);
             background: transparent;
             color: var(--fg);
             padding: 10px;
@@ -2819,7 +2819,7 @@ function applyWindowStyle(result) {
         #notes-editor:focus {
             outline: none;
             box-shadow: none;
-            border: 2px solid var(--accent);
+            border: 1px solid var(--accent);
         }
 
         #notes-editor:not(:focus) {
@@ -2872,7 +2872,7 @@ function applyWindowStyle(result) {
 
         #notes-find-input {
             border-radius: 0;
-            border: 2px solid var(--fg);
+            border: 1px solid var(--fg);
             background: transparent;
             color: var(--fg);
             padding: 4px 8px;
@@ -3030,7 +3030,7 @@ function applyWindowStyle(result) {
             border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             color: var(--fg);
             opacity: 0.45;
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.5;
             text-align: right;
@@ -3046,9 +3046,9 @@ function applyWindowStyle(result) {
             margin: 0;
             padding: 12px;
             background-color: var(--bg);
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             color: var(--fg);
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.5;
             overflow-x: auto;
@@ -3096,7 +3096,7 @@ function applyWindowStyle(result) {
             padding: 12px;
             background-color: var(--bg);
             color: var(--fg);
-            font-family: monospace;
+            font-family: var(--font-family);
             font-size: ${result.fontSize - 2}px;
             line-height: 1.4;
             overflow-x: auto;
@@ -3118,10 +3118,10 @@ function applyWindowStyle(result) {
             width: 100%;
             height: 100%;
             padding: 12px;
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             background-color: var(--bg);
             color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+            font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             resize: none;
             overflow: auto;
@@ -3148,7 +3148,7 @@ function applyWindowStyle(result) {
         #notes-swagger-view {
             overflow: auto;
             padding-right: 8px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+            font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.45;
         }

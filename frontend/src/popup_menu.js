@@ -75,7 +75,8 @@ function measureIdealWidth(items, title, withIcons) {
     const ctx = c.getContext('2d');
     const rootStyle = getComputedStyle(document.documentElement);
     const fontFamily = rootStyle.getPropertyValue('--terminal-menu-font').trim()
-        || 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+        || rootStyle.getPropertyValue('--font-family').trim()
+        || getComputedStyle(document.body).fontFamily;
     const fontSizeVar = rootStyle.getPropertyValue('--terminal-menu-font-size').trim();
     const parsedFontSize = Number.parseFloat(fontSizeVar);
     const fontSize = (Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14) - 1;

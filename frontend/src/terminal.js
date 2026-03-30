@@ -163,6 +163,8 @@ function applyTerminalStyles(result) {
             --terminal-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --terminal-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             --terminal-accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --terminal-accent-soft: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
+            --terminal-accent-ring: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
             --terminal-selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --terminal-selection-20: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             --terminal-green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -235,6 +237,17 @@ function applyTerminalStyles(result) {
             flex: 1;
             min-height: 0;
             overflow: hidden;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+            transition: border-color 120ms ease, box-shadow 120ms ease;
+        }
+
+        #terminal-pane[data-terminal-focused="true"] #terminal-viewport {
+            border-color: var(--terminal-accent-soft);
+        }
+
+        #terminal-pane[data-terminal-focus-visible="true"] #terminal-viewport {
+            box-shadow: inset 0 0 0 1px var(--terminal-accent-ring);
         }
 
         #ttyphoon-terminal {

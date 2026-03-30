@@ -2,7 +2,15 @@ export function createFontController(offCtx) {
     let cellWidth = 10;
     let cellHeight = 20;
     let fontSize = 15;
-    let fontFamily = '"Fira Code", monospace';
+    let fontFamily = '';
+
+    try {
+        fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--terminal-menu-font').trim()
+            || getComputedStyle(document.documentElement).getPropertyValue('--font-family').trim()
+            || getComputedStyle(document.body).fontFamily;
+    } catch {
+        fontFamily = '';
+    }
     let glyphSizeCached = false;
 
     function applyConfiguredFontFromWindowStyle(windowStyle) {

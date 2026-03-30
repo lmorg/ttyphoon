@@ -127,6 +127,9 @@ function applyChromePalette(style) {
         statusBar.style.fontSize = `${statusFontSize}px`;
         statusBar.style.background = `linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), ${bgColor}`;
         statusBar.style.color = fgColor;
+        if (style?.fontFamily) {
+            statusBar.style.fontFamily = style.fontFamily;
+        }
         statusBar.style.borderLeft = `3px solid ${borderColor}`;
         statusBar.style.borderRight = `3px solid ${borderColor}`;
         statusBar.style.borderBottom = `3px solid ${borderColor}`;
@@ -172,8 +175,19 @@ let isDraggingSplit = false;
 let notesCollapsed = false;
 let lastNotesWidthPercent = 50;
 let terminalFocusState = true;
+let terminalKeyboardFocusVisible = false;
+let lastInputWasKeyboard = false;
 const MIN_NOTES_PX = 240;
 const MIN_NOTES_EMBED_PX = 96;
+
+function updateTerminalFocusChrome() {
+    if (!terminalPane) {
+        return;
+    }
+
+    terminalPane.setAttribute('data-terminal-focused', terminalFocusState ? 'true' : 'false');
+    terminalPane.setAttribute('data-terminal-focus-visible', terminalKeyboardFocusVisible ? 'true' : 'false');
+}
 
 (async () => {
     titlebar = setupTitlebar();
@@ -378,15 +392,16 @@ notesPane.addEventListener('mousedown', (event) => {
 });
 
 terminalPane.addEventListener('focusin', () => {
-    setTerminalFocusState(true);
+    setTerminalFocusState(true, { focusVisible: lastInputWasKeyboard });
 });
 
 terminalPane.addEventListener('mousedown', () => {
-    setTerminalFocusState(true);
+    setTerminalFocusState(true, { focusVisible: false });
 });
 
 refreshStatusBarLayout();
 updateSplitHandleTooltip();
+updateTerminalFocusChrome();
 
     // Update titlebar text and colors asynchronously after shell render.
     void hydrateTitlebarAndBorders();
@@ -667,15 +682,32 @@ function requestTerminalResizeAfterLayout() {
     });
 }
 
-function setTerminalFocusState(focused) {
-    if (terminalFocusState === focused) {
+function setTerminalFocusState(focused, options = {}) {
+    const nextFocusVisible = Boolean(options.focusVisible);
+
+    if (terminalFocusState === focused && terminalKeyboardFocusVisible === nextFocusVisible) {
         return;
     }
 
     terminalFocusState = focused;
+    terminalKeyboardFocusVisible = focused ? nextFocusVisible : false;
     window.terminalFocusedState = focused;
+    updateTerminalFocusChrome();
     TerminalSetFocus(focused).catch(() => {});
 }
+
+window.addEventListener('keydown', (event) => {
+    // Treat plain-key navigation as keyboard modality for focus ring display.
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+    }
+
+    lastInputWasKeyboard = true;
+}, true);
+
+window.addEventListener('mousedown', () => {
+    lastInputWasKeyboard = false;
+}, true);
 
 window.addEventListener('mousemove', (event) => {
     if (!isDraggingSplit) {
