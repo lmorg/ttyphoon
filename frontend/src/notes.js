@@ -29,6 +29,13 @@ const CONTEXT_ICON_CHECKBOX = 0xf14a;
 const CONTEXT_ICON_CODE = 0xf121;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 
+const IS_WINDOWS = typeof navigator !== 'undefined' && (
+    /Windows/i.test(navigator.userAgent || '') ||
+    /Win/i.test(navigator.platform || '')
+);
+const PRIMARY_PATH_SEPARATOR = IS_WINDOWS ? '\\' : '/';
+const FALLBACK_PATH_SEPARATOR = IS_WINDOWS ? '/' : '\\';
+
 const app = document.getElementById('notes-pane') || document.getElementById('app') || (() => {
     const root = document.createElement('div');
     root.id = 'app';
@@ -195,6 +202,7 @@ const state = {
         '$PROJ': true,
         '$HISTORY': false,
     },
+    expandedFolders: {},
     jupyterCodeBlocks: {},
     jupyterBlockCounter: 0,
     swaggerSpec: null,
@@ -208,6 +216,177 @@ configureMarked();
 function setStatus(message, isError) {
     elements.status.textContent = message || '';
     elements.status.dataset.state = isError ? 'error' : 'ok';
+}
+
+function getPathParts(path) {
+    if (!path) {
+        return [];
+    }
+
+    const source = String(path).includes(PRIMARY_PATH_SEPARATOR)
+        ? String(path)
+        : String(path).replaceAll(FALLBACK_PATH_SEPARATOR, PRIMARY_PATH_SEPARATOR);
+
+    return source.split(PRIMARY_PATH_SEPARATOR).filter(Boolean);
+}
+
+function getPathFileName(path) {
+    const parts = getPathParts(path);
+    return parts.length === 0 ? '' : parts[parts.length - 1];
+}
+
+function splitCategoryPath(file) {
+    const match = String(file || '').match(/^(\$[A-Z]+)(?:[\\/](.*))?$/);
+    if (!match) {
+        return {
+            category: '',
+            relativePath: String(file || ''),
+        };
+    }
+
+    return {
+        category: match[1],
+        relativePath: match[2] || '',
+    };
+}
+
+function sortTreeNodes(nodes) {
+    nodes.sort((left, right) => {
+        if (left.type !== right.type) {
+            return left.type === 'folder' ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    nodes.forEach((node) => {
+        if (node.type === 'folder') {
+            sortTreeNodes(node.children);
+        }
+    });
+}
+
+function buildFileTree(files) {
+    const root = [];
+
+    files.forEach((file) => {
+        const { relativePath } = splitCategoryPath(file);
+        const segments = getPathParts(relativePath);
+        let level = root;
+
+        segments.forEach((segment, index) => {
+            const isLeaf = index === segments.length - 1;
+            let node = level.find((entry) => entry.name === segment && entry.type === (isLeaf ? 'file' : 'folder'));
+
+            if (!node) {
+                node = isLeaf
+                    ? { type: 'file', name: segment, file }
+                    : { type: 'folder', name: segment, path: segments.slice(0, index + 1).join(PRIMARY_PATH_SEPARATOR), children: [] };
+                level.push(node);
+            }
+
+            if (!isLeaf) {
+                level = node.children;
+            }
+        });
+    });
+
+    sortTreeNodes(root);
+    return root;
+}
+
+function createTreeIndent(depth, ancestorHasNext = [], isLast = false) {
+    const indent = document.createElement('span');
+    indent.className = 'notes-tree-indent';
+    indent.setAttribute('aria-hidden', 'true');
+
+    for (let index = 0; index < depth; index += 1) {
+        const segment = document.createElement('span');
+        const isCurrentLevel = index === depth - 1;
+
+        segment.className = 'notes-tree-branch';
+        if (isCurrentLevel) {
+            segment.classList.add(isLast ? 'notes-tree-branch-end' : 'notes-tree-branch-elbow');
+        } else if (ancestorHasNext[index]) {
+            segment.classList.add('notes-tree-branch-continue');
+        } else {
+            segment.classList.add('notes-tree-branch-empty');
+        }
+
+        indent.appendChild(segment);
+    }
+
+    return indent;
+}
+
+function renderTreeNodes(container, category, nodes, depth = 0, ancestorHasNext = []) {
+    nodes.forEach((node, index) => {
+        const isLast = index === nodes.length - 1;
+
+        if (node.type === 'folder') {
+            const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
+            const expanded = state.expandedFolders[folderKey] !== false;
+            const folder = document.createElement('button');
+
+            folder.type = 'button';
+            folder.className = 'notes-tree-folder';
+            folder.dataset.expanded = expanded ? 'true' : 'false';
+            folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            folder.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
+
+            const arrow = document.createElement('span');
+            arrow.className = 'notes-tree-arrow';
+            arrow.textContent = expanded ? '▼' : '▶';
+
+            const label = document.createElement('span');
+            label.className = 'notes-tree-label';
+            label.textContent = node.name;
+
+            folder.appendChild(arrow);
+            folder.appendChild(label);
+            folder.addEventListener('click', () => {
+                toggleFolder(folderKey);
+            });
+            container.appendChild(folder);
+
+            if (expanded) {
+                renderTreeNodes(container, category, node.children, depth + 1, ancestorHasNext.concat(!isLast));
+            }
+            return;
+        }
+
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'notes-file notes-tree-file';
+        item.dataset.file = node.file;
+        item.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
+
+        const spacer = document.createElement('span');
+        spacer.className = 'notes-tree-arrow notes-tree-arrow-placeholder';
+        spacer.textContent = '•';
+
+        const label = document.createElement('span');
+        label.className = 'notes-tree-label';
+        label.textContent = node.name;
+
+        item.appendChild(spacer);
+        item.appendChild(label);
+
+        if (node.file === state.currentFile) {
+            item.dataset.active = 'true';
+        }
+
+        item.addEventListener('click', () => {
+            loadFile(node.file);
+        });
+
+        item.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            openRenamePrompt(node.file);
+        });
+
+        container.appendChild(item);
+    });
 }
 
 function notifyTerminal(message, level = 'info') {
@@ -386,7 +565,7 @@ function setDirty(isDirty) {
 }
 
 function emitCurrentFileName() {
-    const fileName = state.currentFile ? state.currentFile.split('/').pop() : '';
+    const fileName = state.currentFile ? getPathFileName(state.currentFile) : '';
     app.dataset.currentFileName = fileName;
     window.dispatchEvent(new CustomEvent('notes-current-file', {
         detail: { fileName }
@@ -797,11 +976,13 @@ function renderFileList() {
     };
 
     state.files.forEach((file) => {
-        if (file.startsWith('$GLOBAL/')) {
+        const { category } = splitCategoryPath(file);
+
+        if (category === '$GLOBAL') {
             categories['$GLOBAL'].push(file);
-        } else if (file.startsWith('$NOTES/')) {
+        } else if (category === '$NOTES') {
             categories['$NOTES'].push(file);
-        } else if (file.startsWith('$PROJ/')) {
+        } else if (category === '$PROJ') {
             categories['$PROJ'].push(file);
         }
     });
@@ -840,31 +1021,7 @@ function renderFileList() {
         categoryContent.className = 'notes-category-content';
         categoryContent.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
 
-        files.forEach((file) => {
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'notes-file';
-            
-            // Display only the filename without the category prefix
-            const displayName = file.replace(/^\$[A-Z]+\//, '');
-            item.textContent = displayName;
-            item.dataset.file = file;
-            
-            if (file === state.currentFile) {
-                item.dataset.active = 'true';
-            }
-            
-            item.addEventListener('click', () => {
-                loadFile(file);
-            });
-            
-            item.addEventListener('dblclick', (e) => {
-                e.preventDefault();
-                openRenamePrompt(file);
-            });
-            
-            categoryContent.appendChild(item);
-        });
+        renderTreeNodes(categoryContent, category, buildFileTree(files));
 
         elements.list.appendChild(categoryContent);
     });
@@ -872,6 +1029,11 @@ function renderFileList() {
 
 function toggleCategory(category) {
     state.expandedCategories[category] = !state.expandedCategories[category];
+    renderFileList();
+}
+
+function toggleFolder(folderKey) {
+    state.expandedFolders[folderKey] = !(state.expandedFolders[folderKey] !== false);
     renderFileList();
 }
 
@@ -1414,7 +1576,7 @@ async function loadFile(file) {
     try {
         const loadingJson = isStructuredDataFile(file);
         const stickyId = loadingJson ? Date.now() : null;
-        const fileName = file ? file.split('/').pop() : 'json file';
+        const fileName = file ? getPathFileName(file) : 'json file';
 
         if (loadingJson) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
@@ -1493,7 +1655,7 @@ async function loadFile(file) {
         }
     } catch (err) {
         if (stickyId) {
-            closeStickyProgress(stickyId, `Failed to load ${file.split('/').pop()}`, 'error');
+            closeStickyProgress(stickyId, `Failed to load ${getPathFileName(file)}`, 'error');
         }
         setStatus(`Failed to load ${file}.`, true);
         console.error(err);
@@ -1521,7 +1683,7 @@ async function saveFile() {
 
 function openDeletePrompt(file) {
     state.deletingFile = file;
-    const fileName = file.split('/').pop();
+    const fileName = getPathFileName(file);
     elements.deleteModalBody.textContent = `Are you sure you want to delete "${fileName}"?`;
     elements.deleteModal.dataset.open = 'true';
     elements.deleteModal.setAttribute('aria-hidden', 'false');
@@ -1543,7 +1705,7 @@ async function confirmDelete() {
     }
 
     const fileToDelete = state.deletingFile;
-    const fileName = fileToDelete.split('/').pop();
+    const fileName = getPathFileName(fileToDelete);
 
     try {
         await DeleteFile(fileToDelete);
@@ -1841,7 +2003,7 @@ function openNewFilePrompt() {
 
 function openRenamePrompt(file) {
     state.renamingFile = file;
-    const fileName = file.split('/').pop().replace(/\.md$/, '');
+    const fileName = getPathFileName(file).replace(/\.md$/, '');
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = fileName;
@@ -2629,7 +2791,7 @@ function applyWindowStyle(result) {
         .notes-category-content {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 0;
             padding-left: 18px;
         }
 
@@ -2649,6 +2811,90 @@ function applyWindowStyle(result) {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .notes-tree-folder,
+        .notes-tree-file {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .notes-tree-folder {
+            min-height: ${notesFileSize}px;
+            text-align: left;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            background: transparent;
+            color: var(--fg);
+            padding: 6px 8px;
+            cursor: pointer;
+        }
+
+        .notes-tree-folder:hover {
+            border-color: var(--selection);
+        }
+
+        .notes-tree-indent,
+        .notes-tree-arrow {
+            flex: 0 0 auto;
+        }
+
+        .notes-tree-indent {
+            display: inline-flex;
+            align-self: stretch;
+        }
+
+        .notes-tree-branch {
+            position: relative;
+            width: 14px;
+            align-self: stretch;
+        }
+
+        .notes-tree-branch-continue::before,
+        .notes-tree-branch-elbow::before,
+        .notes-tree-branch-end::before {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 0;
+            bottom: 0;
+            border-left: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.22);
+        }
+
+        .notes-tree-branch-elbow::after,
+        .notes-tree-branch-end::after {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 50%;
+            width: 8px;
+            border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.22);
+        }
+
+        .notes-tree-branch-end::before {
+            bottom: 50%;
+        }
+
+        .notes-tree-arrow {
+            width: 12px;
+            display: inline-flex;
+            justify-content: center;
+            color: var(--accent);
+            font-size: ${result.fontSize - 2}px;
+        }
+
+        .notes-tree-arrow-placeholder {
+            color: transparent;
+        }
+
+        .notes-tree-label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .notes-file[data-active="true"] {
@@ -3215,9 +3461,6 @@ function applyWindowStyle(result) {
         #notes-swagger-view-wrap {
             display: flex;
             flex-direction: column;
-            /*height: 100%;
-            width: 100%;
-            overflow: scroll;*/
             padding: 0px;
         }
 
