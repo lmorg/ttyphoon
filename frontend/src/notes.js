@@ -3995,7 +3995,35 @@ elements.findClose.addEventListener('click', () => {
 (function initSplitter() {
     const splitter = document.getElementById('notes-splitter');
     const app = document.getElementById('notes-app');
+    const splitterWidth = 8;
+    const minPaneWidth = 200;
     let isResizing = false;
+    let hasManualSplit = false;
+    let manualSplitRatio = 0.33;
+
+    function clampLeftWidth(totalWidth, leftWidth) {
+        const maxWidth = totalWidth - minPaneWidth - splitterWidth;
+        return Math.min(Math.max(leftWidth, minPaneWidth), maxWidth);
+    }
+
+    function applyManualSplitToCurrentWidth() {
+        if (!hasManualSplit) {
+            return;
+        }
+
+        const appRect = app.getBoundingClientRect();
+        if (appRect.width <= splitterWidth + (minPaneWidth * 2)) {
+            return;
+        }
+
+        const availableWidth = appRect.width - splitterWidth;
+        const desiredLeftWidth = availableWidth * manualSplitRatio;
+        const leftWidth = clampLeftWidth(appRect.width, desiredLeftWidth);
+        const rightWidth = appRect.width - leftWidth - splitterWidth;
+
+        app.style.gridTemplateColumns = `${leftWidth}px ${splitterWidth}px ${rightWidth}px`;
+        manualSplitRatio = leftWidth / availableWidth;
+    }
 
     splitter.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -4009,12 +4037,14 @@ elements.findClose.addEventListener('click', () => {
 
         const appRect = app.getBoundingClientRect();
         const newLeftWidth = e.clientX - appRect.left;
-        const minWidth = 200;
-        const maxWidth = appRect.width - 200 - 8;
+        const minWidth = minPaneWidth;
+        const maxWidth = appRect.width - minPaneWidth - splitterWidth;
 
         if (newLeftWidth > minWidth && newLeftWidth < maxWidth) {
-            const rightWidth = appRect.width - newLeftWidth - 8;
-            app.style.gridTemplateColumns = `${newLeftWidth}px 8px ${rightWidth}px`;
+            const rightWidth = appRect.width - newLeftWidth - splitterWidth;
+            app.style.gridTemplateColumns = `${newLeftWidth}px ${splitterWidth}px ${rightWidth}px`;
+            hasManualSplit = true;
+            manualSplitRatio = newLeftWidth / (appRect.width - splitterWidth);
         }
     });
 
@@ -4024,6 +4054,14 @@ elements.findClose.addEventListener('click', () => {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         }
+    });
+
+    window.addEventListener('resize', () => {
+        if (isResizing) {
+            return;
+        }
+
+        applyManualSplitToCurrentWidth();
     });
 })();
 
