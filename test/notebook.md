@@ -37,7 +37,7 @@ print("hello world")
 This is a Go hello world one-liner
 
 ```go
-log.Println("hello world")
+fmt.Println("hello world")
 ```
 
 And here is a complete program

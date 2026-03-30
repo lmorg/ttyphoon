@@ -10,7 +10,9 @@
   - [Images](#images)
   - [Tmux Support](#tmux-support)
   - [Highlighted Search Results](#highlighted-search-results)
-  - [Plus more](#plus-more)
+  - [Markdown Viewer](#markdown-viewer)
+  - [Config Files](#config-files)
+  - [Swagger](#swagger)
 - [How It Works](#how-it-works)
 - [Whats Left To Do](#whats-left-to-do)
   - [Escape Codes](#escape-codes)
@@ -116,6 +118,28 @@ terminal emulator
 Search terms can be highlighted to quickly find instances of that term
 
 ![search](images/search.png)
+
+### Markdown Viewer
+
+You can write notes in markdown alongside your terminal sessions. View readme's, have your documentation with you instead of switching between windows
+
+![markdown](images/markdown.png)
+
+And you can even execute the code blocks inline. Bringing you the flexibility of Jupyter Notebooks and the power of a full terminal emulator
+
+![markdown](images/jupyter.png)
+
+### Config Files
+
+Work with JSON and YAML config files more easily
+
+![jsonyaml](images/jsonyaml.png)
+
+### Swagger
+
+Native support for Swagger and OpenAPI files. So you don't need to be a `curl` expert all of the time
+
+![swagger](images/swagger.png)
 
 ## How It Works
 
@@ -280,12 +304,9 @@ Currently TTYphoon can only be compiled from source.
 To do so you will need the following installed:
 - C compiler (eg GNU C)
 - Go compiler
-- SDL libraries
-  - sdl2
-  - sdl2_mixer
-- `pkg-config`
+- wails
 
-Aside from that, it's as easy as running `go build .` from the git repository
+Aside from that, it's as easy as running `make build` from the git repository
 root directory.
 
 ### VT Debugging
