@@ -351,17 +351,18 @@ splitHandle.addEventListener('dblclick', (event) => {
 
 function shouldKeepTerminalFocusedForNotesTarget(target) {
     const mode = notesPane.dataset.viewMode;
+    const targetEl = target instanceof Element ? target : null;
 
     if (mode === 'editor') {
         return false;
     }
 
     if (mode === 'viewer') {
-        return true;
+        const editingJsonViewer = Boolean(targetEl && targetEl.closest('.json-inline-editor'));
+        return !editingJsonViewer;
     }
 
     // In jupyter mode, code blocks are editable and should keep keyboard ownership in notes.
-    const targetEl = target instanceof Element ? target : null;
     const inJupyterCodeBlock = Boolean(targetEl && targetEl.closest('.jupyter-code-block'));
     return !inJupyterCodeBlock;
 }

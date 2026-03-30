@@ -10,10 +10,9 @@
     "name": "Laurence Morgan",
     "email": "mail@laurencemorgan.co.uk"
   },
-
   "info": {
     "companyName": "Laurence Morgan",
-    "productVersion": "0.22.1100",
+    "productVersion": "0.22.1210",
     "copyright": "2023-2026 Laurence Morgan",
     "comments": "The Next Generation Terminal Emulator",
     "protocols": [

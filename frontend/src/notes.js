@@ -11,6 +11,7 @@ import { showLocalMenu } from './popup_menu';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
+import YAML from 'yaml';
 
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
@@ -18,7 +19,7 @@ import {
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
-import { renderJsonViewer } from './json-viewer.js';
+import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -894,7 +895,147 @@ function renderSwaggerJsonView() {
         return;
     }
 
+    attachJsonViewerEditHandler(elements.swaggerView, commitStructuredViewerEdit);
     renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.swaggerEditor.value || '{}'));
+}
+
+function isYamlStructuredFile(fileName) {
+    return /\.ya?ml$/i.test(fileName || '');
+}
+
+function stringifyStructuredDocument(value) {
+    if (isYamlStructuredFile(state.currentFile)) {
+        return YAML.stringify(value);
+    }
+
+    return JSON.stringify(value, null, 2);
+}
+
+function parseStructuredScalar(text) {
+    if (text === '') {
+        return '';
+    }
+
+    try {
+        const parsed = YAML.parse(text);
+        return parsed === undefined ? text : parsed;
+    } catch {
+        return text;
+    }
+}
+
+function getValueAtPath(root, path) {
+    return path.reduce((current, segment) => {
+        if (current === null || current === undefined) {
+            return undefined;
+        }
+
+        return current[segment];
+    }, root);
+}
+
+function setValueAtPath(root, path, value) {
+    if (path.length === 0) {
+        return value;
+    }
+
+    const parentPath = path.slice(0, -1);
+    const parent = getValueAtPath(root, parentPath);
+    if (parent === null || parent === undefined) {
+        throw new Error('Unable to locate parent item for edit.');
+    }
+
+    parent[path[path.length - 1]] = value;
+    return root;
+}
+
+function renameObjectKey(root, path, nextKey) {
+    if (path.length === 0) {
+        throw new Error('Root key cannot be renamed.');
+    }
+
+    const parentPath = path.slice(0, -1);
+    const currentKey = path[path.length - 1];
+    const parent = getValueAtPath(root, parentPath);
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent)) {
+        throw new Error('Only object properties can be renamed.');
+    }
+
+    if (nextKey === currentKey) {
+        return root;
+    }
+
+    if (!nextKey) {
+        throw new Error('Property name cannot be empty.');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(parent, nextKey)) {
+        throw new Error(`Property "${nextKey}" already exists.`);
+    }
+
+    const renamed = {};
+    Object.keys(parent).forEach((key) => {
+        if (key === currentKey) {
+            renamed[nextKey] = parent[key];
+            return;
+        }
+
+        renamed[key] = parent[key];
+    });
+
+    if (parentPath.length === 0) {
+        return renamed;
+    }
+
+    setValueAtPath(root, parentPath, renamed);
+    return root;
+}
+
+async function commitStructuredViewerEdit({ editType, path, text }) {
+    try {
+        const source = state.swaggerSpec ?? parseSwaggerSpec(elements.swaggerEditor.value);
+        if (!source || !Array.isArray(path)) {
+            return;
+        }
+
+        let nextDocument = source;
+
+        if (editType === 'key') {
+            nextDocument = renameObjectKey(nextDocument, path, String(text));
+        } else if (editType === 'value') {
+            const currentValue = getValueAtPath(nextDocument, path);
+            const nextValue = parseStructuredScalar(String(text));
+
+            if (Object.is(currentValue, nextValue)) {
+                return;
+            }
+
+            nextDocument = setValueAtPath(nextDocument, path, nextValue);
+        } else {
+            return;
+        }
+
+        elements.swaggerEditor.value = stringifyStructuredDocument(nextDocument);
+        state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
+        state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
+        updateTabVisibility('json');
+
+        if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+            setViewMode('swagger-view');
+        }
+
+        renderSwaggerJsonView();
+
+        if (state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+            renderSwaggerUI();
+        }
+
+        setDirty(true);
+        await saveFile();
+    } catch (err) {
+        setStatus(err?.message || 'Failed to apply structured document edit.', true);
+        console.error(err);
+    }
 }
 
 
@@ -3063,6 +3204,34 @@ function applyWindowStyle(result) {
 
         .json-key {
             color: var(--accent);
+        }
+
+        .json-editable {
+            border-radius: 3px;
+            cursor: text;
+        }
+
+        .json-editable:hover {
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
+        }
+
+        .json-editing,
+        .json-editing:hover {
+            background-color: transparent;
+        }
+
+        .json-inline-editor {
+            border: 1px solid rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.55);
+            background-color: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.98);
+            color: var(--fg);
+            border-radius: 3px;
+            padding: 1px 6px;
+            font: inherit;
+            line-height: inherit;
+            min-width: 72px;
+            box-sizing: border-box;
+            outline: none;
+            box-shadow: 0 0 0 1px rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
         }
 
         .json-colon,
