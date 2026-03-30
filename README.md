@@ -13,6 +13,7 @@
   - [Markdown Viewer](#markdown-viewer)
   - [Config Files](#config-files)
   - [Swagger](#swagger)
+  - [Non-Intrusive AI](#non-intrusive-ai)
 - [How It Works](#how-it-works)
 - [Whats Left To Do](#whats-left-to-do)
   - [Escape Codes](#escape-codes)
@@ -140,6 +141,12 @@ Work with JSON and YAML config files more easily
 Native support for Swagger and OpenAPI files. So you don't need to be a `curl` expert all of the time
 
 ![swagger](images/swagger.png)
+
+### Non-Intrusive AI
+
+AI is crammed everywhere - even where you don't want it. TTYphoon integrates AI but does so non-intrusively. It's there if you need to quickly debug something. Or want to quickly generate code. Or not there if you prefer. It isn't a clown constantly fighting you for your attention.
+
+![ai-explain](images/ai-explain.png)
 
 ## How It Works
 
