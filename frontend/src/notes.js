@@ -295,21 +295,17 @@ function buildFileTree(files) {
     return root;
 }
 
-function createTreeIndent(depth, ancestorHasNext = [], isLast = false) {
+function createTreeIndent(depth, continueAtLevels = []) {
     const indent = document.createElement('span');
     indent.className = 'notes-tree-indent';
     indent.setAttribute('aria-hidden', 'true');
 
-    for (let index = 0; index < depth; index += 1) {
+    for (let ancestorDepth = 1; ancestorDepth < depth; ancestorDepth += 1) {
         const segment = document.createElement('span');
-        const isCurrentLevel = index === depth - 1;
-
         segment.className = 'notes-tree-branch';
-        if (isCurrentLevel) {
-            segment.classList.add(isLast ? 'notes-tree-branch-end' : 'notes-tree-branch-elbow');
-        } else {
-            segment.classList.add(ancestorHasNext[index] ? 'notes-tree-branch-continue' : 'notes-tree-branch-empty');
-        }
+        
+        const shouldContinue = continueAtLevels[ancestorDepth] === true;
+        segment.classList.add(shouldContinue ? 'notes-tree-branch-continue' : 'notes-tree-branch-empty');
 
         indent.appendChild(segment);
     }
@@ -317,47 +313,51 @@ function createTreeIndent(depth, ancestorHasNext = [], isLast = false) {
     return indent;
 }
 
-function renderTreeNodes(container, category, nodes, depth = 0, ancestorHasNext = []) {
-    nodes.forEach((node, index) => {
-        const isLast = index === nodes.length - 1;
+function renderTreeNodeItem(container, category, node, depth, continueAtLevels, isLast) {
+    // Create the indent column - shows ancestor continuation lines
+    const indentForItem = createTreeIndent(depth, continueAtLevels);
 
-        if (node.type === 'folder') {
-            const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
-            const expanded = state.expandedFolders[folderKey] !== false;
-            const folder = document.createElement('button');
+    // Add the current level's connector (elbow or end)
+    if (depth > 0) {
+        const lastSegment = document.createElement('span');
+        lastSegment.className = 'notes-tree-branch';
+        lastSegment.classList.add(isLast ? 'notes-tree-branch-end' : 'notes-tree-branch-elbow');
+        indentForItem.appendChild(lastSegment);
+    }
 
-            folder.type = 'button';
-            folder.className = 'notes-tree-folder';
-            folder.dataset.expanded = expanded ? 'true' : 'false';
-            folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-            folder.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
+    const label = document.createElement('span');
+    label.className = 'notes-tree-label';
+    label.textContent = node.name;
 
-            const label = document.createElement('span');
-            label.className = 'notes-tree-label';
-            label.textContent = node.name;
+    if (node.type === 'folder') {
+        const folder = document.createElement('button');
+        folder.type = 'button';
+        folder.className = 'notes-tree-folder';
+        folder.appendChild(indentForItem);
+        folder.appendChild(label);
 
-            folder.appendChild(label);
-            folder.addEventListener('click', () => {
-                toggleFolder(folderKey);
-            });
-            container.appendChild(folder);
+        const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
+        const expanded = state.expandedFolders[folderKey] !== false;
+        folder.dataset.expanded = expanded ? 'true' : 'false';
+        folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 
-            if (expanded) {
-                renderTreeNodes(container, category, node.children, depth + 1, ancestorHasNext.concat(!isLast));
-            }
-            return;
+        folder.addEventListener('click', () => {
+            toggleFolder(folderKey);
+        });
+        container.appendChild(folder);
+
+        // Render children if expanded
+        if (expanded && Array.isArray(node.children) && node.children.length > 0) {
+            const newContinueAtLevels = [...continueAtLevels];
+            newContinueAtLevels[depth] = !isLast; // Pass true to children if this node has siblings after it
+            renderTreeNodesList(container, category, node.children, depth + 1, newContinueAtLevels);
         }
-
+    } else {
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'notes-file notes-tree-file';
         item.dataset.file = node.file;
-        item.appendChild(createTreeIndent(depth, ancestorHasNext, isLast));
-
-        const label = document.createElement('span');
-        label.className = 'notes-tree-label';
-        label.textContent = node.name;
-
+        item.appendChild(indentForItem);
         item.appendChild(label);
 
         if (node.file === state.currentFile) {
@@ -374,6 +374,13 @@ function renderTreeNodes(container, category, nodes, depth = 0, ancestorHasNext 
         });
 
         container.appendChild(item);
+    }
+}
+
+function renderTreeNodesList(container, category, nodes, depth = 0, continueAtLevels = []) {
+    nodes.forEach((node, index) => {
+        const isLast = index === nodes.length - 1;
+        renderTreeNodeItem(container, category, node, depth, continueAtLevels, isLast);
     });
 }
 
@@ -1009,7 +1016,7 @@ function renderFileList() {
         categoryContent.className = 'notes-category-content';
         categoryContent.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
 
-        renderTreeNodes(categoryContent, category, buildFileTree(files));
+        renderTreeNodesList(categoryContent, category, buildFileTree(files));
 
         elements.list.appendChild(categoryContent);
     });
@@ -2853,13 +2860,21 @@ function applyWindowStyle(result) {
         }
 
         .notes-tree-branch-continue::before,
-        .notes-tree-branch-elbow::before,
-        .notes-tree-branch-end::before {
+        .notes-tree-branch-elbow::before {
             content: '';
             position: absolute;
             left: 0.8ch;
             top: -1px;
             bottom: -1px;
+            border-left: 1px solid currentColor;
+        }
+
+        .notes-tree-branch-end::before {
+            content: '';
+            position: absolute;
+            left: 0.8ch;
+            top: -1px;
+            bottom: 50%;
             border-left: 1px solid currentColor;
         }
 
@@ -2873,8 +2888,8 @@ function applyWindowStyle(result) {
             border-top: 1px solid currentColor;
         }
 
-        .notes-tree-branch-end::before {
-            bottom: calc(50% - 1px);
+        .notes-tree-branch-end::after {
+            top: 50%;
         }
 
         .notes-tree-label {
