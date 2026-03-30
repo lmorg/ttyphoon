@@ -53,6 +53,7 @@ app.innerHTML = `
             </div>
             <div id="notes-list" role="list"></div>
         </aside>
+        <div id="notes-splitter"></div>
         <main id="notes-main">
             <div id="notes-tabs" role="tablist">
                 <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
@@ -2518,7 +2519,7 @@ function applyWindowStyle(result) {
 
         #notes-app {
             display: grid;
-            grid-template-columns: 25% 1fr;
+            grid-template-columns: 1fr 8px 2fr;
             height: 100%;
             overflow: hidden;
             color: var(--fg);
@@ -2925,11 +2926,31 @@ function applyWindowStyle(result) {
             color: var(--error);
         }
 
+        #notes-splitter {
+            position: relative;
+            width: 8px;
+            cursor: col-resize;
+            user-select: none;
+            touch-action: none;
+            flex-shrink: 0;
+        }
+
+        #notes-splitter::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 100%;
+            background: color-mix(in srgb, var(--fg) 20%, transparent);
+        }
+
         #notes-main {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 2px 4px;
+            padding: 2px 0px;
             height: 100%;
             min-height: 0;
         }
@@ -3969,6 +3990,42 @@ elements.findPrev.addEventListener('click', () => {
 elements.findClose.addEventListener('click', () => {
     closeFindBar();
 });
+
+// Initialize splitter for resizable panels
+(function initSplitter() {
+    const splitter = document.getElementById('notes-splitter');
+    const app = document.getElementById('notes-app');
+    let isResizing = false;
+
+    splitter.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        const appRect = app.getBoundingClientRect();
+        const newLeftWidth = e.clientX - appRect.left;
+        const minWidth = 200;
+        const maxWidth = appRect.width - 200 - 8;
+
+        if (newLeftWidth > minWidth && newLeftWidth < maxWidth) {
+            const rightWidth = appRect.width - newLeftWidth - 8;
+            app.style.gridTemplateColumns = `${newLeftWidth}px 8px ${rightWidth}px`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+})();
 
 document.addEventListener('keydown', (event) => {
     // Block keyboard shortcuts if fullscreen image overlay is open

@@ -218,10 +218,6 @@ notesPane.style.cssText = [
     'height:100%',
     'overflow:hidden',
     'position:relative',
-    // Subtle separator between the two halves.  The notes module injects CSS
-    // variables for the theme colours; until those land we use a semi-transparent
-    // white border that is unobtrusive on any background.
-    'border-right:1px solid rgba(255,255,255,0.12)',
     'box-sizing:border-box',
     'flex-shrink:0',
 ].join(';');
@@ -248,7 +244,7 @@ splitHandleLine.style.cssText = [
     'transform:translateX(-50%)',
     'width:1px',
     'height:100%',
-    'background:rgba(255,255,255,0.16)',
+    'background:color-mix(in srgb, var(--fg) 20%, transparent)',
 ].join(';');
 splitHandle.appendChild(splitHandleLine);
 
@@ -481,7 +477,6 @@ function setTerminalJupyterMode(enabled) {
             notesOriginalStyle = {
                 width: notesPane.style.width,
                 height: notesPane.style.height,
-                borderRight: notesPane.style.borderRight,
                 overflow: notesPane.style.overflow,
                 position: notesPane.style.position,
                 flexShrink: notesPane.style.flexShrink,
@@ -527,7 +522,6 @@ function setTerminalJupyterMode(enabled) {
     if (notesOriginalStyle) {
         notesPane.style.width = notesOriginalStyle.width;
         notesPane.style.height = notesOriginalStyle.height;
-        notesPane.style.borderRight = notesOriginalStyle.borderRight;
         notesPane.style.overflow = notesOriginalStyle.overflow;
         notesPane.style.position = notesOriginalStyle.position;
         notesPane.style.flexShrink = notesOriginalStyle.flexShrink;
@@ -566,7 +560,6 @@ function setSplitFromClientX(clientX) {
     notesCollapsed = false;
     lastNotesWidthPercent = notesPercent;
     notesPane.style.width = `${notesPercent}%`;
-    notesPane.style.borderRight = '1px solid rgba(255,255,255,0.12)';
     updateSplitHandleTooltip();
 
     refreshStatusBarLayout();
