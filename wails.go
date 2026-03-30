@@ -669,7 +669,7 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") {
 			filename := strings.Replace(path, a.projRoot, "$PROJ", 1)
 			files = append(files, filename)
 		}
@@ -683,7 +683,7 @@ func (a *WApp) ListFiles() []string {
 
 func listFiles(path string, varName string) (files []string) {
 	files = listFilesWithGlob(path, varName, "*.md")
-	files = append(files, listFilesWithGlob(path, varName, "*swagger*.json")...)
+	files = append(files, listFilesWithGlob(path, varName, "*.json")...)
 	slices.Sort(files)
 	return files
 }

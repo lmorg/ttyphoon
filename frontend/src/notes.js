@@ -15,7 +15,7 @@ import hljs from "highlight.js/lib/common";
 import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
 import { 
-    isSwaggerFile, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
+    isJsonFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
@@ -178,7 +178,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
-    currentFileType: 'markdown',  // 'markdown' or 'swagger'
+    currentFileType: 'markdown',  // 'markdown' or 'json'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -197,6 +197,7 @@ const state = {
     jupyterCodeBlocks: {},
     jupyterBlockCounter: 0,
     swaggerSpec: null,
+    swaggerRunAvailable: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: ''
 };
@@ -393,8 +394,8 @@ function emitCurrentFileName() {
 
 function setViewMode(mode) {
     // Determine the mode based on current file type
-    if (state.currentFileType === 'swagger') {
-        if (mode === 'swagger-view' || mode === 'swagger-edit' || mode === 'swagger-run') {
+    if (state.currentFileType === 'json') {
+        if (mode === 'swagger-view' || mode === 'swagger-edit' || (mode === 'swagger-run' && state.swaggerRunAvailable)) {
             state.viewMode = mode;
         } else {
             state.viewMode = 'swagger-view';
@@ -875,17 +876,17 @@ function toggleCategory(category) {
  * Show/hide tabs based on file type
  */
 function updateTabVisibility(fileType) {
-    const isSwagger = fileType === 'swagger';
+    const isJson = fileType === 'json';
     
     // Hide/show markdown tabs
-    elements.tabViewer.style.display = isSwagger ? 'none' : '';
-    elements.tabEditor.style.display = isSwagger ? 'none' : '';
-    elements.tabJupyter.style.display = isSwagger ? 'none' : '';
+    elements.tabViewer.style.display = isJson ? 'none' : '';
+    elements.tabEditor.style.display = isJson ? 'none' : '';
+    elements.tabJupyter.style.display = isJson ? 'none' : '';
     
-    // Hide/show swagger tabs
-    elements.tabSwaggerView.style.display = isSwagger ? '' : 'none';
-    elements.tabSwaggerEdit.style.display = isSwagger ? '' : 'none';
-    elements.tabSwaggerRun.style.display = isSwagger ? '' : 'none';
+    // Hide/show JSON tabs
+    elements.tabSwaggerView.style.display = isJson ? '' : 'none';
+    elements.tabSwaggerEdit.style.display = isJson ? '' : 'none';
+    elements.tabSwaggerRun.style.display = isJson && state.swaggerRunAvailable ? '' : 'none';
 }
 
 function renderSwaggerJsonView() {
@@ -1268,11 +1269,11 @@ async function loadFile(file) {
     }
 
     try {
-        const loadingSwagger = isSwaggerFile(file);
-        const stickyId = loadingSwagger ? Date.now() : null;
-        const fileName = file ? file.split('/').pop() : 'swagger file';
+        const loadingJson = isJsonFile(file);
+        const stickyId = loadingJson ? Date.now() : null;
+        const fileName = file ? file.split('/').pop() : 'json file';
 
-        if (loadingSwagger) {
+        if (loadingJson) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
         }
 
@@ -1282,11 +1283,12 @@ async function loadFile(file) {
         emitCurrentFileName();
         
         // Detect file type
-        if (loadingSwagger) {
-            state.currentFileType = 'swagger';
-            updateStickyProgress(stickyId, `Loading ${fileName}… parsing spec`);
+        if (loadingJson) {
+            state.currentFileType = 'json';
+            updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
+            state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
 
             if (!state.swaggerSpec) {
                 closeStickyProgress(stickyId, `Failed to parse ${fileName}`, 'warn');
@@ -1295,8 +1297,8 @@ async function loadFile(file) {
             state.swaggerSelectedEndpoint = null;
             state.swaggerEndpointFilter = '';
             
-            // Update UI for swagger
-            updateTabVisibility('swagger');
+            // Update UI for JSON / swagger-capable JSON
+            updateTabVisibility('json');
             
             // Set editor content
             elements.swaggerEditor.value = doc || '';
@@ -1306,17 +1308,24 @@ async function loadFile(file) {
             await yieldToUI();
             renderSwaggerJsonView();
             
-            // Render swagger UI
-            updateStickyProgress(stickyId, `Loading ${fileName}… rendering run view`);
-            await yieldToUI();
-            renderSwaggerUI();
+            // Render swagger UI only for JSON documents with a top-level swagger key
+            if (state.swaggerRunAvailable) {
+                updateStickyProgress(stickyId, `Loading ${fileName}… rendering run view`);
+                await yieldToUI();
+                renderSwaggerUI();
+            } else {
+                elements.swaggerResponse.innerHTML = '';
+                elements.swaggerRequestBuilder.innerHTML = '';
+                elements.swaggerEndpoints.innerHTML = '';
+            }
             
-            // Set default view mode to swagger viewer
+            // Set default view mode to JSON viewer
             setViewMode('swagger-view');
             closeStickyProgress(stickyId);
         } else {
             state.currentFileType = 'markdown';
             state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
             
             // Update UI for markdown
             updateTabVisibility('markdown');
@@ -1355,7 +1364,7 @@ async function saveFile() {
     }
 
     try {
-        const content = state.currentFileType === 'swagger' 
+        const content = state.currentFileType === 'json' 
             ? elements.swaggerEditor.value 
             : elements.editor.value;
         
@@ -3250,15 +3259,19 @@ if (elements.swaggerEditor) {
     elements.swaggerEditor.addEventListener('input', () => {
         setDirty(true);
         scheduleAutoSave();
-        // Revalidate and refresh the swagger UI
-        try {
-            state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
-            renderSwaggerJsonView();
-            if (state.viewMode === 'swagger-run') {
-                renderSwaggerUI();
-            }
-        } catch (err) {
-            console.error('Failed to parse swagger spec:', err);
+        // Revalidate JSON, refresh the JSON view, and only expose Run for docs with a swagger key.
+        state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
+        state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
+        updateTabVisibility('json');
+        renderSwaggerJsonView();
+
+        if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+            setViewMode('swagger-view');
+            return;
+        }
+
+        if (state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+            renderSwaggerUI();
         }
     });
 }

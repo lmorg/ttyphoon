@@ -4,14 +4,22 @@
  */
 
 /**
- * Detect if a filename is a Swagger/OpenAPI file
+ * Detect if a filename is a JSON file
  * @param {string} filename - File path
- * @returns {boolean} True if file matches swagger/openapi pattern
+ * @returns {boolean} True if file ends with .json
  */
-export function isSwaggerFile(filename) {
+export function isJsonFile(filename) {
     if (!filename) return false;
-    const lower = filename.toLowerCase();
-    return (lower.includes('swagger') || lower.includes('openapi')) && lower.endsWith('.json');
+    return filename.toLowerCase().endsWith('.json');
+}
+
+/**
+ * Check whether a parsed JSON document has a top-level swagger key.
+ * @param {Object|null} spec - Parsed JSON object
+ * @returns {boolean} True if the top-level swagger key exists
+ */
+export function hasSwaggerKey(spec) {
+    return !!(spec && typeof spec === 'object' && !Array.isArray(spec) && Object.prototype.hasOwnProperty.call(spec, 'swagger'));
 }
 
 /**
