@@ -433,6 +433,8 @@ function setViewMode(mode) {
     elements.swaggerViewWrap.dataset.active = isSwaggerView ? 'true' : 'false';
     elements.swaggerEditWrap.dataset.active = isSwaggerEdit ? 'true' : 'false';
     elements.swaggerRunWrap.dataset.active = isSwaggerRun ? 'true' : 'false';
+
+    updateFindAvailability();
     
     // Re-perform find if find bar is open
     if (elements.findBar.dataset.open === 'true' && state.findQuery) {
@@ -1564,6 +1566,11 @@ async function confirmDelete() {
 }
 
 function openFindBar() {
+    if (!isFindAvailableInCurrentMode()) {
+        notifyTerminal('Find not supported in this view', 'info');
+        return;
+    }
+
     elements.findBar.dataset.open = 'true';
     elements.findBar.setAttribute('aria-hidden', 'false');
     setTimeout(() => {
@@ -1582,13 +1589,52 @@ function closeFindBar() {
     elements.findCounter.textContent = '';
 }
 
+function isFindAvailableInCurrentMode() {
+    return state.viewMode !== 'swagger-run';
+}
+
+function updateFindAvailability() {
+    const available = isFindAvailableInCurrentMode();
+    // Do not set disabled — that swallows click events and prevents the
+    // notification from firing. Use aria-disabled for accessibility only.
+    elements.find.setAttribute('aria-disabled', available ? 'false' : 'true');
+
+    if (!available && elements.findBar.dataset.open === 'true') {
+        closeFindBar();
+    }
+}
+
 function getActiveFindContainer() {
-    return state.viewMode === 'jupyter' ? elements.jupyter : elements.preview;
+    if (state.viewMode === 'jupyter') {
+        return elements.jupyter;
+    }
+
+    if (state.viewMode === 'swagger-view') {
+        return elements.swaggerView;
+    }
+
+    return elements.preview;
+}
+
+function getActiveFindEditor() {
+    if (state.viewMode === 'editor') {
+        return elements.editor;
+    }
+
+    if (state.viewMode === 'swagger-edit') {
+        return elements.swaggerEditor;
+    }
+
+    return null;
 }
 
 function clearHighlights() {
-    // Clear highlights in both rendered panes
-    [elements.preview, elements.jupyter].forEach((container) => {
+    // Clear highlights in all rendered panes that support find.
+    [elements.preview, elements.jupyter, elements.swaggerView].forEach((container) => {
+        if (!container) {
+            return;
+        }
+
         const highlights = container.querySelectorAll('.find-highlight');
         highlights.forEach((el) => {
             const parent = el.parentNode;
@@ -1597,13 +1643,18 @@ function clearHighlights() {
         });
     });
 
-    // Clear editor selection
-    if (state.viewMode === 'editor') {
-        elements.editor.setSelectionRange(0, 0);
+    const activeEditor = getActiveFindEditor();
+    if (activeEditor) {
+        activeEditor.setSelectionRange(0, 0);
     }
 }
 
 function performFind() {
+    if (!isFindAvailableInCurrentMode()) {
+        closeFindBar();
+        return;
+    }
+
     const query = elements.findInput.value;
     if (!query) {
         closeFindBar();
@@ -1615,7 +1666,7 @@ function performFind() {
     state.findMatches = [];
     state.findCurrentIndex = -1;
 
-    if (state.viewMode === 'editor') {
+    if (getActiveFindEditor()) {
         findInEditor();
     } else {
         findInRenderedPane();
@@ -1623,14 +1674,19 @@ function performFind() {
 
     if (state.findMatches.length > 0) {
         state.findCurrentIndex = 0;
-        highlightCurrentMatch();
+        highlightCurrentMatch({ focusEditor: false });
     }
 
     updateFindCounter();
 }
 
 function findInEditor() {
-    const text = elements.editor.value.toLowerCase();
+    const editorEl = getActiveFindEditor();
+    if (!editorEl) {
+        return;
+    }
+
+    const text = editorEl.value.toLowerCase();
     const query = state.findQuery.toLowerCase();
     let index = 0;
 
@@ -1646,6 +1702,10 @@ function findInEditor() {
 function findInRenderedPane() {
     const query = state.findQuery;
     const container = getActiveFindContainer();
+    if (!container) {
+        return;
+    }
+
     const walker = document.createTreeWalker(
         container,
         NodeFilter.SHOW_TEXT,
@@ -1695,24 +1755,36 @@ function findInRenderedPane() {
     });
 }
 
-function highlightCurrentMatch() {
+function highlightCurrentMatch({ focusEditor = true } = {}) {
     if (state.findMatches.length === 0 || state.findCurrentIndex === -1) {
         return;
     }
 
-    if (state.viewMode === 'editor') {
+    const editorEl = getActiveFindEditor();
+    if (editorEl) {
         const match = state.findMatches[state.findCurrentIndex];
-        elements.editor.focus();
-        elements.editor.setSelectionRange(match.start, match.end);
-        
-        // Scroll to the selection
-        const lineHeight = parseInt(getComputedStyle(elements.editor).lineHeight);
-        const textBeforeMatch = elements.editor.value.substring(0, match.start);
-        const lineNumber = (textBeforeMatch.match(/\n/g) || []).length;
-        elements.editor.scrollTop = lineNumber * lineHeight - elements.editor.clientHeight / 2;
+
+        // Scroll to the match without stealing focus (used during incremental search)
+        const cs = getComputedStyle(editorEl);
+        const fontSize = parseFloat(cs.fontSize) || 16;
+        const lineHeightRaw = cs.lineHeight;
+        const lineHeight = lineHeightRaw === 'normal' ? fontSize * 1.2 : parseFloat(lineHeightRaw);
+        const paddingTop = parseFloat(cs.paddingTop) || 0;
+        const lineNumber = (editorEl.value.substring(0, match.start).match(/\n/g) || []).length;
+        editorEl.scrollTop = Math.max(0, lineNumber * lineHeight + paddingTop - editorEl.clientHeight / 2);
+
+        if (focusEditor) {
+            editorEl.focus();
+            editorEl.setSelectionRange(match.start, match.end);
+        }
     } else {
+        const activeContainer = getActiveFindContainer();
+        if (!activeContainer) {
+            return;
+        }
+
         // Clear previous active highlight
-        const prevActive = getActiveFindContainer().querySelector('.find-highlight-active');
+        const prevActive = activeContainer.querySelector('.find-highlight-active');
         if (prevActive) {
             prevActive.classList.remove('find-highlight-active');
         }
