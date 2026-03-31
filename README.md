@@ -165,11 +165,9 @@ without breaking compatibility for legacy terminal emulators.
 
 ## Whats Left To Do
 
-In short, _a lot_!! Some of what has been detailed above is still aspirational.
-Some of it has already been delivered but in a _very_ alpha state. And while
-there is lots of error handling and unit tests, test coverage is still pretty
-low and exceptions will crash the terminal (quite deliberately, because I want
-to see where the application fails).
+In short, _a lot_!! Some of what has been detailed above is still in a _very_
+alpha state. And while there is lots of error handling and unit tests, test
+coverage is still pretty low.
 
 Below is a high level TODO list of features and compatibility. If an item is
 ticked but not working as expected, then please raise an issue in Github.
@@ -242,7 +240,7 @@ eg `xterm` and similar terminal emulators
 - [ ] Hyperlink support
   - [x] Auto-hyperlink files
   - [x] Auto-hyperlink URLs
-  - [ ] ANSI escape sequence supported
+  - [ ] ANSI escape sequence supported (rejected because of safety concerns)
 - [ ] Bracketed paste mode
 - [x] Inlining images
   - [x] TTYphoon codes
@@ -311,7 +309,8 @@ Currently TTYphoon can only be compiled from source.
 To do so you will need the following installed:
 - C compiler (eg GNU C)
 - Go compiler
-- wails
+- [wails](https://wails.io/) command line tool
+- GNU Make (available by default on POSIX systems)
 
 Aside from that, it's as easy as running `make build` from the git repository
 root directory.
