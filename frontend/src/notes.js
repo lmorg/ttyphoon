@@ -50,6 +50,9 @@ app.innerHTML = `
         <aside id="notes-sidebar">
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
+                <div id="notes-list-filter-wrap">
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" />
+                </div>
             </div>
             <div id="notes-list" role="list"></div>
         </aside>
@@ -138,6 +141,7 @@ app.innerHTML = `
 const elements = {
     title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
+    listFilter: document.getElementById('notes-list-filter'),
     editor: document.getElementById('notes-editor'),
     preview: document.getElementById('notes-preview'),
     jupyter: document.getElementById('notes-jupyter'),
@@ -197,6 +201,7 @@ const state = {
     findMatches: [],
     findCurrentIndex: -1,
     findQuery: '',
+    fileFilterQuery: '',
     expandedCategories: {
         '$GLOBAL': true,
         '$NOTES': true,
@@ -338,7 +343,8 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.appendChild(label);
 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
-        const expanded = state.expandedFolders[folderKey] !== false;
+        const hasActiveFilter = state.fileFilterQuery.trim() !== '';
+        const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 
@@ -953,13 +959,37 @@ async function refreshFiles() {
     }
 }
 
+function getFilteredFiles() {
+    const query = state.fileFilterQuery.trim().toLowerCase();
+    if (!query) {
+        return state.files;
+    }
+
+    return state.files.filter((file) => {
+        const normalizedFile = String(file || '').toLowerCase();
+        const fileName = getPathFileName(file).toLowerCase();
+        return normalizedFile.includes(query) || fileName.includes(query);
+    });
+}
+
 function renderFileList() {
     elements.list.innerHTML = '';
+
+    const filteredFiles = getFilteredFiles();
+    const hasActiveFilter = state.fileFilterQuery.trim() !== '';
 
     if (state.files.length === 0) {
         const empty = document.createElement('div');
         empty.id = 'notes-empty';
         empty.textContent = 'No notes found.';
+        elements.list.appendChild(empty);
+        return;
+    }
+
+    if (filteredFiles.length === 0) {
+        const empty = document.createElement('div');
+        empty.id = 'notes-empty';
+        empty.textContent = 'No matching files.';
         elements.list.appendChild(empty);
         return;
     }
@@ -972,7 +1002,7 @@ function renderFileList() {
         '$HISTORY': []
     };
 
-    state.files.forEach((file) => {
+    filteredFiles.forEach((file) => {
         const { category } = splitCategoryPath(file);
 
         if (category === '$GLOBAL') {
@@ -993,32 +1023,36 @@ function renderFileList() {
             return;
         }
 
+        const categoryExpanded = hasActiveFilter ? true : state.expandedCategories[category];
+
         // Create category header
         const categoryHeader = document.createElement('div');
         categoryHeader.className = 'notes-category-header';
         categoryHeader.dataset.category = category;
-        categoryHeader.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+        categoryHeader.dataset.expanded = categoryExpanded ? 'true' : 'false';
         
         const arrow = document.createElement('span');
         arrow.className = 'notes-category-arrow';
-        arrow.textContent = state.expandedCategories[category] ? '▼' : '▶';
+        arrow.textContent = categoryExpanded ? '▼' : '▶';
         
         const label = document.createElement('span');
         label.textContent = category;
         
         categoryHeader.appendChild(arrow);
         categoryHeader.appendChild(label);
-        
-        categoryHeader.addEventListener('click', () => {
-            toggleCategory(category);
-        });
+
+        if (!hasActiveFilter) {
+            categoryHeader.addEventListener('click', () => {
+                toggleCategory(category);
+            });
+        }
         
         elements.list.appendChild(categoryHeader);
 
         // Create category content container
         const categoryContent = document.createElement('div');
         categoryContent.className = 'notes-category-content';
-        categoryContent.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+        categoryContent.dataset.expanded = categoryExpanded ? 'true' : 'false';
 
         renderTreeNodesList(categoryContent, category, buildFileTree(files));
 
@@ -2536,6 +2570,7 @@ function applyWindowStyle(result) {
             gap: 12px;
             min-height: 0;
             overflow: hidden;
+            background-color: rgba(0, 0, 0, 0.2);
         }
 
         #notes-sidebar-header {
@@ -2547,7 +2582,31 @@ function applyWindowStyle(result) {
         #notes-title {
             font-size: ${notesTitleFontSize}px;
             color: var(--accent);
-            padding: 10px;
+            padding: 10px 10px 0 10px;
+        }
+
+        #notes-list-filter-wrap {
+            padding: 0 10px;
+        }
+
+        #notes-list-filter {
+            width: 100%;
+            border-radius: 5px;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
+            color: var(--fg);
+            padding: 6px 8px;
+            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            outline: none;
+        }
+
+        #notes-list-filter::placeholder {
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.55);
+        }
+
+        #notes-list-filter:focus {
+            border-color: var(--accent);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.16);
         }
 
         #notes-actions {
@@ -3982,6 +4041,22 @@ elements.deleteConfirm.addEventListener('click', () => {
 elements.findInput.addEventListener('input', () => {
     performFind();
 });
+
+if (elements.listFilter) {
+    elements.listFilter.addEventListener('input', (event) => {
+        state.fileFilterQuery = event.target.value || '';
+        renderFileList();
+    });
+
+    elements.listFilter.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && elements.listFilter.value) {
+            event.preventDefault();
+            elements.listFilter.value = '';
+            state.fileFilterQuery = '';
+            renderFileList();
+        }
+    });
+}
 
 elements.findNext.addEventListener('click', () => {
     nextMatch();
