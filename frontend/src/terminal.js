@@ -457,7 +457,32 @@ function drawCell(cmd) {
     }
 
     if (cmd.char) {
+        if (cmd.searchResult) {
+            const wsr = windowStyle?.colors?.searchResult;
+            const outline = wsr
+                ? `rgb(${wsr.Red}, ${wsr.Green}, ${wsr.Blue})`
+                : 'rgb(64, 64, 255)';
+
+            const wswb = windowStyle?.colors?.whiteBright;
+            const fill = wswb
+                ? `rgb(${wswb.Red}, ${wswb.Green}, ${wswb.Blue})`
+                : 'rgb(64, 64, 255)';
+            
+            offCtx.lineWidth = 1;
+            offCtx.strokeStyle = outline;
+            offCtx.strokeText(cmd.char, x, y);
+                
+            offCtx.shadowColor = outline;
+            offCtx.shadowBlur = 6;
+            offCtx.fillStyle = fill;
+        }
         offCtx.fillText(cmd.char, x, y);
+        if (cmd.searchResult) {
+            offCtx.shadowColor = 'transparent';
+            offCtx.shadowBlur = 0;
+            offCtx.lineWidth = 0;
+            offCtx.strokeStyle = 'transparent';
+        }
     }
 
     if (cmd.underline) {

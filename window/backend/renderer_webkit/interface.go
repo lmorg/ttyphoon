@@ -124,6 +124,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 			Selection:     *types.COLOR_SELECTION,
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
+			SearchResult:  *types.COLOR_SEARCH_RESULT,
 		},
 		StatusBar:        config.Config.Window.StatusBar,
 		FontFamily:       fontFamily,
@@ -157,6 +158,7 @@ type coloursPayload struct {
 	Selection     types.Colour `json:"selection"`
 	Link          types.Colour `json:"link"`
 	Error         types.Colour `json:"error"`
+	SearchResult  types.Colour `json:"searchResult"`
 }
 
 func (wr *webkitRender) tmuxTabs() []terminalTab {

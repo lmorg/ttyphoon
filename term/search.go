@@ -116,16 +116,20 @@ func (term *Term) _searchBuf(buf types.Screen, fnSearch func(string) []int) bool
 				phrase: phrase,
 			})
 
-			// highlight
-			x, z := inStr[0], 0
-			for i := range inStr[1] {
-				if x+i >= len(buf[y+z].Cells) {
-					x = 0
-					z++
+			// highlight the entire matched line(s), including wrapped continuation rows
+			for rowOffset := 0; y+rowOffset < len(buf); rowOffset++ {
+				matchRow := buf[y+rowOffset]
+				if rowOffset > 0 && !matchRow.RowMeta.Is(types.META_ROW_FROM_LINE_OVERFLOW) {
+					break
 				}
-				buf[y+z].Cells[x+i].Sgr = buf[y+z].Cells[x+i].Sgr.Copy()
-				buf[y+z].Cells[x+i].Sgr.Bitwise.Set(types.SGR_HIGHLIGHT_SEARCH_RESULT)
-				term._searchHlHistory = append(term._searchHlHistory, buf[y].Cells[x+i])
+				for _, cell := range matchRow.Cells {
+					if cell == nil || cell.Sgr == nil {
+						continue
+					}
+					cell.Sgr = cell.Sgr.Copy()
+					cell.Sgr.Bitwise.Set(types.SGR_HIGHLIGHT_SEARCH_RESULT)
+					term._searchHlHistory = append(term._searchHlHistory, cell)
+				}
 			}
 
 			if firstMatch == -1 {
