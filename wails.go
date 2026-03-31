@@ -671,7 +671,7 @@ func (a *WApp) ListFiles() []string {
 
 		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
 			strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
-			filename := strings.Replace(path, a.projRoot, "$PROJ", 1)
+			filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
 			files = append(files, filename)
 		}
 		return nil
@@ -723,7 +723,7 @@ func (a *WApp) AddToFileList(filename string) {
 
 func (a *WApp) expandMappingFunc(s string) string {
 	switch s {
-	case "PROJ":
+	case "PROJECT":
 		return a.projRoot
 	case "NOTES":
 		return a.usrNotesDir

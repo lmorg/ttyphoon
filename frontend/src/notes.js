@@ -200,7 +200,7 @@ const state = {
     expandedCategories: {
         '$GLOBAL': true,
         '$NOTES': true,
-        '$PROJ': true,
+        '$PROJECT': true,
         '$HISTORY': false,
     },
     expandedFolders: {},
@@ -968,7 +968,8 @@ function renderFileList() {
     const categories = {
         '$GLOBAL': [],
         '$NOTES': [],
-        '$PROJ': []
+        '$PROJECT': [],
+        '$HISTORY': []
     };
 
     state.files.forEach((file) => {
@@ -978,8 +979,10 @@ function renderFileList() {
             categories['$GLOBAL'].push(file);
         } else if (category === '$NOTES') {
             categories['$NOTES'].push(file);
-        } else if (category === '$PROJ') {
-            categories['$PROJ'].push(file);
+        } else if (category === '$PROJECT') {
+            categories['$PROJECT'].push(file);
+        } else if (category === '$HISTORY') {
+            categories['$HISTORY'].push(file);
         }
     });
 
@@ -2530,7 +2533,6 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             padding: 0;
-            padding-right: 5px;
             gap: 12px;
             min-height: 0;
             overflow: hidden;
@@ -2762,6 +2764,7 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            padding-right: 5px;
         }
 
         .notes-category-header {
@@ -2771,13 +2774,15 @@ function applyWindowStyle(result) {
             padding: 3px 6px;
             cursor: pointer;
             color: var(--accent);
-            font-weight: bold;
+            /*font-weight: bold;*/
             border: 2px solid transparent;
             user-select: none;
+            border-radius: 5px;
         }
 
         .notes-category-header:hover {
-            border-color: var(--selection);
+            /*border-color: var(--selection);*/
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
         .notes-category-arrow {
