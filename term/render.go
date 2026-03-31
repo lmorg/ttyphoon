@@ -113,7 +113,14 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 	}
 	for y = 0; y < len(screen); y++ {
 		if len(screen[y].Hidden) != 0 {
-			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 0, _outputBlockChromeColour(screen[y].Hidden[len(screen[y].Hidden)-1].Block.Meta), true)
+			lastHidden := screen[y].Hidden[len(screen[y].Hidden)-1]
+			var foldColour *types.Colour
+			if lastHidden.RowMeta.Is(types.META_ROW_END_BLOCK) {
+				foldColour = _outputBlockChromeColour(lastHidden.Block.Meta)
+			} else {
+				foldColour = types.COLOR_FOLDED
+			}
+			term.renderer.DrawOutputBlockChrome(term.tile, int32(y), 0, foldColour, true)
 		}
 		if screen[y].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) {
 			begin = y

@@ -3,6 +3,8 @@ package rendererwebkit
 import "github.com/lmorg/ttyphoon/types"
 
 func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.MouseButtonT, clicks uint8, state types.ButtonStateT) {
+	defer wr.TriggerRedraw()
+
 	tile := wr.getTileFromCellOrActive(cellX, cellY)
 	if tile == nil || tile.GetTerm() == nil {
 		return
@@ -31,10 +33,6 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	}
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	/*if pos.X == -1 {
-		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})
-		return
-	}*/
 
 	switch button {
 	case types.MOUSE_BUTTON_RIGHT:
