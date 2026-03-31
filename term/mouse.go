@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"bytes"
 	"fmt"
+	"runtime/debug"
 	"text/template"
 	"time"
 
@@ -243,6 +244,13 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 }
 
 func (term *Term) MouseHover(pos *types.XY) {
+	defer func() {
+		if r := recover(); r != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Panic: %v", r))
+			debug.PrintStack()
+		}
+	}()
+
 	if term._mousePosRenderer.Call() {
 		return
 	}

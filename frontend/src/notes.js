@@ -2529,10 +2529,8 @@ function applyWindowStyle(result) {
         #notes-sidebar {
             display: flex;
             flex-direction: column;
-            padding-left: 15px;
-            padding-top: 10px;
-            padding-right: 0px;
-            padding-bottom: 5px;
+            padding: 0;
+            padding-right: 5px;
             gap: 12px;
             min-height: 0;
             overflow: hidden;
@@ -2547,6 +2545,7 @@ function applyWindowStyle(result) {
         #notes-title {
             font-size: ${notesTitleFontSize}px;
             color: var(--accent);
+            padding: 10px;
         }
 
         #notes-actions {
