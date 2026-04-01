@@ -694,11 +694,15 @@ function convertToJupyterCodeBlocks() {
         runTerminalBtn.textContent = 'Send to terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
-        const runtimeDropdown = document.createElement('select');
-        runtimeDropdown.className = 'jupyter-runtime-dropdown';
-        runtimeDropdown.title = 'Select runtime';
-        
-        // Populate dropdown immediately
+        const runtimeLink = document.createElement('button');
+        runtimeLink.type = 'button';
+        runtimeLink.className = 'jupyter-runtime-dropdown';
+        runtimeLink.title = 'Select runtime';
+        runtimeLink.textContent = language || 'language unknown';
+
+        let runtimeOptions = [];
+
+        // Load runtime options immediately
         (async () => {
             try {
                 const hasLanguage = Boolean(language);
@@ -744,50 +748,49 @@ function convertToJupyterCodeBlocks() {
                     }
                 }
 
-                // Populate dropdown
-                runtimeDropdown.innerHTML = '';
-
-                // If we have a custom default that's not in the list, add it first
+                // Build ordered options list (prepend custom default if not already present)
+                runtimeOptions = [];
                 if (defaultSelection && !descriptions.includes(defaultSelection)) {
-                    const option = document.createElement('option');
-                    option.value = defaultSelection;
-                    option.textContent = defaultSelection;
-                    runtimeDropdown.appendChild(option);
+                    runtimeOptions.push(defaultSelection);
                 }
+                runtimeOptions.push(...descriptions);
 
-                // Add all available descriptions
-                descriptions.forEach((desc) => {
-                    const option = document.createElement('option');
-                    option.value = desc;
-                    option.textContent = desc;
-                    if (desc === defaultSelection) {
-                        option.selected = true;
-                    }
-                    runtimeDropdown.appendChild(option);
-                });
-
-                // Set runtime state
-                state.jupyterCodeBlocks[blockId].runtime = defaultSelection
+                // Set runtime state and update button label
+                const resolved = defaultSelection
                     || (descriptions.length > 0 ? descriptions[0] : language || 'language unknown');
+                state.jupyterCodeBlocks[blockId].runtime = resolved;
+                runtimeLink.textContent = resolved;
 
             } catch (err) {
                 console.error('Error fetching language descriptions:', err);
-                const option = document.createElement('option');
-                option.value = language || 'language unknown';
-                option.textContent = language || 'language unknown';
-                runtimeDropdown.appendChild(option);
-                state.jupyterCodeBlocks[blockId].runtime = language || 'language unknown';
+                const fallback = language || 'language unknown';
+                runtimeOptions = [fallback];
+                state.jupyterCodeBlocks[blockId].runtime = fallback;
+                runtimeLink.textContent = fallback;
             }
         })();
-        
-        runtimeDropdown.addEventListener('change', () => {
-            state.jupyterCodeBlocks[blockId].runtime = runtimeDropdown.value;
+
+        runtimeLink.addEventListener('click', () => {
+            const rect = runtimeLink.getBoundingClientRect();
+            showNotesLocalMenu(
+                runtimeOptions.map((desc) => ({
+                    title: desc,
+                    icon: desc === state.jupyterCodeBlocks[blockId].runtime ? 0xf00c : 0,
+                    onSelect: () => {
+                        state.jupyterCodeBlocks[blockId].runtime = desc;
+                        runtimeLink.textContent = desc;
+                    },
+                })),
+                rect.left,
+                rect.bottom,
+                'Select runtime',
+            );
         });
         
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(stopNotesBtn);
         toolbar.appendChild(runTerminalBtn);
-        toolbar.appendChild(runtimeDropdown);
+        toolbar.appendChild(runtimeLink);
         
         const editableCode = document.createElement('textarea');
         editableCode.className = 'jupyter-code-editable';
@@ -1409,6 +1412,8 @@ function renderSwaggerUI() {
         descEl.innerHTML = marked.parse(markdown);
         processMarkdownContainer(descEl);
     });
+
+    setupSwaggerMethodSelector();
     
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
@@ -1424,6 +1429,64 @@ function renderSwaggerUI() {
             nextFilterInput.setSelectionRange(start, end);
         }
     }
+}
+
+function getSwaggerMethodsForPath(path) {
+    if (!path || !state.swaggerSpec || !state.swaggerSpec.paths || !state.swaggerSpec.paths[path]) {
+        return [];
+    }
+
+    const pathItem = state.swaggerSpec.paths[path];
+    const methodOrder = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
+    const methods = [];
+
+    for (const method of methodOrder) {
+        if (pathItem && pathItem[method]) {
+            methods.push(method.toUpperCase());
+        }
+    }
+
+    const currentMethod = state.swaggerSelectedEndpoint && state.swaggerSelectedEndpoint.method
+        ? state.swaggerSelectedEndpoint.method.toUpperCase()
+        : '';
+    if (currentMethod && !methods.includes(currentMethod)) {
+        methods.unshift(currentMethod);
+    }
+
+    return methods;
+}
+
+function setupSwaggerMethodSelector() {
+    const methodButton = elements.swaggerRequestBuilder.querySelector('.swagger-method-selector');
+    if (!methodButton || !state.swaggerSelectedEndpoint || !state.swaggerSelectedEndpoint.path) {
+        return;
+    }
+
+    methodButton.textContent = state.swaggerSelectedEndpoint.method;
+    methodButton.addEventListener('click', () => {
+        const methods = getSwaggerMethodsForPath(state.swaggerSelectedEndpoint.path);
+        if (methods.length === 0) {
+            return;
+        }
+
+        const rect = methodButton.getBoundingClientRect();
+        showNotesLocalMenu(
+            methods.map((method) => ({
+                title: method,
+                icon: method === String(state.swaggerSelectedEndpoint.method || '').toUpperCase() ? 0xf00c : 0,
+                onSelect: () => {
+                    state.swaggerSelectedEndpoint = {
+                        path: state.swaggerSelectedEndpoint.path,
+                        method,
+                    };
+                    renderSwaggerUI();
+                },
+            })),
+            rect.left,
+            rect.bottom,
+            'Select method',
+        );
+    });
 }
 
 function setupSwaggerEndpointSelection() {
@@ -3403,12 +3466,11 @@ function applyWindowStyle(result) {
             opacity: 0.8;
             cursor: pointer;
             outline: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
             text-align: right;
             align-items: right;
             vertical-align: middle;
+            background: none;
+            font-family: var(--font-family);
         }
 
         .jupyter-runtime-dropdown:hover {
@@ -3419,12 +3481,6 @@ function applyWindowStyle(result) {
         .jupyter-runtime-dropdown:focus {
             opacity: 1;
             color: var(--fg);
-        }
-
-        .jupyter-runtime-dropdown option {
-            background-color: var(--bg);
-            color: var(--fg);
-            padding: 4px 8px;
         }
 
         .jupyter-code-editor {
@@ -3530,7 +3586,7 @@ function applyWindowStyle(result) {
             padding: 12px;
             border: 1px solid transparent;
             background-color: var(--bg);
-            color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             resize: none;
@@ -3708,7 +3764,7 @@ function applyWindowStyle(result) {
             flex-direction: column;
             height: 100%;
             overflow: hidden;
-            padding: 12px;
+            padding: 0;
         }
 
         ${getSwaggerUIStyles(result.colors, result.fontSize)}

@@ -338,11 +338,13 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-endpoints-pane {
             min-height: 0;
-            height: 250px;
-            max-height: 250px;
+            height: 220px;
+            max-height: 220px;
             overflow: auto;
             border: 1px solid rgba(${fgRgb}, 0.2);
-            border-radius: 4px;
+            border-radius: 0;
+            border-left: 0;
+            border-right: 0;
             background-color: rgba(${fgRgb}, 0.03);
             padding: 8px;
             flex-shrink: 0;
@@ -351,8 +353,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         /* Spec Info Header */
         .swagger-info {
-            padding: 4px 0 8px;
+            padding: 0;
             margin-bottom: 4px;
+            padding-left: 5px;
         }
 
         .swagger-info-title {
@@ -433,8 +436,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
             overflow: visible;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding-right: 4px;
+            gap: 0px;
+            padding-left: 5px;
+            padding-right: 0;
         }
 
         .swagger-endpoint-sticky {
@@ -485,16 +489,22 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-method-selector {
-            padding: 6px 12px;
-            border: 1px solid rgba(${fgRgb}, 0.3);
-            border-radius: 3px;
-            background-color: var(--bg);
-            color: var(--fg);
+            padding: 2px 4px;
+            border: none;
+            background: none;
+            color: var(--accent);
             font-weight: bold;
-            cursor: not-allowed;
-            opacity: 0.7;
-            min-width: 80px;
+            cursor: pointer;
+            opacity: 0.9;
+            min-width: 0;
             font-family: var(--font-family);
+        }
+
+        .swagger-method-selector:hover,
+        .swagger-method-selector:focus {
+            color: var(--fg);
+            opacity: 1;
+            outline: none;
         }
 
         .swagger-url-input {

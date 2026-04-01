@@ -431,9 +431,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                     <h2 class="swagger-endpoint-title">${escapeHtml(endpointTitle)}</h2>
                 </div>
                 <div class="swagger-method-url-bar">
-                    <select class="swagger-method-selector" disabled>
-                        <option selected>${selectedEndpoint.method}</option>
-                    </select>
+                    <button type="button" class="swagger-method-selector" title="Select method">${selectedEndpoint.method}</button>
                     <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
                     <button class="swagger-send-btn">Send</button>
                 </div>
