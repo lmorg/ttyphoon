@@ -1104,6 +1104,25 @@ function isYamlStructuredFile(fileName) {
     return /\.ya?ml$/i.test(fileName || '');
 }
 
+function isJsonStructuredFile(fileName) {
+    return /\.json$/i.test(fileName || '');
+}
+
+function formatStructuredEditorJson(pretty) {
+    const source = String(elements.swaggerEditor?.value || '');
+
+    try {
+        const parsed = JSON.parse(source);
+        elements.swaggerEditor.value = pretty
+            ? JSON.stringify(parsed, null, 2)
+            : JSON.stringify(parsed);
+
+        elements.swaggerEditor.dispatchEvent(new Event('input'));
+    } catch {
+        setStatus('Cannot format invalid JSON content.', true);
+    }
+}
+
 function stringifyStructuredDocument(value) {
     if (isYamlStructuredFile(state.currentFile)) {
         return YAML.stringify(value);
@@ -2363,6 +2382,16 @@ function getEditorSelectionText() {
     const start = elements.editor.selectionStart;
     const end = elements.editor.selectionEnd;
     return elements.editor.value.slice(start, end);
+}
+
+function getTextareaSelectionText(textarea) {
+    if (!textarea) {
+        return '';
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    return textarea.value.slice(start, end);
 }
 
 function getRenderedSelectionText(container) {
@@ -3895,12 +3924,12 @@ EventsOn('terminalStyleUpdate', payload => {
 refreshFiles();
 window.refreshFiles = refreshFiles;
 
-function insertEditorText(text) {
+function insertEditorText(text, target = elements.editor) {
     if (!text) {
         return;
     }
 
-    elements.editor.focus();
+    target.focus();
     document.execCommand('insertText', false, text);
 }
 
@@ -3989,19 +4018,19 @@ function decodeClipboardPayload(payload) {
     };
 }
 
-async function pasteFromGoClipboard() {
+async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePaste = true) {
     try {
         const payload = await GetClipboardData();
         const { text, image } = decodeClipboardPayload(payload);
 
-        if (image !== '') {
+        if (allowImagePaste && image !== '') {
             const dataUrl = `data:image/png;base64,${image}`;
             await savePastedImageDataUrl(dataUrl, 'image/png');
             return;
         }
 
         if (text !== '') {
-            insertEditorText(text);
+            insertEditorText(text, targetEditor);
         }
     } catch (err) {
         setStatus('Failed to paste from clipboard.', true);
@@ -4043,6 +4072,7 @@ if (elements.swaggerEditor) {
 }
 
 let _editorSelectionBeforeContextMenu = null;
+let _swaggerEditorSelectionBeforeContextMenu = null;
 
 elements.editor.addEventListener('mousedown', (e) => {
     if (e.button === 2) {
@@ -4126,6 +4156,64 @@ elements.editor.addEventListener('contextmenu', (e) => {
             },
         });
     }
+
+    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
+});
+
+elements.swaggerEditor.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+        _swaggerEditorSelectionBeforeContextMenu = {
+            start: elements.swaggerEditor.selectionStart,
+            end: elements.swaggerEditor.selectionEnd,
+        };
+    }
+});
+
+elements.swaggerEditor.addEventListener('contextmenu', (e) => {
+    // Restore selection that WebKit changed on right-click
+    if (_swaggerEditorSelectionBeforeContextMenu !== null) {
+        elements.swaggerEditor.selectionStart = _swaggerEditorSelectionBeforeContextMenu.start;
+        elements.swaggerEditor.selectionEnd = _swaggerEditorSelectionBeforeContextMenu.end;
+        _swaggerEditorSelectionBeforeContextMenu = null;
+    }
+    e.preventDefault();
+
+    const menuItems = [
+        createCopyMenuItem(() => getTextareaSelectionText(elements.swaggerEditor), 'Copy'),
+        {
+            title: 'Paste',
+            icon: CONTEXT_ICON_PASTE,
+            onSelect: async () => {
+                await pasteFromGoClipboard(elements.swaggerEditor, false);
+            },
+        },
+    ];
+
+    if (isJsonStructuredFile(state.currentFile)) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Format: Minify',
+                icon: 0,
+                onSelect: () => {
+                    formatStructuredEditorJson(false);
+                },
+            },
+            {
+                title: 'Format: Expand All',
+                icon: 0,
+                onSelect: () => {
+                    formatStructuredEditorJson(true);
+                },
+            },
+        );
+    }
+
+    menuItems.push(
+        { title: '-' },
+        createFindMenuItem('Find text...'),
+        createPrintMenuItem('Print...'),
+    );
 
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
