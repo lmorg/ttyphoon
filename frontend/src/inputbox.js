@@ -1,5 +1,6 @@
 import { TerminalInputBoxSubmit } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import { showLocalMenu } from './popup_menu';
 import './inputbox.css';
 
 function ensureInputBoxDom() {
@@ -19,10 +20,10 @@ function ensureInputBoxDom() {
                 <div class="inputbox-title" id="inputbox-title"></div>
                 <div id="inputbox-input-container"></div>
                 <div class="inputbox-hint">Return to confirm &nbsp;&nbsp; Escape to cancel</div>
-                <select id="inputbox-history" class="inputbox-history"></select>
                 <div class="inputbox-buttons">
                     <button class="inputbox-btn inputbox-ok" id="inputbox-ok">OK</button>
                     <button class="inputbox-btn inputbox-cancel" id="inputbox-cancel">Cancel</button>
+                    <button class="inputbox-btn inputbox-history-btn" id="inputbox-history-btn" title="History" aria-label="History" style="display:none">&#xf141;</button>
                 </div>
             </div>
         </div>
@@ -35,17 +36,18 @@ export function initInputBox(canvas) {
 
     const inputboxOverlay = document.getElementById('terminal-inputbox');
     const inputboxInputContainer = document.getElementById('inputbox-input-container');
-    const inputboxHistory = document.getElementById('inputbox-history');
+    const inputboxHistoryBtn = document.getElementById('inputbox-history-btn');
     const inputboxTitle = document.getElementById('inputbox-title');
     const inputboxOkBtn = document.getElementById('inputbox-ok');
     const inputboxCancel = document.getElementById('inputbox-cancel');
 
-    if (!inputboxOverlay || !inputboxInputContainer || !inputboxHistory || !inputboxTitle || !inputboxOkBtn || !inputboxCancel) {
+    if (!inputboxOverlay || !inputboxInputContainer || !inputboxHistoryBtn || !inputboxTitle || !inputboxOkBtn || !inputboxCancel) {
         return;
     }
 
     let inputboxId = null;
     let inputboxInput = null;
+    let inputboxHistoryItems = [];
 
     function autoGrowTextarea(textarea) {
         textarea.style.height = 'auto';
@@ -76,26 +78,39 @@ export function initInputBox(canvas) {
     inputboxOkBtn.addEventListener('click', () => inputboxSubmit(true));
     inputboxCancel.addEventListener('click', () => inputboxSubmit(false));
 
+    inputboxHistoryBtn.addEventListener('click', () => {
+        if (!inputboxInput || inputboxHistoryItems.length === 0) {
+            return;
+        }
+
+        const rect = inputboxHistoryBtn.getBoundingClientRect();
+        showLocalMenu({
+            title: 'History',
+            options: inputboxHistoryItems,
+            x: rect.left,
+            y: rect.bottom,
+            onSelect: (index) => {
+                const value = inputboxHistoryItems[index];
+                if (!value || !inputboxInput) {
+                    return;
+                }
+
+                inputboxInput.value = value;
+                inputboxInput.focus();
+
+                if (inputboxInput.tagName === 'TEXTAREA') {
+                    autoGrowTextarea(inputboxInput);
+                } else if (typeof inputboxInput.select === 'function') {
+                    inputboxInput.select();
+                }
+            },
+        });
+    });
+
     // Clicks on the backdrop (outside the dialog) cancel.
     inputboxOverlay.addEventListener('click', (e) => {
         if (e.target === inputboxOverlay) {
             inputboxSubmit(false);
-        }
-    });
-
-    inputboxHistory.addEventListener('change', (e) => {
-        if (!inputboxInput || !e.target.value) {
-            return;
-        }
-
-        inputboxInput.value = e.target.value;
-        e.target.value = '';
-        inputboxInput.focus();
-
-        if (inputboxInput.tagName === 'TEXTAREA') {
-            autoGrowTextarea(inputboxInput);
-        } else if (typeof inputboxInput.select === 'function') {
-            inputboxInput.select();
         }
     });
 
@@ -152,27 +167,8 @@ export function initInputBox(canvas) {
             });
         }
 
-        inputboxHistory.innerHTML = '';
-        const history = Array.isArray(p.history) ? p.history : [];
-        if (history.length > 0) {
-            const placeholderOption = document.createElement('option');
-            placeholderOption.value = '';
-            placeholderOption.textContent = 'History...';
-            placeholderOption.disabled = true;
-            placeholderOption.selected = true;
-            inputboxHistory.appendChild(placeholderOption);
-
-            history.forEach((item) => {
-                const option = document.createElement('option');
-                option.value = item;
-                option.textContent = item;
-                inputboxHistory.appendChild(option);
-            });
-
-            inputboxHistory.style.display = 'block';
-        } else {
-            inputboxHistory.style.display = 'none';
-        }
+        inputboxHistoryItems = Array.isArray(p.history) ? p.history : [];
+        inputboxHistoryBtn.style.display = inputboxHistoryItems.length > 0 ? 'inline-flex' : 'none';
 
         inputboxInputContainer.appendChild(inputboxInput);
         inputboxOverlay.style.display = 'flex';

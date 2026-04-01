@@ -509,7 +509,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                 valueHtml = `
                     <div class="swagger-header-value-wrap">
                         <input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />
-                        <button type="button" class="swagger-header-dropdown" data-header-name="${escapeHtml(header.name)}" data-header-options="${escapeHtml(JSON.stringify(header.options))}" title="Select value" aria-label="Select ${escapeHtml(header.name)} value">&#xf150;</button>
+                        <button type="button" class="swagger-header-dropdown" data-header-name="${escapeHtml(header.name)}" data-header-options="${escapeHtml(JSON.stringify(header.options))}" title="Select value" aria-label="Select ${escapeHtml(header.name)} value">&#xf141;</button>
                     </div>
                 `;
             } else {
