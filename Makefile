@@ -36,6 +36,7 @@ run-webkit:
 # Test
 .PHONY: test
 test: generate
+	npm --prefix frontend run test:run
 	go test ./... -count 1 -race -covermode=atomic
 
 
