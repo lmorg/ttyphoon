@@ -27,6 +27,7 @@ const CONTEXT_ICON_FIND = 0xf002;
 const CONTEXT_ICON_PRINT = 0xf02f;
 const CONTEXT_ICON_CHECKBOX = 0xf14a;
 const CONTEXT_ICON_CODE = 0xf121;
+const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 
 const IS_WINDOWS = typeof navigator !== 'undefined' && (
@@ -2326,6 +2327,38 @@ function copyTextToClipboard(text) {
     ClipboardSetText(text).catch(() => {});
 }
 
+function getJsonEditableCopyText(editable) {
+    if (!(editable instanceof Element)) {
+        return '';
+    }
+
+    const editType = editable.getAttribute('data-json-edit');
+    if (editType === 'key') {
+        const pathAttr = editable.getAttribute('data-json-path') || '[]';
+        try {
+            const path = JSON.parse(pathAttr);
+            return String(path[path.length - 1] ?? '');
+        } catch {
+            return (editable.textContent || '').replace(/^"|"$/g, '');
+        }
+    }
+
+    if (editType === 'value') {
+        const rawValueAttr = editable.getAttribute('data-json-value');
+        if (rawValueAttr) {
+            try {
+                const parsedValue = JSON.parse(rawValueAttr);
+                return parsedValue === null ? 'null' : String(parsedValue);
+            } catch {
+                // Fall through to text content if the attribute cannot be parsed.
+            }
+        }
+        return (editable.textContent || '').replace(/^"|"$/g, '');
+    }
+
+    return editable.textContent || '';
+}
+
 function getEditorSelectionText() {
     const start = elements.editor.selectionStart;
     const end = elements.editor.selectionEnd;
@@ -2415,6 +2448,49 @@ function initRenderedNotesContextMenu(container, viewMode) {
             createFindMenuItem('Find'),
             createPrintMenuItem('Print'),
         ], e.clientX, e.clientY);
+    });
+}
+
+function initStructuredDataTreeContextMenu(container) {
+    if (!container || container.dataset.jsonTreeContextMenuBound === 'true') {
+        return;
+    }
+
+    container.dataset.jsonTreeContextMenuBound = 'true';
+
+    container.addEventListener('contextmenu', (e) => {
+        if (state.viewMode !== 'swagger-view') {
+            return;
+        }
+
+        const target = e.target instanceof Element ? e.target.closest('.json-editable') : null;
+        if (!target || !container.contains(target)) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        showNotesLocalMenu([
+            {
+                title: 'Copy',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: () => {
+                    copyTextToClipboard(getJsonEditableCopyText(target));
+                },
+            },
+            {
+                title: 'Edit',
+                icon: CONTEXT_ICON_EDIT,
+                onSelect: () => {
+                    target.dispatchEvent(new MouseEvent('dblclick', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                    }));
+                },
+            },
+        ], e.clientX, e.clientY, 'JSON/YAML field');
     });
 }
 
@@ -4056,6 +4132,7 @@ elements.editor.addEventListener('contextmenu', (e) => {
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
+initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
     setViewMode('editor');
