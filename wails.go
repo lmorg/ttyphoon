@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
@@ -8,9 +9,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -744,6 +747,86 @@ func (a WApp) filePath(filename string) string {
 		filename = a.usrNotesDir + string(filepath.Separator) + filename
 	}
 	return filename
+}
+
+func (a *WApp) ResolveFilePath(filename string) string {
+	return a.filePath(filename)
+}
+
+func (a *WApp) GetFileMenuActions(_ string) []map[string]any {
+	apps, _ := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems("file")
+	actions := make([]map[string]any, 0, len(apps))
+
+	for i, app := range apps {
+		actions = append(actions, map[string]any{
+			"title":  "Open link with " + app,
+			"icon":   0xf08e,
+			"action": fmt.Sprintf("open:%d", i),
+		})
+	}
+
+	return actions
+}
+
+func (a *WApp) RunFileMenuAction(filename, action string) error {
+	const prefix = "open:"
+	if !strings.HasPrefix(action, prefix) {
+		return fmt.Errorf("unsupported file menu action: %s", action)
+	}
+
+	index, err := strconv.Atoi(strings.TrimPrefix(action, prefix))
+	if err != nil {
+		return fmt.Errorf("parse file menu action %q: %w", action, err)
+	}
+
+	_, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems("file")
+	if index < 0 || index >= len(cmds) {
+		return fmt.Errorf("file menu action out of range: %d", index)
+	}
+
+	resolvedPath := a.filePath(filename)
+	return runExpandedCommand(cmds[index], map[string]string{
+		"url":    "file://" + resolvedPath,
+		"scheme": "file",
+		"path":   resolvedPath,
+	})
+}
+
+func runExpandedCommand(argv []string, variables map[string]string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("empty command")
+	}
+
+	expanded := make([]string, len(argv))
+	copy(expanded, argv)
+	for i := range expanded {
+		expanded[i] = os.Expand(expanded[i], func(name string) string {
+			if value, ok := variables[name]; ok {
+				return value
+			}
+			return "INVALID_VARIABLE_NAME"
+		})
+	}
+
+	var stderr bytes.Buffer
+	cmd := exec.Command(expanded[0], expanded[1:]...)
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			msg := strings.TrimSpace(stderr.String())
+			if msg == "" {
+				msg = err.Error()
+			}
+			log.Println("file menu action failed:", msg)
+		}
+	}()
+
+	return nil
 }
 
 func (a *WApp) SaveFile(filename, contents string) error {

@@ -3,6 +3,7 @@ import {
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
+    GetFileMenuActions, ResolveFilePath, RunFileMenuAction,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -380,6 +381,12 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
             e.preventDefault();
             openRenamePrompt(node.file);
         });
+
+	    item.addEventListener('contextmenu', async (e) => {
+	        e.preventDefault();
+	        e.stopPropagation();
+	        await openFileListContextMenu(node.file, e.clientX, e.clientY);
+	    });
 
         container.appendChild(item);
     }
@@ -2346,6 +2353,65 @@ function copyTextToClipboard(text) {
     ClipboardSetText(text).catch(() => {});
 }
 
+async function openFileListContextMenu(file, x, y) {
+    const menuItems = [
+        {
+            title: 'Copy file name',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                copyTextToClipboard(getPathFileName(file));
+            },
+        },
+        {
+            title: 'Copy path',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                ResolveFilePath(file)
+                    .then((resolvedPath) => {
+                        copyTextToClipboard(resolvedPath);
+                    })
+                    .catch(() => {
+                        setStatus('Failed to resolve file path.', true);
+                    });
+            },
+        },
+        {
+            title: 'Rename',
+            icon: CONTEXT_ICON_EDIT,
+            onSelect: () => {
+                openRenamePrompt(file);
+            },
+        },
+    ];
+
+    let goMenuItems = [];
+    try {
+        const resolvedMenuItems = await GetFileMenuActions(file);
+        goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
+    } catch {
+        setStatus('Failed to load file actions.', true);
+    }
+
+    if (goMenuItems.length > 0) {
+        menuItems.push({ title: '-', icon: 0 });
+
+        goMenuItems.forEach((item) => {
+            menuItems.push({
+                title: String(item?.title || ''),
+                icon: Number(item?.icon) || 0,
+                onSelect: () => {
+                    RunFileMenuAction(file, String(item?.action || ''))
+                        .catch(() => {
+                            setStatus('Failed to execute file action.', true);
+                        });
+                },
+            });
+        });
+    }
+
+    showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
+}
+
 function getJsonEditableCopyText(editable) {
     if (!(editable instanceof Element)) {
         return '';
@@ -3075,6 +3141,8 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .notes-tree-folder,
@@ -3098,6 +3166,8 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .notes-tree-folder:hover {

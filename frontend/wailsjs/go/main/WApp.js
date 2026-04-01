@@ -26,6 +26,10 @@ export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
 
+export function GetFileMenuActions(arg1) {
+  return window['go']['main']['WApp']['GetFileMenuActions'](arg1);
+}
+
 export function GetImage(arg1) {
   return window['go']['main']['WApp']['GetImage'](arg1);
 }
@@ -54,8 +58,16 @@ export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
+export function ResolveFilePath(arg1) {
+  return window['go']['main']['WApp']['ResolveFilePath'](arg1);
+}
+
 export function RunAIAgentWithStream(arg1, arg2) {
   return window['go']['main']['WApp']['RunAIAgentWithStream'](arg1, arg2);
+}
+
+export function RunFileMenuAction(arg1, arg2) {
+  return window['go']['main']['WApp']['RunFileMenuAction'](arg1, arg2);
 }
 
 export function RunNote(arg1, arg2, arg3) {
