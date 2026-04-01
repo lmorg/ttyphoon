@@ -267,8 +267,18 @@ export function initTerminalPopupMenu(canvas) {
         query = '';
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
-        listRoot.style.display = 'none';
-        listBody.replaceChildren();
+        
+        listRoot.classList.remove('show');
+        listRoot.classList.add('hide');
+        
+        const onAnimationEnd = () => {
+            listRoot.removeEventListener('animationend', onAnimationEnd);
+            listRoot.classList.remove('hide');
+            listRoot.style.display = 'none';
+            listBody.replaceChildren();
+        };
+        
+        listRoot.addEventListener('animationend', onAnimationEnd, { once: true });
     }
 
     function hideMenus(cancel = true) {
@@ -404,6 +414,8 @@ export function initTerminalPopupMenu(canvas) {
         const reserveHeader = 78 + (listSearchWrap.style.display === 'none' ? 0 : 44);
         const idealWidth = measureIdealWidth(filteredItems, listTitle.textContent, hasIcons);
         applyMenuSizing(listRoot, listBody, reserveHeader, idealWidth);
+        listRoot.classList.remove('hide');
+        listRoot.classList.add('show');
         listRoot.style.display = 'block';
         positionMenu(listRoot);
     }

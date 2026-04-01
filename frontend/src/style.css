@@ -134,6 +134,28 @@ body {
 }
 
 /* WebKit listbox/context menus */
+@keyframes tty-menu-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes tty-menu-disappear {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+}
+
 .tty-menu {
     position: fixed;
     z-index: 10000;
@@ -146,6 +168,16 @@ body {
     font-family: var(--terminal-menu-font);
     font-size: calc(var(--terminal-menu-font-size, 14px) - 1px);
     overflow: hidden;
+    display: none;
+}
+
+.tty-menu.show {
+    display: block;
+    animation: tty-menu-appear 0.15s ease-out forwards;
+}
+
+.tty-menu.hide {
+    animation: tty-menu-disappear 0.12s ease-in forwards;
 }
 
 .tty-menu-title {
