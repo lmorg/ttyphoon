@@ -639,8 +639,15 @@ export function getSwaggerUIStyles(colors, fontSize) {
             word-break: break-all;
         }
 
-        .swagger-header-input,
-        .swagger-header-select {
+        .swagger-header-value-wrap {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .swagger-header-input {
             flex: 1;
             padding: 3px 6px;
             border: 1px solid rgba(${fgRgb}, 0.2);
@@ -653,10 +660,35 @@ export function getSwaggerUIStyles(colors, fontSize) {
             min-width: 0;
         }
 
-        .swagger-header-input:focus,
-        .swagger-header-select:focus {
+        .swagger-header-input:focus {
             border-color: var(--accent);
             background-color: rgba(${fgRgb}, 0.08);
+        }
+
+        .swagger-header-dropdown {
+            width: 24px;
+            min-width: 24px;
+            height: 22px;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 3px;
+            background-color: rgba(${fgRgb}, 0.05);
+            color: var(--accent);
+            font-family: "Font Awesome Solid", "Font Awesome", var(--terminal-menu-font), sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            outline: none;
+            flex-shrink: 0;
+        }
+
+        .swagger-header-dropdown:hover {
+            background-color: rgba(${fgRgb}, 0.12);
+        }
+
+        .swagger-header-dropdown:focus {
+            outline: 1px solid var(--accent);
+            outline-offset: -1px;
         }
 
         /* Body Editor */

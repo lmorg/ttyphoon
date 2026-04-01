@@ -1414,6 +1414,7 @@ function renderSwaggerUI() {
     });
 
     setupSwaggerMethodSelector();
+    setupSwaggerHeaderDropdowns();
     
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
@@ -1540,13 +1541,15 @@ async function sendSwaggerRequest() {
     }
 
     // Collect headers from the displayed header items
-    // Values may be <input>, <select> (interactive) or <span> (static)
+    // Values may be <input>, <button> (interactive) or <span> (static)
     const headers = {};
     elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-item').forEach((item) => {
         const name = item.querySelector('.swagger-header-name')?.textContent?.trim();
-        const valueEl = item.querySelector('.swagger-header-value');
+        const valueEl = item.querySelector('.swagger-header-input, .swagger-header-value');
         if (!name || !valueEl) return;
-        const value = ('value' in valueEl ? valueEl.value : valueEl.textContent)?.trim();
+        const value = valueEl instanceof HTMLInputElement
+            ? valueEl.value.trim()
+            : (valueEl.textContent?.trim() || '');
         if (name && value) {
             headers[name] = value;
         }
@@ -1590,6 +1593,34 @@ async function sendSwaggerRequest() {
             sendBtn.textContent = 'Send';
         }
     }
+}
+
+function setupSwaggerHeaderDropdowns() {
+    if (!elements.swaggerRequestBuilder) return;
+
+    elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-dropdown').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const headerName = btn.dataset.headerName;
+            const options = JSON.parse(btn.dataset.headerOptions || '[]');
+            const input = btn.closest('.swagger-header-value-wrap')?.querySelector('.swagger-header-input');
+            const currentValue = input?.value?.trim() || '';
+
+            if (!options.length) return;
+
+            const rect = btn.getBoundingClientRect();
+            const menuItems = options.map((opt) => ({
+                title: opt,
+                icon: opt === currentValue ? 0xf00c : 0,
+                onSelect: () => {
+                    if (input) {
+                        input.value = opt;
+                    }
+                },
+            }));
+
+            showNotesLocalMenu(menuItems, rect.left, rect.bottom, `Select ${headerName || 'header'} value`);
+        });
+    });
 }
 
 function setupSwaggerResponseTabs() {
