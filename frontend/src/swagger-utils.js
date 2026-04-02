@@ -870,7 +870,7 @@ export function generateLiveResponseHTML(response) {
                 <button class="swagger-response-tab swagger-response-tab-active" role="tab" data-tab="body" aria-selected="true">Body</button>
                 <button class="swagger-response-tab" role="tab" data-tab="headers" aria-selected="false">Headers</button>
             </div>
-            <div class="swagger-response-panel swagger-response-panel-active" data-panel="body" role="tabpanel">
+            <div class="swagger-response-panel swagger-response-panel-active markdown-body" data-panel="body" role="tabpanel">
                 <pre class="swagger-response-body"><code>${escapeHtml(bodyDisplay)}</code></pre>
             </div>
             <div class="swagger-response-panel" data-panel="headers" role="tabpanel">

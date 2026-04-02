@@ -1418,7 +1418,6 @@ function renderSwaggerUI() {
     );
 
     elements.swaggerEndpoints.innerHTML = `
-        <div class="swagger-endpoints-header">Operations</div>
         <input
             id="notes-swagger-endpoint-filter"
             class="swagger-endpoint-filter"
@@ -3607,9 +3606,13 @@ function applyWindowStyle(result) {
 
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
 
+        ${getMarkdownBaseTextSizeStyles('#notes-swagger-run-wrap', result.fontSize)}
+
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-request-builder .swagger-param-description', result.fontSize)}
 
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
+
+        ${getMarkdownContentStyles(result.colors, result.fontSize, 'swagger-ui')}
 
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
 
