@@ -174,6 +174,10 @@ export function TerminalTextInput(arg1) {
   return window['go']['main']['WApp']['TerminalTextInput'](arg1);
 }
 
+export function ViewFileInNotes() {
+  return window['go']['main']['WApp']['ViewFileInNotes']();
+}
+
 export function WindowHide() {
   return window['go']['main']['WApp']['WindowHide']();
 }

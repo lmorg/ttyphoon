@@ -17,6 +17,6 @@ func Initialise() (types.Renderer, *types.XY) {
 	//return rendersdl.Initialise()
 }
 
-func Start(r types.Renderer, termWin *types.AppWindowTerms, tmuxClient any, ctx context.Context) {
+func Start(r types.Renderer, termWin *types.AppWindowTerms, tmuxClient any, ctx context.Context, app interface{}) {
 	r.Start(termWin, tmuxClient, ctx)
 }

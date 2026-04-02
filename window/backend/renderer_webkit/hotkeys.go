@@ -31,6 +31,14 @@ func (wr *webkitRender) hotkeys() {
 			}
 			desc = "Reload settings from disk"
 
+		case "ViewFile":
+			fn = func() {
+				if app, ok := wr.app.(interface{ ViewFileInNotes() }); ok {
+					app.ViewFileInNotes()
+				}
+			}
+			desc = "View file in Notes..."
+
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }
 			desc = "Paste from clipboard"

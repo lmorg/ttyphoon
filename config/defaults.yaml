@@ -11,6 +11,7 @@ Hotkeys:
   Functions:
     F2::s: Settings
     F2::C-r: ReloadSettings
+    F2::f: ViewFile
     M-v: Paste
     C-S-v: Paste
     F2::v: VisualEditor

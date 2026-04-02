@@ -29,6 +29,7 @@ func Initialise() (types.Renderer, *types.XY) {
 func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wapp context.Context) {
 	wr.termWin = termWin
 	wr.wapp = wapp
+	// app will be set separately by the caller with SetApp method
 
 	if tc, ok := tmuxClient.(*tmux.Tmux); ok {
 		wr.tmux = tc
@@ -63,4 +64,8 @@ func CurrentRenderer() (*webkitRender, bool) {
 	}
 
 	return currentRenderer, true
+}
+
+func (wr *webkitRender) SetApp(app interface{}) {
+	wr.app = app
 }

@@ -90,6 +90,8 @@ export function TerminalSetGlyphSize(arg1:number,arg2:number):Promise<void>;
 
 export function TerminalTextInput(arg1:string):Promise<void>;
 
+export function ViewFileInNotes():Promise<void>;
+
 export function WindowHide():Promise<void>;
 
 export function WindowPrint():Promise<void>;

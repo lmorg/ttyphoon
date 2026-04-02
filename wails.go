@@ -430,7 +430,12 @@ func (a *WApp) startTerminalWindow() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx)
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx, a)
+
+	// Set app reference on renderer for hotkey handlers
+	if wr, ok := renderwebkit.CurrentRenderer(); ok {
+		wr.SetApp(a)
+	}
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
@@ -1011,6 +1016,43 @@ func (a *WApp) SendToTerminal(content string) {
 // All request logic lives in utils/swagger; this method is a thin binding.
 func (a *WApp) SwaggerRequest(req swagger.RequestT) swagger.ResponseT {
 	return swagger.Execute(a.ctx, req)
+}
+
+// ViewFileInNotes displays a popup menu (in Go) to select a file to view in the Notes pane.
+// On selection it emits:
+//  1. "viewFileInNotesOpen" — tells the frontend to load the chosen file.
+//  2. "terminalActivateAuxTab" with id "notes" — switches to the Notes tab if it is
+//     currently registered as an auxiliary terminal pane tab.
+func (a *WApp) ViewFileInNotes() {
+	files := a.ListFiles()
+	if len(files) == 0 || a.ctx == nil {
+		return
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	onSelect := func(i int) {
+		if i < 0 || i >= len(files) {
+			return
+		}
+		filename := files[i]
+
+		// If Notes is registered as an auxiliary tab, activate it.
+		for _, tab := range renderer.TerminalPaneTabs() {
+			if tab.ID == "notes" {
+				renderer.ActivateTerminalPaneTab("notes")
+				break
+			}
+		}
+
+		// Tell the frontend to open the file in the Notes pane.
+		runtime.EventsEmit(a.ctx, "viewFileInNotesOpen", filename)
+	}
+
+	renderer.DisplayMenu("Select file to view in Notes", files, nil, onSelect, nil)
 }
 
 func (a *WApp) GetAppTitle() string { return appTitle() }

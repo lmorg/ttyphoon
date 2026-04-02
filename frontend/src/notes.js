@@ -2846,6 +2846,20 @@ EventsOn("aiResponseStream", (chunk) => {
     }
 });
 
+// Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
+EventsOn('viewFileInNotesOpen', async (payload) => {
+    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    if (!file) return;
+
+    try {
+        await loadFile(file);
+        AddToFileList(file);
+    } catch (err) {
+        setStatus(`Failed to load file: ${file}`, true);
+        console.error(err);
+    }
+});
+
 // Setup AI panel listeners
 if (elements.aiToggle) {
     elements.aiToggle.addEventListener('click', toggleAIPanel);
@@ -2864,7 +2878,7 @@ function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
 
-    const notesFileSize = result.fontSize * 2;
+    //const notesFileSize = result.fontSize * 2;
     const notesStatusFontSize = result.fontSize - 2;
     const notesTitleFontSize = result.fontSize + 4;
 
