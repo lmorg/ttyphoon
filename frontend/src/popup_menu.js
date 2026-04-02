@@ -10,6 +10,7 @@ let _showListMenuFn = null;
 let _setAnchorFn = null;
 let _menuOperationInProgress = false;
 let _localMenuReturnFocus = null;
+let _listMenuTransitionSeq = 0;
 
 function menuHighlight(id, index) {
     if (id < 0) {
@@ -255,6 +256,8 @@ export function initTerminalPopupMenu(canvas) {
     }
 
     function hideListMenu(cancel = true) {
+        const transitionSeq = ++_listMenuTransitionSeq;
+
         if (activeListMenuId !== null && cancel) {
             menuCancel(activeListMenuId, -1);
         }
@@ -272,6 +275,10 @@ export function initTerminalPopupMenu(canvas) {
         listRoot.classList.add('hide');
         
         const onAnimationEnd = () => {
+            if (transitionSeq !== _listMenuTransitionSeq) {
+                return;
+            }
+
             listRoot.removeEventListener('animationend', onAnimationEnd);
             listRoot.classList.remove('hide');
             listRoot.style.display = 'none';
@@ -421,6 +428,9 @@ export function initTerminalPopupMenu(canvas) {
     }
 
     function showListMenu(menu) {
+        // Invalidate any pending hide callback from a previous menu instance.
+        _listMenuTransitionSeq++;
+
         anchorX = mouseX;
         anchorY = mouseY;
         activeListMenuId = menu.menuId;

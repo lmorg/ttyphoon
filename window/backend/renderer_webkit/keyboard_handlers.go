@@ -49,15 +49,15 @@ func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) 
 		return
 	}
 
+	defer wr.TriggerRedraw()
+
 	if wr.hotkey(keyCode, mod) {
-		wr.TriggerRedraw()
 		return
 	}
 
 	b := codes.GetAnsiEscSeq(wr.keyboardMode.Get(), keyCode, mod)
 	if len(b) > 0 {
 		term.Reply(b)
-		wr.TriggerRedraw()
 	}
 }
 
