@@ -21,6 +21,8 @@ const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const getFileMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
 const runFileMenuActionMock = vi.fn(() => Promise.resolve());
+const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
+const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -47,6 +49,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetFileMenuActions: getFileMenuActionsMock,
     ResolveFilePath: resolveFilePathMock,
     RunFileMenuAction: runFileMenuActionMock,
+    GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
+    RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
 }));
 
 vi.mock('../wailsjs/runtime/runtime', () => ({
@@ -160,6 +164,8 @@ describe('notes rendering', () => {
         getFileMenuActionsMock.mockReset();
         resolveFilePathMock.mockReset();
         runFileMenuActionMock.mockReset();
+        getHyperlinkMenuActionsMock.mockReset();
+        runHyperlinkMenuActionMock.mockReset();
         eventsOnMock.mockReset();
         clipboardSetTextMock.mockClear();
         showLocalMenuMock.mockReset();
@@ -260,6 +266,7 @@ describe('notes rendering', () => {
         expect(menuConfig.options).toEqual([
             'Copy file name',
             'Copy path',
+            'Rename',
             '-',
             'Open link with Visual Studio Code',
             'Open link with System Default',
@@ -274,8 +281,103 @@ describe('notes rendering', () => {
         expect(resolveFilePathMock).toHaveBeenCalledWith('$PROJECT/docs/api.json');
         expect(clipboardSetTextMock).toHaveBeenCalledWith('/tmp/project/docs/api.json');
 
-        menuConfig.onSelect(3);
+        menuConfig.onSelect(4);
         await flushPromises();
         expect(runFileMenuActionMock).toHaveBeenCalledWith('$PROJECT/docs/api.json', 'open:0');
+    });
+
+    it('shows a hyperlink context menu when right-clicking an anchor in the markdown preview', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getMarkdownMock.mockResolvedValue('# Guide');
+        getHyperlinkMenuActionsMock.mockResolvedValue([
+            { title: 'Open in Browser', icon: 0xf08e, action: 'open:0' },
+        ]);
+        runHyperlinkMenuActionMock.mockResolvedValue();
+
+        await importNotesModule();
+
+        // Load the markdown file so viewMode becomes 'viewer'
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        // Inject an anchor directly into the rendered preview container
+        const preview = document.getElementById('notes-preview');
+        const anchor = document.createElement('a');
+        anchor.href = 'https://example.com/docs';
+        anchor.textContent = 'Docs site';
+        preview.appendChild(anchor);
+
+        anchor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 200 }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(getHyperlinkMenuActionsMock).toHaveBeenCalledWith('https://example.com/docs');
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.title).toBe('Docs site');
+        expect(menuConfig.options).toEqual([
+            'Copy link to clipboard',
+            'Copy text to clipboard',
+            '-',
+            'Open in Browser',
+            'Write link to shell',
+        ]);
+
+        // Copy link to clipboard
+        menuConfig.onSelect(0);
+        await flushPromises();
+        expect(clipboardSetTextMock).toHaveBeenCalledWith('https://example.com/docs');
+
+        clipboardSetTextMock.mockClear();
+
+        // Copy text to clipboard
+        menuConfig.onSelect(1);
+        await flushPromises();
+        expect(clipboardSetTextMock).toHaveBeenCalledWith('Docs site');
+
+        // Go-provided action
+        menuConfig.onSelect(3);
+        await flushPromises();
+        expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('https://example.com/docs', 'open:0');
+
+        // Write link to shell
+        menuConfig.onSelect(4);
+        await flushPromises();
+        expect(sendToTerminalMock).toHaveBeenCalledWith('https://example.com/docs');
+    });
+
+    it('shows only built-in options in the hyperlink menu when Go returns no actions', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
+        getMarkdownMock.mockResolvedValue('# Readme');
+        getHyperlinkMenuActionsMock.mockResolvedValue([]);
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/readme.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const preview = document.getElementById('notes-preview');
+        const anchor = document.createElement('a');
+        anchor.href = 'https://go.dev';
+        anchor.textContent = 'Go';
+        preview.appendChild(anchor);
+
+        anchor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 80 }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        // No separator or Go items when Go returns an empty list
+        expect(menuConfig.options).toEqual([
+            'Copy link to clipboard',
+            'Copy text to clipboard',
+            'Write link to shell',
+        ]);
     });
 });

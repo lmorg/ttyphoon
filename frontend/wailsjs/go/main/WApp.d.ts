@@ -18,6 +18,8 @@ export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
 
 export function GetFileMenuActions(arg1:string):Promise<Array<Record<string, any>>>;
 
+export function GetHyperlinkMenuActions(arg1:string):Promise<Array<Record<string, any>>>;
+
 export function GetImage(arg1:string):Promise<string>;
 
 export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
@@ -37,6 +39,8 @@ export function ResolveFilePath(arg1:string):Promise<string>;
 export function RunAIAgentWithStream(arg1:string,arg2:string):Promise<void>;
 
 export function RunFileMenuAction(arg1:string,arg2:string):Promise<void>;
+
+export function RunHyperlinkMenuAction(arg1:string,arg2:string):Promise<void>;
 
 export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 

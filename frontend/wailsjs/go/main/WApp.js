@@ -30,6 +30,10 @@ export function GetFileMenuActions(arg1) {
   return window['go']['main']['WApp']['GetFileMenuActions'](arg1);
 }
 
+export function GetHyperlinkMenuActions(arg1) {
+  return window['go']['main']['WApp']['GetHyperlinkMenuActions'](arg1);
+}
+
 export function GetImage(arg1) {
   return window['go']['main']['WApp']['GetImage'](arg1);
 }
@@ -68,6 +72,10 @@ export function RunAIAgentWithStream(arg1, arg2) {
 
 export function RunFileMenuAction(arg1, arg2) {
   return window['go']['main']['WApp']['RunFileMenuAction'](arg1, arg2);
+}
+
+export function RunHyperlinkMenuAction(arg1, arg2) {
+  return window['go']['main']['WApp']['RunHyperlinkMenuAction'](arg1, arg2);
 }
 
 export function RunNote(arg1, arg2, arg3) {

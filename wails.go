@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
@@ -789,6 +791,95 @@ func (a *WApp) RunFileMenuAction(filename, action string) error {
 		"url":    "file://" + resolvedPath,
 		"scheme": "file",
 		"path":   resolvedPath,
+	})
+}
+
+func parseHyperlink(urlText string) (scheme string, path string) {
+	scheme = ""
+	path = urlText
+
+	u, err := url.Parse(urlText)
+	if err != nil {
+		return
+	}
+
+	scheme = strings.ToLower(u.Scheme)
+	if scheme == "file" {
+		path = u.Path
+		if path == "" {
+			path = u.Opaque
+		}
+	}
+
+	return
+}
+
+func (a *WApp) GetHyperlinkMenuActions(urlText string) []map[string]any {
+	scheme, _ := parseHyperlink(urlText)
+	actions := make([]map[string]any, 0, 8)
+
+	if strings.HasPrefix(scheme, "http") {
+		renderer, ok := renderwebkit.CurrentRenderer()
+		if ok && renderer != nil {
+			actions = append(actions, map[string]any{
+				"title":  "Summarize hyperlink",
+				"icon":   0xf544,
+				"action": "summarize",
+			})
+		}
+	}
+
+	apps, _ := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(scheme)
+	for i, app := range apps {
+		actions = append(actions, map[string]any{
+			"title":  "Open link with " + app,
+			"icon":   0xf08e,
+			"action": fmt.Sprintf("open:%d", i),
+		})
+	}
+
+	return actions
+}
+
+func (a *WApp) RunHyperlinkMenuAction(urlText, action string) error {
+	scheme, path := parseHyperlink(urlText)
+
+	if action == "summarize" {
+		if !strings.HasPrefix(scheme, "http") {
+			return fmt.Errorf("summarize is only supported for http/https links")
+		}
+
+		renderer, ok := renderwebkit.CurrentRenderer()
+		if !ok || renderer == nil {
+			return fmt.Errorf("renderer unavailable")
+		}
+
+		tile := renderer.ActiveTile()
+		agt := agent.Get(tile.Id())
+		agt.Meta = &agent.Meta{}
+		ai.AskAI(agt, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", urlText))
+		return nil
+	}
+
+	const prefix = "open:"
+	if !strings.HasPrefix(action, prefix) {
+		return fmt.Errorf("unsupported hyperlink menu action: %s", action)
+	}
+
+	index, err := strconv.Atoi(strings.TrimPrefix(action, prefix))
+	if err != nil {
+		return fmt.Errorf("parse hyperlink menu action %q: %w", action, err)
+	}
+
+	_, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(scheme)
+	if index < 0 || index >= len(cmds) {
+		return fmt.Errorf("hyperlink menu action out of range: %d", index)
+	}
+
+	return runExpandedCommand(cmds[index], map[string]string{
+		"url":    urlText,
+		"scheme": scheme,
+		"path":   path,
 	})
 }
 

@@ -4,6 +4,7 @@ import {
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     GetFileMenuActions, ResolveFilePath, RunFileMenuAction,
+    GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -2412,6 +2413,87 @@ async function openFileListContextMenu(file, x, y) {
     showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
 }
 
+function getLinkTextFromAnchor(anchor) {
+    if (!(anchor instanceof Element)) {
+        return '';
+    }
+
+    const text = (anchor.textContent || '').trim();
+    if (text.length > 0) {
+        return text;
+    }
+
+    return String(anchor.getAttribute('href') || '').trim();
+}
+
+async function openHyperlinkContextMenu(anchor, x, y) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+    }
+
+    const href = String(anchor.getAttribute('href') || '').trim();
+    if (!href) {
+        return;
+    }
+
+    const absoluteUrl = String(anchor.href || href);
+    const label = getLinkTextFromAnchor(anchor);
+
+    const menuItems = [
+        {
+            title: 'Copy link to clipboard',
+            icon: 0xf0c1,
+            onSelect: () => {
+                copyTextToClipboard(absoluteUrl);
+            },
+        },
+        {
+            title: 'Copy text to clipboard',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                copyTextToClipboard(label);
+            },
+        },
+    ];
+
+    let goMenuItems = [];
+    try {
+        const resolvedMenuItems = await GetHyperlinkMenuActions(absoluteUrl);
+        goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
+    } catch {
+        setStatus('Failed to load hyperlink actions.', true);
+    }
+
+    if (goMenuItems.length > 0) {
+        menuItems.push({ title: '-', icon: 0 });
+
+        goMenuItems.forEach((item) => {
+            menuItems.push({
+                title: String(item?.title || ''),
+                icon: Number(item?.icon) || 0,
+                onSelect: () => {
+                    RunHyperlinkMenuAction(absoluteUrl, String(item?.action || ''))
+                        .catch(() => {
+                            setStatus('Failed to execute hyperlink action.', true);
+                        });
+                },
+            });
+        });
+    }
+
+    menuItems.push({
+        title: 'Write link to shell',
+        icon: 0xf120,
+        onSelect: () => {
+            SendToTerminal(absoluteUrl).catch(() => {
+                setStatus('Failed to write link to shell.', true);
+            });
+        },
+    });
+
+    showNotesLocalMenu(menuItems, x, y, label || 'Hyperlink action');
+}
+
 function getJsonEditableCopyText(editable) {
     if (!(editable instanceof Element)) {
         return '';
@@ -2528,6 +2610,14 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
 function initRenderedNotesContextMenu(container, viewMode) {
     container.addEventListener('contextmenu', (e) => {
         if (state.viewMode !== viewMode) {
+            return;
+        }
+
+        const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+        if (anchor && container.contains(anchor)) {
+            e.preventDefault();
+            e.stopPropagation();
+            openHyperlinkContextMenu(anchor, e.clientX, e.clientY);
             return;
         }
 
@@ -4290,6 +4380,7 @@ elements.swaggerEditor.addEventListener('contextmenu', (e) => {
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
+initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
