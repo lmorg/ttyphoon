@@ -123,6 +123,7 @@ type configT struct {
 		RefreshInterval        int  `yaml:"RefreshInterval"`
 		BellVisualNotification bool `yaml:"BellVisualNotification"`
 		BellPlayAudio          bool `yaml:"BellPlayAudio"`
+		AlwaysOnTop            bool `yaml:"AlwaysOnTop"`
 	} `yaml:"Window"`
 
 	NotesWindow struct {

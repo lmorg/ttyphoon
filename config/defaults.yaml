@@ -77,6 +77,7 @@ TypeFace:
   AdjustCellHeight: 2
   Ligatures: true
 Window:
+  AlwaysOnTop: true
   StatusBar: true
   HoverEffectHighlight: true
   BellVisualNotification: false
