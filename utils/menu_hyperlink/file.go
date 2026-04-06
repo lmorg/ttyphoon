@@ -6,7 +6,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func menuItemsSchemaFile(link LinkT, menuItems []types.MenuItem) []types.MenuItem {
+func menuItemsSchemaFile(link linkT, menuItems []types.MenuItem) []types.MenuItem {
 	if link.Scheme() != "file" {
 		return menuItems
 	}

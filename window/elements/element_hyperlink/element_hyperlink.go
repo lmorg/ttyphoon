@@ -103,11 +103,11 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 		switch button {
 		case types.MOUSE_BUTTON_LEFT:
 			menu := el.renderer.NewContextMenu()
-			menu.Append(menuhyperlink.MenuItems(el)...)
+			menu.Append(menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)
 			menu.DisplayMenu("Hyperlink action")
 
 		case types.MOUSE_BUTTON_RIGHT:
-			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, menuhyperlink.MenuItems(el)...)...)
+			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)...)
 			callback()
 
 		case types.MOUSE_BUTTON_MIDDLE:
@@ -129,7 +129,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 func (el *ElementHyperlink) openWithDefault() {
 	_, cmd := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
 	if len(cmd) > 0 {
-		menuhyperlink.OpenWith(el, cmd[0])
+		menuhyperlink.OpenWith(el.renderer, el.url, string(el.label), cmd[0])
 	}
 }
 

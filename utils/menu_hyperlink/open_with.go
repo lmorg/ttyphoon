@@ -8,15 +8,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-type LinkT interface {
-	Renderer() types.Renderer
-	Url() string
-	Scheme() string
-	Path() string
-	Label() string
-}
-
-func getVar(link LinkT) func(string) string {
+func getVar(link linkT) func(string) string {
 	return func(s string) string {
 		switch s {
 		case "url":
@@ -31,7 +23,7 @@ func getVar(link LinkT) func(string) string {
 	}
 }
 
-func schemaOrPath(link LinkT) string {
+func schemaOrPath(link linkT) string {
 	if link.Scheme() == "file" {
 		return link.Path()
 	} else {
@@ -39,7 +31,12 @@ func schemaOrPath(link LinkT) string {
 	}
 }
 
-func OpenWith(link LinkT, exe []string) {
+func OpenWith(renderer types.Renderer, url, label string, exe []string) {
+	link := makeLink(renderer, url, label)
+	if link.url == "" {
+		return
+	}
+
 	var b []byte
 	buf := bytes.NewBuffer(b)
 

@@ -8,7 +8,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func menuItemsSchemaHttp(link LinkT, menuItems []types.MenuItem) []types.MenuItem {
+func menuItemsSchemaHttp(link linkT, menuItems []types.MenuItem) []types.MenuItem {
 	if link.Scheme() != "http" {
 		return menuItems
 	}

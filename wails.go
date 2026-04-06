@@ -758,54 +758,14 @@ func (a *WApp) ResolveFilePath(filename string) string {
 	return a.filePath(filename)
 }
 
-type markdownHyperlink struct {
-	renderer types.Renderer
-	url      string
-	scheme   string
-	path     string
-	label    string
-}
-
-func (l *markdownHyperlink) Renderer() types.Renderer { return l.renderer }
-func (l *markdownHyperlink) Url() string              { return l.url }
-func (l *markdownHyperlink) Scheme() string           { return l.scheme }
-func (l *markdownHyperlink) Path() string             { return l.path }
-func (l *markdownHyperlink) Label() string            { return l.label }
-
 func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
 		return
 	}
 
-	url = strings.TrimSpace(url)
-	if url == "" {
-		return
-	}
-
-	label := strings.TrimSpace(text)
-	if label == "" {
-		label = url
-	}
-
-	scheme := ""
-	path := ""
-	split := strings.SplitN(url, "://", 2)
-	if len(split) == 2 {
-		scheme = strings.ToLower(strings.TrimSpace(split[0]))
-		path = split[1]
-	}
-
-	link := &markdownHyperlink{
-		renderer: renderer,
-		url:      url,
-		scheme:   scheme,
-		path:     path,
-		label:    label,
-	}
-
 	menu := renderer.NewContextMenu()
-	menu.Append(menuhyperlink.MenuItems(link)...)
+	menu.Append(menuhyperlink.MenuItems(renderer, url, text)...)
 	menu.DisplayMenu("Hyperlink action")
 }
 
