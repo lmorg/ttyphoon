@@ -248,6 +248,14 @@ splitHandleLine.style.cssText = [
 ].join(';');
 splitHandle.appendChild(splitHandleLine);
 
+splitHandle.addEventListener('mouseenter', () => {
+    splitHandleLine.style.background = 'var(--accent)';
+});
+
+splitHandle.addEventListener('mouseleave', () => {
+    splitHandleLine.style.background = 'color-mix(in srgb, var(--fg) 20%, transparent)';
+});
+
 terminalPane = document.createElement('div');
 terminalPane.id = 'terminal-pane';
 terminalPane.style.cssText = [

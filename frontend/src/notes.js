@@ -3381,6 +3381,10 @@ function applyWindowStyle(result) {
             background: color-mix(in srgb, var(--fg) 20%, transparent);
         }
 
+        #notes-splitter:hover::after {
+            background: var(--accent);
+        }
+
         #notes-main {
             display: flex;
             flex-direction: column;

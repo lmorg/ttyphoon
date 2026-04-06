@@ -34,7 +34,9 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.design/x/clipboard"
 )
@@ -1104,25 +1106,21 @@ func startWails() {
 		OnStartup:  wapp.startup,
 		OnDomReady: wapp.domReady,
 		Bind:       []any{wapp},
-		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
-			//WindowIsTranslucent:  true,
-			//WebviewIsTransparent: true,
 			About: &mac.AboutInfo{
 				Title:   app.Name(),
 				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
 				Icon:    appIcon,
 			},
 		},
-		/*Linux: &linux.Options{
-			WindowIsTranslucent: true,
-		},*/
-
-		/*Windows: &windows.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
-		},*/
+		Linux: &linux.Options{
+			Icon:        appIcon,
+			ProgramName: app.Name(),
+		},
+		Windows: &windows.Options{
+			WindowClassName: app.Name(),
+		},
 
 		//BindingsAllowedOrigins: "*",
 	})

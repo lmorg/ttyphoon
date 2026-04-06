@@ -268,6 +268,19 @@ function fitCanvasToWindow() {
     offscreen.height = canvas.height;
 }
 
+function syncTerminalGridSize() {
+    const { cellWidth, cellHeight } = font.getCellSize();
+    if (cellWidth <= 0 || cellHeight <= 0) {
+        return;
+    }
+
+    const cols = Math.floor(canvas.width / cellWidth) - 1;
+    const rows = Math.floor(canvas.height / cellHeight);
+    if (cols > 0 && rows > 0) {
+        TerminalResize(cols, rows).catch(() => {});
+    }
+}
+
 function drawCursorPulseOverlay(targetCtx) {
     if (!Array.isArray(cursorRects) || cursorRects.length === 0) {
         return;
@@ -840,6 +853,7 @@ GetWindowStyle().then((result) => {
     font.loadGlyphSizeFromGo(windowStyle).then(() => {
         const { cellWidth, cellHeight } = font.getCellSize();
         TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+        syncTerminalGridSize();
 
         //drawFrame();
         wireKeyboardEvents(canvas);
@@ -921,7 +935,23 @@ EventsOn('terminalStyleUpdate', payload => {
     }
     windowStyle = result;
     applyTerminalStyles(result);
-    TerminalRequestRedraw().catch(() => {});
+
+    const fontChanged = font.applyConfiguredFontFromWindowStyle(windowStyle);
+    if (!fontChanged) {
+        TerminalRequestRedraw().catch(() => {});
+        return;
+    }
+
+    fitCanvasToWindow();
+    font.loadGlyphSizeFromGo(windowStyle).then(() => {
+        const { cellWidth, cellHeight } = font.getCellSize();
+        TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+        syncTerminalGridSize();
+        fitCanvasToWindow();
+        TerminalRequestRedraw().catch(() => {});
+    }).catch(() => {
+        TerminalRequestRedraw().catch(() => {});
+    });
 });
 
 EventsOn('terminalNotification', payload => {
@@ -1037,14 +1067,7 @@ window.addEventListener('resize', () => {
     // Debounce so we don't spam Go on every pixel of a drag-resize.
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-        const { cellWidth, cellHeight } = font.getCellSize();
-        if (cellWidth > 0 && cellHeight > 0) {
-            const cols = Math.floor(canvas.width / cellWidth) - 1;
-            const rows = Math.floor(canvas.height / cellHeight);
-            if (cols > 0 && rows > 0) {
-                TerminalResize(cols, rows).catch(() => {});
-            }
-        }
+        syncTerminalGridSize();
     }, 100);
 });
 
