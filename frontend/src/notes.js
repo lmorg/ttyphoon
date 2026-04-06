@@ -3,8 +3,8 @@ import {
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
-    GetFileMenuActions, ResolveFilePath, RunFileMenuAction,
-    GetHyperlinkMenuActions, RunHyperlinkMenuAction,
+    ResolveFilePath,
+    DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -2382,32 +2382,36 @@ async function openFileListContextMenu(file, x, y) {
                 openRenamePrompt(file);
             },
         },
+        {
+            title: 'More file actions',
+            icon: 0xf08e,
+            onSelect: () => {
+                ResolveFilePath(file)
+                    .then((resolvedPath) => {
+                        const normalized = String(resolvedPath || '').replaceAll('\\', '/');
+
+                        if (!normalized) {
+                            setStatus('Failed to resolve file path.', true);
+                            return;
+                        }
+
+                        let fileUrl;
+                        if (/^[a-zA-Z]:\//.test(normalized)) {
+                            fileUrl = `file:///${normalized}`;
+                        } else if (normalized.startsWith('/')) {
+                            fileUrl = `file://${normalized}`;
+                        } else {
+                            fileUrl = `file://${normalized}`;
+                        }
+
+                        return DisplayHyperlinkMenu(fileUrl, getPathFileName(file) || normalized);
+                    })
+                    .catch(() => {
+                        setStatus('Failed to open file actions.', true);
+                    });
+            },
+        },
     ];
-
-    let goMenuItems = [];
-    try {
-        const resolvedMenuItems = await GetFileMenuActions(file);
-        goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
-    } catch {
-        setStatus('Failed to load file actions.', true);
-    }
-
-    if (goMenuItems.length > 0) {
-        menuItems.push({ title: '-', icon: 0 });
-
-        goMenuItems.forEach((item) => {
-            menuItems.push({
-                title: String(item?.title || ''),
-                icon: Number(item?.icon) || 0,
-                onSelect: () => {
-                    RunFileMenuAction(file, String(item?.action || ''))
-                        .catch(() => {
-                            setStatus('Failed to execute file action.', true);
-                        });
-                },
-            });
-        });
-    }
 
     showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
 }
@@ -2425,7 +2429,7 @@ function getLinkTextFromAnchor(anchor) {
     return String(anchor.getAttribute('href') || '').trim();
 }
 
-async function openHyperlinkContextMenu(anchor, x, y) {
+async function openHyperlinkContextMenu(anchor) {
     if (!(anchor instanceof HTMLAnchorElement)) {
         return;
     }
@@ -2438,59 +2442,11 @@ async function openHyperlinkContextMenu(anchor, x, y) {
     const absoluteUrl = String(anchor.href || href);
     const label = getLinkTextFromAnchor(anchor);
 
-    const menuItems = [
-        {
-            title: 'Copy link to clipboard',
-            icon: 0xf0c1,
-            onSelect: () => {
-                copyTextToClipboard(absoluteUrl);
-            },
-        },
-        {
-            title: 'Copy text to clipboard',
-            icon: CONTEXT_ICON_COPY,
-            onSelect: () => {
-                copyTextToClipboard(label);
-            },
-        },
-    ];
-
-    let goMenuItems = [];
     try {
-        const resolvedMenuItems = await GetHyperlinkMenuActions(absoluteUrl);
-        goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
+        await DisplayHyperlinkMenu(absoluteUrl, label);
     } catch {
-        setStatus('Failed to load hyperlink actions.', true);
+        setStatus('Failed to open hyperlink actions.', true);
     }
-
-    if (goMenuItems.length > 0) {
-        menuItems.push({ title: '-', icon: 0 });
-
-        goMenuItems.forEach((item) => {
-            menuItems.push({
-                title: String(item?.title || ''),
-                icon: Number(item?.icon) || 0,
-                onSelect: () => {
-                    RunHyperlinkMenuAction(absoluteUrl, String(item?.action || ''))
-                        .catch(() => {
-                            setStatus('Failed to execute hyperlink action.', true);
-                        });
-                },
-            });
-        });
-    }
-
-    menuItems.push({
-        title: 'Write link to shell',
-        icon: 0xf120,
-        onSelect: () => {
-            SendToTerminal(absoluteUrl).catch(() => {
-                setStatus('Failed to write link to shell.', true);
-            });
-        },
-    });
-
-    showNotesLocalMenu(menuItems, x, y, label || 'Hyperlink action');
 }
 
 function getJsonEditableCopyText(editable) {
@@ -2616,7 +2572,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
         if (anchor && container.contains(anchor)) {
             e.preventDefault();
             e.stopPropagation();
-            openHyperlinkContextMenu(anchor, e.clientX, e.clientY);
+            openHyperlinkContextMenu(anchor);
             return;
         }
 

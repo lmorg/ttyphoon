@@ -1,25 +1,20 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
@@ -28,6 +23,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/window/backend"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
@@ -762,169 +758,55 @@ func (a *WApp) ResolveFilePath(filename string) string {
 	return a.filePath(filename)
 }
 
-func (a *WApp) GetFileMenuActions(_ string) []map[string]any {
-	apps, _ := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems("file")
-	actions := make([]map[string]any, 0, len(apps))
-
-	for i, app := range apps {
-		actions = append(actions, map[string]any{
-			"title":  "Open link with " + app,
-			"icon":   0xf08e,
-			"action": fmt.Sprintf("open:%d", i),
-		})
-	}
-
-	return actions
+type markdownHyperlink struct {
+	renderer types.Renderer
+	url      string
+	scheme   string
+	path     string
+	label    string
 }
 
-func (a *WApp) RunFileMenuAction(filename, action string) error {
-	const prefix = "open:"
-	if !strings.HasPrefix(action, prefix) {
-		return fmt.Errorf("unsupported file menu action: %s", action)
-	}
+func (l *markdownHyperlink) Renderer() types.Renderer { return l.renderer }
+func (l *markdownHyperlink) Url() string              { return l.url }
+func (l *markdownHyperlink) Scheme() string           { return l.scheme }
+func (l *markdownHyperlink) Path() string             { return l.path }
+func (l *markdownHyperlink) Label() string            { return l.label }
 
-	index, err := strconv.Atoi(strings.TrimPrefix(action, prefix))
-	if err != nil {
-		return fmt.Errorf("parse file menu action %q: %w", action, err)
-	}
-
-	_, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems("file")
-	if index < 0 || index >= len(cmds) {
-		return fmt.Errorf("file menu action out of range: %d", index)
-	}
-
-	resolvedPath := a.filePath(filename)
-	return runExpandedCommand(cmds[index], map[string]string{
-		"url":    "file://" + resolvedPath,
-		"scheme": "file",
-		"path":   resolvedPath,
-	})
-}
-
-func parseHyperlink(urlText string) (scheme string, path string) {
-	scheme = ""
-	path = urlText
-
-	u, err := url.Parse(urlText)
-	if err != nil {
+func (a *WApp) DisplayHyperlinkMenu(url, text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
 		return
 	}
 
-	scheme = strings.ToLower(u.Scheme)
-	if scheme == "file" {
-		path = u.Path
-		if path == "" {
-			path = u.Opaque
-		}
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return
 	}
 
-	return
-}
-
-func (a *WApp) GetHyperlinkMenuActions(urlText string) []map[string]any {
-	scheme, _ := parseHyperlink(urlText)
-	actions := make([]map[string]any, 0, 8)
-
-	if strings.HasPrefix(scheme, "http") {
-		renderer, ok := renderwebkit.CurrentRenderer()
-		if ok && renderer != nil {
-			actions = append(actions, map[string]any{
-				"title":  "Summarize hyperlink",
-				"icon":   0xf544,
-				"action": "summarize",
-			})
-		}
+	label := strings.TrimSpace(text)
+	if label == "" {
+		label = url
 	}
 
-	apps, _ := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(scheme)
-	for i, app := range apps {
-		actions = append(actions, map[string]any{
-			"title":  "Open link with " + app,
-			"icon":   0xf08e,
-			"action": fmt.Sprintf("open:%d", i),
-		})
+	scheme := ""
+	path := ""
+	split := strings.SplitN(url, "://", 2)
+	if len(split) == 2 {
+		scheme = strings.ToLower(strings.TrimSpace(split[0]))
+		path = split[1]
 	}
 
-	return actions
-}
-
-func (a *WApp) RunHyperlinkMenuAction(urlText, action string) error {
-	scheme, path := parseHyperlink(urlText)
-
-	if action == "summarize" {
-		if !strings.HasPrefix(scheme, "http") {
-			return fmt.Errorf("summarize is only supported for http/https links")
-		}
-
-		renderer, ok := renderwebkit.CurrentRenderer()
-		if !ok || renderer == nil {
-			return fmt.Errorf("renderer unavailable")
-		}
-
-		tile := renderer.ActiveTile()
-		agt := agent.Get(tile.Id())
-		agt.Meta = &agent.Meta{}
-		ai.AskAI(agt, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", urlText))
-		return nil
+	link := &markdownHyperlink{
+		renderer: renderer,
+		url:      url,
+		scheme:   scheme,
+		path:     path,
+		label:    label,
 	}
 
-	const prefix = "open:"
-	if !strings.HasPrefix(action, prefix) {
-		return fmt.Errorf("unsupported hyperlink menu action: %s", action)
-	}
-
-	index, err := strconv.Atoi(strings.TrimPrefix(action, prefix))
-	if err != nil {
-		return fmt.Errorf("parse hyperlink menu action %q: %w", action, err)
-	}
-
-	_, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(scheme)
-	if index < 0 || index >= len(cmds) {
-		return fmt.Errorf("hyperlink menu action out of range: %d", index)
-	}
-
-	return runExpandedCommand(cmds[index], map[string]string{
-		"url":    urlText,
-		"scheme": scheme,
-		"path":   path,
-	})
-}
-
-func runExpandedCommand(argv []string, variables map[string]string) error {
-	if len(argv) == 0 {
-		return fmt.Errorf("empty command")
-	}
-
-	expanded := make([]string, len(argv))
-	copy(expanded, argv)
-	for i := range expanded {
-		expanded[i] = os.Expand(expanded[i], func(name string) string {
-			if value, ok := variables[name]; ok {
-				return value
-			}
-			return "INVALID_VARIABLE_NAME"
-		})
-	}
-
-	var stderr bytes.Buffer
-	cmd := exec.Command(expanded[0], expanded[1:]...)
-	cmd.Stderr = &stderr
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			msg := strings.TrimSpace(stderr.String())
-			if msg == "" {
-				msg = err.Error()
-			}
-			log.Println("file menu action failed:", msg)
-		}
-	}()
-
-	return nil
+	menu := renderer.NewContextMenu()
+	menu.Append(menuhyperlink.MenuItems(link)...)
+	menu.DisplayMenu("Hyperlink action")
 }
 
 func (a *WApp) SaveFile(filename, contents string) error {
