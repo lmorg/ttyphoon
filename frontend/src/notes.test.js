@@ -19,6 +19,8 @@ const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
+const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
+const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const displayHyperlinkMenuMock = vi.fn(() => Promise.resolve());
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
@@ -44,6 +46,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
     ResolveFilePath: resolveFilePathMock,
+    GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
+    RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
 }));
 
@@ -156,6 +160,8 @@ describe('notes rendering', () => {
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
         resolveFilePathMock.mockReset();
+        getHyperlinkMenuActionsMock.mockReset();
+        runHyperlinkMenuActionMock.mockReset();
         displayHyperlinkMenuMock.mockReset();
         eventsOnMock.mockReset();
         clipboardSetTextMock.mockClear();
@@ -164,7 +170,9 @@ describe('notes rendering', () => {
         getWindowStyleMock.mockResolvedValue(theme);
         getMarkdownMock.mockResolvedValue('');
         resolveFilePathMock.mockResolvedValue('');
+        getHyperlinkMenuActionsMock.mockResolvedValue([]);
         clipboardSetTextMock.mockResolvedValue();
+        runHyperlinkMenuActionMock.mockResolvedValue();
     });
 
     it('renders grouped note categories and nested files from the Wails file list', async () => {
@@ -236,6 +244,13 @@ describe('notes rendering', () => {
     it('shows a file context menu with copy actions and Go-provided file handlers', async () => {
         listFilesMock.mockResolvedValue(['$PROJECT/docs/api.json']);
         resolveFilePathMock.mockResolvedValue('/tmp/project/docs/api.json');
+        getHyperlinkMenuActionsMock.mockResolvedValue([
+            { title: 'Copy file path to clipboard', icon: 0xf0c1, action: '0' },
+            { title: 'Open file with Visual Studio Code', icon: 0xf08e, action: '3' },
+            { title: '-', icon: 0, action: '' },
+            { title: 'Rename file', icon: 0xf044, action: '4' },
+            { title: 'Delete file', icon: 0xf1f8, action: '5' },
+        ]);
 
         await importNotesModule();
 
@@ -251,7 +266,12 @@ describe('notes rendering', () => {
             'Copy file name',
             'Copy path',
             'Rename',
-            'More file actions',
+            '-',
+            'Copy file path to clipboard',
+            'Open file with Visual Studio Code',
+            '-',
+            'Rename file',
+            'Delete file',
         ]);
 
         menuConfig.onSelect(0);
@@ -263,9 +283,19 @@ describe('notes rendering', () => {
         expect(resolveFilePathMock).toHaveBeenCalledWith('$PROJECT/docs/api.json');
         expect(clipboardSetTextMock).toHaveBeenCalledWith('/tmp/project/docs/api.json');
 
-        menuConfig.onSelect(3);
+        expect(getHyperlinkMenuActionsMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json');
+
+        menuConfig.onSelect(5);
         await flushPromises();
-        expect(displayHyperlinkMenuMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json');
+        expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '3');
+
+        menuConfig.onSelect(7);
+        await flushPromises();
+        expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '4');
+
+        menuConfig.onSelect(8);
+        await flushPromises();
+        expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '5');
     });
 
     it('shows a hyperlink context menu when right-clicking an anchor in the markdown preview', async () => {

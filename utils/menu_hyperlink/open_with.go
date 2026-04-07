@@ -8,26 +8,26 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func getVar(link linkT) func(string) string {
+func getVar(link *link) func(string) string {
 	return func(s string) string {
 		switch s {
 		case "url":
-			return link.Url()
+			return link.url
 		case "scheme":
-			return link.Scheme()
+			return link.scheme
 		case "path":
-			return link.Path()
+			return link.path
 		default:
 			return s
 		}
 	}
 }
 
-func schemaOrPath(link linkT) string {
-	if link.Scheme() == "file" {
-		return link.Path()
+func schemaOrPath(link *link) string {
+	if link.scheme == "file" {
+		return link.path
 	} else {
-		return link.Url()
+		return link.url
 	}
 }
 
@@ -49,7 +49,7 @@ func OpenWith(renderer types.Renderer, url, label string, exe []string) {
 
 	err := cmd.Start()
 	if err != nil {
-		link.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		link.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
 
@@ -59,7 +59,7 @@ func OpenWith(renderer types.Renderer, url, label string, exe []string) {
 			if msg == "" {
 				msg = err.Error()
 			}
-			link.Renderer().DisplayNotification(types.NOTIFY_ERROR, msg)
+			link.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
 		}
 	}()
 }

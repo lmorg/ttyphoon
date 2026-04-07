@@ -71,6 +71,7 @@ type Renderer interface {
 	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	ActiveTile() Tile
+	GetContext() context.Context
 	Close()
 }
 

@@ -6,21 +6,21 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func menuItemsSchemaFile(link linkT, menuItems []types.MenuItem) []types.MenuItem {
-	if link.Scheme() != "file" {
+func menuItemsSchemaFile(link *link, menuItems []types.MenuItem) []types.MenuItem {
+	if link.scheme != "file" {
 		return menuItems
 	}
 
 	f, err := os.Open(schemaOrPath(link))
 	if err != nil {
-		link.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		link.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return menuItems
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil {
-		link.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		link.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return menuItems
 	}
 
@@ -31,7 +31,7 @@ func menuItemsSchemaFile(link linkT, menuItems []types.MenuItem) []types.MenuIte
 	menuItems = append(menuItems,
 		types.MenuItem{
 			Title: "Copy contents to clipboard",
-			Fn:    func() { copyContentsToClipboard(link.Renderer(), schemaOrPath(link)) },
+			Fn:    func() { copyContentsToClipboard(link.renderer, schemaOrPath(link)) },
 			Icon:  0xf0c6,
 		},
 	)

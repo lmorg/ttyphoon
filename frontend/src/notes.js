@@ -3,7 +3,7 @@ import {
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
-    ResolveFilePath,
+    ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
@@ -2354,64 +2354,50 @@ function copyTextToClipboard(text) {
 }
 
 async function openFileListContextMenu(file, x, y) {
-    const menuItems = [
-        {
-            title: 'Copy file name',
-            icon: CONTEXT_ICON_COPY,
-            onSelect: () => {
-                copyTextToClipboard(getPathFileName(file));
-            },
-        },
-        {
-            title: 'Copy path',
-            icon: CONTEXT_ICON_COPY,
-            onSelect: () => {
-                ResolveFilePath(file)
-                    .then((resolvedPath) => {
-                        copyTextToClipboard(resolvedPath);
-                    })
-                    .catch(() => {
-                        setStatus('Failed to resolve file path.', true);
-                    });
-            },
-        },
-        {
-            title: 'Rename',
-            icon: CONTEXT_ICON_EDIT,
-            onSelect: () => {
-                openRenamePrompt(file);
-            },
-        },
-        {
-            title: 'More file actions',
-            icon: 0xf08e,
-            onSelect: () => {
-                ResolveFilePath(file)
-                    .then((resolvedPath) => {
-                        const normalized = String(resolvedPath || '').replaceAll('\\', '/');
+    const menuItems = [];
 
-                        if (!normalized) {
-                            setStatus('Failed to resolve file path.', true);
-                            return;
-                        }
+    let fileUrl = '';
+    const fileLabel = getPathFileName(file);
+    try {
+        const resolvedPath = await ResolveFilePath(file);
+        const normalized = String(resolvedPath || '').replaceAll('\\', '/');
+        if (normalized) {
+            if (/^[a-zA-Z]:\//.test(normalized)) {
+                fileUrl = `file:///${normalized}`;
+            } else {
+                fileUrl = `file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+            }
+        }
+    } catch {
+        // Keep local actions available even if path resolution fails.
+    }
 
-                        let fileUrl;
-                        if (/^[a-zA-Z]:\//.test(normalized)) {
-                            fileUrl = `file:///${normalized}`;
-                        } else if (normalized.startsWith('/')) {
-                            fileUrl = `file://${normalized}`;
-                        } else {
-                            fileUrl = `file://${normalized}`;
-                        }
+    let goMenuItems = [];
+    if (fileUrl) {
+        try {
+            const resolvedMenuItems = await GetHyperlinkMenuActions(fileUrl, fileLabel || fileUrl);
+            goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
+        } catch {
+            setStatus('Failed to load file actions.', true);
+        }
+    }
 
-                        return DisplayHyperlinkMenu(fileUrl, getPathFileName(file) || normalized);
-                    })
-                    .catch(() => {
-                        setStatus('Failed to open file actions.', true);
-                    });
-            },
-        },
-    ];
+    if (goMenuItems.length > 0) {
+        //menuItems.push({ title: '-', icon: 0 });
+
+        goMenuItems.forEach((item) => {
+            menuItems.push({
+                title: String(item?.title || ''),
+                icon: Number(item?.icon) || 0,
+                onSelect: () => {
+                    RunHyperlinkMenuAction(fileUrl, fileLabel || fileUrl, String(item?.action || ''))
+                        .catch(() => {
+                            setStatus('Failed to execute file action.', true);
+                        });
+                },
+            });
+        });
+    }
 
     showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
 }
@@ -2813,6 +2799,23 @@ EventsOn('viewFileInNotesOpen', async (payload) => {
     } catch (err) {
         setStatus(`Failed to load file: ${file}`, true);
         console.error(err);
+    }
+});
+
+// Event listener for generic file action dialog (rename or delete any file link)
+EventsOn('fileActionDialog', (payload) => {
+    const action = typeof payload === 'object' ? payload.action : '';
+    const filePath = typeof payload === 'object' ? payload.filePath : '';
+    
+    if (!filePath) return;
+    
+    switch (action) {
+        case 'rename':
+            openRenamePrompt(filePath);
+            break;
+        case 'delete':
+            openDeletePrompt(filePath);
+            break;
     }
 });
 

@@ -326,3 +326,7 @@ func (wr *webkitRender) activeTerm() types.Term {
 
 	return nil
 }
+
+func (wr *webkitRender) GetContext() context.Context {
+	return wr.wapp
+}
