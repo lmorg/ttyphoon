@@ -10,6 +10,7 @@ let _showListMenuFn = null;
 let _setAnchorFn = null;
 let _menuOperationInProgress = false;
 let _localMenuReturnFocus = null;
+let _listMenuTransitionSeq = 0;
 
 function menuHighlight(id, index) {
     if (id < 0) {
@@ -255,6 +256,8 @@ export function initTerminalPopupMenu(canvas) {
     }
 
     function hideListMenu(cancel = true) {
+        const transitionSeq = ++_listMenuTransitionSeq;
+
         if (activeListMenuId !== null && cancel) {
             menuCancel(activeListMenuId, -1);
         }
@@ -267,8 +270,22 @@ export function initTerminalPopupMenu(canvas) {
         query = '';
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
-        listRoot.style.display = 'none';
-        listBody.replaceChildren();
+        
+        listRoot.classList.remove('show');
+        listRoot.classList.add('hide');
+        
+        const onAnimationEnd = () => {
+            if (transitionSeq !== _listMenuTransitionSeq) {
+                return;
+            }
+
+            listRoot.removeEventListener('animationend', onAnimationEnd);
+            listRoot.classList.remove('hide');
+            listRoot.style.display = 'none';
+            listBody.replaceChildren();
+        };
+        
+        listRoot.addEventListener('animationend', onAnimationEnd, { once: true });
     }
 
     function hideMenus(cancel = true) {
@@ -404,11 +421,16 @@ export function initTerminalPopupMenu(canvas) {
         const reserveHeader = 78 + (listSearchWrap.style.display === 'none' ? 0 : 44);
         const idealWidth = measureIdealWidth(filteredItems, listTitle.textContent, hasIcons);
         applyMenuSizing(listRoot, listBody, reserveHeader, idealWidth);
+        listRoot.classList.remove('hide');
+        listRoot.classList.add('show');
         listRoot.style.display = 'block';
         positionMenu(listRoot);
     }
 
     function showListMenu(menu) {
+        // Invalidate any pending hide callback from a previous menu instance.
+        _listMenuTransitionSeq++;
+
         anchorX = mouseX;
         anchorY = mouseY;
         activeListMenuId = menu.menuId;

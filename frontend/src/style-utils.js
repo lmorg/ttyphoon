@@ -325,6 +325,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
             gap: 12px;
             color: var(--fg);
             background-color: var(--bg);
+            font-family: var(--font-family);
+            font-size: ${fontSize}px;
+            line-height: 1.45;
         }
             
         .swagger-layout {
@@ -338,11 +341,13 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-endpoints-pane {
             min-height: 0;
-            height: 250px;
-            max-height: 250px;
+            height: 180px;
+            max-height: 180px;
             overflow: auto;
             border: 1px solid rgba(${fgRgb}, 0.2);
-            border-radius: 4px;
+            border-radius: 0;
+            border-left: 0;
+            border-right: 0;
             background-color: rgba(${fgRgb}, 0.03);
             padding: 8px;
             flex-shrink: 0;
@@ -351,8 +356,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         /* Spec Info Header */
         .swagger-info {
-            padding: 4px 0 8px;
+            padding: 0;
             margin-bottom: 4px;
+            padding-left: 5px;
         }
 
         .swagger-info-title {
@@ -388,21 +394,13 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-info-meta-label {
             color: var(--accent);
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 1em;
         }
 
         .swagger-info-meta-value {
             color: rgba(${fgRgb}, 0.8);
             min-width: 0;
             word-break: break-word;
-        }
-
-        .swagger-endpoints-header {
-            font-size: 0.85em;
-            font-weight: bold;
-            color: var(--accent);
-            margin: 2px 0 8px;
-            letter-spacing: 0.03em;
         }
 
         .swagger-endpoint-filter {
@@ -414,7 +412,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             border-radius: 4px;
             padding: 7px 9px;
             margin-bottom: 8px;
-            font-size: 0.9em;
+            font-size: 1em;
             outline: none;
             top: 0;
             position: sticky;
@@ -433,8 +431,9 @@ export function getSwaggerUIStyles(colors, fontSize) {
             overflow: visible;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding-right: 4px;
+            gap: 0px;
+            padding-left: 5px;
+            padding-right: 0;
         }
 
         .swagger-endpoint-sticky {
@@ -470,7 +469,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-empty-field {
             margin: 0;
             color: rgba(${fgRgb}, 0.5);
-            font-size: 0.9em;
+            font-size: 1em;
         }
 
         /* Method + URL Bar */
@@ -485,16 +484,22 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-method-selector {
-            padding: 6px 12px;
-            border: 1px solid rgba(${fgRgb}, 0.3);
-            border-radius: 3px;
-            background-color: var(--bg);
-            color: var(--fg);
+            padding: 2px 4px;
+            border: none;
+            background: none;
+            color: var(--accent);
             font-weight: bold;
-            cursor: not-allowed;
-            opacity: 0.7;
-            min-width: 80px;
+            cursor: pointer;
+            opacity: 0.9;
+            min-width: 0;
             font-family: var(--font-family);
+        }
+
+        .swagger-method-selector:hover,
+        .swagger-method-selector:focus {
+            color: var(--fg);
+            opacity: 1;
+            outline: none;
         }
 
         .swagger-url-input {
@@ -505,7 +510,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             color: var(--fg);
             border-radius: 3px;
             font-family: var(--font-family);
-            font-size: 0.9em;
+            font-size: 1em;
         }
 
         .swagger-url-input:focus {
@@ -521,7 +526,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             border-radius: 3px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 1em;
             transition: background-color 0.2s ease;
         }
 
@@ -536,7 +541,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-live-badge {
-            font-size: 0.75em;
+            font-size: 1em;
             font-weight: bold;
             padding: 2px 6px;
             border-radius: 3px;
@@ -571,7 +576,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             cursor: pointer;
             border-bottom: 2px solid transparent;
             transition: all 0.2s ease;
-            font-size: 0.95em;
+            font-size: 1em;
         }
 
         .swagger-request-tab:hover,
@@ -611,7 +616,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             background-color: rgba(${fgRgb}, 0.03);
             border-radius: 2px;
             font-family: var(--font-family);
-            font-size: 0.85em;
+            font-size: 1em;
             border-left: 2px solid rgba(${yellowRgb}, 0.3);
         }
 
@@ -629,8 +634,15 @@ export function getSwaggerUIStyles(colors, fontSize) {
             word-break: break-all;
         }
 
-        .swagger-header-input,
-        .swagger-header-select {
+        .swagger-header-value-wrap {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .swagger-header-input {
             flex: 1;
             padding: 3px 6px;
             border: 1px solid rgba(${fgRgb}, 0.2);
@@ -638,15 +650,40 @@ export function getSwaggerUIStyles(colors, fontSize) {
             color: var(--fg);
             border-radius: 3px;
             font-family: var(--font-family);
-            font-size: 0.85em;
+            font-size: 1em;
             outline: none;
             min-width: 0;
         }
 
-        .swagger-header-input:focus,
-        .swagger-header-select:focus {
+        .swagger-header-input:focus {
             border-color: var(--accent);
             background-color: rgba(${fgRgb}, 0.08);
+        }
+
+        .swagger-header-dropdown {
+            width: 24px;
+            min-width: 24px;
+            height: 22px;
+            border: 1px solid rgba(${fgRgb}, 0.2);
+            border-radius: 3px;
+            background-color: rgba(${fgRgb}, 0.05);
+            color: var(--fg);
+            font-family: "Font Awesome Solid", "Font Awesome", var(--terminal-menu-font), sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            outline: none;
+            flex-shrink: 0;
+        }
+
+        .swagger-header-dropdown:hover {
+            background-color: rgba(${fgRgb}, 0.12);
+        }
+
+        .swagger-header-dropdown:focus {
+            outline: 1px solid var(--accent);
+            outline-offset: -1px;
         }
 
         /* Body Editor */
@@ -660,7 +697,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             border-radius: 3px;
             color: rgb(${greenRgb});
             font-family: var(--font-family);
-            font-size: 0.85em;
+            font-size: 1em;
             resize: vertical;
         }
 
@@ -673,7 +710,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-params-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85em;
+            font-size: 1em;
         }
 
         .swagger-params-table thead {
@@ -725,7 +762,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             padding: 4px 12px;
             border-radius: 3px;
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 1em;
             flex-shrink: 0;
         }
 
@@ -750,7 +787,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-response-meta {
-            font-size: 0.85em;
+            font-size: 1em;
             color: rgba(${fgRgb}, 0.6);
             font-style: italic;
         }
@@ -758,15 +795,14 @@ export function getSwaggerUIStyles(colors, fontSize) {
         /* Response Body Display */
         .swagger-response-body {
             margin: 0;
-            padding: 8px;
-            background-color: rgba(${fgRgb}, 0.05);
-            border: 1px solid rgba(${fgRgb}, 0.15);
-            border-radius: 3px;
             color: rgb(${greenRgb});
             font-family: var(--font-family);
-            font-size: 0.85em;
-            overflow: auto;
-            max-height: 200px;
+            font-size: 1em;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         /* Method Badges for Endpoints List */
@@ -774,7 +810,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             padding: 2px 8px;
             border-radius: 2px;
             font-weight: bold;
-            font-size: 0.8em;
+            font-size: 1em;
             flex-shrink: 0;
             min-width: 40px;
             text-align: center;
@@ -851,7 +887,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-endpoint-summary {
-            font-size: 0.85em;
+            font-size: 1em;
             color: rgba(${fgRgb}, 0.6);
             font-style: italic;
         }
@@ -928,11 +964,11 @@ export function getSwaggerUIStyles(colors, fontSize) {
         .swagger-param-name {
             font-weight: bold;
             color: var(--accent);
-            font-size: 0.95em;
+            font-size: 1em;
         }
 
         .swagger-param-meta {
-            font-size: 0.8em;
+            font-size: 1em;
             color: rgba(${fgRgb}, 0.5);
             font-family: var(--font-family);
         }
@@ -944,7 +980,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
             color: var(--fg);
             border-radius: 3px;
             font-family: var(--font-family);
-            font-size: 0.9em;
+            font-size: 1em;
             transition: border-color 0.2s ease;
         }
 

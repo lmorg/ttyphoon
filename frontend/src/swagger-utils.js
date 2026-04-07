@@ -328,7 +328,7 @@ export function extractResponses(operation) {
 export function extractHeaders(operation, pathItem = null, spec = null) {
     const headers = [];
 
-    // Add Content-Type derived from the spec's requestBody.content MIME keys
+    // Add Content-Type derived from the spec's requestBody.content MIME keys (OpenAPI 3.0)
     if (operation.requestBody) {
         const requestBody = resolveMaybeRef(spec, operation.requestBody);
         const contentTypes = Object.keys(requestBody.content || {});
@@ -342,6 +342,50 @@ export function extractHeaders(operation, pathItem = null, spec = null) {
             value: preferred,
             options: contentTypes.length > 1 ? contentTypes : null
         });
+    } else if (operation.consumes || (spec && spec.consumes)) {
+        // Swagger 2.0 style: operation-level consumes or global spec-level consumes
+        const consumes = operation.consumes || spec.consumes || [];
+        const preferred = consumes.includes('application/json')
+            ? 'application/json'
+            : (consumes[0] || 'application/json');
+
+        headers.push({
+            name: 'Content-Type',
+            value: preferred,
+            options: consumes.length > 1 ? consumes : null
+        });
+    }
+
+    // Add Accept header from response content types
+    if (operation.responses) {
+        const acceptTypes = new Set();
+
+        Object.entries(operation.responses).forEach(([status, response]) => {
+            const res = resolveMaybeRef(spec, response);
+            // OpenAPI 3.0: response.content
+            if (res.content) {
+                Object.keys(res.content).forEach(mimeType => acceptTypes.add(mimeType));
+            }
+        });
+
+        // Swagger 2.0: check operation.produces or global spec.produces
+        if (acceptTypes.size === 0 && (operation.produces || (spec && spec.produces))) {
+            const produces = operation.produces || spec.produces || [];
+            produces.forEach(mimeType => acceptTypes.add(mimeType));
+        }
+
+        if (acceptTypes.size > 0) {
+            const acceptArray = Array.from(acceptTypes);
+            const preferred = acceptArray.includes('application/json')
+                ? 'application/json'
+                : acceptArray[0];
+
+            headers.push({
+                name: 'Accept',
+                value: preferred,
+                options: acceptArray.length > 1 ? acceptArray : null
+            });
+        }
     }
     
     // Add specific headers from parameters marked as 'header'
@@ -431,9 +475,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                     <h2 class="swagger-endpoint-title">${escapeHtml(endpointTitle)}</h2>
                 </div>
                 <div class="swagger-method-url-bar">
-                    <select class="swagger-method-selector" disabled>
-                        <option selected>${selectedEndpoint.method}</option>
-                    </select>
+                    <button type="button" class="swagger-method-selector" title="Select method">${selectedEndpoint.method}</button>
                     <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
                     <button class="swagger-send-btn">Send</button>
                 </div>
@@ -463,12 +505,13 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
         headers.forEach(header => {
             let valueHtml;
             if (header.options) {
-                // Multiple MIME types — render a select
-                valueHtml = `<select class="swagger-header-value swagger-header-select" data-header-name="${escapeHtml(header.name)}">`
-                    + header.options.map(opt =>
-                        `<option value="${escapeHtml(opt)}"${opt === header.value ? ' selected' : ''}>${escapeHtml(opt)}</option>`
-                    ).join('')
-                    + `</select>`;
+                // Multiple MIME types — render editable input with popup trigger button
+                valueHtml = `
+                    <div class="swagger-header-value-wrap">
+                        <input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />
+                        <button type="button" class="swagger-header-dropdown" data-header-name="${escapeHtml(header.name)}" data-header-options="${escapeHtml(JSON.stringify(header.options))}" title="Select value" aria-label="Select ${escapeHtml(header.name)} value">&#xf141;</button>
+                    </div>
+                `;
             } else {
                 // Editable single-value input
                 valueHtml = `<input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />`;
@@ -827,7 +870,7 @@ export function generateLiveResponseHTML(response) {
                 <button class="swagger-response-tab swagger-response-tab-active" role="tab" data-tab="body" aria-selected="true">Body</button>
                 <button class="swagger-response-tab" role="tab" data-tab="headers" aria-selected="false">Headers</button>
             </div>
-            <div class="swagger-response-panel swagger-response-panel-active" data-panel="body" role="tabpanel">
+            <div class="swagger-response-panel swagger-response-panel-active markdown-body" data-panel="body" role="tabpanel">
                 <pre class="swagger-response-body"><code>${escapeHtml(bodyDisplay)}</code></pre>
             </div>
             <div class="swagger-response-panel" data-panel="headers" role="tabpanel">

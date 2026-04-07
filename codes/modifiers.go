@@ -139,7 +139,7 @@ func specialCaseSequences(keySet types.KeyboardMode, keyPress KeyCode, modifier 
 
 func TmuxKeySanitiser(keySeq []byte) string {
 	if keySeq[0] == 0 {
-		return strings.ReplaceAll(string(keySeq[:len(keySeq)-1]), string(0), "")
+		return strings.ReplaceAll(string(keySeq[:len(keySeq)-1]), string([]rune{0}), "")
 	} else {
 		return string(keySeq)
 	}

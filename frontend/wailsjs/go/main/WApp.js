@@ -10,6 +10,10 @@ export function DeleteFile(arg1) {
   return window['go']['main']['WApp']['DeleteFile'](arg1);
 }
 
+export function DisplayHyperlinkMenu(arg1, arg2) {
+  return window['go']['main']['WApp']['DisplayHyperlinkMenu'](arg1, arg2);
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
@@ -24,6 +28,10 @@ export function GetClipboardData() {
 
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
+}
+
+export function GetHyperlinkMenuActions(arg1, arg2) {
+  return window['go']['main']['WApp']['GetHyperlinkMenuActions'](arg1, arg2);
 }
 
 export function GetImage(arg1) {
@@ -54,8 +62,16 @@ export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
+export function ResolveFilePath(arg1) {
+  return window['go']['main']['WApp']['ResolveFilePath'](arg1);
+}
+
 export function RunAIAgentWithStream(arg1, arg2) {
   return window['go']['main']['WApp']['RunAIAgentWithStream'](arg1, arg2);
+}
+
+export function RunHyperlinkMenuAction(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['RunHyperlinkMenuAction'](arg1, arg2, arg3);
 }
 
 export function RunNote(arg1, arg2, arg3) {
@@ -152,6 +168,10 @@ export function TerminalSetGlyphSize(arg1, arg2) {
 
 export function TerminalTextInput(arg1) {
   return window['go']['main']['WApp']['TerminalTextInput'](arg1);
+}
+
+export function ViewFileInNotes() {
+  return window['go']['main']['WApp']['ViewFileInNotes']();
 }
 
 export function WindowHide() {

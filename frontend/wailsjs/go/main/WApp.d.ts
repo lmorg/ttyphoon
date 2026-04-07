@@ -8,6 +8,8 @@ export function AddToFileList(arg1:string):Promise<void>;
 
 export function DeleteFile(arg1:string):Promise<void>;
 
+export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
+
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
 export function GetAppTitle():Promise<string>;
@@ -15,6 +17,8 @@ export function GetAppTitle():Promise<string>;
 export function GetClipboardData():Promise<main.ClipboardData>;
 
 export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
+
+export function GetHyperlinkMenuActions(arg1:string,arg2:string):Promise<Array<Record<string, any>>>;
 
 export function GetImage(arg1:string):Promise<string>;
 
@@ -30,7 +34,11 @@ export function ListFiles():Promise<Array<string>>;
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
+export function ResolveFilePath(arg1:string):Promise<string>;
+
 export function RunAIAgentWithStream(arg1:string,arg2:string):Promise<void>;
+
+export function RunHyperlinkMenuAction(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -79,6 +87,8 @@ export function TerminalSetFocus(arg1:boolean):Promise<void>;
 export function TerminalSetGlyphSize(arg1:number,arg2:number):Promise<void>;
 
 export function TerminalTextInput(arg1:string):Promise<void>;
+
+export function ViewFileInNotes():Promise<void>;
 
 export function WindowHide():Promise<void>;
 

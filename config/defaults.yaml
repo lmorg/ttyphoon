@@ -1,95 +1,143 @@
 Tmux:
+  # tmux is a terminal multiplexer. This terminal emulator supports tmux
+  # integration via the tmux control plane.
+  # You can also disable tmux here and set `tmux` as the default shell if you
+  # would prefer to use the vanilla tmux UI.
+  # If `tmux` executable is not in $PATH then this terminal emulator will
+  # revert to the $SHELLs defined below
   Enabled: true
+
+# If tmux is not available, then default to the following $SHELLs instead
 Shell:
-  Default:
-    - murex
-  Fallback:
-    - $SHELL
+  Default: [murex]
+  Fallback: [$SHELL]
+
 Hotkeys:
+  # How many milliseconds to wait before ignoring the prefix key
   PrefixTTL: 2000
+  # How many milliseconds to wait before ignoring any chained key presses
   RepeatTTL: 1000
   Functions:
-    F2::s: Settings
-    F2::C-r: ReloadSettings
-    M-v: Paste
-    C-S-v: Paste
-    F2::v: VisualEditor
-    F2::a: AskAI
-    F2::/: AgentSkills
-    F2::n: ShowHideNotes
-    M-f: SearchRegex
-    F3::F3: SearchRegex
-    F3::d: SearchResults
-    F3::c: SearchClear
-    F3::h: SearchCommandLines
+    "F2::s":  Settings
+    "F2::C-r": ReloadSettings
+    "M-v":    Paste
+    "C-S-v":  Paste
+    "F2::v":  VisualEditor
+    "F2::a":  AskAI
+    "F2::/":  AgentSkills
+    #"F2::h":  OpenHistory
+    "F2::n":  ShowHideNotes
+    "F2::f":  ViewFile
+    "M-f":    SearchRegex
+    "F3::F3": SearchRegex
+    "F3::d":  SearchResults
+    "F3::c":  SearchClear
+    #"F3::a":  SearchAIPrompts
+    "F3::h":  SearchCommandLines
+
 Terminal:
+  # ScrollbackHistory is the size of the scrollback buffer.
+  # Value is number of lines
   ScrollbackHistory: 10000
   WriteMarkdownHistory: true
+
+  # Close the scrollback (ie jump back to end of history) if a key is pressed
+  # while in the history scrollback view
   ScrollbackCloseKeyPress: true
+
+  # This controls how often a carriage return (\n) will force the window to
+  # update. The lower the number, the smoother the scrolling but at the cost
+  # of terminal performance and system requirements.
+  # Value is number of lines (ie number of carriage returns or \n) to count
+  # before a forced update.
+  # `0` updates per character, which is smooth but slow
+  # `-1` updates per page, which is fast.
+  # Window.RefreshInterval also affects window updates
+  # This value can also be overwritten by CSI ?4l and CSI ?4h (DECSCLM)
   JumpScrollLineCount: -1
+
+  #ColorTheme: "~/Chalk.itermcolors"
+
+  # Turn anything that looks like a URL or file on disk into a hyperlink.
   AutoHyperlink: true
+
   Widgets:
     AutoHyperlink:
       IncLineNumbers: false
       OpenAgents:
+        # first item in scheme is the 3x / middle click
         - Name: Visual Studio Code
-          Command:
-            - code
-            - ${path}
-          Schemes:
-            - file
+          Command: [ code, "${path}" ]
+          Schemes: [ file ]
         - Name: System Default
-          Command:
-            - open
-            - ${url}
-          Schemes:
-            - "*"
+          Command: [ open, "${url}" ]
+          Schemes: [ "*" ]
+
         - Name: Zed
-          Command:
-            - zed
-            - ${path}
-          Schemes:
-            - file
+          Command: [ zed, "${path}" ]
+          Schemes: [ file ]
         - Name: Mozilla FireFox
-          Command:
-            - firefox
-            - ${url}
-          Schemes:
-            - "*"
+          Command: [ firefox, "${url}" ]
+          Schemes: [ "*" ]
         - Name: Google Chrome
-          Command:
-            - chrome
-            - ${url}
-          Schemes:
-            - "*"
+          Command: [ chrome, "${url}" ]
+          Schemes: [ "*" ]
         - Name: Chromium
-          Command:
-            - chromium
-            - ${url}
-          Schemes:
-            - "*"
+          Command: [ chromium, "${url}" ]
+          Schemes: [ "*" ]
+
     Table:
       ScrollMultiplierX: 2
       ScrollMultiplierY: 2
+
 TypeFace:
+  # FontName is the name of the primary typeface for the terminal.
+  # If this is commented out then the terminal will use a font compiled
+  # into this executable, which is Hasklig - a typeface based on
+  # Source Code Pro.
+  #FontName: "Fira Code"
+  #FontName: "Hack"
   FontSize: 15
-  AdjustCellWidth: 0
+
+  # Cell padding. Some people prefer high density while others find that harder
+  # to read
+  AdjustCellWidth:  0
   AdjustCellHeight: 2
+
+  # Ligatures are characters can be combined to make prettier versions of
+  # themselves. This requires a supporting font to be used.
   Ligatures: true
+
 Window:
   StatusBar: true
+
   HoverEffectHighlight: true
+
   BellVisualNotification: false
   BellPlayAudio: true
-NotesWindow: null
+
+  # RefreshInterval is how long to wait between forced window updates.
+  # Lower values produce smoother scrolling when large text is rapidly written
+  # to the terminal but at the cost of slower terminal performance and greater
+  # system requirements.
+  # Value is time in milliseconds to wait between each refresh.
+  # `0` disables a timer-based refresh entirely.
+  # Terminal.JumpScrollLineCount also affects the window updates
+  #RefreshInterval: 200
+
+
+NotesWindow:
+
 AI:
   MaxIterations: 10
   AvailableModels:
     ChatGPT:
+      # https://platform.openai.com/docs/models
       - gpt-5.2
       - gpt-5-mini
       - gpt-5-nano
     Claude:
+      # https://platform.claude.com/docs/en/about-claude/models/overview
       - claude-opus-4-5
       - claude-sonnet-4-5
       - claude-haiku-4-5

@@ -1,20 +1,14 @@
 package element_hyperlink
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"strings"
 
-	"github.com/lmorg/ttyphoon/ai"
-	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
-	"golang.design/x/clipboard"
 )
 
 type ElementHyperlink struct {
@@ -35,6 +29,12 @@ func New(renderer types.Renderer, tile types.Tile) *ElementHyperlink {
 		sgr:      tile.GetTerm().GetSgr().Copy(),
 	}
 }
+
+func (el *ElementHyperlink) Url() string              { return el.url }
+func (el *ElementHyperlink) Scheme() string           { return el.scheme }
+func (el *ElementHyperlink) Path() string             { return el.path }
+func (el *ElementHyperlink) Label() string            { return string(el.label) }
+func (el *ElementHyperlink) Renderer() types.Renderer { return el.renderer }
 
 func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 	el.label = []rune(apc.Index(0))
@@ -103,11 +103,11 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 		switch button {
 		case types.MOUSE_BUTTON_LEFT:
 			menu := el.renderer.NewContextMenu()
-			menu.Append(el.contextMenuItems()...)
+			menu.Append(menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)
 			menu.DisplayMenu("Hyperlink action")
 
 		case types.MOUSE_BUTTON_RIGHT:
-			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, el.contextMenuItems()...)...)
+			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)...)
 			callback()
 
 		case types.MOUSE_BUTTON_MIDDLE:
@@ -129,206 +129,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 func (el *ElementHyperlink) openWithDefault() {
 	_, cmd := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
 	if len(cmd) > 0 {
-		el.openWith(cmd[0])
-	}
-}
-
-func (el *ElementHyperlink) contextMenuItems() []types.MenuItem {
-	menuItems := []types.MenuItem{
-		{
-			Title: "Copy link to clipboard",
-			Fn:    func() { copyLinkToClipboard(el.renderer, el.schemaOrPath()) },
-			Icon:  0xf0c1,
-		},
-		{
-			Title: "Copy text to clipboard",
-			Fn:    func() { copyLinkToClipboard(el.renderer, string(el.label)) },
-			Icon:  0xf0c5,
-		},
-	}
-
-	menuItems = el._menuItemsSchemaHttp(menuItems)
-	menuItems = el._menuItemsSchemaFile(menuItems)
-
-	apps, cmds := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
-	for i := range apps {
-		menuItems = append(menuItems,
-			types.MenuItem{
-				Title: "Open link with " + apps[i],
-				Fn:    func() { el.openWith(cmds[i]) },
-				Icon:  0xf08e,
-			},
-		)
-	}
-	menuItems = append(menuItems, []types.MenuItem{
-		{
-			Title: "Write link to shell",
-			Fn:    func() { el.tile.GetTerm().Reply([]byte(el.schemaOrPath())) },
-			Icon:  0xf120,
-		},
-	}...,
-	)
-
-	return menuItems
-}
-
-func (el *ElementHyperlink) _menuItemsSchemaHttp(menuItems []types.MenuItem) []types.MenuItem {
-	if !strings.HasPrefix(el.scheme, "http") {
-		return menuItems
-	}
-
-	agt := agent.Get(el.tile.Id())
-	agt.Meta = &agent.Meta{}
-	menuItems = append(menuItems, types.MenuItem{
-		Title: fmt.Sprintf("Summarize hyperlink (%s)", agt.ServiceName()),
-		Fn: func() {
-			ai.AskAI(agt, fmt.Sprintf("Can you summarize the contents of this web page: %s\n Do NOT to check other websites nor use any search engines.", el.url))
-		},
-		Icon: 0xf544,
-	})
-
-	return menuItems
-}
-
-func (el *ElementHyperlink) _menuItemsSchemaFile(menuItems []types.MenuItem) []types.MenuItem {
-	if el.scheme != "file" {
-		return menuItems
-	}
-
-	f, err := os.Open(el.schemaOrPath())
-	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return menuItems
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return menuItems
-	}
-
-	if info.IsDir() || info.Size() > _CONTENTS_CLIP_MAX {
-		return menuItems
-	}
-
-	menuItems = append(menuItems,
-		types.MenuItem{
-			Title: "Copy contents to clipboard",
-			Fn:    func() { copyContentsToClipboard(el.renderer, el.schemaOrPath()) },
-			Icon:  0xf0c6,
-		},
-	)
-
-	/*if strings.HasSuffix(el.url, ".md") {
-		menuItems = append(menuItems, types.MenuItem{
-			Title: "Open in markdown viewer",
-			Fn:    func() { openMarkdownViewer(el) },
-			Icon:  0xf1ea,
-		})
-	}*/
-
-	return menuItems
-}
-
-/*func openMarkdownViewer(el *ElementHyperlink) {
-	windowStyle := dispatcher.NewWindowStyle()
-	//windowStyle.Pos = types.XY{}
-	//x, y := el.renderer.GetWindowMeta().(*sdl.Window).GetSize()
-	//windowStyle.Size = types.XY{X: x, Y: y}
-	//windowStyle.Title = string(el.label)
-
-	parameters := &dispatcher.PMarkdownT{Path: el.path}
-
-	_, _ = dispatcher.DisplayWindow(dispatcher.WindowMarkdown, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
-		if msg.Error != nil {
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
-		}
-	})
-}*/
-
-func (el *ElementHyperlink) schemaOrPath() string {
-	if el.scheme == "file" {
-		return string(el.path)
-	} else {
-		return string(el.url)
-	}
-}
-
-func copyLinkToClipboard(renderer types.Renderer, url string) {
-	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
-	clipboard.Write(clipboard.FmtText, []byte(url))
-}
-
-const _CONTENTS_CLIP_MAX = 10 * 1024 * 1024 // 10 MB
-
-func copyContentsToClipboard(renderer types.Renderer, path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-
-	if info.Size() > _CONTENTS_CLIP_MAX {
-		renderer.DisplayNotification(types.NOTIFY_WARN, "file too large")
-		return
-	}
-
-	b, err := io.ReadAll(f)
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-
-	renderer.DisplayNotification(types.NOTIFY_INFO, "File contents copied to clipboard")
-	clipboard.Write(clipboard.FmtText, b)
-}
-
-func (el *ElementHyperlink) openWith(exe []string) {
-	var b []byte
-	buf := bytes.NewBuffer(b)
-
-	for param := range exe {
-		exe[param] = os.Expand(exe[param], el.getVar)
-	}
-
-	cmd := exec.Command(exe[0], exe[1:]...)
-	cmd.Stderr = buf
-
-	err := cmd.Start()
-	if err != nil {
-		el.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-		return
-	}
-
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			msg := buf.String()
-			if msg == "" {
-				msg = err.Error()
-			}
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg)
-		}
-	}()
-}
-
-func (el *ElementHyperlink) getVar(s string) string {
-	switch s {
-	case "url":
-		return el.url
-	case "scheme":
-		return el.scheme
-	case "path":
-		return el.path
-	default:
-		return "INVALID_VARIABLE_NAME"
+		menuhyperlink.OpenWith(el.renderer, el.url, string(el.label), cmd[0])
 	}
 }
 

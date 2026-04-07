@@ -22,6 +22,7 @@ type terminalTab struct {
 type webkitRender struct {
 	termWin         *types.AppWindowTerms
 	tmux            *tmux.Tmux
+	app             interface{} // Reference to WApp for accessing methods like ListFiles()
 	auxTabsMu       sync.RWMutex
 	auxTerminalTabs []types.TerminalPaneTab
 	glyphSize       *types.XY
@@ -324,4 +325,8 @@ func (wr *webkitRender) activeTerm() types.Term {
 	}
 
 	return nil
+}
+
+func (wr *webkitRender) GetContext() context.Context {
+	return wr.wapp
 }

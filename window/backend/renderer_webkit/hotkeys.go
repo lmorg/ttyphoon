@@ -57,12 +57,20 @@ func (wr *webkitRender) hotkeys() {
 		case "SearchCommandLines":
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
 			desc = "Search command line history..."
-		/*case "OpenHistory":
-		fn = func() { wr.OpenHistory(sr.termWin.Active) }
-		desc = "Open history..."*/
+
+			/*case "OpenHistory":
+			fn = func() { wr.OpenHistory(sr.termWin.Active) }
+			desc = "Open history..."*/
 		case "ShowHideNotes":
 			fn = func() { wr.toggleNotesPane() }
 			desc = "Open notes..."
+		case "ViewFile":
+			fn = func() {
+				if app, ok := wr.app.(interface{ ViewFileInNotes() }); ok {
+					app.ViewFileInNotes()
+				}
+			}
+			desc = "View file in Notes..."
 
 		default:
 			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))

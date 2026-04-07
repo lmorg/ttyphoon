@@ -248,6 +248,14 @@ splitHandleLine.style.cssText = [
 ].join(';');
 splitHandle.appendChild(splitHandleLine);
 
+splitHandle.addEventListener('mouseenter', () => {
+    splitHandleLine.style.background = 'var(--accent)';
+});
+
+splitHandle.addEventListener('mouseleave', () => {
+    splitHandleLine.style.background = 'color-mix(in srgb, var(--fg) 20%, transparent)';
+});
+
 terminalPane = document.createElement('div');
 terminalPane.id = 'terminal-pane';
 terminalPane.style.cssText = [
@@ -723,6 +731,15 @@ window.addEventListener('mouseup', () => {
 
 EventsOn('toggleNotesPane', () => {
     void toggleNotesPaneCollapsed();
+});
+
+// When Go selects a file to view, expand the notes side-panel if it is collapsed
+// (but not embedded as a terminal tab — that case is handled by terminalActivateAuxTab).
+EventsOn('viewFileInNotesOpen', () => {
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    if (notesCollapsed && !embeddedInTerminal) {
+        void toggleNotesPaneCollapsed();
+    }
 });
 
 window.addEventListener('resize', () => {

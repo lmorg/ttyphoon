@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,13 +24,16 @@ import (
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/window/backend"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.design/x/clipboard"
 )
@@ -425,7 +429,12 @@ func (a *WApp) startTerminalWindow() {
 		}
 	}
 
-	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx)
+	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx, a)
+
+	// Set app reference on renderer for hotkey handlers
+	if wr, ok := renderwebkit.CurrentRenderer(); ok {
+		wr.SetApp(a)
+	}
 }
 
 func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
@@ -671,7 +680,7 @@ func (a *WApp) ListFiles() []string {
 
 		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
 			strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
-			filename := strings.Replace(path, a.projRoot, "$PROJ", 1)
+			filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
 			files = append(files, filename)
 		}
 		return nil
@@ -723,7 +732,7 @@ func (a *WApp) AddToFileList(filename string) {
 
 func (a *WApp) expandMappingFunc(s string) string {
 	switch s {
-	case "PROJ":
+	case "PROJECT":
 		return a.projRoot
 	case "NOTES":
 		return a.usrNotesDir
@@ -744,6 +753,62 @@ func (a WApp) filePath(filename string) string {
 		filename = a.usrNotesDir + string(filepath.Separator) + filename
 	}
 	return filename
+}
+
+func (a *WApp) ResolveFilePath(filename string) string {
+	return a.filePath(filename)
+}
+
+func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return nil
+	}
+
+	return menuhyperlink.MenuItems(renderer, url, text)
+}
+
+func (a *WApp) GetHyperlinkMenuActions(url, text string) []map[string]any {
+	menuItems := a.hyperlinkMenuItems(url, text)
+	out := make([]map[string]any, 0, len(menuItems))
+
+	for i := range menuItems {
+		out = append(out, map[string]any{
+			"title":  menuItems[i].Title,
+			"icon":   menuItems[i].Icon,
+			"action": strconv.Itoa(i),
+		})
+	}
+
+	return out
+}
+
+func (a *WApp) RunHyperlinkMenuAction(url, text, action string) {
+	menuItems := a.hyperlinkMenuItems(url, text)
+	if len(menuItems) == 0 {
+		return
+	}
+
+	index, err := strconv.Atoi(strings.TrimSpace(action))
+	if err != nil || index < 0 || index >= len(menuItems) {
+		return
+	}
+
+	// Execute the menu item callback if it exists
+	if menuItems[index].Fn != nil {
+		menuItems[index].Fn()
+	}
+}
+
+func (a *WApp) DisplayHyperlinkMenu(url, text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	menu := renderer.NewContextMenu()
+	menu.Append(a.hyperlinkMenuItems(url, text)...)
+	menu.DisplayMenu("Hyperlink action")
 }
 
 func (a *WApp) SaveFile(filename, contents string) error {
@@ -839,6 +904,43 @@ func (a *WApp) SwaggerRequest(req swagger.RequestT) swagger.ResponseT {
 	return swagger.Execute(a.ctx, req)
 }
 
+// ViewFileInNotes displays a popup menu (in Go) to select a file to view in the Notes pane.
+// On selection it emits:
+//  1. "viewFileInNotesOpen" — tells the frontend to load the chosen file.
+//  2. "terminalActivateAuxTab" with id "notes" — switches to the Notes tab if it is
+//     currently registered as an auxiliary terminal pane tab.
+func (a *WApp) ViewFileInNotes() {
+	files := a.ListFiles()
+	if len(files) == 0 || a.ctx == nil {
+		return
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	onSelect := func(i int) {
+		if i < 0 || i >= len(files) {
+			return
+		}
+		filename := files[i]
+
+		// If Notes is registered as an auxiliary tab, activate it.
+		for _, tab := range renderer.TerminalPaneTabs() {
+			if tab.ID == "notes" {
+				renderer.ActivateTerminalPaneTab("notes")
+				break
+			}
+		}
+
+		// Tell the frontend to open the file in the Notes pane.
+		runtime.EventsEmit(a.ctx, "viewFileInNotesOpen", filename)
+	}
+
+	renderer.DisplayMenu("Select file to view in Notes", files, nil, onSelect, nil)
+}
+
 func (a *WApp) GetAppTitle() string { return appTitle() }
 
 // --------------------
@@ -888,25 +990,21 @@ func startWails() {
 		OnStartup:  wapp.startup,
 		OnDomReady: wapp.domReady,
 		Bind:       []any{wapp},
-		//BackgroundColour: &options.RGBA{0, 0, 0, 0},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
-			//WindowIsTranslucent:  true,
-			//WebviewIsTransparent: true,
 			About: &mac.AboutInfo{
 				Title:   app.Name(),
 				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
 				Icon:    appIcon,
 			},
 		},
-		/*Linux: &linux.Options{
-			WindowIsTranslucent: true,
-		},*/
-
-		/*Windows: &windows.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
-		},*/
+		Linux: &linux.Options{
+			Icon:        appIcon,
+			ProgramName: app.Name(),
+		},
+		Windows: &windows.Options{
+			WindowClassName: app.Name(),
+		},
 
 		//BindingsAllowedOrigins: "*",
 	})

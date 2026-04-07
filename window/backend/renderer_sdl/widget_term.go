@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package rendersdl
 
 import (
@@ -10,7 +13,6 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/dispatcher"
 	"github.com/veandco/go-sdl2/sdl"
 	"golang.design/x/clipboard"
 )
@@ -109,7 +111,6 @@ func (tw *termWidgetT) _eventKeyPress(sr *sdlRender, evt *sdl.KeyboardEvent) {
 		sr.termWin.Active.GetTerm().Reply(b)
 	}
 }
-
 
 func (sr *sdlRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	fn := hotkeys.KeyPress(keyCode, mod)

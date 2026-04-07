@@ -13,6 +13,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const _ITERMCOLORS_EXT = ".itermcolors"
@@ -49,6 +50,15 @@ func (wr *webkitRender) UpdateConfig() {
 			Icon: 0xf035,
 		},
 
+		{
+			Title: fmt.Sprintf("%s == %v", "Window.AlwaysOnTop", config.Config.Window.AlwaysOnTop),
+			Fn: func() {
+				config.Config.Window.AlwaysOnTop = !config.Config.Window.AlwaysOnTop
+				runtime.WindowSetAlwaysOnTop(wr.wapp, config.Config.Window.AlwaysOnTop)
+				wr.UpdateConfig()
+			},
+			Icon: 0xf0f3,
+		},
 		{
 			Title: fmt.Sprintf("%s == %v", "Window.BellVisualNotification", config.Config.Window.BellVisualNotification),
 			Fn: func() {

@@ -70,6 +70,8 @@ type Renderer interface {
 	NotesCreateAndOpen(filename, contents string)
 	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
+	ActiveTile() Tile
+	GetContext() context.Context
 	Close()
 }
 

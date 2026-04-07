@@ -3,6 +3,8 @@ import {
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
+    ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
+    DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -27,6 +29,7 @@ const CONTEXT_ICON_FIND = 0xf002;
 const CONTEXT_ICON_PRINT = 0xf02f;
 const CONTEXT_ICON_CHECKBOX = 0xf14a;
 const CONTEXT_ICON_CODE = 0xf121;
+const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 
 const IS_WINDOWS = typeof navigator !== 'undefined' && (
@@ -50,6 +53,9 @@ app.innerHTML = `
         <aside id="notes-sidebar">
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
+                <div id="notes-list-filter-wrap">
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" />
+                </div>
             </div>
             <div id="notes-list" role="list"></div>
         </aside>
@@ -138,6 +144,7 @@ app.innerHTML = `
 const elements = {
     title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
+    listFilter: document.getElementById('notes-list-filter'),
     editor: document.getElementById('notes-editor'),
     preview: document.getElementById('notes-preview'),
     jupyter: document.getElementById('notes-jupyter'),
@@ -197,10 +204,11 @@ const state = {
     findMatches: [],
     findCurrentIndex: -1,
     findQuery: '',
+    fileFilterQuery: '',
     expandedCategories: {
         '$GLOBAL': true,
         '$NOTES': true,
-        '$PROJ': true,
+        '$PROJECT': true,
         '$HISTORY': false,
     },
     expandedFolders: {},
@@ -338,7 +346,8 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.appendChild(label);
 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
-        const expanded = state.expandedFolders[folderKey] !== false;
+        const hasActiveFilter = state.fileFilterQuery.trim() !== '';
+        const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 
@@ -373,6 +382,12 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
             e.preventDefault();
             openRenamePrompt(node.file);
         });
+
+	    item.addEventListener('contextmenu', async (e) => {
+	        e.preventDefault();
+	        e.stopPropagation();
+	        await openFileListContextMenu(node.file, e.clientX, e.clientY);
+	    });
 
         container.appendChild(item);
     }
@@ -688,11 +703,15 @@ function convertToJupyterCodeBlocks() {
         runTerminalBtn.textContent = 'Send to terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
         
-        const runtimeDropdown = document.createElement('select');
-        runtimeDropdown.className = 'jupyter-runtime-dropdown';
-        runtimeDropdown.title = 'Select runtime';
-        
-        // Populate dropdown immediately
+        const runtimeLink = document.createElement('button');
+        runtimeLink.type = 'button';
+        runtimeLink.className = 'jupyter-runtime-dropdown';
+        runtimeLink.title = 'Select runtime';
+        runtimeLink.textContent = language || 'language unknown';
+
+        let runtimeOptions = [];
+
+        // Load runtime options immediately
         (async () => {
             try {
                 const hasLanguage = Boolean(language);
@@ -738,50 +757,49 @@ function convertToJupyterCodeBlocks() {
                     }
                 }
 
-                // Populate dropdown
-                runtimeDropdown.innerHTML = '';
-
-                // If we have a custom default that's not in the list, add it first
+                // Build ordered options list (prepend custom default if not already present)
+                runtimeOptions = [];
                 if (defaultSelection && !descriptions.includes(defaultSelection)) {
-                    const option = document.createElement('option');
-                    option.value = defaultSelection;
-                    option.textContent = defaultSelection;
-                    runtimeDropdown.appendChild(option);
+                    runtimeOptions.push(defaultSelection);
                 }
+                runtimeOptions.push(...descriptions);
 
-                // Add all available descriptions
-                descriptions.forEach((desc) => {
-                    const option = document.createElement('option');
-                    option.value = desc;
-                    option.textContent = desc;
-                    if (desc === defaultSelection) {
-                        option.selected = true;
-                    }
-                    runtimeDropdown.appendChild(option);
-                });
-
-                // Set runtime state
-                state.jupyterCodeBlocks[blockId].runtime = defaultSelection
+                // Set runtime state and update button label
+                const resolved = defaultSelection
                     || (descriptions.length > 0 ? descriptions[0] : language || 'language unknown');
+                state.jupyterCodeBlocks[blockId].runtime = resolved;
+                runtimeLink.textContent = resolved;
 
             } catch (err) {
                 console.error('Error fetching language descriptions:', err);
-                const option = document.createElement('option');
-                option.value = language || 'language unknown';
-                option.textContent = language || 'language unknown';
-                runtimeDropdown.appendChild(option);
-                state.jupyterCodeBlocks[blockId].runtime = language || 'language unknown';
+                const fallback = language || 'language unknown';
+                runtimeOptions = [fallback];
+                state.jupyterCodeBlocks[blockId].runtime = fallback;
+                runtimeLink.textContent = fallback;
             }
         })();
-        
-        runtimeDropdown.addEventListener('change', () => {
-            state.jupyterCodeBlocks[blockId].runtime = runtimeDropdown.value;
+
+        runtimeLink.addEventListener('click', () => {
+            const rect = runtimeLink.getBoundingClientRect();
+            showNotesLocalMenu(
+                runtimeOptions.map((desc) => ({
+                    title: desc,
+                    icon: desc === state.jupyterCodeBlocks[blockId].runtime ? 0xf00c : 0,
+                    onSelect: () => {
+                        state.jupyterCodeBlocks[blockId].runtime = desc;
+                        runtimeLink.textContent = desc;
+                    },
+                })),
+                rect.left,
+                rect.bottom,
+                'Select runtime',
+            );
         });
         
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(stopNotesBtn);
         toolbar.appendChild(runTerminalBtn);
-        toolbar.appendChild(runtimeDropdown);
+        toolbar.appendChild(runtimeLink);
         
         const editableCode = document.createElement('textarea');
         editableCode.className = 'jupyter-code-editable';
@@ -953,8 +971,24 @@ async function refreshFiles() {
     }
 }
 
+function getFilteredFiles() {
+    const query = state.fileFilterQuery.trim().toLowerCase();
+    if (!query) {
+        return state.files;
+    }
+
+    return state.files.filter((file) => {
+        const normalizedFile = String(file || '').toLowerCase();
+        const fileName = getPathFileName(file).toLowerCase();
+        return normalizedFile.includes(query) || fileName.includes(query);
+    });
+}
+
 function renderFileList() {
     elements.list.innerHTML = '';
+
+    const filteredFiles = getFilteredFiles();
+    const hasActiveFilter = state.fileFilterQuery.trim() !== '';
 
     if (state.files.length === 0) {
         const empty = document.createElement('div');
@@ -964,22 +998,33 @@ function renderFileList() {
         return;
     }
 
+    if (filteredFiles.length === 0) {
+        const empty = document.createElement('div');
+        empty.id = 'notes-empty';
+        empty.textContent = 'No matching files.';
+        elements.list.appendChild(empty);
+        return;
+    }
+
     // Group files by category
     const categories = {
         '$GLOBAL': [],
         '$NOTES': [],
-        '$PROJ': []
+        '$PROJECT': [],
+        '$HISTORY': []
     };
 
-    state.files.forEach((file) => {
+    filteredFiles.forEach((file) => {
         const { category } = splitCategoryPath(file);
 
         if (category === '$GLOBAL') {
             categories['$GLOBAL'].push(file);
         } else if (category === '$NOTES') {
             categories['$NOTES'].push(file);
-        } else if (category === '$PROJ') {
-            categories['$PROJ'].push(file);
+        } else if (category === '$PROJECT') {
+            categories['$PROJECT'].push(file);
+        } else if (category === '$HISTORY') {
+            categories['$HISTORY'].push(file);
         }
     });
 
@@ -990,32 +1035,36 @@ function renderFileList() {
             return;
         }
 
+        const categoryExpanded = hasActiveFilter ? true : state.expandedCategories[category];
+
         // Create category header
         const categoryHeader = document.createElement('div');
         categoryHeader.className = 'notes-category-header';
         categoryHeader.dataset.category = category;
-        categoryHeader.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+        categoryHeader.dataset.expanded = categoryExpanded ? 'true' : 'false';
         
         const arrow = document.createElement('span');
         arrow.className = 'notes-category-arrow';
-        arrow.textContent = state.expandedCategories[category] ? '▼' : '▶';
+        arrow.textContent = categoryExpanded ? '▼' : '▶';
         
         const label = document.createElement('span');
         label.textContent = category;
         
         categoryHeader.appendChild(arrow);
         categoryHeader.appendChild(label);
-        
-        categoryHeader.addEventListener('click', () => {
-            toggleCategory(category);
-        });
+
+        if (!hasActiveFilter) {
+            categoryHeader.addEventListener('click', () => {
+                toggleCategory(category);
+            });
+        }
         
         elements.list.appendChild(categoryHeader);
 
         // Create category content container
         const categoryContent = document.createElement('div');
         categoryContent.className = 'notes-category-content';
-        categoryContent.dataset.expanded = state.expandedCategories[category] ? 'true' : 'false';
+        categoryContent.dataset.expanded = categoryExpanded ? 'true' : 'false';
 
         renderTreeNodesList(categoryContent, category, buildFileTree(files));
 
@@ -1061,6 +1110,25 @@ function renderSwaggerJsonView() {
 
 function isYamlStructuredFile(fileName) {
     return /\.ya?ml$/i.test(fileName || '');
+}
+
+function isJsonStructuredFile(fileName) {
+    return /\.json$/i.test(fileName || '');
+}
+
+function formatStructuredEditorJson(pretty) {
+    const source = String(elements.swaggerEditor?.value || '');
+
+    try {
+        const parsed = JSON.parse(source);
+        elements.swaggerEditor.value = pretty
+            ? JSON.stringify(parsed, null, 2)
+            : JSON.stringify(parsed);
+
+        elements.swaggerEditor.dispatchEvent(new Event('input'));
+    } catch {
+        setStatus('Cannot format invalid JSON content.', true);
+    }
 }
 
 function stringifyStructuredDocument(value) {
@@ -1350,7 +1418,6 @@ function renderSwaggerUI() {
     );
 
     elements.swaggerEndpoints.innerHTML = `
-        <div class="swagger-endpoints-header">Operations</div>
         <input
             id="notes-swagger-endpoint-filter"
             class="swagger-endpoint-filter"
@@ -1372,6 +1439,9 @@ function renderSwaggerUI() {
         descEl.innerHTML = marked.parse(markdown);
         processMarkdownContainer(descEl);
     });
+
+    setupSwaggerMethodSelector();
+    setupSwaggerHeaderDropdowns();
     
     // Add tab switching logic for nested tabs
     setupSwaggerTabSwitching();
@@ -1387,6 +1457,64 @@ function renderSwaggerUI() {
             nextFilterInput.setSelectionRange(start, end);
         }
     }
+}
+
+function getSwaggerMethodsForPath(path) {
+    if (!path || !state.swaggerSpec || !state.swaggerSpec.paths || !state.swaggerSpec.paths[path]) {
+        return [];
+    }
+
+    const pathItem = state.swaggerSpec.paths[path];
+    const methodOrder = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
+    const methods = [];
+
+    for (const method of methodOrder) {
+        if (pathItem && pathItem[method]) {
+            methods.push(method.toUpperCase());
+        }
+    }
+
+    const currentMethod = state.swaggerSelectedEndpoint && state.swaggerSelectedEndpoint.method
+        ? state.swaggerSelectedEndpoint.method.toUpperCase()
+        : '';
+    if (currentMethod && !methods.includes(currentMethod)) {
+        methods.unshift(currentMethod);
+    }
+
+    return methods;
+}
+
+function setupSwaggerMethodSelector() {
+    const methodButton = elements.swaggerRequestBuilder.querySelector('.swagger-method-selector');
+    if (!methodButton || !state.swaggerSelectedEndpoint || !state.swaggerSelectedEndpoint.path) {
+        return;
+    }
+
+    methodButton.textContent = state.swaggerSelectedEndpoint.method;
+    methodButton.addEventListener('click', () => {
+        const methods = getSwaggerMethodsForPath(state.swaggerSelectedEndpoint.path);
+        if (methods.length === 0) {
+            return;
+        }
+
+        const rect = methodButton.getBoundingClientRect();
+        showNotesLocalMenu(
+            methods.map((method) => ({
+                title: method,
+                icon: method === String(state.swaggerSelectedEndpoint.method || '').toUpperCase() ? 0xf00c : 0,
+                onSelect: () => {
+                    state.swaggerSelectedEndpoint = {
+                        path: state.swaggerSelectedEndpoint.path,
+                        method,
+                    };
+                    renderSwaggerUI();
+                },
+            })),
+            rect.left,
+            rect.bottom,
+            'Select method',
+        );
+    });
 }
 
 function setupSwaggerEndpointSelection() {
@@ -1440,13 +1568,15 @@ async function sendSwaggerRequest() {
     }
 
     // Collect headers from the displayed header items
-    // Values may be <input>, <select> (interactive) or <span> (static)
+    // Values may be <input>, <button> (interactive) or <span> (static)
     const headers = {};
     elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-item').forEach((item) => {
         const name = item.querySelector('.swagger-header-name')?.textContent?.trim();
-        const valueEl = item.querySelector('.swagger-header-value');
+        const valueEl = item.querySelector('.swagger-header-input, .swagger-header-value');
         if (!name || !valueEl) return;
-        const value = ('value' in valueEl ? valueEl.value : valueEl.textContent)?.trim();
+        const value = valueEl instanceof HTMLInputElement
+            ? valueEl.value.trim()
+            : (valueEl.textContent?.trim() || '');
         if (name && value) {
             headers[name] = value;
         }
@@ -1490,6 +1620,34 @@ async function sendSwaggerRequest() {
             sendBtn.textContent = 'Send';
         }
     }
+}
+
+function setupSwaggerHeaderDropdowns() {
+    if (!elements.swaggerRequestBuilder) return;
+
+    elements.swaggerRequestBuilder.querySelectorAll('.swagger-header-dropdown').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const headerName = btn.dataset.headerName;
+            const options = JSON.parse(btn.dataset.headerOptions || '[]');
+            const input = btn.closest('.swagger-header-value-wrap')?.querySelector('.swagger-header-input');
+            const currentValue = input?.value?.trim() || '';
+
+            if (!options.length) return;
+
+            const rect = btn.getBoundingClientRect();
+            const menuItems = options.map((opt) => ({
+                title: opt,
+                icon: opt === currentValue ? 0xf00c : 0,
+                onSelect: () => {
+                    if (input) {
+                        input.value = opt;
+                    }
+                },
+            }));
+
+            showNotesLocalMenu(menuItems, rect.left, rect.bottom, `Select ${headerName || 'header'} value`);
+        });
+    });
 }
 
 function setupSwaggerResponseTabs() {
@@ -2195,10 +2353,134 @@ function copyTextToClipboard(text) {
     ClipboardSetText(text).catch(() => {});
 }
 
+async function openFileListContextMenu(file, x, y) {
+    const menuItems = [];
+
+    let fileUrl = '';
+    const fileLabel = getPathFileName(file);
+    try {
+        const resolvedPath = await ResolveFilePath(file);
+        const normalized = String(resolvedPath || '').replaceAll('\\', '/');
+        if (normalized) {
+            if (/^[a-zA-Z]:\//.test(normalized)) {
+                fileUrl = `file:///${normalized}`;
+            } else {
+                fileUrl = `file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+            }
+        }
+    } catch {
+        // Keep local actions available even if path resolution fails.
+    }
+
+    let goMenuItems = [];
+    if (fileUrl) {
+        try {
+            const resolvedMenuItems = await GetHyperlinkMenuActions(fileUrl, fileLabel || fileUrl);
+            goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
+        } catch {
+            setStatus('Failed to load file actions.', true);
+        }
+    }
+
+    if (goMenuItems.length > 0) {
+        //menuItems.push({ title: '-', icon: 0 });
+
+        goMenuItems.forEach((item) => {
+            menuItems.push({
+                title: String(item?.title || ''),
+                icon: Number(item?.icon) || 0,
+                onSelect: () => {
+                    RunHyperlinkMenuAction(fileUrl, fileLabel || fileUrl, String(item?.action || ''))
+                        .catch(() => {
+                            setStatus('Failed to execute file action.', true);
+                        });
+                },
+            });
+        });
+    }
+
+    showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
+}
+
+function getLinkTextFromAnchor(anchor) {
+    if (!(anchor instanceof Element)) {
+        return '';
+    }
+
+    const text = (anchor.textContent || '').trim();
+    if (text.length > 0) {
+        return text;
+    }
+
+    return String(anchor.getAttribute('href') || '').trim();
+}
+
+async function openHyperlinkContextMenu(anchor) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+    }
+
+    const href = String(anchor.getAttribute('href') || '').trim();
+    if (!href) {
+        return;
+    }
+
+    const absoluteUrl = String(anchor.href || href);
+    const label = getLinkTextFromAnchor(anchor);
+
+    try {
+        await DisplayHyperlinkMenu(absoluteUrl, label);
+    } catch {
+        setStatus('Failed to open hyperlink actions.', true);
+    }
+}
+
+function getJsonEditableCopyText(editable) {
+    if (!(editable instanceof Element)) {
+        return '';
+    }
+
+    const editType = editable.getAttribute('data-json-edit');
+    if (editType === 'key') {
+        const pathAttr = editable.getAttribute('data-json-path') || '[]';
+        try {
+            const path = JSON.parse(pathAttr);
+            return String(path[path.length - 1] ?? '');
+        } catch {
+            return (editable.textContent || '').replace(/^"|"$/g, '');
+        }
+    }
+
+    if (editType === 'value') {
+        const rawValueAttr = editable.getAttribute('data-json-value');
+        if (rawValueAttr) {
+            try {
+                const parsedValue = JSON.parse(rawValueAttr);
+                return parsedValue === null ? 'null' : String(parsedValue);
+            } catch {
+                // Fall through to text content if the attribute cannot be parsed.
+            }
+        }
+        return (editable.textContent || '').replace(/^"|"$/g, '');
+    }
+
+    return editable.textContent || '';
+}
+
 function getEditorSelectionText() {
     const start = elements.editor.selectionStart;
     const end = elements.editor.selectionEnd;
     return elements.editor.value.slice(start, end);
+}
+
+function getTextareaSelectionText(textarea) {
+    if (!textarea) {
+        return '';
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    return textarea.value.slice(start, end);
 }
 
 function getRenderedSelectionText(container) {
@@ -2272,6 +2554,14 @@ function initRenderedNotesContextMenu(container, viewMode) {
             return;
         }
 
+        const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+        if (anchor && container.contains(anchor)) {
+            e.preventDefault();
+            e.stopPropagation();
+            openHyperlinkContextMenu(anchor);
+            return;
+        }
+
         if (e.target instanceof Element && e.target.closest('img')) {
             return;
         }
@@ -2284,6 +2574,49 @@ function initRenderedNotesContextMenu(container, viewMode) {
             createFindMenuItem('Find'),
             createPrintMenuItem('Print'),
         ], e.clientX, e.clientY);
+    });
+}
+
+function initStructuredDataTreeContextMenu(container) {
+    if (!container || container.dataset.jsonTreeContextMenuBound === 'true') {
+        return;
+    }
+
+    container.dataset.jsonTreeContextMenuBound = 'true';
+
+    container.addEventListener('contextmenu', (e) => {
+        if (state.viewMode !== 'swagger-view') {
+            return;
+        }
+
+        const target = e.target instanceof Element ? e.target.closest('.json-editable') : null;
+        if (!target || !container.contains(target)) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        showNotesLocalMenu([
+            {
+                title: 'Copy',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: () => {
+                    copyTextToClipboard(getJsonEditableCopyText(target));
+                },
+            },
+            {
+                title: 'Edit',
+                icon: CONTEXT_ICON_EDIT,
+                onSelect: () => {
+                    target.dispatchEvent(new MouseEvent('dblclick', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                    }));
+                },
+            },
+        ], e.clientX, e.clientY, 'JSON/YAML field');
     });
 }
 
@@ -2455,6 +2788,37 @@ EventsOn("aiResponseStream", (chunk) => {
     }
 });
 
+// Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
+EventsOn('viewFileInNotesOpen', async (payload) => {
+    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    if (!file) return;
+
+    try {
+        await loadFile(file);
+        AddToFileList(file);
+    } catch (err) {
+        setStatus(`Failed to load file: ${file}`, true);
+        console.error(err);
+    }
+});
+
+// Event listener for generic file action dialog (rename or delete any file link)
+EventsOn('fileActionDialog', (payload) => {
+    const action = typeof payload === 'object' ? payload.action : '';
+    const filePath = typeof payload === 'object' ? payload.filePath : '';
+    
+    if (!filePath) return;
+    
+    switch (action) {
+        case 'rename':
+            openRenamePrompt(filePath);
+            break;
+        case 'delete':
+            openDeletePrompt(filePath);
+            break;
+    }
+});
+
 // Setup AI panel listeners
 if (elements.aiToggle) {
     elements.aiToggle.addEventListener('click', toggleAIPanel);
@@ -2473,7 +2837,7 @@ function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
 
-    const notesFileSize = result.fontSize * 2;
+    //const notesFileSize = result.fontSize * 2;
     const notesStatusFontSize = result.fontSize - 2;
     const notesTitleFontSize = result.fontSize + 4;
 
@@ -2530,10 +2894,10 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             padding: 0;
-            padding-right: 5px;
             gap: 12px;
             min-height: 0;
             overflow: hidden;
+            background-color: rgba(0, 0, 0, 0.2);
         }
 
         #notes-sidebar-header {
@@ -2545,7 +2909,31 @@ function applyWindowStyle(result) {
         #notes-title {
             font-size: ${notesTitleFontSize}px;
             color: var(--accent);
-            padding: 10px;
+            padding: 10px 10px 0 10px;
+        }
+
+        #notes-list-filter-wrap {
+            padding: 0 10px;
+        }
+
+        #notes-list-filter {
+            width: 100%;
+            border-radius: 5px;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
+            color: var(--fg);
+            padding: 6px 8px;
+            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            outline: none;
+        }
+
+        #notes-list-filter::placeholder {
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.55);
+        }
+
+        #notes-list-filter:focus {
+            border-color: var(--accent);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.16);
         }
 
         #notes-actions {
@@ -2762,6 +3150,7 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            padding-right: 5px;
         }
 
         .notes-category-header {
@@ -2771,13 +3160,15 @@ function applyWindowStyle(result) {
             padding: 3px 6px;
             cursor: pointer;
             color: var(--accent);
-            font-weight: bold;
+            /*font-weight: bold;*/
             border: 2px solid transparent;
             user-select: none;
+            border-radius: 5px;
         }
 
         .notes-category-header:hover {
-            border-color: var(--selection);
+            /*border-color: var(--selection);*/
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
         .notes-category-arrow {
@@ -2812,6 +3203,8 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .notes-tree-folder,
@@ -2835,6 +3228,8 @@ function applyWindowStyle(result) {
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.25;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .notes-tree-folder:hover {
@@ -2943,6 +3338,10 @@ function applyWindowStyle(result) {
             width: 1px;
             height: 100%;
             background: color-mix(in srgb, var(--fg) 20%, transparent);
+        }
+
+        #notes-splitter:hover::after {
+            background: var(--accent);
         }
 
         #notes-main {
@@ -3184,9 +3583,13 @@ function applyWindowStyle(result) {
 
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
 
+        ${getMarkdownBaseTextSizeStyles('#notes-swagger-run-wrap', result.fontSize)}
+
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-request-builder .swagger-param-description', result.fontSize)}
 
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
+
+        ${getMarkdownContentStyles(result.colors, result.fontSize, 'swagger-ui')}
 
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
 
@@ -3339,12 +3742,11 @@ function applyWindowStyle(result) {
             opacity: 0.8;
             cursor: pointer;
             outline: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
             text-align: right;
             align-items: right;
             vertical-align: middle;
+            background: none;
+            font-family: var(--font-family);
         }
 
         .jupyter-runtime-dropdown:hover {
@@ -3355,12 +3757,6 @@ function applyWindowStyle(result) {
         .jupyter-runtime-dropdown:focus {
             opacity: 1;
             color: var(--fg);
-        }
-
-        .jupyter-runtime-dropdown option {
-            background-color: var(--bg);
-            color: var(--fg);
-            padding: 4px 8px;
         }
 
         .jupyter-code-editor {
@@ -3466,7 +3862,7 @@ function applyWindowStyle(result) {
             padding: 12px;
             border: 1px solid transparent;
             background-color: var(--bg);
-            color: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             resize: none;
@@ -3644,7 +4040,7 @@ function applyWindowStyle(result) {
             flex-direction: column;
             height: 100%;
             overflow: hidden;
-            padding: 12px;
+            padding: 0;
         }
 
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
@@ -3668,12 +4064,12 @@ EventsOn('terminalStyleUpdate', payload => {
 refreshFiles();
 window.refreshFiles = refreshFiles;
 
-function insertEditorText(text) {
+function insertEditorText(text, target = elements.editor) {
     if (!text) {
         return;
     }
 
-    elements.editor.focus();
+    target.focus();
     document.execCommand('insertText', false, text);
 }
 
@@ -3762,19 +4158,19 @@ function decodeClipboardPayload(payload) {
     };
 }
 
-async function pasteFromGoClipboard() {
+async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePaste = true) {
     try {
         const payload = await GetClipboardData();
         const { text, image } = decodeClipboardPayload(payload);
 
-        if (image !== '') {
+        if (allowImagePaste && image !== '') {
             const dataUrl = `data:image/png;base64,${image}`;
             await savePastedImageDataUrl(dataUrl, 'image/png');
             return;
         }
 
         if (text !== '') {
-            insertEditorText(text);
+            insertEditorText(text, targetEditor);
         }
     } catch (err) {
         setStatus('Failed to paste from clipboard.', true);
@@ -3816,6 +4212,7 @@ if (elements.swaggerEditor) {
 }
 
 let _editorSelectionBeforeContextMenu = null;
+let _swaggerEditorSelectionBeforeContextMenu = null;
 
 elements.editor.addEventListener('mousedown', (e) => {
     if (e.button === 2) {
@@ -3903,8 +4300,68 @@ elements.editor.addEventListener('contextmenu', (e) => {
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
 
+elements.swaggerEditor.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+        _swaggerEditorSelectionBeforeContextMenu = {
+            start: elements.swaggerEditor.selectionStart,
+            end: elements.swaggerEditor.selectionEnd,
+        };
+    }
+});
+
+elements.swaggerEditor.addEventListener('contextmenu', (e) => {
+    // Restore selection that WebKit changed on right-click
+    if (_swaggerEditorSelectionBeforeContextMenu !== null) {
+        elements.swaggerEditor.selectionStart = _swaggerEditorSelectionBeforeContextMenu.start;
+        elements.swaggerEditor.selectionEnd = _swaggerEditorSelectionBeforeContextMenu.end;
+        _swaggerEditorSelectionBeforeContextMenu = null;
+    }
+    e.preventDefault();
+
+    const menuItems = [
+        createCopyMenuItem(() => getTextareaSelectionText(elements.swaggerEditor), 'Copy'),
+        {
+            title: 'Paste',
+            icon: CONTEXT_ICON_PASTE,
+            onSelect: async () => {
+                await pasteFromGoClipboard(elements.swaggerEditor, false);
+            },
+        },
+    ];
+
+    if (isJsonStructuredFile(state.currentFile)) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Format: Minify',
+                icon: 0,
+                onSelect: () => {
+                    formatStructuredEditorJson(false);
+                },
+            },
+            {
+                title: 'Format: Expand All',
+                icon: 0,
+                onSelect: () => {
+                    formatStructuredEditorJson(true);
+                },
+            },
+        );
+    }
+
+    menuItems.push(
+        { title: '-' },
+        createFindMenuItem('Find text...'),
+        createPrintMenuItem('Print...'),
+    );
+
+    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
+});
+
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
+initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
+initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
     setViewMode('editor');
@@ -3977,6 +4434,22 @@ elements.deleteConfirm.addEventListener('click', () => {
 elements.findInput.addEventListener('input', () => {
     performFind();
 });
+
+if (elements.listFilter) {
+    elements.listFilter.addEventListener('input', (event) => {
+        state.fileFilterQuery = event.target.value || '';
+        renderFileList();
+    });
+
+    elements.listFilter.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && elements.listFilter.value) {
+            event.preventDefault();
+            elements.listFilter.value = '';
+            state.fileFilterQuery = '';
+            renderFileList();
+        }
+    });
+}
 
 elements.findNext.addEventListener('click', () => {
     nextMatch();

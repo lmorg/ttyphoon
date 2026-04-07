@@ -169,10 +169,10 @@ function applyTerminalStyles(result) {
             --terminal-selection-20: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             --terminal-green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
             --terminal-green-20: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-            --terminal-menu-bg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
-            --terminal-menu-fg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
+            --terminal-menu-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            --terminal-menu-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --terminal-menu-border: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
-            --terminal-menu-separator: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.3);
+            --terminal-menu-separator: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
             --terminal-menu-hover: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.4);
             --terminal-menu-font: ${result.fontFamily};
             --terminal-menu-font-size: 12px;
@@ -266,6 +266,19 @@ function fitCanvasToWindow() {
     canvas.height = pane ? pane.clientHeight : window.innerHeight;
     offscreen.width = canvas.width;
     offscreen.height = canvas.height;
+}
+
+function syncTerminalGridSize() {
+    const { cellWidth, cellHeight } = font.getCellSize();
+    if (cellWidth <= 0 || cellHeight <= 0) {
+        return;
+    }
+
+    const cols = Math.floor(canvas.width / cellWidth) - 1;
+    const rows = Math.floor(canvas.height / cellHeight);
+    if (cols > 0 && rows > 0) {
+        TerminalResize(cols, rows).catch(() => {});
+    }
 }
 
 function drawCursorPulseOverlay(targetCtx) {
@@ -840,6 +853,7 @@ GetWindowStyle().then((result) => {
     font.loadGlyphSizeFromGo(windowStyle).then(() => {
         const { cellWidth, cellHeight } = font.getCellSize();
         TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+        syncTerminalGridSize();
 
         //drawFrame();
         wireKeyboardEvents(canvas);
@@ -921,7 +935,23 @@ EventsOn('terminalStyleUpdate', payload => {
     }
     windowStyle = result;
     applyTerminalStyles(result);
-    TerminalRequestRedraw().catch(() => {});
+
+    const fontChanged = font.applyConfiguredFontFromWindowStyle(windowStyle);
+    if (!fontChanged) {
+        TerminalRequestRedraw().catch(() => {});
+        return;
+    }
+
+    fitCanvasToWindow();
+    font.loadGlyphSizeFromGo(windowStyle).then(() => {
+        const { cellWidth, cellHeight } = font.getCellSize();
+        TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+        syncTerminalGridSize();
+        fitCanvasToWindow();
+        TerminalRequestRedraw().catch(() => {});
+    }).catch(() => {
+        TerminalRequestRedraw().catch(() => {});
+    });
 });
 
 EventsOn('terminalNotification', payload => {
@@ -1037,14 +1067,7 @@ window.addEventListener('resize', () => {
     // Debounce so we don't spam Go on every pixel of a drag-resize.
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-        const { cellWidth, cellHeight } = font.getCellSize();
-        if (cellWidth > 0 && cellHeight > 0) {
-            const cols = Math.floor(canvas.width / cellWidth) - 1;
-            const rows = Math.floor(canvas.height / cellHeight);
-            if (cols > 0 && rows > 0) {
-                TerminalResize(cols, rows).catch(() => {});
-            }
-        }
+        syncTerminalGridSize();
     }, 100);
 });
 

@@ -3,6 +3,8 @@ export function createFontController(offCtx) {
     let cellHeight = 20;
     let fontSize = 15;
     let fontFamily = '';
+    let adjustCellWidth = 0;
+    let adjustCellHeight = 0;
 
     try {
         fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--terminal-menu-font').trim()
@@ -14,18 +16,39 @@ export function createFontController(offCtx) {
     let glyphSizeCached = false;
 
     function applyConfiguredFontFromWindowStyle(windowStyle) {
+        let fontChanged = false;
         const parsed = parseInt(windowStyle?.fontSize, 10);
-        if (!Number.isNaN(parsed) && parsed > 0) {
+        if (!Number.isNaN(parsed) && parsed > 0 && parsed !== fontSize) {
             fontSize = parsed;
+            fontChanged = true;
         }
 
-        if (windowStyle?.fontFamily) {
+        if (windowStyle?.fontFamily && windowStyle.fontFamily !== fontFamily) {
             fontFamily = windowStyle.fontFamily;
+            fontChanged = true;
+        }
+
+        const nextAdjustWidth = Number.isFinite(windowStyle?.adjustCellWidth) ? windowStyle.adjustCellWidth : 0;
+        if (nextAdjustWidth !== adjustCellWidth) {
+            adjustCellWidth = nextAdjustWidth;
+            fontChanged = true;
+        }
+
+        const nextAdjustHeight = Number.isFinite(windowStyle?.adjustCellHeight) ? windowStyle.adjustCellHeight : 0;
+        if (nextAdjustHeight !== adjustCellHeight) {
+            adjustCellHeight = nextAdjustHeight;
+            fontChanged = true;
+        }
+
+        if (fontChanged) {
+            glyphSizeCached = false;
         }
 
         if (offCtx) {
             offCtx.font = `${fontSize}px ${fontFamily}`;
         }
+
+        return fontChanged;
     }
 
     function configureFontMetricsFallback(windowStyle) {
@@ -37,8 +60,6 @@ export function createFontController(offCtx) {
 
         offCtx.font = `${fontSize}px ${fontFamily}`;
         const metrics = offCtx.measureText('M');
-        const adjustWidth = Number.isFinite(windowStyle?.adjustCellWidth) ? windowStyle.adjustCellWidth : 0;
-        const adjustHeight = Number.isFinite(windowStyle?.adjustCellHeight) ? windowStyle.adjustCellHeight : 0;
 
         const measuredWidth = Math.ceil(metrics.width || fontSize * 0.6);
 
@@ -54,8 +75,8 @@ export function createFontController(offCtx) {
             ? metrics.emHeightDescent : fontSize * 0.2;
         const measuredHeight = Math.ceil(emAscent + emDescent);
 
-        cellWidth = Math.max(1, measuredWidth + adjustWidth);
-        cellHeight = Math.max(1, measuredHeight + adjustHeight);
+        cellWidth = Math.max(1, measuredWidth + adjustCellWidth);
+        cellHeight = Math.max(1, measuredHeight + adjustCellHeight);
     }
 
     async function loadGlyphSizeFromGo(windowStyle) {
