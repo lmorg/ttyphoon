@@ -73,6 +73,48 @@ describe('popup menu hide/show transitions', () => {
         expect(listRoot.querySelector('.tty-menu-title')?.textContent).toBe('Select a theme');
     });
 
+    it('calls TerminalMenuHighlight when filter changes the highlighted item', async () => {
+        const { initTerminalPopupMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        const listMenuEvent = eventsOnMock.mock.calls.find(([eventName]) => eventName === 'terminalListMenu');
+        const showMenu = listMenuEvent[1];
+
+        // Open menu with 3 items; index 0='Apple', 1='Apricot', 2='Banana'
+        showMenu({ menuId: 5, title: 'Test', options: ['Apple', 'Apricot', 'Banana'] });
+        terminalMenuHighlightMock.mockClear();
+
+        // Type 'b' — only 'Banana' (index 2) should remain visible
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', bubbles: true, cancelable: true }));
+
+        expect(terminalMenuHighlightMock).toHaveBeenCalledWith(5, 2);
+    });
+
+    it('calls TerminalMenuHighlight when filter is cleared and highlight resets', async () => {
+        const { initTerminalPopupMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        const listMenuEvent = eventsOnMock.mock.calls.find(([eventName]) => eventName === 'terminalListMenu');
+        const showMenu = listMenuEvent[1];
+
+        showMenu({ menuId: 6, title: 'Test', options: ['Alpha', 'Beta', 'Gamma'] });
+
+        // Filter to 'Beta' then clear
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', bubbles: true, cancelable: true }));
+        terminalMenuHighlightMock.mockClear();
+
+        // Ctrl+U clears filter — should highlight first item (index 0 = 'Alpha')
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'u', ctrlKey: true, bubbles: true, cancelable: true }));
+
+        expect(terminalMenuHighlightMock).toHaveBeenCalledWith(6, 0);
+    });
+
     it('still hides the menu when the current hide animation completes', async () => {
         const { initTerminalPopupMenu } = await import('./popup_menu.js');
 

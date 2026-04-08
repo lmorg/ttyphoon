@@ -355,6 +355,13 @@ export function initTerminalPopupMenu(canvas) {
         filteredItems = buildFilteredItems(listItems, query);
         ensureValidHighlight();
 
+        if (highlightVisibleIndex >= 0 && activeListMenuId !== null) {
+            const item = filteredItems[highlightVisibleIndex];
+            if (item && !item.separator) {
+                menuHighlight(activeListMenuId, item.index);
+            }
+        }
+
         listBody.replaceChildren();
 
         for (let i = 0; i < filteredItems.length; i++) {
@@ -482,7 +489,7 @@ export function initTerminalPopupMenu(canvas) {
     });
 
     window.addEventListener('keydown', (event) => {
-        if (listRoot.style.display !== 'none') {
+        if (listRoot.isConnected && listRoot.style.display !== 'none') {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
@@ -544,7 +551,7 @@ export function initTerminalPopupMenu(canvas) {
     }, true);
 
     window.addEventListener('keypress', (event) => {
-        if (listRoot.style.display === 'none') {
+        if (!listRoot.isConnected || listRoot.style.display === 'none') {
             return;
         }
 
@@ -554,7 +561,7 @@ export function initTerminalPopupMenu(canvas) {
     }, true);
 
     window.addEventListener('keyup', (event) => {
-        if (listRoot.style.display === 'none') {
+        if (!listRoot.isConnected || listRoot.style.display === 'none') {
             return;
         }
 

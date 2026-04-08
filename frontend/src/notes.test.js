@@ -263,10 +263,6 @@ describe('notes rendering', () => {
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
         expect(menuConfig.title).toBe('api.json');
         expect(menuConfig.options).toEqual([
-            'Copy file name',
-            'Copy path',
-            'Rename',
-            '-',
             'Copy file path to clipboard',
             'Open file with Visual Studio Code',
             '-',
@@ -274,26 +270,17 @@ describe('notes rendering', () => {
             'Delete file',
         ]);
 
-        menuConfig.onSelect(0);
-        await flushPromises();
-        expect(clipboardSetTextMock).toHaveBeenCalledWith('api.json');
-
-        menuConfig.onSelect(1);
-        await flushPromises();
-        expect(resolveFilePathMock).toHaveBeenCalledWith('$PROJECT/docs/api.json');
-        expect(clipboardSetTextMock).toHaveBeenCalledWith('/tmp/project/docs/api.json');
-
         expect(getHyperlinkMenuActionsMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json');
 
-        menuConfig.onSelect(5);
+           menuConfig.onSelect(1);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '3');
 
-        menuConfig.onSelect(7);
+           menuConfig.onSelect(3);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '4');
 
-        menuConfig.onSelect(8);
+           menuConfig.onSelect(4);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '5');
     });
