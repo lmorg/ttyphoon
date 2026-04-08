@@ -2,8 +2,10 @@ package rendererwebkit
 
 import (
 	"context"
+	"time"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
@@ -45,15 +47,17 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 	go wr.blinkSlowLoop()
 
 	go func() {
-		for range wr._redraw {
-			commands := wr.PopDrawCommands()
-			if len(commands) == 0 {
-				continue
+		refreshInterval := time.Duration(config.Config.Window.RefreshInterval)
+		for {
+			select {
+			case <-wr._redraw:
+				if commands := wr.PopDrawCommands(); len(commands) > 0 {
+					runtime.EventsEmit(wapp, "terminalRedraw", commands)
+				}
+
+			case <-time.After(refreshInterval * time.Millisecond):
+				wr.TriggerRedraw()
 			}
-			runtime.EventsEmit(wapp, "terminalRedraw", commands)
-			//case <-time.After(15 * time.Millisecond):
-			//	runtime.EventsEmit(wapp, "terminalRedraw", wr.PopDrawCommands())
-			//wr.TriggerRedraw()
 		}
 	}()
 }
