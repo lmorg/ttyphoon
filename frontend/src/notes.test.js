@@ -272,15 +272,15 @@ describe('notes rendering', () => {
 
         expect(getHyperlinkMenuActionsMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json');
 
-           menuConfig.onSelect(1);
+        menuConfig.onSelect(1);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '3');
 
-           menuConfig.onSelect(3);
+        menuConfig.onSelect(3);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '4');
 
-           menuConfig.onSelect(4);
+        menuConfig.onSelect(4);
         await flushPromises();
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '5');
     });
