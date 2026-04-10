@@ -3353,6 +3353,10 @@ function applyWindowStyle(result) {
             color: var(--bg);
         }
 
+        .notes-file[data-active="true"]:hover {
+            color: var(--accent);
+        }
+
         .notes-file:hover {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
@@ -3378,6 +3382,7 @@ function applyWindowStyle(result) {
             user-select: none;
             touch-action: none;
             flex-shrink: 0;
+            background: linear-gradient(to right, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 50%, var(--bg) 50%, var(--bg) 100%);
         }
 
         #notes-splitter::after {
