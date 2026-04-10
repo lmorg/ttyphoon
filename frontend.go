@@ -19,14 +19,12 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
-	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/swagger"
-	"github.com/lmorg/ttyphoon/window/backend"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -411,25 +409,10 @@ func (a *WApp) TerminalInputBoxSubmit(id int64, value string, isOk bool) {
 }
 
 func (a *WApp) startTerminalWindow() {
-	renderer, size := backend.Initialise()
-
-	tmuxClient, err := tmux.NewStartSession(renderer, size, tmux.START_ATTACH_SESSION)
+	err := startBackend(a)
 	if err != nil {
-		if !strings.HasPrefix(err.Error(), "no sessions") {
-			log.Println(err)
-			return
-		}
-
-		cdHome()
-
-		tmuxClient, err = tmux.NewStartSession(renderer, size, tmux.START_NEW_SESSION)
-		if err != nil {
-			log.Println(err)
-			return
-		}
+		panic(err)
 	}
-
-	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx, a)
 
 	// Set app reference on renderer for hotkey handlers
 	if wr, ok := renderwebkit.CurrentRenderer(); ok {

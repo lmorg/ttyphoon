@@ -20,7 +20,7 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	}
 
 	posSelection := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	if button == types.MOUSE_BUTTON_LEFT {
+	if button == types.MOUSE_BUTTON_LEFT || button == types.MOUSE_BUTTON_RIGHT {
 		switch state {
 		case types.BUTTON_PRESSED:
 			wr.beginSelection(tile, posSelection, button)
@@ -35,6 +35,11 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
 
 	switch button {
+	case types.MOUSE_BUTTON_MIDDLE:
+		if state == types.BUTTON_PRESSED {
+			wr.clipboardPaste()
+		}
+
 	case types.MOUSE_BUTTON_RIGHT:
 		wr.contextMenu = wr.NewContextMenu() // reset term-provided context menu items for this click
 		if state == types.BUTTON_RELEASED {
@@ -68,7 +73,7 @@ func (wr *webkitRender) HandleMouseMotion(cellX, cellY, relX, relY, state int32)
 	wr.setLastMouseCell(cellX, cellY)
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	if state&1 != 0 {
+	if state&1 != 0 || state&2 != 0 {
 		wr.updateSelection(tile, wr.convertCellToTileXYNegX(tile, cellX, cellY))
 	}
 

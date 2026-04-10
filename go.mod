@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/rivo/uniseg v0.4.7
 	github.com/tmc/langchaingo v0.1.14
-	github.com/wailsapp/wails/v2 v2.11.0
+	github.com/wailsapp/wails/v2 v2.12.0
 	golang.design/x/clipboard v0.7.1
 	golang.design/x/hotkey v0.4.1
 	golang.org/x/image v0.35.0
@@ -35,6 +35,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/JohannesKaufmann/dom v0.2.0 // indirect
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0 // indirect

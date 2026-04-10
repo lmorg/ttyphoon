@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -205,6 +206,8 @@ func (term *Term) reset(size *types.XY) {
 	if config.Config.Tmux.Enabled {
 		term.renderer.SetKeyboardFnMode(types.KeysTmuxClient)
 	}
+
+	debug.FreeOSMemory()
 }
 
 func (term *Term) makeScreen() types.Screen {
@@ -321,6 +324,10 @@ type scrollRegionT struct {
 func (term *Term) Close() {
 	term.Pty.Close()
 	term.tile.Close()
+	//term._scrollBuf = nil
+	//term._normBuf = nil
+	//term._altBuf = nil
+	//debug.FreeOSMemory()
 }
 
 func (term *Term) Reply(b []byte) {

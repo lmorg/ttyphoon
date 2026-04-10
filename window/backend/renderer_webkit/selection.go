@@ -131,6 +131,18 @@ func (wr *webkitRender) endSelection(tile types.Tile, pos *types.XY) bool {
 		return false
 	}
 
+	if selection.button == types.MOUSE_BUTTON_LEFT {
+		term := selection.tile.GetTerm()
+		if term == nil {
+			wr.clearSelectionState()
+			return false
+		}
+
+		copySelectionTextToClipboard(wr, term.CopyRange(cloneXY(selection.start), cloneXY(selection.end)))
+		wr.clearSelectionState()
+		return true
+	}
+
 	wr.StatusBarText("Select copy action")
 	wr.showSelectionContextMenu(selection)
 	wr.TriggerRedraw()
@@ -321,8 +333,8 @@ func (wr *webkitRender) drawSelectionPreview() {
 		drawWrappedSelectionPreview(wr, wr.selection.tile, start, end, termSize.X, wr.selection.showFill, wr.selection.showBorder)
 	}
 
-	if !wr.selection.released {
-		// While dragging, always show the image-copy rectangular bounds as an extra border overlay.
+	if !wr.selection.released && wr.selection.button == types.MOUSE_BUTTON_RIGHT {
+		// While right-dragging, show the rectangular bounds as an extra border overlay.
 		drawSquareSelectionPreview(wr, wr.selection.tile, start, end, false, true)
 	}
 }
