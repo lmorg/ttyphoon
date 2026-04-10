@@ -220,6 +220,57 @@ const state = {
     swaggerEndpointFilter: ''
 };
 
+let lastAutoCopiedViewerSelection = '';
+
+function activeViewerWrap() {
+    if (state.viewMode !== 'viewer' || elements.previewWrap?.dataset.active !== 'true') {
+        return null;
+    }
+
+    return elements.previewWrap;
+}
+
+function getViewerSelectionText() {
+    const viewer = activeViewerWrap();
+    if (!viewer || typeof window.getSelection !== 'function') {
+        return '';
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+        return '';
+    }
+
+    const text = String(selection.toString() || '').trim();
+    if (!text) {
+        return '';
+    }
+
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+    const anchorInViewer = anchorNode ? viewer.contains(anchorNode) : false;
+    const focusInViewer = focusNode ? viewer.contains(focusNode) : false;
+
+    return anchorInViewer || focusInViewer ? text : '';
+}
+
+function handleViewerSelectionAutoCopy() {
+    const text = getViewerSelectionText();
+    if (!text) {
+        lastAutoCopiedViewerSelection = '';
+        return;
+    }
+
+    if (text === lastAutoCopiedViewerSelection) {
+        return;
+    }
+
+    lastAutoCopiedViewerSelection = text;
+    ClipboardSetText(text).then(() => {
+        notifyTerminal('Selection copied to clipboard', 'info');
+    }).catch(() => {});
+}
+
 configureMarked();
 
 function setStatus(message, isError) {
@@ -4578,6 +4629,14 @@ document.addEventListener('keydown', (event) => {
         event.preventDefault();
         closeDeletePrompt();
     }
+});
+
+document.addEventListener('selectionchange', () => {
+    if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
+    handleViewerSelectionAutoCopy();
 });
 
 elements.modalInput.addEventListener('keydown', (event) => {

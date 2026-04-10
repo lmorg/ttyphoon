@@ -338,4 +338,44 @@ describe('notes rendering', () => {
         expect(displayHyperlinkMenuMock).toHaveBeenCalledWith('https://go.dev/', 'https://go.dev');
         expect(showLocalMenuMock).not.toHaveBeenCalled();
     });
+
+    it('auto-copies markdown viewer selection when highlighted', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getMarkdownMock.mockResolvedValue('# Guide');
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const textNode = document.createTextNode('Selected markdown text');
+        document.getElementById('notes-preview').appendChild(textNode);
+
+        const selectionMock = {
+            rangeCount: 1,
+            anchorNode: textNode,
+            focusNode: textNode,
+            toString: () => 'Selected markdown text',
+        };
+        const originalGetSelection = window.getSelection;
+        window.getSelection = vi.fn(() => selectionMock);
+
+        document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+        await flushPromises();
+        expect(clipboardSetTextMock).toHaveBeenCalledWith('Selected markdown text');
+        expect(sendIpcMock).toHaveBeenCalledWith('terminal-notify', {
+            level: 'info',
+            message: 'Selection copied to clipboard',
+        });
+
+        // Repeat with the same selection should not re-copy.
+        document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+        await flushPromises();
+        expect(clipboardSetTextMock).toHaveBeenCalledTimes(1);
+        expect(sendIpcMock).toHaveBeenCalledTimes(1);
+
+        window.getSelection = originalGetSelection;
+    });
 });
