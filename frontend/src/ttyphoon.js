@@ -742,6 +742,26 @@ EventsOn('viewFileInNotesOpen', () => {
     }
 });
 
+EventsOn('notesCreateAndOpen', payload => {
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    if (!notesCollapsed || !embeddedInTerminal) {
+        return;
+    }
+
+    const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    const filename = typeof p?.filename === 'string' ? p.filename : '';
+    const parts = filename.split(/[\\/]/).filter(Boolean);
+    const title = parts.length > 0 ? parts[parts.length - 1] : getCurrentNoteFileName();
+
+    window.dispatchEvent(new CustomEvent('ttyphoon-jupyter-tab-mode', {
+        detail: {
+            enabled: true,
+            active: true,
+            title,
+        }
+    }));
+});
+
 window.addEventListener('resize', () => {
     refreshStatusBarLayout();
 });

@@ -22,6 +22,9 @@ var _PROMPT_EXPLAIN string
 //go:embed ask.md
 var _PROMPT_ASK string
 
+//go:embed title.md
+var _PROMPT_TITLE string
+
 var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
 
 func GetExplain(agent *agent.Agent, userPrompt string) string {
@@ -45,6 +48,10 @@ func GetAsk(agent *agent.Agent, userPrompt string) string {
 		agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agent, userPrompt))
+}
+
+func GetTitle(agent *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_TITLE, promptVars(agent, userPrompt))
 }
 
 func promptVars(agent *agent.Agent, userPrompt string) func(string) string {

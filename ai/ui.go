@@ -84,7 +84,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			return tmpl.Execute(buf, data)
 		})
 
-		filename := fmt.Sprintf("$GLOBAL/%s-%s-%d.md", agent.Meta.Function, agent.ServiceName(), time.Now().Unix())
+		filename := buildAINoteFilename(agent, query, time.Now())
 		agent.Renderer().NotesCreateAndOpen(filename, buf.String())
 	}()
 }
