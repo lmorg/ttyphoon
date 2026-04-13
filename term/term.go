@@ -324,10 +324,10 @@ type scrollRegionT struct {
 func (term *Term) Close() {
 	term.Pty.Close()
 	term.tile.Close()
-	//term._scrollBuf = nil
-	//term._normBuf = nil
-	//term._altBuf = nil
-	//debug.FreeOSMemory()
+	term._scrollBuf = nil
+	term._normBuf = nil
+	term._altBuf = nil
+	debug.FreeOSMemory()
 }
 
 func (term *Term) Reply(b []byte) {
