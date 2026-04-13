@@ -10,10 +10,59 @@ import (
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
+
+/*func (term *Term) MouseCaptureEnabled() bool {
+	return term._mouseTracking != codes.MouseTrackingOff
+}
+
+func (term *Term) mouseKeyboardMode() types.KeyboardMode {
+	if config.Config.Tmux.Enabled {
+		return types.KeysTmuxClient
+	}
+
+	return types.KeysNormal
+}*/
+
+/*func (term *Term) mouseWithinBounds(pos *types.XY) bool {
+	if pos == nil {
+		return false
+	}
+
+	if pos.X < 0 || pos.Y < 0 {
+		return false
+	}
+
+	if pos.X >= term.size.X || pos.Y >= term.size.Y {
+		return false
+	}
+
+	return true
+}*/
+
+/*func (term *Term) emitMouseEvent(eventType codes.MouseEventType, button types.MouseButtonT, pos *types.XY) bool {
+	if !term.MouseCaptureEnabled() || !term.mouseWithinBounds(pos) {
+		return false
+	}
+
+	seq := codes.GetMouseEscSeq(term.mouseKeyboardMode(), codes.MouseEvent{
+		Type:   eventType,
+		Button: button,
+		X:      pos.X,
+		Y:      pos.Y,
+	})
+	if len(seq) == 0 {
+		return false
+	}
+
+	term.Reply(seq)
+	return true
+}*/
 
 // MouseClick: pos X should be -1 when out of bounds
 func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
@@ -23,11 +72,27 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 
 	// this is used to determine whether to override ligatures with default font rendering
 	term._mouseButtonDown = state == types.BUTTON_PRESSED
+	/*if state == types.BUTTON_PRESSED {
+		term._mouseButton = button
+	}*/
 
 	if pos == nil {
 		// this just exists to reset ligatures
 		return
 	}
+
+	/*if term.MouseCaptureEnabled() {
+		switch state {
+		case types.BUTTON_PRESSED:
+			if term.emitMouseEvent(codes.MouseEventPress, button, pos) {
+				return
+			}
+		case types.BUTTON_RELEASED:
+			if term.emitMouseEvent(codes.MouseEventRelease, button, pos) {
+				return
+			}
+		}
+	}*/
 
 	if state == types.BUTTON_PRESSED {
 		callback()
@@ -161,6 +226,16 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
 	term._mousePosRenderer.Set(nil)
 
+	/*if term.MouseCaptureEnabled() && movement != nil && movement.Y != 0 {
+		if movement.Y > 0 {
+			if term.emitMouseEvent(codes.MouseEventWheelUp, types.MOUSE_BUTTON_MIDDLE, pos) {
+				return
+			}
+		} else if term.emitMouseEvent(codes.MouseEventWheelDown, types.MOUSE_BUTTON_MIDDLE, pos) {
+			return
+		}
+	}*/
+
 	screen := term.visibleScreen()
 
 	if screen[pos.Y].Cells[pos.X].Element == nil {
@@ -194,6 +269,26 @@ func (term *Term) _mouseWheelCallback(movement *types.XY) {
 
 func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
 	term._mousePosRenderer.Set(nil)
+
+	/*if term.MouseCaptureEnabled() && term.mouseWithinBounds(pos) {
+		switch term._mouseTracking {
+		case codes.MouseTrackingButtonEvent:
+			if term._mouseButtonDown {
+				if term.emitMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
+					return
+				}
+			}
+
+		case codes.MouseTrackingAnyEvent:
+			if term._mouseButtonDown {
+				if term.emitMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
+					return
+				}
+			} else if term.emitMouseEvent(codes.MouseEventMove, term._mouseButton, pos) {
+				return
+			}
+		}
+	}*/
 
 	screen := term.visibleScreen()
 
