@@ -17,7 +17,7 @@ import (
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
 
-/*func (term *Term) MouseCaptureEnabled() bool {
+func (term *Term) IsMouseCaptureEnabled() bool {
 	return term._mouseTracking != codes.MouseTrackingOff
 }
 
@@ -27,9 +27,9 @@ func (term *Term) mouseKeyboardMode() types.KeyboardMode {
 	}
 
 	return types.KeysNormal
-}*/
+}
 
-/*func (term *Term) mouseWithinBounds(pos *types.XY) bool {
+func (term *Term) mouseWithinBounds(pos *types.XY) bool {
 	if pos == nil {
 		return false
 	}
@@ -43,10 +43,10 @@ func (term *Term) mouseKeyboardMode() types.KeyboardMode {
 	}
 
 	return true
-}*/
+}
 
-/*func (term *Term) emitMouseEvent(eventType codes.MouseEventType, button types.MouseButtonT, pos *types.XY) bool {
-	if !term.MouseCaptureEnabled() || !term.mouseWithinBounds(pos) {
+func (term *Term) replyMouseEvent(eventType codes.MouseEventType, button types.MouseButtonT, pos *types.XY) bool {
+	if !term.IsMouseCaptureEnabled() || !term.mouseWithinBounds(pos) {
 		return false
 	}
 
@@ -62,7 +62,7 @@ func (term *Term) mouseKeyboardMode() types.KeyboardMode {
 
 	term.Reply(seq)
 	return true
-}*/
+}
 
 // MouseClick: pos X should be -1 when out of bounds
 func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
@@ -72,27 +72,27 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 
 	// this is used to determine whether to override ligatures with default font rendering
 	term._mouseButtonDown = state == types.BUTTON_PRESSED
-	/*if state == types.BUTTON_PRESSED {
+	if state == types.BUTTON_PRESSED {
 		term._mouseButton = button
-	}*/
+	}
 
 	if pos == nil {
 		// this just exists to reset ligatures
 		return
 	}
 
-	/*if term.MouseCaptureEnabled() {
+	if term.IsMouseCaptureEnabled() {
 		switch state {
 		case types.BUTTON_PRESSED:
-			if term.emitMouseEvent(codes.MouseEventPress, button, pos) {
+			if term.replyMouseEvent(codes.MouseEventPress, button, pos) {
 				return
 			}
 		case types.BUTTON_RELEASED:
-			if term.emitMouseEvent(codes.MouseEventRelease, button, pos) {
+			if term.replyMouseEvent(codes.MouseEventRelease, button, pos) {
 				return
 			}
 		}
-	}*/
+	}
 
 	if state == types.BUTTON_PRESSED {
 		callback()
@@ -226,15 +226,16 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
 	term._mousePosRenderer.Set(nil)
 
-	/*if term.MouseCaptureEnabled() && movement != nil && movement.Y != 0 {
+	// AI generated IF condition
+	if term.IsMouseCaptureEnabled() && movement != nil && movement.Y != 0 {
 		if movement.Y > 0 {
-			if term.emitMouseEvent(codes.MouseEventWheelUp, types.MOUSE_BUTTON_MIDDLE, pos) {
+			if term.replyMouseEvent(codes.MouseEventWheelUp, types.MOUSE_BUTTON_MIDDLE, pos) {
 				return
 			}
-		} else if term.emitMouseEvent(codes.MouseEventWheelDown, types.MOUSE_BUTTON_MIDDLE, pos) {
+		} else if term.replyMouseEvent(codes.MouseEventWheelDown, types.MOUSE_BUTTON_MIDDLE, pos) {
 			return
 		}
-	}*/
+	}
 
 	screen := term.visibleScreen()
 
@@ -270,25 +271,26 @@ func (term *Term) _mouseWheelCallback(movement *types.XY) {
 func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.EventIgnoredCallback) {
 	term._mousePosRenderer.Set(nil)
 
-	/*if term.MouseCaptureEnabled() && term.mouseWithinBounds(pos) {
+	// AI generated IF condition
+	if term.IsMouseCaptureEnabled() && term.mouseWithinBounds(pos) {
 		switch term._mouseTracking {
 		case codes.MouseTrackingButtonEvent:
 			if term._mouseButtonDown {
-				if term.emitMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
+				if term.replyMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
 					return
 				}
 			}
 
 		case codes.MouseTrackingAnyEvent:
 			if term._mouseButtonDown {
-				if term.emitMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
+				if term.replyMouseEvent(codes.MouseEventDrag, term._mouseButton, pos) {
 					return
 				}
-			} else if term.emitMouseEvent(codes.MouseEventMove, term._mouseButton, pos) {
+			} else if term.replyMouseEvent(codes.MouseEventMove, term._mouseButton, pos) {
 				return
 			}
 		}
-	}*/
+	}
 
 	screen := term.visibleScreen()
 

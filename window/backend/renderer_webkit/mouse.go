@@ -19,8 +19,14 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 		wr.termWin.Active = tile
 	}
 
+	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
+	if tile.GetTerm().IsMouseCaptureEnabled() {
+		tile.GetTerm().MouseClick(pos, button, clicks, state, func() {})
+		return
+	}
+
 	posSelection := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	if /*!tile.GetTerm().MouseCaptureEnabled() &&*/ (button == types.MOUSE_BUTTON_LEFT || button == types.MOUSE_BUTTON_RIGHT) {
+	if button == types.MOUSE_BUTTON_LEFT || button == types.MOUSE_BUTTON_RIGHT {
 		switch state {
 		case types.BUTTON_PRESSED:
 			wr.beginSelection(tile, posSelection, button)
@@ -31,8 +37,6 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 			}
 		}
 	}
-
-	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
 
 	switch button {
 	case types.MOUSE_BUTTON_MIDDLE:
@@ -73,7 +77,7 @@ func (wr *webkitRender) HandleMouseMotion(cellX, cellY, relX, relY, state int32)
 	wr.setLastMouseCell(cellX, cellY)
 
 	pos := wr.convertCellToTileXYNegX(tile, cellX, cellY)
-	if /*!tile.GetTerm().MouseCaptureEnabled() &&*/ (state&1 != 0 || state&2 != 0) {
+	if !tile.GetTerm().IsMouseCaptureEnabled() && (state&1 != 0 || state&2 != 0) {
 		wr.updateSelection(tile, wr.convertCellToTileXYNegX(tile, cellX, cellY))
 	}
 

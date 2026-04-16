@@ -223,15 +223,15 @@ func lookupPrivateCsi(term *Term, code []rune) {
 			//case 1004
 			// Don't send FocusIn/FocusOut events, xterm.
 
-			case 2005:
+			case 1005:
 				// Disable UTF-8 Mouse Mode, xterm.
 				term._mouseEncoding = codes.MouseEncodingDefault
 
-			case 2006:
+			case 1006:
 				// Disable SGR Mouse Mode, xterm.
 				term._mouseEncoding = codes.MouseEncodingDefault
 
-			case 2015:
+			case 1015:
 				// Disable urxvt Mouse Mode.
 				term._mouseEncoding = codes.MouseEncodingDefault
 
