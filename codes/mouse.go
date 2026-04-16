@@ -25,18 +25,18 @@ const (
 )
 
 const (
-	TmuxMouseDown1Pane = "MouseDown1Pane"
-	TmuxMouseDown2Pane = "MouseDown2Pane"
-	TmuxMouseDown3Pane = "MouseDown3Pane"
-	TmuxMouseUp1Pane   = "MouseUp1Pane"
-	TmuxMouseUp2Pane   = "MouseUp2Pane"
-	TmuxMouseUp3Pane   = "MouseUp3Pane"
-	TmuxMouseDrag1Pane = "MouseDrag1Pane"
-	TmuxMouseDrag2Pane = "MouseDrag2Pane"
-	TmuxMouseDrag3Pane = "MouseDrag3Pane"
-	TmuxMouseMovePane  = "MouseMovePane"
-	TmuxWheelUpPane    = "WheelUpPane"
-	TmuxWheelDownPane  = "WheelDownPane"
+	TmuxMouseDown1 = "MouseDown1"
+	TmuxMouseDown2 = "MouseDown2"
+	TmuxMouseDown3 = "MouseDown3"
+	TmuxMouseUp1   = "MouseUp1"
+	TmuxMouseUp2   = "MouseUp2"
+	TmuxMouseUp3   = "MouseUp3"
+	TmuxMouseDrag1 = "MouseDrag1"
+	TmuxMouseDrag2 = "MouseDrag2"
+	TmuxMouseDrag3 = "MouseDrag3"
+	TmuxMouseMove  = "MouseMove"
+	TmuxWheelUp    = "WheelUp"
+	TmuxWheelDown  = "WheelDownPane"
 )
 
 type MouseEventType int
@@ -58,13 +58,13 @@ type MouseEvent struct {
 }
 
 func GetMouseEscSeq(keySet types.KeyboardMode, event MouseEvent) []byte {
-	if keySet == types.KeysTmuxClient {
+	/*if keySet == types.KeysTmuxClient {
 		name := getTmuxMouseKeyName(event)
 		if name == "" {
 			return nil
 		}
 		return append([]byte{0}, []byte(name+" ")...)
-	}
+	}*/
 
 	code, ok := xtermMouseCode(event)
 	if !ok {
@@ -124,7 +124,7 @@ func xtermMouseCode(event MouseEvent) (int, bool) {
 	return 0, false
 }
 
-func getTmuxMouseKeyName(event MouseEvent) string {
+/*func getTmuxMouseKeyName(event MouseEvent) string {
 	switch event.Type {
 	case MouseEventPress:
 		switch event.Button {
@@ -167,4 +167,4 @@ func getTmuxMouseKeyName(event MouseEvent) string {
 	}
 
 	return ""
-}
+}*/
