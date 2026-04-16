@@ -33,7 +33,8 @@ func TestGetMouseEscSeqXtermRelease(t *testing.T) {
 	}
 }
 
-func TestGetMouseEscSeqTmux(t *testing.T) {
+// at the moment, lets not send tmux sequences
+/*func TestGetMouseEscSeqTmux(t *testing.T) {
 	seq := codes.GetMouseEscSeq(types.KeysTmuxClient, codes.MouseEvent{
 		Type:   codes.MouseEventWheelUp,
 		Button: types.MOUSE_BUTTON_LEFT,
@@ -42,4 +43,4 @@ func TestGetMouseEscSeqTmux(t *testing.T) {
 	if string(seq) != "\x00WheelUpPane " {
 		t.Fatalf("unexpected sequence: %q", string(seq))
 	}
-}
+}*/

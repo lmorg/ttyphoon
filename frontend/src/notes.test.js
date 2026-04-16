@@ -362,7 +362,7 @@ describe('notes rendering', () => {
         const originalGetSelection = window.getSelection;
         window.getSelection = vi.fn(() => selectionMock);
 
-        document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         await flushPromises();
         expect(clipboardSetTextMock).toHaveBeenCalledWith('Selected markdown text');
         expect(sendIpcMock).toHaveBeenCalledWith('terminal-notify', {
@@ -371,7 +371,7 @@ describe('notes rendering', () => {
         });
 
         // Repeat with the same selection should not re-copy.
-        document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         await flushPromises();
         expect(clipboardSetTextMock).toHaveBeenCalledTimes(1);
         expect(sendIpcMock).toHaveBeenCalledTimes(1);
