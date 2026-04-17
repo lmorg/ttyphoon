@@ -42,7 +42,7 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		AnsiRight: csi('C'),
 		AnsiLeft:  csi('D'),
 		AnsiHome:  csi('H'),
-		AnsiEnd:   csi('E'),
+		AnsiEnd:   csi('F'),
 
 		AnsiKeyPadSpace: []byte{' '},
 		AnsiKeyPadTab:   []byte{'\t'},
@@ -68,7 +68,7 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		AnsiRight: ss3('C'),
 		AnsiLeft:  ss3('D'),
 		AnsiHome:  ss3('H'),
-		AnsiEnd:   ss3('E'),
+		AnsiEnd:   ss3('F'),
 	},
 
 	types.KeysVT220: {

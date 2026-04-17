@@ -163,7 +163,7 @@ func lookupPrivateCsi(term *Term, code []rune) {
 			switch i {
 			case 1:
 				// Normal Cursor Keys (DECCKM), VT100.
-				term.renderer.SetKeyboardFnMode(types.KeysApplication)
+				term.renderer.SetKeyboardFnMode(types.KeysNormal)
 
 			case 2:
 				// Designate VT52 mode (DECANM), VT100.
