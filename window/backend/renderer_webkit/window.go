@@ -43,6 +43,16 @@ func (wr *webkitRender) ResizeWindow(size *types.XY) {
 	}
 	wr.windowCells = size
 
+	// Physically resize the OS window so the column/row constraint imposed by
+	// DECCOLM (resize80/resize132) is actually enforced. Without this the
+	// buffer is reset to the new width but the window pixel size is unchanged,
+	// so the next WindowResized event overwrites the constraint.
+	/*if wr.wapp != nil && wr.glyphSize != nil && wr.glyphSize.X > 0 && wr.glyphSize.Y > 0 {
+		px := int(size.X * wr.glyphSize.X)
+		py := int(size.Y * wr.glyphSize.Y)
+		runtime.WindowSetSize(wr.wapp, px, py)
+	}*/
+
 	if wr.tmux != nil {
 		_ = wr.tmux.RefreshClient(size)
 		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)

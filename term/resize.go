@@ -143,8 +143,8 @@ func (term *Term) resize132() {
 }
 
 func (term *Term) setSize(size *types.XY) {
+	term.reset(size)
 	if !config.Config.Tmux.Enabled {
-		term.reset(size)
 		term.renderer.ResizeWindow(size)
 	}
 }
