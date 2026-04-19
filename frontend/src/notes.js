@@ -4244,6 +4244,16 @@ if (elements.editor) {
     elements.editor.addEventListener('paste', (event) => {
         handleEditorImagePaste(event);
     });
+
+    elements.editor.addEventListener('mouseup', async (event) => {
+        // Middle-click should paste via the same text/image-aware clipboard logic.
+        if (event.button !== 1 || state.viewMode !== 'editor') {
+            return;
+        }
+
+        event.preventDefault();
+        await pasteFromGoClipboard(elements.editor, true);
+    });
 }
 
 if (elements.swaggerEditor) {
@@ -4636,8 +4646,12 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
-document.addEventListener('selectionchange', () => {
+document.addEventListener('mouseup', (event) => {
     if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
+    if (event.button !== 0) {
         return;
     }
 

@@ -15,23 +15,29 @@ LDFLAGS="-X '${PKG_PATH}/app.name=${APP_NAME}' -X '${PKG_PATH}/app.tagLine=${TAG
 
 # Build the binary
 .PHONY: build
-build: generate
+build:
 	wails build -ldflags ${LDFLAGS}
 
 # Clean build the binary
 .PHONY: clean
-clean: generate
+clean:
 	wails build -clean -ldflags ${LDFLAGS}
+
+# Generate code
+.PHONY: generate
+generate:
+	@echo "Running code generation..."
+	go generate ./...
+	wails generate module
 
 # Run the application
 .PHONY: run-darwin
-run-darwin: build
+run-darwin: generate build
 	./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
 
 .PHONY: run-webkit
 run-webkit:
 	wails dev
-
 
 # Test
 .PHONY: test
@@ -50,13 +56,6 @@ bench:
 update-deps:
 	go get -u ./...
 	go mod tidy
-
-# Generate code
-.PHONY: generate
-generate:
-	@echo "Running code generation..."
-	go generate ./...
-	wails generate module
 
 # List available build tags
 .PHONY: list-build-tags

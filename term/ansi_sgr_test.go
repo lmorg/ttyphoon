@@ -11,6 +11,7 @@ import (
 type parserTestPty struct {
 	in  []rune
 	out []byte
+	res []*types.XY
 }
 
 func newParserTestPty() *parserTestPty {
@@ -31,9 +32,17 @@ func (p *parserTestPty) Write(b []byte) error {
 	p.out = append(p.out, b...)
 	return nil
 }
-func (p *parserTestPty) Resize(*types.XY) error { return nil }
-func (p *parserTestPty) BufSize() int           { return len(p.in) }
-func (p *parserTestPty) Close()                 {}
+func (p *parserTestPty) Resize(size *types.XY) error {
+	if size == nil {
+		p.res = append(p.res, nil)
+		return nil
+	}
+
+	p.res = append(p.res, &types.XY{X: size.X, Y: size.Y})
+	return nil
+}
+func (p *parserTestPty) BufSize() int { return len(p.in) }
+func (p *parserTestPty) Close()       {}
 
 func (p *parserTestPty) FeedInput(b []byte) {
 	p.in = append(p.in, bytes.Runes(b)...)

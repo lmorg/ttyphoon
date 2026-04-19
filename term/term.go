@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/charset"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
@@ -74,6 +75,9 @@ type Term struct {
 	_activeElement   types.Element
 	_mouseIn         types.Element
 	_mouseButtonDown bool
+	_mouseButton     types.MouseButtonT
+	_mouseTracking   codes.MouseTrackingMode
+	_mouseEncoding   codes.MouseEncodingMode
 	_rowSource       *types.RowSource
 	_blockMeta       *types.BlockMeta
 	_blockMetaId     atomic.Int64

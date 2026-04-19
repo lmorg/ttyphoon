@@ -1,6 +1,5 @@
 package codes
 
-
 type KeyName string
 
 func (k KeyName) Code() (KeyCode, Modifier) {
@@ -38,7 +37,7 @@ func KeyNameToCode(key KeyName) (KeyCode, Modifier) {
 	case "Tab":
 		return '\t', mod
 	case "BackSpace":
-		return AsciiBackspace, mod // TODO: ASCII or ISO?
+		return AsciiBackspace, mod
 
 	case "F1":
 		return AnsiF1, mod

@@ -381,3 +381,30 @@ func TestCsiInsertCharacters(t *testing.T) {
 
 	test.RunTests(t)
 }
+// TestMoveCursorToRow_DefaultParam verifies that row=0 (the default when no
+// CSI parameter is given) is treated as row 1, placing the cursor at the top
+// of the screen (row index 0).
+func TestMoveCursorToRow_DefaultParam(t *testing.T) {
+	term := NewTestTerminal()
+	term._curPos = types.XY{X: 3, Y: 3}
+
+	term.moveCursorToRow(0)
+
+	if term._curPos.Y != 0 {
+		t.Errorf("moveCursorToRow(0): expected Y=0, got Y=%d", term._curPos.Y)
+	}
+}
+
+// TestMoveCursorToPos_DefaultParams verifies that (0,0) places the cursor at
+// the top-left corner (row/col 1 in ANSI 1-based addressing).
+func TestMoveCursorToPos_DefaultParams(t *testing.T) {
+	term := NewTestTerminal()
+	term._curPos = types.XY{X: 5, Y: 4}
+
+	term.moveCursorToPos(0, 0)
+
+	if term._curPos.X != 0 || term._curPos.Y != 0 {
+		t.Errorf("moveCursorToPos(0,0): expected (0,0), got (%d,%d)",
+			term._curPos.X, term._curPos.Y)
+	}
+}

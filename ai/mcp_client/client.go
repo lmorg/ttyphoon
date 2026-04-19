@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/debug"
+	"github.com/lmorg/ttyphoon/utils/or"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -17,35 +19,18 @@ type Client struct {
 	Tools      *mcp.ListToolsResult
 }
 
-func ConnectCmdLine(envvars []string, command string, args ...string) (*Client, error) {
-	c, err := client.NewStdioMCPClient(command, envvars, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %v", err)
-	}
-
-	return initClient(c)
-}
-
-func ConnectHttp(url string) (*Client, error) {
-	c, err := client.NewStreamableHttpClient(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %v", err)
-	}
-	return initClient(c)
-}
-
-func initClient(c *client.Client) (*Client, error) {
+func initClient(c *client.Client, overrides *mcp_config.OverrideT) (*Client, error) {
 	// Initialize the client
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    app.Name(),
+		Name:    or.NotEmpty(overrides.AppName, app.Name()),
 		Version: app.Version(),
 	}
 
 	initResult, err := c.Initialize(context.Background(), initRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize: %v", err)
+		return nil, fmt.Errorf("failed to initialize: %w", err)
 	}
 
 	client := &Client{
@@ -60,7 +45,7 @@ func (c *Client) ListTools() error {
 	toolsRequest := mcp.ListToolsRequest{}
 	tools, err := c.client.ListTools(context.Background(), toolsRequest)
 	if err != nil {
-		return fmt.Errorf("failed to list tools: %v", err)
+		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
 	c.Tools = tools

@@ -216,6 +216,10 @@ func (term *Term) moveCursorToColumn(col int32) {
 func (term *Term) moveCursorToRow(row int32) {
 	debug.Log(row)
 
+	if row < 1 {
+		row = 1
+	}
+
 	top, bottom := term.getScrollingRegionIncOrigin()
 
 	row += top

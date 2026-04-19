@@ -82,12 +82,55 @@ func (agent *Agent) StartServersFromConfig(config *mcp_config.ConfigT) error {
 			sticky.Close()
 			return err
 		}
+		if svr.Url != "" {
+			svr.Url, err = _updateVarsRxReplace(agent, svr.Url, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+		}
+		if svr.OAuth != nil {
+			svr.OAuth.ClientID, err = _updateVarsRxReplace(agent, svr.OAuth.ClientID, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			svr.OAuth.ClientURI, err = _updateVarsRxReplace(agent, svr.OAuth.ClientURI, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			svr.OAuth.ClientSecret, err = _updateVarsRxReplace(agent, svr.OAuth.ClientSecret, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			svr.OAuth.RedirectURI, err = _updateVarsRxReplace(agent, svr.OAuth.RedirectURI, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			svr.OAuth.AuthServerMetadataURL, err = _updateVarsRxReplace(agent, svr.OAuth.AuthServerMetadataURL, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			svr.OAuth.TokenFile, err = _updateVarsRxReplace(agent, svr.OAuth.TokenFile, cache)
+			if err != nil {
+				sticky.Close()
+				return err
+			}
+			if err = updateVars(agent, svr.OAuth.Scopes, cache); err != nil {
+				sticky.Close()
+				return err
+			}
+		}
 
 		switch svr.Type {
 		case "http", "https":
-			err = startServerHttp(config.Source, agent, name, svr.Url)
+			err = startServerHttp(config.Source, agent, name, svr)
 		default:
-			err = startServerCmdLine(config.Source, agent, envs, name, svr.Command, svr.Args...)
+			err = startServerCmdLine(config.Source, agent, envs, name, svr)
 		}
 		sticky.Close()
 		if err != nil {
