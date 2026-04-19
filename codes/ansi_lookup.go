@@ -42,21 +42,11 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		AnsiRight: csi('C'),
 		AnsiLeft:  csi('D'),
 		AnsiHome:  csi('H'),
-		AnsiEnd:   csi('E'),
+		AnsiEnd:   csi('F'),
 
 		AnsiKeyPadSpace: []byte{' '},
 		AnsiKeyPadTab:   []byte{'\t'},
 		AnsiKeyPadEnter: []byte{'\r'},
-
-		/*AnsiShiftTab:    csi('Z'),
-		AnsiOptUp:       []byte{esc, esc, '[', 'A'},
-		AnsiOptDown:     []byte{esc, esc, '[', 'B'},
-		AnsiOptLeft:     []byte{esc, esc, '[', 'D'},
-		AnsiOptRight:    []byte{esc, esc, '[', 'C'},
-		AnsiCtrlUp:      csi('1', ';', '5', 'A'),
-		AnsiCtrlDown:    csi('1', ';', '5', 'B'),
-		AnsiCtrlLeft:    csi('1', ';', '5', 'D'),
-		AnsiCtrlRight:   csi('1', ';', '5', 'C'),*/
 
 		AnsiF1:  ss3('P'),
 		AnsiF2:  ss3('Q'),
@@ -70,19 +60,6 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		AnsiF10: csi('2', '1', '~'),
 		AnsiF11: csi('2', '3', '~'),
 		AnsiF12: csi('2', '4', '~'),
-
-		/*AnsiShiftF1:  csi('1', ';', '2', 'P'),
-		AnsiShiftF2:  csi('1', ';', '2', 'Q'),
-		AnsiShiftF3:  csi('1', ';', '2', 'R'),
-		AnsiShiftF4:  csi('1', ';', '2', 'S'),
-		AnsiShiftF5:  csi('1', '5', ';', '2', '~'),
-		AnsiShiftF6:  csi('1', '7', ';', '2', '~'),
-		AnsiShiftF7:  csi('1', '8', ';', '2', '~'),
-		AnsiShiftF8:  csi('1', '9', ';', '2', '~'),
-		AnsiShiftF9:  csi('2', '0', ';', '2', '~'),
-		AnsiShiftF10: csi('2', '1', ';', '2', '~'),
-		AnsiShiftF11: csi('2', '3', ';', '2', '~'),
-		AnsiShiftF12: csi('2', '4', ';', '2', '~'),*/
 	},
 
 	types.KeysApplication: {
@@ -91,7 +68,7 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		AnsiRight: ss3('C'),
 		AnsiLeft:  ss3('D'),
 		AnsiHome:  ss3('H'),
-		AnsiEnd:   ss3('E'),
+		AnsiEnd:   ss3('F'),
 	},
 
 	types.KeysVT220: {
@@ -171,11 +148,11 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		6:    _tmuxKeyResponse(`C-f`),    // 06, acknowledge
 		7:    _tmuxKeyResponse(`C-g`),    // 07, bell
 		8:    _tmuxKeyResponse(`BSpace`), // 08, backspace
-		'\t': _tmuxKeyResponse(`Tab`),    // 09, horizontal tab
-		'\n': _tmuxKeyResponse(`Enter`),  // 0a, line feed
+		9:    _tmuxKeyResponse(`Tab`),    // 09, horizontal tab
+		10:   _tmuxKeyResponse(`Enter`),  // 0a, line feed
 		11:   _tmuxKeyResponse(`C-k`),    // 0b, vertical tab
 		12:   _tmuxKeyResponse(`C-l`),    // 0c, form feed
-		'\r': _tmuxKeyResponse(`Enter`),  // 0d, carriage return
+		13:   _tmuxKeyResponse(`Enter`),  // 0d, carriage return
 		14:   _tmuxKeyResponse(`C-n`),    // 0e, shift out
 		15:   _tmuxKeyResponse(`C-o`),    // 0f, shift in
 		16:   _tmuxKeyResponse(`C-p`),    // 10, data link escape
@@ -189,7 +166,7 @@ var _ansiLookUpTable = map[types.KeyboardMode]map[KeyCode][]byte{
 		24:   _tmuxKeyResponse(`C-x`),    // 18, cancel
 		25:   _tmuxKeyResponse(`C-y`),    // 19, end of medium
 		26:   _tmuxKeyResponse(`C-z`),    // 1a, substitute
-		esc:  _tmuxKeyResponse(`Escape`), // 1b. escape
+		27:   _tmuxKeyResponse(`Escape`), // 1b. escape
 		28:   _tmuxKeyResponse(`\034`),   // 1c, file separator
 		29:   _tmuxKeyResponse(`\035`),   // 1d, group separator
 		30:   _tmuxKeyResponse(`\036`),   // 1e, record separator

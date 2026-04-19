@@ -133,8 +133,7 @@ func (term *Term) CopySquare(begin *types.XY, end *types.XY) []byte {
 	for y := begin.Y; y <= end.Y; y++ {
 		var line string
 		for x := begin.X; x <= end.X; x++ {
-			s := string(screen[y].Cells[x].Rune())
-			line += strings.TrimRight(s, " ")
+			line += string(screen[y].Cells[x].Rune())
 		}
 		line = strings.TrimRight(line, " ") + "\n"
 		b = append(b, []byte(line)...)

@@ -24,3 +24,5 @@ func Copyright() string { return copyright }
 func License() string   { return license }
 
 const ProjectSourcePath = "github.com/lmorg/ttyphoon/"
+
+const WebSite = "https://github.com/lmorg/ttyphoon"

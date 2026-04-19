@@ -136,6 +136,7 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 		refFlags := ref.Sgr.Bitwise
 
 		// Accumulate printable characters that share the same style.
+
 		runChars := []rune{ref.Char}
 		runEnd := runStart + 1
 		for runEnd < length {
@@ -151,6 +152,11 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 			}
 			cFg, cBg := sgrOpts(c.Sgr, false)
 			if c.Sgr.Bitwise != refFlags || cFg != refFg || cBg != refBg {
+				break
+			}
+			if ref.Char > 0x7f || c.Char > 0x7f {
+				// Only ASCII runs are grouped into one draw command so ligature shaping
+				// does not affect Unicode cell alignment.
 				break
 			}
 			runChars = append(runChars, c.Char)
