@@ -166,7 +166,7 @@ body {
     color: var(--terminal-menu-fg);
     user-select: none;
     font-family: var(--terminal-menu-font);
-    font-size: calc(var(--terminal-menu-font-size, 14px) - 1px);
+    font-size: var(--terminal-menu-font-size);
     overflow: hidden;
     display: none;
 }
@@ -214,7 +214,7 @@ body {
     color: var(--terminal-menu-fg, var(--fg));
     padding: 6px 8px;
     font-family: var(--terminal-menu-font);
-    font-size: calc(var(--terminal-menu-font-size, 14px) - 1px);
+    font-size: var(--terminal-menu-font-size);
     outline: none;
 }
 

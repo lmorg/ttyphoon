@@ -40,7 +40,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 			Icon:  0xf013,
 		},
 		{
-			Title: fmt.Sprintf("Change theme (currently %s)...", config.Config.Terminal.ColorTheme),
+			Title: fmt.Sprintf("Change theme (%s)...", config.Config.Terminal.ColorTheme),
 			Fn:    wr.updateThemeMenu,
 			Icon:  0xf53f,
 		},
@@ -56,6 +56,17 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		},
 	}
 
+	// Hotkeys
+
+	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
+	for _, hk := range hotkeys.List() {
+		menu = append(menu, types.MenuItem{
+			Title: hk.Description,
+			Fn:    func() { hotkeys.KeyPressWithPrefix(hk.Prefix, hk.Hotkey) },
+			Icon:  hk.Icon,
+		})
+	}
+
 	// terminal tabs:
 
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
@@ -68,7 +79,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 	}
 	for _, tab := range wr.auxTerminalTabs {
 		menu = append(menu, types.MenuItem{
-			Title: fmt.Sprintf("Switch to terminal tab: %s", tab.Name, tab.ID),
+			Title: fmt.Sprintf("Switch to terminal tab: %s", tab.Name),
 			Fn:    func() { _ = wr.tmux.SelectAndResizeWindow(tab.ID, wr.windowCells) },
 			Icon:  0xf2d2,
 		})
@@ -96,42 +107,31 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 			Title: types.MENU_SEPARATOR,
 		},
 		{
-			Title: fmt.Sprintf("AI: Change AI Model (currently %s)", meta.ModelName()),
-			Fn:    func() { meta.SelectServiceModel(wr.UpdateConfig) },
+			Title: fmt.Sprintf("AI: Change AI Model (%s %s)", meta.ServiceName(), meta.ModelName()),
+			Fn:    func() { meta.SelectServiceModel(nil) },
 			Icon:  0xe4f6,
 		},
 		{
 			Title: "AI: Enable or disable specific AI tools...",
-			Fn:    func() { meta.ChooseTools(func(int) { wr.UpdateConfig() }) },
+			Fn:    func() { meta.ChooseTools(nil) },
 			Icon:  0xf7d9,
 		},
 		{
 			Title: "AI: Start MCP servers...",
-			Fn:    func() { meta.McpMenu(func(int) { wr.UpdateConfig() }) },
+			Fn:    func() { meta.McpMenu(nil) },
 			Icon:  0xf552,
 		},
 		{
 			Title: "AI: Set Anthropic (Claude) API Key",
-			Fn:    func() { ai.EnvAnthropic(wr, wr.UpdateConfig) },
+			Fn:    func() { ai.EnvAnthropic(wr, nil) },
 			Icon:  0xf084,
 		},
 		{
 			Title: "AI: Set OpenAI (ChatGPT) API Key",
-			Fn:    func() { ai.EnvOpenAi(wr, wr.UpdateConfig) },
+			Fn:    func() { ai.EnvOpenAi(wr, nil) },
 			Icon:  0xf084,
 		},
 	}...)
-
-	// Hotkeys
-
-	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
-	for _, hk := range hotkeys.List() {
-		menu = append(menu, types.MenuItem{
-			Title: hk.Description,
-			Fn:    func() { hotkeys.KeyPressWithPrefix(hk.Prefix, hk.Hotkey) },
-			//Icon:  0xf11c,
-		})
-	}
 
 	return menu
 }

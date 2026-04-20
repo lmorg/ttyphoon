@@ -24,15 +24,6 @@ type OAuthConfig struct {
 	TokenStore            client.TokenStore
 }
 
-// Name:   Visual Studio Code
-// Website:  https://code.visualstudio.com
-/*
-redirect urls:
-https://insiders.vscode.dev/redirect
-https://vscode.dev/redirect
-http://127.0.0.1/
-http://127.0.0.1:33418/
-*/
 type TokenStore = client.TokenStore
 type Token = client.Token
 type MemoryTokenStore = client.MemoryTokenStore

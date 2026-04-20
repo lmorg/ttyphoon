@@ -29,6 +29,7 @@ type hotKeyT struct {
 	fn   HotkeyFn
 	name codes.KeyName
 	desc string
+	icon rune
 }
 
 func newPrefix(prefix codes.KeyName) *hotkeysT {
@@ -47,12 +48,13 @@ func newPrefix(prefix codes.KeyName) *hotkeysT {
 	return hk
 }
 
-func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string) {
+func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string, icon rune) {
 	code, mod := key.Code()
 	hk.fnTable[mod][code] = &hotKeyT{
 		fn:   fn,
 		name: key,
 		desc: desc,
+		icon: icon,
 	}
 }
 
@@ -87,13 +89,13 @@ func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
 	return nil
 }
 
-func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string) {
+func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string, icon rune) {
 	hk := prefixes[prefix]
 	if hk == nil {
 		hk = newPrefix(prefix)
 	}
 
-	hk.Add(hotkey, fn, desc)
+	hk.Add(hotkey, fn, desc, icon)
 }
 
 func KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
@@ -131,6 +133,7 @@ type HotKeyListItemT struct {
 	Prefix      codes.KeyName
 	Hotkey      codes.KeyName
 	Description string
+	Icon        rune
 }
 
 func List() []*HotKeyListItemT {
@@ -143,6 +146,7 @@ func List() []*HotKeyListItemT {
 					Prefix:      prefix,
 					Hotkey:      hk.name,
 					Description: hk.desc,
+					Icon:        hk.icon,
 				})
 			}
 		}
