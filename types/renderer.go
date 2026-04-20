@@ -8,11 +8,11 @@ type MenuItem struct {
 	Title     string
 	Fn        func()
 	Highlight func() func()
+	Icon      rune
 	// WebkitContextHighlightPersistent is set by the webkit renderer for
 	// AddToContextMenu() items so Highlight()'s returned function is treated as a
 	// per-frame draw callback while the item is highlighted.
 	WebkitContextHighlightPersistent bool
-	Icon                             rune
 }
 
 type ContextMenu interface {

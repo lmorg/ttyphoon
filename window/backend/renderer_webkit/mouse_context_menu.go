@@ -81,8 +81,15 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 		})
 	}
 
-	menu.DisplayMenu("Select an action")
-	//wr.contextMenu = wr.NewContextMenu()
+	wr.openMenu(
+		"Select an action",
+		menu.Options(),
+		menu.Icons(),
+		func(i int) { menu.Highlight(i) },
+		func(i int) { menu.Callback(i) },
+		func(i int) { menu.Cancel(i) },
+		true,
+	)
 }
 
 func (wr *webkitRender) askAi() {

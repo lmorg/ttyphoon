@@ -244,6 +244,7 @@ func (wr *webkitRender) showSelectionContextMenu(selection *selectionState) {
 			menu.Cancel(i)
 			wr.clearSelectionState()
 		},
+		true,
 	)
 }
 

@@ -267,7 +267,11 @@ func fnKeyResizePaneDown5(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-D
 func fnKeyResizePaneLeft5(tmux *Tmux) error  { return _fnKeyResizePane(tmux, "-L 5") }
 func fnKeyResizePaneRight5(tmux *Tmux) error { return _fnKeyResizePane(tmux, "-R 5") }
 
-func fnKeyListBindings(tmux *Tmux) error {
+/*
+	List Key Bindings
+*/
+
+func fnKeyListBindings(tmux *Tmux) error { // error only used because the func type signature required elsewhere
 	var (
 		hkList = hotkeys.List()
 		slice  []string

@@ -1,5 +1,11 @@
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { TerminalMenuHighlight, TerminalMenuSelect, TerminalMenuCancel, TerminalRequestRedraw } from '../wailsjs/go/main/WApp';
+import {
+    CommandPaletteSelect,
+    TerminalMenuHighlight,
+    TerminalMenuSelect,
+    TerminalMenuCancel,
+    TerminalRequestRedraw,
+} from '../wailsjs/go/main/WApp';
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
 
@@ -104,11 +110,13 @@ function measureIdealWidth(items, title, withIcons) {
     return Math.max(itemWidth, titleWidth, 300);
 }
 
+const TOP_CENTER_MENU_OFFSET_Y = 14;
+
 function tokenizeQuery(q) {
     return (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
 }
 
-function buildFilteredItems(items, query) {
+export function buildFilteredItems(items, query) {
     const tokens = tokenizeQuery(query);
 
     const raw = items.map((item) => {
@@ -159,7 +167,17 @@ function buildFilteredItems(items, query) {
         }
     }
 
-    return result;
+    // Collapse runs of separators into a single separator.
+    const deduped = [];
+    for (let i = 0; i < result.length; i++) {
+        const item = result[i];
+        if (item.separator && deduped.length > 0 && deduped[deduped.length - 1].separator) {
+            continue;
+        }
+        deduped.push(item);
+    }
+
+    return deduped;
 }
 
 export function initTerminalPopupMenu(canvas) {
@@ -179,6 +197,9 @@ export function initTerminalPopupMenu(canvas) {
     let highlightVisibleIndex = -1;
     let hasIcons = false;
     let query = '';
+    let showSearch = false;
+    let hideItemsUntilQuery = false;
+    let showNextToMouseCursor = false;
 
     const listRoot = document.createElement('div');
     listRoot.id = LISTBOX_ROOT_ID;
@@ -234,6 +255,11 @@ export function initTerminalPopupMenu(canvas) {
         let x = anchorX;
         let y = anchorY;
 
+        if (!showNextToMouseCursor) {
+            x = Math.round((vw - rect.width) / 2);
+            y = TOP_CENTER_MENU_OFFSET_Y;
+        }
+
         if (x + rect.width > vw - 8) {
             x = Math.max(8, vw - rect.width - 8);
         }
@@ -268,6 +294,9 @@ export function initTerminalPopupMenu(canvas) {
         highlightVisibleIndex = -1;
         hasIcons = false;
         query = '';
+        showSearch = false;
+        hideItemsUntilQuery = false;
+        showNextToMouseCursor = false;
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
         
@@ -352,7 +381,11 @@ export function initTerminalPopupMenu(canvas) {
     }
 
     function renderListbox() {
-        filteredItems = buildFilteredItems(listItems, query);
+        if (hideItemsUntilQuery && query.length === 0) {
+            filteredItems = [];
+        } else {
+            filteredItems = buildFilteredItems(listItems, query);
+        }
         ensureValidHighlight();
 
         if (highlightVisibleIndex >= 0 && activeListMenuId !== null) {
@@ -445,6 +478,9 @@ export function initTerminalPopupMenu(canvas) {
         listTitle.style.display = menu.title ? 'block' : 'none';
 
         hasIcons = Array.isArray(menu.icons) && menu.icons.length > 0;
+        showSearch = Boolean(menu.showSearch);
+        hideItemsUntilQuery = Boolean(menu.hideItemsUntilQuery);
+        showNextToMouseCursor = Boolean(menu.showNextToMouseCursor);
 
         listItems = (menu.options || []).map((title, index) => ({
             title,
@@ -460,10 +496,14 @@ export function initTerminalPopupMenu(canvas) {
 
         query = '';
         listSearchInput.value = '';
-        listSearchWrap.style.display = 'none';
+        listSearchWrap.style.display = showSearch ? 'block' : 'none';
         highlightVisibleIndex = -1;
 
         renderListbox();
+
+        if (showSearch) {
+            listSearchInput.focus();
+        }
     }
 
     function showContextMenu(menu) {
@@ -592,7 +632,29 @@ export function initTerminalPopupMenu(canvas) {
         if (!menu || !Array.isArray(menu.options) || menu.options.length === 0) {
             return;
         }
+        menu.showNextToMouseCursor = true;
         showContextMenu(menu);
+    });
+
+    EventsOn('commandPaletteOpen', (payload) => {
+        const menu = normalizeMenuPayload(payload);
+        const options = Array.isArray(menu?.options) ? menu.options : [];
+        if (options.length === 0) {
+            return;
+        }
+
+        showLocalMenu({
+            title: menu?.title || 'Command Palette',
+            options: options.map((item) => item?.title ?? ''),
+            icons: options.map((item) => item?.icon ?? 0),
+            x: Math.round(window.innerWidth / 2),
+            y: 14,
+            showSearch: true,
+            hideItemsUntilQuery: true,
+            onSelect: (index) => {
+                CommandPaletteSelect(index).catch(() => {});
+            },
+        });
     });
 
     // Suppress native context menus during menu operations
@@ -617,8 +679,23 @@ export function initTerminalPopupMenu(canvas) {
  * @param {function(number):void} [options.onSelect]    - Called with item index on selection
  * @param {function(number):void} [options.onHighlight] - Called with item index on hover
  * @param {function(number):void} [options.onCancel]    - Called on dismiss
+ * @param {boolean} [options.showSearch]                - Force search field visible on open
+ * @param {boolean} [options.hideItemsUntilQuery]       - Keep list empty until search query is typed
+ * @param {boolean} [options.showNextToMouseCursor]     - When true, anchor near cursor; otherwise top-center
  */
-export function showLocalMenu({ title = null, options = [], icons = [], x = 8, y = 8, onSelect, onHighlight, onCancel } = {}) {
+export function showLocalMenu({
+    title = null,
+    options = [],
+    icons = [],
+    x = 8,
+    y = 8,
+    onSelect,
+    onHighlight,
+    onCancel,
+    showSearch = false,
+    hideItemsUntilQuery = false,
+    showNextToMouseCursor = false,
+} = {}) {
     if (!_showListMenuFn || !_setAnchorFn || options.length === 0) {
         return;
     }
@@ -633,7 +710,15 @@ export function showLocalMenu({ title = null, options = [], icons = [], x = 8, y
     });
 
     _setAnchorFn(x, y);
-    _showListMenuFn({ menuId: id, title: title || '', options, icons });
+    _showListMenuFn({
+        menuId: id,
+        title: title || '',
+        options,
+        icons,
+        showSearch,
+        hideItemsUntilQuery,
+        showNextToMouseCursor,
+    });
 }
 
 

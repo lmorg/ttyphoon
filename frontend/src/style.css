@@ -198,21 +198,6 @@ body {
     padding: 6px;
     gap: 2px;
     scrollbar-width: thin;
-    scrollbar-color: var(--terminal-menu-fg) transparent;
-}
-
-.tty-menu-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.tty-menu-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.tty-menu-list::-webkit-scrollbar-thumb {
-    background-color: var(--terminal-menu-fg);
-    border-radius: 3px;
-    opacity: 0.5;
 }
 
 .tty-listbox-search {
@@ -223,10 +208,10 @@ body {
 .tty-listbox-search-input {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid var(--terminal-menu-border);
+    border: 1px solid var(--terminal-accent, var(--accent));
     border-radius: 6px;
-    background: var(--terminal-menu-fg);
-    color: var(--terminal-menu-bg);
+    background: color-mix(in srgb, var(--terminal-menu-bg, var(--bg)) 80%, #000000 20%);
+    color: var(--terminal-menu-fg, var(--fg));
     padding: 6px 8px;
     font-family: var(--terminal-menu-font);
     font-size: calc(var(--terminal-menu-font-size, 14px) - 1px);
@@ -234,7 +219,7 @@ body {
 }
 
 .tty-listbox-search-input:focus {
-    border-color: var(--terminal-accent);
+    border-color: var(--terminal-accent, var(--accent));
 }
 
 .tty-menu-row {
@@ -272,7 +257,9 @@ body {
 }
 
 .tty-menu-separator {
+    flex: 0 0 1px;
     height: 1px;
+    min-height: 1px;
     margin: 4px 8px;
     background: var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
 }

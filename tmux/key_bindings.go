@@ -153,7 +153,7 @@ func (tmux *Tmux) _getDefaultTmuxKeyBindings() error {
 						tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 					}
 				},
-				note)
+				"Terminal: "+note)
 		}
 	}
 

@@ -47,6 +47,7 @@ type webkitRender struct {
 	menuHoverDrawn bool
 	notifications  notifyT
 	inputBoxes     inputBoxesT
+	commandPalette *contextMenuStub
 	nextImageID    atomic.Int64
 	lastMouseCellX atomic.Int32
 	lastMouseCellY atomic.Int32

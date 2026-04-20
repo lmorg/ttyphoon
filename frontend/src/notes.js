@@ -5,7 +5,8 @@ import {
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
-    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest
+    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest,
+    ShowCommandPalette,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -2381,6 +2382,7 @@ function enableImageContextMenus(container) {
                 options: ['Copy image to clipboard', 'Save image...'],
                 x: e.clientX,
                 y: e.clientY,
+                showNextToMouseCursor: true,
                 icons: [0xf0c5, 0xf0c7],
                 onSelect: (index) => {
                     if (index === 0) {
@@ -2590,6 +2592,7 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
         icons: menuItems.map((item) => item.icon),
         x,
         y,
+        showNextToMouseCursor: true,
         onSelect: (index) => {
             const item = menuItems[index];
             if (item && typeof item.onSelect === 'function') {
@@ -4606,6 +4609,12 @@ elements.findClose.addEventListener('click', () => {
 document.addEventListener('keydown', (event) => {
     // Block keyboard shortcuts if fullscreen image overlay is open
     if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
+    if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        ShowCommandPalette().catch(() => {});
         return;
     }
 

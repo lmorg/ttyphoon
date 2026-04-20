@@ -16,13 +16,15 @@ type terminalMenuEvent struct {
 	Title   string   `json:"title"`
 	Options []string `json:"options"`
 	Icons   []rune   `json:"icons"`
+
+	ShowNextToMouseCursor bool `json:"showNextToMouseCursor"`
 }
 
 func (wr *webkitRender) DisplayMenu(title string, items []string, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
-	wr.openMenu(title, items, nil, highlight, ok, cancel)
+	wr.openMenu(title, items, nil, highlight, ok, cancel, false)
 }
 
-func (wr *webkitRender) openMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
+func (wr *webkitRender) openMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT, showNextToMouseCursor bool) {
 	if len(items) == 0 {
 		return
 	}
@@ -53,6 +55,8 @@ func (wr *webkitRender) openMenu(title string, items []string, icons []rune, hig
 		Title:   title,
 		Options: append([]string(nil), items...),
 		Icons:   append([]rune(nil), icons...),
+
+		ShowNextToMouseCursor: showNextToMouseCursor,
 	})
 }
 
@@ -135,6 +139,7 @@ func (cms *contextMenuStub) DisplayMenu(title string) {
 		func(i int) { cms.Highlight(i) },
 		func(i int) { cms.Callback(i) },
 		func(i int) { cms.Cancel(i) },
+		false,
 	)
 }
 

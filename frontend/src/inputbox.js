@@ -89,6 +89,7 @@ export function initInputBox(canvas) {
             options: inputboxHistoryItems,
             x: rect.left,
             y: rect.bottom,
+            showNextToMouseCursor: true,
             onSelect: (index) => {
                 const value = inputboxHistoryItems[index];
                 if (!value || !inputboxInput) {

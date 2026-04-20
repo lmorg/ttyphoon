@@ -6,6 +6,8 @@ import {swagger} from '../models';
 
 export function AddToFileList(arg1:string):Promise<void>;
 
+export function CommandPaletteSelect(arg1:number):Promise<void>;
+
 export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
@@ -51,6 +53,8 @@ export function SaveImageDialog(arg1:string):Promise<string>;
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SendToTerminal(arg1:string):Promise<void>;
+
+export function ShowCommandPalette():Promise<void>;
 
 export function StopNote(arg1:string):Promise<void>;
 

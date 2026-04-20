@@ -18,6 +18,9 @@ func (wr *webkitRender) hotkeys() {
 	for _, hk := range conf {
 
 		switch hk.Function {
+		case "CommandPalette":
+			fn = func() { wr.ShowCommandPalette() }
+			desc = "Open command palette"
 		case "Settings":
 			fn = func() { wr.UpdateConfig() }
 			desc = "Settings..."
@@ -42,7 +45,7 @@ func (wr *webkitRender) hotkeys() {
 			fn = func() { askAi(wr) }
 			desc = "Ask AI..."
 		case "AgentSkills":
-			fn = func() { askAiSkill(wr) }
+			fn = func() { askAiSkills(wr) }
 			desc = "Ask AI with Agent Skill..."
 
 		case "SearchRegex":
@@ -63,7 +66,7 @@ func (wr *webkitRender) hotkeys() {
 			desc = "Open history..."*/
 		case "ShowHideNotes":
 			fn = func() { wr.toggleNotesPane() }
-			desc = "Open notes..."
+			desc = "Show / hide notes..."
 		case "ViewFile":
 			fn = func() {
 				if app, ok := wr.app.(interface{ ViewFileInNotes() }); ok {

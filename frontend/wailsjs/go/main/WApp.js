@@ -6,6 +6,10 @@ export function AddToFileList(arg1) {
   return window['go']['main']['WApp']['AddToFileList'](arg1);
 }
 
+export function CommandPaletteSelect(arg1) {
+  return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
+}
+
 export function DeleteFile(arg1) {
   return window['go']['main']['WApp']['DeleteFile'](arg1);
 }
@@ -96,6 +100,10 @@ export function SendIpc(arg1, arg2) {
 
 export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
+}
+
+export function ShowCommandPalette() {
+  return window['go']['main']['WApp']['ShowCommandPalette']();
 }
 
 export function StopNote(arg1) {

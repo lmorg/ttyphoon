@@ -25,10 +25,7 @@ func askAi(wr *webkitRender) {
 	})
 }
 
-func askAiSkill(wr *webkitRender) {
-	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{}
-
+func askAiSkills(wr *webkitRender) {
 	skills := skills.ReadSkills()
 
 	if len(skills) == 0 {
@@ -53,17 +50,24 @@ func askAiSkill(wr *webkitRender) {
 	}
 
 	fnSelect := func(i int) {
-		parameters := &DisplayInputBoxWT{
-			Options: DisplayInputBoxWTOptions{
-				Title:     strings.Title(skills[i].Description),
-				Multiline: true, // Enable multiline for skills as well
-			},
-			OkFunc: func(prompt string) {
-				ai.AskAI(agt, fmt.Sprintf("/%s %s", skills[i].FunctionName, prompt))
-			},
-		}
-		wr.DisplayInputBoxW(parameters)
+		askAiSkill(wr, skills[i])
 	}
 
 	wr.DisplayMenu("Select an agent skill", slice, nil, fnSelect, nil)
+}
+
+func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
+	agt := agent.Get(wr.termWin.Active.Id())
+	agt.Meta = &agent.Meta{}
+
+	parameters := &DisplayInputBoxWT{
+		Options: DisplayInputBoxWTOptions{
+			Title:     strings.Title(skill.Description),
+			Multiline: true,
+		},
+		OkFunc: func(prompt string) {
+			ai.AskAI(agt, fmt.Sprintf("/%s %s", skill.FunctionName, prompt))
+		},
+	}
+	wr.DisplayInputBoxW(parameters)
 }
