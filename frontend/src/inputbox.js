@@ -19,7 +19,10 @@ function ensureInputBoxDom() {
             <div class="inputbox-dialog">
                 <div class="inputbox-title" id="inputbox-title"></div>
                 <div id="inputbox-input-container"></div>
-                <div class="inputbox-hint">Return to confirm &nbsp;&nbsp; Escape to cancel</div>
+                <div class="inputbox-hint" id="inputbox-hint">
+                    <span id="inputbox-confirm-hint">Return to confirm</span>
+                    <span>Escape to cancel</span>
+                </div>
                 <div class="inputbox-buttons">
                     <button class="inputbox-btn inputbox-ok" id="inputbox-ok">OK</button>
                     <button class="inputbox-btn inputbox-cancel" id="inputbox-cancel">Cancel</button>
@@ -38,16 +41,90 @@ export function initInputBox(canvas) {
     const inputboxInputContainer = document.getElementById('inputbox-input-container');
     const inputboxHistoryBtn = document.getElementById('inputbox-history-btn');
     const inputboxTitle = document.getElementById('inputbox-title');
+    const inputboxConfirmHint = document.getElementById('inputbox-confirm-hint');
     const inputboxOkBtn = document.getElementById('inputbox-ok');
     const inputboxCancel = document.getElementById('inputbox-cancel');
 
-    if (!inputboxOverlay || !inputboxInputContainer || !inputboxHistoryBtn || !inputboxTitle || !inputboxOkBtn || !inputboxCancel) {
+    if (!inputboxOverlay || !inputboxInputContainer || !inputboxHistoryBtn || !inputboxTitle || !inputboxConfirmHint || !inputboxOkBtn || !inputboxCancel) {
         return;
     }
 
     let inputboxId = null;
     let inputboxInput = null;
     let inputboxHistoryItems = [];
+
+    function openInputboxHistoryMenu(x, y) {
+        if (!inputboxInput || inputboxHistoryItems.length === 0) {
+            return;
+        }
+
+        showLocalMenu({
+            title: 'History',
+            options: inputboxHistoryItems,
+            x,
+            y,
+            showNextToMouseCursor: true,
+            onSelect: (index) => {
+                const value = inputboxHistoryItems[index];
+                if (!value || !inputboxInput) {
+                    return;
+                }
+
+                inputboxInput.value = value;
+                inputboxInput.focus();
+
+                if (inputboxInput.tagName === 'TEXTAREA') {
+                    autoGrowTextarea(inputboxInput);
+                } else if (typeof inputboxInput.select === 'function') {
+                    inputboxInput.select();
+                }
+            },
+        });
+    }
+
+    function shouldOpenHistoryHotkey(e) {
+        return e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'h';
+    }
+
+    function shouldOpenHistoryUpArrow(e) {
+        return e.key === 'ArrowUp' && inputboxInput && inputboxInput.value.length === 0;
+    }
+
+    function shouldClearInputbox(e) {
+        return e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'u';
+    }
+
+    function handleHistoryHotkeys(e) {
+        if (!inputboxInput || inputboxHistoryItems.length === 0) {
+            return false;
+        }
+
+        if (shouldOpenHistoryHotkey(e) || shouldOpenHistoryUpArrow(e)) {
+            e.preventDefault();
+            const rect = inputboxInput.getBoundingClientRect();
+            openInputboxHistoryMenu(rect.left, rect.bottom);
+            return true;
+        }
+
+        return false;
+    }
+
+    function handleInputboxHotkeys(e) {
+        if (!inputboxInput) {
+            return false;
+        }
+
+        if (shouldClearInputbox(e)) {
+            e.preventDefault();
+            inputboxInput.value = '';
+            if (inputboxInput.tagName === 'TEXTAREA') {
+                autoGrowTextarea(inputboxInput);
+            }
+            return true;
+        }
+
+        return handleHistoryHotkeys(e);
+    }
 
     function autoGrowTextarea(textarea) {
         textarea.style.height = 'auto';
@@ -79,33 +156,8 @@ export function initInputBox(canvas) {
     inputboxCancel.addEventListener('click', () => inputboxSubmit(false));
 
     inputboxHistoryBtn.addEventListener('click', () => {
-        if (!inputboxInput || inputboxHistoryItems.length === 0) {
-            return;
-        }
-
         const rect = inputboxHistoryBtn.getBoundingClientRect();
-        showLocalMenu({
-            title: 'History',
-            options: inputboxHistoryItems,
-            x: rect.left,
-            y: rect.bottom,
-            showNextToMouseCursor: true,
-            onSelect: (index) => {
-                const value = inputboxHistoryItems[index];
-                if (!value || !inputboxInput) {
-                    return;
-                }
-
-                inputboxInput.value = value;
-                inputboxInput.focus();
-
-                if (inputboxInput.tagName === 'TEXTAREA') {
-                    autoGrowTextarea(inputboxInput);
-                } else if (typeof inputboxInput.select === 'function') {
-                    inputboxInput.select();
-                }
-            },
-        });
+        openInputboxHistoryMenu(rect.left, rect.bottom);
     });
 
     // Clicks on the backdrop (outside the dialog) cancel.
@@ -123,6 +175,9 @@ export function initInputBox(canvas) {
 
         inputboxId = p.id;
         inputboxTitle.textContent = p.title ?? '';
+        inputboxConfirmHint.textContent = p.multiline
+            ? 'Ctrl+Return to confirm'
+            : 'Return to confirm';
         inputboxInputContainer.innerHTML = '';
 
         if (p.multiline) {
@@ -137,6 +192,11 @@ export function initInputBox(canvas) {
             inputboxInput.addEventListener('input', () => autoGrowTextarea(inputboxInput));
             setTimeout(() => autoGrowTextarea(inputboxInput), 0);
             inputboxInput.addEventListener('keydown', (e) => {
+                if (handleInputboxHotkeys(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     inputboxSubmit(true);
@@ -156,6 +216,11 @@ export function initInputBox(canvas) {
             inputboxInput.setAttribute('autocomplete', 'off');
             inputboxInput.setAttribute('spellcheck', 'false');
             inputboxInput.addEventListener('keydown', (e) => {
+                if (handleInputboxHotkeys(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     inputboxSubmit(true);

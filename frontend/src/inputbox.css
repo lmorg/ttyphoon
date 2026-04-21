@@ -50,6 +50,10 @@
 }
 
 .inputbox-hint {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
     font-size: 11px;
     color: var(--terminal-fg, #666);
     opacity: 0.75;

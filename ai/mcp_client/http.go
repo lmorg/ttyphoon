@@ -97,7 +97,7 @@ func IsAuthorizationFailure(err error) bool {
 }
 
 func DefaultRedirectURI() string {
-	return "http://127.0.0.1:38085/oauth/callback"
+	return "http://127.0.0.1:7700/"
 }
 
 func DefaultTokenFile(serverName, rawURL string) string {
