@@ -193,219 +193,230 @@ function updateTerminalFocusChrome() {
     titlebar = setupTitlebar();
     app.appendChild(titlebar);
 
-// Content wrapper for borders and split layout
-contentWrapper = document.createElement('div');
-contentWrapper.id = 'content-wrapper';
-contentWrapper.style.cssText = [
-    'flex:1',
-    'display:flex',
-    'width:100%',
-    'height:100%',
-    'border-left:3px solid rgba(0,0,0,0.2)',
-    'border-right:3px solid rgba(0,0,0,0.2)',
-    'box-sizing:border-box',
-    'overflow:hidden',
-].join(';');
+    // Content wrapper for borders and split layout
+    contentWrapper = document.createElement('div');
+    contentWrapper.id = 'content-wrapper';
+    contentWrapper.style.cssText = [
+        'flex:1',
+        'display:flex',
+        'width:100%',
+        'height:100%',
+        'border-left:3px solid rgba(0,0,0,0.2)',
+        'border-right:3px solid rgba(0,0,0,0.2)',
+        'box-sizing:border-box',
+        'overflow:hidden',
+    ].join(';');
 
-// The split layout: notes on the left half, terminal on the right half.
-// Both panes are created synchronously here.  notes.js and terminal.js are
-// loaded as dynamic imports below, so their module bodies run *after* this
-// synchronous code — they will find #notes-pane and #terminal-pane in the DOM.
-notesPane = document.createElement('div');
-notesPane.id = 'notes-pane';
-notesPane.style.cssText = [
-    'width:50%',
-    'height:100%',
-    'overflow:hidden',
-    'position:relative',
-    'box-sizing:border-box',
-    'flex-shrink:0',
-].join(';');
+    // The split layout: notes on the left half, terminal on the right half.
+    // Both panes are created synchronously here.  notes.js and terminal.js are
+    // loaded as dynamic imports below, so their module bodies run *after* this
+    // synchronous code — they will find #notes-pane and #terminal-pane in the DOM.
+    notesPane = document.createElement('div');
+    notesPane.id = 'notes-pane';
+    notesPane.style.cssText = [
+        'width:50%',
+        'height:100%',
+        'overflow:hidden',
+        'position:relative',
+        'box-sizing:border-box',
+        'flex-shrink:0',
+    ].join(';');
 
-splitHandle = document.createElement('div');
-splitHandle.id = 'notes-terminal-split';
-splitHandle.style.cssText = [
-    'width:8px',
-    'height:100%',
-    'cursor:col-resize',
-    'background:transparent',
-    'position:relative',
-    'flex-shrink:0',
-    'user-select:none',
-    'touch-action:none',
-].join(';');
-splitHandle.title = 'Drag to resize notes';
+    splitHandle = document.createElement('div');
+    splitHandle.id = 'notes-terminal-split';
+    splitHandle.style.cssText = [
+        'width:8px',
+        'height:100%',
+        'cursor:col-resize',
+        'background:transparent',
+        'position:relative',
+        'flex-shrink:0',
+        'user-select:none',
+        'touch-action:none',
+    ].join(';');
+    splitHandle.title = 'Drag to resize notes';
 
-const splitHandleLine = document.createElement('div');
-splitHandleLine.style.cssText = [
-    'position:absolute',
-    'left:50%',
-    'top:0',
-    'transform:translateX(-50%)',
-    'width:1px',
-    'height:100%',
-    'background:color-mix(in srgb, var(--fg) 20%, transparent)',
-].join(';');
-splitHandle.appendChild(splitHandleLine);
+    const splitHandleLine = document.createElement('div');
+    splitHandleLine.style.cssText = [
+        'position:absolute',
+        'left:50%',
+        'top:0',
+        'transform:translateX(-50%)',
+        'width:1px',
+        'height:100%',
+        'background:color-mix(in srgb, var(--fg) 20%, transparent)',
+    ].join(';');
+    splitHandle.appendChild(splitHandleLine);
 
-splitHandle.addEventListener('mouseenter', () => {
-    splitHandleLine.style.background = 'var(--accent)';
-});
+    splitHandle.addEventListener('mouseenter', () => {
+        splitHandleLine.style.background = 'var(--accent)';
+    });
 
-splitHandle.addEventListener('mouseleave', () => {
-    splitHandleLine.style.background = 'color-mix(in srgb, var(--fg) 20%, transparent)';
-});
+    splitHandle.addEventListener('mouseleave', () => {
+        splitHandleLine.style.background = 'color-mix(in srgb, var(--fg) 20%, transparent)';
+    });
 
-terminalPane = document.createElement('div');
-terminalPane.id = 'terminal-pane';
-terminalPane.style.cssText = [
-    'flex:1',
-    'height:100%',
-    'overflow:hidden',
-    'position:relative',
-    'min-width:0',
-].join(';');
+    terminalPane = document.createElement('div');
+    terminalPane.id = 'terminal-pane';
+    terminalPane.style.cssText = [
+        'flex:1',
+        'height:100%',
+        'overflow:hidden',
+        'position:relative',
+        'min-width:0',
+    ].join(';');
 
-contentWrapper.appendChild(notesPane);
-contentWrapper.appendChild(splitHandle);
-contentWrapper.appendChild(terminalPane);
+    contentWrapper.appendChild(notesPane);
+    contentWrapper.appendChild(splitHandle);
+    contentWrapper.appendChild(terminalPane);
 
-app.appendChild(contentWrapper);
+    app.appendChild(contentWrapper);
 
-statusBar = document.createElement('div');
-statusBar.id = 'app-statusbar';
-statusBar.style.cssText = [
-    'height:24px',
-    'display:flex',
-    'align-items:center',
-    'justify-content:space-between',
-    'width:100%',
-    `background:linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), rgba(30,30,30,1)`,
-    'border-left:3px solid rgba(0,0,0,0.2)',
-    'border-right:3px solid rgba(0,0,0,0.2)',
-    'border-bottom:3px solid rgba(0,0,0,0.2)',
-    'border-top:1px solid rgba(255,255,255,0.18)',
-    'box-shadow:inset 0 1px 0 rgba(255,255,255,0.12)',
-    'box-sizing:border-box',
-    'overflow:hidden',
-    'font-size:12px',
-    'line-height:1',
-    'padding:0',
-    'padding-top:4px',
-    '--wails-draggable:drag',
-    'cursor:arrow'
-].join(';');
+    statusBar = document.createElement('div');
+    statusBar.id = 'app-statusbar';
+    statusBar.style.cssText = [
+        'height:24px',
+        'display:flex',
+        'align-items:center',
+        'justify-content:space-between',
+        'width:100%',
+        `background:linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), rgba(30,30,30,1)`,
+        'border-left:3px solid rgba(0,0,0,0.2)',
+        'border-right:3px solid rgba(0,0,0,0.2)',
+        'border-bottom:3px solid rgba(0,0,0,0.2)',
+        'border-top:1px solid rgba(255,255,255,0.18)',
+        'box-shadow:inset 0 1px 0 rgba(255,255,255,0.12)',
+        'box-sizing:border-box',
+        'overflow:hidden',
+        'font-size:12px',
+        'line-height:1',
+        'padding:0',
+        'padding-top:4px',
+        '--wails-draggable:drag',
+        'cursor:arrow'
+    ].join(';');
 
-notesStatusWrap = document.createElement('div');
-notesStatusWrap.id = 'notes-status-wrap';
-notesStatusWrap.style.cssText = [
-    'width:50%',
-    'height:100%',
-    'display:flex',
-    'align-items:center',
-    'padding:0 10px',
-    'min-width:0',
-    'box-sizing:border-box',
-].join(';');
+    notesStatusWrap = document.createElement('div');
+    notesStatusWrap.id = 'notes-status-wrap';
+    notesStatusWrap.style.cssText = [
+        'width:50%',
+        'height:100%',
+        'display:flex',
+        'align-items:center',
+        'padding:0 10px',
+        'min-width:0',
+        'box-sizing:border-box',
+    ].join(';');
 
-const notesStatus = document.createElement('div');
-notesStatus.id = 'notes-status';
-notesStatus.setAttribute('role', 'status');
-notesStatus.style.cssText = [
-    'height:100%',
-    'display:flex',
-    'align-items:center',
-    'width:100%',
-    'white-space:nowrap',
-    'overflow:hidden',
-    'text-overflow:ellipsis',
-    'opacity:0.85',
-].join(';');
-notesStatusWrap.appendChild(notesStatus);
+    const notesStatus = document.createElement('div');
+    notesStatus.id = 'notes-status';
+    notesStatus.setAttribute('role', 'status');
+    notesStatus.style.cssText = [
+        'height:100%',
+        'display:flex',
+        'align-items:center',
+        'width:100%',
+        'white-space:nowrap',
+        'overflow:hidden',
+        'text-overflow:ellipsis',
+        'opacity:0.85',
+    ].join(';');
+    notesStatusWrap.appendChild(notesStatus);
 
-terminalStatus = document.createElement('div');
-terminalStatus.id = 'terminal-status';
-terminalStatus.style.cssText = [
-    'flex:1',
-    'height:100%',
-    'display:flex',
-    'align-items:center',
-    'line-height:1',
-    'padding:0 10px',
-    'min-width:0',
-    'white-space:nowrap',
-    'overflow:hidden',
-    'text-overflow:ellipsis',
-    'opacity:0.85',
-    'box-sizing:border-box',
-].join(';');
+    terminalStatus = document.createElement('div');
+    terminalStatus.id = 'terminal-status';
+    terminalStatus.style.cssText = [
+        'flex:1',
+        'height:100%',
+        'display:flex',
+        'align-items:center',
+        'line-height:1',
+        'padding:0 10px',
+        'min-width:0',
+        'white-space:nowrap',
+        'overflow:hidden',
+        'text-overflow:ellipsis',
+        'opacity:0.85',
+        'box-sizing:border-box',
+    ].join(';');
 
-statusBar.appendChild(notesStatusWrap);
-statusBar.appendChild(terminalStatus);
-app.appendChild(statusBar);
+    statusBar.appendChild(notesStatusWrap);
+    statusBar.appendChild(terminalStatus);
+    app.appendChild(statusBar);
 
-// Setup event listeners after DOM elements are created
-splitHandle.addEventListener('mousedown', (event) => {
-    if (event.button !== 0) {
-        return;
-    }
+    // Setup event listeners after DOM elements are created
+    splitHandle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) {
+            return;
+        }
 
-    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
-    if (notesCollapsed || embeddedInTerminal) {
-        return;
-    }
+        const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+        if (notesCollapsed || embeddedInTerminal) {
+            return;
+        }
 
-    isDraggingSplit = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    event.preventDefault();
-});
+        isDraggingSplit = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        event.preventDefault();
+    });
 
-splitHandle.addEventListener('dblclick', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void toggleNotesPaneCollapsed();
-});
+    splitHandle.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void toggleNotesPaneCollapsed();
+    });
 
-function shouldKeepTerminalFocusedForNotesTarget(target) {
-    const mode = notesPane.dataset.viewMode;
-    const targetEl = target instanceof Element ? target : null;
-
-    if (mode === 'editor') {
+    function shouldKeepTerminalFocusedForNotesTarget(target) {
         return false;
     }
 
-    if (mode === 'viewer') {
-        const editingJsonViewer = Boolean(targetEl && targetEl.closest('.json-inline-editor'));
-        return !editingJsonViewer;
+    function shouldTerminalPaneTakeFocus(target) {
+        const targetEl = target instanceof Element ? target : null;
+        if (!targetEl) {
+            return true;
+        }
+
+        if (notesPane && notesPane.contains(targetEl)) {
+            return false;
+        }
+
+        if (targetEl.closest('[data-window-id="__jupyter__"]')) {
+            return false;
+        }
+
+        return true;
     }
 
-    // In jupyter mode, code blocks are editable and should keep keyboard ownership in notes.
-    const inJupyterCodeBlock = Boolean(targetEl && targetEl.closest('.jupyter-code-block'));
-    return !inJupyterCodeBlock;
-}
+    notesPane.addEventListener('focusin', (event) => {
+        // Any focus inside notes should remove keyboard ownership from the terminal.
+        setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
+    });
 
-notesPane.addEventListener('focusin', (event) => {
-    // Mode-aware focus bridge: viewer -> terminal, editor -> notes, jupyter -> depends on target.
-    setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
-});
+    notesPane.addEventListener('mousedown', (event) => {
+        // Handle repeat clicks where focusin might not fire again.
+        setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
+    });
 
-notesPane.addEventListener('mousedown', (event) => {
-    // Handle repeat clicks where focusin might not fire again.
-    setTerminalFocusState(shouldKeepTerminalFocusedForNotesTarget(event.target));
-});
+    terminalPane.addEventListener('focusin', (event) => {
+        if (!shouldTerminalPaneTakeFocus(event.target)) {
+            return;
+        }
 
-terminalPane.addEventListener('focusin', () => {
-    setTerminalFocusState(true, { focusVisible: lastInputWasKeyboard });
-});
+        setTerminalFocusState(true, { focusVisible: lastInputWasKeyboard });
+    });
 
-terminalPane.addEventListener('mousedown', () => {
-    setTerminalFocusState(true, { focusVisible: false });
-});
+    terminalPane.addEventListener('mousedown', (event) => {
+        if (!shouldTerminalPaneTakeFocus(event.target)) {
+            return;
+        }
 
-refreshStatusBarLayout();
-updateSplitHandleTooltip();
-updateTerminalFocusChrome();
+        setTerminalFocusState(true, { focusVisible: false });
+    });
+
+    refreshStatusBarLayout();
+    updateSplitHandleTooltip();
+    updateTerminalFocusChrome();
 
     // Update titlebar text and colors asynchronously after shell render.
     void hydrateTitlebarAndBorders();
@@ -587,6 +598,7 @@ function collapseNotesIntoTerminal() {
 
     // Move notes into terminal host first so original split styles are preserved.
     setTerminalJupyterMode(true);
+    setTerminalFocusState(false, { focusVisible: false });
     notesCollapsed = true;
     updateSplitHandleTooltip();
     refreshStatusBarLayout();

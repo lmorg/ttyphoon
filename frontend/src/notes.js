@@ -5276,6 +5276,10 @@ document.addEventListener('keydown', (event) => {
         return;
     }
 
+    if (window.terminalFocusedState === true) {
+        return;
+    }
+
     if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') {
         event.preventDefault();
         cycleNotesTabs(event.shiftKey ? -1 : 1);
