@@ -78,13 +78,13 @@ func (wr *webkitRender) hotkeys() {
 			fn = func() { wr.toggleNotesPane() }
 			desc = "Show / hide notes..."
 			icon = 0xf518
-		case "ViewFile":
+		case "OpenFile":
 			fn = func() {
 				if app, ok := wr.app.(interface{ ViewFileInNotes() }); ok {
 					app.ViewFileInNotes()
 				}
 			}
-			desc = "View file in Notes..."
+			desc = "Open file..."
 			icon = 0xf07c
 
 		default:

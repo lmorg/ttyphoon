@@ -73,14 +73,17 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 	for _, tab := range wr.tmuxTabs() {
 		menu = append(menu, types.MenuItem{
 			Title: fmt.Sprintf("Switch to terminal tab: %s (%s)", tab.Name, tab.ID),
-			Fn:    func() { _ = wr.tmux.SelectAndResizeWindow(tab.ID, wr.windowCells) },
-			Icon:  0xf2d2,
+			Fn: func() {
+				wr.ActivateTerminalPaneTab("__tmux__")
+				_ = wr.tmux.SelectAndResizeWindow(tab.ID, wr.windowCells)
+			},
+			Icon: 0xf2d2,
 		})
 	}
 	for _, tab := range wr.auxTerminalTabs {
 		menu = append(menu, types.MenuItem{
 			Title: fmt.Sprintf("Switch to terminal tab: %s", tab.Name),
-			Fn:    func() { _ = wr.tmux.SelectAndResizeWindow(tab.ID, wr.windowCells) },
+			Fn:    func() { wr.ActivateTerminalPaneTab(tab.ID) },
 			Icon:  0xf2d2,
 		})
 	}

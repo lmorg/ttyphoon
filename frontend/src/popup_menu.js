@@ -86,7 +86,7 @@ function measureIdealWidth(items, title, withIcons) {
         || getComputedStyle(document.body).fontFamily;
     const fontSizeVar = rootStyle.getPropertyValue('--terminal-menu-font-size').trim();
     const parsedFontSize = Number.parseFloat(fontSizeVar);
-    const fontSize = (Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14) - 1;
+    const fontSize = (Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14);
     ctx.font = `${fontSize}px ${fontFamily}`;
 
     let maxTextW = 0;
