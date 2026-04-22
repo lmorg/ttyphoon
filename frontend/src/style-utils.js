@@ -125,17 +125,19 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}table {
             width: 100%;
             border-collapse: collapse;
-            /*border: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 22%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.22)`};*/
+            border: 2px solid var(--fg);
         }
 
         ${prefix}th,
         ${prefix}td {
-            border-bottom: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 18%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.18)`};
+            border: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 18%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.18)`};
             padding: 4px 8px;
         }
 
         ${prefix}thead th {
-            border-bottom: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 28%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.28)`};
+            border: 1px solid var(--bg);
+            color: var(--bg);
+            background: var(--fg);
         }
     `;
 }

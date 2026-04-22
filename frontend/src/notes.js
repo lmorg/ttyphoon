@@ -69,6 +69,8 @@ app.innerHTML = `
                 <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
                 <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
                 <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
+                <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
                 <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
@@ -94,6 +96,9 @@ app.innerHTML = `
                 </div>
                 <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-jupyter"></div>
+                </div>
+                <div id="notes-csv-view-wrap" role="tabpanel">
+                    <div id="notes-csv-view" class="markdown-body"></div>
                 </div>
                 <div id="notes-image-view-wrap" role="tabpanel">
                     <img id="notes-image-view-img" alt="" />
@@ -177,11 +182,15 @@ const elements = {
     tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
     tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
     tabImageView: document.getElementById('notes-tab-image-view'),
+    tabCsvView: document.getElementById('notes-tab-csv-view'),
+    tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     editorWrap: document.getElementById('notes-editor-wrap'),
     previewWrap: document.getElementById('notes-preview-wrap'),
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
     imageViewWrap: document.getElementById('notes-image-view-wrap'),
     imageViewImg: document.getElementById('notes-image-view-img'),
+    csvViewWrap: document.getElementById('notes-csv-view-wrap'),
+    csvView: document.getElementById('notes-csv-view'),
     swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
     swaggerEditWrap: document.getElementById('notes-swagger-edit-wrap'),
     swaggerRunWrap: document.getElementById('notes-swagger-run-wrap'),
@@ -214,7 +223,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
-    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image'
+    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -417,6 +426,90 @@ function isMarkdownNotesFile(fileName) {
 
 function isImageFile(fileName) {
     return /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i.test(String(fileName || ''));
+}
+
+function isCsvFile(fileName) {
+    return /\.csv$/i.test(String(fileName || ''));
+}
+
+/**
+ * Parse CSV text into a 2D array of strings.
+ * Handles quoted fields (including embedded commas and newlines).
+ */
+function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    const n = text.length;
+
+    for (let i = 0; i < n; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                // Peek ahead: escaped quote?
+                if (i + 1 < n && text[i + 1] === '"') {
+                    field += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                field += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                row.push(field);
+                field = '';
+            } else if (ch === '\r') {
+                // skip
+            } else if (ch === '\n') {
+                row.push(field);
+                field = '';
+                rows.push(row);
+                row = [];
+            } else {
+                field += ch;
+            }
+        }
+    }
+    // trailing field/row
+    if (field !== '' || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+    }
+    // Drop a trailing empty row (common with files ending in \n)
+    if (rows.length > 0 && rows[rows.length - 1].every(f => f === '')) {
+        rows.pop();
+    }
+    return rows;
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderCsvView(content) {
+    const rows = parseCsv(content || '');
+    if (rows.length === 0) {
+        elements.csvView.innerHTML = '<p class="notes-csv-empty">Empty file</p>';
+        return;
+    }
+
+    const [headerRow, ...dataRows] = rows;
+    const thead = headerRow.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    const tbody = dataRows.map(r => {
+        const cells = headerRow.map((_, i) => `<td>${escapeHtml(r[i] ?? '')}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    elements.csvView.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
 }
 
 function setCodeEditorMode(enabled) {
@@ -814,6 +907,12 @@ function setViewMode(mode) {
         state.viewMode = 'editor';
     } else if (state.currentFileType === 'image') {
         state.viewMode = 'image-view';
+    } else if (state.currentFileType === 'csv') {
+        if (mode === 'csv-view' || mode === 'csv-edit') {
+            state.viewMode = mode;
+        } else {
+            state.viewMode = 'csv-view';
+        }
     } else {
         state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
     }
@@ -851,6 +950,17 @@ function setViewMode(mode) {
     const isImageView = state.viewMode === 'image-view';
     elements.tabImageView.setAttribute('aria-selected', isImageView ? 'true' : 'false');
     elements.imageViewWrap.dataset.active = isImageView ? 'true' : 'false';
+
+    // CSV tabs
+    const isCsvView = state.viewMode === 'csv-view';
+    const isCsvEdit = state.viewMode === 'csv-edit';
+    elements.tabCsvView.setAttribute('aria-selected', isCsvView ? 'true' : 'false');
+    elements.tabCsvEdit.setAttribute('aria-selected', isCsvEdit ? 'true' : 'false');
+    elements.csvViewWrap.dataset.active = isCsvView ? 'true' : 'false';
+    // csv-edit reuses the main editor wrap
+    if (state.currentFileType === 'csv') {
+        elements.editorWrap.dataset.active = isCsvEdit ? 'true' : 'false';
+    }
 
     if (isEditor && state.currentFileType === 'code') {
         renderEditorDecorations();
@@ -1326,6 +1436,7 @@ function updateTabVisibility(fileType) {
     const isJson  = fileType === 'json';
     const isCode  = fileType === 'code';
     const isImage = fileType === 'image';
+    const isCsv   = fileType === 'csv';
 
     if (isImage) {
         // Image files use a single View tab.
@@ -1336,11 +1447,29 @@ function updateTabVisibility(fileType) {
         elements.tabSwaggerView.style.display = 'none';
         elements.tabSwaggerEdit.style.display = 'none';
         elements.tabSwaggerRun.style.display = 'none';
+        elements.tabCsvView.style.display = 'none';
+        elements.tabCsvEdit.style.display = 'none';
         return;
     }
 
-    // Hide image tab for all non-image types
+    if (isCsv) {
+        // CSV files use View + Edit tabs.
+        elements.tabCsvView.style.display = '';
+        elements.tabCsvEdit.style.display = '';
+        elements.tabImageView.style.display = 'none';
+        elements.tabViewer.style.display = 'none';
+        elements.tabEditor.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    // Hide image + csv tabs for all other types
     elements.tabImageView.style.display = 'none';
+    elements.tabCsvView.style.display = 'none';
+    elements.tabCsvEdit.style.display = 'none';
 
     if (isCode) {
         // Code files use a single Edit tab.
@@ -1998,6 +2127,7 @@ async function loadFile(file) {
         const loadingJson     = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
         const loadingImage    = isImageFile(file);
+        const loadingCsv      = isCsvFile(file);
         const stickyId = loadingJson ? Date.now() : null;
         const fileName = file ? getPathFileName(file) : 'json file';
 
@@ -2101,6 +2231,23 @@ async function loadFile(file) {
 
             // Set default view mode to viewer
             setViewMode('viewer');
+        } else if (loadingCsv) {
+            state.currentFileType = 'csv';
+            setCodeEditorMode(false);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+
+            // Update UI for CSV
+            updateTabVisibility('csv');
+
+            // Set editor content (raw text for Edit tab)
+            elements.editor.value = doc || '';
+
+            // Render table view
+            renderCsvView(doc || '');
+
+            // Default to the table view
+            setViewMode('csv-view');
         } else {
             state.currentFileType = 'code';
             setCodeEditorMode(true);
@@ -3672,6 +3819,7 @@ function applyWindowStyle(result) {
             padding: 2px 0px;
             height: 100%;
             min-height: 0;
+            min-width: 0;
         }
 
         #notes-tabs {
@@ -3739,6 +3887,7 @@ function applyWindowStyle(result) {
             position: relative;
             flex: 1;
             min-height: 0;
+            min-width: 0;
             display: flex;
             flex-direction: column;
         }
@@ -3795,6 +3944,48 @@ function applyWindowStyle(result) {
             cursor: zoom-in;
             user-select: none;
             border-radius: 4px;
+        }
+
+        #notes-csv-view-wrap {
+            flex: 1;
+            display: none;
+            min-height: 0;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: auto;
+        }
+
+        #notes-csv-view-wrap[data-active="true"] {
+            display: block;
+        }
+
+        #notes-csv-view {
+            padding: 8px 16px;
+            min-width: 0;
+        }
+
+        #notes-csv-view table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+        }
+
+        #notes-csv-view th,
+        #notes-csv-view td {
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.18);
+            padding: 4px 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        #notes-csv-view thead th {
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.28);
+        }
+
+        .notes-csv-empty {
+            opacity: 0.5;
+            font-style: italic;
+            padding: 8px;
         }
 
         .notes-ai-panel {
@@ -4019,6 +4210,8 @@ function applyWindowStyle(result) {
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
 
@@ -4637,6 +4830,8 @@ if (elements.editor) {
         setDirty(true);
         if (state.currentFileType === 'code') {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
+        } else if (state.currentFileType === 'csv') {
+            renderCsvView(elements.editor.value);
         } else {
             scheduleRender();
         }
@@ -4869,6 +5064,14 @@ elements.tabImageView.addEventListener('click', () => {
     setViewMode('image-view');
 });
 
+elements.tabCsvView.addEventListener('click', () => {
+    setViewMode('csv-view');
+});
+
+elements.tabCsvEdit.addEventListener('click', () => {
+    setViewMode('csv-edit');
+});
+
 function getVisibleNotesTabs() {
     if (state.currentFileType === 'json') {
         const tabs = [elements.tabSwaggerView, elements.tabSwaggerEdit];
@@ -4884,6 +5087,10 @@ function getVisibleNotesTabs() {
 
     if (state.currentFileType === 'image') {
         return [elements.tabImageView].filter(Boolean);
+    }
+
+    if (state.currentFileType === 'csv') {
+        return [elements.tabCsvView, elements.tabCsvEdit].filter(Boolean);
     }
 
     return [elements.tabViewer, elements.tabEditor, elements.tabJupyter].filter((tab) => tab && tab.style.display !== 'none');
