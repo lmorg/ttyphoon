@@ -35,6 +35,7 @@ func (wr *webkitRender) hotkeys() {
 				wr.DisplayNotification(types.NOTIFY_INFO, "Settings have been reloaded from disk")
 			}
 			desc = "Reload settings from disk"
+			icon = 0xf021
 
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }

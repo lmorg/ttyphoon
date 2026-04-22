@@ -187,7 +187,7 @@ export function initInputBox(canvas) {
             inputboxInput.value = p.defaultValue ?? '';
             inputboxInput.placeholder = p.placeholder ?? '';
             inputboxInput.setAttribute('autocomplete', 'off');
-            inputboxInput.setAttribute('spellcheck', 'false');
+            //inputboxInput.setAttribute('spellcheck', 'false');
             inputboxInput.style.resize = 'none';
             inputboxInput.addEventListener('input', () => autoGrowTextarea(inputboxInput));
             setTimeout(() => autoGrowTextarea(inputboxInput), 0);
@@ -214,7 +214,7 @@ export function initInputBox(canvas) {
             inputboxInput.value = p.defaultValue ?? '';
             inputboxInput.placeholder = p.placeholder ?? '';
             inputboxInput.setAttribute('autocomplete', 'off');
-            inputboxInput.setAttribute('spellcheck', 'false');
+            //inputboxInput.setAttribute('spellcheck', 'false');
             inputboxInput.addEventListener('keydown', (e) => {
                 if (handleInputboxHotkeys(e)) {
                     e.stopPropagation();

@@ -89,6 +89,8 @@ func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
 	return nil
 }
 
+// Add appends the hotkey DB with the values included.
+// If no icon is 0, then hotkey will not be included in command palette
 func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string, icon rune) {
 	hk := prefixes[prefix]
 	if hk == nil {

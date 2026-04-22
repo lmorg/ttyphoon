@@ -661,11 +661,11 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
-			strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
-			filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
-			files = append(files, filename)
-		}
+		//if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
+		//	strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
+		filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
+		files = append(files, filename)
+		//}
 		return nil
 	})
 	if err != nil {

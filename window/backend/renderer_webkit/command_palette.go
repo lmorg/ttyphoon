@@ -56,10 +56,13 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		},
 	}
 
-	// Hotkeys
+	// Hotkeys:
 
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
 	for _, hk := range hotkeys.List() {
+		if hk.Icon == 0 {
+			continue
+		}
 		menu = append(menu, types.MenuItem{
 			Title: hk.Description,
 			Fn:    func() { hotkeys.KeyPressWithPrefix(hk.Prefix, hk.Hotkey) },
@@ -88,10 +91,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		})
 	}
 
-	// 0xf2d2 // tmux
-	// 0xf11c // hotkey
-
-	// AI skills
+	// AI skills:
 
 	skills := skills.ReadSkills()
 	if len(skills) > 0 {
