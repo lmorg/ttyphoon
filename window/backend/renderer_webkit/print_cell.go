@@ -14,6 +14,7 @@ const (
 	DrawOpHighlight   DrawOp = "highlight_rect"
 	DrawOpRectColour  DrawOp = "rect_colour"
 	DrawOpTileOverlay DrawOp = "tile_overlay"
+	DrawOpTable       DrawOp = "table"
 )
 
 type DrawCommand struct {
@@ -40,6 +41,7 @@ type DrawCommand struct {
 	SrcHeight    int32         `json:"srcHeight,omitempty"`
 	SrcScaleX    float64       `json:"srcScaleX,omitempty"`
 	SrcScaleY    float64       `json:"srcScaleY,omitempty"`
+	Boundaries   []int32       `json:"boundaries,omitempty"`
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {

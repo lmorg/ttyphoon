@@ -681,6 +681,58 @@ function drawRectColour(cmd) {
     offCtx.restore();
 }
 
+function drawTable(cmd) {
+    if (!offCtx) {
+        return;
+    }
+
+    const { cellWidth, cellHeight } = font.getCellSize();
+    const fg = cmd.fg || { Red: 128, Green: 128, Blue: 128 };
+
+    offCtx.save();
+    offCtx.strokeStyle = `rgb(${fg.Red}, ${fg.Green}, ${fg.Blue})`;
+    offCtx.globalAlpha = 0.2;
+    offCtx.lineWidth = 1;
+
+    const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
+    const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
+    const heightCells = Number.isFinite(cmd.height) ? cmd.height : 0;
+    const maxWidthCells = Number.isFinite(cmd.width) ? cmd.width : 0;
+
+    const x = xCell * cellWidth;
+    const y = yCell * cellHeight;
+    const h = y + (heightCells * cellHeight);
+    const endX = x + (maxWidthCells * cellWidth);
+
+    // Draw vertical line at left border
+    offCtx.beginPath();
+    offCtx.moveTo(x, y);
+    offCtx.lineTo(x, h);
+    offCtx.stroke();
+
+    // Draw vertical lines at each boundary
+    if (Array.isArray(cmd.boundaries)) {
+        for (let i = 0; i < cmd.boundaries.length; i++) {
+            const boundaryX = x + (cmd.boundaries[i] * cellWidth);
+            offCtx.beginPath();
+            offCtx.moveTo(boundaryX, y);
+            offCtx.lineTo(boundaryX, h);
+            offCtx.stroke();
+        }
+    }
+
+    // Draw horizontal lines (top and for each row)
+    for (let i = 0; i <= heightCells; i++) {
+        const lineY = y + (i * cellHeight);
+        offCtx.beginPath();
+        offCtx.moveTo(x, lineY);
+        offCtx.lineTo(endX, lineY);
+        offCtx.stroke();
+    }
+
+    offCtx.restore();
+}
+
 function drawTileOverlay(cmd) {
     if (!offCtx) {
         return;
@@ -811,6 +863,11 @@ EventsOn("terminalRedraw", ops => {
         }
         if (cmd.op === 'rect_colour') {
             drawRectColour(cmd);
+            continue;
+        }
+        if (cmd.op === 'table') {
+            drawTable(cmd);
+            continue;
         }
     }
 
