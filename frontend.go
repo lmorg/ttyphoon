@@ -977,7 +977,7 @@ func startWails() {
 		Title: appTitle(),
 		//Width:             int(payload.Window.Size.X),
 		//Height:            int(payload.Window.Size.Y),
-		AlwaysOnTop:       true,
+		AlwaysOnTop:       config.Config.Window.AlwaysOnTop,
 		HideWindowOnClose: true,
 		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{

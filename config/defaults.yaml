@@ -126,6 +126,7 @@ Window:
   # Terminal.JumpScrollLineCount also affects the window updates
   RefreshInterval: 200
 
+  AlwaysOnTop: true
 
 NotesWindow:
 
