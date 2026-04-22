@@ -1277,6 +1277,14 @@ async function runCodeBlockInNotes(blockId) {
     }
 }
 
+function scrollJupyterOutputToBottom(outputBlock) {
+    if (!outputBlock) {
+        return;
+    }
+
+    outputBlock.scrollTop = outputBlock.scrollHeight;
+}
+
 async function stopCodeBlockInNotes(blockId) {
     try {
         await StopNote(blockId);
@@ -3200,6 +3208,7 @@ EventsOn("noteRun", (data) => {
     span.className = isErr ? 'jupyter-output-line-error' : 'jupyter-output-line';
     span.textContent = text;
     outputBlock.appendChild(span);
+    scrollJupyterOutputToBottom(outputBlock);
 });
 
 EventsOn("noteComplete", (data) => {
@@ -3697,6 +3706,10 @@ function applyWindowStyle(result) {
 
         .notes-tree-folder:hover {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
+        }
+
+        .notes-tree-folder[data-expanded="false"] .notes-tree-label {
+            font-style: italic;
         }
 
         .notes-tree-indent {
@@ -4474,6 +4487,8 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize - 2}px;
             line-height: 1.4;
             overflow-x: auto;
+            overflow-y: auto;
+            max-height: calc((25 * 1.4em) + 24px);
             white-space: pre-wrap;
             word-wrap: break-word;
             border: none;
