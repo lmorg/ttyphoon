@@ -67,6 +67,7 @@ type Renderer interface {
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
+	RefreshNotes()
 	NotesCreateAndOpen(filename, contents string)
 	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
