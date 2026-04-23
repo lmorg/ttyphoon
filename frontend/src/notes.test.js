@@ -72,6 +72,7 @@ vi.mock('./style-utils.js', () => ({
     getCheckboxStyles: vi.fn(() => ''),
     getMarkdownBaseTextSizeStyles: vi.fn(() => ''),
     getSwaggerUIStyles: vi.fn(() => ''),
+    DARKEN_BACKGROUND_OVERLAY: 'rgba(0, 0, 0, 0.2)',
 }));
 
 vi.mock('./swagger-utils.js', () => ({

@@ -104,7 +104,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 		case types.MOUSE_BUTTON_LEFT:
 			menu := el.renderer.NewContextMenu()
 			menu.Append(menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)
-			menu.DisplayMenu("Hyperlink action")
+			menu.DisplayMenu("Hyperlink action", true)
 
 		case types.MOUSE_BUTTON_RIGHT:
 			el.renderer.AddToContextMenu(append([]types.MenuItem{{Title: types.MENU_SEPARATOR}}, menuhyperlink.MenuItems(el.renderer, el.url, string(el.label))...)...)

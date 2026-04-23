@@ -7,6 +7,7 @@ import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
+import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 
 (document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
     <div id="terminal-app">
@@ -192,7 +193,8 @@ function applyTerminalStyles(result) {
             gap: 8px;
             align-items: center;
             padding: 6px 8px 0 8px;
-            border-bottom: 2px solid rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             flex-wrap: nowrap;
             overflow-x: auto;
             overflow-y: hidden;
@@ -207,7 +209,7 @@ function applyTerminalStyles(result) {
 
         #terminal-tabs button {
             border-radius: 0;
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             background: transparent;
             color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             padding: 6px 12px;
@@ -217,19 +219,19 @@ function applyTerminalStyles(result) {
 
         #terminal-tabs button[aria-selected="true"] {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
-            border-color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .terminal-tab {
             border-top-left-radius: 5px !important;
             border-top-right-radius: 5px !important;
-            border: 2px solid !important;
+            border: 1px solid !important;
             border-bottom: 0 !important;
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .terminal-tab:hover {
-            border-color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         #terminal-viewport {
@@ -329,7 +331,7 @@ function paintTerminalCanvas() {
 
     // Apply dim overlay if terminal is not focused
     if (window.terminalFocusedState === false) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillStyle = DARKEN_BACKGROUND_OVERLAY;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 

@@ -17,7 +17,7 @@ import hljs from "highlight.js/lib/common";
 import YAML from 'yaml';
 
 import { configureMarked, processMarkdownContainer, enableFullscreenImages } from './markdown-utils.js';
-import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
+import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
@@ -3369,7 +3369,7 @@ function applyWindowStyle(result) {
             gap: 12px;
             min-height: 0;
             overflow: hidden;
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-sidebar-header {
@@ -3807,7 +3807,7 @@ function applyWindowStyle(result) {
             user-select: none;
             touch-action: none;
             flex-shrink: 0;
-            background: linear-gradient(to right, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 50%, var(--bg) 50%, var(--bg) 100%);
+            background: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-splitter::after {
@@ -3829,24 +3829,30 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 2px 0px;
+            padding: 0 0 2px 0;
             height: 100%;
             min-height: 0;
             min-width: 0;
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        #notes-panel {
+            background-color: var(--bg);
         }
 
         #notes-tabs {
             display: flex;
             gap: 8px;
-            padding: 1px 0px 0 8px;
-            border-bottom: 2px solid var(--fg);
+            padding: 3px 0px 0px 8px;
+            /*background-color: ${DARKEN_BACKGROUND_OVERLAY};*/
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             align-items: center;
             box-sizing: border-box;
         }
 
         #notes-tabs button {
             border-radius: 0;
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             background: transparent;
             color: var(--fg);
             padding: 6px 12px;
@@ -3854,24 +3860,24 @@ function applyWindowStyle(result) {
         }
 
         #notes-tabs button[aria-selected="true"] {
-            border-color: var(--fg);
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             border-bottom: 5px;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
-            border-color: var(--fg) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .tab {
             border-top-left-radius: 5px !important;
             border-top-right-radius: 5px !important;
-            border: 2px solid !important;
+            border: 1px solid !important;
             border-bottom: 0 !important;
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .tab:hover {
-            border: 2px solid !important;
+            border: 1px solid !important;
             border-bottom: 0 !important;
-            border-color: var(--fg) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         #notes-tabs button:hover {
@@ -3914,6 +3920,12 @@ function applyWindowStyle(result) {
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
         }
 
+        #notes-preview-wrap,
+        #notes-jupyter-wrap {
+            padding-right: 10px;
+            padding-bottom: 10px;
+        }
+
         #notes-swagger-edit-wrap,
         #notes-swagger-view-wrap,
         #notes-swagger-run-wrap {
@@ -3921,6 +3933,15 @@ function applyWindowStyle(result) {
             display: none;
             min-height: 0;
             overflow: hidden;
+        }
+
+        #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-edit-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-editor-wrap[data-active="true"],
@@ -4004,7 +4025,7 @@ function applyWindowStyle(result) {
         .notes-ai-panel {
             display: flex;
             flex-direction: column;
-            border-top: 2px solid var(--fg);
+            border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.5);
             transition: all 0.3s ease;
             overflow: hidden;
         }
@@ -4088,7 +4109,7 @@ function applyWindowStyle(result) {
             word-break: break-word;
             font-family: var(--font-family);
             color: var(--fg);
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-ai-output:empty::before {
@@ -4452,7 +4473,7 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-code-editable:not(:focus) {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         .jupyter-output-wrapper {
@@ -4523,7 +4544,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-swagger-editor:not(:focus) {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: transparent;
         }
 
         #notes-swagger-view-wrap {

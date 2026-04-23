@@ -2,6 +2,8 @@
  * Shared CSS styling utilities for consistent theming across markdown views
  */
 
+export const DARKEN_BACKGROUND_OVERLAY = 'rgba(0, 0, 0, 0.2)';
+
 /**
  * Generate scrollbar styles
  * @param {Object} colors - Color palette from GetWindowStyle
@@ -12,11 +14,11 @@ export function getScrollbarStyles(colors) {
         ::-webkit-scrollbar {
             width: 5px;
             height: 5px;
-            background-color: var(--bg);
+            background-color: transparent;
             opacity: 0.5;
         }
         ::-webkit-scrollbar-track {
-            background-color: var(--bg);
+            background-color: transparent;
         }
         ::-webkit-scrollbar-thumb {
             background-color: var(--fg);

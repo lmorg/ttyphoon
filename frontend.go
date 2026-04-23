@@ -791,7 +791,7 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 
 	menu := renderer.NewContextMenu()
 	menu.Append(a.hyperlinkMenuItems(url, text)...)
-	menu.DisplayMenu("Hyperlink action")
+	menu.DisplayMenu("Hyperlink action", true)
 }
 
 func (a *WApp) SaveFile(filename, contents string) error {

@@ -12,6 +12,7 @@ import {
 } from '../wailsjs/runtime/runtime';
 import { GetWindowStyle, GetAppTitle, TerminalSetFocus } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 
 // Global terminal focus state for canvas dimming
 window.terminalFocusedState = true;
@@ -75,7 +76,7 @@ async function hydrateTitlebarAndBorders() {
     let appName = 'TTYphoon';
     /*let bgColor = 'rgba(30,30,30,1)';
     let fgColor = 'rgba(255,255,255,0.87)';
-    let borderColor = 'rgba(0,0,0,0.2)';*/
+    let borderColor = DARKEN_BACKGROUND_OVERLAY;*/
 
     try {
         appName = await GetAppTitle();
@@ -98,7 +99,7 @@ async function hydrateTitlebarAndBorders() {
 function applyChromePalette(style) {
     let bgColor = 'rgba(30,30,30,1)';
     let fgColor = 'rgba(255,255,255,0.87)';
-    let borderColor = 'rgba(0,0,0,0.2)';
+    let borderColor = DARKEN_BACKGROUND_OVERLAY;
     const showStatusBar = style?.statusBar !== false;
     const statusFontSize = Math.max(8, Number(style?.fontSize || 14) - 2);
 
@@ -187,6 +188,10 @@ function updateTerminalFocusChrome() {
 
     terminalPane.setAttribute('data-terminal-focused', terminalFocusState ? 'true' : 'false');
     terminalPane.setAttribute('data-terminal-focus-visible', terminalKeyboardFocusVisible ? 'true' : 'false');
+
+    if (notesPane) {
+        notesPane.setAttribute('data-terminal-focused', terminalFocusState ? 'true' : 'false');
+    }
 }
 
 (async () => {
@@ -201,8 +206,8 @@ function updateTerminalFocusChrome() {
         'display:flex',
         'width:100%',
         'height:100%',
-        'border-left:3px solid rgba(0,0,0,0.2)',
-        'border-right:3px solid rgba(0,0,0,0.2)',
+        `border-left:3px solid ${DARKEN_BACKGROUND_OVERLAY}`,
+        `border-right:3px solid ${DARKEN_BACKGROUND_OVERLAY}`,
         'box-sizing:border-box',
         'overflow:hidden',
     ].join(';');
@@ -228,7 +233,7 @@ function updateTerminalFocusChrome() {
         'width:8px',
         'height:100%',
         'cursor:col-resize',
-        'background:transparent',
+        `background:${DARKEN_BACKGROUND_OVERLAY}`,
         'position:relative',
         'flex-shrink:0',
         'user-select:none',
@@ -281,9 +286,9 @@ function updateTerminalFocusChrome() {
         'justify-content:space-between',
         'width:100%',
         `background:linear-gradient(rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA}), rgba(0, 0, 0, ${INACTIVE_PANE_OVERLAY_ALPHA})), rgba(30,30,30,1)`,
-        'border-left:3px solid rgba(0,0,0,0.2)',
-        'border-right:3px solid rgba(0,0,0,0.2)',
-        'border-bottom:3px solid rgba(0,0,0,0.2)',
+        `border-left:3px solid ${DARKEN_BACKGROUND_OVERLAY}`,
+        `border-right:3px solid ${DARKEN_BACKGROUND_OVERLAY}`,
+        `border-bottom:3px solid ${DARKEN_BACKGROUND_OVERLAY}`,
         'border-top:1px solid rgba(255,255,255,0.18)',
         'box-shadow:inset 0 1px 0 rgba(255,255,255,0.12)',
         'box-sizing:border-box',
