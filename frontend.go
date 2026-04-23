@@ -974,9 +974,7 @@ func startWails() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title: appTitle(),
-		//Width:             int(payload.Window.Size.X),
-		//Height:            int(payload.Window.Size.Y),
+		Title:             appTitle(),
 		AlwaysOnTop:       config.Config.Window.AlwaysOnTop,
 		HideWindowOnClose: true,
 		WindowStartState:  options.Maximised,
@@ -993,7 +991,7 @@ func startWails() {
 		OnDomReady: wapp.domReady,
 		Bind:       []any{wapp},
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
+			TitleBar: mac.TitleBarHidden(),
 			About: &mac.AboutInfo{
 				Title:   app.Name(),
 				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),

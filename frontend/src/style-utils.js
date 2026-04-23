@@ -444,7 +444,6 @@ export function getSwaggerUIStyles(colors, fontSize) {
             position: sticky;
             top: 0;
             z-index: 2;
-            background-color: var(--bg);
             padding-bottom: 0px;
             margin-bottom: -10px;
         }
