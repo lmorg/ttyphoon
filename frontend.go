@@ -661,11 +661,11 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
-			strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
-			filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
-			files = append(files, filename)
-		}
+		//if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
+		//	strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
+		filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
+		files = append(files, filename)
+		//}
 		return nil
 	})
 	if err != nil {
@@ -791,7 +791,7 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 
 	menu := renderer.NewContextMenu()
 	menu.Append(a.hyperlinkMenuItems(url, text)...)
-	menu.DisplayMenu("Hyperlink action")
+	menu.DisplayMenu("Hyperlink action", true)
 }
 
 func (a *WApp) SaveFile(filename, contents string) error {
@@ -926,6 +926,25 @@ func (a *WApp) ViewFileInNotes() {
 
 func (a *WApp) GetAppTitle() string { return appTitle() }
 
+// ShowCommandPalette opens the command palette and sends all options to the
+// frontend in one payload. Filtering is done in JS.
+func (a *WApp) ShowCommandPalette() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+	renderer.ShowCommandPalette()
+}
+
+// CommandPaletteSelect executes the chosen item via the renderer.
+func (a *WApp) CommandPaletteSelect(index int) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+	renderer.CommandPaletteSelect(index)
+}
+
 // --------------------
 
 func (a *WApp) startup(ctx context.Context) {
@@ -958,7 +977,7 @@ func startWails() {
 		Title: appTitle(),
 		//Width:             int(payload.Window.Size.X),
 		//Height:            int(payload.Window.Size.Y),
-		AlwaysOnTop:       true,
+		AlwaysOnTop:       config.Config.Window.AlwaysOnTop,
 		HideWindowOnClose: true,
 		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{

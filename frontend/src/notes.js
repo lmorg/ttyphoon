@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetMarkdown,
+    GetWindowStyle, GetMarkdown, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
@@ -16,8 +16,8 @@ import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
 import YAML from 'yaml';
 
-import { configureMarked, processMarkdownContainer } from './markdown-utils.js';
-import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles } from './style-utils.js';
+import { configureMarked, processMarkdownContainer, enableFullscreenImages } from './markdown-utils.js';
+import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
@@ -69,6 +69,9 @@ app.innerHTML = `
                 <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
                 <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
                 <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
+                <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
+                <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
@@ -78,7 +81,15 @@ app.innerHTML = `
             </div>
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
-                    <textarea id="notes-editor" spellcheck="false"></textarea>
+                    <div id="notes-editor-shell" data-code-view="false">
+                        <div id="notes-editor-gutter-wrap" aria-hidden="true">
+                            <div id="notes-editor-gutter"></div>
+                        </div>
+                        <div id="notes-editor-scroll">
+                            <pre id="notes-editor-highlight" aria-hidden="true"><code id="notes-editor-highlight-code" class="hljs"></code></pre>
+                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                        </div>
+                    </div>
                 </div>
                 <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-preview"></div>
@@ -86,8 +97,14 @@ app.innerHTML = `
                 <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-jupyter"></div>
                 </div>
+                <div id="notes-csv-view-wrap" role="tabpanel">
+                    <div id="notes-csv-view" class="markdown-body"></div>
+                </div>
+                <div id="notes-image-view-wrap" role="tabpanel">
+                    <img id="notes-image-view-img" alt="" />
+                </div>
                 <div id="notes-swagger-edit-wrap" role="tabpanel" style="display: none;">
-                    <textarea id="notes-swagger-editor" spellcheck="false"></textarea>
+                    <textarea id="notes-swagger-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
                 </div>
                 <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
                     <div id="notes-swagger-view" class="json-viewer"></div>
@@ -147,6 +164,10 @@ const elements = {
     list: document.getElementById('notes-list'),
     listFilter: document.getElementById('notes-list-filter'),
     editor: document.getElementById('notes-editor'),
+    editorShell: document.getElementById('notes-editor-shell'),
+    editorGutter: document.getElementById('notes-editor-gutter'),
+    editorHighlight: document.getElementById('notes-editor-highlight'),
+    editorHighlightCode: document.getElementById('notes-editor-highlight-code'),
     preview: document.getElementById('notes-preview'),
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
@@ -160,9 +181,16 @@ const elements = {
     tabSwaggerView: document.getElementById('notes-tab-swagger-view'),
     tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
     tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
+    tabImageView: document.getElementById('notes-tab-image-view'),
+    tabCsvView: document.getElementById('notes-tab-csv-view'),
+    tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     editorWrap: document.getElementById('notes-editor-wrap'),
     previewWrap: document.getElementById('notes-preview-wrap'),
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
+    imageViewWrap: document.getElementById('notes-image-view-wrap'),
+    imageViewImg: document.getElementById('notes-image-view-img'),
+    csvViewWrap: document.getElementById('notes-csv-view-wrap'),
+    csvView: document.getElementById('notes-csv-view'),
     swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
     swaggerEditWrap: document.getElementById('notes-swagger-edit-wrap'),
     swaggerRunWrap: document.getElementById('notes-swagger-run-wrap'),
@@ -195,7 +223,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
-    currentFileType: 'markdown',  // 'markdown' or 'json'
+    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -218,17 +246,14 @@ const state = {
     swaggerSpec: null,
     swaggerRunAvailable: false,
     swaggerSelectedEndpoint: null,
-    swaggerEndpointFilter: ''
+    swaggerEndpointFilter: '',
+    editorLanguage: ''
 };
 
 let lastAutoCopiedViewerSelection = '';
 
 function activeViewerWrap() {
-    if (state.viewMode !== 'viewer' || elements.previewWrap?.dataset.active !== 'true') {
-        return null;
-    }
-
-    return elements.previewWrap;
+    return elements.previewWrap || null;
 }
 
 function getViewerSelectionText() {
@@ -273,6 +298,241 @@ function handleViewerSelectionAutoCopy() {
 }
 
 configureMarked();
+
+function escapeEditorHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function inferEditorLanguage(file, content) {
+    const fileName = String(file || '').toLowerCase();
+    const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
+
+    const extensionMap = {
+        go: 'go',
+        js: 'javascript',
+        mjs: 'javascript',
+        cjs: 'javascript',
+        ts: 'typescript',
+        jsx: 'javascript',
+        tsx: 'typescript',
+        py: 'python',
+        rs: 'rust',
+        c: 'c',
+        h: 'c',
+        cc: 'cpp',
+        cpp: 'cpp',
+        hpp: 'cpp',
+        cs: 'csharp',
+        java: 'java',
+        kt: 'kotlin',
+        swift: 'swift',
+        php: 'php',
+        rb: 'ruby',
+        sh: 'bash',
+        bash: 'bash',
+        zsh: 'bash',
+        fish: 'bash',
+        ps1: 'powershell',
+        json: 'json',
+        yaml: 'yaml',
+        yml: 'yaml',
+        toml: 'toml',
+        ini: 'ini',
+        sql: 'sql',
+        md: 'markdown',
+        markdown: 'markdown',
+        html: 'xml',
+        xml: 'xml',
+        css: 'css',
+        scss: 'scss',
+        dockerfile: 'dockerfile',
+        makefile: 'makefile',
+    };
+
+    if (extension && extensionMap[extension]) {
+        return extensionMap[extension];
+    }
+
+    if (fileName.endsWith('/dockerfile') || fileName.endsWith('dockerfile')) {
+        return 'dockerfile';
+    }
+
+    if (fileName.endsWith('/makefile') || fileName.endsWith('makefile')) {
+        return 'makefile';
+    }
+
+    const markdownFenceMatch = String(content || '').match(/^```\s*([a-z0-9_+-]+)/im);
+    if (markdownFenceMatch && hljs.getLanguage(markdownFenceMatch[1])) {
+        return markdownFenceMatch[1];
+    }
+
+    return 'plaintext';
+}
+
+function syncEditorScrollDecorations() {
+    if (!elements.editor || !elements.editorGutter || !elements.editorHighlight) {
+        return;
+    }
+
+    const scrollTop = elements.editor.scrollTop;
+    const scrollLeft = elements.editor.scrollLeft;
+    elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
+    elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+}
+
+function renderEditorDecorations() {
+    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+    const lineCount = Math.max(1, content.split('\n').length);
+    elements.editorGutter.textContent = Array.from({ length: lineCount }, (_, index) => String(index + 1)).join('\n');
+
+    // Match highlight layer height to the full scrollable editor content.
+    if (elements.editorHighlight) {
+        const contentHeight = Math.max(elements.editor.scrollHeight, elements.editor.clientHeight);
+        elements.editorHighlight.style.minHeight = `${contentHeight}px`;
+    }
+
+    const language = state.editorLanguage || 'plaintext';
+    try {
+        if (hljs.getLanguage(language)) {
+            elements.editorHighlightCode.innerHTML = hljs.highlight(content, { language, ignoreIllegals: true }).value;
+        } else {
+            elements.editorHighlightCode.innerHTML = hljs.highlightAuto(content).value;
+        }
+    } catch {
+        elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
+    }
+
+    syncEditorScrollDecorations();
+}
+
+function refreshEditorLanguage(file, content) {
+    state.editorLanguage = inferEditorLanguage(file, content);
+    if (elements.editorHighlightCode) {
+        elements.editorHighlightCode.className = `hljs language-${state.editorLanguage || 'plaintext'}`;
+    }
+    renderEditorDecorations();
+}
+
+function isMarkdownNotesFile(fileName) {
+    return /\.(md|markdown)$/i.test(String(fileName || ''));
+}
+
+function isImageFile(fileName) {
+    return /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i.test(String(fileName || ''));
+}
+
+function isCsvFile(fileName) {
+    return /\.csv$/i.test(String(fileName || ''));
+}
+
+/**
+ * Parse CSV text into a 2D array of strings.
+ * Handles quoted fields (including embedded commas and newlines).
+ */
+function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    const n = text.length;
+
+    for (let i = 0; i < n; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                // Peek ahead: escaped quote?
+                if (i + 1 < n && text[i + 1] === '"') {
+                    field += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                field += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                row.push(field);
+                field = '';
+            } else if (ch === '\r') {
+                // skip
+            } else if (ch === '\n') {
+                row.push(field);
+                field = '';
+                rows.push(row);
+                row = [];
+            } else {
+                field += ch;
+            }
+        }
+    }
+    // trailing field/row
+    if (field !== '' || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+    }
+    // Drop a trailing empty row (common with files ending in \n)
+    if (rows.length > 0 && rows[rows.length - 1].every(f => f === '')) {
+        rows.pop();
+    }
+    return rows;
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderCsvView(content) {
+    const rows = parseCsv(content || '');
+    if (rows.length === 0) {
+        elements.csvView.innerHTML = '<p class="notes-csv-empty">Empty file</p>';
+        return;
+    }
+
+    const [headerRow, ...dataRows] = rows;
+    const thead = headerRow.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+    const tbody = dataRows.map(r => {
+        const cells = headerRow.map((_, i) => `<td>${escapeHtml(r[i] ?? '')}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    elements.csvView.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+}
+
+function setCodeEditorMode(enabled) {
+    if (!elements.editorShell) {
+        return;
+    }
+
+    elements.editorShell.dataset.codeView = enabled ? 'true' : 'false';
+
+    if (!enabled) {
+        if (elements.editorGutter) {
+            elements.editorGutter.textContent = '';
+            elements.editorGutter.style.transform = '';
+        }
+        if (elements.editorHighlight) {
+            elements.editorHighlight.style.transform = '';
+            elements.editorHighlight.style.minHeight = '';
+        }
+        if (elements.editorHighlightCode) {
+            elements.editorHighlightCode.innerHTML = '';
+        }
+    }
+}
 
 function setStatus(message, isError) {
     elements.status.textContent = message || '';
@@ -636,12 +896,22 @@ function emitCurrentFileName() {
 }
 
 function setViewMode(mode) {
-    // Determine the mode based on current file type
+    // Determine the mode based on current file type.
     if (state.currentFileType === 'json') {
         if (mode === 'swagger-view' || mode === 'swagger-edit' || (mode === 'swagger-run' && state.swaggerRunAvailable)) {
             state.viewMode = mode;
         } else {
             state.viewMode = 'swagger-view';
+        }
+    } else if (state.currentFileType === 'code') {
+        state.viewMode = 'editor';
+    } else if (state.currentFileType === 'image') {
+        state.viewMode = 'image-view';
+    } else if (state.currentFileType === 'csv') {
+        if (mode === 'csv-view' || mode === 'csv-edit') {
+            state.viewMode = mode;
+        } else {
+            state.viewMode = 'csv-view';
         }
     } else {
         state.viewMode = mode === 'viewer' ? 'viewer' : (mode === 'jupyter' ? 'jupyter' : 'editor');
@@ -675,6 +945,26 @@ function setViewMode(mode) {
     elements.swaggerViewWrap.dataset.active = isSwaggerView ? 'true' : 'false';
     elements.swaggerEditWrap.dataset.active = isSwaggerEdit ? 'true' : 'false';
     elements.swaggerRunWrap.dataset.active = isSwaggerRun ? 'true' : 'false';
+
+    // Image view tab
+    const isImageView = state.viewMode === 'image-view';
+    elements.tabImageView.setAttribute('aria-selected', isImageView ? 'true' : 'false');
+    elements.imageViewWrap.dataset.active = isImageView ? 'true' : 'false';
+
+    // CSV tabs
+    const isCsvView = state.viewMode === 'csv-view';
+    const isCsvEdit = state.viewMode === 'csv-edit';
+    elements.tabCsvView.setAttribute('aria-selected', isCsvView ? 'true' : 'false');
+    elements.tabCsvEdit.setAttribute('aria-selected', isCsvEdit ? 'true' : 'false');
+    elements.csvViewWrap.dataset.active = isCsvView ? 'true' : 'false';
+    // csv-edit reuses the main editor wrap
+    if (state.currentFileType === 'csv') {
+        elements.editorWrap.dataset.active = isCsvEdit ? 'true' : 'false';
+    }
+
+    if (isEditor && state.currentFileType === 'code') {
+        renderEditorDecorations();
+    }
 
     updateFindAvailability();
     
@@ -857,7 +1147,12 @@ function convertToJupyterCodeBlocks() {
         editableCode.className = 'jupyter-code-editable';
         editableCode.dataset.language = language;
         editableCode.value = content;
-        editableCode.spellcheck = false;
+        editableCode.setAttribute('autocorrect', 'off');
+        editableCode.setAttribute('autocapitalize', 'off');
+        editableCode.setAttribute('autocomplete', 'off');
+        editableCode.setAttribute('data-gramm', 'false');
+        editableCode.setAttribute('data-gramm_editor', 'false');
+        editableCode.setAttribute('data-enable-grammarly', 'false');
 
         const codeEditor = document.createElement('div');
         codeEditor.className = 'jupyter-code-editor';
@@ -980,6 +1275,14 @@ async function runCodeBlockInNotes(blockId) {
         if (runBtn) runBtn.style.display = 'inline-block';
         if (stopBtn) stopBtn.style.display = 'none';
     }
+}
+
+function scrollJupyterOutputToBottom(outputBlock) {
+    if (!outputBlock) {
+        return;
+    }
+
+    outputBlock.scrollTop = outputBlock.scrollHeight;
 }
 
 async function stopCodeBlockInNotes(blockId) {
@@ -1138,14 +1441,63 @@ function toggleFolder(folderKey) {
  * Show/hide tabs based on file type
  */
 function updateTabVisibility(fileType) {
-    const isJson = fileType === 'json';
-    
-    // Hide/show markdown tabs
+    const isJson  = fileType === 'json';
+    const isCode  = fileType === 'code';
+    const isImage = fileType === 'image';
+    const isCsv   = fileType === 'csv';
+
+    if (isImage) {
+        // Image files use a single View tab.
+        elements.tabImageView.style.display = '';
+        elements.tabViewer.style.display = 'none';
+        elements.tabEditor.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        elements.tabCsvView.style.display = 'none';
+        elements.tabCsvEdit.style.display = 'none';
+        return;
+    }
+
+    if (isCsv) {
+        // CSV files use View + Edit tabs.
+        elements.tabCsvView.style.display = '';
+        elements.tabCsvEdit.style.display = '';
+        elements.tabImageView.style.display = 'none';
+        elements.tabViewer.style.display = 'none';
+        elements.tabEditor.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    // Hide image + csv tabs for all other types
+    elements.tabImageView.style.display = 'none';
+    elements.tabCsvView.style.display = 'none';
+    elements.tabCsvEdit.style.display = 'none';
+
+    if (isCode) {
+        // Code files use a single Edit tab.
+        elements.tabEditor.style.display = '';
+        elements.tabEditor.textContent = 'Edit';
+        elements.tabViewer.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    // Markdown tabs
     elements.tabViewer.style.display = isJson ? 'none' : '';
     elements.tabEditor.style.display = isJson ? 'none' : '';
+    elements.tabEditor.textContent = 'Edit';
     elements.tabJupyter.style.display = isJson ? 'none' : '';
-    
-    // Hide/show JSON tabs
+
+    // JSON/YAML tabs
     elements.tabSwaggerView.style.display = isJson ? '' : 'none';
     elements.tabSwaggerEdit.style.display = isJson ? '' : 'none';
     elements.tabSwaggerRun.style.display = isJson && state.swaggerRunAvailable ? '' : 'none';
@@ -1780,9 +2132,44 @@ async function loadFile(file) {
     }
 
     try {
-        const loadingJson = isStructuredDataFile(file);
+        const loadingJson     = isStructuredDataFile(file);
+        const loadingMarkdown = isMarkdownNotesFile(file);
+        const loadingImage    = isImageFile(file);
+        const loadingCsv      = isCsvFile(file);
         const stickyId = loadingJson ? Date.now() : null;
         const fileName = file ? getPathFileName(file) : 'json file';
+
+        if (loadingImage) {
+            state.currentFile = file;
+            emitCurrentFileName();
+            state.currentFileType = 'image';
+            setCodeEditorMode(false);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+            updateTabVisibility('image');
+
+            // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
+            // GetMarkdown does. GetImage expects a path without a leading separator
+            // (it prepends one itself), so strip it after resolution.
+            const resolvedPath = await ResolveFilePath(file);
+            const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
+            if (imageData.startsWith('error:')) {
+                setStatus(`Failed to load image: ${imageData}`, true);
+                return;
+            }
+            elements.imageViewImg.src = imageData;
+            elements.imageViewImg.dataset.originalFilename = fileName;
+            enableFullscreenImages(elements.imageViewWrap);
+            enableImageContextMenus(elements.imageViewWrap);
+
+            setViewMode('image-view');
+            setDirty(false);
+            renderFileList();
+            if (elements.findBar.dataset.open === 'true') {
+                closeFindBar();
+            }
+            return;
+        }
 
         if (loadingJson) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
@@ -1796,6 +2183,7 @@ async function loadFile(file) {
         // Detect file type
         if (loadingJson) {
             state.currentFileType = 'json';
+            setCodeEditorMode(false);
             updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
@@ -1833,23 +2221,56 @@ async function loadFile(file) {
             // Set default view mode to JSON viewer
             setViewMode('swagger-view');
             closeStickyProgress(stickyId);
-        } else {
+        } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
+            setCodeEditorMode(false);
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
-            
+
             // Update UI for markdown
             updateTabVisibility('markdown');
-            
+
             // Set editor content
             elements.editor.value = doc || '';
-            
+
             // Render markdown views
             renderMarkdown();
             renderJupyterView();
-            
+
             // Set default view mode to viewer
             setViewMode('viewer');
+        } else if (loadingCsv) {
+            state.currentFileType = 'csv';
+            setCodeEditorMode(false);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+
+            // Update UI for CSV
+            updateTabVisibility('csv');
+
+            // Set editor content (raw text for Edit tab)
+            elements.editor.value = doc || '';
+
+            // Render table view
+            renderCsvView(doc || '');
+
+            // Default to the table view
+            setViewMode('csv-view');
+        } else {
+            state.currentFileType = 'code';
+            setCodeEditorMode(true);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+            
+            // Update UI for code
+            updateTabVisibility('code');
+            
+            // Set editor content
+            elements.editor.value = doc || '';
+            refreshEditorLanguage(file, doc || '');
+            
+            // Set default view mode to editor
+            setViewMode('editor');
         }
         
         setDirty(false);
@@ -1958,7 +2379,7 @@ function closeFindBar() {
 }
 
 function isFindAvailableInCurrentMode() {
-    return state.viewMode !== 'swagger-run';
+    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view';
 }
 
 function updateFindAvailability() {
@@ -2604,10 +3025,6 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
 
 function initRenderedNotesContextMenu(container, viewMode) {
     container.addEventListener('contextmenu', (e) => {
-        if (state.viewMode !== viewMode) {
-            return;
-        }
-
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
         if (anchor && container.contains(anchor)) {
             e.preventDefault();
@@ -2791,6 +3208,7 @@ EventsOn("noteRun", (data) => {
     span.className = isErr ? 'jupyter-output-line-error' : 'jupyter-output-line';
     span.textContent = text;
     outputBlock.appendChild(span);
+    scrollJupyterOutputToBottom(outputBlock);
 });
 
 EventsOn("noteComplete", (data) => {
@@ -2951,7 +3369,7 @@ function applyWindowStyle(result) {
             gap: 12px;
             min-height: 0;
             overflow: hidden;
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-sidebar-header {
@@ -3290,6 +3708,10 @@ function applyWindowStyle(result) {
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
+        .notes-tree-folder[data-expanded="false"] .notes-tree-label {
+            font-style: italic;
+        }
+
         .notes-tree-indent {
             flex: 0 0 auto;
         }
@@ -3385,7 +3807,7 @@ function applyWindowStyle(result) {
             user-select: none;
             touch-action: none;
             flex-shrink: 0;
-            background: linear-gradient(to right, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.2) 50%, var(--bg) 50%, var(--bg) 100%);
+            background: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-splitter::after {
@@ -3407,23 +3829,30 @@ function applyWindowStyle(result) {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 2px 0px;
+            padding: 0 0 2px 0;
             height: 100%;
             min-height: 0;
+            min-width: 0;
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        #notes-panel {
+            background-color: var(--bg);
         }
 
         #notes-tabs {
             display: flex;
             gap: 8px;
-            padding: 1px 0px 0 8px;
-            border-bottom: 2px solid var(--fg);
+            padding: 3px 0px 0px 8px;
+            /*background-color: ${DARKEN_BACKGROUND_OVERLAY};*/
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             align-items: center;
             box-sizing: border-box;
         }
 
         #notes-tabs button {
             border-radius: 0;
-            border: 2px solid transparent;
+            border: 1px solid transparent;
             background: transparent;
             color: var(--fg);
             padding: 6px 12px;
@@ -3431,24 +3860,24 @@ function applyWindowStyle(result) {
         }
 
         #notes-tabs button[aria-selected="true"] {
-            border-color: var(--fg);
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             border-bottom: 5px;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
-            border-color: var(--fg) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .tab {
             border-top-left-radius: 5px !important;
             border-top-right-radius: 5px !important;
-            border: 2px solid !important;
+            border: 1px solid !important;
             border-bottom: 0 !important;
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         .tab:hover {
-            border: 2px solid !important;
+            border: 1px solid !important;
             border-bottom: 0 !important;
-            border-color: var(--fg) !important;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
         #notes-tabs button:hover {
@@ -3477,6 +3906,7 @@ function applyWindowStyle(result) {
             position: relative;
             flex: 1;
             min-height: 0;
+            min-width: 0;
             display: flex;
             flex-direction: column;
         }
@@ -3490,6 +3920,12 @@ function applyWindowStyle(result) {
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
         }
 
+        #notes-preview-wrap,
+        #notes-jupyter-wrap {
+            padding-right: 10px;
+            padding-bottom: 10px;
+        }
+
         #notes-swagger-edit-wrap,
         #notes-swagger-view-wrap,
         #notes-swagger-run-wrap {
@@ -3497,6 +3933,15 @@ function applyWindowStyle(result) {
             display: none;
             min-height: 0;
             overflow: hidden;
+        }
+
+        #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-edit-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-editor-wrap[data-active="true"],
@@ -3511,10 +3956,76 @@ function applyWindowStyle(result) {
             display: flex !important;
         }
 
+        #notes-image-view-wrap {
+            flex: 1;
+            display: none;
+            min-height: 0;
+            overflow: auto;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+
+        #notes-image-view-wrap[data-active="true"] {
+            display: flex;
+        }
+
+        #notes-image-view-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            cursor: zoom-in;
+            user-select: none;
+            border-radius: 4px;
+        }
+
+        #notes-csv-view-wrap {
+            flex: 1;
+            display: none;
+            min-height: 0;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: auto;
+        }
+
+        #notes-csv-view-wrap[data-active="true"] {
+            display: block;
+        }
+
+        #notes-csv-view {
+            padding: 8px 16px;
+            min-width: 0;
+        }
+
+        #notes-csv-view table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+        }
+
+        #notes-csv-view th,
+        #notes-csv-view td {
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.18);
+            padding: 4px 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        #notes-csv-view thead th {
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.28);
+        }
+
+        .notes-csv-empty {
+            opacity: 0.5;
+            font-style: italic;
+            padding: 8px;
+        }
+
         .notes-ai-panel {
             display: flex;
             flex-direction: column;
-            border-top: 2px solid var(--fg);
+            border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.5);
             transition: all 0.3s ease;
             overflow: hidden;
         }
@@ -3598,7 +4109,7 @@ function applyWindowStyle(result) {
             word-break: break-word;
             font-family: var(--font-family);
             color: var(--fg);
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-ai-output:empty::before {
@@ -3608,26 +4119,120 @@ function applyWindowStyle(result) {
         }
 
         #notes-editor {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
             resize: none;
             border-radius: 0;
-            border: 1px solid var(--bg);
+            border: 0;
             background: transparent;
             color: var(--fg);
-            padding: 10px;
+            caret-color: var(--fg);
+            padding: 10px 14px;
             font-size: ${result.fontSize}px;
             line-height: 1.4;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            overflow-y: auto;
+            overflow-x: hidden;
+            font-family: var(--font-family);
         }
 
         #notes-editor:focus {
             outline: none;
             box-shadow: none;
-            border: 1px solid var(--accent);
+            border: 0;
         }
 
         #notes-editor:not(:focus) {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: transparent;
+        }
+
+        #notes-editor-shell {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr;
+            height: 100%;
+            width: 100%;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
+            background-color: rgba(0, 0, 0, 0.22);
+            transition: border-color 120ms ease;
+        }
+
+        #notes-editor-shell:focus-within {
+            border-color: var(--accent);
+            background-color: transparent;
+        }
+
+        #notes-editor-shell[data-code-view="true"] {
+            grid-template-columns: max-content 1fr;
+        }
+
+        #notes-editor-shell[data-code-view="true"] #notes-editor {
+            color: transparent;
+            white-space: pre;
+            overflow-wrap: normal;
+            word-break: normal;
+            overflow: auto;
+        }
+
+        #notes-editor-shell[data-code-view="false"] #notes-editor-highlight,
+        #notes-editor-shell[data-code-view="false"] #notes-editor-gutter-wrap {
+            display: none;
+        }
+
+        #notes-editor-gutter-wrap {
+            position: relative;
+            overflow: hidden;
+            border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
+            min-width: 48px;
+        }
+
+        #notes-editor-gutter {
+            padding: 10px 10px 10px 12px;
+            font-size: ${result.fontSize}px;
+            line-height: 1.4;
+            white-space: pre;
+            text-align: right;
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.6);
+            user-select: none;
+            font-family: var(--font-family);
+        }
+
+        #notes-editor-scroll {
+            position: relative;
+            min-width: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #notes-editor-highlight {
+            position: absolute;
+            inset: 0;
+            margin: 0;
+            padding: 10px 14px;
+            overflow: hidden;
+            pointer-events: none;
+            white-space: pre;
+            line-height: 1.4;
+            font-size: ${result.fontSize}px;
+            font-family: var(--font-family);
+        }
+
+        #notes-editor-highlight code {
+            display: block;
+            padding: 0;
+            background: transparent;
+            white-space: pre;
+        }
+
+        #notes-editor-highlight .hljs {
+            overflow: visible !important;
+            padding: 0 !important;
+            background: transparent !important;
         }
 
         #notes-preview-wrap,
@@ -3639,6 +4244,8 @@ function applyWindowStyle(result) {
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
 
@@ -3866,7 +4473,7 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-code-editable:not(:focus) {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         .jupyter-output-wrapper {
@@ -3901,6 +4508,8 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize - 2}px;
             line-height: 1.4;
             overflow-x: auto;
+            overflow-y: auto;
+            max-height: calc((25 * 1.4em) + 24px);
             white-space: pre-wrap;
             word-wrap: break-word;
             border: none;
@@ -3935,7 +4544,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-swagger-editor:not(:focus) {
-            background-color: rgba(0, 0, 0, 0.2);
+            background-color: transparent;
         }
 
         #notes-swagger-view-wrap {
@@ -4238,10 +4847,37 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
 }
 
 if (elements.editor) {
+    elements.editor.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
+        // Keep Tab inside the editor so it doesn't trigger app-level focus hotkeys.
+        event.preventDefault();
+        event.stopPropagation();
+
+        const start = elements.editor.selectionStart;
+        const end = elements.editor.selectionEnd;
+        elements.editor.setRangeText('\t', start, end, 'end');
+        elements.editor.dispatchEvent(new Event('input'));
+    });
+
     elements.editor.addEventListener('input', () => {
         setDirty(true);
-        scheduleRender();
+        if (state.currentFileType === 'code') {
+            refreshEditorLanguage(state.currentFile, elements.editor.value);
+        } else if (state.currentFileType === 'csv') {
+            renderCsvView(elements.editor.value);
+        } else {
+            scheduleRender();
+        }
         scheduleAutoSave();
+    });
+
+    elements.editor.addEventListener('scroll', () => {
+        if (state.currentFileType === 'code') {
+            syncEditorScrollDecorations();
+        }
     });
 
     elements.editor.addEventListener('paste', (event) => {
@@ -4460,6 +5096,55 @@ elements.tabSwaggerRun.addEventListener('click', () => {
     renderSwaggerUI();
 });
 
+elements.tabImageView.addEventListener('click', () => {
+    setViewMode('image-view');
+});
+
+elements.tabCsvView.addEventListener('click', () => {
+    setViewMode('csv-view');
+});
+
+elements.tabCsvEdit.addEventListener('click', () => {
+    setViewMode('csv-edit');
+});
+
+function getVisibleNotesTabs() {
+    if (state.currentFileType === 'json') {
+        const tabs = [elements.tabSwaggerView, elements.tabSwaggerEdit];
+        if (state.swaggerRunAvailable && elements.tabSwaggerRun?.style.display !== 'none') {
+            tabs.push(elements.tabSwaggerRun);
+        }
+        return tabs.filter(Boolean);
+    }
+
+    if (state.currentFileType === 'code') {
+        return [elements.tabEditor].filter(Boolean);
+    }
+
+    if (state.currentFileType === 'image') {
+        return [elements.tabImageView].filter(Boolean);
+    }
+
+    if (state.currentFileType === 'csv') {
+        return [elements.tabCsvView, elements.tabCsvEdit].filter(Boolean);
+    }
+
+    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter].filter((tab) => tab && tab.style.display !== 'none');
+}
+
+function cycleNotesTabs(direction = 1) {
+    const visibleTabs = getVisibleNotesTabs();
+    if (visibleTabs.length <= 1) {
+        return;
+    }
+
+    const currentIndex = visibleTabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true');
+    const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+    const step = direction < 0 ? -1 : 1;
+    const nextIndex = (baseIndex + step + visibleTabs.length) % visibleTabs.length;
+    visibleTabs[nextIndex].click();
+}
+
 elements.newFile.addEventListener('click', () => {
     openNewFilePrompt();
 });
@@ -4612,6 +5297,16 @@ document.addEventListener('keydown', (event) => {
         return;
     }
 
+    if (window.terminalFocusedState === true) {
+        return;
+    }
+
+    if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Tab') {
+        event.preventDefault();
+        cycleNotesTabs(event.shiftKey ? -1 : 1);
+        return;
+    }
+
     if (event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
         event.preventDefault();
         ShowCommandPalette().catch(() => {});
@@ -4622,26 +5317,6 @@ document.addEventListener('keydown', (event) => {
         event.preventDefault();
         saveFile();
     }
-
-    /*if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        openFindBar();
-    }*/
-
-    /*if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
-        event.preventDefault();
-        setViewMode('editor');
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        setViewMode('viewer');
-    }*/
-
-    /*if (event.key === 'F2' && state.currentFile && elements.modal.dataset.open === 'false') {
-        event.preventDefault();
-        openRenamePrompt(state.currentFile);
-    }*/
 
     if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
         event.preventDefault();
@@ -4685,7 +5360,7 @@ elements.findInput.addEventListener('keydown', (event) => {
     }
 });
 
-setViewMode('viewer');
+setViewMode('editor');
 
 if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {
     const swaggerPaneResizeObserver = new ResizeObserver(() => {

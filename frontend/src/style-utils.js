@@ -2,6 +2,8 @@
  * Shared CSS styling utilities for consistent theming across markdown views
  */
 
+export const DARKEN_BACKGROUND_OVERLAY = 'rgba(0, 0, 0, 0.2)';
+
 /**
  * Generate scrollbar styles
  * @param {Object} colors - Color palette from GetWindowStyle
@@ -12,11 +14,11 @@ export function getScrollbarStyles(colors) {
         ::-webkit-scrollbar {
             width: 5px;
             height: 5px;
-            background-color: var(--bg);
+            background-color: transparent;
             opacity: 0.5;
         }
         ::-webkit-scrollbar-track {
-            background-color: var(--bg);
+            background-color: transparent;
         }
         ::-webkit-scrollbar-thumb {
             background-color: var(--fg);
@@ -125,17 +127,19 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}table {
             width: 100%;
             border-collapse: collapse;
-            /*border: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 22%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.22)`};*/
+            border: 2px solid var(--fg);
         }
 
         ${prefix}th,
         ${prefix}td {
-            border-bottom: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 18%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.18)`};
+            border: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 18%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.18)`};
             padding: 4px 8px;
         }
 
         ${prefix}thead th {
-            border-bottom: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 28%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.28)`};
+            border: 1px solid var(--bg);
+            color: var(--bg);
+            background: var(--fg);
         }
     `;
 }

@@ -72,6 +72,7 @@ vi.mock('./style-utils.js', () => ({
     getCheckboxStyles: vi.fn(() => ''),
     getMarkdownBaseTextSizeStyles: vi.fn(() => ''),
     getSwaggerUIStyles: vi.fn(() => ''),
+    DARKEN_BACKGROUND_OVERLAY: 'rgba(0, 0, 0, 0.2)',
 }));
 
 vi.mock('./swagger-utils.js', () => ({
@@ -377,5 +378,160 @@ describe('notes rendering', () => {
         expect(sendIpcMock).toHaveBeenCalledTimes(1);
 
         window.getSelection = originalGetSelection;
+    });
+
+    it('shows single Edit tab only for code files and preserves markdown/yaml tabs', async () => {
+        listFilesMock.mockResolvedValue([
+            '$NOTES/readme.md',
+            '$NOTES/script.go',
+            '$NOTES/spec.yaml',
+        ]);
+
+        getMarkdownMock.mockImplementation(async (file) => {
+            if (file.endsWith('.md')) {
+                return '# Markdown note';
+            }
+
+            if (file.endsWith('.yaml')) {
+                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+            }
+
+            return 'package main\n\nfunc main() {}';
+        });
+
+        await importNotesModule();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabJupyter = document.getElementById('notes-tab-jupyter');
+        const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
+        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
+        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
+
+        const clickFile = async (filePath) => {
+            const fileButton = document.querySelector(`[data-file="${filePath}"]`);
+            fileButton.click();
+            await flushPromises();
+            await flushPromises();
+        };
+
+        await clickFile('$NOTES/script.go');
+        expect(tabEditor.style.display).toBe('');
+        expect(tabViewer.style.display).toBe('none');
+        expect(tabJupyter.style.display).toBe('none');
+        expect(tabSwaggerView.style.display).toBe('none');
+        expect(tabSwaggerEdit.style.display).toBe('none');
+        expect(tabSwaggerRun.style.display).toBe('none');
+
+        await clickFile('$NOTES/readme.md');
+        expect(tabEditor.style.display).toBe('');
+        expect(tabViewer.style.display).toBe('');
+        expect(tabJupyter.style.display).toBe('');
+        expect(tabSwaggerView.style.display).toBe('none');
+        expect(tabSwaggerEdit.style.display).toBe('none');
+        expect(tabSwaggerRun.style.display).toBe('none');
+
+        await clickFile('$NOTES/spec.yaml');
+        expect(tabEditor.style.display).toBe('none');
+        expect(tabViewer.style.display).toBe('none');
+        expect(tabJupyter.style.display).toBe('none');
+        expect(tabSwaggerView.style.display).toBe('');
+        expect(tabSwaggerEdit.style.display).toBe('');
+        expect(tabSwaggerRun.style.display).toBe('none');
+    });
+
+    it('cycles visible notes tabs with ctrl+tab', async () => {
+        listFilesMock.mockResolvedValue([
+            '$NOTES/readme.md',
+            '$NOTES/spec.yaml',
+        ]);
+
+        getMarkdownMock.mockImplementation(async (file) => {
+            if (file.endsWith('.yaml')) {
+                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+            }
+            return '# Markdown note';
+        });
+
+        await importNotesModule();
+
+        const clickFile = async (filePath) => {
+            const fileButton = document.querySelector(`[data-file="${filePath}"]`);
+            fileButton.click();
+            await flushPromises();
+            await flushPromises();
+        };
+
+        // Markdown defaults to View, then cycles View -> Edit -> Run -> View.
+        await clickFile('$NOTES/readme.md');
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabJupyter = document.getElementById('notes-tab-jupyter');
+
+        expect(tabViewer.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabEditor.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabJupyter.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabViewer.getAttribute('aria-selected')).toBe('true');
+
+        // YAML defaults to structured View, then cycles View <-> Edit (Run hidden without swagger key).
+        await clickFile('$NOTES/spec.yaml');
+        const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
+        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
+        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
+
+        expect(tabSwaggerRun.style.display).toBe('none');
+        tabSwaggerView.click();
+        await flushPromises();
+        const selectedBefore = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
+        expect(selectedAfterFirst).not.toBe(selectedBefore);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
+        expect(selectedAfterSecond).toBe(selectedBefore);
+    });
+
+    it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
+        getMarkdownMock.mockResolvedValue('# Note\n\n```js\nconsole.log("hello")\n```');
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/readme.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const notesEditor = document.getElementById('notes-editor');
+        const swaggerEditor = document.getElementById('notes-swagger-editor');
+        const jupyterEditor = document.querySelector('.jupyter-code-editable');
+
+        expect(notesEditor.getAttribute('autocorrect')).toBe('off');
+        expect(notesEditor.getAttribute('autocapitalize')).toBe('off');
+        expect(notesEditor.getAttribute('autocomplete')).toBe('off');
+        expect(notesEditor.getAttribute('data-gramm')).toBe('false');
+        expect(notesEditor.getAttribute('data-gramm_editor')).toBe('false');
+        expect(notesEditor.getAttribute('data-enable-grammarly')).toBe('false');
+        expect(notesEditor.getAttribute('spellcheck')).toBeNull();
+
+        expect(swaggerEditor.getAttribute('autocorrect')).toBe('off');
+        expect(swaggerEditor.getAttribute('autocapitalize')).toBe('off');
+        expect(swaggerEditor.getAttribute('autocomplete')).toBe('off');
+        expect(swaggerEditor.getAttribute('data-gramm')).toBe('false');
+        expect(swaggerEditor.getAttribute('data-gramm_editor')).toBe('false');
+        expect(swaggerEditor.getAttribute('data-enable-grammarly')).toBe('false');
+        expect(swaggerEditor.getAttribute('spellcheck')).toBeNull();
+
+        expect(jupyterEditor).toBeTruthy();
+        expect(jupyterEditor.getAttribute('autocorrect')).toBe('off');
+        expect(jupyterEditor.getAttribute('autocapitalize')).toBe('off');
+        expect(jupyterEditor.getAttribute('autocomplete')).toBe('off');
+        expect(jupyterEditor.getAttribute('data-gramm')).toBe('false');
+        expect(jupyterEditor.getAttribute('data-gramm_editor')).toBe('false');
+        expect(jupyterEditor.getAttribute('data-enable-grammarly')).toBe('false');
+        expect(jupyterEditor.getAttribute('spellcheck')).toBeNull();
     });
 });

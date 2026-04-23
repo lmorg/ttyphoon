@@ -130,16 +130,21 @@ func (cms *contextMenuStub) Append(items ...types.MenuItem) {
 	cms.items = append(cms.items, items...)
 }
 
-func (cms *contextMenuStub) DisplayMenu(title string) {
+func (cms *contextMenuStub) DisplayMenu(title string, showNextToMouseCursor ...bool) {
 	if cms.renderer == nil {
 		return
+	}
+
+	showAtCursor := false
+	if len(showNextToMouseCursor) > 0 {
+		showAtCursor = showNextToMouseCursor[0]
 	}
 
 	cms.renderer.openMenu(title, cms.Options(), cms.Icons(),
 		func(i int) { cms.Highlight(i) },
 		func(i int) { cms.Callback(i) },
 		func(i int) { cms.Cancel(i) },
-		false,
+		showAtCursor,
 	)
 }
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/prompts"
-	"github.com/lmorg/ttyphoon/types"
 )
 
 const aiNoteTitleTimeout = 30 * time.Second
@@ -65,8 +64,8 @@ func summarizeAINoteTitle(agent *agent.Agent, query string) string {
 }
 
 func buildAINoteFilename(agent *agent.Agent, query string, now time.Time) string {
-	sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, "Writing output to markdown...", nil)
-	defer sticky.Close()
+	//sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, "Writing output to markdown...", nil)
+	//defer sticky.Close()
 
 	title := summarizeAINoteTitle(agent, query)
 	if title == "" {

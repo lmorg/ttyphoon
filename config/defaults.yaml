@@ -28,7 +28,7 @@ Hotkeys:
     "F2::/":  AgentSkills
     #"F2::h":  OpenHistory
     "F2::n":  ShowHideNotes
-    "F2::f":  ViewFile
+    "F2::f":  OpenFile
     "M-f":    SearchRegex
     "F3::F3": SearchRegex
     "F3::d":  SearchResults
@@ -126,6 +126,7 @@ Window:
   # Terminal.JumpScrollLineCount also affects the window updates
   RefreshInterval: 200
 
+  AlwaysOnTop: true
 
 NotesWindow:
 

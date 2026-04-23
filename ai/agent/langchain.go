@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/tmc/langchaingo/agents"
@@ -104,7 +103,7 @@ func (agent *Agent) RunLLMWithStream(ctx context.Context, prompt string, streamC
 	}
 
 	if strings.HasPrefix(err.Error(), _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT) {
-		log.Println(err)
+		//log.Println(err)
 		response := err.Error()[len(_ERR_UNABLE_TO_PARSE_AGENT_OUTPUT):]
 		if streamCallback != nil {
 			streamCallback(response)

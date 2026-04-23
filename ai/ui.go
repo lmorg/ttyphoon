@@ -44,6 +44,14 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 
 	go func() {
 		startTime := time.Now()
+		noteTime := startTime
+		filenameCh := make(chan string, 1)
+
+		// Generate the note filename in parallel so it is ready when output is rendered.
+		go func() {
+			filenameCh <- buildAINoteFilename(agent, query, noteTime)
+		}()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
@@ -84,7 +92,7 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 			return tmpl.Execute(buf, data)
 		})
 
-		filename := buildAINoteFilename(agent, query, time.Now())
+		filename := <-filenameCh
 		agent.Renderer().NotesCreateAndOpen(filename, buf.String())
 	}()
 }

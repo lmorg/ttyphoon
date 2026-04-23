@@ -58,6 +58,10 @@ export function wireKeyboardEvents(canvas) {
             return;
         }
 
+        if (window.terminalFocusedState !== true) {
+            return;
+        }
+
         if (isEditableTarget(event.target) || event.isComposing) {
             return;
         }

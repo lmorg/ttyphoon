@@ -24,15 +24,6 @@ type OAuthConfig struct {
 	TokenStore            client.TokenStore
 }
 
-// Name:   Visual Studio Code
-// Website:  https://code.visualstudio.com
-/*
-redirect urls:
-https://insiders.vscode.dev/redirect
-https://vscode.dev/redirect
-http://127.0.0.1/
-http://127.0.0.1:33418/
-*/
 type TokenStore = client.TokenStore
 type Token = client.Token
 type MemoryTokenStore = client.MemoryTokenStore
@@ -106,7 +97,7 @@ func IsAuthorizationFailure(err error) bool {
 }
 
 func DefaultRedirectURI() string {
-	return "http://127.0.0.1:38085/oauth/callback"
+	return "http://127.0.0.1:7700/"
 }
 
 func DefaultTokenFile(serverName, rawURL string) string {

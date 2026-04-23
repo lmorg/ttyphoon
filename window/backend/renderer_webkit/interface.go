@@ -84,8 +84,6 @@ func (wr *webkitRender) SetBlinkState(value bool) {
 	wr.blinkState.Store(value)
 }
 
-func (wr *webkitRender) DrawTable(_ types.Tile, _ *types.XY, _ int32, _ []int32) {}
-
 func (wr *webkitRender) EmitStyleUpdate() {
 	if wr.wapp == nil {
 		return
