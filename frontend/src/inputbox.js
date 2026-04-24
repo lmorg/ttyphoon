@@ -52,6 +52,7 @@ export function initInputBox(canvas) {
     let inputboxId = null;
     let inputboxInput = null;
     let inputboxHistoryItems = [];
+    let backdropPointerDown = false;
 
     function openInputboxHistoryMenu(x, y) {
         if (!inputboxInput || inputboxHistoryItems.length === 0) {
@@ -160,11 +161,22 @@ export function initInputBox(canvas) {
         openInputboxHistoryMenu(rect.left, rect.bottom);
     });
 
-    // Clicks on the backdrop (outside the dialog) cancel.
-    inputboxOverlay.addEventListener('click', (e) => {
-        if (e.target === inputboxOverlay) {
+    // Only close when both pointer down and pointer up happen on the backdrop.
+    // This avoids accidental dismiss when selecting text and releasing outside.
+    inputboxOverlay.addEventListener('pointerdown', (e) => {
+        backdropPointerDown = e.target === inputboxOverlay;
+    });
+
+    inputboxOverlay.addEventListener('pointerup', (e) => {
+        const shouldClose = backdropPointerDown && e.target === inputboxOverlay;
+        backdropPointerDown = false;
+        if (shouldClose) {
             inputboxSubmit(false);
         }
+    });
+
+    inputboxOverlay.addEventListener('pointercancel', () => {
+        backdropPointerDown = false;
     });
 
     EventsOn('terminalInputBox', (payload) => {
@@ -174,6 +186,7 @@ export function initInputBox(canvas) {
         }
 
         inputboxId = p.id;
+        backdropPointerDown = false;
         inputboxTitle.textContent = p.title ?? '';
         inputboxConfirmHint.textContent = p.multiline
             ? 'Ctrl+Return to confirm'
