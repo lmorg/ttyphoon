@@ -201,6 +201,13 @@ func (wr *webkitRender) updateNotes() {
 	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
 }
 
+func (wr *webkitRender) RefreshNotes() {
+	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
+		return
+	}
+	wr.updateNotes()
+}
+
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
 	if wr.tmux != nil {
 		wr.termWin = wr.tmux.GetTermTiles()
@@ -225,7 +232,23 @@ func (wr *webkitRender) SelectWindow(windowID string) {
 	wr.RefreshWindowList()
 }
 
-func (wr *webkitRender) Bell() {}
+func (wr *webkitRender) Bell() {
+	if wr == nil {
+		return
+	}
+
+	if config.Config.Window.BellVisualNotification {
+		wr.DisplayNotification(types.NOTIFY_INFO, "DING! System bell received")
+	}
+
+	if !config.Config.Window.BellPlayAudio || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "terminalBell", map[string]any{
+		"sound": "ding",
+	})
+}
 
 func (wr *webkitRender) TriggerRedraw() {
 	select {

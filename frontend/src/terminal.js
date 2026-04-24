@@ -8,6 +8,7 @@ import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
+import dingSound from './assets/sound/ding.mp3';
 
 (document.getElementById('terminal-pane') || document.querySelector('#app')).innerHTML = `
     <div id="terminal-app">
@@ -36,6 +37,11 @@ let cursorPulseRaf = 0;
 let jupyterTabEnabled = false;
 let jupyterTabActive = false;
 let jupyterTabTitle = 'Notes';
+const bellAudio = typeof Audio === 'function' ? new Audio(dingSound) : null;
+
+if (bellAudio) {
+    bellAudio.preload = 'auto';
+}
 
 function syncAuxTerminalTabState() {
     SendIpc('terminal-extra-tab-state', {
@@ -1103,6 +1109,28 @@ EventsOn('terminalNotificationClose', payload => {
         
         el.classList.add('fade-out');
         el.addEventListener('animationend', () => el.remove(), { once: true });
+    }
+});
+
+EventsOn('terminalBell', payload => {
+    const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (p && p.sound && p.sound !== 'ding') {
+        return;
+    }
+
+    if (!bellAudio) {
+        return;
+    }
+
+    try {
+        bellAudio.pause();
+        bellAudio.currentTime = 0;
+        const playPromise = bellAudio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {});
+        }
+    } catch {
+        // Ignore playback failures, e.g. if the webview blocks audio output.
     }
 });
 

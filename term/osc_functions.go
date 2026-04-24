@@ -108,6 +108,7 @@ func _osc7UpdatePath(term *Term, host, pwd string) {
 	}
 	term._rowSource = &rowSrc
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
+	term.renderer.RefreshNotes()
 }
 
 func (term *Term) osc9PostNotification(params []string) {

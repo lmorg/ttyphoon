@@ -440,6 +440,32 @@ describe('notes rendering', () => {
         expect(tabSwaggerRun.style.display).toBe('none');
     });
 
+    it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/config.json']);
+        getMarkdownMock.mockResolvedValue('{"longPropertyName": "value"}');
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/config.json"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const notesEditor = document.getElementById('notes-editor');
+        const editorHighlight = document.getElementById('notes-editor-highlight');
+
+        Object.defineProperty(notesEditor, 'scrollWidth', { configurable: true, value: 640 });
+        Object.defineProperty(notesEditor, 'clientWidth', { configurable: true, value: 320 });
+        Object.defineProperty(notesEditor, 'scrollHeight', { configurable: true, value: 240 });
+        Object.defineProperty(notesEditor, 'clientHeight', { configurable: true, value: 180 });
+
+        notesEditor.value = '{"veryLongPropertyNameThatForcesHorizontalScrolling": "value"}';
+        notesEditor.dispatchEvent(new Event('input', { bubbles: true }));
+
+        expect(editorHighlight.style.minWidth).toBe('640px');
+        expect(editorHighlight.style.minHeight).toBe('240px');
+    });
+
     it('cycles visible notes tabs with ctrl+tab', async () => {
         listFilesMock.mockResolvedValue([
             '$NOTES/readme.md',
@@ -506,7 +532,6 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const notesEditor = document.getElementById('notes-editor');
-        const swaggerEditor = document.getElementById('notes-swagger-editor');
         const jupyterEditor = document.querySelector('.jupyter-code-editable');
 
         expect(notesEditor.getAttribute('autocorrect')).toBe('off');
@@ -516,14 +541,6 @@ describe('notes rendering', () => {
         expect(notesEditor.getAttribute('data-gramm_editor')).toBe('false');
         expect(notesEditor.getAttribute('data-enable-grammarly')).toBe('false');
         expect(notesEditor.getAttribute('spellcheck')).toBeNull();
-
-        expect(swaggerEditor.getAttribute('autocorrect')).toBe('off');
-        expect(swaggerEditor.getAttribute('autocapitalize')).toBe('off');
-        expect(swaggerEditor.getAttribute('autocomplete')).toBe('off');
-        expect(swaggerEditor.getAttribute('data-gramm')).toBe('false');
-        expect(swaggerEditor.getAttribute('data-gramm_editor')).toBe('false');
-        expect(swaggerEditor.getAttribute('data-enable-grammarly')).toBe('false');
-        expect(swaggerEditor.getAttribute('spellcheck')).toBeNull();
 
         expect(jupyterEditor).toBeTruthy();
         expect(jupyterEditor.getAttribute('autocorrect')).toBe('off');

@@ -103,9 +103,6 @@ app.innerHTML = `
                 <div id="notes-image-view-wrap" role="tabpanel">
                     <img id="notes-image-view-img" alt="" />
                 </div>
-                <div id="notes-swagger-edit-wrap" role="tabpanel" style="display: none;">
-                    <textarea id="notes-swagger-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
-                </div>
                 <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
                     <div id="notes-swagger-view" class="json-viewer"></div>
                 </div>
@@ -192,11 +189,9 @@ const elements = {
     csvViewWrap: document.getElementById('notes-csv-view-wrap'),
     csvView: document.getElementById('notes-csv-view'),
     swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
-    swaggerEditWrap: document.getElementById('notes-swagger-edit-wrap'),
     swaggerRunWrap: document.getElementById('notes-swagger-run-wrap'),
     swaggerView: document.getElementById('notes-swagger-view'),
     swaggerEndpoints: document.getElementById('notes-swagger-endpoints'),
-    swaggerEditor: document.getElementById('notes-swagger-editor'),
     swaggerRequestBuilder: document.getElementById('notes-swagger-request-builder'),
     swaggerResponse: document.getElementById('notes-swagger-response'),
     modal: document.getElementById('notes-modal'),
@@ -395,7 +390,9 @@ function renderEditorDecorations() {
     // Match highlight layer height to the full scrollable editor content.
     if (elements.editorHighlight) {
         const contentHeight = Math.max(elements.editor.scrollHeight, elements.editor.clientHeight);
+        const contentWidth = Math.max(elements.editor.scrollWidth, elements.editor.clientWidth);
         elements.editorHighlight.style.minHeight = `${contentHeight}px`;
+        elements.editorHighlight.style.minWidth = `${contentWidth}px`;
     }
 
     const language = state.editorLanguage || 'plaintext';
@@ -418,6 +415,10 @@ function refreshEditorLanguage(file, content) {
         elements.editorHighlightCode.className = `hljs language-${state.editorLanguage || 'plaintext'}`;
     }
     renderEditorDecorations();
+}
+
+function usesCodeEditorDecorations() {
+    return state.currentFileType === 'code' || state.currentFileType === 'json';
 }
 
 function isMarkdownNotesFile(fileName) {
@@ -527,6 +528,7 @@ function setCodeEditorMode(enabled) {
         if (elements.editorHighlight) {
             elements.editorHighlight.style.transform = '';
             elements.editorHighlight.style.minHeight = '';
+            elements.editorHighlight.style.minWidth = '';
         }
         if (elements.editorHighlightCode) {
             elements.editorHighlightCode.innerHTML = '';
@@ -920,7 +922,7 @@ function setViewMode(mode) {
     // Share active notes mode with ttyphoon.js so cross-pane focus behavior can follow mode intent.
     app.dataset.viewMode = state.viewMode;
     
-    // Markdown tabs
+    // Standard tabs
     const isEditor = state.viewMode === 'editor';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
@@ -929,7 +931,8 @@ function setViewMode(mode) {
     elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
     
-    elements.editorWrap.dataset.active = isEditor ? 'true' : 'false';
+    const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
+    elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     
@@ -943,7 +946,6 @@ function setViewMode(mode) {
     elements.tabSwaggerRun.setAttribute('aria-selected', isSwaggerRun ? 'true' : 'false');
     
     elements.swaggerViewWrap.dataset.active = isSwaggerView ? 'true' : 'false';
-    elements.swaggerEditWrap.dataset.active = isSwaggerEdit ? 'true' : 'false';
     elements.swaggerRunWrap.dataset.active = isSwaggerRun ? 'true' : 'false';
 
     // Image view tab
@@ -962,7 +964,7 @@ function setViewMode(mode) {
         elements.editorWrap.dataset.active = isCsvEdit ? 'true' : 'false';
     }
 
-    if (isEditor && state.currentFileType === 'code') {
+    if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
         renderEditorDecorations();
     }
 
@@ -1504,12 +1506,12 @@ function updateTabVisibility(fileType) {
 }
 
 function renderSwaggerJsonView() {
-    if (!elements.swaggerView || !elements.swaggerEditor) {
+    if (!elements.swaggerView || !elements.editor) {
         return;
     }
 
     attachJsonViewerEditHandler(elements.swaggerView, commitStructuredViewerEdit);
-    renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.swaggerEditor.value || '{}'));
+    renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.editor.value || '{}'));
 }
 
 function isYamlStructuredFile(fileName) {
@@ -1521,15 +1523,15 @@ function isJsonStructuredFile(fileName) {
 }
 
 function formatStructuredEditorJson(pretty) {
-    const source = String(elements.swaggerEditor?.value || '');
+    const source = String(elements.editor?.value || '');
 
     try {
         const parsed = JSON.parse(source);
-        elements.swaggerEditor.value = pretty
+        elements.editor.value = pretty
             ? JSON.stringify(parsed, null, 2)
             : JSON.stringify(parsed);
 
-        elements.swaggerEditor.dispatchEvent(new Event('input'));
+        elements.editor.dispatchEvent(new Event('input'));
     } catch {
         setStatus('Cannot format invalid JSON content.', true);
     }
@@ -1625,7 +1627,7 @@ function renameObjectKey(root, path, nextKey) {
 
 async function commitStructuredViewerEdit({ editType, path, text }) {
     try {
-        const source = state.swaggerSpec ?? parseSwaggerSpec(elements.swaggerEditor.value);
+        const source = state.swaggerSpec ?? parseSwaggerSpec(elements.editor.value);
         if (!source || !Array.isArray(path)) {
             return;
         }
@@ -1647,8 +1649,8 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
             return;
         }
 
-        elements.swaggerEditor.value = stringifyStructuredDocument(nextDocument);
-        state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
+        elements.editor.value = stringifyStructuredDocument(nextDocument);
+        state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
         state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
         updateTabVisibility('json');
 
@@ -2183,7 +2185,7 @@ async function loadFile(file) {
         // Detect file type
         if (loadingJson) {
             state.currentFileType = 'json';
-            setCodeEditorMode(false);
+            setCodeEditorMode(true);
             updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
@@ -2199,8 +2201,9 @@ async function loadFile(file) {
             // Update UI for JSON / swagger-capable JSON
             updateTabVisibility('json');
             
-            // Set editor content
-            elements.swaggerEditor.value = doc || '';
+            // Set editor content (use regular editor with line numbers for JSON/YAML)
+            elements.editor.value = doc || '';
+            refreshEditorLanguage(file, doc || '');
 
             // Render JSON tree view
             updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
@@ -2276,6 +2279,11 @@ async function loadFile(file) {
         setDirty(false);
         renderFileList();
         
+        // Refresh the JSON viewer when switching to JSON files
+        if (state.currentFileType === 'json') {
+            renderSwaggerJsonView();
+        }
+        
         // Close find bar when loading a new file
         if (elements.findBar.dataset.open === 'true') {
             closeFindBar();
@@ -2297,7 +2305,7 @@ async function saveFile() {
 
     try {
         const content = state.currentFileType === 'json' 
-            ? elements.swaggerEditor.value 
+            ? elements.editor.value 
             : elements.editor.value;
         
         await SaveFile(state.currentFile, content);
@@ -2340,7 +2348,6 @@ async function confirmDelete() {
             state.currentFile = '';
             emitCurrentFileName();
             elements.editor.value = '';
-            elements.swaggerEditor.value = '';
             elements.swaggerView.innerHTML = '';
             renderMarkdown();
             setDirty(false);
@@ -2411,7 +2418,7 @@ function getActiveFindEditor() {
     }
 
     if (state.viewMode === 'swagger-edit') {
-        return elements.swaggerEditor;
+        return state.currentFileType === 'json' ? elements.editor : null;
     }
 
     return null;
@@ -2945,16 +2952,6 @@ function getEditorSelectionText() {
     const start = elements.editor.selectionStart;
     const end = elements.editor.selectionEnd;
     return elements.editor.value.slice(start, end);
-}
-
-function getTextareaSelectionText(textarea) {
-    if (!textarea) {
-        return '';
-    }
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    return textarea.value.slice(start, end);
 }
 
 function getRenderedSelectionText(container) {
@@ -3828,7 +3825,7 @@ function applyWindowStyle(result) {
         #notes-main {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            /*gap: 12px;*/
             padding: 0 0 2px 0;
             height: 100%;
             min-height: 0;
@@ -3926,7 +3923,6 @@ function applyWindowStyle(result) {
             padding-bottom: 10px;
         }
 
-        #notes-swagger-edit-wrap,
         #notes-swagger-view-wrap,
         #notes-swagger-run-wrap {
             flex: 1;
@@ -3938,7 +3934,6 @@ function applyWindowStyle(result) {
         #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-swagger-edit-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
@@ -3951,7 +3946,6 @@ function applyWindowStyle(result) {
         }
 
         #notes-swagger-view-wrap[data-active="true"],
-        #notes-swagger-edit-wrap[data-active="true"],
         #notes-swagger-run-wrap[data-active="true"] {
             display: flex !important;
         }
@@ -4523,30 +4517,6 @@ function applyWindowStyle(result) {
             color: var(--error);
         }
 
-        /* Swagger Editor */
-        #notes-swagger-editor {
-            width: 100%;
-            height: 100%;
-            padding: 12px;
-            border: 1px solid transparent;
-            background-color: var(--bg);
-            color: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            resize: none;
-            overflow: auto;
-            box-sizing: border-box;
-        }
-
-        #notes-swagger-editor:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-
-        #notes-swagger-editor:not(:focus) {
-            background-color: transparent;
-        }
-
         #notes-swagger-view-wrap {
             display: flex;
             flex-direction: column;
@@ -4694,13 +4664,6 @@ function applyWindowStyle(result) {
 
         .json-value-null {
             color: var(--magenta);
-        }
-
-        #notes-swagger-edit-wrap {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            overflow: hidden;
         }
 
         #notes-swagger-run-wrap {
@@ -4864,18 +4827,32 @@ if (elements.editor) {
 
     elements.editor.addEventListener('input', () => {
         setDirty(true);
-        if (state.currentFileType === 'code') {
+        if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
         } else if (state.currentFileType === 'csv') {
             renderCsvView(elements.editor.value);
         } else {
             scheduleRender();
         }
+
+        if (state.currentFileType === 'json') {
+            // Revalidate JSON/YAML, refresh the viewer, and only expose Run for docs with a swagger key.
+            state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
+            state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
+            updateTabVisibility('json');
+            renderSwaggerJsonView();
+
+            if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+                setViewMode('swagger-view');
+            } else if (state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+                renderSwaggerUI();
+            }
+        }
         scheduleAutoSave();
     });
 
     elements.editor.addEventListener('scroll', () => {
-        if (state.currentFileType === 'code') {
+        if (usesCodeEditorDecorations()) {
             syncEditorScrollDecorations();
         }
     });
@@ -4895,29 +4872,7 @@ if (elements.editor) {
     });
 }
 
-if (elements.swaggerEditor) {
-    elements.swaggerEditor.addEventListener('input', () => {
-        setDirty(true);
-        scheduleAutoSave();
-        // Revalidate JSON, refresh the JSON view, and only expose Run for docs with a swagger key.
-        state.swaggerSpec = parseSwaggerSpec(elements.swaggerEditor.value);
-        state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
-        updateTabVisibility('json');
-        renderSwaggerJsonView();
-
-        if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
-            setViewMode('swagger-view');
-            return;
-        }
-
-        if (state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
-            renderSwaggerUI();
-        }
-    });
-}
-
 let _editorSelectionBeforeContextMenu = null;
-let _swaggerEditorSelectionBeforeContextMenu = null;
 
 elements.editor.addEventListener('mousedown', (e) => {
     if (e.button === 2) {
@@ -4943,115 +4898,28 @@ elements.editor.addEventListener('contextmenu', (e) => {
             title: 'Paste',
             icon: CONTEXT_ICON_PASTE,
             onSelect: async () => {
-                await pasteFromGoClipboard();
-            },
-        },
-        { title: '-' },
-        createFindMenuItem('Find text...'),
-        createPrintMenuItem('Print...'),
-        { title: '-' },
-        {
-            title: 'Insert checkbox',
-            icon: CONTEXT_ICON_CHECKBOX,
-            onSelect: () => {
-                const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
-                elements.editor.focus();
-                elements.editor.selectionStart = lineStart;
-                elements.editor.selectionEnd = lineStart;
-                document.execCommand('insertText', false, '- [ ] ');
-            },
-        },
-        {
-            title: 'Insert code block',
-            icon: CONTEXT_ICON_CODE,
-            onSelect: () => {
-                const selStart = elements.editor.selectionStart;
-                const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
-                elements.editor.focus();
-                document.execCommand('insertText', false, '```\n' + selected + '\n```');
-                // Move cursor to after the opening ``` so the user can type a language
-                elements.editor.selectionStart = selStart + 3;
-                elements.editor.selectionEnd = selStart + 3;
-            },
-        },
-    ];
-
-    const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
-    if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
-        menuItems.push(
-        { title: '-' },
-        {
-            title: 'Delete image from disk',
-            icon: CONTEXT_ICON_DELETE,
-            onSelect: async () => {
-                const imageDiskPath = resolveRelativeAssetPath(state.currentFile, imageAtCursor.imagePath);
-
-                try {
-                    await DeleteFile(imageDiskPath);
-
-                    elements.editor.focus();
-                    elements.editor.selectionStart = imageAtCursor.markdownStart;
-                    elements.editor.selectionEnd = imageAtCursor.markdownEnd;
-                    document.execCommand('insertText', false, '');
-                    notifyTerminal(`Deleted image ${imageAtCursor.imagePath}.`, 'info');
-                } catch (err) {
-                    notifyTerminal(`Failed to delete image ${imageAtCursor.imagePath}.`, 'error');
-                    console.error(err);
-                }
-            },
-        });
-    }
-
-    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
-});
-
-elements.swaggerEditor.addEventListener('mousedown', (e) => {
-    if (e.button === 2) {
-        _swaggerEditorSelectionBeforeContextMenu = {
-            start: elements.swaggerEditor.selectionStart,
-            end: elements.swaggerEditor.selectionEnd,
-        };
-    }
-});
-
-elements.swaggerEditor.addEventListener('contextmenu', (e) => {
-    // Restore selection that WebKit changed on right-click
-    if (_swaggerEditorSelectionBeforeContextMenu !== null) {
-        elements.swaggerEditor.selectionStart = _swaggerEditorSelectionBeforeContextMenu.start;
-        elements.swaggerEditor.selectionEnd = _swaggerEditorSelectionBeforeContextMenu.end;
-        _swaggerEditorSelectionBeforeContextMenu = null;
-    }
-    e.preventDefault();
-
-    const menuItems = [
-        createCopyMenuItem(() => getTextareaSelectionText(elements.swaggerEditor), 'Copy'),
-        {
-            title: 'Paste',
-            icon: CONTEXT_ICON_PASTE,
-            onSelect: async () => {
-                await pasteFromGoClipboard(elements.swaggerEditor, false);
+                await pasteFromGoClipboard(elements.editor, !isStructuredDataFile(state.currentFile));
             },
         },
     ];
 
     if (isJsonStructuredFile(state.currentFile)) {
         menuItems.push(
-            { title: '-' },
-            {
-                title: 'Format: Minify',
-                icon: 0,
-                onSelect: () => {
-                    formatStructuredEditorJson(false);
-                },
+        { title: '-' },
+        {
+            title: 'Format: Minify',
+            icon: 0,
+            onSelect: () => {
+                formatStructuredEditorJson(false);
             },
-            {
-                title: 'Format: Expand All',
-                icon: 0,
-                onSelect: () => {
-                    formatStructuredEditorJson(true);
-                },
+        },
+        {
+            title: 'Format: Expand All',
+            icon: 0,
+            onSelect: () => {
+                formatStructuredEditorJson(true);
             },
-        );
+        });
     }
 
     menuItems.push(
@@ -5059,6 +4927,61 @@ elements.swaggerEditor.addEventListener('contextmenu', (e) => {
         createFindMenuItem('Find text...'),
         createPrintMenuItem('Print...'),
     );
+
+    if (state.currentFileType === 'markdown') {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Insert checkbox',
+                icon: CONTEXT_ICON_CHECKBOX,
+                onSelect: () => {
+                    const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
+                    elements.editor.focus();
+                    elements.editor.selectionStart = lineStart;
+                    elements.editor.selectionEnd = lineStart;
+                    document.execCommand('insertText', false, '- [ ] ');
+                },
+            },
+            {
+                title: 'Insert code block',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    const selStart = elements.editor.selectionStart;
+                    const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
+                    elements.editor.focus();
+                    document.execCommand('insertText', false, '```\n' + selected + '\n```');
+                    elements.editor.selectionStart = selStart + 3;
+                    elements.editor.selectionEnd = selStart + 3;
+                },
+            },
+        );
+
+        const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
+        if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
+            menuItems.push(
+            { title: '-' },
+            {
+                title: 'Delete image from disk',
+                icon: CONTEXT_ICON_DELETE,
+                onSelect: async () => {
+                    const imageDiskPath = resolveRelativeAssetPath(state.currentFile, imageAtCursor.imagePath);
+
+                    try {
+                        await DeleteFile(imageDiskPath);
+
+                        elements.editor.focus();
+                        elements.editor.selectionStart = imageAtCursor.markdownStart;
+                        elements.editor.selectionEnd = imageAtCursor.markdownEnd;
+                        document.execCommand('insertText', false, '');
+                        notifyTerminal(`Deleted image ${imageAtCursor.imagePath}.`, 'info');
+                    } catch (err) {
+                        notifyTerminal(`Failed to delete image ${imageAtCursor.imagePath}.`, 'error');
+                        console.error(err);
+                    }
+                },
+            });
+        }
+    }
 
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
