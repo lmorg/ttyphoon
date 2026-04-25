@@ -714,7 +714,59 @@ function setTerminalFocusState(focused, options = {}) {
     TerminalSetFocus(focused).catch(() => {});
 }
 
+function focusNotesPane() {
+    if (!notesPane) {
+        return;
+    }
+
+    setTerminalFocusState(false, { focusVisible: false });
+
+    const embeddedInTerminal = notesPane.parentElement?.id === 'terminal-jupyter-host';
+    if (embeddedInTerminal) {
+        window.dispatchEvent(new CustomEvent('ttyphoon-activate-notes-tab'));
+        return;
+    }
+
+    if (typeof notesPane.focus === 'function') {
+        notesPane.focus({ preventScroll: true });
+    }
+}
+
+function focusTerminalPane() {
+    if (!terminalPane) {
+        return;
+    }
+
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    if (embeddedInTerminal) {
+        window.dispatchEvent(new CustomEvent('ttyphoon-activate-terminal-tab'));
+    }
+
+    setTerminalFocusState(true, { focusVisible: true });
+
+    const terminalCanvas = document.getElementById('ttyphoon-terminal');
+    if (typeof terminalCanvas?.focus === 'function') {
+        terminalCanvas.focus({ preventScroll: true });
+    }
+}
+
+function toggleTerminalAndNotesFocus() {
+    if (window.terminalFocusedState === true) {
+        focusNotesPane();
+        return;
+    }
+
+    focusTerminalPane();
+}
+
 window.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && event.altKey && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleTerminalAndNotesFocus();
+        return;
+    }
+
     // Treat plain-key navigation as keyboard modality for focus ring display.
     if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
@@ -748,6 +800,21 @@ window.addEventListener('mouseup', () => {
 
 EventsOn('toggleNotesPane', () => {
     void toggleNotesPaneCollapsed();
+});
+
+EventsOn('terminalWindowTitle', (title) => {
+    const text = typeof title === 'string' ? title : String(title ?? '');
+    if (titlebar && text) {
+        titlebar.textContent = text;
+    }
+});
+
+window.addEventListener('ttyphoon-focus-notes', () => {
+    focusNotesPane();
+});
+
+window.addEventListener('ttyphoon-focus-terminal', () => {
+    focusTerminalPane();
 });
 
 // When Go selects a file to view, expand the notes side-panel if it is collapsed

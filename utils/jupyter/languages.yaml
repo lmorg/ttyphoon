@@ -78,6 +78,13 @@
   FileExtension: sh
   ExecuteCommand: [ dash, "${FILE}" ]
 
+- Aliases: [ murex ]
+  Description: Murex Shell Script
+  Template: |-
+    {{ .Code }}
+  FileExtension: mx
+  ExecuteCommand: [ murex, "${FILE}" ]
+
 - Aliases: [ powershell, pwsh, ps ]
   Description: PowerShell (pwsh)
   Template: |-

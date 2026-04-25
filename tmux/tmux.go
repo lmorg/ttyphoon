@@ -296,7 +296,6 @@ func _respWindowAdd(tmux *Tmux, b []byte) {
 }
 
 func _respWindowRenamed(tmux *Tmux, b []byte) {
-	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	win := tmux.wins.Get(string(params[1]))
 	if win == nil {
@@ -305,11 +304,11 @@ func _respWindowRenamed(tmux *Tmux, b []byte) {
 	}
 
 	win.name = string(params[2])
+
 	go tmux.renderer.RefreshWindowList()
 }
 
 func _respWindowPaneChanged(tmux *Tmux, b []byte) {
-	//tmux.renderer.DisplayNotification(types.NOTIFY_DEBUG, string(b))
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	go func() {
 		errToNotification(tmux.renderer, tmux.updatePaneInfo(string(params[2])))

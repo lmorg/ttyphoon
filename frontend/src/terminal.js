@@ -1185,6 +1185,28 @@ window.addEventListener('notes-current-file', (event) => {
     }
 });
 
+window.addEventListener('ttyphoon-activate-notes-tab', () => {
+    if (!jupyterTabEnabled) {
+        return;
+    }
+
+    jupyterTabActive = true;
+    applyEmbeddedJupyterVisibility();
+    syncAuxTerminalTabState();
+    renderTerminalTabs(tabState);
+});
+
+window.addEventListener('ttyphoon-activate-terminal-tab', () => {
+    if (!jupyterTabEnabled) {
+        return;
+    }
+
+    jupyterTabActive = false;
+    applyEmbeddedJupyterVisibility();
+    syncAuxTerminalTabState();
+    renderTerminalTabs(tabState);
+});
+
 EventsOn('terminalActivateAuxTab', payload => {
     const p = Array.isArray(payload?.[0]) ? payload[0] : payload;
     const tabID = p?.id;

@@ -183,4 +183,68 @@ describe('ttyphoon focus handoff', () => {
 
         expect(terminalSetFocusMock).not.toHaveBeenCalledWith(true);
     });
+
+    it('hands ctrl+tab focus to notes and requests embedded notes tab activation', async () => {
+        await importTtyphoon();
+
+        const terminalPane = document.getElementById('terminal-pane');
+        const notesPane = document.getElementById('notes-pane');
+        const embeddedHost = document.createElement('div');
+        embeddedHost.id = 'terminal-jupyter-host';
+        terminalPane.appendChild(embeddedHost);
+        embeddedHost.appendChild(notesPane);
+
+        const activations = [];
+        window.addEventListener('ttyphoon-activate-notes-tab', () => {
+            activations.push('notes');
+        });
+
+        terminalPane.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        terminalSetFocusMock.mockClear();
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-focus-notes'));
+        await flushPromises();
+
+        expect(terminalSetFocusMock).toHaveBeenCalledWith(false);
+        expect(window.terminalFocusedState).toBe(false);
+        expect(activations).toEqual(['notes']);
+    });
+
+    it('uses alt+tab to hand off to notes and the shared terminal focus path to switch back, including embedded tabs', async () => {
+        await importTtyphoon();
+
+        const terminalPane = document.getElementById('terminal-pane');
+        const notesPane = document.getElementById('notes-pane');
+        const embeddedHost = document.createElement('div');
+        embeddedHost.id = 'terminal-jupyter-host';
+        terminalPane.appendChild(embeddedHost);
+        embeddedHost.appendChild(notesPane);
+
+        const activations = [];
+        window.addEventListener('ttyphoon-activate-notes-tab', () => {
+            activations.push('notes');
+        });
+        window.addEventListener('ttyphoon-activate-terminal-tab', () => {
+            activations.push('terminal');
+        });
+
+        terminalSetFocusMock.mockClear();
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', altKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(terminalSetFocusMock).toHaveBeenCalledWith(false);
+        expect(window.terminalFocusedState).toBe(false);
+        expect(activations.at(-1)).toBe('notes');
+
+        terminalSetFocusMock.mockClear();
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+        await flushPromises();
+
+        expect(terminalSetFocusMock).toHaveBeenCalledWith(true);
+        expect(window.terminalFocusedState).toBe(true);
+        expect(activations).toContain('terminal');
+    });
 });

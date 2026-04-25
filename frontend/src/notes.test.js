@@ -242,6 +242,57 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
 
+    it('focuses the textarea whenever an Edit view becomes active', async () => {
+        listFilesMock.mockResolvedValue([
+            '$NOTES/script.go',
+            '$NOTES/readme.md',
+            '$NOTES/spec.yaml',
+        ]);
+
+        getMarkdownMock.mockImplementation(async (file) => {
+            if (file.endsWith('.go')) {
+                return 'package main\n\nfunc main() {}';
+            }
+
+            if (file.endsWith('.yaml')) {
+                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+            }
+
+            return '# Markdown note';
+        });
+
+        await importNotesModule();
+
+        const notesEditor = document.getElementById('notes-editor');
+        const clickFile = async (filePath) => {
+            const fileButton = document.querySelector(`[data-file="${filePath}"]`);
+            fileButton.click();
+            await flushPromises();
+            await flushPromises();
+        };
+
+        await clickFile('$NOTES/script.go');
+        expect(document.activeElement).toBe(notesEditor);
+
+        await clickFile('$NOTES/readme.md');
+
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+        expect(document.activeElement).toBe(notesEditor);
+
+        await clickFile('$NOTES/spec.yaml');
+
+        document.getElementById('notes-tab-swagger-edit').click();
+        await flushPromises();
+        expect(document.activeElement).toBe(notesEditor);
+
+        document.getElementById('notes-tab-swagger-view').click();
+        await flushPromises();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(document.activeElement).toBe(notesEditor);
+    });
+
     it('shows a file context menu with copy actions and Go-provided file handlers', async () => {
         listFilesMock.mockResolvedValue(['$PROJECT/docs/api.json']);
         resolveFilePathMock.mockResolvedValue('/tmp/project/docs/api.json');

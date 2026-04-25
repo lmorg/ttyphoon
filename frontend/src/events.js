@@ -66,6 +66,12 @@ export function wireKeyboardEvents(canvas) {
             return;
         }
 
+        if (event.key === 'Tab' && event.ctrlKey && /*!event.altKey &&*/ !event.metaKey) {
+            event.preventDefault();
+            window.dispatchEvent(new CustomEvent('ttyphoon-focus-notes'));
+            return;
+        }
+
         const isTextInput = event.key &&
             event.key.length === 1 &&
             !event.ctrlKey &&

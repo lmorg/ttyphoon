@@ -889,6 +889,34 @@ function setDirty(isDirty) {
     elements.status.textContent = isDirty ? `${label} (unsaved)` : label;
 }
 
+function focusActiveEditorForViewMode() {
+    if (!elements.editor) {
+        return;
+    }
+
+    const shouldFocusEditor =
+        state.viewMode === 'editor' ||
+        state.viewMode === 'swagger-edit' ||
+        state.viewMode === 'csv-edit';
+
+    if (!shouldFocusEditor) {
+        return;
+    }
+
+    setTimeout(() => {
+        const stillShouldFocus =
+            state.viewMode === 'editor' ||
+            state.viewMode === 'swagger-edit' ||
+            state.viewMode === 'csv-edit';
+
+        if (!stillShouldFocus || !elements.editor) {
+            return;
+        }
+
+        elements.editor.focus({ preventScroll: true });
+    }, 0);
+}
+
 function emitCurrentFileName() {
     const fileName = state.currentFile ? getPathFileName(state.currentFile) : '';
     app.dataset.currentFileName = fileName;
@@ -974,6 +1002,8 @@ function setViewMode(mode) {
     if (elements.findBar.dataset.open === 'true' && state.findQuery) {
         performFind();
     }
+
+    focusActiveEditorForViewMode();
 }
 
 function renderJupyterView() {
@@ -3264,7 +3294,6 @@ EventsOn('viewFileInNotesOpen', async (payload) => {
 
     try {
         await loadFile(file);
-        AddToFileList(file);
     } catch (err) {
         setStatus(`Failed to load file: ${file}`, true);
         console.error(err);
