@@ -28,6 +28,194 @@ const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
+
+const REDRAW_OP = {
+    CELL: 1,
+    FRAME: 2,
+    HIGHLIGHT_RECT: 3,
+    RECT_COLOUR: 4,
+    BLOCK_CHROME: 5,
+    GAUGE_H: 6,
+    GAUGE_V: 7,
+    TILE_OVERLAY: 8,
+    IMAGE: 9,
+    TABLE: 10,
+};
+
+const REDRAW_FLAG = {
+    BOLD: 1 << 0,
+    ITALIC: 1 << 1,
+    UNDERLINE: 1 << 2,
+    STRIKE: 1 << 3,
+    SEARCH_RESULT: 1 << 4,
+    FOLDED: 1 << 5,
+};
+
+function colourFrom24(value) {
+    const c = Number(value);
+    if (!Number.isFinite(c) || c <= 0) {
+        return null;
+    }
+
+    const n = c >>> 0;
+    return {
+        Red: (n >>> 16) & 255,
+        Green: (n >>> 8) & 255,
+        Blue: n & 255,
+    };
+}
+
+function hasFlag(flags, flag) {
+    const n = Number(flags);
+    if (!Number.isFinite(n)) {
+        return false;
+    }
+    return (n & flag) !== 0;
+}
+
+function toCompactCommand(op) {
+    if (!Array.isArray(op) || op.length === 0) {
+        return null;
+    }
+
+    const kind = Number(op[0]);
+
+    switch (kind) {
+        case REDRAW_OP.CELL: {
+            const flags = Number(op[5]) || 0;
+            return {
+                op: 'cell',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                char: op[4],
+                bold: hasFlag(flags, REDRAW_FLAG.BOLD),
+                italic: hasFlag(flags, REDRAW_FLAG.ITALIC),
+                underline: hasFlag(flags, REDRAW_FLAG.UNDERLINE),
+                strike: hasFlag(flags, REDRAW_FLAG.STRIKE),
+                searchResult: hasFlag(flags, REDRAW_FLAG.SEARCH_RESULT),
+                fg: colourFrom24(op[6]),
+                bg: colourFrom24(op[7]),
+            };
+        }
+
+        case REDRAW_OP.FRAME:
+            return { op: 'frame', x: op[1], y: op[2], width: op[3], height: op[4] };
+
+        case REDRAW_OP.HIGHLIGHT_RECT:
+            return {
+                op: 'highlight_rect',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                fg: colourFrom24(op[5]),
+                bg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.RECT_COLOUR:
+            return {
+                op: 'rect_colour',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                bg: colourFrom24(op[5]),
+            };
+
+        case REDRAW_OP.BLOCK_CHROME: {
+            const flags = Number(op[6]) || 0;
+            return {
+                op: 'block_chrome',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                endX: op[4],
+                fg: colourFrom24(op[5]),
+                folded: hasFlag(flags, REDRAW_FLAG.FOLDED),
+            };
+        }
+
+        case REDRAW_OP.GAUGE_H:
+            return {
+                op: 'gauge_h',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                value: op[4],
+                max: op[5],
+                fg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.GAUGE_V:
+            return {
+                op: 'gauge_v',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                value: op[4],
+                max: op[5],
+                fg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.TILE_OVERLAY:
+            return {
+                op: 'tile_overlay',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                alpha: op[5],
+            };
+
+        case REDRAW_OP.IMAGE:
+            return {
+                op: 'image',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                imageId: op[5],
+                srcWidth: op[6],
+                srcHeight: op[7],
+                srcScaleX: Number.isFinite(Number(op[8])) ? Number(op[8]) / 1000 : 0,
+                srcScaleY: Number.isFinite(Number(op[9])) ? Number(op[9]) / 1000 : 0,
+            };
+
+        case REDRAW_OP.TABLE:
+            return {
+                op: 'table',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                width: op[4],
+                fg: colourFrom24(op[5]),
+                boundaries: Array.isArray(op[6]) ? op[6] : [],
+            };
+
+        default:
+            return null;
+    }
+}
+
+function decodeDrawOpsPayload(payload) {
+    const compactOps = Array.isArray(payload?.[0]) && Array.isArray(payload[0][0])
+        ? payload[0]
+        : payload;
+
+    if (!Array.isArray(compactOps)) {
+        return [];
+    }
+
+    const decoded = [];
+    for (let i = 0; i < compactOps.length; i++) {
+        const cmd = toCompactCommand(compactOps[i]);
+        if (cmd) {
+            decoded.push(cmd);
+        }
+    }
+    return decoded;
+}
 let tabState = [];
 const imageCache = new Map();
 const terminalStatusEl = document.getElementById('terminal-status');
@@ -813,7 +1001,7 @@ EventsOn("terminalRedraw", ops => {
     }
     rafPending = true;
 
-    const drawOps = Array.isArray(ops?.[0]) ? ops[0] : ops;
+    const drawOps = decodeDrawOpsPayload(ops);
 
     if (!Array.isArray(drawOps) || drawOps.length === 0) {
         rafPending = false;
