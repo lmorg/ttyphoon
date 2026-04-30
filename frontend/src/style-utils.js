@@ -66,9 +66,34 @@ export function getMarkdownBaseTextSizeStyles(selector, fontSize) {
  * @returns {string} CSS text for markdown content styling
  */
 export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
+    const rootSelector = classPrefix ? `.${classPrefix}` : 'body';
     const prefix = classPrefix ? `.${classPrefix} ` : '';
     
     return `
+        ${rootSelector},
+        ${prefix}p,
+        ${prefix}a,
+        ${prefix}li,
+        ${prefix}blockquote,
+        ${prefix}td,
+        ${prefix}th {
+            font-family: "Lato", var(--font-family), sans-serif;
+            font-size: calc(${fontSize}px + 1);
+            letter-spacing: 1px;
+        }
+
+        ${prefix}b,
+        ${prefix}strong {
+            font-family: "Jura", var(--font-family), sans-serif;
+            color: rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue});
+        }
+
+        ${prefix}i,
+        ${prefix}em {
+            font-family: "Libre Baskerville", var(--font-family), sans-serif;
+            font-size: calc(${fontSize}px + 1);
+        }
+
         ${prefix}h1,
         ${prefix}h2,
         ${prefix}h3,
@@ -76,6 +101,7 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}h5,
         ${prefix}h6 {
             color: ${classPrefix ? 'var(--accent)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`};
+            font-family: "Jura", var(--font-family), sans-serif;
         }
 
         ${prefix}a {

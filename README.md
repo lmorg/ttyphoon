@@ -1,6 +1,6 @@
 <h1>TTYphoon</h1>
 
-![logo](assets/icon-large.bmp)
+![logo](frontend/src/assets/images/icon-large.bmp)
 
 - [Multimedia Terminal Emulator](#multimedia-terminal-emulator)
 - [Screenshots](#screenshots)
