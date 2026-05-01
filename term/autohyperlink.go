@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	rxUrl     = regexp.MustCompile(`[a-zA-Z]+://[-./_%&?+=#a-zA-Z0-9]+`)
+	rxUrl     = regexp.MustCompile(`[a-zA-Z]+://[-:./_%&?+=#a-zA-Z0-9]+`)
 	rxFile    = regexp.MustCompile(`(~|)[-:./_%&?+=a-zA-Z0-9]+`)
 	rxSrcLine = regexp.MustCompile(`:[0-9]+$`)
 )
