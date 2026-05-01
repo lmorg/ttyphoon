@@ -4615,16 +4615,23 @@ function applyWindowStyle(result) {
             filter: brightness(1.15);
         }
 
+        .json-toggle:hover::before {
+            opacity: 1;
+        }
+
         .json-toggle::before {
-            content: "\\f146";
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            /*content: "\\f146";*/
+            /*font-family: "Font Awesome Solid", "Font Awesome", sans-serif;*/
+            content: "▼";
             font-weight: 900;
             font-size: 12px;
             line-height: 1;
+            opacity: 0.3;
         }
 
         .json-node[data-expanded="false"] > .json-row > .json-toggle::before {
-            content: "\\f0fe";
+            /*content: "\\f0fe";*/
+            content: "▶";
         }
 
         .json-key {

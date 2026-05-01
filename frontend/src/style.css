@@ -60,6 +60,10 @@ body {
     opacity: 0.8;
 }
 
+#terminal-notifications:hover {
+    opacity: 1;
+}
+
 .terminal-notification {
     pointer-events: auto;
     display: flex;
