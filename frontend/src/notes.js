@@ -6,7 +6,7 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest,
-    ShowCommandPalette,
+    ShowCommandPalette, GetCurrentProject,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -218,6 +218,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
+    currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv'
     dirty: false,
     renderTimer: null,
@@ -2164,6 +2165,9 @@ async function loadFile(file) {
     }
 
     try {
+        // Capture the current project context to prevent autosave issues if user switches projects
+        state.currentFileProject = await GetCurrentProject();
+
         const loadingJson     = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
         const loadingImage    = isImageFile(file);
@@ -2338,7 +2342,8 @@ async function saveFile() {
             ? elements.editor.value 
             : elements.editor.value;
         
-        await SaveFile(state.currentFile, content);
+        // Use the saved project context to prevent overwrites if user switched projects
+        await SaveFile(state.currentFile, content, state.currentFileProject || '');
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -2376,6 +2381,7 @@ async function confirmDelete() {
         await DeleteFile(fileToDelete);
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
+            state.currentFileProject = '';
             emitCurrentFileName();
             elements.editor.value = '';
             elements.swaggerView.innerHTML = '';
@@ -3153,7 +3159,7 @@ async function createNewFile() {
     }
 
     try {
-        await SaveFile(fileName, '');
+        await SaveFile(fileName, '', '');
         await refreshFiles();
         await loadFile(fileName);
         setViewMode('editor');
@@ -3173,7 +3179,7 @@ async function createAndOpenFile(filename, contents) {
     }
 
     try {
-        await SaveFile(fileName, contents || '');
+        await SaveFile(fileName, contents || '', '');
         await refreshFiles();
         await loadFile(fileName);
         //setViewMode('editor');

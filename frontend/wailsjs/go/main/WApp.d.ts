@@ -18,6 +18,8 @@ export function GetAppTitle():Promise<string>;
 
 export function GetClipboardData():Promise<main.ClipboardData>;
 
+export function GetCurrentProject():Promise<string>;
+
 export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
 
 export function GetHyperlinkMenuActions(arg1:string,arg2:string):Promise<Array<Record<string, any>>>;
@@ -46,7 +48,7 @@ export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveBinaryFile(arg1:string,arg2:string):Promise<void>;
 
-export function SaveFile(arg1:string,arg2:string):Promise<void>;
+export function SaveFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveImageDialog(arg1:string):Promise<string>;
 

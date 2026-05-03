@@ -30,6 +30,10 @@ export function GetClipboardData() {
   return window['go']['main']['WApp']['GetClipboardData']();
 }
 
+export function GetCurrentProject() {
+  return window['go']['main']['WApp']['GetCurrentProject']();
+}
+
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
@@ -86,8 +90,8 @@ export function SaveBinaryFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveBinaryFile'](arg1, arg2);
 }
 
-export function SaveFile(arg1, arg2) {
-  return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
+export function SaveFile(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['SaveFile'](arg1, arg2, arg3);
 }
 
 export function SaveImageDialog(arg1) {

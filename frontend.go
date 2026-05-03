@@ -713,9 +713,12 @@ func (a *WApp) AddToFileList(filename string) {
 	files = append([]string{filename}, files...)
 }
 
-func (a *WApp) expandMappingFunc(s string) string {
+func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 	switch s {
 	case "PROJECT":
+		if projectPath != "" {
+			return projectPath
+		}
 		return a.projRoot
 	case "NOTES":
 		return a.usrNotesDir
@@ -731,7 +734,21 @@ func (a *WApp) expandMappingFunc(s string) string {
 }
 
 func (a WApp) filePath(filename string) string {
-	filename = os.Expand(filename, a.expandMappingFunc)
+	filename = os.Expand(filename, func(s string) string {
+		return a.expandMappingFuncWithProject(s, "")
+	})
+	if filepath.IsLocal(filename) {
+		filename = a.usrNotesDir + string(filepath.Separator) + filename
+	}
+	return filename
+}
+
+// filePathWithProject returns the expanded file path using a specific project root.
+// This uses the same expansion logic as filePath but allows overriding $PROJECT.
+func (a WApp) filePathWithProject(filename string, projectPath string) string {
+	filename = os.Expand(filename, func(s string) string {
+		return a.expandMappingFuncWithProject(s, projectPath)
+	})
 	if filepath.IsLocal(filename) {
 		filename = a.usrNotesDir + string(filepath.Separator) + filename
 	}
@@ -740,6 +757,14 @@ func (a WApp) filePath(filename string) string {
 
 func (a *WApp) ResolveFilePath(filename string) string {
 	return a.filePath(filename)
+}
+
+// GetCurrentProject returns the absolute path of the current project root.
+// This is used by the frontend to track which project a file is associated with,
+// preventing issues where a file opened in one project could be overwritten
+// if the user switches projects before autosave completes.
+func (a *WApp) GetCurrentProject() string {
+	return a.projRoot
 }
 
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
@@ -794,8 +819,16 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 	menu.DisplayMenu("Hyperlink action", true)
 }
 
-func (a *WApp) SaveFile(filename, contents string) error {
-	filename = a.filePath(filename)
+// SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.
+// If projectPath is set, $PROJECT in filename is expanded against projectPath,
+// which keeps autosave bound to the project where the file was opened.
+func (a *WApp) SaveFile(filename, contents, projectPath string) error {
+	if projectPath == "" {
+		filename = a.filePath(filename)
+	} else {
+		filename = a.filePathWithProject(filename, projectPath)
+	}
+
 	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
