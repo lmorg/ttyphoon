@@ -56,6 +56,7 @@ app.innerHTML = `
                 <div id="notes-title">Notes</div>
                 <div id="notes-list-filter-wrap">
                     <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" />
+                    <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
                 </div>
             </div>
             <div id="notes-list" role="list"></div>
@@ -160,6 +161,7 @@ const elements = {
     title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
     listFilter: document.getElementById('notes-list-filter'),
+    listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
     editorShell: document.getElementById('notes-editor-shell'),
     editorGutter: document.getElementById('notes-editor-gutter'),
@@ -895,6 +897,11 @@ function focusActiveEditorForViewMode() {
         return;
     }
 
+    // Keep terminal ownership on app startup; ttyphoon.js will hand off when Notes is explicitly focused.
+    if (window.terminalFocusedState === true) {
+        return;
+    }
+
     const shouldFocusEditor =
         state.viewMode === 'editor' ||
         state.viewMode === 'swagger-edit' ||
@@ -905,6 +912,10 @@ function focusActiveEditorForViewMode() {
     }
 
     setTimeout(() => {
+        if (window.terminalFocusedState === true) {
+            return;
+        }
+
         const stillShouldFocus =
             state.viewMode === 'editor' ||
             state.viewMode === 'swagger-edit' ||
@@ -1372,7 +1383,18 @@ function getFilteredFiles() {
     });
 }
 
+function updateListFilterClearButtonVisibility() {
+    if (!elements.listFilterClear || !elements.listFilter) {
+        return;
+    }
+
+    const hasValue = (elements.listFilter.value || '').trim().length > 0;
+    elements.listFilterClear.dataset.visible = hasValue ? 'true' : 'false';
+    elements.listFilterClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+}
+
 function renderFileList() {
+    updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
 
     const filteredFiles = getFilteredFiles();
@@ -3417,6 +3439,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-list-filter-wrap {
+            position: relative;
             padding: 0 10px;
         }
 
@@ -3426,9 +3449,34 @@ function applyWindowStyle(result) {
             border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
             background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
             color: var(--fg);
-            padding: 6px 8px;
-            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            padding: 6px 28px 6px 8px;
+            font-size: ${result.fontSize - 1}px;
             outline: none;
+        }
+
+        #notes-list-filter-clear {
+            position: absolute;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 1);
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            display: none;
+            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 900;
+            font-size: ${result.fontSize + 7}px;
+        }
+
+        #notes-list-filter-clear[data-visible="true"] {
+            display: block;
+        }
+
+        #notes-list-filter-clear:hover {
+            color: var(--accent);
         }
 
         #notes-list-filter::placeholder {
@@ -5167,6 +5215,15 @@ if (elements.listFilter) {
             state.fileFilterQuery = '';
             renderFileList();
         }
+    });
+}
+
+if (elements.listFilterClear && elements.listFilter) {
+    elements.listFilterClear.addEventListener('click', () => {
+        elements.listFilter.value = '';
+        state.fileFilterQuery = '';
+        renderFileList();
+        elements.listFilter.focus();
     });
 }
 
