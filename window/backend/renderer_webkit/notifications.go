@@ -32,6 +32,7 @@ type notificationT struct {
 	ctx    context.Context
 	cancel func()
 	closed bool
+	mutex  sync.Mutex
 	wr     *webkitRender
 }
 
@@ -45,12 +46,25 @@ func (nt *notificationT) UpdateCanceller(cancel func()) {
 }
 
 func (nt *notificationT) Close() {
-	nt.closed = true
-	if nt.cancel != nil {
-		nt.cancel()
+	nt.mutex.Lock()
+	if nt.closed {
+		nt.mutex.Unlock()
+		return
 	}
-	if nt.wr != nil && nt.wr.wapp != nil {
-		runtime.EventsEmit(nt.wr.wapp, "terminalNotificationClose", nt.id)
+	nt.closed = true
+	cancel := nt.cancel
+	nt.cancel = nil
+	wr := nt.wr
+	nt.mutex.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if wr != nil {
+		wr.notifications.delete(nt)
+	}
+	if wr != nil && wr.wapp != nil {
+		runtime.EventsEmit(wr.wapp, "terminalNotificationClose", nt.id)
 	}
 }
 
@@ -89,6 +103,10 @@ func (wr *webkitRender) DisplaySticky(notificationType types.NotificationType, m
 	return nt
 }
 
+func (wr *webkitRender) CloseNotification(id int64) {
+	wr.notifications.closeByID(id)
+}
+
 func (n *notifyT) addTimed(nt *notificationT) {
 	const d = 5 * time.Second
 	nt.ctx, nt.cancel = context.WithTimeout(context.Background(), d)
@@ -102,10 +120,18 @@ func (n *notifyT) addTimed(nt *notificationT) {
 
 	go func() {
 		<-nt.ctx.Done()
+		nt.mutex.Lock()
+		if nt.closed {
+			nt.mutex.Unlock()
+			return
+		}
 		nt.closed = true
+		wr := nt.wr
+		nt.mutex.Unlock()
+
 		n.delete(nt)
-		if nt.wr != nil && nt.wr.wapp != nil {
-			runtime.EventsEmit(nt.wr.wapp, "terminalNotificationClose", nt.id)
+		if wr != nil && wr.wapp != nil {
+			runtime.EventsEmit(wr.wapp, "terminalNotificationClose", nt.id)
 		}
 	}()
 }
@@ -133,6 +159,25 @@ func (n *notifyT) delete(nt *notificationT) {
 	for i := range *notifications {
 		if (*notifications)[i].id == nt.id {
 			*notifications = slices.Delete(*notifications, i, i+1)
+			return
+		}
+	}
+}
+
+func (n *notifyT) closeByID(id int64) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
+	for i := range n.sticky {
+		if n.sticky[i].id == id {
+			go n.sticky[i].Close()
+			return
+		}
+	}
+
+	for i := range n.timed {
+		if n.timed[i].id == id {
+			go n.timed[i].Close()
 			return
 		}
 	}

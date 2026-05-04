@@ -36,6 +36,7 @@ func AskAI(agent *agent.Agent, prompt string) {
 }
 
 func askAI(agent *agent.Agent, prompt string, title string, query string) {
+	prompt += prompts.AgentsMd()
 	sticky := agent.Renderer().DisplaySticky(
 		types.NOTIFY_INFO,
 		fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName()),

@@ -6,6 +6,10 @@ export function AddToFileList(arg1) {
   return window['go']['main']['WApp']['AddToFileList'](arg1);
 }
 
+export function CloseNotification(arg1) {
+  return window['go']['main']['WApp']['CloseNotification'](arg1);
+}
+
 export function CommandPaletteSelect(arg1) {
   return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
 }

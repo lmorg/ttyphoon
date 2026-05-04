@@ -1,4 +1,4 @@
-import { GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -1239,6 +1239,13 @@ EventsOn('terminalNotification', payload => {
     if (p.sticky) {
         el.classList.add('is-sticky');
         startStickySpinner(el, p.id);
+        el.addEventListener('click', () => {
+            const id = Number(p.id);
+            if (!Number.isFinite(id)) {
+                return;
+            }
+            CloseNotification(id).catch(() => {});
+        });
     }
 
     if (!p.sticky) {

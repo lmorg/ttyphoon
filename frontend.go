@@ -260,6 +260,15 @@ func (a *WApp) TerminalRequestRedraw() {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) CloseNotification(id int64) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.CloseNotification(id)
+}
+
 func (a *WApp) TerminalMenuHighlight(menuID, index int) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

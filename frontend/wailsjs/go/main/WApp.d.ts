@@ -6,6 +6,8 @@ import {swagger} from '../models';
 
 export function AddToFileList(arg1:string):Promise<void>;
 
+export function CloseNotification(arg1:number):Promise<void>;
+
 export function CommandPaletteSelect(arg1:number):Promise<void>;
 
 export function DeleteFile(arg1:string):Promise<void>;
