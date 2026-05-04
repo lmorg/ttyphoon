@@ -40,7 +40,7 @@ func (wr *webkitRender) hotkeys() {
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }
 			desc = "Paste from clipboard"
-			icon = 0xf0ea
+			//icon = 0xf0ea
 		case "VisualEditor":
 			fn = func() { wr.VisualEditor() }
 			desc = "Visual editor..."
