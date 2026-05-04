@@ -130,6 +130,13 @@ describe('ttyphoon focus handoff', () => {
         expect(window.terminalFocusedState).toBe(false);
     });
 
+    it('asserts terminal focus on startup', async () => {
+        await importTtyphoon();
+
+        expect(terminalSetFocusMock).toHaveBeenCalledWith(true);
+        expect(window.terminalFocusedState).toBe(true);
+    });
+
     it('does not re-focus terminal when clicking embedded notes content', async () => {
         await importTtyphoon();
 

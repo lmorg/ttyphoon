@@ -204,8 +204,12 @@ describe('notes rendering', () => {
         await importNotesModule();
 
         const filterInput = document.getElementById('notes-list-filter');
+        const clearButton = document.getElementById('notes-list-filter-clear');
+        expect(clearButton?.dataset.visible).toBe('false');
+
         filterInput.value = 'guide';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(clearButton?.dataset.visible).toBe('true');
 
         const visibleFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
         expect(visibleFiles).toEqual(['$GLOBAL/docs/guide.md']);
@@ -215,6 +219,17 @@ describe('notes rendering', () => {
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
 
         expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+
+        clearButton.click();
+        expect(filterInput.value).toBe('');
+        expect(clearButton?.dataset.visible).toBe('false');
+
+        const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+        expect(restoredAfterClear).toEqual(expect.arrayContaining([
+            '$GLOBAL/docs/guide.md',
+            '$GLOBAL/images/logo.png',
+            '$NOTES/todo.md',
+        ]));
 
         filterInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 

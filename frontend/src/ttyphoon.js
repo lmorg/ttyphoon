@@ -702,8 +702,9 @@ function requestTerminalResizeAfterLayout() {
 
 function setTerminalFocusState(focused, options = {}) {
     const nextFocusVisible = Boolean(options.focusVisible);
+    const force = Boolean(options.force);
 
-    if (terminalFocusState === focused && terminalKeyboardFocusVisible === nextFocusVisible) {
+    if (!force && terminalFocusState === focused && terminalKeyboardFocusVisible === nextFocusVisible) {
         return;
     }
 
@@ -858,6 +859,16 @@ Promise.all([
     import('./terminal.js')
 ]).then(() => {
     setTerminalJupyterMode(notesCollapsed);
+
+    // Notes may queue editor autofocus during its boot sequence.
+    // Re-assert terminal ownership after module initialization settles.
+    setTimeout(() => {
+        setTerminalFocusState(true, { focusVisible: false, force: true });
+        const terminalCanvas = document.getElementById('ttyphoon-terminal');
+        if (typeof terminalCanvas?.focus === 'function') {
+            terminalCanvas.focus({ preventScroll: true });
+        }
+    }, 0);
 
     // After all modules have loaded, trigger a resize event to ensure
     // proper sizing of all components (file list, terminal tabs, tmux, etc.)
