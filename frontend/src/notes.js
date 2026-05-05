@@ -2186,6 +2186,9 @@ async function loadFile(file) {
         return;
     }
 
+    const fileName = file ? getPathFileName(file) : 'json file';
+    let stickyId = null;
+
     try {
         // Capture the current project context to prevent autosave issues if user switches projects
         state.currentFileProject = await GetCurrentProject();
@@ -2194,8 +2197,7 @@ async function loadFile(file) {
         const loadingMarkdown = isMarkdownNotesFile(file);
         const loadingImage    = isImageFile(file);
         const loadingCsv      = isCsvFile(file);
-        const stickyId = loadingJson ? Date.now() : null;
-        const fileName = file ? getPathFileName(file) : 'json file';
+        stickyId = loadingJson ? Date.now() : null;
 
         if (loadingImage) {
             state.currentFile = file;
@@ -2695,10 +2697,9 @@ function openNewFilePrompt() {
 
 function openRenamePrompt(file) {
     state.renamingFile = file;
-    const fileName = getPathFileName(file).replace(/\.md$/, '');
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
-    elements.modalInput.value = fileName;
+    elements.modalInput.value = file;
     elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
@@ -2760,12 +2761,12 @@ function buildImagePaths(notePath, epoch, extension) {
     const slash = notePath.lastIndexOf('/');
     const dir = slash === -1 ? '' : notePath.slice(0, slash + 1);
     const file = slash === -1 ? notePath : notePath.slice(slash + 1);
-    const stem = file.replace(/\.[^/.]+$/, '');
-
-    const imageFileName = `${stem}.${epoch}.${extension}`;
+    const imageDirName = `${file}.d`;
+    const imageFileName = `${epoch}.${extension}`;
+    const markdownImagePath = `${imageDirName}/${imageFileName}`;
     return {
-        imagePath: `${dir}${imageFileName}`,
-        imageFileName,
+        imagePath: `${dir}${markdownImagePath}`,
+        imageFileName: markdownImagePath,
     };
 }
 
@@ -3147,14 +3148,14 @@ function initStructuredDataTreeContextMenu(container) {
 }
 
 async function createNewFile() {
-    let fileName = normalizeNoteName(elements.modalInput.value);
-    if (fileName === '') {
-        setStatus('File name cannot be empty.', true);
-        return;
-    }
-
     // Handle rename operation
     if (state.renamingFile) {
+        const fileName = (elements.modalInput.value || '').trim();
+        if (fileName === '') {
+            setStatus('File name cannot be empty.', true);
+            return;
+        }
+
         try {
             await RenameFile(state.renamingFile, fileName);
             await refreshFiles();
@@ -3167,6 +3168,12 @@ async function createNewFile() {
             setStatus(`Failed to rename file.`, true);
             console.error(err);
         }
+        return;
+    }
+
+    let fileName = normalizeNoteName(elements.modalInput.value);
+    if (fileName === '') {
+        setStatus('File name cannot be empty.', true);
         return;
     }
 

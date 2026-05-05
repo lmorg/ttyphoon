@@ -18,6 +18,7 @@ const saveImageDialogMock = vi.fn(() => Promise.resolve(''));
 const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
+const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
@@ -45,6 +46,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     WindowPrint: windowPrintMock,
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
+    GetCurrentProject: getCurrentProjectMock,
     ResolveFilePath: resolveFilePathMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
@@ -160,6 +162,7 @@ describe('notes rendering', () => {
         windowPrintMock.mockClear();
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
+        getCurrentProjectMock.mockReset();
         resolveFilePathMock.mockReset();
         getHyperlinkMenuActionsMock.mockReset();
         runHyperlinkMenuActionMock.mockReset();
@@ -170,6 +173,7 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockResolvedValue(theme);
         getMarkdownMock.mockResolvedValue('');
+        getCurrentProjectMock.mockResolvedValue('');
         resolveFilePathMock.mockResolvedValue('');
         getHyperlinkMenuActionsMock.mockResolvedValue([]);
         clipboardSetTextMock.mockResolvedValue();
@@ -255,6 +259,34 @@ describe('notes rendering', () => {
         expect(getMarkdownMock).toHaveBeenCalledWith('$NOTES/todo.md');
         expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
+    });
+
+    it('renames notes using the exact modal path and extension without forcing .md', async () => {
+        listFilesMock
+            .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
+            .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
+        getMarkdownMock.mockResolvedValue('# Hello Notes');
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$GLOBAL/docs/todo.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        document.getElementById('notes-rename').click();
+        await flushPromises();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        expect(modalInput.value).toBe('$GLOBAL/docs/todo.md');
+
+        modalInput.value = '$PROJECT/docs/todo.txt';
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(renameFileMock).toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt');
+        expect(renameFileMock).not.toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt.md');
     });
 
     it('focuses the textarea whenever an Edit view becomes active', async () => {

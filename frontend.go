@@ -670,6 +670,10 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
+		if isSystemFileName(d.Name()) {
+			return nil
+		}
+
 		//if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
 		//	strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
 		filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
@@ -683,13 +687,18 @@ func (a *WApp) ListFiles() []string {
 	return files
 }
 
+func isSystemFileName(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "thumbs.db", "ehthumbs.db", "desktop.ini", ".ds_store":
+		return true
+	}
+
+	// macOS AppleDouble sidecar files
+	return strings.HasPrefix(name, "._")
+}
+
 func listFiles(path string, varName string) (files []string) {
-	files = listFilesWithGlob(path, varName, "*.md")
-	files = append(files, listFilesWithGlob(path, varName, "*.json")...)
-	files = append(files, listFilesWithGlob(path, varName, "*.yaml")...)
-	files = append(files, listFilesWithGlob(path, varName, "*.yml")...)
-	slices.Sort(files)
-	return files
+	return listFilesWithGlob(path, varName, "*")
 }
 
 func listFilesWithGlob(path string, varName string, pattern string) (files []string) {
@@ -704,6 +713,15 @@ func listFilesWithGlob(path string, varName string, pattern string) (files []str
 	}
 	replace := fmt.Sprintf("$%s/", varName)
 	for i := range glob {
+		info, err := os.Stat(glob[i])
+		if err != nil {
+			continue
+		}
+
+		if info.IsDir() || isSystemFileName(info.Name()) {
+			continue
+		}
+
 		files = append(files, strings.Replace(glob[i], path, replace, 1))
 	}
 	return
@@ -843,6 +861,10 @@ func (a *WApp) SaveFile(filename, contents, projectPath string) error {
 
 func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
 	filename = a.filePath(filename)
+
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		return fmt.Errorf("create directory for binary file: %w", err)
+	}
 
 	b, err := base64.StdEncoding.DecodeString(base64Contents)
 	if err != nil {
