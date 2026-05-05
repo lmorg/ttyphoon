@@ -384,6 +384,77 @@ describe('notes rendering', () => {
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '5');
     });
 
+    it('shows a folder-tree menu on category headers and applies collapse/expand actions', async () => {
+        listFilesMock.mockResolvedValue([
+            '$PROJECT/docs/guide.md',
+            '$PROJECT/docs/reference/api.md',
+            '$PROJECT/images/logo.png',
+        ]);
+
+        await importNotesModule();
+
+        const projectHeader = document.querySelector('.notes-category-header[data-category="$PROJECT"]');
+        projectHeader.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 64,
+            clientY: 128,
+        }));
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toEqual(['Collapse Folders', 'Expand Folders']);
+        expect(menuConfig.icons).toEqual([0xf146, 0xf0fe]);
+
+        menuConfig.onSelect(0);
+        await flushPromises();
+
+        const collapsedFolders = Array.from(document.querySelectorAll('.notes-tree-folder'));
+        expect(collapsedFolders.length).toBeGreaterThan(0);
+        expect(collapsedFolders.every((folder) => folder.dataset.expanded === 'false')).toBe(true);
+
+        menuConfig.onSelect(1);
+        await flushPromises();
+
+        const expandedFolders = Array.from(document.querySelectorAll('.notes-tree-folder'));
+        expect(expandedFolders.length).toBeGreaterThan(0);
+        expect(expandedFolders.every((folder) => folder.dataset.expanded === 'true')).toBe(true);
+    });
+
+    it('shows a folder-tree menu on directory items and applies actions to child folders only', async () => {
+        listFilesMock.mockResolvedValue([
+            '$PROJECT/docs/reference/api.md',
+            '$PROJECT/docs/readme.md',
+            '$PROJECT/images/logo.png',
+        ]);
+
+        await importNotesModule();
+
+        const docsFolder = document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs"]');
+        docsFolder.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 72,
+            clientY: 140,
+        }));
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toEqual(['Collapse Folders', 'Expand Folders']);
+
+        menuConfig.onSelect(0);
+        await flushPromises();
+
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs"]')?.dataset.expanded).toBe('true');
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('false');
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/images"]')?.dataset.expanded).toBe('true');
+
+        menuConfig.onSelect(1);
+        await flushPromises();
+
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('true');
+    });
+
     it('shows a hyperlink context menu when right-clicking an anchor in the markdown preview', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getMarkdownMock.mockResolvedValue('# Guide');

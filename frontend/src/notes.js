@@ -665,11 +665,18 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
         const hasActiveFilter = state.fileFilterQuery.trim() !== '';
         const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
+        folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 
         folder.addEventListener('click', () => {
             toggleFolder(folderKey);
+        });
+
+        folder.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openFolderTreeContextMenu(category, node.children || [], event.clientX, event.clientY, node.name);
         });
         container.appendChild(folder);
 
@@ -1445,6 +1452,8 @@ function renderFileList() {
             return;
         }
 
+        const categoryTree = buildFileTree(files);
+
         const categoryExpanded = hasActiveFilter ? true : state.expandedCategories[category];
 
         // Create category header
@@ -1468,6 +1477,12 @@ function renderFileList() {
                 toggleCategory(category);
             });
         }
+
+        categoryHeader.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openFolderTreeContextMenu(category, categoryTree, event.clientX, event.clientY, `${category} folders`);
+        });
         
         elements.list.appendChild(categoryHeader);
 
@@ -1476,7 +1491,7 @@ function renderFileList() {
         categoryContent.className = 'notes-category-content';
         categoryContent.dataset.expanded = categoryExpanded ? 'true' : 'false';
 
-        renderTreeNodesList(categoryContent, category, buildFileTree(files));
+        renderTreeNodesList(categoryContent, category, categoryTree);
 
         elements.list.appendChild(categoryContent);
     });
@@ -1490,6 +1505,59 @@ function toggleCategory(category) {
 function toggleFolder(folderKey) {
     state.expandedFolders[folderKey] = !(state.expandedFolders[folderKey] !== false);
     renderFileList();
+}
+
+function collectFolderKeys(category, nodes) {
+    const keys = [];
+
+    function walk(entries) {
+        entries.forEach((entry) => {
+            if (entry.type !== 'folder') {
+                return;
+            }
+
+            keys.push(`${category}${PRIMARY_PATH_SEPARATOR}${entry.path}`);
+
+            if (Array.isArray(entry.children) && entry.children.length > 0) {
+                walk(entry.children);
+            }
+        });
+    }
+
+    walk(Array.isArray(nodes) ? nodes : []);
+    return keys;
+}
+
+function setFolderExpansionState(folderKeys, expanded) {
+    folderKeys.forEach((key) => {
+        state.expandedFolders[key] = expanded;
+    });
+}
+
+function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder actions') {
+    const folderKeys = collectFolderKeys(category, nodes);
+    if (folderKeys.length === 0) {
+        return;
+    }
+
+    showNotesLocalMenu([
+        {
+            title: 'Collapse Folders',
+            icon: 0xf146,
+            onSelect: () => {
+                setFolderExpansionState(folderKeys, false);
+                renderFileList();
+            },
+        },
+        {
+            title: 'Expand Folders',
+            icon: 0xf0fe,
+            onSelect: () => {
+                setFolderExpansionState(folderKeys, true);
+                renderFileList();
+            },
+        },
+    ], x, y, title);
 }
 
 /**
