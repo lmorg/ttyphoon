@@ -27,9 +27,11 @@ func TestDocumentIncludesInlineCodeValues(t *testing.T) {
 
 	required := []string{
 		"# note.md",
-		"- Size: `123 B` (`123` bytes)",
+		"- Size:",
+		"- Human: `123 B`",
+		"- Bytes: `123`",
 		"- Path:",
-		"```",
+		"```text",
 		"/tmp/note.md",
 		"- User:  `alice`",
 		"- Group: `staff`",
@@ -59,6 +61,10 @@ func TestDocumentEscapesInlineCode(t *testing.T) {
 		t.Fatalf("expected fenced code block for path value, got: %s", doc)
 	}
 
+	if !strings.Contains(doc, "```text") {
+		t.Fatalf("expected typed fenced code block for path value, got: %s", doc)
+	}
+
 }
 
 func TestDocumentForPathIncludesResolvedPath(t *testing.T) {
@@ -75,8 +81,8 @@ func TestDocumentForPathIncludesResolvedPath(t *testing.T) {
 		t.Fatalf("expected file name heading in markdown: %s", doc)
 	}
 
-	if !strings.Contains(doc, "(`5` bytes)") {
-		t.Fatalf("expected byte count section in size field: %s", doc)
+	if !strings.Contains(doc, "- Bytes: `5`") {
+		t.Fatalf("expected bytes section in size field: %s", doc)
 	}
 
 	if !strings.Contains(doc, "- Path:") {

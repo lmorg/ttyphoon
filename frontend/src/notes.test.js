@@ -832,4 +832,44 @@ describe('notes rendering', () => {
         expect(jupyterEditor.getAttribute('data-enable-grammarly')).toBe('false');
         expect(jupyterEditor.getAttribute('spellcheck')).toBeNull();
     });
+
+    it('edits markdown table cells on double click in Run tab', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/table.md']);
+        getMarkdownMock.mockResolvedValue([
+            '# Table',
+            '',
+            '| Name | Value |',
+            '| --- | --- |',
+            '| Alpha | 1 |',
+            '| Beta | 2 |',
+        ].join('\n'));
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/table.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const runTab = document.getElementById('notes-tab-jupyter');
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+
+        const targetCell = document.querySelector('#notes-jupyter tbody tr td');
+        expect(targetCell).toBeTruthy();
+
+        targetCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(targetCell.getAttribute('contenteditable')).toBe('true');
+
+        targetCell.textContent = 'Gamma';
+        targetCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+        await flushPromises();
+
+        const notesEditor = document.getElementById('notes-editor');
+        expect(notesEditor.value).toContain('| Gamma | 1 |');
+    });
 });

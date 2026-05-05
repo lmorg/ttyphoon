@@ -126,8 +126,9 @@ type configT struct {
 		AlwaysOnTop            bool `yaml:"AlwaysOnTop"`
 	} `yaml:"Window"`
 
-	NotesWindow struct {
-	} `yaml:"NotesWindow"`
+	Notes struct {
+		MaxFileSize int64 `yaml:"MaxFileSize"`
+	} `yaml:"Notes"`
 
 	TypeFace struct {
 		FontName         string `yaml:"FontName"`

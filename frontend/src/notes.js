@@ -833,6 +833,243 @@ function setupInteractiveCheckboxes(container, isEditable) {
     });
 }
 
+function parseMarkdownTableRow(line) {
+    const source = String(line ?? '').trim();
+    const hasLeadingPipe = source.startsWith('|');
+    const hasTrailingPipe = source.endsWith('|');
+    const body = source.replace(/^\|/, '').replace(/\|$/, '');
+
+    const cells = [];
+    let current = '';
+    let escaped = false;
+
+    for (let i = 0; i < body.length; i += 1) {
+        const char = body[i];
+        if (escaped) {
+            current += char;
+            escaped = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escaped = true;
+            current += char;
+            continue;
+        }
+
+        if (char === '|') {
+            cells.push(current.trim());
+            current = '';
+            continue;
+        }
+
+        current += char;
+    }
+
+    cells.push(current.trim());
+
+    return { cells, hasLeadingPipe, hasTrailingPipe };
+}
+
+function serializeMarkdownTableRow(cells, hasLeadingPipe = true, hasTrailingPipe = true) {
+    const escapedCells = cells.map((cell) => String(cell ?? '')
+        .replace(/\n/g, ' ')
+        .replace(/\|/g, '\\|')
+        .trim());
+
+    const core = ` ${escapedCells.join(' | ')} `;
+    if (hasLeadingPipe && hasTrailingPipe) {
+        return `|${core}|`;
+    }
+    if (hasLeadingPipe) {
+        return `|${core}`;
+    }
+    if (hasTrailingPipe) {
+        return `${core}|`;
+    }
+    return core;
+}
+
+function isMarkdownTableSeparatorLine(line) {
+    return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(String(line ?? ''));
+}
+
+function findMarkdownTableBlocks(markdown) {
+    const lines = String(markdown ?? '').split('\n');
+    const blocks = [];
+
+    for (let i = 0; i < lines.length - 1; i += 1) {
+        const headerLine = lines[i];
+        const separatorLine = lines[i + 1];
+
+        if (!String(headerLine).includes('|') || !isMarkdownTableSeparatorLine(separatorLine)) {
+            continue;
+        }
+
+        const rowLineIndexes = [i];
+        let j = i + 2;
+        while (j < lines.length) {
+            const rowLine = lines[j];
+            if (!String(rowLine).includes('|') || String(rowLine).trim() === '') {
+                break;
+            }
+            rowLineIndexes.push(j);
+            j += 1;
+        }
+
+        blocks.push({
+            rowLineIndexes,
+            separatorLineIndex: i + 1,
+        });
+
+        i = j - 1;
+    }
+
+    return blocks;
+}
+
+function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) {
+        return false;
+    }
+
+    const lineIndex = block.rowLineIndexes[sourceRowIndex];
+    if (!Number.isInteger(lineIndex)) {
+        return false;
+    }
+
+    const lines = String(elements.editor.value || '').split('\n');
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+        return false;
+    }
+
+    const parsed = parseMarkdownTableRow(lines[lineIndex]);
+    while (parsed.cells.length <= columnIndex) {
+        parsed.cells.push('');
+    }
+
+    parsed.cells[columnIndex] = String(value ?? '').trim();
+    lines[lineIndex] = serializeMarkdownTableRow(parsed.cells, parsed.hasLeadingPipe, parsed.hasTrailingPipe);
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+
+    return true;
+}
+
+function setupInteractiveMarkdownTables(container, isEditable) {
+    if (!container) {
+        return;
+    }
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    if (!isEditable || tables.length === 0) {
+        return;
+    }
+
+    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+
+    tables.forEach((table, tableIndex) => {
+        const block = blocks[tableIndex];
+        if (!block) {
+            return;
+        }
+
+        const attachEditor = (cell, sourceRowIndex, columnIndex) => {
+            cell.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (cell.dataset.tableEditing === 'true') {
+                    return;
+                }
+
+                const originalValue = String(cell.textContent || '').trim();
+
+                cell.dataset.tableEditing = 'true';
+                cell.setAttribute('contenteditable', 'true');
+                cell.setAttribute('spellcheck', 'false');
+                cell.style.outline = 'none';
+                cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
+
+                const selection = window.getSelection ? window.getSelection() : null;
+                const range = document.createRange ? document.createRange() : null;
+                if (selection && range) {
+                    range.selectNodeContents(cell);
+                    range.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+                cell.focus();
+
+                const finish = (commit) => {
+                    if (cell.dataset.tableEditing !== 'true') {
+                        return;
+                    }
+
+                    cell.dataset.tableEditing = 'false';
+                    cell.removeAttribute('contenteditable');
+                    cell.removeAttribute('spellcheck');
+                    cell.style.outline = '';
+                    cell.style.boxShadow = '';
+
+                    const nextValue = commit ? String(cell.textContent || '').trim() : originalValue;
+                    if (!commit) {
+                        cell.textContent = originalValue;
+                    }
+
+                    cell.removeEventListener('keydown', onKeyDown);
+                    cell.removeEventListener('blur', onBlur);
+
+                    if (commit) {
+                        updateMarkdownTableCell(block, sourceRowIndex, columnIndex, nextValue);
+                    }
+
+                    if (state.viewMode === 'jupyter') {
+                        renderJupyterView();
+                    }
+                };
+
+                const onKeyDown = (keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                        keyEvent.preventDefault();
+                        finish(true);
+                    } else if (keyEvent.key === 'Escape') {
+                        keyEvent.preventDefault();
+                        finish(false);
+                    }
+                };
+
+                const onBlur = () => {
+                    finish(true);
+                };
+
+                cell.addEventListener('keydown', onKeyDown);
+                cell.addEventListener('blur', onBlur);
+            });
+        };
+
+        const headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            const headerCells = Array.from(headerRow.querySelectorAll('th'));
+            headerCells.forEach((cell, columnIndex) => {
+                attachEditor(cell, 0, columnIndex);
+            });
+        }
+
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        bodyRows.forEach((row, rowIndex) => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            cells.forEach((cell, columnIndex) => {
+                attachEditor(cell, rowIndex + 1, columnIndex);
+            });
+        });
+    });
+}
+
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     const lines = elements.editor.value.split('\n');
     let currentCheckboxIndex = 0;
@@ -1081,6 +1318,7 @@ function renderJupyterView() {
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
+    setupInteractiveMarkdownTables(elements.jupyter, true);
     convertToJupyterCodeBlocks();
     
     // Re-apply find highlights if find bar is open and in jupyter mode

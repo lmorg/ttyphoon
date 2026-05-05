@@ -16,6 +16,7 @@ import (
 // Values are the metadata fields rendered into the Notes Meta markdown template.
 type Values struct {
 	Filename   string
+	FileType   string
 	SizeHuman  string
 	SizeBytes  int64
 	PathFull   string
@@ -127,6 +128,7 @@ func lookupGroupName(gid string) string {
 func DocumentForPath(resolvedPath string) string {
 	meta := Values{
 		Filename:   filepath.Base(resolvedPath),
+		FileType:   "unknown",
 		SizeHuman:  "unknown",
 		PathFull:   resolvedPath,
 		UserOwner:  "unknown",
@@ -143,6 +145,7 @@ func DocumentForPath(resolvedPath string) string {
 	}
 
 	meta.Filename = fi.Name()
+	meta.FileType = fileType(resolvedPath)
 	meta.SizeBytes = fi.Size()
 	meta.SizeHuman = humannumbers.Bytes(uint64(fi.Size()))
 	meta.UnixOctal = fmt.Sprintf("%04o", fi.Mode().Perm())
@@ -161,6 +164,7 @@ func DocumentForPath(resolvedPath string) string {
 func document(v Values) string {
 	data := Values{
 		Filename:   withDefault(v.Filename, "Unknown file"),
+		FileType:   withDefault(v.FileType, "unknown"),
 		SizeBytes:  v.SizeBytes,
 		SizeHuman:  withDefault(v.SizeHuman, "unknown"),
 		PathFull:   withDefault(v.PathFull, ""),

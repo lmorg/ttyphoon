@@ -572,6 +572,15 @@ func (a *WApp) StopNote(id string) {
 func (a *WApp) GetMarkdown(filename string) string {
 	filename = a.filePath(filename)
 
+	stat, err := os.Stat(filename)
+	if err != nil {
+		log.Println(err)
+		return err.Error()
+	}
+	if stat.Size() > config.Config.Notes.MaxFileSize*1024*1024 {
+		return "File too large to open"
+	}
+
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)

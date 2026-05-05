@@ -1,10 +1,14 @@
 # {{ .Filename }}
 
+> {{ .FileType }}
+
 ## Attributes
 
-- Size: `{{ .SizeHuman }}` (`{{ .SizeBytes }}` bytes)
+- Size:
+  - Human: `{{ .SizeHuman }}`
+  - Bytes: `{{ .SizeBytes }}`
 - Path:
-  ```
+  ```text
   {{ .PathFull }}
   ```
 
