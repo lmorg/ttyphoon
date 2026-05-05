@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetMarkdown, GetImage,
+    GetWindowStyle, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
@@ -23,6 +23,7 @@ import {
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
 import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
+import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -92,6 +93,9 @@ app.innerHTML = `
                             <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
                         </div>
                     </div>
+                </div>
+                <div id="notes-hex-wrap" role="tabpanel">
+                    <div id="notes-hex"></div>
                 </div>
                 <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-preview"></div>
@@ -189,6 +193,8 @@ const elements = {
     tabCsvView: document.getElementById('notes-tab-csv-view'),
     tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     editorWrap: document.getElementById('notes-editor-wrap'),
+    hexWrap: document.getElementById('notes-hex-wrap'),
+    hex: document.getElementById('notes-hex'),
     previewWrap: document.getElementById('notes-preview-wrap'),
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
     imageViewWrap: document.getElementById('notes-image-view-wrap'),
@@ -228,7 +234,7 @@ const state = {
     files: [],
     currentFile: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
-    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv'
+    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -1224,6 +1230,8 @@ function setViewMode(mode) {
         }
     } else if (state.currentFileType === 'code') {
         state.viewMode = 'editor';
+    } else if (state.currentFileType === 'binary') {
+        state.viewMode = 'hex';
     } else if (state.currentFileType === 'image') {
         state.viewMode = 'image-view';
     } else if (state.currentFileType === 'csv') {
@@ -1241,17 +1249,19 @@ function setViewMode(mode) {
     
     // Standard tabs
     const isEditor = state.viewMode === 'editor';
+    const isHex = state.viewMode === 'hex';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
     const isMeta = state.viewMode === 'meta';
     
-    elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
+    elements.tabEditor.setAttribute('aria-selected', (isEditor || isHex) ? 'true' : 'false');
     elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
     elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
     
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
+    elements.hexWrap.dataset.active = isHex ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
@@ -1842,8 +1852,23 @@ function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder action
  * Show/hide tabs based on file type
  */
 function updateTabVisibility(fileType) {
+    if (fileType === 'error') {
+        elements.tabMeta.style.display = '';
+        elements.tabViewer.style.display = 'none';
+        elements.tabEditor.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        elements.tabImageView.style.display = 'none';
+        elements.tabCsvView.style.display = 'none';
+        elements.tabCsvEdit.style.display = 'none';
+        return;
+    }
+
     const isJson  = fileType === 'json';
     const isCode  = fileType === 'code';
+    const isBinary = fileType === 'binary';
     const isImage = fileType === 'image';
     const isCsv   = fileType === 'csv';
 
@@ -1886,6 +1911,19 @@ function updateTabVisibility(fileType) {
         // Code files use a single Edit tab.
         elements.tabEditor.style.display = '';
         elements.tabEditor.textContent = 'Edit';
+        elements.tabMeta.style.display = '';
+        elements.tabViewer.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    if (isBinary) {
+        // Binary files use a single Hex tab.
+        elements.tabEditor.style.display = '';
+        elements.tabEditor.textContent = 'Hex';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
@@ -2560,7 +2598,7 @@ async function loadFile(file) {
             updateTabVisibility('image');
 
             // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
-            // GetMarkdown does. GetImage expects a path without a leading separator
+            // GetFile does. GetImage expects a path without a leading separator
             // (it prepends one itself), so strip it after resolution.
             const resolvedPath = await ResolveFilePath(file);
             const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
@@ -2586,11 +2624,53 @@ async function loadFile(file) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
         }
 
-        const doc = await GetMarkdown(file);
+        const result = await GetFile(file);
 
         state.currentFile = file;
         emitCurrentFileName();
         await refreshFileMetaMarkdown(file);
+
+        if (result.error !== '') {
+            if (stickyId) {
+                closeStickyProgress(stickyId, result.error, 'warn');
+            } else {
+                notifyTerminal(result.error, 'warn');
+            }
+            updateTabVisibility('error');
+            setViewMode('meta');
+            setDirty(false);
+            renderFileList();
+            return;
+        }
+
+        const doc = result.contents;
+        const isBinaryFile = Boolean(result.binary ?? result.text);
+
+        if (isBinaryFile) {
+            state.currentFileType = 'binary';
+            setCodeEditorMode(false);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+
+            updateTabVisibility('binary');
+            renderHexDump(elements.hex, doc || '', {
+                fontSize: result.fontSize,
+                adjustCellHeight: result.adjustCellHeight,
+            });
+            setViewMode('hex');
+
+            if (stickyId) {
+                closeStickyProgress(stickyId);
+            }
+
+            setDirty(false);
+            renderFileList();
+
+            if (elements.findBar.dataset.open === 'true') {
+                closeFindBar();
+            }
+            return;
+        }
         
         // Detect file type
         if (loadingJson) {
@@ -2815,7 +2895,7 @@ function closeFindBar() {
 }
 
 function isFindAvailableInCurrentMode() {
-    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view';
+    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view' && state.viewMode !== 'hex';
 }
 
 function updateFindAvailability() {
@@ -4380,9 +4460,11 @@ function applyWindowStyle(result) {
         }
 
         #notes-swagger-view-wrap,
-        #notes-swagger-run-wrap {
+        #notes-swagger-run-wrap,
+        #notes-hex-wrap {
             flex: 1;
             display: none;
+            min-width: 0;
             min-height: 0;
             overflow: hidden;
         }
@@ -4392,11 +4474,13 @@ function applyWindowStyle(result) {
         #notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-hex-wrap {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-editor-wrap[data-active="true"],
+        #notes-hex-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
         #notes-jupyter-wrap[data-active="true"],
         #notes-meta-wrap[data-active="true"] {
@@ -4715,6 +4799,8 @@ function applyWindowStyle(result) {
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
 
         ${getHighlightJsTheme(result.colors, true)}
+
+        ${getHexDumpStyles(result.fontSize, result.adjustCellHeight)}
 
         #notes-preview img,
         #notes-jupyter img {
@@ -5460,6 +5546,10 @@ initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
+    if (state.currentFileType === 'binary') {
+        setViewMode('hex');
+        return;
+    }
     setViewMode('editor');
 });
 
@@ -5514,6 +5604,10 @@ function getVisibleNotesTabs() {
     }
 
     if (state.currentFileType === 'code') {
+        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
+    }
+
+    if (state.currentFileType === 'binary') {
         return [elements.tabEditor, elements.tabMeta].filter(Boolean);
     }
 

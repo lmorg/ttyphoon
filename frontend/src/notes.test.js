@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getWindowStyleMock = vi.fn();
-const getMarkdownMock = vi.fn();
+const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const saveFileMock = vi.fn(() => Promise.resolve());
 const saveBinaryFileMock = vi.fn(() => Promise.resolve());
@@ -49,7 +49,7 @@ const showLocalMenuMock = vi.fn();
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
-    GetMarkdown: getMarkdownMock,
+    GetFile: getFileMock,
     ListFiles: listFilesMock,
     SaveFile: saveFileMock,
     SaveBinaryFile: saveBinaryFileMock,
@@ -166,7 +166,7 @@ describe('notes rendering', () => {
         }
 
         getWindowStyleMock.mockReset();
-        getMarkdownMock.mockReset();
+        getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
         saveBinaryFileMock.mockClear();
@@ -194,7 +194,7 @@ describe('notes rendering', () => {
         showLocalMenuMock.mockReset();
 
         getWindowStyleMock.mockResolvedValue(theme);
-        getMarkdownMock.mockResolvedValue('');
+        getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
         getCurrentProjectMock.mockResolvedValue('');
         getFileMetaMarkdownMock.mockResolvedValue([
             '# note.md',
@@ -289,7 +289,7 @@ describe('notes rendering', () => {
 
     it('loads markdown content when a rendered file entry is clicked', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
-        getMarkdownMock.mockResolvedValue('# Hello Notes');
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
 
         await importNotesModule();
 
@@ -298,7 +298,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(getMarkdownMock).toHaveBeenCalledWith('$NOTES/todo.md');
+        expect(getFileMock).toHaveBeenCalledWith('$NOTES/todo.md');
         expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
@@ -307,7 +307,7 @@ describe('notes rendering', () => {
         listFilesMock
             .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
             .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
-        getMarkdownMock.mockResolvedValue('# Hello Notes');
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
 
         await importNotesModule();
 
@@ -338,16 +338,16 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.go')) {
-                return 'package main\n\nfunc main() {}';
+                return { contents: 'package main\n\nfunc main() {}', text: '', error: '' };
             }
 
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
 
-            return '# Markdown note';
+            return { contents: '# Markdown note', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -499,7 +499,7 @@ describe('notes rendering', () => {
 
     it('shows a hyperlink context menu when right-clicking an anchor in the markdown preview', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getMarkdownMock.mockResolvedValue('# Guide');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
         displayHyperlinkMenuMock.mockResolvedValue();
 
         await importNotesModule();
@@ -527,7 +527,7 @@ describe('notes rendering', () => {
 
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
-        getMarkdownMock.mockResolvedValue('# Readme');
+        getFileMock.mockResolvedValue({ contents: '# Readme', text: '', error: '' });
         displayHyperlinkMenuMock.mockResolvedValue();
 
         await importNotesModule();
@@ -553,7 +553,7 @@ describe('notes rendering', () => {
 
     it('auto-copies markdown viewer selection when highlighted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getMarkdownMock.mockResolvedValue('# Guide');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
         await importNotesModule();
 
@@ -598,16 +598,16 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.md')) {
-                return '# Markdown note';
+                return { contents: '# Markdown note', text: '', error: '' };
             }
 
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
 
-            return 'package main\n\nfunc main() {}';
+            return { contents: 'package main\n\nfunc main() {}', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -655,9 +655,48 @@ describe('notes rendering', () => {
         expect(tabMeta.style.display).toBe('');
     });
 
+    it('shows a Hex tab for binary files and renders hexdump output', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/app.bin']);
+        getFileMock.mockResolvedValue({
+            contents: 'Y2YgAAAAAABoZXh5CgAAAA==',
+            binary: true,
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/app.bin"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabMeta = document.getElementById('notes-tab-meta');
+        const hexWrap = document.getElementById('notes-hex-wrap');
+        const hexRoot = document.getElementById('notes-hex');
+        const editorWrap = document.getElementById('notes-editor-wrap');
+        const hexHeader = document.querySelector('.notes-hex-header');
+        const offsetInput = document.querySelector('.notes-hex-offset-input');
+        const goButton = document.querySelector('.notes-hex-offset-go');
+
+        expect(tabEditor.textContent).toBe('Hex');
+        expect(tabEditor.getAttribute('aria-selected')).toBe('true');
+        expect(tabViewer.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
+        expect(hexWrap.dataset.active).toBe('true');
+        expect(editorWrap.dataset.active).toBe('false');
+        expect(hexRoot.textContent).toContain('00000000');
+        expect(hexRoot.textContent).toContain('63 66 20 00 00 00 00 00');
+        expect(hexRoot.textContent).toContain('|cf .....hexy....|');
+        expect(hexHeader.textContent).toContain('Offset');
+        expect(offsetInput).toBeTruthy();
+        expect(goButton).toBeTruthy();
+    });
+
     it('shows meta pane only when meta tab is selected and renders template-provided markdown', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
-        getMarkdownMock.mockResolvedValue('# Markdown note');
+        getFileMock.mockResolvedValue({ contents: '# Markdown note', text: '', error: '' });
         getFileMetaMarkdownMock.mockResolvedValue([
             '# readme.md',
             '',
@@ -711,7 +750,7 @@ describe('notes rendering', () => {
 
     it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/config.json']);
-        getMarkdownMock.mockResolvedValue('{"longPropertyName": "value"}');
+        getFileMock.mockResolvedValue({ contents: '{"longPropertyName": "value"}', text: '', error: '' });
 
         await importNotesModule();
 
@@ -741,11 +780,11 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
-            return '# Markdown note';
+            return { contents: '# Markdown note', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -803,7 +842,7 @@ describe('notes rendering', () => {
 
     it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
-        getMarkdownMock.mockResolvedValue('# Note\n\n```js\nconsole.log("hello")\n```');
+        getFileMock.mockResolvedValue({ contents: '# Note\n\n```js\nconsole.log("hello")\n```', text: '', error: '' });
 
         await importNotesModule();
 
@@ -835,14 +874,14 @@ describe('notes rendering', () => {
 
     it('edits markdown table cells on double click in Run tab', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/table.md']);
-        getMarkdownMock.mockResolvedValue([
+        getFileMock.mockResolvedValue({ contents: [
             '# Table',
             '',
             '| Name | Value |',
             '| --- | --- |',
             '| Alpha | 1 |',
             '| Beta | 2 |',
-        ].join('\n'));
+        ].join('\n'), text: '', error: '' });
 
         await importNotesModule();
 

@@ -113,7 +113,7 @@ TypeFace:
 Notes:
   # Maximum size of files that can be opened in Notes
   # Units: megabytes (MB)
-  MaxFileSize: 5
+  MaxFileSize: 50
 
 Window:
   StatusBar: true

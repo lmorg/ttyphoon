@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
@@ -569,33 +570,43 @@ func (a *WApp) StopNote(id string) {
 	})
 }
 
-func (a *WApp) GetMarkdown(filename string) string {
+type GetFileReturnT struct {
+	Contents string `json:"contents"`
+	Binary   bool   `json:"binary"`
+	Error    string `json:"error"`
+}
+
+func (a *WApp) GetFile(filename string) GetFileReturnT {
 	filename = a.filePath(filename)
 
 	stat, err := os.Stat(filename)
 	if err != nil {
 		log.Println(err)
-		return err.Error()
+		return GetFileReturnT{Error: err.Error()}
 	}
 	if stat.Size() > config.Config.Notes.MaxFileSize*1024*1024 {
-		return "File too large to open"
+		return GetFileReturnT{Error: "File too large to open"}
 	}
 
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
-		return err.Error()
+		return GetFileReturnT{Error: err.Error()}
 	}
 
 	b, err := io.ReadAll(f)
 	if err != nil {
 		log.Println(err)
-		return err.Error()
+		return GetFileReturnT{Error: err.Error()}
 	}
 
 	a.mdBaseDir = filepath.Dir(filename)
 
-	return string(b)
+	if bytes.Contains(b[:min(1024, len(b))], []byte{0}) {
+		return GetFileReturnT{Contents: base64.StdEncoding.EncodeToString(b), Binary: true}
+	}
+
+	return GetFileReturnT{Contents: string(b), Binary: false}
 }
 
 var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)

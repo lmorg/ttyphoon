@@ -1,5 +1,9 @@
 # {{ .Filename }}
 
+```text
+{{ .PathFull }}
+```
+
 > {{ .FileType }}
 
 ## Attributes
@@ -7,10 +11,9 @@
 - Size:
   - Human: `{{ .SizeHuman }}`
   - Bytes: `{{ .SizeBytes }}`
-- Path:
-  ```text
-  {{ .PathFull }}
-  ```
+- Date:
+  - Created:  `{{ .DateCreated }}`
+  - Modified: `{{ .DateModified }}`
 
 ## Owners
 

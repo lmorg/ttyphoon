@@ -42,6 +42,10 @@ export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
 
+export function GetFile(arg1) {
+  return window['go']['main']['WApp']['GetFile'](arg1);
+}
+
 export function GetFileMetaMarkdown(arg1) {
   return window['go']['main']['WApp']['GetFileMetaMarkdown'](arg1);
 }
@@ -56,10 +60,6 @@ export function GetImage(arg1) {
 
 export function GetLanguageDescriptions(arg1) {
   return window['go']['main']['WApp']['GetLanguageDescriptions'](arg1);
-}
-
-export function GetMarkdown(arg1) {
-  return window['go']['main']['WApp']['GetMarkdown'](arg1);
 }
 
 export function GetTerminalGlyphSize() {

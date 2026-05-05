@@ -10,22 +10,27 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/djherbis/times"
 	"github.com/lmorg/murex/utils/humannumbers"
 )
 
+const _UNKNOWN = "unknown"
+
 // Values are the metadata fields rendered into the Notes Meta markdown template.
 type Values struct {
-	Filename   string
-	FileType   string
-	SizeHuman  string
-	SizeBytes  int64
-	PathFull   string
-	UserOwner  string
-	GroupOwner string
-	UnixOctal  string
-	UserACL    string
-	GroupACL   string
-	OtherACL   string
+	Filename     string
+	PathFull     string
+	FileType     string
+	SizeHuman    string
+	SizeBytes    int64
+	DateCreated  string
+	DateModified string
+	UserOwner    string
+	GroupOwner   string
+	UnixOctal    string
+	UserACL      string
+	GroupACL     string
+	OtherACL     string
 }
 
 //go:embed meta.md
@@ -91,7 +96,7 @@ func statOwnerGroupIDs(sys any) (string, string) {
 func lookupUserName(uid string) string {
 	uid = strings.TrimSpace(uid)
 	if uid == "" {
-		return "unknown"
+		return _UNKNOWN
 	}
 
 	u, err := user.LookupId(uid)
@@ -109,7 +114,7 @@ func lookupUserName(uid string) string {
 func lookupGroupName(gid string) string {
 	gid = strings.TrimSpace(gid)
 	if gid == "" {
-		return "unknown"
+		return _UNKNOWN
 	}
 
 	g, err := user.LookupGroupId(gid)
@@ -127,16 +132,18 @@ func lookupGroupName(gid string) string {
 // DocumentForPath returns a complete markdown metadata document for a file path.
 func DocumentForPath(resolvedPath string) string {
 	meta := Values{
-		Filename:   filepath.Base(resolvedPath),
-		FileType:   "unknown",
-		SizeHuman:  "unknown",
-		PathFull:   resolvedPath,
-		UserOwner:  "unknown",
-		GroupOwner: "unknown",
-		UnixOctal:  "0000",
-		UserACL:    "---",
-		GroupACL:   "---",
-		OtherACL:   "---",
+		Filename:     filepath.Base(resolvedPath),
+		PathFull:     resolvedPath,
+		FileType:     _UNKNOWN,
+		SizeHuman:    _UNKNOWN,
+		DateCreated:  _UNKNOWN,
+		DateModified: _UNKNOWN,
+		UserOwner:    _UNKNOWN,
+		GroupOwner:   _UNKNOWN,
+		UnixOctal:    "0000",
+		UserACL:      "---",
+		GroupACL:     "---",
+		OtherACL:     "---",
 	}
 
 	fi, err := os.Stat(resolvedPath)
@@ -148,10 +155,16 @@ func DocumentForPath(resolvedPath string) string {
 	meta.FileType = fileType(resolvedPath)
 	meta.SizeBytes = fi.Size()
 	meta.SizeHuman = humannumbers.Bytes(uint64(fi.Size()))
+	meta.DateModified = fi.ModTime().String()
 	meta.UnixOctal = fmt.Sprintf("%04o", fi.Mode().Perm())
 	meta.UserACL = aclString(fi.Mode(), 0400, 0200, 0100)
 	meta.GroupACL = aclString(fi.Mode(), 0040, 0020, 0010)
 	meta.OtherACL = aclString(fi.Mode(), 0004, 0002, 0001)
+
+	t, _ := times.Stat(resolvedPath)
+	if t != nil {
+		meta.DateCreated = t.BirthTime().String()
+	}
 
 	uid, gid := statOwnerGroupIDs(fi.Sys())
 	meta.UserOwner = lookupUserName(uid)
@@ -163,17 +176,19 @@ func DocumentForPath(resolvedPath string) string {
 // Document returns a complete markdown document for the notes Meta tab.
 func document(v Values) string {
 	data := Values{
-		Filename:   withDefault(v.Filename, "Unknown file"),
-		FileType:   withDefault(v.FileType, "unknown"),
-		SizeBytes:  v.SizeBytes,
-		SizeHuman:  withDefault(v.SizeHuman, "unknown"),
-		PathFull:   withDefault(v.PathFull, ""),
-		UserOwner:  withDefault(v.UserOwner, "unknown"),
-		GroupOwner: withDefault(v.GroupOwner, "unknown"),
-		UnixOctal:  withDefault(v.UnixOctal, "0000"),
-		UserACL:    withDefault(v.UserACL, "---"),
-		GroupACL:   withDefault(v.GroupACL, "---"),
-		OtherACL:   withDefault(v.OtherACL, "---"),
+		Filename:     withDefault(v.Filename, "Unknown file"),
+		PathFull:     withDefault(v.PathFull, ""),
+		FileType:     withDefault(v.FileType, _UNKNOWN),
+		SizeBytes:    v.SizeBytes,
+		SizeHuman:    withDefault(v.SizeHuman, _UNKNOWN),
+		DateCreated:  withDefault(v.DateCreated, _UNKNOWN),
+		DateModified: withDefault(v.DateModified, _UNKNOWN),
+		UserOwner:    withDefault(v.UserOwner, _UNKNOWN),
+		GroupOwner:   withDefault(v.GroupOwner, _UNKNOWN),
+		UnixOctal:    withDefault(v.UnixOctal, "0000"),
+		UserACL:      withDefault(v.UserACL, "---"),
+		GroupACL:     withDefault(v.GroupACL, "---"),
+		OtherACL:     withDefault(v.OtherACL, "---"),
 	}
 
 	var b strings.Builder
