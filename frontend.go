@@ -19,6 +19,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
+	metamd "github.com/lmorg/ttyphoon/tools/meta-md"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
@@ -899,6 +900,10 @@ func (a *WApp) WindowPrint() {
 type ClipboardData struct {
 	Text  string `json:"text"`
 	Image string `json:"image"`
+}
+
+func (a *WApp) GetFileMetaMarkdown(filename string) string {
+	return metamd.DocumentForPath(a.filePath(filename))
 }
 
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.

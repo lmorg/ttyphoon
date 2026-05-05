@@ -19,6 +19,26 @@ const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
+const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
+    '# note.md',
+    '',
+    '## Attributes',
+    '',
+    '- Size: `0`',
+    '- Path: `/tmp/note.md`',
+    '',
+    '## Owners',
+    '',
+    '- User: `user`',
+    '- Group: `group`',
+    '',
+    '## Permissions',
+    '',
+    '- Unix: `0644`',
+    '- User: `rw-`',
+    '- Group: `r--`',
+    '- Other: `r--`',
+].join('\n')));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
@@ -47,6 +67,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
     GetCurrentProject: getCurrentProjectMock,
+    GetFileMetaMarkdown: getFileMetaMarkdownMock,
     ResolveFilePath: resolveFilePathMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
@@ -163,6 +184,7 @@ describe('notes rendering', () => {
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
         getCurrentProjectMock.mockReset();
+        getFileMetaMarkdownMock.mockReset();
         resolveFilePathMock.mockReset();
         getHyperlinkMenuActionsMock.mockReset();
         runHyperlinkMenuActionMock.mockReset();
@@ -174,6 +196,26 @@ describe('notes rendering', () => {
         getWindowStyleMock.mockResolvedValue(theme);
         getMarkdownMock.mockResolvedValue('');
         getCurrentProjectMock.mockResolvedValue('');
+        getFileMetaMarkdownMock.mockResolvedValue([
+            '# note.md',
+            '',
+            '## Attributes',
+            '',
+            '- Size: `0`',
+            '- Path: `/tmp/note.md`',
+            '',
+            '## Owners',
+            '',
+            '- User: `user`',
+            '- Group: `group`',
+            '',
+            '## Permissions',
+            '',
+            '- Unix: `0644`',
+            '- User: `rw-`',
+            '- Group: `r--`',
+            '- Other: `r--`',
+        ].join('\n'));
         resolveFilePathMock.mockResolvedValue('');
         getHyperlinkMenuActionsMock.mockResolvedValue([]);
         clipboardSetTextMock.mockResolvedValue();
@@ -573,6 +615,7 @@ describe('notes rendering', () => {
         const tabEditor = document.getElementById('notes-tab-editor');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
+        const tabMeta = document.getElementById('notes-tab-meta');
         const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
         const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
@@ -591,6 +634,7 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('none');
         expect(tabSwaggerEdit.style.display).toBe('none');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
 
         await clickFile('$NOTES/readme.md');
         expect(tabEditor.style.display).toBe('');
@@ -599,6 +643,7 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('none');
         expect(tabSwaggerEdit.style.display).toBe('none');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
 
         await clickFile('$NOTES/spec.yaml');
         expect(tabEditor.style.display).toBe('none');
@@ -607,6 +652,61 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('');
         expect(tabSwaggerEdit.style.display).toBe('');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
+    });
+
+    it('shows meta pane only when meta tab is selected and renders template-provided markdown', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
+        getMarkdownMock.mockResolvedValue('# Markdown note');
+        getFileMetaMarkdownMock.mockResolvedValue([
+            '# readme.md',
+            '',
+            '## Attributes',
+            '',
+            '- Size: `123Bb`',
+            '- Path:',
+            '  ```',
+            '  /tmp/readme.md',
+            '  ```',
+            '',
+            '## Owners',
+            '',
+            '- User: `user`',
+            '- Group: `group`',
+            '',
+            '## Permissions',
+            '',
+            '- Unix: `0644`',
+            '- User: `rw-`',
+            '- Group: `r--`',
+            '- Other: `r--`',
+        ].join('\n'));
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/readme.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabMeta = document.getElementById('notes-tab-meta');
+        const previewWrap = document.getElementById('notes-preview-wrap');
+        const metaWrap = document.getElementById('notes-meta-wrap');
+        const metaRoot = document.getElementById('notes-meta');
+
+        expect(tabViewer.getAttribute('aria-selected')).toBe('true');
+        expect(metaWrap.dataset.active).toBe('false');
+        expect(previewWrap.dataset.active).toBe('true');
+
+        tabMeta.click();
+        await flushPromises();
+
+        expect(tabMeta.getAttribute('aria-selected')).toBe('true');
+        expect(metaWrap.dataset.active).toBe('true');
+        expect(previewWrap.dataset.active).toBe('false');
+        expect(metaRoot.querySelector('pre')).toBeTruthy();
+        expect(metaRoot.querySelectorAll('code').length).toBeGreaterThan(0);
     });
 
     it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
@@ -657,11 +757,12 @@ describe('notes rendering', () => {
             await flushPromises();
         };
 
-        // Markdown defaults to View, then cycles View -> Edit -> Run -> View.
+        // Markdown defaults to View, then cycles View -> Edit -> Run -> Meta -> View.
         await clickFile('$NOTES/readme.md');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabEditor = document.getElementById('notes-tab-editor');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
+        const tabMeta = document.getElementById('notes-tab-meta');
 
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -669,9 +770,11 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabJupyter.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabMeta.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
 
-        // YAML defaults to structured View, then cycles View <-> Edit (Run hidden without swagger key).
+        // YAML defaults to structured View, then cycles View -> Edit -> Meta -> View (Run hidden without swagger key).
         await clickFile('$NOTES/spec.yaml');
         const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
@@ -682,11 +785,20 @@ describe('notes rendering', () => {
         await flushPromises();
         const selectedBefore = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
-        const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
+        const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
         expect(selectedAfterFirst).not.toBe(selectedBefore);
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
-        const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
-        expect(selectedAfterSecond).toBe(selectedBefore);
+        const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+        expect(selectedAfterSecond).not.toBe(selectedBefore);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        const selectedAfterThird = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+        expect(selectedAfterThird).toBe(selectedBefore);
     });
 
     it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {

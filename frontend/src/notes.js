@@ -6,7 +6,7 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest,
-    ShowCommandPalette, GetCurrentProject,
+    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -73,6 +73,7 @@ app.innerHTML = `
                 <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
                 <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
@@ -103,6 +104,9 @@ app.innerHTML = `
                 </div>
                 <div id="notes-image-view-wrap" role="tabpanel">
                     <img id="notes-image-view-img" alt="" />
+                </div>
+                <div id="notes-meta-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-meta"></div>
                 </div>
                 <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
                     <div id="notes-swagger-view" class="json-viewer"></div>
@@ -181,6 +185,7 @@ const elements = {
     tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
     tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
     tabImageView: document.getElementById('notes-tab-image-view'),
+    tabMeta: document.getElementById('notes-tab-meta'),
     tabCsvView: document.getElementById('notes-tab-csv-view'),
     tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     editorWrap: document.getElementById('notes-editor-wrap'),
@@ -188,6 +193,8 @@ const elements = {
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
     imageViewWrap: document.getElementById('notes-image-view-wrap'),
     imageViewImg: document.getElementById('notes-image-view-img'),
+    metaWrap: document.getElementById('notes-meta-wrap'),
+    meta: document.getElementById('notes-meta'),
     csvViewWrap: document.getElementById('notes-csv-view-wrap'),
     csvView: document.getElementById('notes-csv-view'),
     swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
@@ -245,7 +252,8 @@ const state = {
     swaggerRunAvailable: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
-    editorLanguage: ''
+    editorLanguage: '',
+    fileMetaMarkdown: '',
 };
 
 let lastAutoCopiedViewerSelection = '';
@@ -786,6 +794,29 @@ function renderMarkdown() {
     }
 }
 
+function renderMetaView() {
+    const markdown = state.fileMetaMarkdown || '# Unknown file';
+    elements.meta.innerHTML = marked.parse(markdown);
+    processMarkdownContainer(elements.meta);
+}
+
+async function refreshFileMetaMarkdown(file) {
+    if (!file) {
+        state.fileMetaMarkdown = '';
+        renderMetaView();
+        return;
+    }
+
+    try {
+        state.fileMetaMarkdown = await GetFileMetaMarkdown(file);
+    } catch (err) {
+        state.fileMetaMarkdown = '';
+        console.error(err);
+    }
+
+    renderMetaView();
+}
+
 function setupInteractiveCheckboxes(container, isEditable) {
     const checkboxes = container.querySelectorAll('input[type="checkbox"]');
     
@@ -946,7 +977,9 @@ function emitCurrentFileName() {
 
 function setViewMode(mode) {
     // Determine the mode based on current file type.
-    if (state.currentFileType === 'json') {
+    if (mode === 'meta') {
+        state.viewMode = 'meta';
+    } else if (state.currentFileType === 'json') {
         if (mode === 'swagger-view' || mode === 'swagger-edit' || (mode === 'swagger-run' && state.swaggerRunAvailable)) {
             state.viewMode = mode;
         } else {
@@ -973,15 +1006,18 @@ function setViewMode(mode) {
     const isEditor = state.viewMode === 'editor';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
+    const isMeta = state.viewMode === 'meta';
     
     elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
     elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
+    elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
     
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
+    elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
@@ -1013,6 +1049,10 @@ function setViewMode(mode) {
 
     if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
         renderEditorDecorations();
+    }
+
+    if (isMeta) {
+        renderMetaView();
     }
 
     updateFindAvailability();
@@ -1572,6 +1612,7 @@ function updateTabVisibility(fileType) {
     if (isImage) {
         // Image files use a single View tab.
         elements.tabImageView.style.display = '';
+        elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
@@ -1587,6 +1628,7 @@ function updateTabVisibility(fileType) {
         // CSV files use View + Edit tabs.
         elements.tabCsvView.style.display = '';
         elements.tabCsvEdit.style.display = '';
+        elements.tabMeta.style.display = '';
         elements.tabImageView.style.display = 'none';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
@@ -1606,6 +1648,7 @@ function updateTabVisibility(fileType) {
         // Code files use a single Edit tab.
         elements.tabEditor.style.display = '';
         elements.tabEditor.textContent = 'Edit';
+        elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
         elements.tabSwaggerView.style.display = 'none';
@@ -1619,6 +1662,7 @@ function updateTabVisibility(fileType) {
     elements.tabEditor.style.display = isJson ? 'none' : '';
     elements.tabEditor.textContent = 'Edit';
     elements.tabJupyter.style.display = isJson ? 'none' : '';
+    elements.tabMeta.style.display = '';
 
     // JSON/YAML tabs
     elements.tabSwaggerView.style.display = isJson ? '' : 'none';
@@ -2270,6 +2314,7 @@ async function loadFile(file) {
         if (loadingImage) {
             state.currentFile = file;
             emitCurrentFileName();
+            await refreshFileMetaMarkdown(file);
             state.currentFileType = 'image';
             setCodeEditorMode(false);
             state.swaggerSpec = null;
@@ -2307,6 +2352,7 @@ async function loadFile(file) {
 
         state.currentFile = file;
         emitCurrentFileName();
+        await refreshFileMetaMarkdown(file);
         
         // Detect file type
         if (loadingJson) {
@@ -4068,7 +4114,8 @@ function applyWindowStyle(result) {
 
         #notes-editor-wrap,
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             flex: 1;
             display: none;
             min-height: 0;
@@ -4076,7 +4123,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             padding-right: 10px;
             padding-bottom: 10px;
         }
@@ -4091,6 +4139,7 @@ function applyWindowStyle(result) {
 
         #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
@@ -4099,7 +4148,8 @@ function applyWindowStyle(result) {
 
         #notes-editor-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
-        #notes-jupyter-wrap[data-active="true"] {
+        #notes-jupyter-wrap[data-active="true"],
+        #notes-meta-wrap[data-active="true"] {
             display: block;
         }
 
@@ -4388,7 +4438,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             overflow-y: auto;
             padding-left: 16px;
         }
@@ -4396,6 +4447,8 @@ function applyWindowStyle(result) {
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-meta', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
 
@@ -5196,28 +5249,33 @@ elements.tabCsvEdit.addEventListener('click', () => {
     setViewMode('csv-edit');
 });
 
+elements.tabMeta.addEventListener('click', () => {
+    setViewMode('meta');
+});
+
 function getVisibleNotesTabs() {
     if (state.currentFileType === 'json') {
         const tabs = [elements.tabSwaggerView, elements.tabSwaggerEdit];
         if (state.swaggerRunAvailable && elements.tabSwaggerRun?.style.display !== 'none') {
             tabs.push(elements.tabSwaggerRun);
         }
+        tabs.push(elements.tabMeta);
         return tabs.filter(Boolean);
     }
 
     if (state.currentFileType === 'code') {
-        return [elements.tabEditor].filter(Boolean);
+        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'image') {
-        return [elements.tabImageView].filter(Boolean);
+        return [elements.tabImageView, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'csv') {
-        return [elements.tabCsvView, elements.tabCsvEdit].filter(Boolean);
+        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabMeta].filter(Boolean);
     }
 
-    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter].filter((tab) => tab && tab.style.display !== 'none');
+    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter, elements.tabMeta].filter((tab) => tab && tab.style.display !== 'none');
 }
 
 function cycleNotesTabs(direction = 1) {

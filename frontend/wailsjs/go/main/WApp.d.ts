@@ -24,6 +24,8 @@ export function GetCurrentProject():Promise<string>;
 
 export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
 
+export function GetFileMetaMarkdown(arg1:string):Promise<string>;
+
 export function GetHyperlinkMenuActions(arg1:string,arg2:string):Promise<Array<Record<string, any>>>;
 
 export function GetImage(arg1:string):Promise<string>;

@@ -42,6 +42,10 @@ export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
 
+export function GetFileMetaMarkdown(arg1) {
+  return window['go']['main']['WApp']['GetFileMetaMarkdown'](arg1);
+}
+
 export function GetHyperlinkMenuActions(arg1, arg2) {
   return window['go']['main']['WApp']['GetHyperlinkMenuActions'](arg1, arg2);
 }
