@@ -155,9 +155,9 @@ app.innerHTML = `
     <div id="notes-find-bar" data-open="false" aria-hidden="true">
         <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" />
         <span id="notes-find-counter"></span>
-        <button id="notes-find-prev" type="button" title="Previous match">↑</button>
-        <button id="notes-find-next" type="button" title="Next match">↓</button>
-        <button id="notes-find-close" type="button" title="Close find">✕</button>
+        <button id="notes-find-prev" type="button" title="Previous match" tabindex="-1">↑</button>
+        <button id="notes-find-next" type="button" title="Next match" tabindex="-1">↓</button>
+        <button id="notes-find-close" type="button" title="Close find" tabindex="-1">✕</button>
     </div>
 `;
 
@@ -2787,6 +2787,23 @@ function openFindBar() {
     }, 0);
 }
 
+function scrollEditorToSelection(editor, selectionStart) {
+    // Calculate which line the selection starts on and scroll to it
+    const text = editor.value;
+    const beforeSelection = text.substring(0, selectionStart);
+    const linesBefore = beforeSelection.split('\n').length - 1;
+    
+    // Get the line height from computed styles
+    const styles = window.getComputedStyle(editor);
+    const lineHeight = parseFloat(styles.lineHeight) || parseFloat(styles.fontSize) * 1.4;
+    
+    // Calculate the scroll position (subtract half viewport height to center the line)
+    const viewportHeight = editor.clientHeight;
+    const targetScrollTop = Math.max(0, (linesBefore * lineHeight) - (viewportHeight / 2));
+    
+    editor.scrollTop = targetScrollTop;
+}
+
 function closeFindBar() {
     elements.findBar.dataset.open = 'false';
     elements.findBar.setAttribute('aria-hidden', 'true');
@@ -2975,18 +2992,13 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
         if (focusEditor) {
             editorEl.focus();
             editorEl.setSelectionRange(match.start, match.end);
+            // Ensure the editor scrolls to show the selection
+            scrollEditorToSelection(editorEl, match.start);
         } else {
             // Scroll to the match without permanently stealing focus.
-            // Temporarily focus the editor (preventScroll keeps the page from
-            // jumping), then setSelectionRange lets the browser natively scroll
-            // the textarea to the selection, then restore focus to the previous
-            // element (e.g. the find input).
-            const prevFocused = document.activeElement;
-            editorEl.focus({ preventScroll: true });
+            // Set selection and scroll without permanently focusing the editor.
             editorEl.setSelectionRange(match.start, match.end);
-            if (prevFocused && prevFocused !== editorEl) {
-                prevFocused.focus({ preventScroll: true });
-            }
+            scrollEditorToSelection(editorEl, match.start);
         }
     } else {
         const activeContainer = getActiveFindContainer();
@@ -5598,15 +5610,18 @@ if (elements.listFilterClear && elements.listFilter) {
     });
 }
 
-elements.findNext.addEventListener('click', () => {
+elements.findNext.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     nextMatch();
 });
 
-elements.findPrev.addEventListener('click', () => {
+elements.findPrev.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     prevMatch();
 });
 
-elements.findClose.addEventListener('click', () => {
+elements.findClose.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     closeFindBar();
 });
 
