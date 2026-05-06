@@ -16,9 +16,12 @@ import (
 
 const _UNKNOWN = "unknown"
 
+const _DATE_TIME_FORMAT = "Monday, 02-Jan-06 15:04"
+
 // Values are the metadata fields rendered into the Notes Meta markdown template.
 type Values struct {
 	Filename     string
+	PathOnly     string
 	PathFull     string
 	FileType     string
 	SizeHuman    string
@@ -131,8 +134,11 @@ func lookupGroupName(gid string) string {
 
 // DocumentForPath returns a complete markdown metadata document for a file path.
 func DocumentForPath(resolvedPath string) string {
+	resolvedPath = filepath.Clean(resolvedPath)
+
 	meta := Values{
 		Filename:     filepath.Base(resolvedPath),
+		PathOnly:     filepath.Dir(resolvedPath),
 		PathFull:     resolvedPath,
 		FileType:     _UNKNOWN,
 		SizeHuman:    _UNKNOWN,
@@ -155,7 +161,7 @@ func DocumentForPath(resolvedPath string) string {
 	meta.FileType = fileType(resolvedPath)
 	meta.SizeBytes = fi.Size()
 	meta.SizeHuman = humannumbers.Bytes(uint64(fi.Size()))
-	meta.DateModified = fi.ModTime().String()
+	meta.DateModified = fi.ModTime().Format(_DATE_TIME_FORMAT)
 	meta.UnixOctal = fmt.Sprintf("%04o", fi.Mode().Perm())
 	meta.UserACL = aclString(fi.Mode(), 0400, 0200, 0100)
 	meta.GroupACL = aclString(fi.Mode(), 0040, 0020, 0010)
@@ -163,7 +169,7 @@ func DocumentForPath(resolvedPath string) string {
 
 	t, _ := times.Stat(resolvedPath)
 	if t != nil {
-		meta.DateCreated = t.BirthTime().String()
+		meta.DateCreated = t.BirthTime().Format(_DATE_TIME_FORMAT)
 	}
 
 	uid, gid := statOwnerGroupIDs(fi.Sys())
@@ -177,7 +183,8 @@ func DocumentForPath(resolvedPath string) string {
 func document(v Values) string {
 	data := Values{
 		Filename:     withDefault(v.Filename, "Unknown file"),
-		PathFull:     withDefault(v.PathFull, ""),
+		PathOnly:     withDefault(v.PathOnly, _UNKNOWN),
+		PathFull:     withDefault(v.PathFull, _UNKNOWN),
 		FileType:     withDefault(v.FileType, _UNKNOWN),
 		SizeBytes:    v.SizeBytes,
 		SizeHuman:    withDefault(v.SizeHuman, _UNKNOWN),

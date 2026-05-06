@@ -230,7 +230,7 @@ function updateTerminalFocusChrome() {
     splitHandle = document.createElement('div');
     splitHandle.id = 'notes-terminal-split';
     splitHandle.style.cssText = [
-        'width:8px',
+        'width:2px',
         'height:100%',
         'cursor:col-resize',
         `background:${DARKEN_BACKGROUND_OVERLAY}`,
@@ -244,10 +244,8 @@ function updateTerminalFocusChrome() {
     const splitHandleLine = document.createElement('div');
     splitHandleLine.style.cssText = [
         'position:absolute',
-        'left:50%',
         'top:0',
-        'transform:translateX(-50%)',
-        'width:1px',
+        'width:2px',
         'height:100%',
         'background:color-mix(in srgb, var(--fg) 20%, transparent)',
     ].join(';');

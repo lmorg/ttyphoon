@@ -1,9 +1,5 @@
 # {{ .Filename }}
 
-```text
-{{ .PathFull }}
-```
-
 > {{ .FileType }}
 
 ## Attributes
@@ -14,6 +10,11 @@
 - Date:
   - Created:  `{{ .DateCreated }}`
   - Modified: `{{ .DateModified }}`
+- Path:
+  ```text
+  {{ .PathOnly }}
+  ```
+
 
 ## Owners
 

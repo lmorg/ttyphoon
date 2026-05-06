@@ -860,7 +860,7 @@ describe('notes rendering', () => {
         expect(notesEditor.getAttribute('data-gramm')).toBe('false');
         expect(notesEditor.getAttribute('data-gramm_editor')).toBe('false');
         expect(notesEditor.getAttribute('data-enable-grammarly')).toBe('false');
-        expect(notesEditor.getAttribute('spellcheck')).toBeNull();
+        expect(notesEditor.getAttribute('spellcheck')).toBe('false');
 
         expect(jupyterEditor).toBeTruthy();
         expect(jupyterEditor.getAttribute('autocorrect')).toBe('off');

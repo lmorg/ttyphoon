@@ -64,13 +64,10 @@ func summarizeAINoteTitle(agent *agent.Agent, query string) string {
 }
 
 func buildAINoteFilename(agent *agent.Agent, query string, now time.Time) string {
-	//sticky := agent.Renderer().DisplaySticky(types.NOTIFY_INFO, "Writing output to markdown...", nil)
-	//defer sticky.Close()
-
 	title := summarizeAINoteTitle(agent, query)
 	if title == "" {
 		title = fallbackAINoteTitle(agent)
 	}
 
-	return fmt.Sprintf("$GLOBAL/ai-%s-%d.md", title, now.Unix())
+	return fmt.Sprintf("$GLOBAL/🤖%s-%d.md", title, now.Unix())
 }

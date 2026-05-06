@@ -31,6 +31,7 @@ const CONTEXT_ICON_FIND = 0xf002;
 const CONTEXT_ICON_PRINT = 0xf02f;
 const CONTEXT_ICON_CHECKBOX = 0xf14a;
 const CONTEXT_ICON_CODE = 0xf121;
+const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 
@@ -56,7 +57,7 @@ app.innerHTML = `
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
                 <div id="notes-list-filter-wrap">
-                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" />
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" />
                     <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
                 </div>
             </div>
@@ -90,7 +91,7 @@ app.innerHTML = `
                         </div>
                         <div id="notes-editor-scroll">
                             <pre id="notes-editor-highlight" aria-hidden="true"><code id="notes-editor-highlight-code" class="hljs"></code></pre>
-                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
                         </div>
                     </div>
                 </div>
@@ -3860,7 +3861,7 @@ function applyWindowStyle(result) {
 
         #notes-app {
             display: grid;
-            grid-template-columns: 1fr 8px 2fr;
+            grid-template-columns: 1fr 2px 2fr;
             height: 100%;
             overflow: hidden;
             color: var(--fg);
@@ -4045,6 +4046,7 @@ function applyWindowStyle(result) {
             gap: 4px;
             margin-left: auto;
             align-items: center;
+            height: 20px;
         }
 
         .notes-toolbar-btn {
@@ -4332,8 +4334,10 @@ function applyWindowStyle(result) {
         }
 
         #notes-splitter {
+            padding: 0;
+            margin: 0;
             position: relative;
-            width: 8px;
+            width: 2px;
             cursor: col-resize;
             user-select: none;
             touch-action: none;
@@ -4344,10 +4348,10 @@ function applyWindowStyle(result) {
         #notes-splitter::after {
             content: '';
             position: absolute;
-            left: 50%;
+            /*left: 50%;*/
             top: 0;
-            transform: translateX(-50%);
-            width: 1px;
+            /*transform: translateX(-50%);*/
+            width: 2px;
             height: 100%;
             background: color-mix(in srgb, var(--fg) 20%, transparent);
         }
@@ -4359,8 +4363,7 @@ function applyWindowStyle(result) {
         #notes-main {
             display: flex;
             flex-direction: column;
-            /*gap: 12px;*/
-            padding: 0 0 2px 0;
+            padding: 0;
             height: 100%;
             min-height: 0;
             min-width: 0;
@@ -4374,10 +4377,10 @@ function applyWindowStyle(result) {
         #notes-tabs {
             display: flex;
             gap: 8px;
-            padding: 3px 0px 0px 8px;
-            /*background-color: ${DARKEN_BACKGROUND_OVERLAY};*/
+            padding: 6px 8px 0px 8px;
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            align-items: center;
+            /*align-items: center;*/
+
             box-sizing: border-box;
         }
 
@@ -4674,6 +4677,7 @@ function applyWindowStyle(result) {
             overflow-y: auto;
             overflow-x: hidden;
             font-family: var(--font-family);
+            -webkit-user-modify: read-write-plaintext-only;
         }
 
         #notes-editor:focus {
@@ -4686,13 +4690,23 @@ function applyWindowStyle(result) {
             background-color: transparent;
         }
 
+        #notes-editor,
+        .jupyter-code-editable,
+        .swagger-body-editor,
+        #notes-editor-highlight,
+        #notes-editor-highlight code,
+        #notes-editor-highlight .hljs {
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+
         #notes-editor-shell {
             position: relative;
             display: grid;
             grid-template-columns: 1fr;
             height: 100%;
             width: 100%;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0);
             background-color: rgba(0, 0, 0, 0.22);
             transition: border-color 120ms ease;
         }
@@ -5506,6 +5520,14 @@ elements.editor.addEventListener('contextmenu', (e) => {
                     document.execCommand('insertText', false, '```\n' + selected + '\n```');
                     elements.editor.selectionStart = selStart + 3;
                     elements.editor.selectionEnd = selStart + 3;
+                },
+            },
+            {
+                title: 'Insert table 3x1',
+                icon: CONTEXT_ICON_TABLE,
+                onSelect: () => {
+                    elements.editor.focus();
+                    document.execCommand('insertText', false, '| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
                 },
             },
         );

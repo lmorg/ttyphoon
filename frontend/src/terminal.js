@@ -358,8 +358,6 @@ function applyTerminalStyles(result) {
             --terminal-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --terminal-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             --terminal-accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
-            --terminal-accent-soft: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
-            --terminal-accent-ring: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
             --terminal-selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --terminal-selection-20: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             --terminal-green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -434,16 +432,17 @@ function applyTerminalStyles(result) {
             min-height: 0;
             overflow: hidden;
             box-sizing: border-box;
-            border: 1px solid transparent;
-            transition: border-color 120ms ease, box-shadow 120ms ease;
+            border: 1px solid;
+            border-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        #terminal-viewport[data-tile-count]:not([data-tile-count="1"]) {
+            background-color: ${DARKEN_BACKGROUND_OVERLAY} !important;
         }
 
         #terminal-pane[data-terminal-focused="true"] #terminal-viewport {
-            border-color: var(--terminal-accent-soft);
-        }
-
-        #terminal-pane[data-terminal-focus-visible="true"] #terminal-viewport {
-            box-shadow: inset 0 0 0 1px var(--terminal-accent-ring);
+            border: 1px solid !important;
+            border-color: var(--terminal-accent) !important;
         }
 
         #ttyphoon-terminal {
@@ -514,16 +513,17 @@ function drawCursorPulseOverlay(targetCtx) {
 
 function paintTerminalCanvas() {
     // Fill canvas with theme background
-    const bg = windowStyle?.colors?.bg;
-    if (bg) {
-        ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    const bg = windowStyle.colors.bg;
+    ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw terminal content
     ctx.drawImage(offscreen, 0, 0);
 
-    // Apply dim overlay if terminal is not focused
+    // Dim when unfocused or when multiple tiles are present.
+    //const viewport = document.getElementById('terminal-viewport');
+    //const tileCount = Number(viewport?.getAttribute('data-tile-count')) || 1;
+    //if (window.terminalFocusedState === false || tileCount > 1) {
     if (window.terminalFocusedState === false) {
         ctx.fillStyle = DARKEN_BACKGROUND_OVERLAY;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -794,13 +794,9 @@ function drawFrame(cmd = null) {
         return;
     }
 
-    const bg = windowStyle?.colors?.bg;
-    if (bg) {
-        offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-        offCtx.fillRect(x, y, width, height);
-    } else {
-        offCtx.clearRect(x, y, width, height);
-    }
+    const bg = windowStyle.colors.bg;
+    offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+    offCtx.fillRect(x, y, width, height);
 }
 
 function drawHighlightRect(cmd) {
@@ -1076,7 +1072,30 @@ EventsOn("terminalRedraw", ops => {
 });
 
 EventsOn("terminalTabs", payload => {
-    const tabs = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    // Handle both old format (array of tabs) and new format (object with tabs and tileCount)
+    let tabs;
+    let tileCount = 1;
+    
+    if (Array.isArray(payload?.[0])) {
+        // Old format: [tabs array]
+        tabs = payload[0];
+    } else if (payload?.tabs) {
+        // New format: {tabs: [], tileCount: N}
+        tabs = payload.tabs;
+        tileCount = payload.tileCount || 1;
+    } else if (Array.isArray(payload)) {
+        // Fallback: direct array
+        tabs = payload;
+    } else {
+        tabs = [];
+    }
+    
+    // Store tile count on viewport for CSS queries
+    const viewport = document.getElementById('terminal-viewport');
+    if (viewport) {
+        viewport.setAttribute('data-tile-count', String(tileCount));
+    }
+    
     renderTerminalTabs(tabs);
     fitCanvasToWindow();
 });

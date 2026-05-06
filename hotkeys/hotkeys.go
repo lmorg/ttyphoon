@@ -30,6 +30,7 @@ type hotKeyT struct {
 	name codes.KeyName
 	desc string
 	icon rune
+	term bool
 }
 
 func newPrefix(prefix codes.KeyName) *hotkeysT {
@@ -48,13 +49,14 @@ func newPrefix(prefix codes.KeyName) *hotkeysT {
 	return hk
 }
 
-func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string, icon rune) {
+func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string, icon rune, term bool) {
 	code, mod := key.Code()
 	hk.fnTable[mod][code] = &hotKeyT{
 		fn:   fn,
 		name: key,
 		desc: desc,
 		icon: icon,
+		term: term,
 	}
 }
 
@@ -91,13 +93,13 @@ func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
 
 // Add appends the hotkey DB with the values included.
 // If no icon is 0, then hotkey will not be included in command palette
-func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string, icon rune) {
+func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string, icon rune, term bool) {
 	hk := prefixes[prefix]
 	if hk == nil {
 		hk = newPrefix(prefix)
 	}
 
-	hk.Add(hotkey, fn, desc, icon)
+	hk.Add(hotkey, fn, desc, icon, term)
 }
 
 func KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
@@ -138,6 +140,13 @@ type HotKeyListItemT struct {
 	Icon        rune
 }
 
+func (hk *hotKeyT) Description() string {
+	if hk.term {
+		return "Terminal: " + hk.desc
+	}
+	return hk.desc
+}
+
 func List() []*HotKeyListItemT {
 	var list []*HotKeyListItemT
 
@@ -147,7 +156,7 @@ func List() []*HotKeyListItemT {
 				list = append(list, &HotKeyListItemT{
 					Prefix:      prefix,
 					Hotkey:      hk.name,
-					Description: hk.desc,
+					Description: hk.Description(),
 					Icon:        hk.icon,
 				})
 			}

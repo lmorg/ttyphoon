@@ -11,6 +11,7 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 		if tile.GetTerm() == nil || !tile.GetTerm().Render() || tile.GetTerm().IsFocused() {
 			continue
 		}
+		//continue
 
 		termSize := tile.GetTerm().GetSize()
 
@@ -20,7 +21,8 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 			Y:      tile.Top(),
 			Width:  termSize.X + 1,
 			Height: termSize.Y,
-			Alpha:  51,
+			//Bg:     types.SGR_COLOR_RED,
+			Alpha: 51,
 		})
 	}
 

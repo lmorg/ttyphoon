@@ -99,7 +99,7 @@ TypeFace:
   # Source Code Pro.
   #FontName: "Fira Code"
   #FontName: "Hack"
-  FontSize: 15
+  FontSize: 13
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
@@ -132,7 +132,7 @@ Window:
   # Terminal.JumpScrollLineCount also affects the window updates
   RefreshInterval: 200
 
-  AlwaysOnTop: true
+  AlwaysOnTop: false
 
 AI:
   MaxIterations: 10
