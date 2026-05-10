@@ -20,6 +20,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/hotkeys"
 	metamd "github.com/lmorg/ttyphoon/tools/meta-md"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
@@ -251,6 +252,10 @@ func (a *WApp) TerminalSetFocus(focused bool) {
 
 	tile.GetTerm().SetFocus(focused)
 	renderer.TriggerRedraw()
+}
+
+func (a *WApp) FocusTerminalPane() {
+	runtime.EventsEmit(a.ctx, "focusTerminalPane")
 }
 
 func (a *WApp) TerminalRequestRedraw() {
@@ -1038,6 +1043,7 @@ func (a *WApp) CommandPaletteSelect(index int) {
 
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
+	hotkeys.SetTerminalFocusFn(a.FocusTerminalPane)
 
 	globalhotkeys.Register(func(key string) {
 		switch key {

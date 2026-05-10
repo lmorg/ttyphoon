@@ -758,6 +758,12 @@ function toggleTerminalAndNotesFocus() {
     focusTerminalPane();
 }
 
+// Listen for backend-triggered focus event
+EventsOn('focusTerminalPane', () => {
+    //window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+    focusTerminalPane()
+});
+
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Tab' && event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();

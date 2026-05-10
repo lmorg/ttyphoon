@@ -11,11 +11,23 @@ import (
 )
 
 type HotkeyFn func()
+type TerminalFocusFn func()
 
 var (
-	prefixes    = map[codes.KeyName]*hotkeysT{}
-	prefixFound = func() {}
+	prefixes           = map[codes.KeyName]*hotkeysT{}
+	prefixFound        = func() {}
+	setTerminalFocusFn TerminalFocusFn
 )
+
+func SetTerminalFocusFn(fn TerminalFocusFn) {
+	setTerminalFocusFn = fn
+}
+
+func TerminalFocus() {
+	if setTerminalFocusFn != nil {
+		setTerminalFocusFn()
+	}
+}
 
 type hotkeysT struct {
 	fnTable   [codes.MOD_META << 1]map[codes.KeyCode]*hotKeyT
@@ -97,6 +109,14 @@ func Add(prefix codes.KeyName, hotkey codes.KeyName, fn HotkeyFn, desc string, i
 	hk := prefixes[prefix]
 	if hk == nil {
 		hk = newPrefix(prefix)
+	}
+
+	if term {
+		hk.Add(hotkey, func() {
+			fn()
+			TerminalFocus()
+		}, desc, icon, term)
+		return
 	}
 
 	hk.Add(hotkey, fn, desc, icon, term)

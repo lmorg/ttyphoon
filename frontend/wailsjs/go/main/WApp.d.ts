@@ -14,6 +14,8 @@ export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
 
+export function FocusTerminalPane():Promise<void>;
+
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
 export function GetAppTitle():Promise<string>;

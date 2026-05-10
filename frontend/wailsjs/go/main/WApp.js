@@ -22,6 +22,10 @@ export function DisplayHyperlinkMenu(arg1, arg2) {
   return window['go']['main']['WApp']['DisplayHyperlinkMenu'](arg1, arg2);
 }
 
+export function FocusTerminalPane() {
+  return window['go']['main']['WApp']['FocusTerminalPane']();
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
