@@ -74,6 +74,7 @@ app.innerHTML = `
                 <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
                 <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
+                <button id="notes-tab-csv-run"    type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Run</button>
                 <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
@@ -193,6 +194,7 @@ const elements = {
     tabMeta: document.getElementById('notes-tab-meta'),
     tabCsvView: document.getElementById('notes-tab-csv-view'),
     tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
+    tabCsvRun: document.getElementById('notes-tab-csv-run'),
     editorWrap: document.getElementById('notes-editor-wrap'),
     hexWrap: document.getElementById('notes-hex-wrap'),
     hex: document.getElementById('notes-hex'),
@@ -506,6 +508,20 @@ function parseCsv(text) {
     return rows;
 }
 
+function escapeCsvField(value) {
+    const text = String(value ?? '');
+    if (text.includes('"') || text.includes(',') || text.includes('\n') || text.includes('\r')) {
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+}
+
+function serializeCsvRows(rows) {
+    return (rows || [])
+        .map((row) => (row || []).map((field) => escapeCsvField(field)).join(','))
+        .join('\n');
+}
+
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, '&amp;')
@@ -514,7 +530,139 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-function renderCsvView(content) {
+function updateCsvCell(rowIndex, columnIndex, value) {
+    const rows = parseCsv(elements.editor?.value || '');
+    while (rows.length <= rowIndex) {
+        rows.push([]);
+    }
+
+    const row = rows[rowIndex];
+    while (row.length <= columnIndex) {
+        row.push('');
+    }
+
+    row[columnIndex] = String(value ?? '').trim();
+
+    elements.editor.value = serializeCsvRows(rows);
+    setDirty(true);
+    renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
+    scheduleAutoSave();
+    saveFile();
+
+    return true;
+}
+
+function setupInteractiveTableCells(container, isEditable, resolveCommit, afterCommit) {
+    if (!container || !isEditable) {
+        return;
+    }
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    if (tables.length === 0) {
+        return;
+    }
+
+    tables.forEach((table, tableIndex) => {
+        const commitCell = typeof resolveCommit === 'function'
+            ? resolveCommit(table, tableIndex)
+            : null;
+        if (typeof commitCell !== 'function') {
+            return;
+        }
+
+        const attachEditor = (cell, sourceRowIndex, columnIndex) => {
+            cell.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (cell.dataset.tableEditing === 'true') {
+                    return;
+                }
+
+                const originalValue = String(cell.textContent || '').trim();
+
+                cell.dataset.tableEditing = 'true';
+                cell.setAttribute('contenteditable', 'true');
+                cell.setAttribute('spellcheck', 'false');
+                cell.style.outline = 'none';
+                cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
+
+                const selection = window.getSelection ? window.getSelection() : null;
+                const range = document.createRange ? document.createRange() : null;
+                if (selection && range) {
+                    range.selectNodeContents(cell);
+                    range.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+                cell.focus();
+
+                const finish = (commit) => {
+                    if (cell.dataset.tableEditing !== 'true') {
+                        return;
+                    }
+
+                    cell.dataset.tableEditing = 'false';
+                    cell.removeAttribute('contenteditable');
+                    cell.removeAttribute('spellcheck');
+                    cell.style.outline = '';
+                    cell.style.boxShadow = '';
+
+                    const nextValue = commit ? String(cell.textContent || '').trim() : originalValue;
+                    if (!commit) {
+                        cell.textContent = originalValue;
+                    }
+
+                    cell.removeEventListener('keydown', onKeyDown);
+                    cell.removeEventListener('blur', onBlur);
+
+                    if (commit) {
+                        commitCell(sourceRowIndex, columnIndex, nextValue);
+                        if (typeof afterCommit === 'function') {
+                            afterCommit();
+                        }
+                    }
+                };
+
+                const onKeyDown = (keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                        keyEvent.preventDefault();
+                        finish(true);
+                    } else if (keyEvent.key === 'Escape') {
+                        keyEvent.preventDefault();
+                        finish(false);
+                    }
+                };
+
+                const onBlur = () => {
+                    finish(true);
+                };
+
+                cell.addEventListener('keydown', onKeyDown);
+                cell.addEventListener('blur', onBlur);
+            });
+        };
+
+        const headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            const headerCells = Array.from(headerRow.querySelectorAll('th'));
+            headerCells.forEach((cell, columnIndex) => {
+                attachEditor(cell, 0, columnIndex);
+            });
+        }
+
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        bodyRows.forEach((row, rowIndex) => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            cells.forEach((cell, columnIndex) => {
+                attachEditor(cell, rowIndex + 1, columnIndex);
+            });
+        });
+    });
+}
+
+function renderCsvView(content, options = {}) {
+    const interactive = Boolean(options.interactive);
     const rows = parseCsv(content || '');
     if (rows.length === 0) {
         elements.csvView.innerHTML = '<p class="notes-csv-empty">Empty file</p>';
@@ -529,6 +677,14 @@ function renderCsvView(content) {
     }).join('');
 
     elements.csvView.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+
+    if (interactive) {
+        setupInteractiveTableCells(
+            elements.csvView,
+            true,
+            () => (sourceRowIndex, columnIndex, value) => updateCsvCell(sourceRowIndex, columnIndex, value),
+        );
+    }
 }
 
 function setCodeEditorMode(enabled) {
@@ -968,113 +1124,27 @@ function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
 }
 
 function setupInteractiveMarkdownTables(container, isEditable) {
-    if (!container) {
-        return;
-    }
-
-    const tables = Array.from(container.querySelectorAll('table'));
-    if (!isEditable || tables.length === 0) {
-        return;
-    }
-
     const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
 
-    tables.forEach((table, tableIndex) => {
-        const block = blocks[tableIndex];
-        if (!block) {
-            return;
-        }
+    setupInteractiveTableCells(
+        container,
+        isEditable,
+        (_table, tableIndex) => {
+            const block = blocks[tableIndex];
+            if (!block) {
+                return null;
+            }
 
-        const attachEditor = (cell, sourceRowIndex, columnIndex) => {
-            cell.addEventListener('dblclick', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (cell.dataset.tableEditing === 'true') {
-                    return;
-                }
-
-                const originalValue = String(cell.textContent || '').trim();
-
-                cell.dataset.tableEditing = 'true';
-                cell.setAttribute('contenteditable', 'true');
-                cell.setAttribute('spellcheck', 'false');
-                cell.style.outline = 'none';
-                cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
-
-                const selection = window.getSelection ? window.getSelection() : null;
-                const range = document.createRange ? document.createRange() : null;
-                if (selection && range) {
-                    range.selectNodeContents(cell);
-                    range.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                }
-                cell.focus();
-
-                const finish = (commit) => {
-                    if (cell.dataset.tableEditing !== 'true') {
-                        return;
-                    }
-
-                    cell.dataset.tableEditing = 'false';
-                    cell.removeAttribute('contenteditable');
-                    cell.removeAttribute('spellcheck');
-                    cell.style.outline = '';
-                    cell.style.boxShadow = '';
-
-                    const nextValue = commit ? String(cell.textContent || '').trim() : originalValue;
-                    if (!commit) {
-                        cell.textContent = originalValue;
-                    }
-
-                    cell.removeEventListener('keydown', onKeyDown);
-                    cell.removeEventListener('blur', onBlur);
-
-                    if (commit) {
-                        updateMarkdownTableCell(block, sourceRowIndex, columnIndex, nextValue);
-                    }
-
-                    if (state.viewMode === 'jupyter') {
-                        renderJupyterView();
-                    }
-                };
-
-                const onKeyDown = (keyEvent) => {
-                    if (keyEvent.key === 'Enter') {
-                        keyEvent.preventDefault();
-                        finish(true);
-                    } else if (keyEvent.key === 'Escape') {
-                        keyEvent.preventDefault();
-                        finish(false);
-                    }
-                };
-
-                const onBlur = () => {
-                    finish(true);
-                };
-
-                cell.addEventListener('keydown', onKeyDown);
-                cell.addEventListener('blur', onBlur);
-            });
-        };
-
-        const headerRow = table.querySelector('thead tr');
-        if (headerRow) {
-            const headerCells = Array.from(headerRow.querySelectorAll('th'));
-            headerCells.forEach((cell, columnIndex) => {
-                attachEditor(cell, 0, columnIndex);
-            });
-        }
-
-        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
-        bodyRows.forEach((row, rowIndex) => {
-            const cells = Array.from(row.querySelectorAll('td'));
-            cells.forEach((cell, columnIndex) => {
-                attachEditor(cell, rowIndex + 1, columnIndex);
-            });
-        });
-    });
+            return (sourceRowIndex, columnIndex, value) => {
+                updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value);
+            };
+        },
+        () => {
+            if (state.viewMode === 'jupyter') {
+                renderJupyterView();
+            }
+        },
+    );
 }
 
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
@@ -1236,7 +1306,7 @@ function setViewMode(mode) {
     } else if (state.currentFileType === 'image') {
         state.viewMode = 'image-view';
     } else if (state.currentFileType === 'csv') {
-        if (mode === 'csv-view' || mode === 'csv-edit') {
+        if (mode === 'csv-view' || mode === 'csv-edit' || mode === 'csv-run') {
             state.viewMode = mode;
         } else {
             state.viewMode = 'csv-view';
@@ -1287,12 +1357,17 @@ function setViewMode(mode) {
     // CSV tabs
     const isCsvView = state.viewMode === 'csv-view';
     const isCsvEdit = state.viewMode === 'csv-edit';
+    const isCsvRun = state.viewMode === 'csv-run';
     elements.tabCsvView.setAttribute('aria-selected', isCsvView ? 'true' : 'false');
     elements.tabCsvEdit.setAttribute('aria-selected', isCsvEdit ? 'true' : 'false');
-    elements.csvViewWrap.dataset.active = isCsvView ? 'true' : 'false';
+    elements.tabCsvRun.setAttribute('aria-selected', isCsvRun ? 'true' : 'false');
+    elements.csvViewWrap.dataset.active = (isCsvView || isCsvRun) ? 'true' : 'false';
     // csv-edit reuses the main editor wrap
     if (state.currentFileType === 'csv') {
         elements.editorWrap.dataset.active = isCsvEdit ? 'true' : 'false';
+        if (isCsvView || isCsvRun) {
+            renderCsvView(elements.editor.value, { interactive: isCsvRun });
+        }
     }
 
     if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
@@ -1864,6 +1939,7 @@ function updateTabVisibility(fileType) {
         elements.tabImageView.style.display = 'none';
         elements.tabCsvView.style.display = 'none';
         elements.tabCsvEdit.style.display = 'none';
+        elements.tabCsvRun.style.display = 'none';
         return;
     }
 
@@ -1885,13 +1961,15 @@ function updateTabVisibility(fileType) {
         elements.tabSwaggerRun.style.display = 'none';
         elements.tabCsvView.style.display = 'none';
         elements.tabCsvEdit.style.display = 'none';
+        elements.tabCsvRun.style.display = 'none';
         return;
     }
 
     if (isCsv) {
-        // CSV files use View + Edit tabs.
+        // CSV files use View + Edit + Run tabs.
         elements.tabCsvView.style.display = '';
         elements.tabCsvEdit.style.display = '';
+        elements.tabCsvRun.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabImageView.style.display = 'none';
         elements.tabViewer.style.display = 'none';
@@ -1907,6 +1985,7 @@ function updateTabVisibility(fileType) {
     elements.tabImageView.style.display = 'none';
     elements.tabCsvView.style.display = 'none';
     elements.tabCsvEdit.style.display = 'none';
+    elements.tabCsvRun.style.display = 'none';
 
     if (isCode) {
         // Code files use a single Edit tab.
@@ -5398,7 +5477,7 @@ if (elements.editor) {
         if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
         } else if (state.currentFileType === 'csv') {
-            renderCsvView(elements.editor.value);
+            renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
         } else {
             scheduleRender();
         }
@@ -5611,6 +5690,10 @@ elements.tabCsvEdit.addEventListener('click', () => {
     setViewMode('csv-edit');
 });
 
+elements.tabCsvRun.addEventListener('click', () => {
+    setViewMode('csv-run');
+});
+
 elements.tabMeta.addEventListener('click', () => {
     setViewMode('meta');
 });
@@ -5638,7 +5721,7 @@ function getVisibleNotesTabs() {
     }
 
     if (state.currentFileType === 'csv') {
-        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabMeta].filter(Boolean);
+        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabCsvRun, elements.tabMeta].filter(Boolean);
     }
 
     return [elements.tabViewer, elements.tabEditor, elements.tabJupyter, elements.tabMeta].filter((tab) => tab && tab.style.display !== 'none');
