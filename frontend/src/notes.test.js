@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getWindowStyleMock = vi.fn();
-const getMarkdownMock = vi.fn();
+const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const saveFileMock = vi.fn(() => Promise.resolve());
 const saveBinaryFileMock = vi.fn(() => Promise.resolve());
@@ -18,6 +18,27 @@ const saveImageDialogMock = vi.fn(() => Promise.resolve(''));
 const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
+const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
+const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
+    '# note.md',
+    '',
+    '## Attributes',
+    '',
+    '- Size: `0`',
+    '- Path: `/tmp/note.md`',
+    '',
+    '## Owners',
+    '',
+    '- User: `user`',
+    '- Group: `group`',
+    '',
+    '## Permissions',
+    '',
+    '- Unix: `0644`',
+    '- User: `rw-`',
+    '- Group: `r--`',
+    '- Other: `r--`',
+].join('\n')));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
@@ -28,7 +49,7 @@ const showLocalMenuMock = vi.fn();
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
-    GetMarkdown: getMarkdownMock,
+    GetFile: getFileMock,
     ListFiles: listFilesMock,
     SaveFile: saveFileMock,
     SaveBinaryFile: saveBinaryFileMock,
@@ -45,6 +66,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     WindowPrint: windowPrintMock,
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
+    GetCurrentProject: getCurrentProjectMock,
+    GetFileMetaMarkdown: getFileMetaMarkdownMock,
     ResolveFilePath: resolveFilePathMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
@@ -143,7 +166,7 @@ describe('notes rendering', () => {
         }
 
         getWindowStyleMock.mockReset();
-        getMarkdownMock.mockReset();
+        getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
         saveBinaryFileMock.mockClear();
@@ -160,6 +183,8 @@ describe('notes rendering', () => {
         windowPrintMock.mockClear();
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
+        getCurrentProjectMock.mockReset();
+        getFileMetaMarkdownMock.mockReset();
         resolveFilePathMock.mockReset();
         getHyperlinkMenuActionsMock.mockReset();
         runHyperlinkMenuActionMock.mockReset();
@@ -169,7 +194,28 @@ describe('notes rendering', () => {
         showLocalMenuMock.mockReset();
 
         getWindowStyleMock.mockResolvedValue(theme);
-        getMarkdownMock.mockResolvedValue('');
+        getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
+        getCurrentProjectMock.mockResolvedValue('');
+        getFileMetaMarkdownMock.mockResolvedValue([
+            '# note.md',
+            '',
+            '## Attributes',
+            '',
+            '- Size: `0`',
+            '- Path: `/tmp/note.md`',
+            '',
+            '## Owners',
+            '',
+            '- User: `user`',
+            '- Group: `group`',
+            '',
+            '## Permissions',
+            '',
+            '- Unix: `0644`',
+            '- User: `rw-`',
+            '- Group: `r--`',
+            '- Other: `r--`',
+        ].join('\n'));
         resolveFilePathMock.mockResolvedValue('');
         getHyperlinkMenuActionsMock.mockResolvedValue([]);
         clipboardSetTextMock.mockResolvedValue();
@@ -204,8 +250,12 @@ describe('notes rendering', () => {
         await importNotesModule();
 
         const filterInput = document.getElementById('notes-list-filter');
+        const clearButton = document.getElementById('notes-list-filter-clear');
+        expect(clearButton?.dataset.visible).toBe('false');
+
         filterInput.value = 'guide';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(clearButton?.dataset.visible).toBe('true');
 
         const visibleFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
         expect(visibleFiles).toEqual(['$GLOBAL/docs/guide.md']);
@@ -215,6 +265,17 @@ describe('notes rendering', () => {
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
 
         expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+
+        clearButton.click();
+        expect(filterInput.value).toBe('');
+        expect(clearButton?.dataset.visible).toBe('false');
+
+        const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+        expect(restoredAfterClear).toEqual(expect.arrayContaining([
+            '$GLOBAL/docs/guide.md',
+            '$GLOBAL/images/logo.png',
+            '$NOTES/todo.md',
+        ]));
 
         filterInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
@@ -228,7 +289,7 @@ describe('notes rendering', () => {
 
     it('loads markdown content when a rendered file entry is clicked', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
-        getMarkdownMock.mockResolvedValue('# Hello Notes');
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
 
         await importNotesModule();
 
@@ -237,9 +298,37 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(getMarkdownMock).toHaveBeenCalledWith('$NOTES/todo.md');
+        expect(getFileMock).toHaveBeenCalledWith('$NOTES/todo.md');
         expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
+    });
+
+    it('renames notes using the exact modal path and extension without forcing .md', async () => {
+        listFilesMock
+            .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
+            .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$GLOBAL/docs/todo.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        document.getElementById('notes-rename').click();
+        await flushPromises();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        expect(modalInput.value).toBe('$GLOBAL/docs/todo.md');
+
+        modalInput.value = '$PROJECT/docs/todo.txt';
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(renameFileMock).toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt');
+        expect(renameFileMock).not.toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt.md');
     });
 
     it('focuses the textarea whenever an Edit view becomes active', async () => {
@@ -249,16 +338,16 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.go')) {
-                return 'package main\n\nfunc main() {}';
+                return { contents: 'package main\n\nfunc main() {}', text: '', error: '' };
             }
 
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
 
-            return '# Markdown note';
+            return { contents: '# Markdown note', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -337,9 +426,80 @@ describe('notes rendering', () => {
         expect(runHyperlinkMenuActionMock).toHaveBeenCalledWith('file:///tmp/project/docs/api.json', 'api.json', '5');
     });
 
+    it('shows a folder-tree menu on category headers and applies collapse/expand actions', async () => {
+        listFilesMock.mockResolvedValue([
+            '$PROJECT/docs/guide.md',
+            '$PROJECT/docs/reference/api.md',
+            '$PROJECT/images/logo.png',
+        ]);
+
+        await importNotesModule();
+
+        const projectHeader = document.querySelector('.notes-category-header[data-category="$PROJECT"]');
+        projectHeader.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 64,
+            clientY: 128,
+        }));
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toEqual(['Collapse Folders', 'Expand Folders']);
+        expect(menuConfig.icons).toEqual([0xf146, 0xf0fe]);
+
+        menuConfig.onSelect(0);
+        await flushPromises();
+
+        const collapsedFolders = Array.from(document.querySelectorAll('.notes-tree-folder'));
+        expect(collapsedFolders.length).toBeGreaterThan(0);
+        expect(collapsedFolders.every((folder) => folder.dataset.expanded === 'false')).toBe(true);
+
+        menuConfig.onSelect(1);
+        await flushPromises();
+
+        const expandedFolders = Array.from(document.querySelectorAll('.notes-tree-folder'));
+        expect(expandedFolders.length).toBeGreaterThan(0);
+        expect(expandedFolders.every((folder) => folder.dataset.expanded === 'true')).toBe(true);
+    });
+
+    it('shows a folder-tree menu on directory items and applies actions to child folders only', async () => {
+        listFilesMock.mockResolvedValue([
+            '$PROJECT/docs/reference/api.md',
+            '$PROJECT/docs/readme.md',
+            '$PROJECT/images/logo.png',
+        ]);
+
+        await importNotesModule();
+
+        const docsFolder = document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs"]');
+        docsFolder.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 72,
+            clientY: 140,
+        }));
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toEqual(['Collapse Folders', 'Expand Folders']);
+
+        menuConfig.onSelect(0);
+        await flushPromises();
+
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs"]')?.dataset.expanded).toBe('true');
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('false');
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/images"]')?.dataset.expanded).toBe('true');
+
+        menuConfig.onSelect(1);
+        await flushPromises();
+
+        expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('true');
+    });
+
     it('shows a hyperlink context menu when right-clicking an anchor in the markdown preview', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getMarkdownMock.mockResolvedValue('# Guide');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
         displayHyperlinkMenuMock.mockResolvedValue();
 
         await importNotesModule();
@@ -367,7 +527,7 @@ describe('notes rendering', () => {
 
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
-        getMarkdownMock.mockResolvedValue('# Readme');
+        getFileMock.mockResolvedValue({ contents: '# Readme', text: '', error: '' });
         displayHyperlinkMenuMock.mockResolvedValue();
 
         await importNotesModule();
@@ -393,7 +553,7 @@ describe('notes rendering', () => {
 
     it('auto-copies markdown viewer selection when highlighted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getMarkdownMock.mockResolvedValue('# Guide');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
         await importNotesModule();
 
@@ -438,16 +598,16 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.md')) {
-                return '# Markdown note';
+                return { contents: '# Markdown note', text: '', error: '' };
             }
 
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
 
-            return 'package main\n\nfunc main() {}';
+            return { contents: 'package main\n\nfunc main() {}', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -455,6 +615,7 @@ describe('notes rendering', () => {
         const tabEditor = document.getElementById('notes-tab-editor');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
+        const tabMeta = document.getElementById('notes-tab-meta');
         const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
         const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
@@ -473,6 +634,7 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('none');
         expect(tabSwaggerEdit.style.display).toBe('none');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
 
         await clickFile('$NOTES/readme.md');
         expect(tabEditor.style.display).toBe('');
@@ -481,6 +643,7 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('none');
         expect(tabSwaggerEdit.style.display).toBe('none');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
 
         await clickFile('$NOTES/spec.yaml');
         expect(tabEditor.style.display).toBe('none');
@@ -489,11 +652,105 @@ describe('notes rendering', () => {
         expect(tabSwaggerView.style.display).toBe('');
         expect(tabSwaggerEdit.style.display).toBe('');
         expect(tabSwaggerRun.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
+    });
+
+    it('shows a Hex tab for binary files and renders hexdump output', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/app.bin']);
+        getFileMock.mockResolvedValue({
+            contents: 'Y2YgAAAAAABoZXh5CgAAAA==',
+            binary: true,
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/app.bin"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabMeta = document.getElementById('notes-tab-meta');
+        const hexWrap = document.getElementById('notes-hex-wrap');
+        const hexRoot = document.getElementById('notes-hex');
+        const editorWrap = document.getElementById('notes-editor-wrap');
+        const hexHeader = document.querySelector('.notes-hex-header');
+        const offsetInput = document.querySelector('.notes-hex-offset-input');
+        const goButton = document.querySelector('.notes-hex-offset-go');
+
+        expect(tabEditor.textContent).toBe('Hex');
+        expect(tabEditor.getAttribute('aria-selected')).toBe('true');
+        expect(tabViewer.style.display).toBe('none');
+        expect(tabMeta.style.display).toBe('');
+        expect(hexWrap.dataset.active).toBe('true');
+        expect(editorWrap.dataset.active).toBe('false');
+        expect(hexRoot.textContent).toContain('00000000');
+        expect(hexRoot.textContent).toContain('63 66 20 00 00 00 00 00');
+        expect(hexRoot.textContent).toContain('|cf .....hexy....|');
+        expect(hexHeader.textContent).toContain('Offset');
+        expect(offsetInput).toBeTruthy();
+        expect(goButton).toBeTruthy();
+    });
+
+    it('shows meta pane only when meta tab is selected and renders template-provided markdown', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
+        getFileMock.mockResolvedValue({ contents: '# Markdown note', text: '', error: '' });
+        getFileMetaMarkdownMock.mockResolvedValue([
+            '# readme.md',
+            '',
+            '## Attributes',
+            '',
+            '- Size: `123Bb`',
+            '- Path:',
+            '  ```',
+            '  /tmp/readme.md',
+            '  ```',
+            '',
+            '## Owners',
+            '',
+            '- User: `user`',
+            '- Group: `group`',
+            '',
+            '## Permissions',
+            '',
+            '- Unix: `0644`',
+            '- User: `rw-`',
+            '- Group: `r--`',
+            '- Other: `r--`',
+        ].join('\n'));
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/readme.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabMeta = document.getElementById('notes-tab-meta');
+        const previewWrap = document.getElementById('notes-preview-wrap');
+        const metaWrap = document.getElementById('notes-meta-wrap');
+        const metaRoot = document.getElementById('notes-meta');
+
+        expect(tabViewer.getAttribute('aria-selected')).toBe('true');
+        expect(metaWrap.dataset.active).toBe('false');
+        expect(previewWrap.dataset.active).toBe('true');
+
+        tabMeta.click();
+        await flushPromises();
+
+        expect(tabMeta.getAttribute('aria-selected')).toBe('true');
+        expect(metaWrap.dataset.active).toBe('true');
+        expect(previewWrap.dataset.active).toBe('false');
+        expect(metaRoot.querySelector('pre')).toBeTruthy();
+        expect(metaRoot.querySelectorAll('code').length).toBeGreaterThan(0);
     });
 
     it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/config.json']);
-        getMarkdownMock.mockResolvedValue('{"longPropertyName": "value"}');
+        getFileMock.mockResolvedValue({ contents: '{"longPropertyName": "value"}', text: '', error: '' });
 
         await importNotesModule();
 
@@ -523,11 +780,11 @@ describe('notes rendering', () => {
             '$NOTES/spec.yaml',
         ]);
 
-        getMarkdownMock.mockImplementation(async (file) => {
+        getFileMock.mockImplementation(async (file) => {
             if (file.endsWith('.yaml')) {
-                return 'openapi: 3.0.0\ninfo:\n  title: Sample';
+                return { contents: 'openapi: 3.0.0\ninfo:\n  title: Sample', text: '', error: '' };
             }
-            return '# Markdown note';
+            return { contents: '# Markdown note', text: '', error: '' };
         });
 
         await importNotesModule();
@@ -539,11 +796,12 @@ describe('notes rendering', () => {
             await flushPromises();
         };
 
-        // Markdown defaults to View, then cycles View -> Edit -> Run -> View.
+        // Markdown defaults to View, then cycles View -> Edit -> Run -> Meta -> View.
         await clickFile('$NOTES/readme.md');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabEditor = document.getElementById('notes-tab-editor');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
+        const tabMeta = document.getElementById('notes-tab-meta');
 
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -551,9 +809,11 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabJupyter.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabMeta.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
 
-        // YAML defaults to structured View, then cycles View <-> Edit (Run hidden without swagger key).
+        // YAML defaults to structured View, then cycles View -> Edit -> Meta -> View (Run hidden without swagger key).
         await clickFile('$NOTES/spec.yaml');
         const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
@@ -564,16 +824,25 @@ describe('notes rendering', () => {
         await flushPromises();
         const selectedBefore = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
-        const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
+        const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
         expect(selectedAfterFirst).not.toBe(selectedBefore);
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
-        const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true' ? 'view' : 'edit';
-        expect(selectedAfterSecond).toBe(selectedBefore);
+        const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+        expect(selectedAfterSecond).not.toBe(selectedBefore);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        const selectedAfterThird = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+        expect(selectedAfterThird).toBe(selectedBefore);
     });
 
     it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
-        getMarkdownMock.mockResolvedValue('# Note\n\n```js\nconsole.log("hello")\n```');
+        getFileMock.mockResolvedValue({ contents: '# Note\n\n```js\nconsole.log("hello")\n```', text: '', error: '' });
 
         await importNotesModule();
 
@@ -591,7 +860,7 @@ describe('notes rendering', () => {
         expect(notesEditor.getAttribute('data-gramm')).toBe('false');
         expect(notesEditor.getAttribute('data-gramm_editor')).toBe('false');
         expect(notesEditor.getAttribute('data-enable-grammarly')).toBe('false');
-        expect(notesEditor.getAttribute('spellcheck')).toBeNull();
+        expect(notesEditor.getAttribute('spellcheck')).toBe('false');
 
         expect(jupyterEditor).toBeTruthy();
         expect(jupyterEditor.getAttribute('autocorrect')).toBe('off');
@@ -601,5 +870,45 @@ describe('notes rendering', () => {
         expect(jupyterEditor.getAttribute('data-gramm_editor')).toBe('false');
         expect(jupyterEditor.getAttribute('data-enable-grammarly')).toBe('false');
         expect(jupyterEditor.getAttribute('spellcheck')).toBeNull();
+    });
+
+    it('edits markdown table cells on double click in Run tab', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/table.md']);
+        getFileMock.mockResolvedValue({ contents: [
+            '# Table',
+            '',
+            '| Name | Value |',
+            '| --- | --- |',
+            '| Alpha | 1 |',
+            '| Beta | 2 |',
+        ].join('\n'), text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/table.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const runTab = document.getElementById('notes-tab-jupyter');
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+
+        const targetCell = document.querySelector('#notes-jupyter tbody tr td');
+        expect(targetCell).toBeTruthy();
+
+        targetCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(targetCell.getAttribute('contenteditable')).toBe('true');
+
+        targetCell.textContent = 'Gamma';
+        targetCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+        await flushPromises();
+
+        const notesEditor = document.getElementById('notes-editor');
+        expect(notesEditor.value).toContain('| Gamma | 1 |');
     });
 });

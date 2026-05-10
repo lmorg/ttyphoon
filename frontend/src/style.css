@@ -1,3 +1,5 @@
+@import "./assets/fonts/font-face.css";
+
 html {
   height: 100%;
   overflow: hidden;
@@ -56,6 +58,10 @@ body {
     width: min(70vw, 680px);
     max-width: calc(100% - 24px);
     opacity: 0.8;
+}
+
+#terminal-notifications:hover {
+    opacity: 1;
 }
 
 .terminal-notification {

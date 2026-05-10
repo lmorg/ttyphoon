@@ -19,6 +19,11 @@ type terminalTab struct {
 	Active bool   `json:"active"`
 }
 
+type terminalTabsPayload struct {
+	Tabs      []terminalTab `json:"tabs"`
+	TileCount int           `json:"tileCount"`
+}
+
 type webkitRender struct {
 	termWin         *types.AppWindowTerms
 	tmux            *tmux.Tmux
@@ -186,7 +191,15 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	if wr.wapp != nil {
-		runtime.EventsEmit(wr.wapp, "terminalTabs", wr.tmuxTabs())
+		tabs := wr.tmuxTabs()
+		tileCount := 0
+		if wr.termWin != nil && wr.termWin.Tiles != nil {
+			tileCount = len(wr.termWin.Tiles)
+		}
+		runtime.EventsEmit(wr.wapp, "terminalTabs", terminalTabsPayload{
+			Tabs:      tabs,
+			TileCount: tileCount,
+		})
 	}
 
 	wr.TriggerRedraw()

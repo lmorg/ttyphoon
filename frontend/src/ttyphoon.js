@@ -230,7 +230,7 @@ function updateTerminalFocusChrome() {
     splitHandle = document.createElement('div');
     splitHandle.id = 'notes-terminal-split';
     splitHandle.style.cssText = [
-        'width:8px',
+        'width:2px',
         'height:100%',
         'cursor:col-resize',
         `background:${DARKEN_BACKGROUND_OVERLAY}`,
@@ -244,10 +244,8 @@ function updateTerminalFocusChrome() {
     const splitHandleLine = document.createElement('div');
     splitHandleLine.style.cssText = [
         'position:absolute',
-        'left:50%',
         'top:0',
-        'transform:translateX(-50%)',
-        'width:1px',
+        'width:2px',
         'height:100%',
         'background:color-mix(in srgb, var(--fg) 20%, transparent)',
     ].join(';');
@@ -702,8 +700,9 @@ function requestTerminalResizeAfterLayout() {
 
 function setTerminalFocusState(focused, options = {}) {
     const nextFocusVisible = Boolean(options.focusVisible);
+    const force = Boolean(options.force);
 
-    if (terminalFocusState === focused && terminalKeyboardFocusVisible === nextFocusVisible) {
+    if (!force && terminalFocusState === focused && terminalKeyboardFocusVisible === nextFocusVisible) {
         return;
     }
 
@@ -758,6 +757,12 @@ function toggleTerminalAndNotesFocus() {
 
     focusTerminalPane();
 }
+
+// Listen for backend-triggered focus event
+EventsOn('focusTerminalPane', () => {
+    //window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+    focusTerminalPane()
+});
 
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Tab' && event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -858,6 +863,16 @@ Promise.all([
     import('./terminal.js')
 ]).then(() => {
     setTerminalJupyterMode(notesCollapsed);
+
+    // Notes may queue editor autofocus during its boot sequence.
+    // Re-assert terminal ownership after module initialization settles.
+    setTimeout(() => {
+        setTerminalFocusState(true, { focusVisible: false, force: true });
+        const terminalCanvas = document.getElementById('ttyphoon-terminal');
+        if (typeof terminalCanvas?.focus === 'function') {
+            terminalCanvas.focus({ preventScroll: true });
+        }
+    }, 0);
 
     // After all modules have loaded, trigger a resize event to ensure
     // proper sizing of all components (file list, terminal tabs, tmux, etc.)

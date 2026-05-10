@@ -79,6 +79,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 			Fn: func() {
 				wr.ActivateTerminalPaneTab("__tmux__")
 				_ = wr.tmux.SelectAndResizeWindow(tab.ID, wr.windowCells)
+				hotkeys.TerminalFocus()
 			},
 			Icon: 0xf2d2,
 		})

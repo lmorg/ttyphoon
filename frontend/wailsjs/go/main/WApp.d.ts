@@ -6,11 +6,15 @@ import {swagger} from '../models';
 
 export function AddToFileList(arg1:string):Promise<void>;
 
+export function CloseNotification(arg1:number):Promise<void>;
+
 export function CommandPaletteSelect(arg1:number):Promise<void>;
 
 export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
+
+export function FocusTerminalPane():Promise<void>;
 
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
@@ -18,15 +22,19 @@ export function GetAppTitle():Promise<string>;
 
 export function GetClipboardData():Promise<main.ClipboardData>;
 
+export function GetCurrentProject():Promise<string>;
+
 export function GetCustomRegexp():Promise<Array<Record<string, string>>>;
+
+export function GetFile(arg1:string):Promise<main.GetFileReturnT>;
+
+export function GetFileMetaMarkdown(arg1:string):Promise<string>;
 
 export function GetHyperlinkMenuActions(arg1:string,arg2:string):Promise<Array<Record<string, any>>>;
 
 export function GetImage(arg1:string):Promise<string>;
 
 export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
-
-export function GetMarkdown(arg1:string):Promise<string>;
 
 export function GetTerminalGlyphSize():Promise<types.XY>;
 
@@ -46,7 +54,7 @@ export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveBinaryFile(arg1:string,arg2:string):Promise<void>;
 
-export function SaveFile(arg1:string,arg2:string):Promise<void>;
+export function SaveFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveImageDialog(arg1:string):Promise<string>;
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/base64"
@@ -19,6 +20,8 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/hotkeys"
+	metamd "github.com/lmorg/ttyphoon/tools/meta-md"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
@@ -251,6 +254,10 @@ func (a *WApp) TerminalSetFocus(focused bool) {
 	renderer.TriggerRedraw()
 }
 
+func (a *WApp) FocusTerminalPane() {
+	runtime.EventsEmit(a.ctx, "focusTerminalPane")
+}
+
 func (a *WApp) TerminalRequestRedraw() {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
@@ -258,6 +265,15 @@ func (a *WApp) TerminalRequestRedraw() {
 	}
 
 	renderer.TriggerRedraw()
+}
+
+func (a *WApp) CloseNotification(id int64) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.CloseNotification(id)
 }
 
 func (a *WApp) TerminalMenuHighlight(menuID, index int) {
@@ -559,24 +575,43 @@ func (a *WApp) StopNote(id string) {
 	})
 }
 
-func (a *WApp) GetMarkdown(filename string) string {
+type GetFileReturnT struct {
+	Contents string `json:"contents"`
+	Binary   bool   `json:"binary"`
+	Error    string `json:"error"`
+}
+
+func (a *WApp) GetFile(filename string) GetFileReturnT {
 	filename = a.filePath(filename)
+
+	stat, err := os.Stat(filename)
+	if err != nil {
+		log.Println(err)
+		return GetFileReturnT{Error: err.Error()}
+	}
+	if stat.Size() > config.Config.Notes.MaxFileSize*1024*1024 {
+		return GetFileReturnT{Error: "File too large to open"}
+	}
 
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Println(err)
-		return err.Error()
+		return GetFileReturnT{Error: err.Error()}
 	}
 
 	b, err := io.ReadAll(f)
 	if err != nil {
 		log.Println(err)
-		return err.Error()
+		return GetFileReturnT{Error: err.Error()}
 	}
 
 	a.mdBaseDir = filepath.Dir(filename)
 
-	return string(b)
+	if bytes.Contains(b[:min(1024, len(b))], []byte{0}) {
+		return GetFileReturnT{Contents: base64.StdEncoding.EncodeToString(b), Binary: true}
+	}
+
+	return GetFileReturnT{Contents: string(b), Binary: false}
 }
 
 var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)
@@ -661,6 +696,10 @@ func (a *WApp) ListFiles() []string {
 			return nil
 		}
 
+		if isSystemFileName(d.Name()) {
+			return nil
+		}
+
 		//if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
 		//	strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
 		filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
@@ -674,13 +713,18 @@ func (a *WApp) ListFiles() []string {
 	return files
 }
 
+func isSystemFileName(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "thumbs.db", "ehthumbs.db", "desktop.ini", ".ds_store":
+		return true
+	}
+
+	// macOS AppleDouble sidecar files
+	return strings.HasPrefix(name, "._")
+}
+
 func listFiles(path string, varName string) (files []string) {
-	files = listFilesWithGlob(path, varName, "*.md")
-	files = append(files, listFilesWithGlob(path, varName, "*.json")...)
-	files = append(files, listFilesWithGlob(path, varName, "*.yaml")...)
-	files = append(files, listFilesWithGlob(path, varName, "*.yml")...)
-	slices.Sort(files)
-	return files
+	return listFilesWithGlob(path, varName, "*")
 }
 
 func listFilesWithGlob(path string, varName string, pattern string) (files []string) {
@@ -695,6 +739,15 @@ func listFilesWithGlob(path string, varName string, pattern string) (files []str
 	}
 	replace := fmt.Sprintf("$%s/", varName)
 	for i := range glob {
+		info, err := os.Stat(glob[i])
+		if err != nil {
+			continue
+		}
+
+		if info.IsDir() || isSystemFileName(info.Name()) {
+			continue
+		}
+
 		files = append(files, strings.Replace(glob[i], path, replace, 1))
 	}
 	return
@@ -713,9 +766,12 @@ func (a *WApp) AddToFileList(filename string) {
 	files = append([]string{filename}, files...)
 }
 
-func (a *WApp) expandMappingFunc(s string) string {
+func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 	switch s {
 	case "PROJECT":
+		if projectPath != "" {
+			return projectPath
+		}
 		return a.projRoot
 	case "NOTES":
 		return a.usrNotesDir
@@ -731,7 +787,21 @@ func (a *WApp) expandMappingFunc(s string) string {
 }
 
 func (a WApp) filePath(filename string) string {
-	filename = os.Expand(filename, a.expandMappingFunc)
+	filename = os.Expand(filename, func(s string) string {
+		return a.expandMappingFuncWithProject(s, "")
+	})
+	if filepath.IsLocal(filename) {
+		filename = a.usrNotesDir + string(filepath.Separator) + filename
+	}
+	return filename
+}
+
+// filePathWithProject returns the expanded file path using a specific project root.
+// This uses the same expansion logic as filePath but allows overriding $PROJECT.
+func (a WApp) filePathWithProject(filename string, projectPath string) string {
+	filename = os.Expand(filename, func(s string) string {
+		return a.expandMappingFuncWithProject(s, projectPath)
+	})
 	if filepath.IsLocal(filename) {
 		filename = a.usrNotesDir + string(filepath.Separator) + filename
 	}
@@ -740,6 +810,14 @@ func (a WApp) filePath(filename string) string {
 
 func (a *WApp) ResolveFilePath(filename string) string {
 	return a.filePath(filename)
+}
+
+// GetCurrentProject returns the absolute path of the current project root.
+// This is used by the frontend to track which project a file is associated with,
+// preventing issues where a file opened in one project could be overwritten
+// if the user switches projects before autosave completes.
+func (a *WApp) GetCurrentProject() string {
+	return a.projRoot
 }
 
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
@@ -794,13 +872,25 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 	menu.DisplayMenu("Hyperlink action", true)
 }
 
-func (a *WApp) SaveFile(filename, contents string) error {
-	filename = a.filePath(filename)
+// SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.
+// If projectPath is set, $PROJECT in filename is expanded against projectPath,
+// which keeps autosave bound to the project where the file was opened.
+func (a *WApp) SaveFile(filename, contents, projectPath string) error {
+	if projectPath == "" {
+		filename = a.filePath(filename)
+	} else {
+		filename = a.filePathWithProject(filename, projectPath)
+	}
+
 	return os.WriteFile(filename, []byte(contents), 0644)
 }
 
 func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
 	filename = a.filePath(filename)
+
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		return fmt.Errorf("create directory for binary file: %w", err)
+	}
 
 	b, err := base64.StdEncoding.DecodeString(base64Contents)
 	if err != nil {
@@ -835,6 +925,10 @@ func (a *WApp) WindowPrint() {
 type ClipboardData struct {
 	Text  string `json:"text"`
 	Image string `json:"image"`
+}
+
+func (a *WApp) GetFileMetaMarkdown(filename string) string {
+	return metamd.DocumentForPath(a.filePath(filename))
 }
 
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
@@ -949,6 +1043,7 @@ func (a *WApp) CommandPaletteSelect(index int) {
 
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
+	hotkeys.SetTerminalFocusFn(a.FocusTerminalPane)
 
 	globalhotkeys.Register(func(key string) {
 		switch key {

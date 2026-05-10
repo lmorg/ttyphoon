@@ -6,6 +6,10 @@ export function AddToFileList(arg1) {
   return window['go']['main']['WApp']['AddToFileList'](arg1);
 }
 
+export function CloseNotification(arg1) {
+  return window['go']['main']['WApp']['CloseNotification'](arg1);
+}
+
 export function CommandPaletteSelect(arg1) {
   return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
 }
@@ -16,6 +20,10 @@ export function DeleteFile(arg1) {
 
 export function DisplayHyperlinkMenu(arg1, arg2) {
   return window['go']['main']['WApp']['DisplayHyperlinkMenu'](arg1, arg2);
+}
+
+export function FocusTerminalPane() {
+  return window['go']['main']['WApp']['FocusTerminalPane']();
 }
 
 export function GetAllLanguageDescriptions() {
@@ -30,8 +38,20 @@ export function GetClipboardData() {
   return window['go']['main']['WApp']['GetClipboardData']();
 }
 
+export function GetCurrentProject() {
+  return window['go']['main']['WApp']['GetCurrentProject']();
+}
+
 export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
+}
+
+export function GetFile(arg1) {
+  return window['go']['main']['WApp']['GetFile'](arg1);
+}
+
+export function GetFileMetaMarkdown(arg1) {
+  return window['go']['main']['WApp']['GetFileMetaMarkdown'](arg1);
 }
 
 export function GetHyperlinkMenuActions(arg1, arg2) {
@@ -44,10 +64,6 @@ export function GetImage(arg1) {
 
 export function GetLanguageDescriptions(arg1) {
   return window['go']['main']['WApp']['GetLanguageDescriptions'](arg1);
-}
-
-export function GetMarkdown(arg1) {
-  return window['go']['main']['WApp']['GetMarkdown'](arg1);
 }
 
 export function GetTerminalGlyphSize() {
@@ -86,8 +102,8 @@ export function SaveBinaryFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveBinaryFile'](arg1, arg2);
 }
 
-export function SaveFile(arg1, arg2) {
-  return window['go']['main']['WApp']['SaveFile'](arg1, arg2);
+export function SaveFile(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['SaveFile'](arg1, arg2, arg3);
 }
 
 export function SaveImageDialog(arg1) {

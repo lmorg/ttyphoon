@@ -1,0 +1,6 @@
+id,name,email,department,salary
+1,Bertie Wooster,bertie.wooster@example.com,Management,75000
+2,Reginald Jeeves,r.jeeves@example.com,Personal Services,95000
+3,Aunt Agatha,a.gregson@example.com,Executive,120000
+4,Tuppy Glossop,t.glossop@example.com,Sales,65000
+5,Madeline Bassett,m.bassett@example.com,Marketing,70000

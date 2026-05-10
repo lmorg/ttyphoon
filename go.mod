@@ -6,6 +6,7 @@ require (
 	github.com/adrg/frontmatter v0.2.0
 	github.com/adrg/xdg v0.5.3
 	github.com/creack/pty v1.1.24
+	github.com/djherbis/times v1.6.0
 	github.com/forPelevin/gomoji v1.4.1
 	github.com/lmorg/mcp-web-scraper v1.0.1
 	github.com/lmorg/murex v0.0.0-20260111231928-c71002785e97

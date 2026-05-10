@@ -16,7 +16,10 @@ func (wr *webkitRender) hotkeys() {
 	)
 
 	for _, hk := range conf {
-		var icon rune
+		var (
+			icon rune
+			term bool
+		)
 
 		switch hk.Function {
 		case "CommandPalette":
@@ -40,11 +43,13 @@ func (wr *webkitRender) hotkeys() {
 		case "Paste":
 			fn = func() { wr.clipboardPaste() }
 			desc = "Paste from clipboard"
-			icon = 0xf0ea
+			term = true
+
 		case "VisualEditor":
 			fn = func() { wr.VisualEditor() }
 			desc = "Visual editor..."
 			icon = 0xf11c
+			term = true
 
 		case "AskAI":
 			fn = func() { askAi(wr) }
@@ -59,18 +64,22 @@ func (wr *webkitRender) hotkeys() {
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_REGEX) }
 			desc = "Search terminal output for regex match (find)..."
 			icon = 0xf002
+			term = true
 		case "SearchResults":
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_RESULTS) }
 			desc = "View search results..."
 			icon = 0xe521
+			term = true
 		case "SearchClear":
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_CLEAR) }
 			desc = "Clear search results"
 			icon = 0xf010
+			term = true
 		case "SearchCommandLines":
 			fn = func() { wr.termWin.Active.GetTerm().Search(types.SEARCH_CMD_LINES) }
 			desc = "Search command line history..."
 			icon = 0xf002
+			term = true
 
 			/*case "OpenHistory":
 			fn = func() { wr.OpenHistory(sr.termWin.Active) }
@@ -92,7 +101,7 @@ func (wr *webkitRender) hotkeys() {
 			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
 			continue
 		}
-		hotkeys.Add(hk.Prefix, hk.Hotkey, fn, desc, icon)
+		hotkeys.Add(hk.Prefix, hk.Hotkey, fn, desc, icon, term)
 
 	}
 }

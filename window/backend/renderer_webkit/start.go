@@ -52,7 +52,7 @@ func (wr *webkitRender) Start(termWin *types.AppWindowTerms, tmuxClient any, wap
 			select {
 			case <-wr._redraw:
 				if commands := wr.PopDrawCommands(); len(commands) > 0 {
-					runtime.EventsEmit(wapp, "terminalRedraw", commands)
+					runtime.EventsEmit(wapp, "terminalRedraw", encodeDrawCommands(commands))
 				}
 
 			case <-time.After(refreshInterval * time.Millisecond):

@@ -161,7 +161,11 @@ func (el *ElementHyperlink) MouseOut() {
 }
 
 func (el *ElementHyperlink) MouseHover(_ *types.XY, _ *types.XY) func() {
-	if el == nil || !config.Config.Window.HoverEffectHighlight {
+	if !config.Config.Window.HoverEffectHighlight {
+		return func() {}
+	}
+
+	if el == nil || el.pos == nil {
 		return func() {}
 	}
 

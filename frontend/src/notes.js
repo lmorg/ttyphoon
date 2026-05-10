@@ -1,12 +1,12 @@
 import {
-    GetWindowStyle, GetMarkdown, GetImage,
+    GetWindowStyle, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest,
-    ShowCommandPalette,
+    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -23,6 +23,7 @@ import {
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
 import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
+import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -30,6 +31,7 @@ const CONTEXT_ICON_FIND = 0xf002;
 const CONTEXT_ICON_PRINT = 0xf02f;
 const CONTEXT_ICON_CHECKBOX = 0xf14a;
 const CONTEXT_ICON_CODE = 0xf121;
+const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 
@@ -55,7 +57,8 @@ app.innerHTML = `
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
                 <div id="notes-list-filter-wrap">
-                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" />
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" />
+                    <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
                 </div>
             </div>
             <div id="notes-list" role="list"></div>
@@ -72,6 +75,7 @@ app.innerHTML = `
                 <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
                 <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
                 <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
@@ -87,9 +91,12 @@ app.innerHTML = `
                         </div>
                         <div id="notes-editor-scroll">
                             <pre id="notes-editor-highlight" aria-hidden="true"><code id="notes-editor-highlight-code" class="hljs"></code></pre>
-                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
                         </div>
                     </div>
+                </div>
+                <div id="notes-hex-wrap" role="tabpanel">
+                    <div id="notes-hex"></div>
                 </div>
                 <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-preview"></div>
@@ -102,6 +109,9 @@ app.innerHTML = `
                 </div>
                 <div id="notes-image-view-wrap" role="tabpanel">
                     <img id="notes-image-view-img" alt="" />
+                </div>
+                <div id="notes-meta-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-meta"></div>
                 </div>
                 <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
                     <div id="notes-swagger-view" class="json-viewer"></div>
@@ -150,9 +160,9 @@ app.innerHTML = `
     <div id="notes-find-bar" data-open="false" aria-hidden="true">
         <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" />
         <span id="notes-find-counter"></span>
-        <button id="notes-find-prev" type="button" title="Previous match">↑</button>
-        <button id="notes-find-next" type="button" title="Next match">↓</button>
-        <button id="notes-find-close" type="button" title="Close find">✕</button>
+        <button id="notes-find-prev" type="button" title="Previous match" tabindex="-1">↑</button>
+        <button id="notes-find-next" type="button" title="Next match" tabindex="-1">↓</button>
+        <button id="notes-find-close" type="button" title="Close find" tabindex="-1">✕</button>
     </div>
 `;
 
@@ -160,6 +170,7 @@ const elements = {
     title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
     listFilter: document.getElementById('notes-list-filter'),
+    listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
     editorShell: document.getElementById('notes-editor-shell'),
     editorGutter: document.getElementById('notes-editor-gutter'),
@@ -179,13 +190,18 @@ const elements = {
     tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
     tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
     tabImageView: document.getElementById('notes-tab-image-view'),
+    tabMeta: document.getElementById('notes-tab-meta'),
     tabCsvView: document.getElementById('notes-tab-csv-view'),
     tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     editorWrap: document.getElementById('notes-editor-wrap'),
+    hexWrap: document.getElementById('notes-hex-wrap'),
+    hex: document.getElementById('notes-hex'),
     previewWrap: document.getElementById('notes-preview-wrap'),
     jupyterWrap: document.getElementById('notes-jupyter-wrap'),
     imageViewWrap: document.getElementById('notes-image-view-wrap'),
     imageViewImg: document.getElementById('notes-image-view-img'),
+    metaWrap: document.getElementById('notes-meta-wrap'),
+    meta: document.getElementById('notes-meta'),
     csvViewWrap: document.getElementById('notes-csv-view-wrap'),
     csvView: document.getElementById('notes-csv-view'),
     swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
@@ -218,7 +234,8 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
-    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv'
+    currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
+    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -242,7 +259,8 @@ const state = {
     swaggerRunAvailable: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
-    editorLanguage: ''
+    editorLanguage: '',
+    fileMetaMarkdown: '',
 };
 
 let lastAutoCopiedViewerSelection = '';
@@ -662,11 +680,18 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
         const hasActiveFilter = state.fileFilterQuery.trim() !== '';
         const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
+        folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 
         folder.addEventListener('click', () => {
             toggleFolder(folderKey);
+        });
+
+        folder.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openFolderTreeContextMenu(category, node.children || [], event.clientX, event.clientY, node.name);
         });
         container.appendChild(folder);
 
@@ -776,6 +801,29 @@ function renderMarkdown() {
     }
 }
 
+function renderMetaView() {
+    const markdown = state.fileMetaMarkdown || '# Unknown file';
+    elements.meta.innerHTML = marked.parse(markdown);
+    processMarkdownContainer(elements.meta);
+}
+
+async function refreshFileMetaMarkdown(file) {
+    if (!file) {
+        state.fileMetaMarkdown = '';
+        renderMetaView();
+        return;
+    }
+
+    try {
+        state.fileMetaMarkdown = await GetFileMetaMarkdown(file);
+    } catch (err) {
+        state.fileMetaMarkdown = '';
+        console.error(err);
+    }
+
+    renderMetaView();
+}
+
 function setupInteractiveCheckboxes(container, isEditable) {
     const checkboxes = container.querySelectorAll('input[type="checkbox"]');
     
@@ -788,6 +836,243 @@ function setupInteractiveCheckboxes(container, isEditable) {
         checkbox.removeAttribute('disabled');
         checkbox.addEventListener('change', (e) => {
             toggleCheckboxInMarkdown(index, e.target.checked);
+        });
+    });
+}
+
+function parseMarkdownTableRow(line) {
+    const source = String(line ?? '').trim();
+    const hasLeadingPipe = source.startsWith('|');
+    const hasTrailingPipe = source.endsWith('|');
+    const body = source.replace(/^\|/, '').replace(/\|$/, '');
+
+    const cells = [];
+    let current = '';
+    let escaped = false;
+
+    for (let i = 0; i < body.length; i += 1) {
+        const char = body[i];
+        if (escaped) {
+            current += char;
+            escaped = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escaped = true;
+            current += char;
+            continue;
+        }
+
+        if (char === '|') {
+            cells.push(current.trim());
+            current = '';
+            continue;
+        }
+
+        current += char;
+    }
+
+    cells.push(current.trim());
+
+    return { cells, hasLeadingPipe, hasTrailingPipe };
+}
+
+function serializeMarkdownTableRow(cells, hasLeadingPipe = true, hasTrailingPipe = true) {
+    const escapedCells = cells.map((cell) => String(cell ?? '')
+        .replace(/\n/g, ' ')
+        .replace(/\|/g, '\\|')
+        .trim());
+
+    const core = ` ${escapedCells.join(' | ')} `;
+    if (hasLeadingPipe && hasTrailingPipe) {
+        return `|${core}|`;
+    }
+    if (hasLeadingPipe) {
+        return `|${core}`;
+    }
+    if (hasTrailingPipe) {
+        return `${core}|`;
+    }
+    return core;
+}
+
+function isMarkdownTableSeparatorLine(line) {
+    return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(String(line ?? ''));
+}
+
+function findMarkdownTableBlocks(markdown) {
+    const lines = String(markdown ?? '').split('\n');
+    const blocks = [];
+
+    for (let i = 0; i < lines.length - 1; i += 1) {
+        const headerLine = lines[i];
+        const separatorLine = lines[i + 1];
+
+        if (!String(headerLine).includes('|') || !isMarkdownTableSeparatorLine(separatorLine)) {
+            continue;
+        }
+
+        const rowLineIndexes = [i];
+        let j = i + 2;
+        while (j < lines.length) {
+            const rowLine = lines[j];
+            if (!String(rowLine).includes('|') || String(rowLine).trim() === '') {
+                break;
+            }
+            rowLineIndexes.push(j);
+            j += 1;
+        }
+
+        blocks.push({
+            rowLineIndexes,
+            separatorLineIndex: i + 1,
+        });
+
+        i = j - 1;
+    }
+
+    return blocks;
+}
+
+function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) {
+        return false;
+    }
+
+    const lineIndex = block.rowLineIndexes[sourceRowIndex];
+    if (!Number.isInteger(lineIndex)) {
+        return false;
+    }
+
+    const lines = String(elements.editor.value || '').split('\n');
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+        return false;
+    }
+
+    const parsed = parseMarkdownTableRow(lines[lineIndex]);
+    while (parsed.cells.length <= columnIndex) {
+        parsed.cells.push('');
+    }
+
+    parsed.cells[columnIndex] = String(value ?? '').trim();
+    lines[lineIndex] = serializeMarkdownTableRow(parsed.cells, parsed.hasLeadingPipe, parsed.hasTrailingPipe);
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+
+    return true;
+}
+
+function setupInteractiveMarkdownTables(container, isEditable) {
+    if (!container) {
+        return;
+    }
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    if (!isEditable || tables.length === 0) {
+        return;
+    }
+
+    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+
+    tables.forEach((table, tableIndex) => {
+        const block = blocks[tableIndex];
+        if (!block) {
+            return;
+        }
+
+        const attachEditor = (cell, sourceRowIndex, columnIndex) => {
+            cell.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (cell.dataset.tableEditing === 'true') {
+                    return;
+                }
+
+                const originalValue = String(cell.textContent || '').trim();
+
+                cell.dataset.tableEditing = 'true';
+                cell.setAttribute('contenteditable', 'true');
+                cell.setAttribute('spellcheck', 'false');
+                cell.style.outline = 'none';
+                cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
+
+                const selection = window.getSelection ? window.getSelection() : null;
+                const range = document.createRange ? document.createRange() : null;
+                if (selection && range) {
+                    range.selectNodeContents(cell);
+                    range.collapse(false);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+                cell.focus();
+
+                const finish = (commit) => {
+                    if (cell.dataset.tableEditing !== 'true') {
+                        return;
+                    }
+
+                    cell.dataset.tableEditing = 'false';
+                    cell.removeAttribute('contenteditable');
+                    cell.removeAttribute('spellcheck');
+                    cell.style.outline = '';
+                    cell.style.boxShadow = '';
+
+                    const nextValue = commit ? String(cell.textContent || '').trim() : originalValue;
+                    if (!commit) {
+                        cell.textContent = originalValue;
+                    }
+
+                    cell.removeEventListener('keydown', onKeyDown);
+                    cell.removeEventListener('blur', onBlur);
+
+                    if (commit) {
+                        updateMarkdownTableCell(block, sourceRowIndex, columnIndex, nextValue);
+                    }
+
+                    if (state.viewMode === 'jupyter') {
+                        renderJupyterView();
+                    }
+                };
+
+                const onKeyDown = (keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                        keyEvent.preventDefault();
+                        finish(true);
+                    } else if (keyEvent.key === 'Escape') {
+                        keyEvent.preventDefault();
+                        finish(false);
+                    }
+                };
+
+                const onBlur = () => {
+                    finish(true);
+                };
+
+                cell.addEventListener('keydown', onKeyDown);
+                cell.addEventListener('blur', onBlur);
+            });
+        };
+
+        const headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            const headerCells = Array.from(headerRow.querySelectorAll('th'));
+            headerCells.forEach((cell, columnIndex) => {
+                attachEditor(cell, 0, columnIndex);
+            });
+        }
+
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        bodyRows.forEach((row, rowIndex) => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            cells.forEach((cell, columnIndex) => {
+                attachEditor(cell, rowIndex + 1, columnIndex);
+            });
         });
     });
 }
@@ -894,6 +1179,11 @@ function focusActiveEditorForViewMode() {
         return;
     }
 
+    // Keep terminal ownership on app startup; ttyphoon.js will hand off when Notes is explicitly focused.
+    if (window.terminalFocusedState === true) {
+        return;
+    }
+
     const shouldFocusEditor =
         state.viewMode === 'editor' ||
         state.viewMode === 'swagger-edit' ||
@@ -904,6 +1194,10 @@ function focusActiveEditorForViewMode() {
     }
 
     setTimeout(() => {
+        if (window.terminalFocusedState === true) {
+            return;
+        }
+
         const stillShouldFocus =
             state.viewMode === 'editor' ||
             state.viewMode === 'swagger-edit' ||
@@ -927,7 +1221,9 @@ function emitCurrentFileName() {
 
 function setViewMode(mode) {
     // Determine the mode based on current file type.
-    if (state.currentFileType === 'json') {
+    if (mode === 'meta') {
+        state.viewMode = 'meta';
+    } else if (state.currentFileType === 'json') {
         if (mode === 'swagger-view' || mode === 'swagger-edit' || (mode === 'swagger-run' && state.swaggerRunAvailable)) {
             state.viewMode = mode;
         } else {
@@ -935,6 +1231,8 @@ function setViewMode(mode) {
         }
     } else if (state.currentFileType === 'code') {
         state.viewMode = 'editor';
+    } else if (state.currentFileType === 'binary') {
+        state.viewMode = 'hex';
     } else if (state.currentFileType === 'image') {
         state.viewMode = 'image-view';
     } else if (state.currentFileType === 'csv') {
@@ -952,17 +1250,22 @@ function setViewMode(mode) {
     
     // Standard tabs
     const isEditor = state.viewMode === 'editor';
+    const isHex = state.viewMode === 'hex';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
+    const isMeta = state.viewMode === 'meta';
     
-    elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
+    elements.tabEditor.setAttribute('aria-selected', (isEditor || isHex) ? 'true' : 'false');
     elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
+    elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
     
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
+    elements.hexWrap.dataset.active = isHex ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
+    elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
@@ -996,6 +1299,10 @@ function setViewMode(mode) {
         renderEditorDecorations();
     }
 
+    if (isMeta) {
+        renderMetaView();
+    }
+
     updateFindAvailability();
     
     // Re-perform find if find bar is open
@@ -1022,6 +1329,7 @@ function renderJupyterView() {
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
+    setupInteractiveMarkdownTables(elements.jupyter, true);
     convertToJupyterCodeBlocks();
     
     // Re-apply find highlights if find bar is open and in jupyter mode
@@ -1371,7 +1679,18 @@ function getFilteredFiles() {
     });
 }
 
+function updateListFilterClearButtonVisibility() {
+    if (!elements.listFilterClear || !elements.listFilter) {
+        return;
+    }
+
+    const hasValue = (elements.listFilter.value || '').trim().length > 0;
+    elements.listFilterClear.dataset.visible = hasValue ? 'true' : 'false';
+    elements.listFilterClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+}
+
 function renderFileList() {
+    updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
 
     const filteredFiles = getFilteredFiles();
@@ -1422,6 +1741,8 @@ function renderFileList() {
             return;
         }
 
+        const categoryTree = buildFileTree(files);
+
         const categoryExpanded = hasActiveFilter ? true : state.expandedCategories[category];
 
         // Create category header
@@ -1445,6 +1766,12 @@ function renderFileList() {
                 toggleCategory(category);
             });
         }
+
+        categoryHeader.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openFolderTreeContextMenu(category, categoryTree, event.clientX, event.clientY, `${category} folders`);
+        });
         
         elements.list.appendChild(categoryHeader);
 
@@ -1453,7 +1780,7 @@ function renderFileList() {
         categoryContent.className = 'notes-category-content';
         categoryContent.dataset.expanded = categoryExpanded ? 'true' : 'false';
 
-        renderTreeNodesList(categoryContent, category, buildFileTree(files));
+        renderTreeNodesList(categoryContent, category, categoryTree);
 
         elements.list.appendChild(categoryContent);
     });
@@ -1469,18 +1796,87 @@ function toggleFolder(folderKey) {
     renderFileList();
 }
 
+function collectFolderKeys(category, nodes) {
+    const keys = [];
+
+    function walk(entries) {
+        entries.forEach((entry) => {
+            if (entry.type !== 'folder') {
+                return;
+            }
+
+            keys.push(`${category}${PRIMARY_PATH_SEPARATOR}${entry.path}`);
+
+            if (Array.isArray(entry.children) && entry.children.length > 0) {
+                walk(entry.children);
+            }
+        });
+    }
+
+    walk(Array.isArray(nodes) ? nodes : []);
+    return keys;
+}
+
+function setFolderExpansionState(folderKeys, expanded) {
+    folderKeys.forEach((key) => {
+        state.expandedFolders[key] = expanded;
+    });
+}
+
+function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder actions') {
+    const folderKeys = collectFolderKeys(category, nodes);
+    if (folderKeys.length === 0) {
+        return;
+    }
+
+    showNotesLocalMenu([
+        {
+            title: 'Collapse Folders',
+            icon: 0xf146,
+            onSelect: () => {
+                setFolderExpansionState(folderKeys, false);
+                renderFileList();
+            },
+        },
+        {
+            title: 'Expand Folders',
+            icon: 0xf0fe,
+            onSelect: () => {
+                setFolderExpansionState(folderKeys, true);
+                renderFileList();
+            },
+        },
+    ], x, y, title);
+}
+
 /**
  * Show/hide tabs based on file type
  */
 function updateTabVisibility(fileType) {
+    if (fileType === 'error') {
+        elements.tabMeta.style.display = '';
+        elements.tabViewer.style.display = 'none';
+        elements.tabEditor.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        elements.tabImageView.style.display = 'none';
+        elements.tabCsvView.style.display = 'none';
+        elements.tabCsvEdit.style.display = 'none';
+        return;
+    }
+
     const isJson  = fileType === 'json';
     const isCode  = fileType === 'code';
+    const isBinary = fileType === 'binary';
     const isImage = fileType === 'image';
     const isCsv   = fileType === 'csv';
 
     if (isImage) {
         // Image files use a single View tab.
         elements.tabImageView.style.display = '';
+        elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
@@ -1496,6 +1892,7 @@ function updateTabVisibility(fileType) {
         // CSV files use View + Edit tabs.
         elements.tabCsvView.style.display = '';
         elements.tabCsvEdit.style.display = '';
+        elements.tabMeta.style.display = '';
         elements.tabImageView.style.display = 'none';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
@@ -1515,6 +1912,20 @@ function updateTabVisibility(fileType) {
         // Code files use a single Edit tab.
         elements.tabEditor.style.display = '';
         elements.tabEditor.textContent = 'Edit';
+        elements.tabMeta.style.display = '';
+        elements.tabViewer.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    if (isBinary) {
+        // Binary files use a single Hex tab.
+        elements.tabEditor.style.display = '';
+        elements.tabEditor.textContent = 'Hex';
+        elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
         elements.tabSwaggerView.style.display = 'none';
@@ -1528,6 +1939,7 @@ function updateTabVisibility(fileType) {
     elements.tabEditor.style.display = isJson ? 'none' : '';
     elements.tabEditor.textContent = 'Edit';
     elements.tabJupyter.style.display = isJson ? 'none' : '';
+    elements.tabMeta.style.display = '';
 
     // JSON/YAML tabs
     elements.tabSwaggerView.style.display = isJson ? '' : 'none';
@@ -2163,17 +2575,23 @@ async function loadFile(file) {
         return;
     }
 
+    const fileName = file ? getPathFileName(file) : 'json file';
+    let stickyId = null;
+
     try {
+        // Capture the current project context to prevent autosave issues if user switches projects
+        state.currentFileProject = await GetCurrentProject();
+
         const loadingJson     = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
         const loadingImage    = isImageFile(file);
         const loadingCsv      = isCsvFile(file);
-        const stickyId = loadingJson ? Date.now() : null;
-        const fileName = file ? getPathFileName(file) : 'json file';
+        stickyId = loadingJson ? Date.now() : null;
 
         if (loadingImage) {
             state.currentFile = file;
             emitCurrentFileName();
+            await refreshFileMetaMarkdown(file);
             state.currentFileType = 'image';
             setCodeEditorMode(false);
             state.swaggerSpec = null;
@@ -2181,7 +2599,7 @@ async function loadFile(file) {
             updateTabVisibility('image');
 
             // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
-            // GetMarkdown does. GetImage expects a path without a leading separator
+            // GetFile does. GetImage expects a path without a leading separator
             // (it prepends one itself), so strip it after resolution.
             const resolvedPath = await ResolveFilePath(file);
             const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
@@ -2207,10 +2625,53 @@ async function loadFile(file) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
         }
 
-        const doc = await GetMarkdown(file);
+        const result = await GetFile(file);
 
         state.currentFile = file;
         emitCurrentFileName();
+        await refreshFileMetaMarkdown(file);
+
+        if (result.error !== '') {
+            if (stickyId) {
+                closeStickyProgress(stickyId, result.error, 'warn');
+            } else {
+                notifyTerminal(result.error, 'warn');
+            }
+            updateTabVisibility('error');
+            setViewMode('meta');
+            setDirty(false);
+            renderFileList();
+            return;
+        }
+
+        const doc = result.contents;
+        const isBinaryFile = Boolean(result.binary ?? result.text);
+
+        if (isBinaryFile) {
+            state.currentFileType = 'binary';
+            setCodeEditorMode(false);
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+
+            updateTabVisibility('binary');
+            renderHexDump(elements.hex, doc || '', {
+                fontSize: result.fontSize,
+                adjustCellHeight: result.adjustCellHeight,
+            });
+            setViewMode('hex');
+
+            if (stickyId) {
+                closeStickyProgress(stickyId);
+            }
+
+            setDirty(false);
+            renderFileList();
+
+            if (elements.findBar.dataset.open === 'true') {
+                closeFindBar();
+            }
+            return;
+        }
         
         // Detect file type
         if (loadingJson) {
@@ -2338,7 +2799,8 @@ async function saveFile() {
             ? elements.editor.value 
             : elements.editor.value;
         
-        await SaveFile(state.currentFile, content);
+        // Use the saved project context to prevent overwrites if user switched projects
+        await SaveFile(state.currentFile, content, state.currentFileProject || '');
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -2376,6 +2838,7 @@ async function confirmDelete() {
         await DeleteFile(fileToDelete);
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
+            state.currentFileProject = '';
             emitCurrentFileName();
             elements.editor.value = '';
             elements.swaggerView.innerHTML = '';
@@ -2405,6 +2868,23 @@ function openFindBar() {
     }, 0);
 }
 
+function scrollEditorToSelection(editor, selectionStart) {
+    // Calculate which line the selection starts on and scroll to it
+    const text = editor.value;
+    const beforeSelection = text.substring(0, selectionStart);
+    const linesBefore = beforeSelection.split('\n').length - 1;
+    
+    // Get the line height from computed styles
+    const styles = window.getComputedStyle(editor);
+    const lineHeight = parseFloat(styles.lineHeight) || parseFloat(styles.fontSize) * 1.4;
+    
+    // Calculate the scroll position (subtract half viewport height to center the line)
+    const viewportHeight = editor.clientHeight;
+    const targetScrollTop = Math.max(0, (linesBefore * lineHeight) - (viewportHeight / 2));
+    
+    editor.scrollTop = targetScrollTop;
+}
+
 function closeFindBar() {
     elements.findBar.dataset.open = 'false';
     elements.findBar.setAttribute('aria-hidden', 'true');
@@ -2416,7 +2896,7 @@ function closeFindBar() {
 }
 
 function isFindAvailableInCurrentMode() {
-    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view';
+    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view' && state.viewMode !== 'hex';
 }
 
 function updateFindAvailability() {
@@ -2593,18 +3073,13 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
         if (focusEditor) {
             editorEl.focus();
             editorEl.setSelectionRange(match.start, match.end);
+            // Ensure the editor scrolls to show the selection
+            scrollEditorToSelection(editorEl, match.start);
         } else {
             // Scroll to the match without permanently stealing focus.
-            // Temporarily focus the editor (preventScroll keeps the page from
-            // jumping), then setSelectionRange lets the browser natively scroll
-            // the textarea to the selection, then restore focus to the previous
-            // element (e.g. the find input).
-            const prevFocused = document.activeElement;
-            editorEl.focus({ preventScroll: true });
+            // Set selection and scroll without permanently focusing the editor.
             editorEl.setSelectionRange(match.start, match.end);
-            if (prevFocused && prevFocused !== editorEl) {
-                prevFocused.focus({ preventScroll: true });
-            }
+            scrollEditorToSelection(editorEl, match.start);
         }
     } else {
         const activeContainer = getActiveFindContainer();
@@ -2667,10 +3142,9 @@ function openNewFilePrompt() {
 
 function openRenamePrompt(file) {
     state.renamingFile = file;
-    const fileName = getPathFileName(file).replace(/\.md$/, '');
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
-    elements.modalInput.value = fileName;
+    elements.modalInput.value = file;
     elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
@@ -2732,12 +3206,12 @@ function buildImagePaths(notePath, epoch, extension) {
     const slash = notePath.lastIndexOf('/');
     const dir = slash === -1 ? '' : notePath.slice(0, slash + 1);
     const file = slash === -1 ? notePath : notePath.slice(slash + 1);
-    const stem = file.replace(/\.[^/.]+$/, '');
-
-    const imageFileName = `${stem}.${epoch}.${extension}`;
+    const imageDirName = `${file}.d`;
+    const imageFileName = `${epoch}.${extension}`;
+    const markdownImagePath = `${imageDirName}/${imageFileName}`;
     return {
-        imagePath: `${dir}${imageFileName}`,
-        imageFileName,
+        imagePath: `${dir}${markdownImagePath}`,
+        imageFileName: markdownImagePath,
     };
 }
 
@@ -3119,14 +3593,14 @@ function initStructuredDataTreeContextMenu(container) {
 }
 
 async function createNewFile() {
-    let fileName = normalizeNoteName(elements.modalInput.value);
-    if (fileName === '') {
-        setStatus('File name cannot be empty.', true);
-        return;
-    }
-
     // Handle rename operation
     if (state.renamingFile) {
+        const fileName = (elements.modalInput.value || '').trim();
+        if (fileName === '') {
+            setStatus('File name cannot be empty.', true);
+            return;
+        }
+
         try {
             await RenameFile(state.renamingFile, fileName);
             await refreshFiles();
@@ -3142,6 +3616,12 @@ async function createNewFile() {
         return;
     }
 
+    let fileName = normalizeNoteName(elements.modalInput.value);
+    if (fileName === '') {
+        setStatus('File name cannot be empty.', true);
+        return;
+    }
+
     // Handle new file creation
 
     const exists = state.files.some((file) => file === fileName);
@@ -3153,7 +3633,7 @@ async function createNewFile() {
     }
 
     try {
-        await SaveFile(fileName, '');
+        await SaveFile(fileName, '', '');
         await refreshFiles();
         await loadFile(fileName);
         setViewMode('editor');
@@ -3173,7 +3653,7 @@ async function createAndOpenFile(filename, contents) {
     }
 
     try {
-        await SaveFile(fileName, contents || '');
+        await SaveFile(fileName, contents || '', '');
         await refreshFiles();
         await loadFile(fileName);
         //setViewMode('editor');
@@ -3381,7 +3861,7 @@ function applyWindowStyle(result) {
 
         #notes-app {
             display: grid;
-            grid-template-columns: 1fr 8px 2fr;
+            grid-template-columns: 1fr 2px 2fr;
             height: 100%;
             overflow: hidden;
             color: var(--fg);
@@ -3411,6 +3891,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-list-filter-wrap {
+            position: relative;
             padding: 0 10px;
         }
 
@@ -3420,9 +3901,34 @@ function applyWindowStyle(result) {
             border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
             background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
             color: var(--fg);
-            padding: 6px 8px;
-            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            padding: 6px 28px 6px 8px;
+            font-size: ${result.fontSize - 1}px;
             outline: none;
+        }
+
+        #notes-list-filter-clear {
+            position: absolute;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 1);
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            display: none;
+            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 900;
+            font-size: ${result.fontSize + 7}px;
+        }
+
+        #notes-list-filter-clear[data-visible="true"] {
+            display: block;
+        }
+
+        #notes-list-filter-clear:hover {
+            color: var(--accent);
         }
 
         #notes-list-filter::placeholder {
@@ -3540,6 +4046,7 @@ function applyWindowStyle(result) {
             gap: 4px;
             margin-left: auto;
             align-items: center;
+            height: 20px;
         }
 
         .notes-toolbar-btn {
@@ -3827,8 +4334,10 @@ function applyWindowStyle(result) {
         }
 
         #notes-splitter {
+            padding: 0;
+            margin: 0;
             position: relative;
-            width: 8px;
+            width: 2px;
             cursor: col-resize;
             user-select: none;
             touch-action: none;
@@ -3839,10 +4348,10 @@ function applyWindowStyle(result) {
         #notes-splitter::after {
             content: '';
             position: absolute;
-            left: 50%;
+            /*left: 50%;*/
             top: 0;
-            transform: translateX(-50%);
-            width: 1px;
+            /*transform: translateX(-50%);*/
+            width: 2px;
             height: 100%;
             background: color-mix(in srgb, var(--fg) 20%, transparent);
         }
@@ -3854,8 +4363,7 @@ function applyWindowStyle(result) {
         #notes-main {
             display: flex;
             flex-direction: column;
-            /*gap: 12px;*/
-            padding: 0 0 2px 0;
+            padding: 0;
             height: 100%;
             min-height: 0;
             min-width: 0;
@@ -3869,10 +4377,10 @@ function applyWindowStyle(result) {
         #notes-tabs {
             display: flex;
             gap: 8px;
-            padding: 3px 0px 0px 8px;
-            /*background-color: ${DARKEN_BACKGROUND_OVERLAY};*/
+            padding: 6px 8px 0px 8px;
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            align-items: center;
+            /*align-items: center;*/
+
             box-sizing: border-box;
         }
 
@@ -3939,7 +4447,8 @@ function applyWindowStyle(result) {
 
         #notes-editor-wrap,
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             flex: 1;
             display: none;
             min-height: 0;
@@ -3947,30 +4456,37 @@ function applyWindowStyle(result) {
         }
 
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             padding-right: 10px;
             padding-bottom: 10px;
         }
 
         #notes-swagger-view-wrap,
-        #notes-swagger-run-wrap {
+        #notes-swagger-run-wrap,
+        #notes-hex-wrap {
             flex: 1;
             display: none;
+            min-width: 0;
             min-height: 0;
             overflow: hidden;
         }
 
         #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap {
+        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-hex-wrap {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         #notes-editor-wrap[data-active="true"],
+        #notes-hex-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
-        #notes-jupyter-wrap[data-active="true"] {
+        #notes-jupyter-wrap[data-active="true"],
+        #notes-meta-wrap[data-active="true"] {
             display: block;
         }
 
@@ -4161,6 +4677,7 @@ function applyWindowStyle(result) {
             overflow-y: auto;
             overflow-x: hidden;
             font-family: var(--font-family);
+            -webkit-user-modify: read-write-plaintext-only;
         }
 
         #notes-editor:focus {
@@ -4173,13 +4690,23 @@ function applyWindowStyle(result) {
             background-color: transparent;
         }
 
+        #notes-editor,
+        .jupyter-code-editable,
+        .swagger-body-editor,
+        #notes-editor-highlight,
+        #notes-editor-highlight code,
+        #notes-editor-highlight .hljs {
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+
         #notes-editor-shell {
             position: relative;
             display: grid;
             grid-template-columns: 1fr;
             height: 100%;
             width: 100%;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0);
             background-color: rgba(0, 0, 0, 0.22);
             transition: border-color 120ms ease;
         }
@@ -4259,7 +4786,8 @@ function applyWindowStyle(result) {
         }
 
         #notes-preview-wrap,
-        #notes-jupyter-wrap {
+        #notes-jupyter-wrap,
+        #notes-meta-wrap {
             overflow-y: auto;
             padding-left: 16px;
         }
@@ -4267,6 +4795,8 @@ function applyWindowStyle(result) {
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
+
+        ${getMarkdownBaseTextSizeStyles('#notes-meta', result.fontSize)}
 
         ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
 
@@ -4283,6 +4813,8 @@ function applyWindowStyle(result) {
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
 
         ${getHighlightJsTheme(result.colors, true)}
+
+        ${getHexDumpStyles(result.fontSize, result.adjustCellHeight)}
 
         #notes-preview img,
         #notes-jupyter img {
@@ -4615,16 +5147,23 @@ function applyWindowStyle(result) {
             filter: brightness(1.15);
         }
 
+        .json-toggle:hover::before {
+            opacity: 1;
+        }
+
         .json-toggle::before {
-            content: "\\f146";
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            /*content: "\\f146";*/
+            /*font-family: "Font Awesome Solid", "Font Awesome", sans-serif;*/
+            content: "▼";
             font-weight: 900;
             font-size: 12px;
             line-height: 1;
+            opacity: 0.3;
         }
 
         .json-node[data-expanded="false"] > .json-row > .json-toggle::before {
-            content: "\\f0fe";
+            /*content: "\\f0fe";*/
+            content: "▶";
         }
 
         .json-key {
@@ -4983,6 +5522,14 @@ elements.editor.addEventListener('contextmenu', (e) => {
                     elements.editor.selectionEnd = selStart + 3;
                 },
             },
+            {
+                title: 'Insert table 3x1',
+                icon: CONTEXT_ICON_TABLE,
+                onSelect: () => {
+                    elements.editor.focus();
+                    document.execCommand('insertText', false, '| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
+                },
+            },
         );
 
         const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
@@ -5021,6 +5568,10 @@ initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
+    if (state.currentFileType === 'binary') {
+        setViewMode('hex');
+        return;
+    }
     setViewMode('editor');
 });
 
@@ -5060,28 +5611,37 @@ elements.tabCsvEdit.addEventListener('click', () => {
     setViewMode('csv-edit');
 });
 
+elements.tabMeta.addEventListener('click', () => {
+    setViewMode('meta');
+});
+
 function getVisibleNotesTabs() {
     if (state.currentFileType === 'json') {
         const tabs = [elements.tabSwaggerView, elements.tabSwaggerEdit];
         if (state.swaggerRunAvailable && elements.tabSwaggerRun?.style.display !== 'none') {
             tabs.push(elements.tabSwaggerRun);
         }
+        tabs.push(elements.tabMeta);
         return tabs.filter(Boolean);
     }
 
     if (state.currentFileType === 'code') {
-        return [elements.tabEditor].filter(Boolean);
+        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
+    }
+
+    if (state.currentFileType === 'binary') {
+        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'image') {
-        return [elements.tabImageView].filter(Boolean);
+        return [elements.tabImageView, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'csv') {
-        return [elements.tabCsvView, elements.tabCsvEdit].filter(Boolean);
+        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabMeta].filter(Boolean);
     }
 
-    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter].filter((tab) => tab && tab.style.display !== 'none');
+    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter, elements.tabMeta].filter((tab) => tab && tab.style.display !== 'none');
 }
 
 function cycleNotesTabs(direction = 1) {
@@ -5157,15 +5717,27 @@ if (elements.listFilter) {
     });
 }
 
-elements.findNext.addEventListener('click', () => {
+if (elements.listFilterClear && elements.listFilter) {
+    elements.listFilterClear.addEventListener('click', () => {
+        elements.listFilter.value = '';
+        state.fileFilterQuery = '';
+        renderFileList();
+        elements.listFilter.focus();
+    });
+}
+
+elements.findNext.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     nextMatch();
 });
 
-elements.findPrev.addEventListener('click', () => {
+elements.findPrev.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     prevMatch();
 });
 
-elements.findClose.addEventListener('click', () => {
+elements.findClose.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     closeFindBar();
 });
 

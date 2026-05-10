@@ -19,6 +19,7 @@ Hotkeys:
   RepeatTTL: 1000
   Functions:
     "M-p":    CommandPalette
+    "F2::p":  CommandPalette
     "F2::s":  Settings
     "F2::C-r": ReloadSettings
     "M-v":    Paste
@@ -98,7 +99,7 @@ TypeFace:
   # Source Code Pro.
   #FontName: "Fira Code"
   #FontName: "Hack"
-  FontSize: 15
+  FontSize: 13
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
@@ -108,6 +109,11 @@ TypeFace:
   # Ligatures are characters can be combined to make prettier versions of
   # themselves. This requires a supporting font to be used.
   Ligatures: true
+
+Notes:
+  # Maximum size of files that can be opened in Notes
+  # Units: megabytes (MB)
+  MaxFileSize: 50
 
 Window:
   StatusBar: true
@@ -126,9 +132,7 @@ Window:
   # Terminal.JumpScrollLineCount also affects the window updates
   RefreshInterval: 200
 
-  AlwaysOnTop: true
-
-NotesWindow:
+  AlwaysOnTop: false
 
 AI:
   MaxIterations: 10

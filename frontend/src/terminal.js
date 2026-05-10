@@ -1,4 +1,4 @@
-import { GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -28,6 +28,194 @@ const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
+
+const REDRAW_OP = {
+    CELL: 1,
+    FRAME: 2,
+    HIGHLIGHT_RECT: 3,
+    RECT_COLOUR: 4,
+    BLOCK_CHROME: 5,
+    GAUGE_H: 6,
+    GAUGE_V: 7,
+    TILE_OVERLAY: 8,
+    IMAGE: 9,
+    TABLE: 10,
+};
+
+const REDRAW_FLAG = {
+    BOLD: 1 << 0,
+    ITALIC: 1 << 1,
+    UNDERLINE: 1 << 2,
+    STRIKE: 1 << 3,
+    SEARCH_RESULT: 1 << 4,
+    FOLDED: 1 << 5,
+};
+
+function colourFrom24(value) {
+    const c = Number(value);
+    if (!Number.isFinite(c) || c <= 0) {
+        return null;
+    }
+
+    const n = c >>> 0;
+    return {
+        Red: (n >>> 16) & 255,
+        Green: (n >>> 8) & 255,
+        Blue: n & 255,
+    };
+}
+
+function hasFlag(flags, flag) {
+    const n = Number(flags);
+    if (!Number.isFinite(n)) {
+        return false;
+    }
+    return (n & flag) !== 0;
+}
+
+function toCompactCommand(op) {
+    if (!Array.isArray(op) || op.length === 0) {
+        return null;
+    }
+
+    const kind = Number(op[0]);
+
+    switch (kind) {
+        case REDRAW_OP.CELL: {
+            const flags = Number(op[5]) || 0;
+            return {
+                op: 'cell',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                char: op[4],
+                bold: hasFlag(flags, REDRAW_FLAG.BOLD),
+                italic: hasFlag(flags, REDRAW_FLAG.ITALIC),
+                underline: hasFlag(flags, REDRAW_FLAG.UNDERLINE),
+                strike: hasFlag(flags, REDRAW_FLAG.STRIKE),
+                searchResult: hasFlag(flags, REDRAW_FLAG.SEARCH_RESULT),
+                fg: colourFrom24(op[6]),
+                bg: colourFrom24(op[7]),
+            };
+        }
+
+        case REDRAW_OP.FRAME:
+            return { op: 'frame', x: op[1], y: op[2], width: op[3], height: op[4] };
+
+        case REDRAW_OP.HIGHLIGHT_RECT:
+            return {
+                op: 'highlight_rect',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                fg: colourFrom24(op[5]),
+                bg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.RECT_COLOUR:
+            return {
+                op: 'rect_colour',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                bg: colourFrom24(op[5]),
+            };
+
+        case REDRAW_OP.BLOCK_CHROME: {
+            const flags = Number(op[6]) || 0;
+            return {
+                op: 'block_chrome',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                endX: op[4],
+                fg: colourFrom24(op[5]),
+                folded: hasFlag(flags, REDRAW_FLAG.FOLDED),
+            };
+        }
+
+        case REDRAW_OP.GAUGE_H:
+            return {
+                op: 'gauge_h',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                value: op[4],
+                max: op[5],
+                fg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.GAUGE_V:
+            return {
+                op: 'gauge_v',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                value: op[4],
+                max: op[5],
+                fg: colourFrom24(op[6]),
+            };
+
+        case REDRAW_OP.TILE_OVERLAY:
+            return {
+                op: 'tile_overlay',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                alpha: op[5],
+            };
+
+        case REDRAW_OP.IMAGE:
+            return {
+                op: 'image',
+                x: op[1],
+                y: op[2],
+                width: op[3],
+                height: op[4],
+                imageId: op[5],
+                srcWidth: op[6],
+                srcHeight: op[7],
+                srcScaleX: Number.isFinite(Number(op[8])) ? Number(op[8]) / 1000 : 0,
+                srcScaleY: Number.isFinite(Number(op[9])) ? Number(op[9]) / 1000 : 0,
+            };
+
+        case REDRAW_OP.TABLE:
+            return {
+                op: 'table',
+                x: op[1],
+                y: op[2],
+                height: op[3],
+                width: op[4],
+                fg: colourFrom24(op[5]),
+                boundaries: Array.isArray(op[6]) ? op[6] : [],
+            };
+
+        default:
+            return null;
+    }
+}
+
+function decodeDrawOpsPayload(payload) {
+    const compactOps = Array.isArray(payload?.[0]) && Array.isArray(payload[0][0])
+        ? payload[0]
+        : payload;
+
+    if (!Array.isArray(compactOps)) {
+        return [];
+    }
+
+    const decoded = [];
+    for (let i = 0; i < compactOps.length; i++) {
+        const cmd = toCompactCommand(compactOps[i]);
+        if (cmd) {
+            decoded.push(cmd);
+        }
+    }
+    return decoded;
+}
 let tabState = [];
 const imageCache = new Map();
 const terminalStatusEl = document.getElementById('terminal-status');
@@ -170,8 +358,6 @@ function applyTerminalStyles(result) {
             --terminal-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --terminal-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             --terminal-accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
-            --terminal-accent-soft: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
-            --terminal-accent-ring: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0);
             --terminal-selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --terminal-selection-20: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             --terminal-green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -246,16 +432,17 @@ function applyTerminalStyles(result) {
             min-height: 0;
             overflow: hidden;
             box-sizing: border-box;
-            border: 1px solid transparent;
-            transition: border-color 120ms ease, box-shadow 120ms ease;
+            border: 1px solid;
+            border-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        #terminal-viewport[data-tile-count]:not([data-tile-count="1"]) {
+            background-color: ${DARKEN_BACKGROUND_OVERLAY} !important;
         }
 
         #terminal-pane[data-terminal-focused="true"] #terminal-viewport {
-            border-color: var(--terminal-accent-soft);
-        }
-
-        #terminal-pane[data-terminal-focus-visible="true"] #terminal-viewport {
-            box-shadow: inset 0 0 0 1px var(--terminal-accent-ring);
+            border: 1px solid !important;
+            border-color: var(--terminal-accent) !important;
         }
 
         #ttyphoon-terminal {
@@ -326,16 +513,17 @@ function drawCursorPulseOverlay(targetCtx) {
 
 function paintTerminalCanvas() {
     // Fill canvas with theme background
-    const bg = windowStyle?.colors?.bg;
-    if (bg) {
-        ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    const bg = windowStyle.colors.bg;
+    ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw terminal content
     ctx.drawImage(offscreen, 0, 0);
 
-    // Apply dim overlay if terminal is not focused
+    // Dim when unfocused or when multiple tiles are present.
+    //const viewport = document.getElementById('terminal-viewport');
+    //const tileCount = Number(viewport?.getAttribute('data-tile-count')) || 1;
+    //if (window.terminalFocusedState === false || tileCount > 1) {
     if (window.terminalFocusedState === false) {
         ctx.fillStyle = DARKEN_BACKGROUND_OVERLAY;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -606,13 +794,9 @@ function drawFrame(cmd = null) {
         return;
     }
 
-    const bg = windowStyle?.colors?.bg;
-    if (bg) {
-        offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
-        offCtx.fillRect(x, y, width, height);
-    } else {
-        offCtx.clearRect(x, y, width, height);
-    }
+    const bg = windowStyle.colors.bg;
+    offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
+    offCtx.fillRect(x, y, width, height);
 }
 
 function drawHighlightRect(cmd) {
@@ -813,7 +997,7 @@ EventsOn("terminalRedraw", ops => {
     }
     rafPending = true;
 
-    const drawOps = Array.isArray(ops?.[0]) ? ops[0] : ops;
+    const drawOps = decodeDrawOpsPayload(ops);
 
     if (!Array.isArray(drawOps) || drawOps.length === 0) {
         rafPending = false;
@@ -888,7 +1072,30 @@ EventsOn("terminalRedraw", ops => {
 });
 
 EventsOn("terminalTabs", payload => {
-    const tabs = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    // Handle both old format (array of tabs) and new format (object with tabs and tileCount)
+    let tabs;
+    let tileCount = 1;
+    
+    if (Array.isArray(payload?.[0])) {
+        // Old format: [tabs array]
+        tabs = payload[0];
+    } else if (payload?.tabs) {
+        // New format: {tabs: [], tileCount: N}
+        tabs = payload.tabs;
+        tileCount = payload.tileCount || 1;
+    } else if (Array.isArray(payload)) {
+        // Fallback: direct array
+        tabs = payload;
+    } else {
+        tabs = [];
+    }
+    
+    // Store tile count on viewport for CSS queries
+    const viewport = document.getElementById('terminal-viewport');
+    if (viewport) {
+        viewport.setAttribute('data-tile-count', String(tileCount));
+    }
+    
     renderTerminalTabs(tabs);
     fitCanvasToWindow();
 });
@@ -1051,6 +1258,13 @@ EventsOn('terminalNotification', payload => {
     if (p.sticky) {
         el.classList.add('is-sticky');
         startStickySpinner(el, p.id);
+        el.addEventListener('click', () => {
+            const id = Number(p.id);
+            if (!Number.isFinite(id)) {
+                return;
+            }
+            CloseNotification(id).catch(() => {});
+        });
     }
 
     if (!p.sticky) {
