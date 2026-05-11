@@ -151,7 +151,8 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         }
 
         ${prefix}table {
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             border-collapse: collapse;
             border: 2px solid var(--fg);
         }
@@ -215,8 +216,19 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
         .hljs-symbol,
         .hljs-bullet,
         .hljs-addition,
+        .hljs-code,
         .hljs-built_in {
             color: ${green};
+        }
+
+        .hljs-emphasis {
+            color: ${magenta};
+            font-style: italic;
+        }
+
+        .hljs-strong {
+            color: ${yellow};
+            font-weight: bold;
         }
 
         .hljs-number,

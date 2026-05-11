@@ -16,6 +16,322 @@ import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
 import YAML from 'yaml';
 
+// Import additional syntax highlighting languages (not in common bundle)
+import lang1c from "highlight.js/lib/languages/1c";
+import abnf from "highlight.js/lib/languages/abnf";
+import accesslog from "highlight.js/lib/languages/accesslog";
+import actionscript from "highlight.js/lib/languages/actionscript";
+import ada from "highlight.js/lib/languages/ada";
+import angelscript from "highlight.js/lib/languages/angelscript";
+import apache from "highlight.js/lib/languages/apache";
+import applescript from "highlight.js/lib/languages/applescript";
+import arcade from "highlight.js/lib/languages/arcade";
+import arduino from "highlight.js/lib/languages/arduino";
+import armasm from "highlight.js/lib/languages/armasm";
+import asciidoc from "highlight.js/lib/languages/asciidoc";
+import aspectj from "highlight.js/lib/languages/aspectj";
+import autohotkey from "highlight.js/lib/languages/autohotkey";
+import autoit from "highlight.js/lib/languages/autoit";
+import avrasm from "highlight.js/lib/languages/avrasm";
+import awk from "highlight.js/lib/languages/awk";
+import axapta from "highlight.js/lib/languages/axapta";
+import basic from "highlight.js/lib/languages/basic";
+import bnf from "highlight.js/lib/languages/bnf";
+import brainfuck from "highlight.js/lib/languages/brainfuck";
+import cal from "highlight.js/lib/languages/cal";
+import capnproto from "highlight.js/lib/languages/capnproto";
+import ceylon from "highlight.js/lib/languages/ceylon";
+import clean from "highlight.js/lib/languages/clean";
+import clojure from "highlight.js/lib/languages/clojure";
+import clojureRepl from "highlight.js/lib/languages/clojure-repl";
+import cmake from "highlight.js/lib/languages/cmake";
+import coffeescript from "highlight.js/lib/languages/coffeescript";
+import coq from "highlight.js/lib/languages/coq";
+import cos from "highlight.js/lib/languages/cos";
+import crmsh from "highlight.js/lib/languages/crmsh";
+import crystal from "highlight.js/lib/languages/crystal";
+import csp from "highlight.js/lib/languages/csp";
+import d from "highlight.js/lib/languages/d";
+import dart from "highlight.js/lib/languages/dart";
+import delphi from "highlight.js/lib/languages/delphi";
+import django from "highlight.js/lib/languages/django";
+import dns from "highlight.js/lib/languages/dns";
+import dockerfile from "highlight.js/lib/languages/dockerfile";
+import dos from "highlight.js/lib/languages/dos";
+import dsconfig from "highlight.js/lib/languages/dsconfig";
+import dts from "highlight.js/lib/languages/dts";
+import dust from "highlight.js/lib/languages/dust";
+import ebnf from "highlight.js/lib/languages/ebnf";
+import elixir from "highlight.js/lib/languages/elixir";
+import elm from "highlight.js/lib/languages/elm";
+import erb from "highlight.js/lib/languages/erb";
+import erlang from "highlight.js/lib/languages/erlang";
+import erlangRepl from "highlight.js/lib/languages/erlang-repl";
+import excel from "highlight.js/lib/languages/excel";
+import fix from "highlight.js/lib/languages/fix";
+import flix from "highlight.js/lib/languages/flix";
+import fortran from "highlight.js/lib/languages/fortran";
+import fsharp from "highlight.js/lib/languages/fsharp";
+import gams from "highlight.js/lib/languages/gams";
+import gauss from "highlight.js/lib/languages/gauss";
+import gcode from "highlight.js/lib/languages/gcode";
+import gherkin from "highlight.js/lib/languages/gherkin";
+import glsl from "highlight.js/lib/languages/glsl";
+import gml from "highlight.js/lib/languages/gml";
+import golo from "highlight.js/lib/languages/golo";
+import gradle from "highlight.js/lib/languages/gradle";
+import groovy from "highlight.js/lib/languages/groovy";
+import haml from "highlight.js/lib/languages/haml";
+import handlebars from "highlight.js/lib/languages/handlebars";
+import haskell from "highlight.js/lib/languages/haskell";
+import haxe from "highlight.js/lib/languages/haxe";
+import hsp from "highlight.js/lib/languages/hsp";
+import http from "highlight.js/lib/languages/http";
+import hy from "highlight.js/lib/languages/hy";
+import inform7 from "highlight.js/lib/languages/inform7";
+import irpf90 from "highlight.js/lib/languages/irpf90";
+import isbl from "highlight.js/lib/languages/isbl";
+import jbossCli from "highlight.js/lib/languages/jboss-cli";
+import julia from "highlight.js/lib/languages/julia";
+import juliaRepl from "highlight.js/lib/languages/julia-repl";
+import lasso from "highlight.js/lib/languages/lasso";
+import latex from "highlight.js/lib/languages/latex";
+import ldif from "highlight.js/lib/languages/ldif";
+import leaf from "highlight.js/lib/languages/leaf";
+import lisp from "highlight.js/lib/languages/lisp";
+import livecodeserver from "highlight.js/lib/languages/livecodeserver";
+import livescript from "highlight.js/lib/languages/livescript";
+import llvm from "highlight.js/lib/languages/llvm";
+import lsl from "highlight.js/lib/languages/lsl";
+import mathematica from "highlight.js/lib/languages/mathematica";
+import matlab from "highlight.js/lib/languages/matlab";
+import maxima from "highlight.js/lib/languages/maxima";
+import mel from "highlight.js/lib/languages/mel";
+import mercury from "highlight.js/lib/languages/mercury";
+import mipsasm from "highlight.js/lib/languages/mipsasm";
+import mizar from "highlight.js/lib/languages/mizar";
+import mojolicious from "highlight.js/lib/languages/mojolicious";
+import monkey from "highlight.js/lib/languages/monkey";
+import moonscript from "highlight.js/lib/languages/moonscript";
+import n1ql from "highlight.js/lib/languages/n1ql";
+import nestedtext from "highlight.js/lib/languages/nestedtext";
+import nginx from "highlight.js/lib/languages/nginx";
+import nim from "highlight.js/lib/languages/nim";
+import nix from "highlight.js/lib/languages/nix";
+import nodeRepl from "highlight.js/lib/languages/node-repl";
+import nsis from "highlight.js/lib/languages/nsis";
+import ocaml from "highlight.js/lib/languages/ocaml";
+import openscad from "highlight.js/lib/languages/openscad";
+import oxygene from "highlight.js/lib/languages/oxygene";
+import parser3 from "highlight.js/lib/languages/parser3";
+import pf from "highlight.js/lib/languages/pf";
+import pgsql from "highlight.js/lib/languages/pgsql";
+import pony from "highlight.js/lib/languages/pony";
+import powershell from "highlight.js/lib/languages/powershell";
+import processing from "highlight.js/lib/languages/processing";
+import profile from "highlight.js/lib/languages/profile";
+import prolog from "highlight.js/lib/languages/prolog";
+import properties from "highlight.js/lib/languages/properties";
+import protobuf from "highlight.js/lib/languages/protobuf";
+import puppet from "highlight.js/lib/languages/puppet";
+import purebasic from "highlight.js/lib/languages/purebasic";
+import q from "highlight.js/lib/languages/q";
+import qml from "highlight.js/lib/languages/qml";
+import reasonml from "highlight.js/lib/languages/reasonml";
+import rib from "highlight.js/lib/languages/rib";
+import roboconf from "highlight.js/lib/languages/roboconf";
+import routeros from "highlight.js/lib/languages/routeros";
+import rsl from "highlight.js/lib/languages/rsl";
+import ruleslanguage from "highlight.js/lib/languages/ruleslanguage";
+import sas from "highlight.js/lib/languages/sas";
+import scala from "highlight.js/lib/languages/scala";
+import scheme from "highlight.js/lib/languages/scheme";
+import scilab from "highlight.js/lib/languages/scilab";
+import smali from "highlight.js/lib/languages/smali";
+import smalltalk from "highlight.js/lib/languages/smalltalk";
+import sml from "highlight.js/lib/languages/sml";
+import sqf from "highlight.js/lib/languages/sqf";
+import stan from "highlight.js/lib/languages/stan";
+import stata from "highlight.js/lib/languages/stata";
+import step21 from "highlight.js/lib/languages/step21";
+import stylus from "highlight.js/lib/languages/stylus";
+import subunit from "highlight.js/lib/languages/subunit";
+import taggerscript from "highlight.js/lib/languages/taggerscript";
+import tap from "highlight.js/lib/languages/tap";
+import tcl from "highlight.js/lib/languages/tcl";
+import thrift from "highlight.js/lib/languages/thrift";
+import tp from "highlight.js/lib/languages/tp";
+import twig from "highlight.js/lib/languages/twig";
+import vala from "highlight.js/lib/languages/vala";
+import vbscript from "highlight.js/lib/languages/vbscript";
+import vbscriptHtml from "highlight.js/lib/languages/vbscript-html";
+import verilog from "highlight.js/lib/languages/verilog";
+import vhdl from "highlight.js/lib/languages/vhdl";
+import vim from "highlight.js/lib/languages/vim";
+import wren from "highlight.js/lib/languages/wren";
+import x86asm from "highlight.js/lib/languages/x86asm";
+import xl from "highlight.js/lib/languages/xl";
+import xquery from "highlight.js/lib/languages/xquery";
+import zephir from "highlight.js/lib/languages/zephir";
+
+// Register all languages with highlight.js
+hljs.registerLanguage('1c', lang1c);
+hljs.registerLanguage('abnf', abnf);
+hljs.registerLanguage('accesslog', accesslog);
+hljs.registerLanguage('actionscript', actionscript);
+hljs.registerLanguage('ada', ada);
+hljs.registerLanguage('angelscript', angelscript);
+hljs.registerLanguage('apache', apache);
+hljs.registerLanguage('applescript', applescript);
+hljs.registerLanguage('arcade', arcade);
+hljs.registerLanguage('arduino', arduino);
+hljs.registerLanguage('armasm', armasm);
+hljs.registerLanguage('asciidoc', asciidoc);
+hljs.registerLanguage('aspectj', aspectj);
+hljs.registerLanguage('autohotkey', autohotkey);
+hljs.registerLanguage('autoit', autoit);
+hljs.registerLanguage('avrasm', avrasm);
+hljs.registerLanguage('awk', awk);
+hljs.registerLanguage('axapta', axapta);
+hljs.registerLanguage('basic', basic);
+hljs.registerLanguage('bnf', bnf);
+hljs.registerLanguage('brainfuck', brainfuck);
+hljs.registerLanguage('cal', cal);
+hljs.registerLanguage('capnproto', capnproto);
+hljs.registerLanguage('ceylon', ceylon);
+hljs.registerLanguage('clean', clean);
+hljs.registerLanguage('clojure', clojure);
+hljs.registerLanguage('clojure-repl', clojureRepl);
+hljs.registerLanguage('cmake', cmake);
+hljs.registerLanguage('coffeescript', coffeescript);
+hljs.registerLanguage('coq', coq);
+hljs.registerLanguage('cos', cos);
+hljs.registerLanguage('crmsh', crmsh);
+hljs.registerLanguage('crystal', crystal);
+hljs.registerLanguage('csp', csp);
+hljs.registerLanguage('d', d);
+hljs.registerLanguage('dart', dart);
+hljs.registerLanguage('delphi', delphi);
+hljs.registerLanguage('django', django);
+hljs.registerLanguage('dns', dns);
+hljs.registerLanguage('dockerfile', dockerfile);
+hljs.registerLanguage('dos', dos);
+hljs.registerLanguage('dsconfig', dsconfig);
+hljs.registerLanguage('dts', dts);
+hljs.registerLanguage('dust', dust);
+hljs.registerLanguage('ebnf', ebnf);
+hljs.registerLanguage('elixir', elixir);
+hljs.registerLanguage('elm', elm);
+hljs.registerLanguage('erb', erb);
+hljs.registerLanguage('erlang', erlang);
+hljs.registerLanguage('erlang-repl', erlangRepl);
+hljs.registerLanguage('excel', excel);
+hljs.registerLanguage('fix', fix);
+hljs.registerLanguage('flix', flix);
+hljs.registerLanguage('fortran', fortran);
+hljs.registerLanguage('fsharp', fsharp);
+hljs.registerLanguage('gams', gams);
+hljs.registerLanguage('gauss', gauss);
+hljs.registerLanguage('gcode', gcode);
+hljs.registerLanguage('gherkin', gherkin);
+hljs.registerLanguage('glsl', glsl);
+hljs.registerLanguage('gml', gml);
+hljs.registerLanguage('golo', golo);
+hljs.registerLanguage('gradle', gradle);
+hljs.registerLanguage('groovy', groovy);
+hljs.registerLanguage('haml', haml);
+hljs.registerLanguage('handlebars', handlebars);
+hljs.registerLanguage('haskell', haskell);
+hljs.registerLanguage('haxe', haxe);
+hljs.registerLanguage('hsp', hsp);
+hljs.registerLanguage('http', http);
+hljs.registerLanguage('hy', hy);
+hljs.registerLanguage('inform7', inform7);
+hljs.registerLanguage('irpf90', irpf90);
+hljs.registerLanguage('isbl', isbl);
+hljs.registerLanguage('jboss-cli', jbossCli);
+hljs.registerLanguage('julia', julia);
+hljs.registerLanguage('julia-repl', juliaRepl);
+hljs.registerLanguage('lasso', lasso);
+hljs.registerLanguage('latex', latex);
+hljs.registerLanguage('ldif', ldif);
+hljs.registerLanguage('leaf', leaf);
+hljs.registerLanguage('lisp', lisp);
+hljs.registerLanguage('livecodeserver', livecodeserver);
+hljs.registerLanguage('livescript', livescript);
+hljs.registerLanguage('llvm', llvm);
+hljs.registerLanguage('lsl', lsl);
+hljs.registerLanguage('mathematica', mathematica);
+hljs.registerLanguage('matlab', matlab);
+hljs.registerLanguage('maxima', maxima);
+hljs.registerLanguage('mel', mel);
+hljs.registerLanguage('mercury', mercury);
+hljs.registerLanguage('mipsasm', mipsasm);
+hljs.registerLanguage('mizar', mizar);
+hljs.registerLanguage('mojolicious', mojolicious);
+hljs.registerLanguage('monkey', monkey);
+hljs.registerLanguage('moonscript', moonscript);
+hljs.registerLanguage('n1ql', n1ql);
+hljs.registerLanguage('nestedtext', nestedtext);
+hljs.registerLanguage('nginx', nginx);
+hljs.registerLanguage('nim', nim);
+hljs.registerLanguage('nix', nix);
+hljs.registerLanguage('node-repl', nodeRepl);
+hljs.registerLanguage('nsis', nsis);
+hljs.registerLanguage('ocaml', ocaml);
+hljs.registerLanguage('openscad', openscad);
+hljs.registerLanguage('oxygene', oxygene);
+hljs.registerLanguage('parser3', parser3);
+hljs.registerLanguage('pf', pf);
+hljs.registerLanguage('pgsql', pgsql);
+hljs.registerLanguage('pony', pony);
+hljs.registerLanguage('powershell', powershell);
+hljs.registerLanguage('processing', processing);
+hljs.registerLanguage('profile', profile);
+hljs.registerLanguage('prolog', prolog);
+hljs.registerLanguage('properties', properties);
+hljs.registerLanguage('protobuf', protobuf);
+hljs.registerLanguage('puppet', puppet);
+hljs.registerLanguage('purebasic', purebasic);
+hljs.registerLanguage('q', q);
+hljs.registerLanguage('qml', qml);
+hljs.registerLanguage('reasonml', reasonml);
+hljs.registerLanguage('rib', rib);
+hljs.registerLanguage('roboconf', roboconf);
+hljs.registerLanguage('routeros', routeros);
+hljs.registerLanguage('rsl', rsl);
+hljs.registerLanguage('ruleslanguage', ruleslanguage);
+hljs.registerLanguage('sas', sas);
+hljs.registerLanguage('scala', scala);
+hljs.registerLanguage('scheme', scheme);
+hljs.registerLanguage('scilab', scilab);
+hljs.registerLanguage('smali', smali);
+hljs.registerLanguage('smalltalk', smalltalk);
+hljs.registerLanguage('sml', sml);
+hljs.registerLanguage('sqf', sqf);
+hljs.registerLanguage('stan', stan);
+hljs.registerLanguage('stata', stata);
+hljs.registerLanguage('step21', step21);
+hljs.registerLanguage('stylus', stylus);
+hljs.registerLanguage('subunit', subunit);
+hljs.registerLanguage('taggerscript', taggerscript);
+hljs.registerLanguage('tap', tap);
+hljs.registerLanguage('tcl', tcl);
+hljs.registerLanguage('thrift', thrift);
+hljs.registerLanguage('tp', tp);
+hljs.registerLanguage('twig', twig);
+hljs.registerLanguage('vala', vala);
+hljs.registerLanguage('vbscript', vbscript);
+hljs.registerLanguage('vbscript-html', vbscriptHtml);
+hljs.registerLanguage('verilog', verilog);
+hljs.registerLanguage('vhdl', vhdl);
+hljs.registerLanguage('vim', vim);
+hljs.registerLanguage('wren', wren);
+hljs.registerLanguage('x86asm', x86asm);
+hljs.registerLanguage('xl', xl);
+hljs.registerLanguage('xquery', xquery);
+hljs.registerLanguage('zephir', zephir);
+
 import { configureMarked, processMarkdownContainer, enableFullscreenImages } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
@@ -77,6 +393,21 @@ function ensureCellRefStyle() {
     }
     td .notes-cellref, th .notes-cellref {
         /* ensure always visible */
+    }
+    .notes-sort-icon {
+        display: inline-block;
+        font-family: "Font Awesome Solid";
+        font-weight: 900;
+        margin-right: 6px;
+        color: var(--red);
+        vertical-align: middle;
+        font-style: normal;
+        pointer-events: none;
+        user-select: none;
+    }
+    thead th {
+        cursor: pointer;
+        user-select: none;
     }
     `;
     document.head.appendChild(style);
@@ -408,6 +739,8 @@ function inferEditorLanguage(file, content) {
         markdown: 'markdown',
         html: 'xml',
         xml: 'xml',
+        plist: 'xml',
+        manifest: 'xml',
         css: 'css',
         scss: 'scss',
         dockerfile: 'dockerfile',
@@ -442,7 +775,14 @@ function syncEditorScrollDecorations() {
     const scrollTop = elements.editor.scrollTop;
     const scrollLeft = elements.editor.scrollLeft;
     elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
-    elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+
+    // For wrapped markdown, keep vertical transform sync so overlay tracks touchpad/scrollbar movement.
+    const isMarkdownWrapped = elements.editorShell?.dataset?.fileType === 'markdown';
+    if (isMarkdownWrapped) {
+        elements.editorHighlight.style.transform = `translate(0px, ${-scrollTop}px)`;
+    } else {
+        elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+    }
 }
 
 function renderEditorDecorations() {
@@ -466,6 +806,9 @@ function renderEditorDecorations() {
     try {
         if (hljs.getLanguage(language)) {
             elements.editorHighlightCode.innerHTML = hljs.highlight(content, { language, ignoreIllegals: true }).value;
+        } else if (language === 'markdown') {
+            // Avoid auto-detect for markdown; mis-detection often paints headings as comments.
+            elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
         } else {
             elements.editorHighlightCode.innerHTML = hljs.highlightAuto(content).value;
         }
@@ -485,7 +828,7 @@ function refreshEditorLanguage(file, content) {
 }
 
 function usesCodeEditorDecorations() {
-    return state.currentFileType === 'code' || state.currentFileType === 'json';
+    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
 }
 
 function isMarkdownNotesFile(fileName) {
@@ -699,12 +1042,18 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                 const wrap = cell.querySelector('.notes-table-cell-wrap');
                 const cellRef = wrap ? wrap.querySelector('.notes-cellref') : null;
                 const contentSpan = wrap ? wrap.querySelector('span:first-child') : null;
+                const sortIcon = cell.querySelector('.notes-sort-icon');
 
-                // Save the cellref element to restore later
+                // Save the cellref and sort icon elements to restore later
                 let cellRefNode = null;
+                let sortIconNode = null;
                 if (cellRef) {
                     cellRefNode = cellRef;
                     cellRef.remove();
+                }
+                if (sortIcon) {
+                    sortIconNode = sortIcon;
+                    sortIcon.remove();
                 }
 
                 const displayValue = contentSpan ? contentSpan.textContent : String(cell.textContent || '').trim();
@@ -754,11 +1103,14 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                             contentSpan.textContent = nextValue;
                         }
                     }
-                    // Restore the cellref node if it was present
+                    // Restore the cellref and sort icon nodes if they were present
                     if (wrap && cellRefNode) {
                         wrap.appendChild(cellRefNode);
                     }
                     cell.innerHTML = wrap ? wrap.outerHTML : cell.innerHTML;
+                    if (sortIconNode) {
+                        cell.prepend(sortIconNode);
+                    }
 
                     cell.removeEventListener('keydown', onKeyDown);
                     cell.removeEventListener('blur', onBlur);
@@ -810,6 +1162,7 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
 
 function renderCsvView(content, options = {}) {
     const interactive = Boolean(options.interactive);
+    const renderCellRef = (ref) => interactive ? `<span class="notes-cellref">${ref}</span>` : '';
     const rows = parseCsv(content || '');
     if (rows.length === 0) {
         elements.csvView.innerHTML = '<p class="notes-csv-empty">Empty file</p>';
@@ -833,7 +1186,7 @@ function renderCsvView(content, options = {}) {
     ensureCellRefStyle();
     const thead = headerRow.map((h, cIdx) => {
         const ref = getCellReference(0, cIdx);
-        return `<th><span class="notes-table-cell-wrap"><span>${escapeHtml(h)}</span><span class="notes-cellref">${ref}</span></span></th>`;
+        return `<th><span class="notes-table-cell-wrap"><span>${escapeHtml(h)}</span>${renderCellRef(ref)}</span></th>`;
     }).join('');
     const tbody = dataRows.map((r, rIdx) => {
         const cells = headerRow.map((_, cIdx) => {
@@ -843,7 +1196,7 @@ function renderCsvView(content, options = {}) {
             const formulaAttr = (interactive && isTableFormula(origVal))
                 ? ` data-formula="${escapeHtml(origVal)}"`
                 : '';
-            return `<td${formulaAttr}><span class="notes-table-cell-wrap"><span>${escapeHtml(displayVal)}</span><span class="notes-cellref">${ref}</span></span></td>`;
+            return `<td${formulaAttr}><span class="notes-table-cell-wrap"><span>${escapeHtml(displayVal)}</span>${renderCellRef(ref)}</span></td>`;
         }).join('');
         return `<tr>${cells}</tr>`;
     }).join('');
@@ -857,6 +1210,9 @@ function renderCsvView(content, options = {}) {
             () => (sourceRowIndex, columnIndex, value) => updateCsvCell(sourceRowIndex, columnIndex, value),
         );
     }
+
+    // Enable column sorting (available in both view and run mode)
+    setupTableSorting(elements.csvView);
 }
 
 function setCodeEditorMode(enabled) {
@@ -867,6 +1223,7 @@ function setCodeEditorMode(enabled) {
     elements.editorShell.dataset.codeView = enabled ? 'true' : 'false';
 
     if (!enabled) {
+        delete elements.editorShell.dataset.fileType;
         if (elements.editorGutter) {
             elements.editorGutter.textContent = '';
             elements.editorGutter.style.transform = '';
@@ -1124,6 +1481,9 @@ function renderMarkdown() {
     // Enable collapsible H1-H6 sections
     setupCollapsibleHeadings(elements.preview);
 
+    // Enable column sorting on all tables
+    setupTableSorting(elements.preview);
+
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
@@ -1194,7 +1554,8 @@ function setupCollapsibleHeadings(container) {
 
         // Wrap section content in a div so we can animate it as a unit.
         const wrapper = document.createElement('div');
-        wrapper.style.overflow = 'hidden';
+        wrapper.style.overflowX = 'auto';
+        wrapper.style.overflowY = 'hidden';
         wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
         wrapper.style.maxHeight = '100000px';
         wrapper.style.opacity = '1';
@@ -1912,6 +2273,112 @@ function setupInteractiveMarkdownTables(container, isEditable) {
     );
 }
 
+function setupTableSorting(container) {
+    if (!container) return;
+
+    const getCellText = (cell) => {
+        const wrap = cell.querySelector('.notes-table-cell-wrap > span:first-child');
+        if (wrap) return String(wrap.textContent || '').trim();
+        // Exclude sort icon from raw text comparison
+        return Array.from(cell.childNodes)
+            .filter(n => !n.classList?.contains('notes-sort-icon'))
+            .map(n => n.textContent)
+            .join('')
+            .trim();
+    };
+
+    Array.from(container.querySelectorAll('table')).forEach((table) => {
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        const headerRow = table.querySelector('thead tr');
+        if (!headerRow) return;
+        const headerCells = Array.from(headerRow.querySelectorAll('th'));
+
+        // Stamp original order so we can restore it on clear
+        Array.from(tbody.querySelectorAll('tr')).forEach((row, i) => {
+            row.dataset.originalSortOrder = String(i);
+        });
+
+        const clearSortIcons = () => {
+            headerCells.forEach((th) => {
+                const icon = th.querySelector('.notes-sort-icon');
+                if (icon) icon.remove();
+                delete th.dataset.sortType;
+            });
+        };
+
+        const clearSort = () => {
+            clearSortIcons();
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => Number(a.dataset.originalSortOrder) - Number(b.dataset.originalSortOrder));
+            rows.forEach(row => tbody.appendChild(row));
+        };
+
+        const applySort = (colIndex, sortType) => {
+            clearSortIcons();
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const aText = getCellText(a.querySelectorAll('td, th')[colIndex] || a);
+                const bText = getCellText(b.querySelectorAll('td, th')[colIndex] || b);
+                if (sortType === 'num-asc')  return (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
+                if (sortType === 'num-desc') return (parseFloat(bText) || 0) - (parseFloat(aText) || 0);
+                if (sortType === 'char-asc')  return aText.localeCompare(bText);
+                if (sortType === 'char-desc') return bText.localeCompare(aText);
+                return 0;
+            });
+            rows.forEach(row => tbody.appendChild(row));
+
+            // Stamp sort icon onto the header cell
+            const th = headerCells[colIndex];
+            if (th) {
+                th.dataset.sortType = sortType;
+                const iconCodePoint = { 'num-asc': 0xf162, 'num-desc': 0xf886, 'char-asc': 0xf15d, 'char-desc': 0xf881 }[sortType];
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'notes-sort-icon';
+                iconSpan.textContent = String.fromCodePoint(iconCodePoint);
+                th.prepend(iconSpan);
+            }
+        };
+
+        headerCells.forEach((th, colIndex) => {
+            th.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const headerText = getCellText(th) || `Column ${colIndex + 1}`;
+                const menuItems = [
+                    { title: 'Sort by number (low to high)',     icon: 0xf162, onSelect: () => { applySort(colIndex, 'num-asc'); clearTableHighlight(table); } },
+                    { title: 'Sort by number (high to low)',     icon: 0xf886, onSelect: () => { applySort(colIndex, 'num-desc'); clearTableHighlight(table); } },
+                    { title: 'Sort by characters (low to high)', icon: 0xf15d, onSelect: () => { applySort(colIndex, 'char-asc'); clearTableHighlight(table); } },
+                    { title: 'Sort by characters (high to low)', icon: 0xf881, onSelect: () => { applySort(colIndex, 'char-desc'); clearTableHighlight(table); } },
+                    { title: '-' },
+                    { title: 'Clear sorting', icon: 0, onSelect: () => { clearSort(); clearTableHighlight(table); } },
+                ];
+
+                const highlightCallback = (itemIndex) => {
+                    const item = menuItems[itemIndex];
+                    if (!item) return;
+                    clearTableHighlight(table);
+                    if (item.title === 'Clear sorting') {
+                        highlightEntireTable(table, true);
+                    } else if (item.title.startsWith('Sort')) {
+                        highlightTableColumn(table, colIndex, true);
+                    }
+                };
+
+                showNotesLocalMenu(
+                    menuItems,
+                    e.clientX,
+                    e.clientY,
+                    `Sort: ${headerText}`,
+                    highlightCallback,
+                    () => clearTableHighlight(table),
+                );
+            });
+        });
+    });
+}
+
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     const lines = elements.editor.value.split('\n');
     let currentCheckboxIndex = 0;
@@ -2182,6 +2649,9 @@ function renderJupyterView() {
         })
         .finally(() => {
             setupInteractiveMarkdownTables(elements.jupyter, true);
+
+            // Enable column sorting on all tables
+            setupTableSorting(elements.jupyter);
 
             // Re-apply find highlights if find bar is open and in jupyter mode
             if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'jupyter') {
@@ -3501,6 +3971,7 @@ async function loadFile(file) {
             await refreshFileMetaMarkdown(file);
             state.currentFileType = 'image';
             setCodeEditorMode(false);
+            elements.editorShell.dataset.fileType = 'image';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
             updateTabVisibility('image');
@@ -3557,6 +4028,7 @@ async function loadFile(file) {
         if (isBinaryFile) {
             state.currentFileType = 'binary';
             setCodeEditorMode(false);
+            elements.editorShell.dataset.fileType = 'binary';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
 
@@ -3584,6 +4056,7 @@ async function loadFile(file) {
         if (loadingJson) {
             state.currentFileType = 'json';
             setCodeEditorMode(true);
+            elements.editorShell.dataset.fileType = 'json';
             updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
@@ -3619,12 +4092,13 @@ async function loadFile(file) {
                 elements.swaggerEndpoints.innerHTML = '';
             }
             
-            // Set default view mode to JSON viewer
-            setViewMode('swagger-view');
+            // Set default view mode to editor for JSON/YAML files
+            setViewMode('swagger-edit');
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
-            setCodeEditorMode(false);
+            setCodeEditorMode(true);
+            elements.editorShell.dataset.fileType = 'markdown';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
 
@@ -3633,6 +4107,7 @@ async function loadFile(file) {
 
             // Set editor content
             elements.editor.value = doc || '';
+            refreshEditorLanguage(file, doc || '');
 
             // Render markdown views
             renderMarkdown();
@@ -3643,6 +4118,7 @@ async function loadFile(file) {
         } else if (loadingCsv) {
             state.currentFileType = 'csv';
             setCodeEditorMode(false);
+            elements.editorShell.dataset.fileType = 'csv';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
 
@@ -3660,6 +4136,7 @@ async function loadFile(file) {
         } else {
             state.currentFileType = 'code';
             setCodeEditorMode(true);
+            elements.editorShell.dataset.fileType = 'code';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
             
@@ -4434,13 +4911,25 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action', onHighl
 }
 
 function extractTableData(table) {
+    const getCellContent = (cell) => {
+        // Try to get content from the wrapped span (excludes cell refs)
+        const wrap = cell.querySelector('.notes-table-cell-wrap > span:first-child');
+        if (wrap) return String(wrap.textContent || '').trim();
+        // Otherwise exclude sort icons and cell refs from childNodes
+        return Array.from(cell.childNodes)
+            .filter(n => !n.classList?.contains('notes-sort-icon') && !n.classList?.contains('notes-cellref'))
+            .map(n => n.textContent)
+            .join('')
+            .trim();
+    };
+
     const rows = [];
     const headerRow = table.querySelector('thead tr');
     if (headerRow) {
-        rows.push(Array.from(headerRow.querySelectorAll('th, td')).map(cell => String(cell.textContent || '').trim()));
+        rows.push(Array.from(headerRow.querySelectorAll('th, td')).map(cell => getCellContent(cell)));
     }
     Array.from(table.querySelectorAll('tbody tr')).forEach(tr => {
-        rows.push(Array.from(tr.querySelectorAll('td, th')).map(cell => String(cell.textContent || '').trim()));
+        rows.push(Array.from(tr.querySelectorAll('td, th')).map(cell => getCellContent(cell)));
     });
     return rows;
 }
@@ -5604,6 +6093,7 @@ function applyWindowStyle(result) {
         #notes-meta-wrap {
             padding-right: 10px;
             padding-bottom: 10px;
+            overflow: auto;
         }
 
         #notes-swagger-view-wrap,
@@ -5870,12 +6360,41 @@ function applyWindowStyle(result) {
             grid-template-columns: max-content 1fr;
         }
 
+        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] {
+            grid-template-columns: 1fr;
+        }
+
+        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-gutter-wrap {
+            display: none;
+        }
+
         #notes-editor-shell[data-code-view="true"] #notes-editor {
             color: transparent;
             white-space: pre;
             overflow-wrap: normal;
             word-break: normal;
             overflow: auto;
+        }
+
+        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor {
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight {
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            overflow: hidden;
+        }
+
+        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight code {
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         #notes-editor-shell[data-code-view="false"] #notes-editor-highlight,
@@ -5906,6 +6425,10 @@ function applyWindowStyle(result) {
             position: relative;
             min-width: 0;
             height: 100%;
+            overflow: hidden;
+        }
+
+        #notes-editor-shell[data-file-type="markdown"] #notes-editor-scroll {
             overflow: hidden;
         }
 
@@ -5965,6 +6488,13 @@ function applyWindowStyle(result) {
         ${getHighlightJsTheme(result.colors, true)}
 
         ${getHexDumpStyles(result.fontSize, result.adjustCellHeight)}
+
+        #notes-preview,
+        #notes-jupyter,
+        #notes-meta,
+        #notes-csv-view {
+            min-width: 0;
+        }
 
         #notes-preview img,
         #notes-jupyter img {
