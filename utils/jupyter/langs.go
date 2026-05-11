@@ -2,8 +2,8 @@ package jupyter
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,19 +12,17 @@ import (
 	"slices"
 	"strings"
 	"text/template"
-	"time"
-
-	"github.com/lmorg/ttyphoon/app"
 )
 
 type LanguageBindingT struct {
-	Aliases        []string `yaml:"Aliases"`
-	Description    string   `yaml:"Description"`
-	Template       string   `yaml:"Template"`
-	FileExtension  string   `yaml:"FileExtension"`  // Must exclude `.` prefix
-	PreRunCommand  []string `yaml:"PreRunCommand"`  // `$FILE` is replaced with the filename
-	PreRunCommand2 []string `yaml:"PreRunCommand2"` // `$FILE` is replaced with the filename
-	ExecuteCommand []string `yaml:"ExecuteCommand"` // `$FILE` is replace with the filename
+	Aliases           []string `yaml:"Aliases"`
+	Description       string   `yaml:"Description"`
+	Template          string   `yaml:"Template"`
+	FileExtension     string   `yaml:"FileExtension"`     // Must exclude `.` prefix
+	PreRunCommand     []string `yaml:"PreRunCommand"`     // `$FILE` is replaced with the filename
+	PreRunCommand2    []string `yaml:"PreRunCommand2"`    // `$FILE` is replaced with the filename
+	ExecuteCommand    []string `yaml:"ExecuteCommand"`    // `$FILE` is replace with the filename
+	ExecuteParameters []string `yaml:"ExecuteParameters"` // `$FILE` is replace with the filename
 }
 
 var Languages []*LanguageBindingT
@@ -51,14 +49,14 @@ func GetLanguageDescriptions(language string) []string {
 func GetAllLanguageDescriptions() []string {
 	var descriptions []string
 	seen := make(map[string]bool)
-	
+
 	for _, binding := range Languages {
 		if !seen[binding.Description] {
 			descriptions = append(descriptions, binding.Description)
 			seen[binding.Description] = true
 		}
 	}
-	
+
 	return descriptions
 }
 
@@ -79,67 +77,40 @@ func RunNote(ctx context.Context, id, code, langRuntime string, ch chan<- *Outpu
 	}
 }
 
-func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, binding *LanguageBindingT) {
-	tempDir := os.TempDir()
-	tempFile, err := os.CreateTemp(tempDir, fmt.Sprintf("%s-note-*.%s", app.DirName, binding.FileExtension))
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error creating temp file: %v", err),
-			IsErr:  true,
+const _ID_FUNCTION = "#function"
+
+const _PARAMETERS = "${PARAMETERS}"
+
+func RunFunction(ctx context.Context, code string, parameters []string, langRuntime string) (string, error) {
+	for _, binding := range Languages {
+		if binding.Description != langRuntime {
+			continue
 		}
-		return
-	}
-	defer os.Remove(tempFile.Name())
 
-	buf := bytes.NewBuffer([]byte{})
-	tmpl, err := template.New(id).Funcs(templateFuncs(code)).Parse(binding.Template)
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
+		var (
+			ch  = make(chan *OutputT)
+			out string
+			err string
+		)
+
+		go runNote(ctx, _ID_FUNCTION, code, ch, binding, parameters...)
+
+		for output := range ch {
+			if output.IsErr {
+				err += "\n" + output.Output
+			} else {
+				out += "\n" + output.Output
+			}
 		}
-		return
-	}
-	err = tmpl.Execute(buf, map[string]string{"Code": code})
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
+
+		if err != "" {
+			return out, errors.New(err)
 		}
-		return
+
+		return out, nil
 	}
 
-	_, err = tempFile.Write(buf.Bytes())
-	tempFile.Close()
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
-		}
-		return
-	}
-
-	pre1 := expandVars(binding.PreRunCommand, tempFile.Name())
-	pre2 := expandVars(binding.PreRunCommand, tempFile.Name())
-	exe := expandVars(binding.ExecuteCommand, tempFile.Name())
-
-	var exitCode int
-	if len(pre1) > 0 {
-		exitCode = execute(ctx, id, pre1, ch)
-	}
-	if len(pre2) > 0 && exitCode == 0 {
-		exitCode = execute(ctx, id, pre2, ch)
-	}
-	if exitCode == 0 {
-		_ = execute(ctx, id, exe, ch)
-	}
-
-	time.Sleep(500 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed
-	close(ch)
+	return "", fmt.Errorf("Unsupported language: %s", langRuntime)
 }
 
 func templateFuncs(code string) template.FuncMap {
@@ -161,12 +132,25 @@ func expandVars(slice []string, filename string) []string {
 				return filename
 			case "DIR":
 				return dir
+			case "PARAMETERS":
+				return _PARAMETERS
 			default:
 				return val
 			}
 		})
 	}
 
+	return s
+}
+
+func expandParameters(slice []string, filename string, parameters []string) []string {
+	s := expandVars(slice, filename)
+
+	for i := range s {
+		if s[i] == _PARAMETERS {
+			return slices.Replace(s, i, i+1, parameters...)
+		}
+	}
 	return s
 }
 

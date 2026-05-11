@@ -13,6 +13,7 @@
   FileExtension: go
   PreRunCommand: [ goimports, -w, "${FILE}" ]
   ExecuteCommand: [ go, run, "${FILE}" ]
+  ExecuteParameters: [ go, run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ go, golang, tinygo ]
   Description: Go (TinyGo)
@@ -28,6 +29,7 @@
     {{ end }}
   FileExtension: go
   ExecuteCommand: [ tinygo, run, "${FILE}" ]
+  ExecuteParameters: [ tinygo, run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ python, py, python3 ]
   Description: Python 3.x
@@ -35,6 +37,7 @@
     {{ .Code }}
   FileExtension: py
   ExecuteCommand: [ python3, "${FILE}" ]
+  ExecuteParameters: [ python3, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ python2 ]
   Description: Python 2
@@ -42,6 +45,7 @@
     {{ .Code }}
   FileExtension: py
   ExecuteCommand: [ python2, "${FILE}" ]
+  ExecuteParameters: [ python2, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ python, py, python3 ]
   Description: Python (PyPy)
@@ -49,6 +53,7 @@
     {{ .Code }}
   FileExtension: py
   ExecuteCommand: [ pypy3, "${FILE}" ]
+  ExecuteParameters: [ pypy3, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ python, py, python3 ]
   Description: Python (IPython)
@@ -56,6 +61,7 @@
     {{ .Code }}
   FileExtension: py
   ExecuteCommand: [ ipython, "${FILE}" ]
+  ExecuteParameters: [ ipython, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ bash, sh, shell ]
   Description: Bash Shell Script
@@ -63,6 +69,7 @@
     {{ .Code }}
   FileExtension: sh
   ExecuteCommand: [ bash, "${FILE}" ]
+  ExecuteParameters: [ bash, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ sh, shell ]
   Description: POSIX Shell (sh)
@@ -70,6 +77,7 @@
     {{ .Code }}
   FileExtension: sh
   ExecuteCommand: [ sh, "${FILE}" ]
+  ExecuteParameters: [ sh, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ sh, shell, dash ]
   Description: Dash Shell Script
@@ -77,6 +85,7 @@
     {{ .Code }}
   FileExtension: sh
   ExecuteCommand: [ dash, "${FILE}" ]
+  ExecuteParameters: [ dash, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ murex ]
   Description: Murex Shell Script
@@ -84,6 +93,7 @@
     {{ .Code }}
   FileExtension: mx
   ExecuteCommand: [ murex, "${FILE}" ]
+  ExecuteParameters: [ murex, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ powershell, pwsh, ps ]
   Description: PowerShell (pwsh)
@@ -91,6 +101,7 @@
     {{ .Code }}
   FileExtension: ps1
   ExecuteCommand: [ pwsh, -NoProfile, -File, "${FILE}" ]
+  ExecuteParameters: [ pwsh, -NoProfile, -File, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ powershell, pwsh, ps ]
   Description: PowerShell (Windows PowerShell)
@@ -98,6 +109,7 @@
     {{ .Code }}
   FileExtension: ps1
   ExecuteCommand: [ powershell.exe, -NoProfile, -File, "${FILE}" ]
+  ExecuteParameters: [ powershell.exe, -NoProfile, -File, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ zsh ]
   Description: Zsh Shell Script
@@ -105,6 +117,7 @@
     {{ .Code }}
   FileExtension: zsh
   ExecuteCommand: [ zsh, "${FILE}" ]
+  ExecuteParameters: [ zsh, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ fish ]
   Description: Fish Shell Script
@@ -112,6 +125,7 @@
     {{ .Code }}
   FileExtension: fish
   ExecuteCommand: [ fish, "${FILE}" ]
+  ExecuteParameters: [ fish, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ nu, nushell ]
   Description: Nushell
@@ -119,6 +133,7 @@
     {{ .Code }}
   FileExtension: nu
   ExecuteCommand: [ nu, "${FILE}" ]
+  ExecuteParameters: [ nu, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ dockerfile, docker ]
   Description: Dockerfile (build and run)
@@ -127,6 +142,7 @@
   FileExtension: Dockerfile
   PreRunCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "${DIR}" ]
   ExecuteCommand: [ docker, run, --rm, ttyphoon-jupyter:latest ]
+  ExecuteParameters: [ docker, run, --rm, ttyphoon-jupyter:latest, "${PARAMETERS}"]
 
 - Aliases: [ ruby, rb ]
   Description: Ruby
@@ -134,6 +150,7 @@
     {{ .Code }}
   FileExtension: rb
   ExecuteCommand: [ ruby, "${FILE}" ]
+  ExecuteParameters: [ ruby, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ ruby, rb ]
   Description: Ruby (JRuby)
@@ -141,6 +158,7 @@
     {{ .Code }}
   FileExtension: rb
   ExecuteCommand: [ jruby, "${FILE}" ]
+  ExecuteParameters: [ jruby, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ ruby, rb ]
   Description: Ruby (TruffleRuby)
@@ -148,6 +166,7 @@
     {{ .Code }}
   FileExtension: rb
   ExecuteCommand: [ truffleruby, "${FILE}" ]
+  ExecuteParameters: [ truffleruby, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ node, js, javascript ]
   Description: Javascript (node.js)
@@ -155,6 +174,7 @@
     {{ .Code }}
   FileExtension: js
   ExecuteCommand: [ node, "${FILE}" ]
+  ExecuteParameters: [ node, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ node, js, javascript ]
   Description: Javascript (Deno)
@@ -162,6 +182,7 @@
     {{ .Code }}
   FileExtension: js
   ExecuteCommand: [ deno, run, "${FILE}" ]
+  ExecuteParameters: [ deno, run, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ node, js, javascript ]
   Description: Javascript (Bun)
@@ -169,6 +190,7 @@
     {{ .Code }}
   FileExtension: js
   ExecuteCommand: [ bun, "${FILE}" ]
+  ExecuteParameters: [ bun, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ kotlin, kt ]
   Description: Kotlin (JVM)
@@ -183,6 +205,7 @@
   FileExtension: kt
   PreRunCommand: [ kotlinc, "${FILE}", -include-runtime, -d, "${FILE}.jar" ]
   ExecuteCommand: [ java, -jar, "${FILE}.jar" ]
+  ExecuteParameters: [ java, -jar, "${FILE}.jar", "${PARAMETERS}"]
 
 - Aliases: [ kts, "kotlin script" ]
   Description: Kotlin Script
@@ -190,6 +213,7 @@
     {{ .Code }}
   FileExtension: kts
   ExecuteCommand: [ kotlinc, -script, "${FILE}" ]
+  ExecuteParameters: [ kotlinc, -script, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ swift ]
   Description: Swift
@@ -197,6 +221,7 @@
     {{ .Code }}
   FileExtension: swift
   ExecuteCommand: [ swift, "${FILE}" ]
+  ExecuteParameters: [ swift, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ swift ]
   Description: Swift (swiftc)
@@ -205,6 +230,7 @@
   FileExtension: swift
   PreRunCommand: [ swiftc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ clojure, clj ]
   Description: Clojure
@@ -212,6 +238,7 @@
     {{ .Code }}
   FileExtension: clj
   ExecuteCommand: [ clojure, "${FILE}" ]
+  ExecuteParameters: [ clojure, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ elixir, ex ]
   Description: Elixir
@@ -219,6 +246,7 @@
     {{ .Code }}
   FileExtension: exs
   ExecuteCommand: [ elixir, "${FILE}" ]
+  ExecuteParameters: [ elixir, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ erlang, erl ]
   Description: Erlang (escript)
@@ -234,6 +262,7 @@
     {{ end }}
   FileExtension: escript
   ExecuteCommand: [ escript, "${FILE}" ]
+  ExecuteParameters: [ escript, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ prolog, plg ]
   Description: Prolog (SWI-Prolog)
@@ -241,6 +270,7 @@
     {{ .Code }}
   FileExtension: pl
   ExecuteCommand: [ swipl, -q, -f, "${FILE}", -t, halt ]
+  ExecuteParameters: [ swipl, -q, -f, "${FILE}", -t, halt, "${PARAMETERS}"]
 
 - Aliases: [ julia, jl ]
   Description: Julia
@@ -248,6 +278,7 @@
     {{ .Code }}
   FileExtension: jl
   ExecuteCommand: [ julia, "${FILE}" ]
+  ExecuteParameters: [ julia, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ lisp, commonlisp, cl ]
   Description: Common Lisp (SBCL)
@@ -255,6 +286,7 @@
     {{ .Code }}
   FileExtension: lisp
   ExecuteCommand: [ sbcl, --script, "${FILE}" ]
+  ExecuteParameters: [ sbcl, --script, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ lisp, commonlisp, cl ]
   Description: Common Lisp (CLISP)
@@ -262,6 +294,7 @@
     {{ .Code }}
   FileExtension: lisp
   ExecuteCommand: [ clisp, "${FILE}" ]
+  ExecuteParameters: [ clisp, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ scheme, scm, racket ]
   Description: Scheme (Racket)
@@ -274,6 +307,7 @@
     {{ end }}
   FileExtension: rkt
   ExecuteCommand: [ racket, "${FILE}" ]
+  ExecuteParameters: [ racket, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ scheme, scm ]
   Description: Scheme (Guile)
@@ -281,6 +315,7 @@
     {{ .Code }}
   FileExtension: scm
   ExecuteCommand: [ guile, "${FILE}" ]
+  ExecuteParameters: [ guile, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ haskell, hs ]
   Description: Haskell
@@ -293,6 +328,7 @@
     {{ end }}
   FileExtension: hs
   ExecuteCommand: [ runghc, "${FILE}" ]
+  ExecuteParameters: [ runghc, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ elm ]
   Description: Elm
@@ -310,6 +346,7 @@
   FileExtension: elm
   PreRunCommand: [ elm, make, "${FILE}", '--output="${FILE}.html"' ]
   ExecuteCommand: [ cat, "${FILE}.html" ]
+  ExecuteParameters: [ cat, "${FILE}.html", "${PARAMETERS}"]
 
 - Aliases: [ ocaml, ml ]
   Description: OCaml
@@ -317,6 +354,7 @@
     {{ .Code }}
   FileExtension: ml
   ExecuteCommand: [ ocaml, "${FILE}" ]
+  ExecuteParameters: [ ocaml, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ scala, sc ]
   Description: Scala
@@ -330,6 +368,7 @@
     {{ end }}
   FileExtension: scala
   ExecuteCommand: [ scala, "${FILE}" ]
+  ExecuteParameters: [ scala, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ scala, sc ]
   Description: Scala (scala-cli)
@@ -343,6 +382,7 @@
     {{ end }}
   FileExtension: scala
   ExecuteCommand: [ scala-cli, run, "${FILE}" ]
+  ExecuteParameters: [ scala-cli, run, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ scala, sc, ammonite ]
   Description: Scala (Ammonite)
@@ -350,6 +390,7 @@
     {{ .Code }}
   FileExtension: sc
   ExecuteCommand: [ amm, "${FILE}" ]
+  ExecuteParameters: [ amm, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ haxe, hx ]
   Description: Haxe
@@ -365,6 +406,7 @@
     {{ end }}
   FileExtension: hx
   ExecuteCommand: [ haxe, --interp, --main, Main, --run, "${FILE}" ]
+  ExecuteParameters: [ haxe, --interp, --main, Main, --run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ dart ]
   Description: Dart
@@ -378,6 +420,7 @@
     {{ end }}
   FileExtension: dart
   ExecuteCommand: [ dart, "${FILE}" ]
+  ExecuteParameters: [ dart, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ groovy, gr ]
   Description: Groovy
@@ -385,6 +428,7 @@
     {{ .Code }}
   FileExtension: groovy
   ExecuteCommand: [ groovy, "${FILE}" ]
+  ExecuteParameters: [ groovy, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ tcl ]
   Description: Tcl
@@ -392,6 +436,7 @@
     {{ .Code }}
   FileExtension: tcl
   ExecuteCommand: [ tclsh, "${FILE}" ]
+  ExecuteParameters: [ tclsh, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ awk ]
   Description: Awk
@@ -399,6 +444,7 @@
     {{ .Code }}
   FileExtension: awk
   ExecuteCommand: [ awk, -f, "${FILE}" ]
+  ExecuteParameters: [ awk, -f, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ typescript, ts ]
   Description: TypeScript (ts-node)
@@ -406,6 +452,7 @@
     {{ .Code }}
   FileExtension: ts
   ExecuteCommand: [ ts-node, "${FILE}" ]
+  ExecuteParameters: [ ts-node, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ typescript, ts ]
   Description: TypeScript (tsx)
@@ -413,6 +460,7 @@
     {{ .Code }}
   FileExtension: ts
   ExecuteCommand: [ tsx, "${FILE}" ]
+  ExecuteParameters: [ tsx, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ typescript, ts ]
   Description: TypeScript (Deno)
@@ -420,6 +468,7 @@
     {{ .Code }}
   FileExtension: ts
   ExecuteCommand: [ deno, run, "${FILE}" ]
+  ExecuteParameters: [ deno, run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ perl, perl5 ]
   Description: Perl 5.x
@@ -427,6 +476,7 @@
     {{ .Code }}
   FileExtension: pl
   ExecuteCommand: [ perl, "${FILE}" ]
+  ExecuteParameters: [ perl, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ perl, perl5, raku, perl6 ]
   Description: Raku (formerly Perl 6)
@@ -434,6 +484,7 @@
     {{ .Code }}
   FileExtension: raku
   ExecuteCommand: [ raku, "${FILE}" ]
+  ExecuteParameters: [ raku, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ java ]
   Description: Java
@@ -450,6 +501,7 @@
   FileExtension: java
   PreRunCommand: [ javac, "${FILE}" ]
   ExecuteCommand: [ java, -cp, "${DIR}", Main ]
+  ExecuteParameters: [ java, -cp, "${DIR}", Main, "${PARAMETERS}"]
 
 - Aliases: [ java, jshell ]
   Description: Java (JShell)
@@ -457,6 +509,7 @@
     {{ .Code }}
   FileExtension: jsh
   ExecuteCommand: [ jshell, "${FILE}" ]
+  ExecuteParameters: [ jshell, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ objective-c, objc, obj-c ]
   Description: Objective-C
@@ -476,6 +529,7 @@
   FileExtension: m
   PreRunCommand: [ clang, -framework, Foundation, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ d ]
   Description: D
@@ -492,6 +546,7 @@
   FileExtension: d
   PreRunCommand: [ dmd, "${FILE}", "-of=${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ d ]
   Description: D (LDC2)
@@ -508,6 +563,7 @@
   FileExtension: d
   PreRunCommand: [ ldc2, "${FILE}", "-of=${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ d ]
   Description: D (GDC)
@@ -524,6 +580,7 @@
   FileExtension: d
   PreRunCommand: [ gdc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ c ]
   Description: C (cc)
@@ -541,6 +598,7 @@
   FileExtension: c
   PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ c ]
   Description: C (gcc)
@@ -558,6 +616,7 @@
   FileExtension: c
   PreRunCommand: [ gcc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ c ]
   Description: C (clang)
@@ -575,6 +634,7 @@
   FileExtension: c
   PreRunCommand: [ clang, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ c ]
   Description: C (MSVC)
@@ -592,6 +652,7 @@
   FileExtension: c
   PreRunCommand: [ cl.exe, /nologo, "${FILE}", "/Fe:${FILE}.exe" ]
   ExecuteCommand: [ "${FILE}.exe" ]
+  ExecuteParameters: [ "${FILE}.exe", "${PARAMETERS}"]
 
 - Aliases: [ cpp, c++, cxx ]
   Description: C++ (c++)
@@ -609,6 +670,7 @@
   FileExtension: cpp
   PreRunCommand: [ c++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ cpp, c++, cxx ]
   Description: C++ (g++)
@@ -626,6 +688,7 @@
   FileExtension: cpp
   PreRunCommand: [ g++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ cpp, c++, cxx ]
   Description: C++ (clang++)
@@ -643,6 +706,7 @@
   FileExtension: cpp
   PreRunCommand: [ clang++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ cpp, c++, cxx ]
   Description: C++ (MSVC)
@@ -660,6 +724,7 @@
   FileExtension: cpp
   PreRunCommand: [ cl.exe, /nologo, /EHsc, "${FILE}", "/Fe:${FILE}.exe" ]
   ExecuteCommand: [ "${FILE}.exe" ]
+  ExecuteParameters: [ "${FILE}.exe", "${PARAMETERS}"]
 
 - Aliases: [ rust, rs ]
   Description: Rust
@@ -674,6 +739,7 @@
   FileExtension: rs
   PreRunCommand: [ rustc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ crystal, cr ]
   Description: Crystal
@@ -681,6 +747,7 @@
     {{ .Code }}
   FileExtension: cr
   ExecuteCommand: [ crystal, run, "${FILE}" ]
+  ExecuteParameters: [ crystal, run, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ vlang, v ]
   Description: V
@@ -694,6 +761,7 @@
     {{ end }}
   FileExtension: v
   ExecuteCommand: [ v, run, "${FILE}" ]
+  ExecuteParameters: [ v, run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ zig ]
   Description: Zig
@@ -709,6 +777,7 @@
     {{ end }}
   FileExtension: zig
   ExecuteCommand: [ zig, run, "${FILE}" ]
+  ExecuteParameters: [ zig, run, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ odin ]
   Description: Odin
@@ -726,6 +795,7 @@
     {{ end }}
   FileExtension: odin
   ExecuteCommand: [ odin, run, "${FILE}" ]
+  ExecuteParameters: [ odin, run, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ red ]
   Description: Red
@@ -739,6 +809,7 @@
     {{ end }}
   FileExtension: red
   ExecuteCommand: [ red, "${FILE}" ]
+  ExecuteParameters: [ red, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ nim ]
   Description: Nim
@@ -752,6 +823,7 @@
   FileExtension: nim
   PreRunCommand: [ nim, c, "-o:${FILE}.out", "${FILE}" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ fortran, f90, f95, f03, f08 ]
   Description: Fortran
@@ -766,6 +838,7 @@
   FileExtension: f90
   PreRunCommand: [ gfortran, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ fortran, f90, f95, f03, f08 ]
   Description: Fortran (Flang)
@@ -780,6 +853,7 @@
   FileExtension: f90
   PreRunCommand: [ flang, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ fortran, f90, f95, f03, f08 ]
   Description: Fortran (Intel ifx)
@@ -794,6 +868,7 @@
   FileExtension: f90
   PreRunCommand: [ ifx, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ cobol, cob, cbl ]
   Description: COBOL (GnuCOBOL)
@@ -802,6 +877,7 @@
   FileExtension: cbl
   PreRunCommand: [ cobc, -x, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ php ]
   Description: PHP
@@ -814,6 +890,7 @@
     {{ end }}
   FileExtension: php
   ExecuteCommand: [ php, "${FILE}" ]
+  ExecuteParameters: [ php, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ php ]
   Description: PHP (PHP-CGI)
@@ -826,6 +903,7 @@
     {{ end }}
   FileExtension: php
   ExecuteCommand: [ php-cgi, "${FILE}" ]
+  ExecuteParameters: [ php-cgi, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ php ]
   Description: PHP (HHVM)
@@ -838,6 +916,7 @@
     {{ end }}
   FileExtension: php
   ExecuteCommand: [ hhvm, "${FILE}" ]
+  ExecuteParameters: [ hhvm, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ lua ]
   Description: Lua
@@ -845,6 +924,7 @@
     {{ .Code }}
   FileExtension: lua
   ExecuteCommand: [ lua, "${FILE}" ]
+  ExecuteParameters: [ lua, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ r, rstats ]
   Description: R
@@ -852,6 +932,7 @@
     {{ .Code }}
   FileExtension: r
   ExecuteCommand: [ Rscript, "${FILE}" ]
+  ExecuteParameters: [ Rscript, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ csharp, cs, dotnet ]
   Description: C# (.NET)
@@ -859,6 +940,7 @@
     {{ .Code }}
   FileExtension: cs
   ExecuteCommand: [ dotnet, script, "${FILE}" ]
+  ExecuteParameters: [ dotnet, script, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ forth, fth ]
   Description: Forth (Gforth)
@@ -866,6 +948,7 @@
     {{ .Code }}
   FileExtension: fs
   ExecuteCommand: [ gforth, "${FILE}" ]
+  ExecuteParameters: [ gforth, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ csharp, cs, dotnet ]
   Description: C# (C# Interactive - csi)
@@ -873,6 +956,7 @@
     {{ .Code }}
   FileExtension: cs
   ExecuteCommand: [ csi, "${FILE}" ]
+  ExecuteParameters: [ csi, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ fsharp, fs, "f#" ]
   Description: F# (F# Interactive)
@@ -880,6 +964,7 @@
     {{ .Code }}
   FileExtension: fsx
   ExecuteCommand: [ dotnet, fsi, "${FILE}" ]
+  ExecuteParameters: [ dotnet, fsi, "${FILE}", --, "${PARAMETERS}"]
 
 - Aliases: [ vb, vbnet, "vb.net" ]
   Description: VB.NET (Mono)
@@ -896,6 +981,7 @@
   FileExtension: vb
   PreRunCommand: [ vbnc, "${FILE}", '-out:"${FILE}.exe"' ]
   ExecuteCommand: [ mono, "${FILE}.exe" ]
+  ExecuteParameters: [ mono, "${FILE}.exe", "${PARAMETERS}"]
 
 - Aliases: [ vbscript, vbs ]
   Description: VBScript (Windows)
@@ -903,6 +989,7 @@
     {{ .Code }}
   FileExtension: vbs
   ExecuteCommand: [ cscript.exe, //NoLogo, "${FILE}" ]
+  ExecuteParameters: [ cscript.exe, //NoLogo, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ vb, vbnet, "vb.net" ]
   Description: VB.NET (.NET SDK)
@@ -918,6 +1005,7 @@
     {{ end }}
   FileExtension: vb
   ExecuteCommand: [ dotnet, script, "${FILE}" ]
+  ExecuteParameters: [ dotnet, script, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ ada, adb, ads ]
   Description: Ada (GNAT)
@@ -935,6 +1023,7 @@
   FileExtension: adb
   PreRunCommand: [ gnatmake, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ ada, adb, ads ]
   Description: Ada (GPRbuild)
@@ -952,6 +1041,7 @@
   FileExtension: adb
   PreRunCommand: [ gprbuild, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ smalltalk, st ]
   Description: Smalltalk (GNU Smalltalk)
@@ -959,6 +1049,7 @@
     {{ .Code }}
   FileExtension: st
   ExecuteCommand: [ gst, "${FILE}" ]
+  ExecuteParameters: [ gst, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ wolfram, mathematica, wl ]
   Description: Wolfram Language (wolframscript)
@@ -966,6 +1057,7 @@
     {{ .Code }}
   FileExtension: wl
   ExecuteCommand: [ wolframscript, -file, "${FILE}" ]
+  ExecuteParameters: [ wolframscript, -file, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ wolfram, mathematica, wl ]
   Description: Wolfram Language (MathKernel)
@@ -973,6 +1065,7 @@
     {{ .Code }}
   FileExtension: wl
   ExecuteCommand: [ MathKernel, -script, "${FILE}" ]
+  ExecuteParameters: [ MathKernel, -script, "${FILE}", "${PARAMETERS}"]
 
 - Aliases: [ delphi, objectpascal, "object-pascal" ]
   Description: Delphi / Object Pascal (Free Pascal)
@@ -988,6 +1081,7 @@
   FileExtension: pas
   PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ pascal, pas ]
   Description: Pascal (Free Pascal)
@@ -1003,6 +1097,7 @@
   FileExtension: pas
   PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ basic, bas, freebasic ]
   Description: BASIC (FreeBASIC)
@@ -1011,6 +1106,7 @@
   FileExtension: bas
   PreRunCommand: [ fbc, "${FILE}", "-x", "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ asm, assembly, gas ]
   Description: Assembly (GNU as via cc)
@@ -1019,6 +1115,7 @@
   FileExtension: s
   PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ nasm ]
   Description: Assembly (NASM)
@@ -1028,6 +1125,7 @@
   PreRunCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
   PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ yasm ]
   Description: Assembly (YASM)
@@ -1037,6 +1135,7 @@
   PreRunCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
   PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ fasm ]
   Description: Assembly (FASM)
@@ -1045,6 +1144,7 @@
   FileExtension: asm
   PreRunCommand: [ fasm, "${FILE}", "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
 - Aliases: [ goasm, goassembly, "go-asm", "go assembly" ]
   Description: Go Assembly (Plan 9 assembler)
@@ -1053,3 +1153,4 @@
   FileExtension: s
   PreRunCommand: [ go, tool, asm, -o, "${FILE}.o", "${FILE}" ]
   ExecuteCommand: [ go, tool, objdump, "${FILE}.o" ]
+  ExecuteParameters: [ go, tool, objdump, "${FILE}.o", "${PARAMETERS}"]

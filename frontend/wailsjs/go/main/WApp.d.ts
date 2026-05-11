@@ -48,6 +48,8 @@ export function ResolveFilePath(arg1:string):Promise<string>;
 
 export function RunAIAgentWithStream(arg1:string,arg2:string):Promise<void>;
 
+export function RunFunction(arg1:string,arg2:string,arg3:Array<string>,arg4:string):Promise<main.RunFunctionReturnT>;
+
 export function RunHyperlinkMenuAction(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;

@@ -4,3 +4,4 @@ id,name,email,department,salary
 3,Aunt Agatha,a.gregson@example.com,Executive,120000
 4,Tuppy Glossop,t.glossop@example.com,Sales,65000
 5,Madeline Bassett,m.bassett@example.com,Marketing,70000
+6,Mr Blobby,blobby@example.com,Loan Shark,=E2+E3+E4+E5

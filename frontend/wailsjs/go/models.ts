@@ -100,6 +100,22 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class RunFunctionReturnT {
+	    Output: string;
+	    IsError: boolean;
+	    CellId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RunFunctionReturnT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Output = source["Output"];
+	        this.IsError = source["IsError"];
+	        this.CellId = source["CellId"];
+	    }
+	}
 	export class WindowStyleT {
 	    colors?: ColoursT;
 	    statusBar: boolean;

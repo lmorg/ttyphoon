@@ -560,6 +560,29 @@ func (a *WApp) RunNote(id string, code, language string) {
 	}()
 }
 
+type RunFunctionReturnT struct {
+	Output  string
+	IsError bool
+	CellId  string
+}
+
+func (a *WApp) RunFunction(cellId, code string, parameters []string, language string) RunFunctionReturnT {
+	output, err := jupyter.RunFunction(context.Background(), code, parameters, language)
+	if err != nil {
+		return RunFunctionReturnT{
+			Output:  err.Error(),
+			IsError: true,
+			CellId:  cellId,
+		}
+	}
+
+	return RunFunctionReturnT{
+		Output:  output,
+		IsError: false,
+		CellId:  cellId,
+	}
+}
+
 func (a *WApp) StopNote(id string) {
 	fn, ok := a.notesKills[id]
 	if !ok {

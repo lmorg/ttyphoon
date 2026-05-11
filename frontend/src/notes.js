@@ -1,7 +1,7 @@
 import {
     GetWindowStyle, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
-    RunNote, StopNote, SendIpc, SendToTerminal,
+    RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
@@ -24,6 +24,15 @@ import {
 } from './swagger-utils.js';
 import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
 import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
+import {
+    evaluateTableFormula,
+    isTableFormula,
+    getCellReference,
+    parseTableFunctionCall,
+    resolveTableFunctionArg,
+    resolveTableFunctionArgs,
+    resolveTableFunctionArgsAsync,
+} from './table-expressions.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -34,6 +43,44 @@ const CONTEXT_ICON_CODE = 0xf121;
 const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
+
+// Inject cell reference CSS if not present
+function ensureCellRefStyle() {
+    if (document.getElementById('notes-cellref-style')) return;
+    const style = document.createElement('style');
+    style.id = 'notes-cellref-style';
+    style.textContent = `
+    .notes-cellref {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        opacity: 0.2;
+        font-size: calc(var(--notes-table-font-size, 1em) - 2px);
+        color: currentColor;
+        pointer-events: none;
+        z-index: 1;
+        line-height: 1;
+        user-select: none;
+        text-align: right;
+    }
+    .notes-table-cell-wrap {
+        position: relative;
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .notes-table-cell-wrap > span:first-child {
+        font-family: "Lato", var(--font-family), sans-serif !important;
+        font-size: inherit !important;
+        font-weight: inherit !important;
+        letter-spacing: 1px !important;
+    }
+    td .notes-cellref, th .notes-cellref {
+        /* ensure always visible */
+    }
+    `;
+    document.head.appendChild(style);
+}
 
 const IS_WINDOWS = typeof navigator !== 'undefined' && (
     /Windows/i.test(navigator.userAgent || '') ||
@@ -552,6 +599,75 @@ function updateCsvCell(rowIndex, columnIndex, value) {
     return true;
 }
 
+function insertCsvRowAfter(rowIndex) {
+    const rows = parseCsv(elements.editor?.value || '');
+    const colCount = rows.length > 0 ? Math.max(...rows.map(r => r.length)) : 1;
+    const newRow = Array(colCount).fill('');
+    rows.splice(rowIndex + 1, 0, newRow);
+    elements.editor.value = serializeCsvRows(rows);
+    setDirty(true);
+    renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
+    scheduleAutoSave();
+    saveFile();
+}
+
+function insertCsvColumnAfter(columnIndex) {
+    const rows = parseCsv(elements.editor?.value || '');
+    rows.forEach(row => {
+        while (row.length <= columnIndex) row.push('');
+        row.splice(columnIndex + 1, 0, '');
+    });
+    elements.editor.value = serializeCsvRows(rows);
+    setDirty(true);
+    renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
+    scheduleAutoSave();
+    saveFile();
+}
+
+function deleteCsvRow(rowIndex) {
+    const rows = parseCsv(elements.editor?.value || '');
+    if (rowIndex < 0 || rowIndex >= rows.length) {
+        return;
+    }
+
+    // Keep at least one row so table structure remains valid.
+    if (rows.length <= 1) {
+        return;
+    }
+
+    rows.splice(rowIndex, 1);
+    elements.editor.value = serializeCsvRows(rows);
+    setDirty(true);
+    renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
+    scheduleAutoSave();
+    saveFile();
+}
+
+function deleteCsvColumn(columnIndex) {
+    const rows = parseCsv(elements.editor?.value || '');
+    if (rows.length === 0) {
+        return;
+    }
+
+    const maxCols = Math.max(...rows.map(r => r.length), 0);
+    if (maxCols <= 1 || columnIndex < 0 || columnIndex >= maxCols) {
+        return;
+    }
+
+    rows.forEach(row => {
+        while (row.length < maxCols) {
+            row.push('');
+        }
+        row.splice(columnIndex, 1);
+    });
+
+    elements.editor.value = serializeCsvRows(rows);
+    setDirty(true);
+    renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
+    scheduleAutoSave();
+    saveFile();
+}
+
 function setupInteractiveTableCells(container, isEditable, resolveCommit, afterCommit) {
     if (!container || !isEditable) {
         return;
@@ -579,13 +695,31 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                     return;
                 }
 
-                const originalValue = String(cell.textContent || '').trim();
+                // Find the .notes-table-cell-wrap and .notes-cellref inside this cell
+                const wrap = cell.querySelector('.notes-table-cell-wrap');
+                const cellRef = wrap ? wrap.querySelector('.notes-cellref') : null;
+                const contentSpan = wrap ? wrap.querySelector('span:first-child') : null;
+
+                // Save the cellref element to restore later
+                let cellRefNode = null;
+                if (cellRef) {
+                    cellRefNode = cellRef;
+                    cellRef.remove();
+                }
+
+                const displayValue = contentSpan ? contentSpan.textContent : String(cell.textContent || '').trim();
+                // If the cell has a formula, show the raw formula for editing
+                const rawFormula = cell.dataset.formula || '';
+                const editValue = rawFormula || displayValue;
 
                 cell.dataset.tableEditing = 'true';
                 cell.setAttribute('contenteditable', 'true');
                 cell.setAttribute('spellcheck', 'false');
                 cell.style.outline = 'none';
                 cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
+
+                // Show formula text for editing
+                cell.textContent = rawFormula || displayValue;
 
                 const selection = window.getSelection ? window.getSelection() : null;
                 const range = document.createRange ? document.createRange() : null;
@@ -608,10 +742,23 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                     cell.style.outline = '';
                     cell.style.boxShadow = '';
 
-                    const nextValue = commit ? String(cell.textContent || '').trim() : originalValue;
+                    const nextValue = commit ? String(cell.textContent || '').trim() : editValue;
+                    // Restore the cell's HTML structure with cellref after editing
                     if (!commit) {
-                        cell.textContent = originalValue;
+                        // Restore display (evaluated) value on cancel
+                        if (wrap && contentSpan) {
+                            contentSpan.textContent = displayValue;
+                        }
+                    } else {
+                        if (wrap && contentSpan) {
+                            contentSpan.textContent = nextValue;
+                        }
                     }
+                    // Restore the cellref node if it was present
+                    if (wrap && cellRefNode) {
+                        wrap.appendChild(cellRefNode);
+                    }
+                    cell.innerHTML = wrap ? wrap.outerHTML : cell.innerHTML;
 
                     cell.removeEventListener('keydown', onKeyDown);
                     cell.removeEventListener('blur', onBlur);
@@ -669,10 +816,35 @@ function renderCsvView(content, options = {}) {
         return;
     }
 
+    // Evaluate formulas for display (but not for editing)
     const [headerRow, ...dataRows] = rows;
-    const thead = headerRow.map(h => `<th>${escapeHtml(h)}</th>`).join('');
-    const tbody = dataRows.map(r => {
-        const cells = headerRow.map((_, i) => `<td>${escapeHtml(r[i] ?? '')}</td>`).join('');
+    // Build a table of display values (header untouched)
+    const displayRows = [headerRow, ...dataRows.map((row, rIdx) =>
+        headerRow.map((_, cIdx) => {
+            const val = row[cIdx] ?? '';
+            if (isTableFormula(val)) {
+                // rIdx+1 because dataRows skips header
+                return evaluateTableFormula(val, rIdx + 1, cIdx, rows);
+            }
+            return val;
+        })
+    )];
+
+    ensureCellRefStyle();
+    const thead = headerRow.map((h, cIdx) => {
+        const ref = getCellReference(0, cIdx);
+        return `<th><span class="notes-table-cell-wrap"><span>${escapeHtml(h)}</span><span class="notes-cellref">${ref}</span></span></th>`;
+    }).join('');
+    const tbody = dataRows.map((r, rIdx) => {
+        const cells = headerRow.map((_, cIdx) => {
+            const origVal = r[cIdx] ?? '';
+            const displayVal = displayRows[rIdx + 1][cIdx];
+            const ref = getCellReference(rIdx + 1, cIdx);
+            const formulaAttr = (interactive && isTableFormula(origVal))
+                ? ` data-formula="${escapeHtml(origVal)}"`
+                : '';
+            return `<td${formulaAttr}><span class="notes-table-cell-wrap"><span>${escapeHtml(displayVal)}</span><span class="notes-cellref">${ref}</span></span></td>`;
+        }).join('');
         return `<tr>${cells}</tr>`;
     }).join('');
 
@@ -949,6 +1121,9 @@ function renderMarkdown() {
     // Keep checkboxes readonly in viewer mode
     setupInteractiveCheckboxes(elements.preview, false);
 
+    // Enable collapsible H1-H6 sections
+    setupCollapsibleHeadings(elements.preview);
+
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
@@ -992,6 +1167,77 @@ function setupInteractiveCheckboxes(container, isEditable) {
         checkbox.removeAttribute('disabled');
         checkbox.addEventListener('change', (e) => {
             toggleCheckboxInMarkdown(index, e.target.checked);
+        });
+    });
+}
+
+function setupCollapsibleHeadings(container) {
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+
+    headings.forEach((heading) => {
+        const level = parseInt(heading.tagName[1], 10);
+
+        // Collect the sibling elements that belong to this heading's section.
+        // Processed in document order so inner headings (h2, h3…) are already
+        // children of an outer wrapper when we reach them — nextElementSibling
+        // still returns the correct in-section siblings.
+        const sectionEls = [];
+        let sibling = heading.nextElementSibling;
+        while (sibling) {
+            const sibTag = sibling.tagName.toUpperCase();
+            if (/^H[1-6]$/.test(sibTag) && parseInt(sibTag[1], 10) <= level) break;
+            sectionEls.push(sibling);
+            sibling = sibling.nextElementSibling;
+        }
+
+        if (sectionEls.length === 0) return;
+
+        // Wrap section content in a div so we can animate it as a unit.
+        const wrapper = document.createElement('div');
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+        wrapper.style.maxHeight = '100000px';
+        wrapper.style.opacity = '1';
+        heading.insertAdjacentElement('afterend', wrapper);
+        sectionEls.forEach((el) => wrapper.appendChild(el));
+
+        heading.style.cursor = 'pointer';
+
+        heading.addEventListener('mouseenter', () => {
+            heading.style.textDecoration = 'underline';
+        });
+        heading.addEventListener('mouseleave', () => {
+            heading.style.textDecoration = '';
+        });
+
+        heading.addEventListener('click', () => {
+            const isCollapsed = heading.dataset.collapsed === 'true';
+
+            if (isCollapsed) {
+                // Expand: animate from 0 → scrollHeight, then release max-height cap.
+                wrapper.style.maxHeight = wrapper.scrollHeight + 'px';
+                wrapper.style.opacity = '1';
+                wrapper.addEventListener('transitionend', () => {
+                    if (heading.dataset.collapsed !== 'true') {
+                        wrapper.style.maxHeight = '100000px';
+                    }
+                }, { once: true });
+                heading.dataset.collapsed = 'false';
+                heading.style.fontStyle = '';
+            } else {
+                // Collapse: pin to exact current height (no jump), then animate to 0.
+                const height = wrapper.scrollHeight;
+                wrapper.style.transition = 'none';
+                wrapper.style.maxHeight = height + 'px';
+                wrapper.offsetHeight; // force reflow so the pin takes effect
+                wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+                requestAnimationFrame(() => {
+                    wrapper.style.maxHeight = '0px';
+                    wrapper.style.opacity = '0';
+                });
+                heading.dataset.collapsed = 'true';
+                heading.style.fontStyle = 'italic';
+            }
         });
     });
 }
@@ -1121,6 +1367,525 @@ function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
     saveFile();
 
     return true;
+}
+
+function insertMarkdownRowAfter(block, sourceRowIndex) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) return;
+
+    const lines = String(elements.editor.value || '').split('\n');
+    // Determine column count from the header row
+    const headerParsed = parseMarkdownTableRow(lines[block.rowLineIndexes[0]]);
+    const colCount = headerParsed.cells.length;
+    const newRow = serializeMarkdownTableRow(
+        Array(colCount).fill(''),
+        headerParsed.hasLeadingPipe,
+        headerParsed.hasTrailingPipe,
+    );
+
+    // Find the line to insert after
+    const lastRowIdx = block.rowLineIndexes[sourceRowIndex];
+    // If inserting after header (sourceRowIndex === 0), insert after separator
+    const insertAfterLine = sourceRowIndex === 0 ? block.separatorLineIndex : lastRowIdx;
+    lines.splice(insertAfterLine + 1, 0, newRow);
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+    renderJupyterView();
+}
+
+function insertMarkdownColumnAfter(block, columnIndex) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) return;
+
+    const lines = String(elements.editor.value || '').split('\n');
+
+    // Insert into each data/header row
+    block.rowLineIndexes.forEach(lineIdx => {
+        const parsed = parseMarkdownTableRow(lines[lineIdx]);
+        while (parsed.cells.length <= columnIndex) parsed.cells.push('');
+        parsed.cells.splice(columnIndex + 1, 0, '');
+        lines[lineIdx] = serializeMarkdownTableRow(parsed.cells, parsed.hasLeadingPipe, parsed.hasTrailingPipe);
+    });
+
+    // Insert into separator row
+    const sepParsed = parseMarkdownTableRow(lines[block.separatorLineIndex]);
+    while (sepParsed.cells.length <= columnIndex) sepParsed.cells.push('---');
+    sepParsed.cells.splice(columnIndex + 1, 0, '---');
+    lines[block.separatorLineIndex] = serializeMarkdownTableRow(sepParsed.cells, sepParsed.hasLeadingPipe, sepParsed.hasTrailingPipe);
+
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+    renderJupyterView();
+}
+
+function deleteMarkdownRow(block, sourceRowIndex) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) {
+        return;
+    }
+
+    // Keep at least one row in the table body (header + one data row minimum).
+    if (sourceRowIndex <= 0 || block.rowLineIndexes.length <= 2) {
+        return;
+    }
+
+    const lines = String(elements.editor.value || '').split('\n');
+    const lineIndex = block.rowLineIndexes[sourceRowIndex];
+    if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
+        return;
+    }
+
+    lines.splice(lineIndex, 1);
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+    renderJupyterView();
+}
+
+function deleteMarkdownColumn(block, columnIndex) {
+    if (!block || !Array.isArray(block.rowLineIndexes)) {
+        return;
+    }
+
+    const lines = String(elements.editor.value || '').split('\n');
+    const headerParsed = parseMarkdownTableRow(lines[block.rowLineIndexes[0]]);
+    if (columnIndex < 0 || columnIndex >= headerParsed.cells.length || headerParsed.cells.length <= 1) {
+        return;
+    }
+
+    block.rowLineIndexes.forEach(lineIdx => {
+        const parsed = parseMarkdownTableRow(lines[lineIdx]);
+        if (columnIndex < parsed.cells.length) {
+            parsed.cells.splice(columnIndex, 1);
+        }
+        lines[lineIdx] = serializeMarkdownTableRow(parsed.cells, parsed.hasLeadingPipe, parsed.hasTrailingPipe);
+    });
+
+    const sepParsed = parseMarkdownTableRow(lines[block.separatorLineIndex]);
+    if (columnIndex < sepParsed.cells.length) {
+        sepParsed.cells.splice(columnIndex, 1);
+    }
+    lines[block.separatorLineIndex] = serializeMarkdownTableRow(sepParsed.cells, sepParsed.hasLeadingPipe, sepParsed.hasTrailingPipe);
+
+    elements.editor.value = lines.join('\n');
+
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+    renderJupyterView();
+}
+
+function findMarkdownFunctionCodeBlock(container, functionName) {
+    if (!container || !functionName) {
+        return null;
+    }
+
+    const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+    const targetHeading = headings.find((h) => String(h.textContent || '').trim().toLowerCase() === String(functionName).trim().toLowerCase());
+    if (!targetHeading) {
+        return null;
+    }
+
+    let sibling = targetHeading.nextElementSibling;
+    while (sibling) {
+        if (/^H[1-6]$/.test(sibling.tagName)) {
+            break;
+        }
+
+        // Check for a .jupyter-code-block — either directly or nested inside a
+        // collapsible-section wrapper created by setupCollapsibleHeadings.
+        const jupBlock = (sibling.classList?.contains('jupyter-code-block') ? sibling : null)
+            ?? sibling.querySelector?.('.jupyter-code-block');
+        if (jupBlock) {
+            const blockId = jupBlock.dataset ? jupBlock.dataset.blockId : '';
+            const blockState = blockId ? state.jupyterCodeBlocks?.[blockId] : null;
+            if (blockState) {
+                return {
+                    code: String(blockState.currentContent ?? blockState.originalContent ?? ''),
+                    language: String(blockState.language || ''),
+                };
+            }
+        }
+
+        const codeNode = sibling.tagName === 'PRE'
+            ? sibling.querySelector('code')
+            : sibling.querySelector('pre code');
+        if (codeNode) {
+            const langClass = Array.from(codeNode.classList || []).find(cls => cls.startsWith('language-'));
+            const language = langClass ? langClass.replace('language-', '') : '';
+            return {
+                code: String(codeNode.textContent || ''),
+                language,
+            };
+        }
+
+        sibling = sibling.nextElementSibling;
+    }
+
+    return null;
+}
+
+async function resolveRuntimeForFunctionLanguage(language) {
+    const lang = String(language || '').trim();
+    if (!lang) {
+        return 'language unknown';
+    }
+
+    try {
+        const matches = await GetLanguageDescriptions(lang);
+        if (Array.isArray(matches) && matches.length > 0) {
+            return matches[0];
+        }
+    } catch (err) {
+        console.warn('Unable to resolve function runtime:', err);
+    }
+
+    return lang;
+}
+
+function parseA1ColumnToIndex(columnLetters) {
+    let colIdx = 0;
+    const normalized = String(columnLetters || '').toUpperCase();
+    for (let i = 0; i < normalized.length; i += 1) {
+        colIdx *= 26;
+        colIdx += normalized.charCodeAt(i) - 65 + 1;
+    }
+    return colIdx - 1;
+}
+
+function buildRefFromRowCol(row, col) {
+    return getCellReference(row, col);
+}
+
+function parseCoordinateReference(ref, row, col) {
+    const source = String(ref || '').trim();
+    if (!source) {
+        return null;
+    }
+
+    const r1c1Pattern = /^R(\[(-?\d+)\]|(\d+))C(\[(-?\d+)\]|(\d+))$/i;
+    const r1c1Match = source.match(r1c1Pattern);
+    if (r1c1Match) {
+        const targetRow = r1c1Match[2] !== undefined ? row + parseInt(r1c1Match[2], 10) : parseInt(r1c1Match[3], 10) - 1;
+        const targetCol = r1c1Match[5] !== undefined ? col + parseInt(r1c1Match[5], 10) : parseInt(r1c1Match[6], 10) - 1;
+        return { row: targetRow, col: targetCol };
+    }
+
+    const a1Match = source.match(/^([A-Z]+)(\d+)$/i);
+    if (a1Match) {
+        return {
+            row: parseInt(a1Match[2], 10) - 1,
+            col: parseA1ColumnToIndex(a1Match[1]),
+        };
+    }
+
+    return null;
+}
+
+function getFormulaDependencies(formula, row, col, rowCount, colCount) {
+    const refs = new Set();
+    const source = String(formula || '');
+    if (!isTableFormula(source)) {
+        return refs;
+    }
+
+    const fnCall = parseTableFunctionCall(source);
+    const candidates = fnCall ? fnCall.args : [source.slice(1)];
+
+    for (const candidate of candidates) {
+        const arg = String(candidate || '').trim();
+        if (!arg) {
+            continue;
+        }
+
+        const a1Range = arg.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+        if (a1Range) {
+            const startCol = parseA1ColumnToIndex(a1Range[1]);
+            const startRow = parseInt(a1Range[2], 10) - 1;
+            const endCol = parseA1ColumnToIndex(a1Range[3]);
+            const endRow = parseInt(a1Range[4], 10) - 1;
+            const rowStart = Math.max(0, Math.min(startRow, endRow));
+            const rowEnd = Math.min(rowCount - 1, Math.max(startRow, endRow));
+            const colStart = Math.max(0, Math.min(startCol, endCol));
+            const colEnd = Math.min(colCount - 1, Math.max(startCol, endCol));
+
+            for (let rowIdx = rowStart; rowIdx <= rowEnd; rowIdx += 1) {
+                for (let colIdx = colStart; colIdx <= colEnd; colIdx += 1) {
+                    refs.add(buildRefFromRowCol(rowIdx, colIdx));
+                }
+            }
+            continue;
+        }
+
+        const wholeColumnRange = arg.match(/^([A-Z]+):([A-Z]+)$/i);
+        if (wholeColumnRange) {
+            const startCol = parseA1ColumnToIndex(wholeColumnRange[1]);
+            const endCol = parseA1ColumnToIndex(wholeColumnRange[2]);
+            const colStart = Math.max(0, Math.min(startCol, endCol));
+            const colEnd = Math.min(colCount - 1, Math.max(startCol, endCol));
+            for (let rowIdx = 0; rowIdx < rowCount; rowIdx += 1) {
+                for (let colIdx = colStart; colIdx <= colEnd; colIdx += 1) {
+                    refs.add(buildRefFromRowCol(rowIdx, colIdx));
+                }
+            }
+            continue;
+        }
+
+        const wholeRowRange = arg.match(/^(\d+):(\d+)$/);
+        if (wholeRowRange) {
+            const startRow = parseInt(wholeRowRange[1], 10) - 1;
+            const endRow = parseInt(wholeRowRange[2], 10) - 1;
+            const rowStart = Math.max(0, Math.min(startRow, endRow));
+            const rowEnd = Math.min(rowCount - 1, Math.max(startRow, endRow));
+            for (let rowIdx = rowStart; rowIdx <= rowEnd; rowIdx += 1) {
+                for (let colIdx = 0; colIdx < colCount; colIdx += 1) {
+                    refs.add(buildRefFromRowCol(rowIdx, colIdx));
+                }
+            }
+            continue;
+        }
+
+        const directCoordinate = parseCoordinateReference(arg, row, col);
+        if (directCoordinate) {
+            if (
+                directCoordinate.row >= 0 && directCoordinate.row < rowCount &&
+                directCoordinate.col >= 0 && directCoordinate.col < colCount
+            ) {
+                refs.add(buildRefFromRowCol(directCoordinate.row, directCoordinate.col));
+            }
+            continue;
+        }
+
+        const embeddedA1Refs = arg.match(/\b([A-Z]+)(\d+)\b/g) || [];
+        for (const token of embeddedA1Refs) {
+            const parsed = parseCoordinateReference(token, row, col);
+            if (parsed && parsed.row >= 0 && parsed.row < rowCount && parsed.col >= 0 && parsed.col < colCount) {
+                refs.add(buildRefFromRowCol(parsed.row, parsed.col));
+            }
+        }
+
+        const embeddedR1C1Refs = arg.match(/R(\[[-+]?\d+\]|\d+)C(\[[-+]?\d+\]|\d+)/gi) || [];
+        for (const token of embeddedR1C1Refs) {
+            const parsed = parseCoordinateReference(token, row, col);
+            if (parsed && parsed.row >= 0 && parsed.row < rowCount && parsed.col >= 0 && parsed.col < colCount) {
+                refs.add(buildRefFromRowCol(parsed.row, parsed.col));
+            }
+        }
+    }
+
+    return refs;
+}
+
+async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, rows, cellId) {
+    const block = findMarkdownFunctionCodeBlock(container, fnName);
+    if (!block) {
+        return '#ERR';
+    }
+
+    const currentCellId = String(cellId || getCellReference(row, col));
+
+    // Create a function executor for nested function calls
+    const functionExecutor = async (nestedFnName, nestedFnArgs, nestedRow, nestedCol) => {
+        return runMarkdownTableFunction(container, nestedFnName, nestedFnArgs, nestedRow, nestedCol, rows, currentCellId);
+    };
+
+    // Resolve arguments with support for nested function calls
+    const resolvedArgArrays = await Promise.all(
+        fnArgs.map((arg) => resolveTableFunctionArgsAsync(functionExecutor, arg, row, col, rows))
+    );
+    const resolvedArgs = resolvedArgArrays.flatMap((arr) => arr);
+
+    const runtime = await resolveRuntimeForFunctionLanguage(block.language);
+
+    try {
+        const result = await RunFunction(currentCellId, block.code, resolvedArgs, runtime);
+
+        // Backward compatibility: support both structured and string responses.
+        const isStructured = result && typeof result === 'object';
+        const isError = isStructured
+            ? Boolean(result.IsError ?? result.isError)
+            : false;
+        const output = isStructured
+            ? String(result.Output ?? result.output ?? '')
+            : String(result ?? '');
+
+        if (isError) {
+            return `#ERR ${output}`;
+        }
+
+        return output;
+    } catch (err) {
+        const stderr = String(err ?? '');
+        return `#ERR ${stderr}`;
+    }
+}
+
+async function evaluateTableFormulasInPlace(container) {
+    const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(String(navigator.userAgent || ''));
+
+    const flushUiPaint = () => new Promise((resolve) => {
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => resolve());
+            return;
+        }
+        Promise.resolve().then(resolve);
+    });
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    for (const table of tables) {
+        // Build 2D array from DOM
+        const rows = [];
+        const headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            rows.push(Array.from(headerRow.querySelectorAll('th, td')).map(c => String(c.textContent || '').trim()));
+        }
+        Array.from(table.querySelectorAll('tbody tr')).forEach(tr => {
+            rows.push(Array.from(tr.querySelectorAll('td, th')).map(c => String(c.textContent || '').trim()));
+        });
+
+        ensureCellRefStyle();
+
+        // Collect all table cells first, then evaluate formulas in parallel.
+        const tableCells = [];
+
+        if (headerRow) {
+            const headerCells = Array.from(headerRow.querySelectorAll('th, td'));
+            for (const [colIdx, cell] of headerCells.entries()) {
+                tableCells.push({
+                    cell,
+                    row: 0,
+                    col: colIdx,
+                    val: rows[0][colIdx],
+                    ref: getCellReference(0, colIdx),
+                });
+            }
+        }
+
+        const bodyRowOffset = headerRow ? 1 : 0;
+        const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+        for (const [rIdx, tr] of bodyRows.entries()) {
+            const cells = Array.from(tr.querySelectorAll('td, th'));
+            for (const [colIdx, cell] of cells.entries()) {
+                const row = bodyRowOffset + rIdx;
+                tableCells.push({
+                    cell,
+                    row,
+                    col: colIdx,
+                    val: rows[row][colIdx],
+                    ref: getCellReference(row, colIdx),
+                });
+            }
+        }
+
+        // Render non-formula cells immediately so UI has baseline content.
+        for (const { cell, val, ref } of tableCells) {
+            if (!isTableFormula(val)) {
+                cell.innerHTML = `<span class="notes-table-cell-wrap"><span>${escapeHtml(val)}</span><span class="notes-cellref">${ref}</span></span>`;
+            }
+        }
+
+        const formulaTasks = tableCells.filter(({ val }) => isTableFormula(val));
+
+        // Render formula placeholders so users see immediate progress while async calls run.
+        for (const { cell, val, ref } of formulaTasks) {
+            cell.dataset.formula = val;
+            cell.innerHTML = `<span class="notes-table-cell-wrap"><span>...</span><span class="notes-cellref">${ref}</span></span>`;
+        }
+
+        const formulaTaskMap = new Map(formulaTasks.map((task) => [task.ref, task]));
+        const dependencyRefsMap = new Map();
+
+        const rowCount = rows.length;
+        const colCount = rows[0]?.length || 0;
+
+        for (const task of formulaTasks) {
+            const rawDeps = getFormulaDependencies(task.val, task.row, task.col, rowCount, colCount);
+            const filtered = new Set(Array.from(rawDeps).filter((depRef) => depRef !== task.ref && formulaTaskMap.has(depRef)));
+            dependencyRefsMap.set(task.ref, filtered);
+        }
+
+        const indegree = new Map();
+        const dependents = new Map();
+        for (const task of formulaTasks) {
+            const deps = dependencyRefsMap.get(task.ref) || new Set();
+            indegree.set(task.ref, deps.size);
+            for (const depRef of deps) {
+                if (!dependents.has(depRef)) {
+                    dependents.set(depRef, new Set());
+                }
+                dependents.get(depRef).add(task.ref);
+            }
+        }
+
+        const computedRefs = new Set();
+        const ready = formulaTasks
+            .map((task) => task.ref)
+            .filter((ref) => (indegree.get(ref) || 0) === 0);
+
+        while (ready.length > 0) {
+            const batchRefs = ready.splice(0, ready.length);
+            const batchTasks = batchRefs.map((ref) => formulaTaskMap.get(ref)).filter(Boolean);
+
+            await Promise.allSettled(batchTasks.map(async (task) => {
+                const { cell, row, col, val, ref } = task;
+                const fnCall = parseTableFunctionCall(val);
+                const content = fnCall
+                    ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref)
+                    : evaluateTableFormula(val, row, col, rows);
+
+                rows[row][col] = String(content ?? '');
+                cell.dataset.formula = val;
+                cell.innerHTML = `<span class="notes-table-cell-wrap"><span>${escapeHtml(content)}</span><span class="notes-cellref">${ref}</span></span>`;
+                computedRefs.add(ref);
+            }));
+
+            // Yield so the browser can paint completed cells before the next dependency batch.
+            if (!isJsdom) {
+                await flushUiPaint();
+            }
+
+            for (const ref of batchRefs) {
+                const nextRefs = dependents.get(ref);
+                if (!nextRefs) {
+                    continue;
+                }
+
+                for (const dependentRef of nextRefs) {
+                    const nextIndegree = (indegree.get(dependentRef) || 0) - 1;
+                    indegree.set(dependentRef, nextIndegree);
+                    if (nextIndegree === 0) {
+                        ready.push(dependentRef);
+                    }
+                }
+            }
+        }
+
+        // Circular or unresolved dependencies fallback: evaluate remaining formulas best-effort.
+        const remaining = formulaTasks.filter((task) => !computedRefs.has(task.ref));
+        for (const task of remaining) {
+            const { cell, row, col, val, ref } = task;
+            const fnCall = parseTableFunctionCall(val);
+            const content = fnCall
+                ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref)
+                : evaluateTableFormula(val, row, col, rows);
+            rows[row][col] = String(content ?? '');
+            cell.dataset.formula = val;
+            cell.innerHTML = `<span class="notes-table-cell-wrap"><span>${escapeHtml(content)}</span><span class="notes-cellref">${ref}</span></span>`;
+
+            if (!isJsdom) {
+                await flushUiPaint();
+            }
+        }
+    }
 }
 
 function setupInteractiveMarkdownTables(container, isEditable) {
@@ -1404,15 +2169,27 @@ function renderJupyterView() {
     
     // Enable checkbox editing and save behavior in jupyter mode
     setupInteractiveCheckboxes(elements.jupyter, true);
-    setupInteractiveMarkdownTables(elements.jupyter, true);
+
+    // Enable collapsible H1-H6 sections
+    setupCollapsibleHeadings(elements.jupyter);
+
+    // Render code blocks immediately so they are not blocked by table evaluation.
     convertToJupyterCodeBlocks();
-    
-    // Re-apply find highlights if find bar is open and in jupyter mode
-    if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'jupyter') {
-        setTimeout(() => {
-            performFind();
-        }, 0);
-    }
+
+    evaluateTableFormulasInPlace(elements.jupyter)
+        .catch((err) => {
+            console.warn('Table formula evaluation failed:', err);
+        })
+        .finally(() => {
+            setupInteractiveMarkdownTables(elements.jupyter, true);
+
+            // Re-apply find highlights if find bar is open and in jupyter mode
+            if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'jupyter') {
+                setTimeout(() => {
+                    performFind();
+                }, 0);
+            }
+        });
 }
 
 function convertToJupyterCodeBlocks() {
@@ -1574,20 +2351,67 @@ function convertToJupyterCodeBlocks() {
 
         const lineNumbers = document.createElement('div');
         lineNumbers.className = 'jupyter-line-numbers';
+        const lineNumbersInner = document.createElement('div');
+        lineNumbersInner.className = 'jupyter-line-numbers-inner';
+        lineNumbers.appendChild(lineNumbersInner);
+
+        // Syntax highlight layer — sits behind the textarea
+        const highlightPre = document.createElement('pre');
+        highlightPre.className = 'jupyter-highlight';
+        highlightPre.setAttribute('aria-hidden', 'true');
+        const highlightCode = document.createElement('code');
+        highlightCode.className = `hljs language-${language || 'plaintext'}`;
+        highlightPre.appendChild(highlightCode);
+
+        const renderHighlight = () => {
+            const code = editableCode.value;
+            const lang = state.jupyterCodeBlocks[blockId]?.language || language;
+            try {
+                if (lang && hljs.getLanguage(lang)) {
+                    highlightCode.innerHTML = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+                } else {
+                    highlightCode.innerHTML = hljs.highlightAuto(code).value;
+                }
+            } catch {
+                highlightCode.textContent = code;
+            }
+        };
+
+        // Wrapper that positions the highlight layer and textarea together
+        const codeArea = document.createElement('div');
+        codeArea.className = 'jupyter-code-area';
 
         const renderLineNumbers = () => {
             const lineCount = Math.max(1, editableCode.value.split('\n').length);
-            lineNumbers.textContent = Array.from({ length: lineCount }, (_, i) => i + 1).join('\n');
+            lineNumbersInner.textContent = Array.from({ length: lineCount }, (_, i) => String(i + 1)).join('\n');
         };
         
         // Auto-resize textarea to fit content
         const autoResize = () => {
             editableCode.style.height = 'auto';
-            editableCode.style.height = editableCode.scrollHeight + 'px';
+            const maxHeight = parseFloat(getComputedStyle(editableCode).maxHeight || '0');
+            const targetHeight = Number.isFinite(maxHeight) && maxHeight > 0
+                ? Math.min(editableCode.scrollHeight, maxHeight)
+                : editableCode.scrollHeight;
+            editableCode.style.height = `${targetHeight}px`;
         };
+
+        const syncHighlightViewport = () => {
+            const contentWidth = Math.max(editableCode.scrollWidth, editableCode.clientWidth);
+            const contentHeight = Math.max(editableCode.scrollHeight, editableCode.clientHeight);
+            highlightPre.style.minWidth = `${contentWidth}px`;
+            highlightPre.style.minHeight = `${contentHeight}px`;
+            highlightPre.style.transform = `translate(${-editableCode.scrollLeft}px, ${-editableCode.scrollTop}px)`;
+            lineNumbersInner.style.minHeight = `${contentHeight}px`;
+            lineNumbersInner.style.minWidth = `${lineNumbers.clientWidth}px`;
+            lineNumbersInner.style.transform = `translateY(${-editableCode.scrollTop}px)`;
+        };
+
         editableCode.addEventListener('input', () => {
             autoResize();
             renderLineNumbers();
+            renderHighlight();
+            syncHighlightViewport();
             const blockState = state.jupyterCodeBlocks[blockId];
             if (!blockState) {
                 return;
@@ -1609,12 +2433,14 @@ function convertToJupyterCodeBlocks() {
             scheduleAutoSave();
         });
         editableCode.addEventListener('scroll', () => {
-            lineNumbers.scrollTop = editableCode.scrollTop;
+            syncHighlightViewport();
         });
-        // Set initial height
+        // Set initial height and highlight
         setTimeout(() => {
             autoResize();
             renderLineNumbers();
+            renderHighlight();
+            syncHighlightViewport();
         }, 0);
         
         const outputWrapper = document.createElement('div');
@@ -1644,8 +2470,10 @@ function convertToJupyterCodeBlocks() {
         
         pre.replaceWith(wrapper);
         wrapper.appendChild(toolbar);
+        codeArea.appendChild(highlightPre);
+        codeArea.appendChild(editableCode);
         codeEditor.appendChild(lineNumbers);
-        codeEditor.appendChild(editableCode);
+        codeEditor.appendChild(codeArea);
         wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
     });
@@ -3586,7 +4414,7 @@ function createPrintMenuItem(title = 'Print...') {
     };
 }
 
-function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
+function showNotesLocalMenu(menuItems, x, y, title = 'Select an action', onHighlight = null, onCancel = null) {
     showLocalMenu({
         title,
         options: menuItems.map((item) => item.title),
@@ -3600,7 +4428,191 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action') {
                 item.onSelect();
             }
         },
+        onHighlight: onHighlight || null,
+        onCancel: onCancel || null,
     });
+}
+
+function extractTableData(table) {
+    const rows = [];
+    const headerRow = table.querySelector('thead tr');
+    if (headerRow) {
+        rows.push(Array.from(headerRow.querySelectorAll('th, td')).map(cell => String(cell.textContent || '').trim()));
+    }
+    Array.from(table.querySelectorAll('tbody tr')).forEach(tr => {
+        rows.push(Array.from(tr.querySelectorAll('td, th')).map(cell => String(cell.textContent || '').trim()));
+    });
+    return rows;
+}
+
+function tableDataToCsv(rows) {
+    return (rows || []).map(row => (row || []).map(field => escapeCsvField(field)).join(',')).join('\n');
+}
+
+function tableDataToMarkdown(rows) {
+    if (!rows || rows.length === 0) return '';
+    const header = rows[0];
+    const body = rows.slice(1);
+    const headerLine = `| ${header.join(' | ')} |`;
+    const separatorLine = `| ${header.map(() => '---').join(' | ')} |`;
+    const bodyLines = body.map(row => `| ${row.join(' | ')} |`);
+    return [headerLine, separatorLine, ...bodyLines].join('\n');
+}
+
+function createTableCopyMenuItems(table) {
+    return [
+        {
+            title: 'Copy table (CSV)',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                const data = extractTableData(table);
+                copyTextToClipboard(tableDataToCsv(data));
+            },
+        },
+        {
+            title: 'Copy table (Markdown)',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                const data = extractTableData(table);
+                copyTextToClipboard(tableDataToMarkdown(data));
+            },
+        },
+    ];
+}
+
+function highlightTableRow(table, rowIndex, isHighlighted) {
+    const rows = table.querySelectorAll('tr');
+    if (rowIndex < 0 || rowIndex >= rows.length) return;
+    const row = rows[rowIndex];
+    if (isHighlighted) {
+        row.style.backgroundColor = 'var(--accent)';
+        row.style.color = 'var(--bg)';
+    } else {
+        row.style.backgroundColor = '';
+        row.style.color = '';
+    }
+}
+
+function highlightTableColumn(table, colIndex, isHighlighted) {
+    table.querySelectorAll('tr').forEach(row => {
+        const cell = row.children[colIndex];
+        if (cell) {
+            if (isHighlighted) {
+                cell.style.backgroundColor = 'var(--accent)';
+                cell.style.color = 'var(--bg)';
+            } else {
+                cell.style.backgroundColor = '';
+                cell.style.color = '';
+            }
+        }
+    });
+}
+
+function clearTableHighlight(table) {
+    table.querySelectorAll('tr').forEach(r => {
+        r.style.backgroundColor = '';
+        r.style.color = '';
+        r.querySelectorAll('td, th').forEach(c => {
+            c.style.backgroundColor = '';
+            c.style.color = '';
+        });
+    });
+}
+
+function highlightEntireTable(table, isHighlighted) {
+    table.querySelectorAll('tr').forEach(row => {
+        if (isHighlighted) {
+            row.style.backgroundColor = 'var(--accent)';
+            row.style.color = 'var(--bg)';
+        } else {
+            row.style.backgroundColor = '';
+            row.style.color = '';
+        }
+        row.querySelectorAll('td, th').forEach(cell => {
+            if (isHighlighted) {
+                cell.style.backgroundColor = 'var(--accent)';
+                cell.style.color = 'var(--bg)';
+            } else {
+                cell.style.backgroundColor = '';
+                cell.style.color = '';
+            }
+        });
+    });
+}
+
+function getCellPosition(target, table) {
+    const cell = target.closest('td, th');
+    if (!cell || !table.contains(cell)) return null;
+    const tr = cell.parentElement;
+    const colIndex = Array.from(tr.children).indexOf(cell);
+    const isHeader = tr.parentElement && tr.parentElement.tagName === 'THEAD';
+    if (isHeader) return { row: 0, col: colIndex };
+    const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+    const rowOffset = bodyRows.indexOf(tr);
+    return rowOffset >= 0 ? { row: rowOffset + 1, col: colIndex } : null;
+}
+
+function createTableInsertMenuItems(table, target, tableIndex) {
+    const pos = target instanceof Element ? getCellPosition(target, table) : null;
+    if (!pos) return [];
+
+    const isCsv = state.currentFileType === 'csv';
+
+    return [
+        {
+            title: 'Insert row (after)',
+            icon: 0xf0ab,
+            onSelect: () => {
+                if (isCsv) {
+                    insertCsvRowAfter(pos.row);
+                } else {
+                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const block = blocks[tableIndex];
+                    if (block) insertMarkdownRowAfter(block, pos.row);
+                }
+            },
+        },
+        {
+            title: 'Insert column (after)',
+            icon: 0xf0a9,
+            onSelect: () => {
+                if (isCsv) {
+                    insertCsvColumnAfter(pos.col);
+                } else {
+                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const block = blocks[tableIndex];
+                    if (block) insertMarkdownColumnAfter(block, pos.col);
+                }
+            },
+        },
+        { title: '-' },
+        {
+            title: 'Delete row',
+            icon: 0xf057,
+            onSelect: () => {
+                if (isCsv) {
+                    deleteCsvRow(pos.row);
+                } else {
+                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const block = blocks[tableIndex];
+                    if (block) deleteMarkdownRow(block, pos.row);
+                }
+            },
+        },
+        {
+            title: 'Delete column',
+            icon: 0xf057,
+            onSelect: () => {
+                if (isCsv) {
+                    deleteCsvColumn(pos.col);
+                } else {
+                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const block = blocks[tableIndex];
+                    if (block) deleteMarkdownColumn(block, pos.col);
+                }
+            },
+        },
+    ];
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
@@ -3619,12 +4631,63 @@ function initRenderedNotesContextMenu(container, viewMode) {
 
         e.preventDefault();
 
-        showNotesLocalMenu([
+        const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const isRunMode = state.viewMode === 'jupyter';
+        const tableIndex = table ? Array.from(container.querySelectorAll('table')).indexOf(table) : -1;
+        const tableItems = table && container.contains(table)
+            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            : [];
+        const insertItems = (table && isRunMode && container.contains(table))
+            ? [...createTableInsertMenuItems(table, e.target, tableIndex), { title: '-' }]
+            : [];
+
+        const allMenuItems = [
             createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
             { title: '-' },
+            ...tableItems,
+            ...insertItems,
             createFindMenuItem('Find'),
             createPrintMenuItem('Print'),
-        ], e.clientX, e.clientY);
+        ];
+
+        // Set up highlight callback for table row/column items if table exists
+        let highlightCallback = null;
+        let cancelCallback = null;
+        if (table) {
+            if (isRunMode) {
+                const pos = getCellPosition(e.target, table);
+                if (pos) {
+                    highlightCallback = (itemIndex) => {
+                        const item = allMenuItems[itemIndex];
+                        if (!item) return;
+                        // Unhighlight all first
+                        clearTableHighlight(table);
+                        // Highlight based on item title
+                        if (item.title.toLowerCase().includes('copy table')) {
+                            highlightEntireTable(table, true);
+                        } else if (item.title.includes('row') && !item.title.includes('column')) {
+                            highlightTableRow(table, pos.row, true);
+                        } else if (item.title.includes('column')) {
+                            highlightTableColumn(table, pos.col, true);
+                        }
+                    };
+                    cancelCallback = () => clearTableHighlight(table);
+                }
+            } else {
+                // Enable highlight for copy table items even when not in Run mode
+                highlightCallback = (itemIndex) => {
+                    const item = allMenuItems[itemIndex];
+                    if (!item) return;
+                    clearTableHighlight(table);
+                    if (item.title.toLowerCase().includes('copy table')) {
+                        highlightEntireTable(table, true);
+                    }
+                };
+                cancelCallback = () => clearTableHighlight(table);
+            }
+        }
+
+        showNotesLocalMenu(allMenuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
     });
 }
 
@@ -3780,6 +4843,7 @@ EventsOn("notesUpdate", group => {
 
 EventsOn("noteRun", (data) => {
     const { blockId, output, isError } = data;
+
     const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
     if (!outputBlock) return;
 
@@ -3799,6 +4863,7 @@ EventsOn("noteRun", (data) => {
 
 EventsOn("noteComplete", (data) => {
     const { blockId } = data;
+
     // Toggle buttons back to Run
     const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
     const stopBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-stop-notes`);
@@ -4771,12 +5836,18 @@ function applyWindowStyle(result) {
 
         #notes-editor,
         .jupyter-code-editable,
+        .jupyter-highlight,
+        .jupyter-highlight code,
+        .jupyter-highlight .hljs,
         .swagger-body-editor,
         #notes-editor-highlight,
         #notes-editor-highlight code,
         #notes-editor-highlight .hljs {
             tab-size: 4;
             -moz-tab-size: 4;
+            letter-spacing: normal;
+            font-variant-ligatures: none;
+            font-feature-settings: "liga" 0, "calt" 0;
         }
 
         #notes-editor-shell {
@@ -4969,7 +6040,7 @@ function applyWindowStyle(result) {
 
         /* Jupyter UI Styles */
 
-        #notes-jupyter-wrap pre {
+        #notes-jupyter-wrap pre:not(.jupyter-highlight) {
             border-left: 0;
             padding-left: 10px;
             /*white-space: pre-wrap;
@@ -4980,6 +6051,10 @@ function applyWindowStyle(result) {
             margin: 16px 0;
             border: 2px solid var(--fg);
             border-radius: 5px;
+        }
+
+        .jupyter-code-block:focus-within {
+            border-color: var(--accent);
         }
 
         .jupyter-toolbar {
@@ -5063,12 +6138,53 @@ function applyWindowStyle(result) {
             display: flex;
             align-items: stretch;
             background-color: var(--bg);
+            max-height: calc((25 * 1.5em) + 24px);
+            overflow: hidden;
+        }
+
+        .jupyter-code-area {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            max-height: calc((25 * 1.5em) + 24px);
+        }
+
+        #notes-jupyter .jupyter-highlight {
+            position: absolute;
+            inset: 0;
+            margin: 0 !important;
+            padding: 12px !important;
+            border: 0 !important;
+            border-left: 0 !important;
+            pointer-events: none;
+            overflow: hidden !important;
+            white-space: pre !important;
+            word-wrap: normal !important;
+            overflow-wrap: normal !important;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.5;
+            background: transparent;
+        }
+
+        .jupyter-highlight code {
+            display: block;
+            padding: 0;
+            background: transparent;
+            white-space: pre;
+        }
+
+        .jupyter-highlight .hljs {
+            overflow: visible !important;
+            padding: 0 !important;
+            background: transparent !important;
         }
 
         .jupyter-line-numbers {
             min-width: 42px;
             margin: 0;
-            padding: 12px 8px 12px 10px;
+            padding: 0;
             border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             color: var(--fg);
             opacity: 0.45;
@@ -5080,21 +6196,36 @@ function applyWindowStyle(result) {
             user-select: none;
             pointer-events: none;
             overflow: hidden;
+            max-height: calc((25 * 1.5em) + 24px);
+        }
+
+        .jupyter-line-numbers-inner {
+            padding: 12px 8px 12px 10px;
+            white-space: pre;
+            line-height: 1.5;
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            text-align: right;
+            transform: translateY(0);
+            will-change: transform;
         }
 
         .jupyter-code-editable {
-            flex: 1;
-            width: auto;
+            position: relative;
+            z-index: 1;
+            width: 100%;
             margin: 0;
             padding: 12px;
-            background-color: var(--bg);
+            background-color: transparent;
             border: 1px solid transparent;
-            color: var(--fg);
+            color: transparent;
+            caret-color: var(--fg);
             font-family: var(--font-family);
             font-size: ${result.fontSize}px;
             line-height: 1.5;
             overflow-x: auto;
-            overflow-y: hidden;
+            overflow-y: auto;
+            max-height: calc((25 * 1.5em) + 24px);
             outline: none;
             resize: none;
             box-sizing: border-box;
@@ -5103,10 +6234,10 @@ function applyWindowStyle(result) {
 
         .jupyter-code-editable:focus {
             outline: none;
-            border-color: var(--accent);
+            border-color: transparent;
         }
 
-        .jupyter-code-editable:not(:focus) {
+        .jupyter-code-block:not(:focus-within) .jupyter-code-area {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
@@ -5644,6 +6775,56 @@ elements.editor.addEventListener('contextmenu', (e) => {
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
 initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
+
+elements.csvView.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const table = e.target instanceof Element ? e.target.closest('table') : null;
+    if (!table || !elements.csvView.contains(table)) return;
+    const menuItems = [...createTableCopyMenuItems(table)];
+    const isRunMode = state.viewMode === 'csv-run';
+    if (isRunMode) {
+        const insertItems = createTableInsertMenuItems(table, e.target, 0);
+        if (insertItems.length > 0) {
+            menuItems.push({ title: '-' }, ...insertItems);
+        }
+    }
+
+    let highlightCallback = null;
+    let cancelCallback = null;
+    if (isRunMode) {
+        const pos = getCellPosition(e.target, table);
+        if (pos) {
+            highlightCallback = (itemIndex) => {
+                const item = menuItems[itemIndex];
+                if (!item) return;
+                // Unhighlight all first
+                clearTableHighlight(table);
+                // Highlight based on item title
+                if (item.title.toLowerCase().includes('copy table')) {
+                    highlightEntireTable(table, true);
+                } else if (item.title.includes('row') && !item.title.includes('column')) {
+                    highlightTableRow(table, pos.row, true);
+                } else if (item.title.includes('column')) {
+                    highlightTableColumn(table, pos.col, true);
+                }
+            };
+            cancelCallback = () => clearTableHighlight(table);
+        }
+    } else {
+        // Enable highlight for copy table items even when not in Run mode
+        highlightCallback = (itemIndex) => {
+            const item = menuItems[itemIndex];
+            if (!item) return;
+            clearTableHighlight(table);
+            if (item.title.toLowerCase().includes('copy table')) {
+                highlightEntireTable(table, true);
+            }
+        };
+        cancelCallback = () => clearTableHighlight(table);
+    }
+
+    showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
+});
 initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
@@ -5828,7 +7009,7 @@ elements.findClose.addEventListener('mousedown', (event) => {
 (function initSplitter() {
     const splitter = document.getElementById('notes-splitter');
     const app = document.getElementById('notes-app');
-    const splitterWidth = 8;
+    const splitterWidth = 2;
     const minPaneWidth = 200;
     let isResizing = false;
     let hasManualSplit = false;
