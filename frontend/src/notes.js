@@ -5,7 +5,7 @@ import {
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
-    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest,
+    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
@@ -160,6 +160,7 @@ import taggerscript from "highlight.js/lib/languages/taggerscript";
 import tap from "highlight.js/lib/languages/tap";
 import tcl from "highlight.js/lib/languages/tcl";
 import thrift from "highlight.js/lib/languages/thrift";
+import terraform from "highlight-js-terraform";
 import tp from "highlight.js/lib/languages/tp";
 import twig from "highlight.js/lib/languages/twig";
 import vala from "highlight.js/lib/languages/vala";
@@ -318,6 +319,7 @@ hljs.registerLanguage('taggerscript', taggerscript);
 hljs.registerLanguage('tap', tap);
 hljs.registerLanguage('tcl', tcl);
 hljs.registerLanguage('thrift', thrift);
+hljs.registerLanguage('terraform', terraform);
 hljs.registerLanguage('tp', tp);
 hljs.registerLanguage('twig', twig);
 hljs.registerLanguage('vala', vala);
@@ -735,6 +737,9 @@ function inferEditorLanguage(file, content) {
         toml: 'toml',
         ini: 'ini',
         sql: 'sql',
+        tf: 'terraform',
+        tfvars: 'terraform',
+        hcl: 'terraform',
         md: 'markdown',
         markdown: 'markdown',
         html: 'xml',
@@ -2901,6 +2906,20 @@ function convertToJupyterCodeBlocks() {
             setDirty(true);
             scheduleRender();
             scheduleAutoSave();
+        });
+        editableCode.addEventListener('keydown', (event) => {
+            if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+
+            // Insert tab character and keep focus in the code editor
+            event.preventDefault();
+            event.stopPropagation();
+
+            const start = editableCode.selectionStart;
+            const end = editableCode.selectionEnd;
+            editableCode.setRangeText('\t', start, end, 'end');
+            editableCode.dispatchEvent(new Event('input'));
         });
         editableCode.addEventListener('scroll', () => {
             syncHighlightViewport();
@@ -7647,6 +7666,44 @@ document.addEventListener('keydown', (event) => {
         closeDeletePrompt();
     }
 });
+
+function isFunctionKey(key) {
+    return /^F([1-9]|1[0-9]|2[0-4])$/.test(String(key || ''));
+}
+
+let notesHotkeyPrefixActive = false;
+
+document.addEventListener('keydown', (event) => {
+    // Block keyboard shortcuts if fullscreen image overlay is open
+    if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
+    if (window.terminalFocusedState === true) {
+        return;
+    }
+
+    const shouldRouteToGo = notesHotkeyPrefixActive || isFunctionKey(event.key);
+    if (!shouldRouteToGo) {
+        return;
+    }
+
+    // During a prefix sequence, always consume plain keys before the browser/editor sees them.
+    event.preventDefault();
+    event.stopPropagation();
+
+    NotesKeyPress(
+        event.key,
+        event.ctrlKey,
+        event.altKey,
+        event.shiftKey,
+        event.metaKey,
+    ).then((result) => {
+        notesHotkeyPrefixActive = Boolean(result?.prefixActive);
+    }).catch(() => {
+        notesHotkeyPrefixActive = false;
+    });
+}, true);
 
 document.addEventListener('mouseup', (event) => {
     if (document.getElementById('fullscreen-image-overlay')) {

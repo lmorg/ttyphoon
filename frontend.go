@@ -415,6 +415,22 @@ func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
 	renderer.HandleKeyPress(key, ctrl, alt, shift, meta)
 }
 
+func (a *WApp) NotesKeyPress(key string, ctrl, alt, shift, meta bool) map[string]bool {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return map[string]bool{
+			"consume":      false,
+			"prefixActive": false,
+		}
+	}
+
+	consume, prefixActive := renderer.HandleNotesKeyPress(key, ctrl, alt, shift, meta)
+	return map[string]bool{
+		"consume":      consume,
+		"prefixActive": prefixActive,
+	}
+}
+
 func (a *WApp) TerminalInputBoxSubmit(id int64, value string, isOk bool) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

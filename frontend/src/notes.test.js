@@ -44,6 +44,7 @@ const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const displayHyperlinkMenuMock = vi.fn(() => Promise.resolve());
+const notesKeyPressMock = vi.fn(() => Promise.resolve({ consume: false, prefixActive: false }));
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -74,6 +75,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
+    NotesKeyPress: notesKeyPressMock,
 }));
 
 vi.mock('../wailsjs/runtime/runtime', () => ({

@@ -73,34 +73,50 @@ func (hk *hotkeysT) Add(key codes.KeyName, fn HotkeyFn, desc string, icon rune, 
 }
 
 func (hk *hotkeysT) KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
+	fn, consume, _ := hk.KeyPressEx(key, mod)
+	if !consume {
+		return nil
+	}
+
+	if fn == nil {
+		return prefixFound
+	}
+
+	return fn
+}
+
+func (hk *hotkeysT) KeyPressEx(key codes.KeyCode, mod codes.Modifier) (HotkeyFn, bool, bool) {
 	if hk.prefixKey == 0 && hk.prefixMod == codes.MOD_NONE {
 		fn := hk.fnTable[mod][key]
 		if fn == nil {
-			return nil
+			return nil, false, false
 		}
-		return fn.fn
+		return fn.fn, true, false
 	}
 
 	if hk.prefixTtl.After(time.Now()) {
 		// still within prefix time limit
 		fn := hk.fnTable[mod][key]
 		if fn == nil {
-			return nil
+			// Consume the next key once a prefix is active even when no mapping exists.
+			// This prevents accidental text insertion in editors while a prefix sequence is in progress.
+			hk.prefixTtl = time.Time{}
+			return nil, true, false
 		}
 
 		// a valid hotkey so lets extend the timeout to allow multiple hotkey presses
 		hk.prefixTtl = time.Now().Add(time.Duration(config.Config.Hotkeys.RepeatTtl) * time.Millisecond)
-		return fn.fn
+		return fn.fn, true, true
 	}
 
 	if key == hk.prefixKey && mod == hk.prefixMod {
 		// prefix pressed, lets add a wait for any subsequent hotkeys
 		hk.prefixTtl = time.Now().Add(time.Duration(config.Config.Hotkeys.PrefixTtl) * time.Millisecond)
-		return prefixFound
+		return nil, true, true
 	}
 
 	// not a hotkey. Nothing to see here!
-	return nil
+	return nil, false, false
 }
 
 // Add appends the hotkey DB with the values included.
@@ -131,6 +147,17 @@ func KeyPress(key codes.KeyCode, mod codes.Modifier) HotkeyFn {
 	}
 
 	return nil
+}
+
+func KeyPressEx(key codes.KeyCode, mod codes.Modifier) (HotkeyFn, bool, bool) {
+	for _, prefix := range prefixes {
+		fn, consume, prefixActive := prefix.KeyPressEx(key, mod)
+		if consume {
+			return fn, true, prefixActive
+		}
+	}
+
+	return nil, false, false
 }
 
 func KeyPressWithPrefix(prefix codes.KeyName, hotkey codes.KeyName) error {

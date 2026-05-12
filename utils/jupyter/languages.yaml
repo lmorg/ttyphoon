@@ -346,7 +346,7 @@
   FileExtension: elm
   PreRunCommand: [ elm, make, "${FILE}", '--output="${FILE}.html"' ]
   ExecuteCommand: [ cat, "${FILE}.html" ]
-  ExecuteParameters: [ cat, "${FILE}.html", "${PARAMETERS}"]
+  ExecuteParameters: [ cat, "${FILE}.html" ]
 
 - Aliases: [ ocaml, ml ]
   Description: OCaml

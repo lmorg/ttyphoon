@@ -61,6 +61,34 @@ func (wr *webkitRender) HandleKeyPress(key string, ctrl, alt, shift, meta bool) 
 	}
 }
 
+func (wr *webkitRender) HandleNotesKeyPress(key string, ctrl, alt, shift, meta bool) (bool, bool) {
+	if key == "" {
+		return false, false
+	}
+
+	mod := keyEventModToCodesModifier(ctrl, alt, shift, meta)
+	if isModifierOnlyKey(key) {
+		return false, false
+	}
+
+	keyCode := webKeyCodeLookup(key)
+	if keyCode == 0 {
+		return false, false
+	}
+
+	fn, consume, prefixActive := hotkeys.KeyPressEx(keyCode, mod)
+	if !consume {
+		return false, false
+	}
+
+	if fn != nil {
+		fn()
+		wr.TriggerRedraw()
+	}
+
+	return true, prefixActive
+}
+
 func (wr *webkitRender) hotkey(keyCode codes.KeyCode, mod codes.Modifier) bool {
 	fn := hotkeys.KeyPress(keyCode, mod)
 	if fn == nil {

@@ -78,6 +78,10 @@ export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
 
+export function NotesKeyPress(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['NotesKeyPress'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }

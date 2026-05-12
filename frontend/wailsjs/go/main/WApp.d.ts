@@ -42,6 +42,8 @@ export function GetWindowStyle():Promise<main.WindowStyleT>;
 
 export function ListFiles():Promise<Array<string>>;
 
+export function NotesKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<Record<string, boolean>>;
+
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveFilePath(arg1:string):Promise<string>;
