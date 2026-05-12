@@ -602,7 +602,7 @@ describe('notes rendering', () => {
         window.getSelection = originalGetSelection;
     });
 
-    it('shows single Edit tab only for code files and preserves markdown/yaml tabs', async () => {
+    it('shows Hex tab across code, markdown, and yaml views', async () => {
         listFilesMock.mockResolvedValue([
             '$NOTES/readme.md',
             '$NOTES/script.go',
@@ -624,6 +624,7 @@ describe('notes rendering', () => {
         await importNotesModule();
 
         const tabEditor = document.getElementById('notes-tab-editor');
+        const tabHex = document.getElementById('notes-tab-hex');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
         const tabMeta = document.getElementById('notes-tab-meta');
@@ -640,6 +641,7 @@ describe('notes rendering', () => {
 
         await clickFile('$NOTES/script.go');
         expect(tabEditor.style.display).toBe('');
+        expect(tabHex.style.display).toBe('');
         expect(tabViewer.style.display).toBe('none');
         expect(tabJupyter.style.display).toBe('none');
         expect(tabSwaggerView.style.display).toBe('none');
@@ -649,6 +651,7 @@ describe('notes rendering', () => {
 
         await clickFile('$NOTES/readme.md');
         expect(tabEditor.style.display).toBe('');
+        expect(tabHex.style.display).toBe('');
         expect(tabViewer.style.display).toBe('');
         expect(tabJupyter.style.display).toBe('');
         expect(tabSwaggerView.style.display).toBe('none');
@@ -658,6 +661,7 @@ describe('notes rendering', () => {
 
         await clickFile('$NOTES/spec.yaml');
         expect(tabEditor.style.display).toBe('none');
+        expect(tabHex.style.display).toBe('');
         expect(tabViewer.style.display).toBe('none');
         expect(tabJupyter.style.display).toBe('none');
         expect(tabSwaggerView.style.display).toBe('');
@@ -682,6 +686,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const tabEditor = document.getElementById('notes-tab-editor');
+        const tabHex = document.getElementById('notes-tab-hex');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabMeta = document.getElementById('notes-tab-meta');
         const hexWrap = document.getElementById('notes-hex-wrap');
@@ -691,8 +696,8 @@ describe('notes rendering', () => {
         const offsetInput = document.querySelector('.notes-hex-offset-input');
         const goButton = document.querySelector('.notes-hex-offset-go');
 
-        expect(tabEditor.textContent).toBe('Hex');
-        expect(tabEditor.getAttribute('aria-selected')).toBe('true');
+        expect(tabEditor.style.display).toBe('none');
+        expect(tabHex.getAttribute('aria-selected')).toBe('true');
         expect(tabViewer.style.display).toBe('none');
         expect(tabMeta.style.display).toBe('');
         expect(hexWrap.dataset.active).toBe('true');
@@ -703,6 +708,29 @@ describe('notes rendering', () => {
         expect(hexHeader.textContent).toContain('Offset');
         expect(offsetInput).toBeTruthy();
         expect(goButton).toBeTruthy();
+    });
+
+    it('renders hexdump for text files only when Hex tab is opened', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
+        getFileMock.mockResolvedValue({ contents: 'Hello hex', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/readme.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const hexRoot = document.getElementById('notes-hex');
+        const tabHex = document.getElementById('notes-tab-hex');
+
+        expect(hexRoot.textContent).not.toContain('00000000');
+
+        tabHex.click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(hexRoot.textContent).toContain('00000000');
     });
 
     it('shows meta pane only when meta tab is selected and renders template-provided markdown', async () => {
@@ -807,10 +835,11 @@ describe('notes rendering', () => {
             await flushPromises();
         };
 
-        // Markdown defaults to View, then cycles View -> Edit -> Run -> Meta -> View.
+        // Markdown defaults to View, then cycles View -> Edit -> Run -> Hex -> Meta -> View.
         await clickFile('$NOTES/readme.md');
         const tabViewer = document.getElementById('notes-tab-viewer');
         const tabEditor = document.getElementById('notes-tab-editor');
+        const tabHex = document.getElementById('notes-tab-hex');
         const tabJupyter = document.getElementById('notes-tab-jupyter');
         const tabMeta = document.getElementById('notes-tab-meta');
 
@@ -820,11 +849,13 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabJupyter.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        expect(tabHex.getAttribute('aria-selected')).toBe('true');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabMeta.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
 
-        // YAML defaults to structured View, then cycles View -> Edit -> Meta -> View (Run hidden without swagger key).
+        // YAML defaults to structured View, then cycles View -> Edit -> Hex -> Meta -> View (Run hidden without swagger key).
         await clickFile('$NOTES/spec.yaml');
         const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
@@ -837,18 +868,31 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         const selectedAfterFirst = tabSwaggerView.getAttribute('aria-selected') === 'true'
             ? 'view'
-            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true'
+                ? 'edit'
+                : (tabHex.getAttribute('aria-selected') === 'true' ? 'hex' : 'meta'));
         expect(selectedAfterFirst).not.toBe(selectedBefore);
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         const selectedAfterSecond = tabSwaggerView.getAttribute('aria-selected') === 'true'
             ? 'view'
-            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true'
+                ? 'edit'
+                : (tabHex.getAttribute('aria-selected') === 'true' ? 'hex' : 'meta'));
         expect(selectedAfterSecond).not.toBe(selectedBefore);
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         const selectedAfterThird = tabSwaggerView.getAttribute('aria-selected') === 'true'
             ? 'view'
-            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true' ? 'edit' : 'meta');
-        expect(selectedAfterThird).toBe(selectedBefore);
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true'
+                ? 'edit'
+                : (tabHex.getAttribute('aria-selected') === 'true' ? 'hex' : 'meta'));
+        expect(selectedAfterThird).not.toBe(selectedBefore);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
+        const selectedAfterFourth = tabSwaggerView.getAttribute('aria-selected') === 'true'
+            ? 'view'
+            : (tabSwaggerEdit.getAttribute('aria-selected') === 'true'
+                ? 'edit'
+                : (tabHex.getAttribute('aria-selected') === 'true' ? 'hex' : 'meta'));
+        expect(selectedAfterFourth).toBe(selectedBefore);
     });
 
     it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {

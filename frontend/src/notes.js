@@ -456,6 +456,7 @@ app.innerHTML = `
                 <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
                 <button id="notes-tab-csv-run"    type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Run</button>
                 <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
@@ -565,6 +566,7 @@ const elements = {
     delete: document.getElementById('notes-delete'),
     find: document.getElementById('notes-find'),
     tabEditor: document.getElementById('notes-tab-editor'),
+    tabHex: document.getElementById('notes-tab-hex'),
     tabViewer: document.getElementById('notes-tab-viewer'),
     tabJupyter: document.getElementById('notes-tab-jupyter'),
     tabSwaggerView: document.getElementById('notes-tab-swagger-view'),
@@ -643,6 +645,12 @@ const state = {
     swaggerEndpointFilter: '',
     editorLanguage: '',
     fileMetaMarkdown: '',
+    hexSourceType: '',
+    hexSourceValue: '',
+    hexSourceFile: '',
+    hexSourceOptions: null,
+    hexRenderedFile: '',
+    hexLoadingPromise: null,
 };
 
 let lastAutoCopiedViewerSelection = '';
@@ -699,6 +707,107 @@ function escapeEditorHtml(text) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+function encodeTextToBase64(text) {
+    const source = String(text || '');
+    if (!source) {
+        return '';
+    }
+
+    const bytes = new TextEncoder().encode(source);
+    let binary = '';
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+
+    return btoa(binary);
+}
+
+function clearHexSource() {
+    state.hexSourceType = '';
+    state.hexSourceValue = '';
+    state.hexSourceFile = '';
+    state.hexSourceOptions = null;
+    state.hexRenderedFile = '';
+    state.hexLoadingPromise = null;
+}
+
+function setHexSource(file, sourceType, sourceValue, options = {}) {
+    state.hexSourceFile = file;
+    state.hexSourceType = sourceType;
+    state.hexSourceValue = sourceValue || '';
+    state.hexSourceOptions = {
+        fontSize: options.fontSize,
+        adjustCellHeight: options.adjustCellHeight,
+    };
+    state.hexRenderedFile = '';
+    state.hexLoadingPromise = null;
+}
+
+async function ensureHexDumpForCurrentFile() {
+    const targetFile = state.currentFile;
+    if (!targetFile) {
+        return false;
+    }
+
+    if (state.hexRenderedFile === targetFile && state.hexSourceFile === targetFile) {
+        return true;
+    }
+
+    if (state.hexSourceFile !== targetFile) {
+        if (state.currentFileType !== 'image') {
+            return false;
+        }
+
+        if (!state.hexLoadingPromise) {
+            state.hexLoadingPromise = GetFile(targetFile)
+                .then((result) => {
+                    if (!result || result.error) {
+                        notifyTerminal(result && result.error ? result.error : 'Failed to load hex data', 'warn');
+                        return false;
+                    }
+
+                    if (state.currentFile !== targetFile) {
+                        return false;
+                    }
+
+                    const sourceType = result.binary ? 'base64' : 'text';
+                    setHexSource(targetFile, sourceType, result.contents || '', {
+                        fontSize: result.fontSize,
+                        adjustCellHeight: result.adjustCellHeight,
+                    });
+                    return true;
+                })
+                .catch((err) => {
+                    notifyTerminal(String(err && err.message ? err.message : err), 'warn');
+                    return false;
+                })
+                .finally(() => {
+                    state.hexLoadingPromise = null;
+                });
+        }
+
+        const loaded = await state.hexLoadingPromise;
+        if (!loaded) {
+            return false;
+        }
+    }
+
+    if (state.hexSourceFile !== targetFile || !state.hexSourceType) {
+        return false;
+    }
+
+    const base64Data = state.hexSourceType === 'base64'
+        ? state.hexSourceValue
+        : encodeTextToBase64(state.hexSourceValue);
+
+    renderHexDump(elements.hex, base64Data, state.hexSourceOptions || {});
+    state.hexRenderedFile = targetFile;
+    return true;
 }
 
 function inferEditorLanguage(file, content) {
@@ -2530,6 +2639,8 @@ function setViewMode(mode) {
     // Determine the mode based on current file type.
     if (mode === 'meta') {
         state.viewMode = 'meta';
+    } else if (mode === 'hex') {
+        state.viewMode = 'hex';
     } else if (state.currentFileType === 'json') {
         if (mode === 'swagger-view' || mode === 'swagger-edit' || (mode === 'swagger-run' && state.swaggerRunAvailable)) {
             state.viewMode = mode;
@@ -2562,7 +2673,8 @@ function setViewMode(mode) {
     const isViewer = state.viewMode === 'viewer';
     const isMeta = state.viewMode === 'meta';
     
-    elements.tabEditor.setAttribute('aria-selected', (isEditor || isHex) ? 'true' : 'false');
+    elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
+    elements.tabHex.setAttribute('aria-selected', isHex ? 'true' : 'false');
     elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
     elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
@@ -2616,6 +2728,10 @@ function setViewMode(mode) {
     }
 
     updateFindAvailability();
+
+    if (isHex) {
+        void ensureHexDumpForCurrentFile();
+    }
     
     // Re-perform find if find bar is open
     if (elements.findBar.dataset.open === 'true' && state.findQuery) {
@@ -3249,6 +3365,7 @@ function updateTabVisibility(fileType) {
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
+        elements.tabHex.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
         elements.tabSwaggerView.style.display = 'none';
         elements.tabSwaggerEdit.style.display = 'none';
@@ -3269,6 +3386,7 @@ function updateTabVisibility(fileType) {
     if (isImage) {
         // Image files use a single View tab.
         elements.tabImageView.style.display = '';
+        elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabEditor.style.display = 'none';
@@ -3287,6 +3405,7 @@ function updateTabVisibility(fileType) {
         elements.tabCsvView.style.display = '';
         elements.tabCsvEdit.style.display = '';
         elements.tabCsvRun.style.display = '';
+        elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabImageView.style.display = 'none';
         elements.tabViewer.style.display = 'none';
@@ -3307,7 +3426,7 @@ function updateTabVisibility(fileType) {
     if (isCode) {
         // Code files use a single Edit tab.
         elements.tabEditor.style.display = '';
-        elements.tabEditor.textContent = 'Edit';
+        elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
@@ -3318,9 +3437,9 @@ function updateTabVisibility(fileType) {
     }
 
     if (isBinary) {
-        // Binary files use a single Hex tab.
-        elements.tabEditor.style.display = '';
-        elements.tabEditor.textContent = 'Hex';
+        // Binary files use Hex + Meta tabs.
+        elements.tabEditor.style.display = 'none';
+        elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
         elements.tabJupyter.style.display = 'none';
@@ -3333,7 +3452,7 @@ function updateTabVisibility(fileType) {
     // Markdown tabs
     elements.tabViewer.style.display = isJson ? 'none' : '';
     elements.tabEditor.style.display = isJson ? 'none' : '';
-    elements.tabEditor.textContent = 'Edit';
+    elements.tabHex.style.display = '';
     elements.tabJupyter.style.display = isJson ? 'none' : '';
     elements.tabMeta.style.display = '';
 
@@ -3975,6 +4094,8 @@ async function loadFile(file) {
     let stickyId = null;
 
     try {
+        clearHexSource();
+
         // Capture the current project context to prevent autosave issues if user switches projects
         state.currentFileProject = await GetCurrentProject();
 
@@ -4052,7 +4173,7 @@ async function loadFile(file) {
             state.swaggerRunAvailable = false;
 
             updateTabVisibility('binary');
-            renderHexDump(elements.hex, doc || '', {
+            setHexSource(file, 'base64', doc || '', {
                 fontSize: result.fontSize,
                 adjustCellHeight: result.adjustCellHeight,
             });
@@ -4070,6 +4191,12 @@ async function loadFile(file) {
             }
             return;
         }
+
+        // Keep hex source data available, but only render when hex tab is opened.
+        setHexSource(file, 'text', doc || '', {
+            fontSize: result.fontSize,
+            adjustCellHeight: result.adjustCellHeight,
+        });
         
         // Detect file type
         if (loadingJson) {
@@ -7377,11 +7504,11 @@ elements.csvView.addEventListener('contextmenu', (e) => {
 initStructuredDataTreeContextMenu(elements.swaggerView);
 
 elements.tabEditor.addEventListener('click', () => {
-    if (state.currentFileType === 'binary') {
-        setViewMode('hex');
-        return;
-    }
     setViewMode('editor');
+});
+
+elements.tabHex.addEventListener('click', () => {
+    setViewMode('hex');
 });
 
 elements.tabViewer.addEventListener('click', () => {
@@ -7434,27 +7561,28 @@ function getVisibleNotesTabs() {
         if (state.swaggerRunAvailable && elements.tabSwaggerRun?.style.display !== 'none') {
             tabs.push(elements.tabSwaggerRun);
         }
+        tabs.push(elements.tabHex);
         tabs.push(elements.tabMeta);
         return tabs.filter(Boolean);
     }
 
     if (state.currentFileType === 'code') {
-        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
+        return [elements.tabEditor, elements.tabHex, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'binary') {
-        return [elements.tabEditor, elements.tabMeta].filter(Boolean);
+        return [elements.tabHex, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'image') {
-        return [elements.tabImageView, elements.tabMeta].filter(Boolean);
+        return [elements.tabImageView, elements.tabHex, elements.tabMeta].filter(Boolean);
     }
 
     if (state.currentFileType === 'csv') {
-        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabCsvRun, elements.tabMeta].filter(Boolean);
+        return [elements.tabCsvView, elements.tabCsvEdit, elements.tabCsvRun, elements.tabHex, elements.tabMeta].filter(Boolean);
     }
 
-    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter, elements.tabMeta].filter((tab) => tab && tab.style.display !== 'none');
+    return [elements.tabViewer, elements.tabEditor, elements.tabJupyter, elements.tabHex, elements.tabMeta].filter((tab) => tab && tab.style.display !== 'none');
 }
 
 function cycleNotesTabs(direction = 1) {

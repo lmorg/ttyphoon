@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	godebug "runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -638,6 +639,9 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 		return GetFileReturnT{Error: err.Error()}
 	}
 
+	defer f.Close()
+	defer godebug.FreeOSMemory()
+
 	b, err := io.ReadAll(f)
 	if err != nil {
 		log.Println(err)
@@ -674,6 +678,8 @@ func (a *WApp) GetImage(path string) string {
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
+
+	defer f.Close()
 
 	b, err := io.ReadAll(f)
 	if err != nil {
