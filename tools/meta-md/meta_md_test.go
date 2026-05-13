@@ -12,6 +12,7 @@ func TestDocumentIncludesInlineCodeValues(t *testing.T) {
 		Filename:   "note.md",
 		SizeHuman:  "123 B",
 		SizeBytes:  123,
+		PathOnly:   "/tmp",
 		PathFull:   "/tmp/note.md",
 		UserOwner:  "alice",
 		GroupOwner: "staff",
@@ -32,7 +33,7 @@ func TestDocumentIncludesInlineCodeValues(t *testing.T) {
 		"- Bytes: `123`",
 		"- Path:",
 		"```text",
-		"/tmp/note.md",
+		"/tmp",
 		"- User:  `alice`",
 		"- Group: `staff`",
 		"- Unix:  `0644`",
@@ -50,7 +51,8 @@ func TestDocumentEscapesInlineCode(t *testing.T) {
 		Filename:  "meta.md",
 		SizeHuman: "1 B",
 		SizeBytes: 1,
-		PathFull:  "C:\\\\tmp\\\\tick`path",
+		PathOnly:  "C:\\\\tmp\\\\tick`path",
+		PathFull:  "C:\\\\tmp\\\\tick`path\\\\meta.md",
 	})
 
 	if !strings.Contains(doc, "- Path:") {
@@ -89,7 +91,8 @@ func TestDocumentForPathIncludesResolvedPath(t *testing.T) {
 		t.Fatalf("expected path heading in markdown: %s", doc)
 	}
 
-	if !strings.Contains(doc, filePath) {
-		t.Fatalf("expected fenced path block to include resolved path: %s", doc)
+	pathDir := filepath.Dir(filePath)
+	if !strings.Contains(doc, pathDir) {
+		t.Fatalf("expected fenced path block to include directory path: %s", doc)
 	}
 }

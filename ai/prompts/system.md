@@ -4,3 +4,4 @@
 - Unless specified otherwise, answers should be tailored to following context:
   - Operating system: $HOST_OS
   - CPU: $HOST_CPU
+- Any diagrams should be written using Mermaid

@@ -1,5 +1,3 @@
-$SYSTEM_PROMPT
-
 # Instructions
 
 - Generate a very short title from the user's prompt for use in a markdown filename.
