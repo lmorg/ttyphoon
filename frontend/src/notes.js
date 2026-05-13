@@ -5678,7 +5678,7 @@ function applyWindowStyle(result) {
             width: 100%;
             border-radius: 5px;
             border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
+            background: ${DARKEN_BACKGROUND_OVERLAY};
             color: var(--fg);
             padding: 6px 28px 6px 8px;
             font-size: ${result.fontSize - 1}px;
@@ -5716,7 +5716,7 @@ function applyWindowStyle(result) {
 
         #notes-list-filter:focus {
             border-color: var(--accent);
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.16);
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 1);
         }
 
         #notes-actions {
@@ -6175,7 +6175,7 @@ function applyWindowStyle(result) {
         #notes-tabs button[aria-selected="true"] {
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             border-bottom: 5px;
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
@@ -6552,7 +6552,7 @@ function applyWindowStyle(result) {
             position: relative;
             overflow: hidden;
             border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.08);
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 1);
             min-width: 48px;
         }
 
@@ -6719,8 +6719,6 @@ function applyWindowStyle(result) {
         #notes-jupyter-wrap pre:not(.jupyter-highlight) {
             border-left: 0;
             padding-left: 10px;
-            /*white-space: pre-wrap;
-            word-wrap: break-word;*/
         }
 
         .jupyter-code-block {
@@ -6738,7 +6736,7 @@ function applyWindowStyle(result) {
             gap: 8px;
             padding: 0px;
             padding-left: 8px;
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.05);
             border-bottom: 2px solid var(--fg);
             align-items: center;
         }
