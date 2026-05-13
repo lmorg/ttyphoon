@@ -890,7 +890,7 @@ function syncEditorScrollDecorations() {
     const scrollLeft = elements.editor.scrollLeft;
     elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
 
-    // For wrapped markdown, keep vertical transform sync so overlay tracks touchpad/scrollbar movement.
+    // For wrapped markdown, no horizontal scroll so only sync vertical
     const isMarkdownWrapped = elements.editorShell?.dataset?.fileType === 'markdown';
     if (isMarkdownWrapped) {
         elements.editorHighlight.style.transform = `translate(0px, ${-scrollTop}px)`;
@@ -913,7 +913,12 @@ function renderEditorDecorations() {
         const contentHeight = Math.max(elements.editor.scrollHeight, elements.editor.clientHeight);
         const contentWidth = Math.max(elements.editor.scrollWidth, elements.editor.clientWidth);
         elements.editorHighlight.style.minHeight = `${contentHeight}px`;
-        elements.editorHighlight.style.minWidth = `${contentWidth}px`;
+        
+        // Don't set minWidth for markdown - it wraps, so width should match container
+        const isMarkdownWrapped = elements.editorShell?.dataset?.fileType === 'markdown';
+        if (!isMarkdownWrapped) {
+            elements.editorHighlight.style.minWidth = `${contentWidth}px`;
+        }
     }
 
     const language = state.editorLanguage || 'plaintext';
@@ -4243,7 +4248,8 @@ async function loadFile(file) {
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
-            setCodeEditorMode(true);
+            //setCodeEditorMode(false);
+            setCodeEditorMode(true); // TODO: maybe support toggling?
             elements.editorShell.dataset.fileType = 'markdown';
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
@@ -6528,19 +6534,33 @@ function applyWindowStyle(result) {
             word-break: break-word;
             overflow-y: auto;
             overflow-x: hidden;
+            box-sizing: border-box;
+            text-rendering: auto;
         }
 
         #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight {
+            inset: auto;
+            top: 0;
+            left: 0;
+            right: 0;
             white-space: pre-wrap;
             overflow-wrap: break-word;
             word-break: break-word;
             overflow: hidden;
+            box-sizing: border-box;
+            text-rendering: auto;
+            -webkit-font-smoothing: auto;
+            -moz-osx-font-smoothing: auto;
         }
 
         #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight code {
+            display: inline;
             white-space: pre-wrap;
             overflow-wrap: break-word;
             word-break: break-word;
+            margin: 0;
+            padding: 0;
+            border: 0;
         }
 
         #notes-editor-shell[data-code-view="false"] #notes-editor-highlight,
