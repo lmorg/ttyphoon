@@ -111,18 +111,22 @@ function makeContext2d() {
         globalAlpha: 1,
         shadowColor: 'transparent',
         shadowBlur: 0,
+        __strokeStyles: [],
         save: vi.fn(),
         restore: vi.fn(),
         beginPath: vi.fn(),
         moveTo: vi.fn(),
         lineTo: vi.fn(),
-        stroke: vi.fn(),
+        stroke: vi.fn(function trackStroke() {
+            this.__strokeStyles.push(this.strokeStyle);
+        }),
         strokeRect: vi.fn(),
         fillRect: vi.fn(),
         clearRect: vi.fn(),
         fillText: vi.fn(),
         strokeText: vi.fn(),
         drawImage: vi.fn(),
+        setLineDash: vi.fn(),
         measureText: vi.fn(() => ({ width: 10, emHeightAscent: 12, emHeightDescent: 4 })),
     };
 }
@@ -191,9 +195,9 @@ describe('terminal compact redraw decoder', () => {
         expect(typeof redraw).toBe('function');
 
         // [op=1(cell), x, y, width, char, flags, fg24, bg24]
-        // flags: bold + italic + underline + strike + searchResult = 31
+        // flags: bold(1) + italic(2) + underlineStyle(4) + strike(32) + searchResult(64) = 103
         redraw([
-            [1, 3, 2, 1, 'X', 31, 0x112233, 0x445566],
+            [1, 3, 2, 1, 'X', 103, 0x112233, 0x445566],
         ]);
 
         expect(fontApplyCellStyleMock).toHaveBeenCalledTimes(1);
@@ -205,7 +209,7 @@ describe('terminal compact redraw decoder', () => {
             char: 'X',
             bold: true,
             italic: true,
-            underline: true,
+            underlineStyle: 1,
             strike: true,
             searchResult: true,
             fg: { Red: 0x11, Green: 0x22, Blue: 0x33 },
@@ -224,9 +228,9 @@ describe('terminal compact redraw decoder', () => {
         drawBlockChromeMock.mockClear();
 
         // [op=5(block_chrome), x, y, height, endX, fg24, flags]
-        // flags: folded only = 1 << 5 = 32
+        // flags: folded only = 1 << 7 = 128
         redraw([
-            [5, 1, 4, 3, 20, 0x778899, 32],
+            [5, 1, 4, 3, 20, 0x778899, 128],
         ]);
 
         expect(drawBlockChromeMock).toHaveBeenCalledTimes(1);
@@ -305,5 +309,64 @@ describe('terminal compact redraw decoder', () => {
 
         expect(latestOffscreenCtx.moveTo).toHaveBeenCalledWith(90, 40);
         expect(latestOffscreenCtx.lineTo).toHaveBeenCalledWith(90, 100);
+    });
+
+    it('renders dashed underline using cell text colour', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const redraw = eventHandlers.get('terminalRedraw');
+        expect(typeof redraw).toBe('function');
+
+        latestOffscreenCtx.__strokeStyles = [];
+        latestOffscreenCtx.stroke.mockClear();
+
+        // [op=1(cell), x, y, width, char, flags, fg24, bg24]
+        // flags: dashed underline style 5 => 5 << 2 = 20
+        redraw([
+            [1, 0, 0, 1, 'X', 20, 0x112233, 0x000000],
+        ]);
+
+        expect(latestOffscreenCtx.stroke).toHaveBeenCalled();
+        expect(latestOffscreenCtx.__strokeStyles).toContain('rgb(17, 34, 51)');
+    });
+
+    it('decodes compact underline colour from terminalRedraw', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const redraw = eventHandlers.get('terminalRedraw');
+        expect(typeof redraw).toBe('function');
+
+        redraw([
+            [1, 0, 0, 1, 'X', 4, 0x112233, 0x445566, 0xAABBCC],
+        ]);
+
+        expect(fontApplyCellStyleMock).toHaveBeenCalledWith(expect.objectContaining({
+            ulc: { Red: 0xAA, Green: 0xBB, Blue: 0xCC },
+        }));
+    });
+
+    it('renders underline with explicit underline colour when provided', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const redraw = eventHandlers.get('terminalRedraw');
+        expect(typeof redraw).toBe('function');
+
+        latestOffscreenCtx.__strokeStyles = [];
+        latestOffscreenCtx.stroke.mockClear();
+
+        // [op=1(cell), x, y, width, char, flags, fg24, bg24, ulc24]
+        // flags: dashed underline style 5 => 5 << 2 = 20
+        redraw([
+            [1, 0, 0, 1, 'X', 20, 0x112233, 0x000000, 0x8899AA],
+        ]);
+
+        expect(latestOffscreenCtx.stroke).toHaveBeenCalled();
+        expect(latestOffscreenCtx.__strokeStyles).toContain('rgb(136, 153, 170)');
     });
 });

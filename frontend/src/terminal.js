@@ -45,10 +45,10 @@ const REDRAW_OP = {
 const REDRAW_FLAG = {
     BOLD: 1 << 0,
     ITALIC: 1 << 1,
-    UNDERLINE: 1 << 2,
-    STRIKE: 1 << 3,
-    SEARCH_RESULT: 1 << 4,
-    FOLDED: 1 << 5,
+    // Bits 2-4 are used for underline style (0-7), no individual flags
+    STRIKE: 1 << 5,
+    SEARCH_RESULT: 1 << 6,
+    FOLDED: 1 << 7,
 };
 
 function colourFrom24(value) {
@@ -83,19 +83,22 @@ function toCompactCommand(op) {
     switch (kind) {
         case REDRAW_OP.CELL: {
             const flags = Number(op[5]) || 0;
+            // Extract underline style from bits 2-4 (shift right 2, mask 0x7)
+            const underlineStyle = (flags >> 2) & 0x7;
             return {
                 op: 'cell',
                 x: op[1],
                 y: op[2],
                 width: op[3],
                 char: op[4],
-                bold: hasFlag(flags, REDRAW_FLAG.BOLD),
-                italic: hasFlag(flags, REDRAW_FLAG.ITALIC),
-                underline: hasFlag(flags, REDRAW_FLAG.UNDERLINE),
-                strike: hasFlag(flags, REDRAW_FLAG.STRIKE),
-                searchResult: hasFlag(flags, REDRAW_FLAG.SEARCH_RESULT),
+                bold: hasFlag(flags, 1),
+                italic: hasFlag(flags, 2),
+                underlineStyle: underlineStyle, // 0=none, 1=single, 2=double, 3=curly, 4=dotted, 5=dashed
+                strike: hasFlag(flags, 32),
+                searchResult: hasFlag(flags, 64),
                 fg: colourFrom24(op[6]),
                 bg: colourFrom24(op[7]),
+                ulc: colourFrom24(op[8]),
             };
         }
 
@@ -664,6 +667,7 @@ function drawCell(cmd) {
     } else {
         offCtx.fillStyle = '#ffffff';
     }
+    const textColour = offCtx.fillStyle;
 
     if (cmd.char) {
         if (cmd.searchResult) {
@@ -694,15 +698,78 @@ function drawCell(cmd) {
         }
     }
 
-    if (cmd.underline) {
-        const lineY = y + cellHeight - 2;
-        offCtx.fillRect(x, lineY, width, 1);
+    if (cmd.underlineStyle && cmd.underlineStyle > 0) {
+        const underlineColour = cmd.ulc
+            ? `rgb(${cmd.ulc.Red}, ${cmd.ulc.Green}, ${cmd.ulc.Blue})`
+            : textColour;
+        drawUnderline(cmd.underlineStyle, x, y, width, cellHeight, underlineColour);
     }
 
     if (cmd.strike) {
         const lineY = y + Math.floor(cellHeight / 2);
         offCtx.fillRect(x, lineY, width, 1);
     }
+}
+
+function drawUnderline(style, x, y, width, cellHeight, colour) {
+    // Underline styles: 0=none, 1=single, 2=double, 3=curly/wavy, 4=dotted, 5=dashed
+    const baseY = y + cellHeight - 2;
+    const underlineColour = colour || '#ffffff';
+
+    offCtx.save();
+    offCtx.fillStyle = underlineColour;
+    offCtx.strokeStyle = underlineColour;
+    offCtx.lineWidth = 1;
+
+    switch (style) {
+        case 1: // single underline
+            offCtx.fillRect(x, baseY, width, 1);
+            break;
+
+        case 2: { // double underline
+            offCtx.fillRect(x, baseY - 1, width, 1);
+            offCtx.fillRect(x, baseY + 1, width, 1);
+            break;
+        }
+
+        case 3: { // curly/wavy underline
+            const amplitude = 1.5;
+            const frequency = 0.4;
+            offCtx.beginPath();
+            for (let i = 0; i <= width; i++) {
+                const waveY = baseY + Math.sin((x + i) * frequency) * amplitude;
+                if (i === 0) {
+                    offCtx.moveTo(x + i, waveY);
+                } else {
+                    offCtx.lineTo(x + i, waveY);
+                }
+            }
+            offCtx.stroke();
+            break;
+        }
+
+        case 4: { // dotted underline
+            offCtx.setLineDash([2, 2]);
+            offCtx.beginPath();
+            offCtx.moveTo(x, baseY);
+            offCtx.lineTo(x + width, baseY);
+            offCtx.stroke();
+            offCtx.setLineDash([]);
+            break;
+        }
+
+        case 5: { // dashed underline
+            offCtx.setLineDash([4, 3]);
+            offCtx.beginPath();
+            offCtx.moveTo(x, baseY);
+            offCtx.lineTo(x + width, baseY);
+            offCtx.stroke();
+            offCtx.setLineDash([]);
+            break;
+        }
+    }
+
+    offCtx.restore();
 }
 
 function getOrLoadImageById(imageId) {

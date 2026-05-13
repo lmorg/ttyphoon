@@ -28,8 +28,29 @@ func lookupSgr(sgr *types.Sgr, stack []int32) {
 		case 3: // Italicized, ECMA-48 2nd
 			sgr.Bitwise.Set(types.SGR_ITALIC)
 
-		case 4: // Underlined, VT100
-			sgr.Bitwise.Set(types.SGR_UNDERLINE)
+		case 4: // Underlined, VT100 or Kitty/xterm underline style
+			// Check for extended underline style: 4:<n> or 4:<n>:<color>
+			if i+1 < len(stack) && stack[i+1] >= 0 && stack[i+1] <= 5 {
+				style := stack[i+1]
+				switch style {
+				case 0:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_NONE)
+				case 1:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_SINGLE)
+				case 2:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_DOUBLE)
+				case 3:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_CURLY)
+				case 4:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_DOTTED)
+				case 5:
+					sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_DASHED)
+				}
+				i++ // consume style param
+				// Optionally: 4:<n>:<color> (not implemented here)
+			} else {
+				sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_SINGLE)
+			}
 
 		case 5, // Blink, VT100
 			6: // (fast blink)
@@ -51,7 +72,7 @@ func lookupSgr(sgr *types.Sgr, stack []int32) {
 			sgr.Bitwise.Unset(types.SGR_ITALIC)
 
 		case 24: // no underline
-			sgr.Bitwise.Unset(types.SGR_UNDERLINE)
+			sgr.Bitwise.SetUnderlineStyle(types.UNDERLINE_NONE)
 
 		case 25: // no blink
 			sgr.Bitwise.Unset(types.SGR_SLOW_BLINK)
@@ -140,6 +161,17 @@ func lookupSgr(sgr *types.Sgr, stack []int32) {
 
 		case 49: // bg default
 			sgr.Bg = types.SGR_COLOR_BACKGROUND
+
+		case 58: // underline color
+			colour, consume := _sgrEnhancedColour(stack, i)
+			if colour != nil {
+				sgr.UlC = colour
+			}
+			i += consume
+			continue
+
+		case 59: // underline color default
+			sgr.UlC = nil
 
 		//
 		// 4-bit foreground colour:

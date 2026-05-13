@@ -98,6 +98,35 @@ func TestLookupSgr_ParsesMixedUnderlineAndTrueColor(t *testing.T) {
 	}
 }
 
+func TestLookupSgr_ParsesUnderlineColour(t *testing.T) {
+	sgr := types.SGR_DEFAULT.Copy()
+
+	lookupSgr(sgr, []int32{4, 58, 2, 12, 34, 56})
+
+	if got := sgr.Bitwise.GetUnderlineStyle(); got != types.UNDERLINE_SINGLE {
+		t.Fatalf("expected underline style 1, got %d", got)
+	}
+
+	if sgr.UlC == nil {
+		t.Fatalf("expected underline colour to be set")
+	}
+
+	if sgr.UlC.Red != 12 || sgr.UlC.Green != 34 || sgr.UlC.Blue != 56 {
+		t.Fatalf("unexpected underline colour: got (%d,%d,%d)", sgr.UlC.Red, sgr.UlC.Green, sgr.UlC.Blue)
+	}
+}
+
+func TestLookupSgr_ResetsUnderlineColour(t *testing.T) {
+	sgr := types.SGR_DEFAULT.Copy()
+	sgr.UlC = &types.Colour{Red: 200, Green: 100, Blue: 50}
+
+	lookupSgr(sgr, []int32{59})
+
+	if sgr.UlC != nil {
+		t.Fatalf("expected underline colour reset to nil")
+	}
+}
+
 func TestReadChar_ParsesMixedSgrSequenceFromStream(t *testing.T) {
 	term := newParserTestTerm()
 	pty := term.Pty.(*parserTestPty)

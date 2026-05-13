@@ -20,12 +20,18 @@ const (
 )
 
 const (
-	compactFlagBold int32 = 1 << iota
-	compactFlagItalic
-	compactFlagUnderline
-	compactFlagStrike
-	compactFlagSearchResult
-	compactFlagFolded
+	compactFlagBold         int32 = 1 << 0 // Bit 0
+	compactFlagItalic       int32 = 1 << 1 // Bit 1
+	compactFlagStrike       int32 = 1 << 5 // Bit 5 (bits 2-4 reserved for underline style)
+	compactFlagSearchResult int32 = 1 << 6 // Bit 6
+	compactFlagFolded       int32 = 1 << 7 // Bit 7
+	// Bits 2-4 are used for underline style (values 0-7)
+)
+
+const (
+	// Underline style uses bits 2-4 (shift left 2 positions, mask 0x7)
+	underlineStyleShift int32 = 2
+	underlineStyleMask  int32 = 0x7
 )
 
 type DrawOpTuple []any
@@ -45,6 +51,7 @@ func encodeDrawCommands(commands []DrawCommand) []DrawOpTuple {
 				packDrawFlags(cmd),
 				packColour24(cmd.Fg),
 				packColour24(cmd.Bg),
+				packColour24(cmd.UlC),
 			})
 
 		case DrawOpFrame:
@@ -98,9 +105,9 @@ func packDrawFlags(cmd DrawCommand) int32 {
 	if cmd.Italic {
 		flags |= compactFlagItalic
 	}
-	if cmd.Underline {
-		flags |= compactFlagUnderline
-	}
+	// Pack underline style (0-7) into bits 2-4
+	underlineStyle := int32(cmd.Underline & 0x7)
+	flags |= (underlineStyle << underlineStyleShift) & (underlineStyleMask << underlineStyleShift)
 	if cmd.Strike {
 		flags |= compactFlagStrike
 	}

@@ -1,15 +1,19 @@
 package types
 
+import "math/bits"
+
 type Sgr struct {
 	Bitwise SgrFlag
 	Fg      *Colour
 	Bg      *Colour
+	UlC     *Colour // Optional underline color
 }
 
 func (s *Sgr) Reset() {
 	s.Bitwise = 0
 	s.Fg = SGR_COLOR_FOREGROUND
 	s.Bg = SGR_COLOR_BACKGROUND
+	s.UlC = nil
 }
 
 func (s *Sgr) Copy() *Sgr {
@@ -20,6 +24,7 @@ func (s *Sgr) Copy() *Sgr {
 		Fg:      s.Fg,
 		Bg:      s.Bg,
 		Bitwise: s.Bitwise,
+		UlC:     s.UlC,
 	}
 }
 
@@ -34,7 +39,6 @@ const (
 	SGR_NORMAL SgrFlag = 0
 	SGR_BOLD   SgrFlag = 1 << iota
 	SGR_ITALIC
-	SGR_UNDERLINE
 	SGR_STRIKETHROUGH
 	SGR_SLOW_BLINK
 	SGR_INVERT
@@ -44,14 +48,28 @@ const (
 	SGR_HIGHLIGHT_SEARCH_RESULT
 	SGR_HIGHLIGHT_HEADING
 
+	SGR_UNDERLINE
+	_SGR_UNDERLINE_2nd_bit
+	_SGR_UNDERLINE_3rd_bit
+
 	// _SGR_PLACEHOLDER1
 	// _SGR_PLACEHOLDER2
 	// _SGR_PLACEHOLDER3
-	// _SGR_PLACEHOLDER4
-	// _SGR_PLACEHOLDER5
 
 	SGR_WIDE_CHAR
 	SGR_SPECIAL_FONT_AWESOME
+)
+
+// UnderlineStyle represents Kitty/xterm underline style
+type UnderlineStyle uint8
+
+const (
+	UNDERLINE_NONE UnderlineStyle = iota
+	UNDERLINE_SINGLE
+	UNDERLINE_DOUBLE
+	UNDERLINE_CURLY // wavy
+	UNDERLINE_DOTTED
+	UNDERLINE_DASHED
 )
 
 func (f SgrFlag) Is(flag SgrFlag) bool {
@@ -64,4 +82,20 @@ func (f *SgrFlag) Set(flag SgrFlag) {
 
 func (f *SgrFlag) Unset(flag SgrFlag) {
 	*f &^= flag
+}
+
+var _underlineShift = bits.TrailingZeros16(uint16(SGR_UNDERLINE))
+var _underlineMask = SgrFlag(0x7) << _underlineShift
+
+// UnderlineStyle returns the value encoded by SGR_UNDERLINE and the
+// two following underline bits as an integer in the range 0..7.
+func (f SgrFlag) GetUnderlineStyle() UnderlineStyle {
+	return UnderlineStyle((f >> _underlineShift) & 0x7)
+}
+
+// SetUnderlineStyle sets the value encoded by SGR_UNDERLINE and the
+// two following underline bits.
+func (f *SgrFlag) SetUnderlineStyle(style UnderlineStyle) {
+	*f &^= _underlineMask
+	*f |= (SgrFlag(style) & 0x7) << _underlineShift
 }
