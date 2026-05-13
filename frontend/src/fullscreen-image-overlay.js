@@ -1,13 +1,14 @@
 export function showFullscreenImageOverlay(options = {}) {
     const {
         dataURL,
+        svgElement,
         sourceWidth = 0,
         sourceHeight = 0,
         onOpen,
         onClose,
     } = options;
 
-    if (!dataURL) {
+    if (!dataURL && !svgElement) {
         return;
     }
 
@@ -43,15 +44,34 @@ export function showFullscreenImageOverlay(options = {}) {
         max-height: 100%;
     `;
 
-    const img = document.createElement('img');
-    img.src = dataURL;
-    img.style.cssText = `
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-        box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
-        border-radius: 8px;
-    `;
+    let contentElement;
+    if (svgElement) {
+        // Clone or use the SVG element for fullscreen display
+        contentElement = svgElement instanceof SVGElement ? svgElement : svgElement.cloneNode(true);
+        contentElement.style.cssText = `
+            display: block;
+            max-width: calc(100vw - 40px);
+            max-height: calc(100vh - 40px);
+            width: auto;
+            height: auto;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: transparent;
+        `;
+        // Ensure SVG is visible
+        contentElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    } else {
+        // Use image element for data URLs
+        contentElement = document.createElement('img');
+        contentElement.src = dataURL;
+        contentElement.style.cssText = `
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+        `;
+    }
 
     const info = document.createElement('div');
     info.style.cssText = `
@@ -67,7 +87,7 @@ export function showFullscreenImageOverlay(options = {}) {
     `;
     info.textContent = `${sourceWidth}×${sourceHeight} | Press ESC to close`;
 
-    container.appendChild(img);
+    container.appendChild(contentElement);
     overlay.appendChild(container);
     overlay.appendChild(info);
     document.body.appendChild(overlay);

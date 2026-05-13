@@ -1584,12 +1584,12 @@ function yieldToUI() {
     });
 }
 
-function renderMarkdown() {
+async function renderMarkdown() {
     const markdown = elements.editor.value || '';
     elements.preview.innerHTML = marked.parse(markdown);
 
     // Apply common markdown processing
-    processMarkdownContainer(elements.preview);
+    await processMarkdownContainer(elements.preview);
 
     // Enable context menus on images
     enableImageContextMenus(elements.preview);
@@ -2746,7 +2746,7 @@ function setViewMode(mode) {
     focusActiveEditorForViewMode();
 }
 
-function renderJupyterView() {
+async function renderJupyterView() {
     // Reset jupyter state for the new render
     state.jupyterCodeBlocks = {};
     state.jupyterBlockCounter = 0;
@@ -2755,7 +2755,7 @@ function renderJupyterView() {
     elements.jupyter.innerHTML = marked.parse(markdown);
     
     // Apply common markdown processing
-    processMarkdownContainer(elements.jupyter);
+    await processMarkdownContainer(elements.jupyter);
 
     // Enable context menus on images
     enableImageContextMenus(elements.jupyter);
@@ -4262,8 +4262,8 @@ async function loadFile(file) {
             refreshEditorLanguage(file, doc || '');
 
             // Render markdown views
-            renderMarkdown();
-            renderJupyterView();
+            await renderMarkdown();
+            await renderJupyterView();
 
             // Set default view mode to viewer
             setViewMode('viewer');
@@ -4378,7 +4378,7 @@ async function confirmDelete() {
             emitCurrentFileName();
             elements.editor.value = '';
             elements.swaggerView.innerHTML = '';
-            renderMarkdown();
+            await renderMarkdown();
             setDirty(false);
         }
         closeDeletePrompt();

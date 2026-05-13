@@ -7,6 +7,7 @@ import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
+import mermaid from "mermaid";
 import hljs from "highlight.js/lib/common";
 
 const hljsLanguageLoaders = import.meta.glob('../node_modules/highlight.js/lib/languages/*.js');
@@ -67,6 +68,14 @@ function getBlockLanguage(block) {
     return normalizeLanguageName(langClass.slice('language-'.length));
 }
 
+// Initialize Mermaid
+mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    darkMode: true,
+    securityLevel: 'loose',
+});
+
 // Configure marked with GFM heading IDs
 export function configureMarked() {
     marked.use(gfmHeadingId({}));
@@ -77,6 +86,53 @@ export function configureMarked() {
  */
 const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
 const rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+
+/**
+ * Render Mermaid diagrams in a container
+ * @param {HTMLElement} container - The container element to search for mermaid code blocks
+ */
+export async function renderMermaidDiagrams(container) {
+    const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid');
+    
+    if (mermaidBlocks.length === 0) {
+        return;
+    }
+    
+    // Replace code blocks with pre-rendered mermaid content
+    let diagramIndex = 0;
+    for (const block of mermaidBlocks) {
+        const pre = block.parentElement;
+        const mermaidCode = block.textContent;
+        
+        try {
+            // Generate unique ID for this diagram
+            const id = `mermaid-diagram-${Date.now()}-${diagramIndex++}`;
+            
+            // Render the diagram using mermaid.render()
+            const { svg } = await mermaid.render(id, mermaidCode);
+            
+            // Create a container div for the rendered SVG
+            const mermaidDiv = document.createElement('div');
+            mermaidDiv.className = 'mermaid-diagram';
+            mermaidDiv.innerHTML = svg;
+            
+            // Replace the pre block with the rendered diagram
+            pre.replaceWith(mermaidDiv);
+        } catch (err) {
+            // If rendering fails, show error in place
+            console.error('Mermaid rendering error:', err);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'mermaid-error';
+            errorDiv.style.color = 'var(--error)';
+            errorDiv.style.padding = '10px';
+            errorDiv.style.border = '1px solid var(--error)';
+            errorDiv.style.borderRadius = '4px';
+            errorDiv.style.marginBottom = '10px';
+            errorDiv.textContent = `Mermaid diagram error: ${err.message || err}`;
+            pre.replaceWith(errorDiv);
+        }
+    }
+}
 
 /**
  * Apply syntax highlighting to all code blocks in a container
@@ -97,6 +153,12 @@ export async function applySyntaxHighlighting(container) {
 
     blocks.forEach((block) => {
         const language = getBlockLanguage(block);
+        
+        // Skip mermaid blocks - they'll be handled separately
+        if (language === 'mermaid') {
+            return;
+        }
+        
         if (!language || hljs.getLanguage(language)) {
             hljs.highlightElement(block);
             return;
@@ -153,6 +215,55 @@ export function enableFullscreenImages(container) {
                 dataURL: img.src,
                 sourceWidth,
                 sourceHeight,
+            });
+        });
+    });
+}
+
+/**
+ * Enable fullscreen viewing for Mermaid diagrams
+ * @param {HTMLElement} container - The container element to search for mermaid diagrams
+ */
+export function enableFullscreenMermaidDiagrams(container) {
+    const diagrams = container.querySelectorAll('.mermaid-diagram');
+    diagrams.forEach((diagram) => {
+        if (diagram.dataset.fullscreenBound === 'true') {
+            return;
+        }
+
+        diagram.dataset.fullscreenBound = 'true';
+        diagram.style.cursor = 'zoom-in';
+        diagram.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const svg = diagram.querySelector('svg');
+            if (!svg) {
+                console.error('No SVG found in mermaid diagram');
+                return;
+            }
+
+            // Get SVG dimensions from viewBox or attributes
+            const viewBox = svg.viewBox?.baseVal;
+            const width = viewBox?.width || svg.width?.baseVal?.value || parseInt(svg.getAttribute('width')) || 800;
+            const height = viewBox?.height || svg.height?.baseVal?.value || parseInt(svg.getAttribute('height')) || 600;
+
+            // Clone SVG and ensure it has proper dimensions
+            const clonedSvg = svg.cloneNode(true);
+            if (!clonedSvg.getAttribute('width')) {
+                clonedSvg.setAttribute('width', width);
+            }
+            if (!clonedSvg.getAttribute('height')) {
+                clonedSvg.setAttribute('height', height);
+            }
+            // Preserve viewBox
+            if (viewBox && !clonedSvg.getAttribute('viewBox')) {
+                clonedSvg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+            }
+
+            showFullscreenImageOverlay({
+                svgElement: clonedSvg,
+                sourceWidth: Math.round(width),
+                sourceHeight: Math.round(height),
             });
         });
     });
@@ -291,6 +402,8 @@ export async function autoHyperlink(container) {
  * @param {HTMLElement} container - The container element with rendered markdown
  */
 export async function processMarkdownContainer(container) {
+    await renderMermaidDiagrams(container);
+    enableFullscreenMermaidDiagrams(container);
     await applySyntaxHighlighting(container);
     await processWailsImages(container);
     enableFullscreenImages(container);
