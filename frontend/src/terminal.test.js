@@ -195,9 +195,9 @@ describe('terminal compact redraw decoder', () => {
         expect(typeof redraw).toBe('function');
 
         // [op=1(cell), x, y, width, char, flags, fg24, bg24]
-        // flags: bold(1) + italic(2) + underlineStyle(4) + strike(32) + searchResult(64) = 103
+        // raw SGR flags: bold(2) + italic(4) + strike(8) + searchResult(256) + underlineStyle1(1<<10=1024) = 1294
         redraw([
-            [1, 3, 2, 1, 'X', 103, 0x112233, 0x445566],
+            [1, 3, 2, 1, 'X', 1294, 0x112233, 0x445566],
         ]);
 
         expect(fontApplyCellStyleMock).toHaveBeenCalledTimes(1);
@@ -323,9 +323,9 @@ describe('terminal compact redraw decoder', () => {
         latestOffscreenCtx.stroke.mockClear();
 
         // [op=1(cell), x, y, width, char, flags, fg24, bg24]
-        // flags: dashed underline style 5 => 5 << 2 = 20
+        // raw SGR flags: dashed underline style 5 => 5 << 10 = 5120
         redraw([
-            [1, 0, 0, 1, 'X', 20, 0x112233, 0x000000],
+            [1, 0, 0, 1, 'X', 5120, 0x112233, 0x000000],
         ]);
 
         expect(latestOffscreenCtx.stroke).toHaveBeenCalled();
@@ -340,8 +340,9 @@ describe('terminal compact redraw decoder', () => {
         const redraw = eventHandlers.get('terminalRedraw');
         expect(typeof redraw).toBe('function');
 
+        // raw SGR flags: underlineStyle1 => 1 << 10 = 1024
         redraw([
-            [1, 0, 0, 1, 'X', 4, 0x112233, 0x445566, 0xAABBCC],
+            [1, 0, 0, 1, 'X', 1024, 0x112233, 0x445566, 0xAABBCC],
         ]);
 
         expect(fontApplyCellStyleMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -361,9 +362,9 @@ describe('terminal compact redraw decoder', () => {
         latestOffscreenCtx.stroke.mockClear();
 
         // [op=1(cell), x, y, width, char, flags, fg24, bg24, ulc24]
-        // flags: dashed underline style 5 => 5 << 2 = 20
+        // raw SGR flags: dashed underline style 5 => 5 << 10 = 5120
         redraw([
-            [1, 0, 0, 1, 'X', 20, 0x112233, 0x000000, 0x8899AA],
+            [1, 0, 0, 1, 'X', 5120, 0x112233, 0x000000, 0x8899AA],
         ]);
 
         expect(latestOffscreenCtx.stroke).toHaveBeenCalled();

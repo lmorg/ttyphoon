@@ -43,12 +43,17 @@ const REDRAW_OP = {
 };
 
 const REDRAW_FLAG = {
-    BOLD: 1 << 0,
-    ITALIC: 1 << 1,
-    // Bits 2-4 are used for underline style (0-7), no individual flags
-    STRIKE: 1 << 5,
-    SEARCH_RESULT: 1 << 6,
     FOLDED: 1 << 7,
+};
+
+// SGR_FLAG mirrors the Go types.SgrFlag iota bit layout.
+const SGR_FLAG = {
+    BOLD: 1 << 1,           // SGR_BOLD
+    ITALIC: 1 << 2,         // SGR_ITALIC
+    STRIKE: 1 << 3,         // SGR_STRIKETHROUGH
+    SEARCH_RESULT: 1 << 8,  // SGR_HIGHLIGHT_SEARCH_RESULT
+    UNDERLINE_SHIFT: 10,    // SGR_UNDERLINE bit position
+    UNDERLINE_MASK: 0x7,
 };
 
 function colourFrom24(value) {
@@ -83,19 +88,19 @@ function toCompactCommand(op) {
     switch (kind) {
         case REDRAW_OP.CELL: {
             const flags = Number(op[5]) || 0;
-            // Extract underline style from bits 2-4 (shift right 2, mask 0x7)
-            const underlineStyle = (flags >> 2) & 0x7;
+            // Cell flags are transmitted in raw Go SGR bit layout.
+            const underlineStyle = (flags >> SGR_FLAG.UNDERLINE_SHIFT) & SGR_FLAG.UNDERLINE_MASK;
             return {
                 op: 'cell',
                 x: op[1],
                 y: op[2],
                 width: op[3],
                 char: op[4],
-                bold: hasFlag(flags, 1),
-                italic: hasFlag(flags, 2),
+                bold: hasFlag(flags, SGR_FLAG.BOLD),
+                italic: hasFlag(flags, SGR_FLAG.ITALIC),
                 underlineStyle: underlineStyle, // 0=none, 1=single, 2=double, 3=curly, 4=dotted, 5=dashed
-                strike: hasFlag(flags, 32),
-                searchResult: hasFlag(flags, 64),
+                strike: hasFlag(flags, SGR_FLAG.STRIKE),
+                searchResult: hasFlag(flags, SGR_FLAG.SEARCH_RESULT),
                 fg: colourFrom24(op[6]),
                 bg: colourFrom24(op[7]),
                 ulc: colourFrom24(op[8]),

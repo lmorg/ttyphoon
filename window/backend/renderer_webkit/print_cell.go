@@ -18,31 +18,27 @@ const (
 )
 
 type DrawCommand struct {
-	Op           DrawOp        `json:"op"`
-	X            int32         `json:"x"`
-	Y            int32         `json:"y"`
-	Height       int32         `json:"height"`
-	EndX         int32         `json:"endX"`
-	Char         string        `json:"char,omitempty"`
-	Fg           *types.Colour `json:"fg,omitempty"`
-	Bg           *types.Colour `json:"bg,omitempty"`
-	Bold         bool          `json:"bold,omitempty"`
-	Italic       bool          `json:"italic,omitempty"`
-	Underline    int           `json:"underline,omitempty"` // 0=none, 1=single, 2=double, 3=curly, 4=dotted, 5=dashed
-	Strike       bool          `json:"strike,omitempty"`
-	Width        int32         `json:"width"`
-	Value        int32         `json:"value"`
-	Max          int32         `json:"max"`
-	Folded       bool          `json:"folded,omitempty"`
-	SearchResult bool          `json:"searchResult,omitempty"`
-	Alpha        uint8         `json:"alpha,omitempty"`
-	ImageID      int64         `json:"imageId,omitempty"`
-	SrcWidth     int32         `json:"srcWidth,omitempty"`
-	SrcHeight    int32         `json:"srcHeight,omitempty"`
-	SrcScaleX    float64       `json:"srcScaleX,omitempty"`
-	SrcScaleY    float64       `json:"srcScaleY,omitempty"`
-	Boundaries   []int32       `json:"boundaries,omitempty"`
-	UlC          *types.Colour `json:"ulc,omitempty"`
+	Op         DrawOp
+	Flags      int32
+	X          int32
+	Y          int32
+	Height     int32
+	EndX       int32
+	Char       string
+	Fg         *types.Colour
+	Bg         *types.Colour
+	Width      int32
+	Value      int32
+	Max        int32
+	Folded     bool
+	Alpha      uint8
+	ImageID    int64
+	SrcWidth   int32
+	SrcHeight  int32
+	SrcScaleX  float64
+	SrcScaleY  float64
+	Boundaries []int32
+	UlC        *types.Colour
 }
 
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {
@@ -91,19 +87,15 @@ func (wr *webkitRender) PrintCell(tile types.Tile, cell *types.Cell, cellPos *ty
 	}
 
 	wr.enqueueDrawCommand(DrawCommand{
-		Op:           DrawOpCell,
-		X:            pos.X,
-		Y:            pos.Y,
-		Char:         string(cell.Char),
-		Fg:           fg,
-		Bg:           bg,
-		UlC:          cell.Sgr.UlC,
-		Bold:         cell.Sgr.Bitwise.Is(types.SGR_BOLD),
-		Italic:       cell.Sgr.Bitwise.Is(types.SGR_ITALIC),
-		Underline:    int(cell.Sgr.Bitwise.GetUnderlineStyle()),
-		Strike:       cell.Sgr.Bitwise.Is(types.SGR_STRIKETHROUGH),
-		Width:        width,
-		SearchResult: cell.Sgr.Bitwise.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT),
+		Op:    DrawOpCell,
+		Flags: int32(cell.Sgr.Bitwise),
+		X:     pos.X,
+		Y:     pos.Y,
+		Char:  string(cell.Char),
+		Fg:    fg,
+		Bg:    bg,
+		UlC:   cell.Sgr.UlC,
+		Width: width,
 	})
 }
 
@@ -191,19 +183,15 @@ func (wr *webkitRender) PrintRow(tile types.Tile, cells []*types.Cell, cellPos *
 		}
 
 		wr.enqueueDrawCommand(DrawCommand{
-			Op:           DrawOpCell,
-			X:            pos.X,
-			Y:            pos.Y,
-			Char:         string(runChars),
-			Fg:           refFg,
-			Bg:           refBg,
-			UlC:          ref.Sgr.UlC,
-			Bold:         refFlags.Is(types.SGR_BOLD),
-			Italic:       refFlags.Is(types.SGR_ITALIC),
-			Underline:    int(refFlags.GetUnderlineStyle()),
-			Strike:       refFlags.Is(types.SGR_STRIKETHROUGH),
-			Width:        width,
-			SearchResult: refFlags.Is(types.SGR_HIGHLIGHT_SEARCH_RESULT),
+			Op:    DrawOpCell,
+			Flags: int32(refFlags),
+			X:     pos.X,
+			Y:     pos.Y,
+			Char:  string(runChars),
+			Fg:    refFg,
+			Bg:    refBg,
+			UlC:   ref.Sgr.UlC,
+			Width: width,
 		})
 
 		runStart = runEnd
