@@ -160,6 +160,7 @@ import taggerscript from "highlight.js/lib/languages/taggerscript";
 import tap from "highlight.js/lib/languages/tap";
 import tcl from "highlight.js/lib/languages/tcl";
 import thrift from "highlight.js/lib/languages/thrift";
+import murex from "highlight-js-murex";
 import terraform from "highlight-js-terraform";
 import tp from "highlight.js/lib/languages/tp";
 import twig from "highlight.js/lib/languages/twig";
@@ -319,6 +320,7 @@ hljs.registerLanguage('taggerscript', taggerscript);
 hljs.registerLanguage('tap', tap);
 hljs.registerLanguage('tcl', tcl);
 hljs.registerLanguage('thrift', thrift);
+hljs.registerLanguage('murex', murex);
 hljs.registerLanguage('terraform', terraform);
 hljs.registerLanguage('tp', tp);
 hljs.registerLanguage('twig', twig);
@@ -849,6 +851,7 @@ function inferEditorLanguage(file, content) {
         tf: 'terraform',
         tfvars: 'terraform',
         hcl: 'terraform',
+        mx: 'murex',
         md: 'markdown',
         markdown: 'markdown',
         html: 'xml',
@@ -3163,6 +3166,7 @@ async function runCodeBlockInTerminal(blockId) {
     
         try {
             await SendToTerminal(block.currentContent);
+            window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
         } catch (err) {
             console.error('Error sending to terminal:', err);
         }

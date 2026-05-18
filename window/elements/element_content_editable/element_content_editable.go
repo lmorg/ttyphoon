@@ -22,11 +22,17 @@ type ElementContentEditable struct {
 }
 
 func New(renderer types.Renderer, tile types.Tile, spellingExc map[string]bool) *ElementContentEditable {
-	return &ElementContentEditable{
+	el := &ElementContentEditable{
 		renderer:    renderer,
 		tile:        tile,
 		spellingExc: spellingExc,
 	}
+
+	if el.spellingExc == nil {
+		el.spellingExc = map[string]bool{}
+	}
+
+	return el
 }
 
 var rxAnsiSgr = regexp.MustCompile(`\x1b\[[:;0-9]+m`)
@@ -49,10 +55,10 @@ func (el *ElementContentEditable) Generate(apc *types.ApcSlice) error {
 			return
 		}
 
-		el.suggestions = spelling.FilterExclusions(el.suggestions, el.spellingExc)
-
 		el.mu.Lock()
 		defer el.mu.Unlock()
+
+		el.suggestions = spelling.FilterExclusions(el.suggestions, el.spellingExc)
 
 		for i := range el.suggestions {
 			start := el.suggestions[i].WordStart

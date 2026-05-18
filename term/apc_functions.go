@@ -23,6 +23,7 @@ func (term *Term) mxapcBegin(element types.ElementID) {
 }
 
 func (term *Term) mxapcBeginContentEditable(element types.ElementID) {
+
 	term._activeElement = term.renderer.NewElement(term.tile, element, term._spellingExc)
 }
 
@@ -308,7 +309,7 @@ func (term *Term) mxapcConfigDictionary(apc *types.ApcSlice) {
 
 	exclusions := make(map[string]bool)
 	for i := range dictionary.Exclude {
-		exclusions[dictionary.Exclude[i]] = true
+		exclusions[strings.ToLower(dictionary.Exclude[i])] = true
 	}
 
 	term._spellingExc = exclusions

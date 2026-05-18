@@ -18,6 +18,7 @@
     "vitest": "^0.34.6"
   },
   "dependencies": {
+    "highlight-js-murex": "github:lmorg/highlight.js-murex",
     "highlight-js-terraform": "github:lmorg/highlight.js-terraform",
     "highlight.js": "^11.11.1",
     "marked-gfm-heading-id": "^4.1.3",
