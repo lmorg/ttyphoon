@@ -56,7 +56,7 @@ type Renderer interface {
 	TriggerLazyRedraw()
 	TriggerDeallocation(func())
 	TriggerQuit()
-	NewElement(Tile, ElementID) Element
+	NewElement(Tile, ElementID, ...any) Element
 	DisplayNotification(NotificationType, string)
 	DisplaySticky(NotificationType, string, func()) Notification
 	DisplayInputBox(string, string, InputBoxCallbackT, InputBoxCallbackT)

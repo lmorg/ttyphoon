@@ -18,8 +18,12 @@ import (
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 )
 
-func (term *Term) mxapcBegin(element types.ElementID, parameters *types.ApcSlice) {
+func (term *Term) mxapcBegin(element types.ElementID) {
 	term._activeElement = term.renderer.NewElement(term.tile, element)
+}
+
+func (term *Term) mxapcBeginContentEditable(element types.ElementID) {
+	term._activeElement = term.renderer.NewElement(term.tile, element, term._spellingExc)
 }
 
 func (term *Term) mxapcEnd(parameters *types.ApcSlice) {
@@ -292,4 +296,20 @@ func (term *Term) mxapcConfigMcp(apc *types.ApcSlice) {
 			term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP from escape sequence: %v", err))
 		}
 	}()
+}
+
+type _mxapcConfigDictionaryT struct {
+	Exclude []string `json:"history"`
+}
+
+func (term *Term) mxapcConfigDictionary(apc *types.ApcSlice) {
+	dictionary := new(_mxapcConfigDictionaryT)
+	apc.Parameters(dictionary)
+
+	exclusions := make(map[string]bool)
+	for i := range dictionary.Exclude {
+		exclusions[dictionary.Exclude[i]] = true
+	}
+
+	term._spellingExc = exclusions
 }

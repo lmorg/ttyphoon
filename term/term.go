@@ -10,8 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
-	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/charset"
+	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	sbh "github.com/lmorg/ttyphoon/utils/scrollback_history"
@@ -81,6 +81,7 @@ type Term struct {
 	_rowSource       *types.RowSource
 	_blockMeta       *types.BlockMeta
 	_blockMetaId     atomic.Int64
+	_spellingExc     map[string]bool
 
 	_apcStack uint
 

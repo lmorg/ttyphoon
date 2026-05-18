@@ -74,13 +74,13 @@ func (term *Term) writeToElement(r rune) (ok bool) {
 	}
 
 	err := term._activeElement.Write(r)
-	if err == nil {
-		return true
+	if err != nil {
+		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		term._activeElement = nil
+		return false
 	}
 
-	term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	term._activeElement = nil
-	return false
+	return true
 }
 
 func (term *Term) appendScrollBuf(n int) {

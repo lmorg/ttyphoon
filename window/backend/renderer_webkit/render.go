@@ -8,10 +8,9 @@ func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {
 
 func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 	for _, tile := range wr.termWin.Tiles {
-		if tile.GetTerm() == nil || !tile.GetTerm().Render() || tile.GetTerm().IsFocused() {
+		if tile == nil || tile.GetTerm() == nil || !tile.GetTerm().Render() || tile.GetTerm().IsFocused() {
 			continue
 		}
-		//continue
 
 		termSize := tile.GetTerm().GetSize()
 
@@ -21,8 +20,7 @@ func (wr *webkitRender) PopDrawCommands() []DrawCommand {
 			Y:      tile.Top(),
 			Width:  termSize.X + 1,
 			Height: termSize.Y,
-			//Bg:     types.SGR_COLOR_RED,
-			Alpha: 51,
+			Alpha:  51,
 		})
 	}
 

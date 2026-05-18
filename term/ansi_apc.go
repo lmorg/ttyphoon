@@ -55,13 +55,16 @@ func (term *Term) parseApcCodes() {
 
 		switch apc.Index(1) {
 		case "csv":
-			term.mxapcBegin(types.ELEMENT_ID_CSV, apc)
+			term.mxapcBegin(types.ELEMENT_ID_CSV)
 
 		case "md-table":
-			term.mxapcBegin(types.ELEMENT_ID_MARKDOWN_TABLE, apc)
+			term.mxapcBegin(types.ELEMENT_ID_MARKDOWN_TABLE)
 
 		case "code-block":
-			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK, apc)
+			term.mxapcBegin(types.ELEMENT_ID_CODEBLOCK)
+
+		case "content-editable":
+			term.mxapcBeginContentEditable(types.ELEMENT_ID_CONTENT_EDITABLE)
 
 		case "output-block":
 			//term._apcStack--
@@ -88,6 +91,9 @@ func (term *Term) parseApcCodes() {
 			term.mxapcEnd(apc)
 
 		case "code-block":
+			term.mxapcEnd(apc)
+
+		case "content-editable":
 			term.mxapcEnd(apc)
 
 		case "output-block":
@@ -145,6 +151,8 @@ func (term *Term) parseApcCodes() {
 			term.mxapcConfigUnset(apc)
 		case "mcp":
 			term.mxapcConfigMcp(apc)
+		case "dictionary":
+			term.mxapcConfigDictionary(apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 				fmt.Sprintf("Unknown mxAPC `config` code %s: %s", apc.Index(1), string(text[:len(text)-1])))

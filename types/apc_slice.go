@@ -14,7 +14,7 @@ func NewApcSlice(apc []rune) *ApcSlice {
 	s := string(apc)
 	as := new(ApcSlice)
 
-	slice := strings.Split(s, ";")
+	slice := strings.SplitN(s, ";", 3)
 	if len(slice) > 3 {
 		as.slice = slice[:2]
 		l := len(slice[0]) + len(slice[1]) + 2

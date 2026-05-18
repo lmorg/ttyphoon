@@ -18,6 +18,8 @@ type SuggestionT struct {
 	Suggestions  []string // List of suggested corrections
 }
 
+const MaxSuggestions = 5
+
 // ExecAspell runs aspell -a with the given text and returns the raw output
 func ExecAspell(text string) (string, error) {
 	cmd := exec.Command("aspell", "-a")
@@ -138,6 +140,9 @@ func parseMisspelledLine(line string) (SuggestionT, error) {
 
 	// Parse suggestions
 	suggestionList := strings.Split(strings.TrimSpace(parts[1]), ", ")
+	if len(suggestionList) > MaxSuggestions {
+		suggestionList = suggestionList[:MaxSuggestions]
+	}
 
 	return SuggestionT{
 		MisspeltWord: word,
@@ -170,4 +175,20 @@ func parseMisspelledLineNoSuggestions(line string) (SuggestionT, error) {
 		WordLength:   len(word),
 		Suggestions:  []string{},
 	}, nil
+}
+
+// FilterExclusions removes suggestions for words in the exclusion list.
+// The exclusion map should use lowercase keys for case-insensitive matching.
+func FilterExclusions(suggestions []SuggestionT, exclusions map[string]bool) []SuggestionT {
+	if len(exclusions) == 0 {
+		return suggestions
+	}
+
+	filtered := make([]SuggestionT, 0, len(suggestions))
+	for _, s := range suggestions {
+		if !exclusions[strings.ToLower(s.MisspeltWord)] {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
