@@ -2733,7 +2733,7 @@ function setViewMode(mode) {
     
     // Show wrap button for all code-like files in edit mode
     const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
-    const showWrapButton = isEditor && isCodeLike;
+    const showWrapButton = (isEditor || isStructuredEdit) && isCodeLike;
     elements.wrap.style.display = showWrapButton ? 'block' : 'none';
     
     // Swagger tabs
@@ -2800,7 +2800,8 @@ function setEditorWrapMode(enabled) {
 
 function toggleMarkdownWrapMode() {
     const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
-    if (!isCodeLike || state.viewMode !== 'editor') {
+    const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
+    if (!isCodeLike || (state.viewMode !== 'editor' && !isStructuredEdit)) {
         return;
     }
 
