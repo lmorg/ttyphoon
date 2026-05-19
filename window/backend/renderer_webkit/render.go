@@ -7,21 +7,28 @@ func (wr *webkitRender) enqueueDrawCommand(cmd DrawCommand) {
 }
 
 func (wr *webkitRender) PopDrawCommands() []DrawCommand {
-	for _, tile := range wr.termWin.Tiles {
-		if tile == nil || tile.GetTerm() == nil || !tile.GetTerm().Render() || tile.GetTerm().IsFocused() {
-			continue
+	if wr.termWin != nil {
+		for _, tile := range wr.termWin.Tiles {
+			if tile == nil {
+				continue
+			}
+
+			term := tile.GetTerm()
+			if term == nil || !term.Render() || term.IsFocused() {
+				continue
+			}
+
+			termSize := term.GetSize()
+
+			wr.enqueueDrawCommand(DrawCommand{
+				Op:     DrawOpTileOverlay,
+				X:      tile.Left(),
+				Y:      tile.Top(),
+				Width:  termSize.X + 1,
+				Height: termSize.Y,
+				Alpha:  51,
+			})
 		}
-
-		termSize := tile.GetTerm().GetSize()
-
-		wr.enqueueDrawCommand(DrawCommand{
-			Op:     DrawOpTileOverlay,
-			X:      tile.Left(),
-			Y:      tile.Top(),
-			Width:  termSize.X + 1,
-			Height: termSize.Y,
-			Alpha:  51,
-		})
 	}
 
 	wr.drawSelectionPreview()
