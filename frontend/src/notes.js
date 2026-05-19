@@ -1614,6 +1614,9 @@ async function renderMarkdown() {
     // Enable collapsible H1-H6 sections
     setupCollapsibleHeadings(elements.preview);
 
+    // Keep table horizontal scrolling local to each table rather than the whole section.
+    wrapTablesForHorizontalScroll(elements.preview);
+
     // Enable column sorting on all tables
     setupTableSorting(elements.preview);
 
@@ -1629,6 +1632,7 @@ function renderMetaView() {
     const markdown = state.fileMetaMarkdown || '# Unknown file';
     elements.meta.innerHTML = marked.parse(markdown);
     processMarkdownContainer(elements.meta);
+    wrapTablesForHorizontalScroll(elements.meta);
 }
 
 async function refreshFileMetaMarkdown(file) {
@@ -1687,7 +1691,6 @@ function setupCollapsibleHeadings(container) {
 
         // Wrap section content in a div so we can animate it as a unit.
         const wrapper = document.createElement('div');
-        wrapper.style.overflowX = 'auto';
         wrapper.style.overflowY = 'hidden';
         wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
         wrapper.style.maxHeight = '100000px';
@@ -1733,6 +1736,29 @@ function setupCollapsibleHeadings(container) {
                 heading.style.fontStyle = 'italic';
             }
         });
+    });
+}
+
+function wrapTablesForHorizontalScroll(container) {
+    if (!container) {
+        return;
+    }
+
+    const tables = container.querySelectorAll('table');
+    tables.forEach((table) => {
+        if (!(table instanceof HTMLElement)) {
+            return;
+        }
+
+        const parent = table.parentElement;
+        if (!parent || parent.classList.contains('notes-table-scroll-wrap')) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'notes-table-scroll-wrap';
+        table.before(wrapper);
+        wrapper.appendChild(table);
     });
 }
 
@@ -2813,6 +2839,9 @@ async function renderJupyterView() {
         })
         .finally(() => {
             setupInteractiveMarkdownTables(elements.jupyter, true);
+
+            // Keep table horizontal scrolling local to each table rather than the whole section.
+            wrapTablesForHorizontalScroll(elements.jupyter);
 
             // Enable column sorting on all tables
             setupTableSorting(elements.jupyter);
@@ -6722,6 +6751,13 @@ function applyWindowStyle(result) {
         #notes-jupyter img {
             max-width: 100%;
             height: auto;
+        }
+
+        .notes-table-scroll-wrap {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
 
         #notes-find-bar {
