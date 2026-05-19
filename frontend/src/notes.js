@@ -461,6 +461,7 @@ app.innerHTML = `
                 <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
+                    <button id="notes-wrap" type="button" class="notes-toolbar-btn" title="Toggle word wrap" aria-label="Toggle word wrap" style="display: none;">&#xf035;</button>
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
                     <button id="notes-delete" type="button" class="notes-toolbar-btn" title="Delete" aria-label="Delete current note">&#xf2ed;</button>
@@ -567,6 +568,7 @@ const elements = {
     rename: document.getElementById('notes-rename'),
     delete: document.getElementById('notes-delete'),
     find: document.getElementById('notes-find'),
+    wrap: document.getElementById('notes-wrap'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabHex: document.getElementById('notes-tab-hex'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -653,6 +655,7 @@ const state = {
     hexSourceOptions: null,
     hexRenderedFile: '',
     hexLoadingPromise: null,
+    markdownWrapMode: false,  // New: track word wrap mode for markdown files
 };
 
 let lastAutoCopiedViewerSelection = '';
@@ -893,9 +896,9 @@ function syncEditorScrollDecorations() {
     const scrollLeft = elements.editor.scrollLeft;
     elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
 
-    // For wrapped markdown, no horizontal scroll so only sync vertical
-    const isMarkdownWrapped = elements.editorShell?.dataset?.fileType === 'markdown';
-    if (isMarkdownWrapped) {
+    // Wrapped mode has no horizontal scroll, so only sync vertical.
+    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
+    if (isWrapModeEnabled) {
         elements.editorHighlight.style.transform = `translate(0px, ${-scrollTop}px)`;
     } else {
         elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
@@ -917,11 +920,19 @@ function renderEditorDecorations() {
         const contentWidth = Math.max(elements.editor.scrollWidth, elements.editor.clientWidth);
         elements.editorHighlight.style.minHeight = `${contentHeight}px`;
         
-        // Don't set minWidth for markdown - it wraps, so width should match container
-        const isMarkdownWrapped = elements.editorShell?.dataset?.fileType === 'markdown';
-        if (!isMarkdownWrapped) {
+        // Don't set minWidth for wrapped mode - it wraps, so width should match container
+        const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
+        if (!isWrapModeEnabled) {
             elements.editorHighlight.style.minWidth = `${contentWidth}px`;
         }
+    }
+
+    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
+    if (isWrapModeEnabled) {
+        // Wrap mode intentionally hides syntax highlighting and renders plain wrapped text.
+        elements.editorHighlightCode.textContent = '';
+        syncEditorScrollDecorations();
+        return;
     }
 
     const language = state.editorLanguage || 'plaintext';
@@ -2694,6 +2705,11 @@ function setViewMode(mode) {
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
+    // Show wrap button for all code-like files in edit mode
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    const showWrapButton = isEditor && isCodeLike;
+    elements.wrap.style.display = showWrapButton ? 'block' : 'none';
+    
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
     const isSwaggerEdit = state.viewMode === 'swagger-edit';
@@ -2747,6 +2763,25 @@ function setViewMode(mode) {
     }
 
     focusActiveEditorForViewMode();
+}
+
+function setEditorWrapMode(enabled) {
+    const wrapEnabled = enabled === true;
+    state.markdownWrapMode = wrapEnabled;
+    elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
+    elements.wrap.dataset.wrapActive = wrapEnabled ? 'true' : 'false';
+}
+
+function toggleMarkdownWrapMode() {
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    if (!isCodeLike || state.viewMode !== 'editor') {
+        return;
+    }
+
+    setEditorWrapMode(!state.markdownWrapMode);
+    
+    // Re-render decorations to adjust layout
+    renderEditorDecorations();
 }
 
 async function renderJupyterView() {
@@ -4114,6 +4149,11 @@ async function loadFile(file) {
         const loadingCsv      = isCsvFile(file);
         stickyId = loadingJson ? Date.now() : null;
 
+        if (!loadingMarkdown) {
+            // Keep wrap-mode effects from leaking into non-markdown editors.
+            setEditorWrapMode(false);
+        }
+
         if (loadingImage) {
             state.currentFile = file;
             emitCurrentFileName();
@@ -4252,6 +4292,7 @@ async function loadFile(file) {
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
+            setEditorWrapMode(false);  // Reset wrap mode when loading new markdown file
             //setCodeEditorMode(false);
             setCodeEditorMode(true); // TODO: maybe support toggling?
             elements.editorShell.dataset.fileType = 'markdown';
@@ -5875,6 +5916,19 @@ function applyWindowStyle(result) {
             color: var(--red) !important;
         }
 
+        #notes-wrap:hover {
+            border-color: var(--cyan) !important;
+            color: var(--cyan) !important;
+            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.2);
+            border-radius: 5px;
+        }
+
+        #notes-wrap[data-wrap-active="true"] {
+            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.3);
+            border-color: var(--cyan) !important;
+            color: var(--cyan) !important;
+        }
+
         #notes-modal-create:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
@@ -6516,11 +6570,11 @@ function applyWindowStyle(result) {
             grid-template-columns: max-content 1fr;
         }
 
-        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] {
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] {
             grid-template-columns: 1fr;
         }
 
-        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-gutter-wrap {
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-gutter-wrap {
             display: none;
         }
 
@@ -6532,7 +6586,7 @@ function applyWindowStyle(result) {
             overflow: auto;
         }
 
-        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor {
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor {
             white-space: pre-wrap;
             overflow-wrap: break-word;
             word-break: break-word;
@@ -6540,9 +6594,10 @@ function applyWindowStyle(result) {
             overflow-x: hidden;
             box-sizing: border-box;
             text-rendering: auto;
+            color: var(--fg);
         }
 
-        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight {
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight {
             inset: auto;
             top: 0;
             left: 0;
@@ -6555,9 +6610,10 @@ function applyWindowStyle(result) {
             text-rendering: auto;
             -webkit-font-smoothing: auto;
             -moz-osx-font-smoothing: auto;
+            display: none;
         }
 
-        #notes-editor-shell[data-code-view="true"][data-file-type="markdown"] #notes-editor-highlight code {
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight code {
             display: inline;
             white-space: pre-wrap;
             overflow-wrap: break-word;
@@ -6595,10 +6651,6 @@ function applyWindowStyle(result) {
             position: relative;
             min-width: 0;
             height: 100%;
-            overflow: hidden;
-        }
-
-        #notes-editor-shell[data-file-type="markdown"] #notes-editor-scroll {
             overflow: hidden;
         }
 
@@ -7650,6 +7702,10 @@ elements.delete.addEventListener('click', () => {
 
 elements.find.addEventListener('click', () => {
     openFindBar();
+});
+
+elements.wrap.addEventListener('click', () => {
+    toggleMarkdownWrapMode();
 });
 
 elements.deleteCancel.addEventListener('click', () => {
