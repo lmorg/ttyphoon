@@ -476,7 +476,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                 </div>
                 <div class="swagger-method-url-bar">
                     <button type="button" class="swagger-method-selector" title="Select method">${selectedEndpoint.method}</button>
-                    <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly />
+                    <input type="text" class="swagger-url-input" value="${selectedEndpoint.path}" readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                     <button class="swagger-send-btn">Send</button>
                 </div>
                 <div class="markdown-body"><h3>Request</h3></div>
@@ -508,13 +508,13 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                 // Multiple MIME types — render editable input with popup trigger button
                 valueHtml = `
                     <div class="swagger-header-value-wrap">
-                        <input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />
+                        <input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                         <button type="button" class="swagger-header-dropdown" data-header-name="${escapeHtml(header.name)}" data-header-options="${escapeHtml(JSON.stringify(header.options))}" title="Select value" aria-label="Select ${escapeHtml(header.name)} value">&#xf141;</button>
                     </div>
                 `;
             } else {
                 // Editable single-value input
-                valueHtml = `<input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" />`;
+                valueHtml = `<input type="text" class="swagger-header-value swagger-header-input" data-header-name="${escapeHtml(header.name)}" value="${escapeHtml(header.value)}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />`;
             }
             html += `
                 <div class="swagger-header-item">
@@ -533,7 +533,7 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
     `;
 
     if (requestBody) {
-        html += `<textarea class="swagger-body-editor">${escapeHtml(requestBody.example)}</textarea>`;
+        html += `<textarea class="swagger-body-editor" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">${escapeHtml(requestBody.example)}</textarea>`;
     } else {
         html += `<p class="swagger-empty-field">No request body for this operation</p>`;
     }
@@ -569,6 +569,10 @@ export function generateRequestBuilderHTML(spec, selectedEndpoint) {
                         data-param-type="${escapeHtml(schemaType)}"
                         placeholder="${param.example ? 'e.g., ' + escapeHtml(param.example) : 'Enter value'}"
                         value="${param.example ? escapeHtml(param.example) : ''}"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
                         ${requiredAttr}
                     />
                     ${param.description

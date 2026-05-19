@@ -439,7 +439,7 @@ app.innerHTML = `
             <div id="notes-sidebar-header">
                 <div id="notes-title">Notes</div>
                 <div id="notes-list-filter-wrap">
-                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" />
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                     <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
                 </div>
             </div>
@@ -525,7 +525,7 @@ app.innerHTML = `
     <div id="notes-modal" data-open="false" aria-hidden="true">
         <div id="notes-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
             <div id="notes-modal-title">New note name</div>
-            <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" />
+            <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             <div id="notes-modal-actions">
                 <button id="notes-modal-cancel" type="button">Cancel</button>
                 <button id="notes-modal-create" type="button">Create</button>
@@ -543,7 +543,7 @@ app.innerHTML = `
         </div>
     </div>
     <div id="notes-find-bar" data-open="false" aria-hidden="true">
-        <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" />
+        <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
         <span id="notes-find-counter"></span>
         <button id="notes-find-prev" type="button" title="Previous match" tabindex="-1">↑</button>
         <button id="notes-find-next" type="button" title="Next match" tabindex="-1">↓</button>
@@ -3006,6 +3006,7 @@ function convertToJupyterCodeBlocks() {
         editableCode.setAttribute('autocorrect', 'off');
         editableCode.setAttribute('autocapitalize', 'off');
         editableCode.setAttribute('autocomplete', 'off');
+        editableCode.setAttribute('spellcheck', 'false');
         editableCode.setAttribute('data-gramm', 'false');
         editableCode.setAttribute('data-gramm_editor', 'false');
         editableCode.setAttribute('data-enable-grammarly', 'false');
@@ -3861,6 +3862,9 @@ function renderSwaggerUI() {
             type="text"
             placeholder="Filter operations..."
             autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
             value="${state.swaggerEndpointFilter.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;')}"
         />
         ${endpointListHtml}

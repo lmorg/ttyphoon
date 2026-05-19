@@ -143,7 +143,7 @@ export function renderHexDump(container, base64Data, options = {}) {
     container.innerHTML = `
         <div class="notes-hex-toolbar">
             <span class="notes-hex-toolbar-label">Jump to offset</span>
-            <input class="notes-hex-offset-input" type="text" placeholder="0x0" autocomplete="off" spellcheck="false" />
+            <input class="notes-hex-offset-input" type="text" placeholder="0x0" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             <button class="notes-hex-offset-go" type="button">Go</button>
             <span class="notes-hex-size">${bytes.length} bytes</span>
         </div>

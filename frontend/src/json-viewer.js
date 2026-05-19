@@ -166,6 +166,9 @@ export function renderJsonViewer(container, input) {
                 input.className = 'json-inline-editor';
                 input.value = initialValue;
                 input.spellcheck = false;
+                input.setAttribute('autocomplete', 'off');
+                input.setAttribute('autocorrect', 'off');
+                input.setAttribute('autocapitalize', 'off');
                 input.setAttribute('data-json-inline-editor', 'true');
                 input.setAttribute('aria-label', editType === 'key' ? 'Edit property name' : 'Edit value');
 
