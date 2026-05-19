@@ -465,8 +465,18 @@ function applyTerminalStyles(result) {
 
 function fitCanvasToWindow() {
     const pane = canvas.parentElement;
-    canvas.width = pane ? pane.clientWidth : window.innerWidth;
-    canvas.height = pane ? pane.clientHeight : window.innerHeight;
+    // Ensure we always get valid dimensions; use window size if parent reports 0
+    // (which can happen before layout is complete on startup).
+    let width = pane?.clientWidth ?? 0;
+    let height = pane?.clientHeight ?? 0;
+    if (width <= 0) {
+        width = window.innerWidth;
+    }
+    if (height <= 0) {
+        height = window.innerHeight;
+    }
+    canvas.width = width;
+    canvas.height = height;
     offscreen.width = canvas.width;
     offscreen.height = canvas.height;
 }
@@ -1069,6 +1079,12 @@ EventsOn("terminalRedraw", ops => {
     }
     rafPending = true;
 
+    // Guard against startup race where canvas dimensions are 0.
+    // If parent now has layout, re-fit to proper dimensions.
+    if (canvas.width === 0 || canvas.height === 0) {
+        fitCanvasToWindow();
+    }
+
     const drawOps = decodeDrawOpsPayload(ops);
 
     if (!Array.isArray(drawOps) || drawOps.length === 0) {
@@ -1193,24 +1209,29 @@ GetWindowStyle().then((result) => {
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
     applyTerminalStyles(result);
     font.applyConfiguredFontFromWindowStyle(windowStyle);
-    fitCanvasToWindow();
-    font.loadGlyphSizeFromGo(windowStyle).then(() => {
-        const { cellWidth, cellHeight } = font.getCellSize();
-        TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
-        syncTerminalGridSize();
+    
+    // Defer canvas fitting to ensure browser has computed layout dimensions
+    requestAnimationFrame(() => {
+        fitCanvasToWindow();
+        
+        font.loadGlyphSizeFromGo(windowStyle).then(() => {
+            const { cellWidth, cellHeight } = font.getCellSize();
+            TerminalSetGlyphSize(Math.floor(cellWidth), Math.floor(cellHeight)).catch(() => {});
+            syncTerminalGridSize();
 
-        //drawFrame();
-        wireKeyboardEvents(canvas);
-        wireMouseEvents(canvas, font.getCellSize);
-        initTerminalPopupMenu(canvas);
-        canvas.focus();
+            //drawFrame();
+            wireKeyboardEvents(canvas);
+            wireMouseEvents(canvas, font.getCellSize);
+            initTerminalPopupMenu(canvas);
+            canvas.focus();
 
-        TerminalGetTabs().then((tabs) => {
-            renderTerminalTabs(tabs);
-            fitCanvasToWindow();
-        }).catch(() => {});
+            TerminalGetTabs().then((tabs) => {
+                renderTerminalTabs(tabs);
+                fitCanvasToWindow();
+            }).catch(() => {});
 
-        TerminalRequestRedraw().catch(() => {});
+            TerminalRequestRedraw().catch(() => {});
+        });
     });
 });
 
