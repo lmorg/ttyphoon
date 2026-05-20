@@ -531,7 +531,7 @@ function drawCursorPulseOverlay(targetCtx) {
 
 function paintTerminalCanvas() {
     // Fill canvas with theme background
-    const bg = windowStyle.colors.bg;
+    const bg = windowStyle?.colors?.bg || { Red: 0, Green: 0, Blue: 0 };
     ctx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -876,7 +876,7 @@ function drawFrame(cmd = null) {
         return;
     }
 
-    const bg = windowStyle.colors.bg;
+    const bg = windowStyle?.colors?.bg || { Red: 0, Green: 0, Blue: 0 };
     offCtx.fillStyle = `rgb(${bg.Red}, ${bg.Green}, ${bg.Blue})`;
     offCtx.fillRect(x, y, width, height);
 }
@@ -1085,78 +1085,87 @@ EventsOn("terminalRedraw", ops => {
         fitCanvasToWindow();
     }
 
-    const drawOps = decodeDrawOpsPayload(ops);
+    try {
+        const drawOps = decodeDrawOpsPayload(ops);
 
-    if (!Array.isArray(drawOps) || drawOps.length === 0) {
-        rafPending = false;
-        return;
-    }
+        if (!Array.isArray(drawOps) || drawOps.length === 0) {
+            rafPending = false;
+            return;
+        }
 
-    cursorRects = [];
+        cursorRects = [];
 
-    for (let i = 0; i < drawOps.length; i++) {
-        const cmd = drawOps[i];
-        if (cmd.op === 'frame') {
-            drawFrame(cmd);
-            continue;
-        }
-        if (cmd.op === 'cell') {
-            drawCell(cmd);
-            continue;
-        }
-        if (cmd.op === 'image') {
-            drawImageCommand(cmd);
-            continue;
-        }
-        if (cmd.op === 'gauge_h' || cmd.op === 'gauge_v') {
-            drawGauge(offCtx, font.getCellSize, cmd);
-            continue;
-        }
-        if (cmd.op === 'block_chrome') {
-            drawBlockChrome(offCtx, font.getCellSize, cmd);
-            continue;
-        }
-        if (cmd.op === 'tile_overlay') {
-            if (window.terminalFocusedState === true) {
-                drawTileOverlay(cmd);
+        for (let i = 0; i < drawOps.length; i++) {
+            const cmd = drawOps[i];
+            if (cmd.op === 'frame') {
+                drawFrame(cmd);
+                continue;
             }
-            continue;
-        }
-        if (cmd.op === 'highlight_rect') {
-            if (isCursorMarkerRect(cmd)) {
-                const { cellWidth, cellHeight } = font.getCellSize();
-                const animated = isCursorMarkerRect(drawOps[i + 1]) && sameHighlightRect(cmd, drawOps[i + 1]);
-                cursorRects.push({
-                    x: (Number.isFinite(cmd.x) ? cmd.x : 0) * cellWidth,
-                    y: (Number.isFinite(cmd.y) ? cmd.y : 0) * cellHeight,
-                    width: (Number.isFinite(cmd.width) ? cmd.width : 1) * cellWidth,
-                    height: (Number.isFinite(cmd.height) ? cmd.height : 1) * cellHeight,
-                    animated,
-                });
-                if (animated) {
-                    i += 1;
+            if (cmd.op === 'cell') {
+                drawCell(cmd);
+                continue;
+            }
+            if (cmd.op === 'image') {
+                drawImageCommand(cmd);
+                continue;
+            }
+            if (cmd.op === 'gauge_h' || cmd.op === 'gauge_v') {
+                drawGauge(offCtx, font.getCellSize, cmd);
+                continue;
+            }
+            if (cmd.op === 'block_chrome') {
+                drawBlockChrome(offCtx, font.getCellSize, cmd);
+                continue;
+            }
+            if (cmd.op === 'tile_overlay') {
+                if (window.terminalFocusedState === true) {
+                    drawTileOverlay(cmd);
                 }
                 continue;
             }
-            drawHighlightRect(cmd);
-            continue;
+            if (cmd.op === 'highlight_rect') {
+                if (isCursorMarkerRect(cmd)) {
+                    const { cellWidth, cellHeight } = font.getCellSize();
+                    const animated = isCursorMarkerRect(drawOps[i + 1]) && sameHighlightRect(cmd, drawOps[i + 1]);
+                    cursorRects.push({
+                        x: (Number.isFinite(cmd.x) ? cmd.x : 0) * cellWidth,
+                        y: (Number.isFinite(cmd.y) ? cmd.y : 0) * cellHeight,
+                        width: (Number.isFinite(cmd.width) ? cmd.width : 1) * cellWidth,
+                        height: (Number.isFinite(cmd.height) ? cmd.height : 1) * cellHeight,
+                        animated,
+                    });
+                    if (animated) {
+                        i += 1;
+                    }
+                    continue;
+                }
+                drawHighlightRect(cmd);
+                continue;
+            }
+            if (cmd.op === 'rect_colour') {
+                drawRectColour(cmd);
+                continue;
+            }
+            if (cmd.op === 'table') {
+                drawTable(cmd);
+                continue;
+            }
         }
-        if (cmd.op === 'rect_colour') {
-            drawRectColour(cmd);
-            continue;
-        }
-        if (cmd.op === 'table') {
-            drawTable(cmd);
-            continue;
-        }
-    }
 
-    requestAnimationFrame(() => {
-        paintTerminalCanvas();
-        syncCursorLoopState();
-
+        requestAnimationFrame(() => {
+            try {
+                paintTerminalCanvas();
+                syncCursorLoopState();
+            } catch (err) {
+                console.error('terminal redraw RAF failed', err);
+            } finally {
+                rafPending = false;
+            }
+        });
+    } catch (err) {
+        console.error('terminal redraw failed', err);
         rafPending = false;
-    });
+    }
 });
 
 EventsOn("terminalTabs", payload => {
