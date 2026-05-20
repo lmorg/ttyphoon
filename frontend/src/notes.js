@@ -4782,7 +4782,7 @@ function openNewFilePrompt() {
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = '';
     elements.modalLocation.textContent = '$NOTES';
-    elements.modalLocation.style.display = 'none';
+    elements.modalLocation.style.display = '';
     elements.modal.querySelector('#notes-modal-title').textContent = 'New note name';
     elements.modalCreate.textContent = 'Create';
     setTimeout(() => {
@@ -4824,7 +4824,8 @@ function normalizeNoteName(rawName) {
         return '';
     }
 
-    if (trimmed.toLowerCase().endsWith('.md')) {
+    const leaf = trimmed.split('/').filter(Boolean).pop() || '';
+    if (/\.[^./]+$/.test(leaf)) {
         return trimmed;
     }
 
@@ -5528,11 +5529,16 @@ async function createNewFile() {
         return;
     }
 
-    let fileName = normalizeNoteName(elements.modalInput.value);
-    if (fileName === '') {
+    const name = normalizeNoteName(elements.modalInput.value);
+    if (name === '') {
         setStatus('File name cannot be empty.', true);
         return;
     }
+
+    const fileName = composeNoteLocationPath(
+        (elements.modalLocation.textContent || '$NOTES').trim(),
+        name,
+    );
 
     // Handle new file creation
 
@@ -7816,10 +7822,6 @@ elements.modalCreate.addEventListener('click', () => {
 
 if (elements.modalLocation) {
     elements.modalLocation.addEventListener('click', (event) => {
-        if (!state.renamingFile) {
-            return;
-        }
-
         const rect = event.currentTarget.getBoundingClientRect();
         showLocalMenu({
             title: 'Location',

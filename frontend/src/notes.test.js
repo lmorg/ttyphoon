@@ -345,6 +345,55 @@ describe('notes rendering', () => {
         expect(renameFileMock).not.toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt.md');
     });
 
+    it('creates notes using selected location and normalized filename', async () => {
+        listFilesMock
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce(['$PROJECT/new-note.md']);
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
+
+        await importNotesModule();
+
+        document.getElementById('notes-new').click();
+        await flushPromises();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        const modalLocation = document.getElementById('notes-modal-location');
+
+        modalLocation.textContent = '$PROJECT';
+        modalInput.value = 'new-note';
+
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalledWith('$PROJECT/new-note.md', '', '');
+    });
+
+    it('creates notes with provided extension without appending .md', async () => {
+        listFilesMock
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce(['$PROJECT/new-note.txt']);
+        getFileMock.mockResolvedValue({ contents: 'Hello Notes', text: '', error: '' });
+
+        await importNotesModule();
+
+        document.getElementById('notes-new').click();
+        await flushPromises();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        const modalLocation = document.getElementById('notes-modal-location');
+
+        modalLocation.textContent = '$PROJECT';
+        modalInput.value = 'new-note.txt';
+
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalledWith('$PROJECT/new-note.txt', '', '');
+        expect(saveFileMock).not.toHaveBeenCalledWith('$PROJECT/new-note.txt.md', '', '');
+    });
+
     it('focuses the textarea whenever an Edit view becomes active', async () => {
         listFilesMock.mockResolvedValue([
             '$NOTES/script.go',
