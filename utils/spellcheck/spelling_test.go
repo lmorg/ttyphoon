@@ -1,4 +1,4 @@
-package spelling
+package spellcheck
 
 import (
 	"reflect"

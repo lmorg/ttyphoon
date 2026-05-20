@@ -525,7 +525,10 @@ app.innerHTML = `
     <div id="notes-modal" data-open="false" aria-hidden="true">
         <div id="notes-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
             <div id="notes-modal-title">New note name</div>
-            <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            <div id="notes-modal-location-row">
+                <button id="notes-modal-location" type="button" aria-label="Location" title="Select location">$NOTES</button>
+                <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            </div>
             <div id="notes-modal-actions">
                 <button id="notes-modal-cancel" type="button">Cancel</button>
                 <button id="notes-modal-create" type="button">Create</button>
@@ -599,6 +602,8 @@ const elements = {
     swaggerRequestBuilder: document.getElementById('notes-swagger-request-builder'),
     swaggerResponse: document.getElementById('notes-swagger-response'),
     modal: document.getElementById('notes-modal'),
+    modalLocationRow: document.getElementById('notes-modal-location-row'),
+    modalLocation: document.getElementById('notes-modal-location'),
     modalInput: document.getElementById('notes-modal-input'),
     modalCancel: document.getElementById('notes-modal-cancel'),
     modalCreate: document.getElementById('notes-modal-create'),
@@ -659,6 +664,34 @@ const state = {
 };
 
 let lastAutoCopiedViewerSelection = '';
+
+const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
+
+function splitNoteLocation(path) {
+    const source = String(path || '').trim();
+    for (const location of NOTE_LOCATIONS) {
+        if (source === location) {
+            return { location, name: '' };
+        }
+        const prefix = `${location}/`;
+        if (source.startsWith(prefix)) {
+            return { location, name: source.slice(prefix.length) };
+        }
+    }
+
+    return { location: '$NOTES', name: source };
+}
+
+function composeNoteLocationPath(location, name) {
+    const safeLocation = NOTE_LOCATIONS.includes(location) ? location : '$NOTES';
+    const safeName = String(name || '').replace(/^\/+/, '');
+    return `${safeLocation}/${safeName}`;
+}
+
+function hasKnownNoteLocationPrefix(path) {
+    const source = String(path || '').trim();
+    return NOTE_LOCATIONS.some((location) => source === location || source.startsWith(`${location}/`));
+}
 
 function activeViewerWrap() {
     return elements.previewWrap || null;
@@ -4748,6 +4781,8 @@ function openNewFilePrompt() {
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
     elements.modalInput.value = '';
+    elements.modalLocation.textContent = '$NOTES';
+    elements.modalLocation.style.display = 'none';
     elements.modal.querySelector('#notes-modal-title').textContent = 'New note name';
     elements.modalCreate.textContent = 'Create';
     setTimeout(() => {
@@ -4756,10 +4791,20 @@ function openNewFilePrompt() {
 }
 
 function openRenamePrompt(file) {
+    const source = String(file || '').trim();
+    const split = splitNoteLocation(source);
     state.renamingFile = file;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
-    elements.modalInput.value = file;
+    if (hasKnownNoteLocationPrefix(source)) {
+        elements.modalLocation.textContent = split.location;
+        elements.modalLocation.style.display = '';
+        elements.modalInput.value = split.name;
+    } else {
+        elements.modalLocation.textContent = '$NOTES';
+        elements.modalLocation.style.display = 'none';
+        elements.modalInput.value = source;
+    }
     elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
@@ -5457,11 +5502,16 @@ function initStructuredDataTreeContextMenu(container) {
 async function createNewFile() {
     // Handle rename operation
     if (state.renamingFile) {
-        const fileName = (elements.modalInput.value || '').trim();
-        if (fileName === '') {
+        const name = (elements.modalInput.value || '').trim();
+        if (name === '') {
             setStatus('File name cannot be empty.', true);
             return;
         }
+
+        const useLocationSelector = elements.modalLocation.style.display !== 'none';
+        const fileName = useLocationSelector
+            ? composeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
+            : name;
 
         try {
             await RenameFile(state.renamingFile, fileName);
@@ -5852,7 +5902,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-modal-card {
-            min-width: 360px;
+            min-width: 600px;
             max-width: 80vw;
             border: 2px solid var(--fg);
             background: var(--bg);
@@ -5882,6 +5932,34 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize}px;
         }
 
+        #notes-modal-location-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        #notes-modal-location {
+            border-radius: 5px;
+            border: 2px solid var(--bg);
+            background: transparent;
+            color: var(--fg);
+            padding: 6px 10px;
+            font-size: ${result.fontSize}px;
+            text-align: center;
+            cursor: pointer;
+            white-space: nowrap;
+            min-width: 96px;
+        }
+
+        #notes-modal-location:hover,
+        #notes-modal-location:focus {
+            border-color: var(--accent);
+            color: var(--accent);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            outline: none;
+        }
+
         #notes-delete-modal-title {
             color: var(--accent);
             font-size: ${result.fontSize}px;
@@ -5899,6 +5977,9 @@ function applyWindowStyle(result) {
             padding: 8px;
             font-size: ${result.fontSize}px;
             outline: none;
+            flex: 1;
+            width: 100%;
+            min-width: 0;
         }
 
         #notes-modal-input:focus {
@@ -7732,6 +7813,30 @@ elements.modalCancel.addEventListener('click', () => {
 elements.modalCreate.addEventListener('click', () => {
     createNewFile();
 });
+
+if (elements.modalLocation) {
+    elements.modalLocation.addEventListener('click', (event) => {
+        if (!state.renamingFile) {
+            return;
+        }
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        showLocalMenu({
+            title: 'Location',
+            options: NOTE_LOCATIONS,
+            x: rect.left,
+            y: rect.bottom,
+            showNextToMouseCursor: true,
+            onSelect: (index) => {
+                const option = NOTE_LOCATIONS[index];
+                if (option) {
+                    elements.modalLocation.textContent = option;
+                    elements.modalInput.focus();
+                }
+            },
+        });
+    });
+}
 
 elements.delete.addEventListener('click', () => {
     if (!state.currentFile) {

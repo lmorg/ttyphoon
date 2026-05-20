@@ -314,7 +314,7 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
 
-    it('renames notes using the exact modal path and extension without forcing .md', async () => {
+    it('renames notes using selected location and name without forcing .md', async () => {
         listFilesMock
             .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
             .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
@@ -331,9 +331,12 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const modalInput = document.getElementById('notes-modal-input');
-        expect(modalInput.value).toBe('$GLOBAL/docs/todo.md');
+        const modalLocation = document.getElementById('notes-modal-location');
+        expect(modalLocation.textContent).toBe('$GLOBAL');
+        expect(modalInput.value).toBe('docs/todo.md');
 
-        modalInput.value = '$PROJECT/docs/todo.txt';
+        modalLocation.textContent = '$PROJECT';
+        modalInput.value = 'docs/todo.txt';
         document.getElementById('notes-modal-create').click();
         await flushPromises();
         await flushPromises();

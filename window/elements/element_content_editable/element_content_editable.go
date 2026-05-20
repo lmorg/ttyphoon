@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/spelling"
+	"github.com/lmorg/ttyphoon/utils/spellcheck"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
 
@@ -15,7 +15,7 @@ type ElementContentEditable struct {
 	tile        types.Tile
 	cells       []*types.Cell
 	spellingExc map[string]bool
-	suggestions []spelling.SuggestionT
+	suggestions []spellcheck.SuggestionT
 	mu          sync.RWMutex
 	pos         *types.XY
 	text        string
@@ -45,12 +45,12 @@ func (el *ElementContentEditable) Generate(apc *types.ApcSlice) error {
 	el.mu.RUnlock()
 
 	go func(text string) {
-		out, err := spelling.ExecAspell(text)
+		out, err := spellcheck.ExecAspell(text)
 		if err != nil {
 			return
 		}
 
-		el.suggestions, err = spelling.ParseAspellOutput(out)
+		el.suggestions, err = spellcheck.ParseAspellOutput(out)
 		if err != nil {
 			return
 		}
@@ -58,7 +58,7 @@ func (el *ElementContentEditable) Generate(apc *types.ApcSlice) error {
 		el.mu.Lock()
 		defer el.mu.Unlock()
 
-		el.suggestions = spelling.FilterExclusions(el.suggestions, el.spellingExc)
+		el.suggestions = spellcheck.FilterExclusions(el.suggestions, el.spellingExc)
 
 		for i := range el.suggestions {
 			start := el.suggestions[i].WordStart
@@ -186,17 +186,17 @@ func isRedCurlyUnderline(sgr *types.Sgr) bool {
 		sgr.UlC.Blue == types.SGR_COLOR_RED.Blue
 }
 
-func (el *ElementContentEditable) suggestionAt(x int32) (spelling.SuggestionT, bool) {
+func (el *ElementContentEditable) suggestionAt(x int32) (spellcheck.SuggestionT, bool) {
 	el.mu.RLock()
 	defer el.mu.RUnlock()
 
 	idx := int(x)
 	if idx < 0 || idx >= len(el.cells) {
-		return spelling.SuggestionT{}, false
+		return spellcheck.SuggestionT{}, false
 	}
 
 	if el.cells[idx] == nil || el.cells[idx].Sgr == nil || !isRedCurlyUnderline(el.cells[idx].Sgr) {
-		return spelling.SuggestionT{}, false
+		return spellcheck.SuggestionT{}, false
 	}
 
 	for i := range el.suggestions {
@@ -207,7 +207,7 @@ func (el *ElementContentEditable) suggestionAt(x int32) (spelling.SuggestionT, b
 		}
 	}
 
-	return spelling.SuggestionT{}, false
+	return spellcheck.SuggestionT{}, false
 }
 
 func (el *ElementContentEditable) replaceWord(start, length int, replacement string) string {

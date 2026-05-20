@@ -231,7 +231,7 @@ export function initInputBox(canvas) {
             inputboxInput.setAttribute('autocomplete', 'off');
             inputboxInput.setAttribute('autocorrect', 'off');
             inputboxInput.setAttribute('autocapitalize', 'off');
-            inputboxInput.setAttribute('spellcheck', 'false');
+            //inputboxInput.setAttribute('spellcheck', 'false');
             inputboxInput.addEventListener('keydown', (e) => {
                 if (handleInputboxHotkeys(e)) {
                     e.stopPropagation();
