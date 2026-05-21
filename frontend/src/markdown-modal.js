@@ -11,86 +11,51 @@ import {
 
 configureMarked();
 
-function createLineNumbers(content) {
-    const totalLines = Math.max(1, String(content || '').split('\n').length);
-    return Array.from({ length: totalLines }, (_, i) => String(i + 1)).join('\n');
+function buildLineNumbers(lineCount) {
+    return Array.from({ length: Math.max(1, lineCount) }, (_, index) => String(index + 1)).join('\n');
 }
 
-function convertToJupyterCodeBlocks(container) {
-    const codeBlocks = container.querySelectorAll('pre');
+function enhanceCodeBlocks(container) {
+    const codeBlocks = container.querySelectorAll('pre > code[class*="language-"]');
 
-    codeBlocks.forEach((pre) => {
-        const code = pre.querySelector('code');
-        if (!code) {
+    codeBlocks.forEach((code) => {
+        const pre = code.parentElement;
+        if (!pre || pre.parentElement?.classList.contains('markdown-modal-code-shell')) {
             return;
         }
 
-        const langClass = Array.from(code.classList).find((cls) => cls.startsWith('language-'));
-        if (!langClass) {
+        const languageClass = Array.from(code.classList).find((name) => name.startsWith('language-'));
+        const language = languageClass ? languageClass.slice('language-'.length) : '';
+        if (!language || language === 'mermaid' || language === 'raw') {
             return;
         }
 
-        const language = langClass.replace('language-', '');
-        if (!language || language === 'mermaid') {
-            return;
-        }
+        const lineCount = String(code.textContent || '').split('\n').length;
 
-        const content = code.textContent || '';
+        const shell = document.createElement('div');
+        shell.className = 'markdown-modal-code-shell';
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'jupyter-code-block';
+        const lineNumbers = document.createElement('div');
+        lineNumbers.className = 'markdown-modal-code-lines';
 
-        const toolbar = document.createElement('div');
-        toolbar.className = 'jupyter-toolbar';
-
-        const runtimeBadge = document.createElement('span');
-        runtimeBadge.className = 'jupyter-runtime-dropdown';
-        runtimeBadge.textContent = language;
-        runtimeBadge.title = `Runtime: ${language}`;
-
-        toolbar.appendChild(runtimeBadge);
-
-        const codeEditor = document.createElement('div');
-        codeEditor.className = 'jupyter-code-editor';
-
-        const lineNumbers = document.createElement('pre');
-        lineNumbers.className = 'jupyter-line-numbers';
         const lineNumbersInner = document.createElement('div');
-        lineNumbersInner.className = 'jupyter-line-numbers-inner';
-        lineNumbersInner.textContent = createLineNumbers(content);
+        lineNumbersInner.className = 'markdown-modal-code-lines-inner';
+        lineNumbersInner.textContent = buildLineNumbers(lineCount);
         lineNumbers.appendChild(lineNumbersInner);
 
-        const codeArea = document.createElement('div');
-        codeArea.className = 'jupyter-code-area';
+        const viewport = document.createElement('div');
+        viewport.className = 'markdown-modal-code-viewport';
 
-        const highlighted = document.createElement('pre');
-        highlighted.className = 'jupyter-highlight';
-        const highlightedCode = document.createElement('code');
-        highlightedCode.className = `language-${language}`;
-        highlightedCode.textContent = content;
-        highlighted.appendChild(highlightedCode);
+        pre.classList.add('markdown-modal-code-pre');
 
-        const editable = document.createElement('textarea');
-        editable.className = 'jupyter-code-editable';
-        editable.setAttribute('readonly', 'readonly');
-        editable.setAttribute('spellcheck', 'false');
-        editable.value = content;
-
-        editable.addEventListener('scroll', () => {
-            highlighted.scrollTop = editable.scrollTop;
-            highlighted.scrollLeft = editable.scrollLeft;
-            lineNumbersInner.style.transform = `translateY(-${editable.scrollTop}px)`;
+        pre.addEventListener('scroll', () => {
+            lineNumbersInner.style.transform = `translateY(-${pre.scrollTop}px)`;
         });
 
-        codeArea.appendChild(highlighted);
-        codeArea.appendChild(editable);
-        codeEditor.appendChild(lineNumbers);
-        codeEditor.appendChild(codeArea);
-
-        wrapper.appendChild(toolbar);
-        wrapper.appendChild(codeEditor);
-
-        pre.replaceWith(wrapper);
+        pre.replaceWith(shell);
+        viewport.appendChild(pre);
+        shell.appendChild(lineNumbers);
+        shell.appendChild(viewport);
     });
 }
 
@@ -139,11 +104,10 @@ export async function showMarkdownModal(markdownContent) {
     }
 
     body.innerHTML = marked.parse(markdownContent);
-
-    convertToJupyterCodeBlocks(body);
-    await applySyntaxHighlighting(body);
     await renderMermaidDiagrams(body);
+    await applySyntaxHighlighting(body);
     await processWailsImages(body);
+    enhanceCodeBlocks(body);
     enableFullscreenImages(body);
 
     overlay.style.display = 'flex';

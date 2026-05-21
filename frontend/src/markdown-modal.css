@@ -20,6 +20,9 @@
     max-width: min(860px, calc(100vw - 80px));
     max-height: calc(100vh - 80px);
     overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;
 }
 
 .markdown-modal-body {
@@ -27,20 +30,71 @@
     padding-top: 0px;
 }
 
-/* Bridge rule: Notes uses #notes-jupyter .jupyter-highlight; modal needs the same layout behavior. */
-#markdown-modal-body .jupyter-highlight {
-    position: absolute;
-    inset: 0;
-    margin: 0 !important;
-    padding: 12px !important;
-    border: 0 !important;
-    border-left: 0 !important;
+.markdown-modal-code-shell {
+    --markdown-modal-code-font-size: 0.7em;
+    --markdown-modal-code-line-height: 1.5;
+    --markdown-modal-code-max-height: calc((25 * var(--markdown-modal-code-line-height) * 1em) + 24px);
+    display: flex;
+    align-items: stretch;
+    margin: 0.8em 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    overflow: hidden;
+    max-height: var(--markdown-modal-code-max-height);
+}
+
+.markdown-modal-code-lines {
+    flex: 0 0 auto;
+    min-width: 42px;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--terminal-fg, #e6edf3);
+    opacity: 0.45;
+    text-align: right;
+    white-space: pre;
+    user-select: none;
     pointer-events: none;
-    overflow: hidden !important;
+    overflow: hidden;
+    max-height: var(--markdown-modal-code-max-height);
+    font-size: var(--markdown-modal-code-font-size) !important;
+    line-height: var(--markdown-modal-code-line-height);
+}
+
+.markdown-modal-code-lines-inner {
+    padding: 12px 8px 12px 10px;
+    line-height: var(--markdown-modal-code-line-height);
+    transform: translateY(0);
+    will-change: transform;
+}
+
+.markdown-modal-code-viewport {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: var(--markdown-modal-code-max-height);
+}
+
+.markdown-modal-code-pre {
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 12px !important;
+    max-height: var(--markdown-modal-code-max-height);
+    overflow-x: auto;
+    overflow-y: auto;
     white-space: pre !important;
     word-wrap: normal !important;
     overflow-wrap: normal !important;
-    font-family: var(--font-family);
-    line-height: 1.5;
-    background: transparent;
+    background: transparent !important;
+    font-size: var(--markdown-modal-code-font-size) !important;
+    line-height: var(--markdown-modal-code-line-height);
+}
+
+.markdown-modal-code-pre code,
+.markdown-modal-code-pre .hljs {
+    display: block;
+    white-space: pre !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    background: transparent !important;
+    font-size: inherit;
+    line-height: inherit;
 }

@@ -183,42 +183,37 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 		OutputBlock: string(term.copyOutputBlock(absBlockPos)),
 	}
 
+	highlightFn := func() func() {
+		return func() {
+			term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
+		}
+	}
+
 	term.renderer.AddToContextMenu(
 		[]types.MenuItem{
 			{
-				Title: "Copy output block to clipboard",
-				Icon:  0xf0c5,
-				Highlight: func() func() {
-					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
-					}
-				},
-				Fn: func() { term.copyOutputBlockToClipboard(absBlockPos) },
+				Title:     "Copy output block to clipboard",
+				Icon:      0xf0c5,
+				Highlight: highlightFn,
+				Fn:        func() { term.copyOutputBlockToClipboard(absBlockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Annotate in %s Notes...", app.Name()),
-				Icon:  0xf044,
-				Highlight: func() func() {
-					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
-					}
-				},
-				Fn: func() { notesCreateAndOpen(term, absBlockPos) },
+				Title:     fmt.Sprintf("Annotate in %s Notes...", app.Name()),
+				Icon:      0xf044,
+				Highlight: highlightFn,
+				Fn:        func() { notesCreateAndOpen(term, absBlockPos) },
 			},
 			{
-				Title: fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
-				Icon:  0xf544,
-				Highlight: func() func() {
-					return func() {
-						term.renderer.DrawRectWithColour(term.tile, &types.XY{X: 0, Y: relBlockPos[0]}, &types.XY{X: term.size.X + 1, Y: relBlockPos[1]}, types.COLOR_SELECTION, true)
-					}
-				},
-				Fn: func() { ai.Explain(agt, true) },
+				Title:     fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
+				Icon:      0xf544,
+				Highlight: highlightFn,
+				Fn:        func() { ai.Explain(agt, true) },
 			},
 			{
-				Title: "View command meta...",
-				Icon:  0x23,
-				Fn:    func() { commandMeta(term, absPosY) },
+				Title:     "View command meta...",
+				Icon:      0x23,
+				Highlight: highlightFn,
+				Fn:        func() { commandMeta(term, absPosY) },
 			},
 		}...)
 }

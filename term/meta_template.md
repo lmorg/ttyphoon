@@ -1,36 +1,32 @@
-# Command Metadata
+# Metadata
 
-## Row
-
-> {{ quote (trim .RowString) }}
+## Environment
 
 - Host: `{{ .Source.Host }}`
 - Pwd: `{{ .Source.Pwd }}`
 
-## Block
+## Timings
 
-- Exit Code: `{{ .Block.ExitNum }}`
-- Time Start: {{ .Block.TimeStart }}
-- Time End: {{ .Block.TimeEnd }}
+| Property | Value | Units |
+| --- | --- | --- |
+| Date | {{ .DateStart }} | yyyy-mm-dd |
+| Start | {{ .TimeStart }} | hh:mm:ss |
+| End | {{ .TimeEnd }} | hh:mm:ss |
+| Duration | {{ .Duration}} | milliseconds |
 
-### Query
+## {{ if .Block.AiMeta }}Query{{ else }}Command Line{{ end }}
 
-```murex
+```raw
 {{ toString .Block.Query }}
 ```
 
-### Output
+## Return
 
-<details>
-<summary>
-Click to expand
-</summary>
+Exit Code: `{{ .Block.ExitNum }}`
 
 ```text
 {{ .Output }}
 ```
-
-</details>
 
 ## Agent
 {{ if .Block.AiMeta }}
@@ -47,7 +43,7 @@ Click to expand
 _nil_
 {{ end }}
 
-### {{ .AppName }} Debug
+## {{ .AppName }} Debug
 
 - Block ID: `{{ .Block.Id }}`
 - Meta ID: `{{ .Block.Meta }}`

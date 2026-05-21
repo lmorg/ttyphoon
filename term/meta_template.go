@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"strings"
 	"text/template"
 
@@ -13,12 +14,20 @@ import (
 //go:embed meta_template.md
 var mdMetaTemplate string
 
+const (
+	_FMT_META_DATE = "2006-01-02"
+	_FMT_META_TIME = "15:04:05"
+)
+
 func commandMeta(term *Term, absPosY int) {
 	screen := append(term._scrollBuf, term._normBuf...)
 	rowString, err := screen.Phrase(absPosY)
 	if err != nil {
 		rowString = screen[absPosY].String()
 	}
+
+	outputBlock := term.copyOutputBlock(term.getBlockStartAndEndAbs(absPosY))
+	durationMilli := screen[absPosY].Block.TimeEnd.UnixMilli() - screen[absPosY].Block.TimeStart.UnixMilli()
 
 	data := struct {
 		AppName   string
@@ -28,6 +37,10 @@ func commandMeta(term *Term, absPosY int) {
 		Source    types.RowSource
 		Block     types.BlockMeta
 		Output    string
+		DateStart string
+		TimeStart string
+		TimeEnd   string
+		Duration  string
 	}{
 		AppName:   app.Name(),
 		RowString: rowString,
@@ -35,7 +48,11 @@ func commandMeta(term *Term, absPosY int) {
 		RowMeta:   int(screen[absPosY].RowMeta),
 		Source:    *screen[absPosY].Source,
 		Block:     *screen[absPosY].Block,
-		Output:    screen.PhraseAll(),
+		Output:    string(outputBlock),
+		DateStart: screen[absPosY].Block.TimeStart.Format(_FMT_META_DATE),
+		TimeStart: screen[absPosY].Block.TimeStart.Format(_FMT_META_TIME),
+		TimeEnd:   screen[absPosY].Block.TimeEnd.Format(_FMT_META_TIME),
+		Duration:  fmt.Sprintf("%d ms", durationMilli),
 	}
 
 	tmpl, err := template.New("cmd").Funcs(metaTemplateFuncs()).Parse(mdMetaTemplate)
