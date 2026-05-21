@@ -1,0 +1,46 @@
+.markdown-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+}
+
+.markdown-modal-dialog {
+    background: var(--terminal-bg, #1e2228);
+    border: 2px solid var(--terminal-fg, #316db0);
+    color: var(--terminal-fg, #e6edf3);
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+    display: inline-block;
+    max-width: min(860px, calc(100vw - 80px));
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+}
+
+.markdown-modal-body {
+    padding: 12px 32px;
+    padding-top: 0px;
+}
+
+/* Bridge rule: Notes uses #notes-jupyter .jupyter-highlight; modal needs the same layout behavior. */
+#markdown-modal-body .jupyter-highlight {
+    position: absolute;
+    inset: 0;
+    margin: 0 !important;
+    padding: 12px !important;
+    border: 0 !important;
+    border-left: 0 !important;
+    pointer-events: none;
+    overflow: hidden !important;
+    white-space: pre !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    font-family: var(--font-family);
+    line-height: 1.5;
+    background: transparent;
+}

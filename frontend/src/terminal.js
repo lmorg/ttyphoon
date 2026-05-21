@@ -6,6 +6,7 @@ import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
+import { initMarkdownModal } from './markdown-modal';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 import dingSound from './assets/sound/ding.mp3';
@@ -1245,6 +1246,7 @@ GetWindowStyle().then((result) => {
 });
 
 initInputBox(canvas);
+initMarkdownModal();
 
 // ------------------------------------------------------------------
 // Notification overlay

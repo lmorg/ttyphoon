@@ -283,10 +283,6 @@ func (wr *webkitRender) TriggerDeallocation(fn func()) {
 
 func (wr *webkitRender) TriggerQuit() {}
 
-func (wr *webkitRender) GetWindowMeta() any {
-	return wr.TerminalPaneTabs()
-}
-
 func (wr *webkitRender) SetTerminalPaneTabs(tabs []types.TerminalPaneTab) {
 	wr.auxTabsMu.Lock()
 	wr.auxTerminalTabs = append([]types.TerminalPaneTab(nil), tabs...)
@@ -365,4 +361,8 @@ func (wr *webkitRender) activeTerm() types.Term {
 
 func (wr *webkitRender) GetContext() context.Context {
 	return wr.wapp
+}
+
+func (wr *webkitRender) DisplayMarkdownModel(markdownContent string) {
+	runtime.EventsEmit(wr.wapp, "showMarkdownModal", markdownContent)
 }

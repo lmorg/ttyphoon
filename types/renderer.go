@@ -80,7 +80,7 @@ type Renderer interface {
 	DisplayMenu(title string, items []string, highlight MenuCallbackT, ok MenuCallbackT, cancel MenuCallbackT)
 	NewContextMenu() ContextMenu
 	AddToContextMenu(...MenuItem)
-	GetWindowMeta() any
+	DisplayMarkdownModel(string)
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
