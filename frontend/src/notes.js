@@ -6,7 +6,7 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
-    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown,
+    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -363,6 +363,7 @@ const CONTEXT_ICON_CODE = 0xf121;
 const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
+const CONTEXT_ICON_ASK_AI = 0xf544;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -4972,11 +4973,11 @@ function enableImageContextMenus(container) {
             
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI...'],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
-                icons: [0xf0c5, 0xf0c7],
+                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI],
                 onSelect: (index) => {
                     if (index === 0) {
                         TerminalCopyImageDataURL(dataURLToCopy).catch(() => {
@@ -4984,6 +4985,8 @@ function enableImageContextMenus(container) {
                         });
                     } else if (index === 1) {
                         saveImageToFile(filename, dataURLToCopy);
+                    } else if (index === 2) {
+                        askAIAboutCurrentDocument();
                     }
                 },
             });
@@ -5164,6 +5167,72 @@ function createPrintMenuItem(title = 'Print...') {
         icon: CONTEXT_ICON_PRINT,
         onSelect: () => {
             WindowPrint();
+        },
+    };
+}
+
+function getCurrentDocumentContentsForAI() {
+    const fileType = String(state.currentFileType || '').toLowerCase();
+
+    let contents = '';
+    if (fileType === 'image') {
+        contents = String(elements.imageViewImg?.src || '').trim();
+    } else if (fileType === 'binary') {
+        contents = String(state.hexSourceValue || elements.editor.value || '');
+    } else {
+        contents = String(elements.editor.value || '');
+    }
+
+    if (!contents && fileType === 'meta') {
+        contents = String(state.fileMetaMarkdown || elements.meta?.textContent || '');
+    }
+
+    const maxChars = 120000;
+    if (contents.length > maxChars) {
+        contents = `${contents.slice(0, maxChars)}\n\n[document truncated for AI input]`;
+    }
+
+    return contents;
+}
+
+async function askAIAboutCurrentDocument() {
+    if (!state.currentFile) {
+        setStatus('Open a document first.', true);
+        return;
+    }
+
+    const fileName = state.currentFile;
+    const fileType = state.currentFileType || 'unknown';
+    const contents = getCurrentDocumentContentsForAI();
+    if (!contents) {
+        setStatus('This document has no content to send to AI.', true);
+        return;
+    }
+
+    const aiContext = [
+        `Document: ${fileName}`,
+        `Type: ${fileType}`,
+        '',
+        contents,
+    ].join('\n');
+
+    clearAIOutput();
+    setAIPanelCollapsed(false);
+
+    try {
+        await AskAI('notesDocument', fileName, aiContext);
+    } catch (err) {
+        setStatus('Failed to ask AI about this document.', true);
+        console.error(err);
+    }
+}
+
+function createAskAIDocumentMenuItem() {
+    return {
+        title: 'Ask AI...',
+        icon: CONTEXT_ICON_ASK_AI,
+        onSelect: () => {
+            void askAIAboutCurrentDocument();
         },
     };
 }
@@ -5413,6 +5482,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
             ...tableItems,
             ...insertItems,
             createFindMenuItem('Find'),
+            createAskAIDocumentMenuItem(),
             createPrintMenuItem('Print'),
         ];
 
@@ -5496,6 +5566,8 @@ function initStructuredDataTreeContextMenu(container) {
                     }));
                 },
             },
+            { title: '-' },
+            createAskAIDocumentMenuItem(),
         ], e.clientX, e.clientY, 'JSON/YAML field');
     });
 }
@@ -7581,6 +7653,7 @@ elements.editor.addEventListener('contextmenu', (e) => {
     menuItems.push(
         { title: '-' },
         createFindMenuItem('Find text...'),
+        createAskAIDocumentMenuItem(),
         createPrintMenuItem('Print...'),
     );
 
@@ -7666,6 +7739,8 @@ elements.csvView.addEventListener('contextmenu', (e) => {
             menuItems.push({ title: '-' }, ...insertItems);
         }
     }
+
+    menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
 
     let highlightCallback = null;
     let cancelCallback = null;

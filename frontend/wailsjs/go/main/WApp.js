@@ -6,6 +6,10 @@ export function AddToFileList(arg1) {
   return window['go']['main']['WApp']['AddToFileList'](arg1);
 }
 
+export function AskAI(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['AskAI'](arg1, arg2, arg3);
+}
+
 export function CloseNotification(arg1) {
   return window['go']['main']['WApp']['CloseNotification'](arg1);
 }

@@ -14,8 +14,8 @@ func askAi(wr *webkitRender) {
 	agt := agent.Get(wr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
-	wr.DisplayInputBoxW(&DisplayInputBoxWT{
-		Options: DisplayInputBoxWTOptions{
+	wr.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
 			Title:     fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
 			Multiline: true, // Enable multiline input for AI prompt
 		},
@@ -60,8 +60,8 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 	agt := agent.Get(wr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
-	parameters := &DisplayInputBoxWT{
-		Options: DisplayInputBoxWTOptions{
+	parameters := &types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
 			Title:     strings.Title(skill.Description),
 			Multiline: true,
 		},

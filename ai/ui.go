@@ -16,30 +16,54 @@ import (
 
 func Explain(agent *agent.Agent, promptDialogue bool) {
 	if !promptDialogue {
-		askAI(agent, prompts.GetExplain(agent, ""), fmt.Sprintf("```\n%s\n```", agent.Meta.CmdLine), agent.Meta.CmdLine)
+		askAI(agent, prompts.GetExplainCmd(agent, ""), fmt.Sprintf("```\n%s\n```", agent.Meta.CmdLine), agent.Meta.CmdLine)
 		return
 	}
 
 	fn := func(userPrompt string) {
-		askAI(agent, prompts.GetExplain(agent, userPrompt), "> "+userPrompt, userPrompt)
+		askAI(agent, prompts.GetExplainCmd(agent, userPrompt), "> "+userPrompt, userPrompt)
 	}
 
 	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
+func ExplainDoc(agt *agent.Agent, filename, contents string) {
+	tile := agt.Renderer().ActiveTile()
+	if tile == nil {
+		return
+	}
+
+	agt.Meta = &agent.Meta{
+		Pwd:         tile.Pwd(),
+		CmdLine:     filename,
+		OutputBlock: contents,
+	}
+	params := &types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:       "Ask AI about " + filename,
+			Placeholder: "Optional",
+			Multiline:   true,
+		},
+		OkFunc: func(userPrompt string) {
+			askAI(agt, prompts.GetExplainDoc(agt, userPrompt), "> "+userPrompt, userPrompt)
+		},
+	}
+	agt.Renderer().DisplayInputBoxW(params)
+}
+
 const _STICKY_MESSAGE = "Asking %s...."
 
-func AskAI(agent *agent.Agent, prompt string) {
+func AskAI(agt *agent.Agent, prompt string) {
 	go func() {
-		askAI(agent, prompts.GetAsk(agent, prompt), "> "+prompt, prompt)
+		askAI(agt, prompts.GetAsk(agt, prompt), "> "+prompt, prompt)
 	}()
 }
 
-func askAI(agent *agent.Agent, prompt string, title string, query string) {
+func askAI(agt *agent.Agent, prompt string, title string, query string) {
 	prompt += prompts.AgentsMd()
-	sticky := agent.Renderer().DisplaySticky(
+	sticky := agt.Renderer().DisplaySticky(
 		types.NOTIFY_INFO,
-		fmt.Sprintf(_STICKY_MESSAGE, agent.ServiceName()),
+		fmt.Sprintf(_STICKY_MESSAGE, agt.ServiceName()),
 		func() {},
 	)
 
@@ -50,38 +74,38 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 
 		// Generate the note filename in parallel so it is ready when output is rendered.
 		go func() {
-			filenameCh <- buildAINoteFilename(agent, query, noteTime)
+			filenameCh <- buildAINoteFilename(agt, query, noteTime)
 		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 
-		result, err := agent.RunLLMWithStream(ctx, prompt, func(chunk string) {
+		result, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
 			if chunk == "" {
 				return
 			}
-			agent.Renderer().EmitAIResponseChunk(chunk)
+			agt.Renderer().EmitAIResponseChunk(chunk)
 		})
 		sticky.Close()
 		if err != nil {
-			agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
 
 		} else {
-			agent.AddHistory(title, result)
+			agt.AddHistory(title, result)
 		}
 
 		endTime := time.Now()
 		data := &historymd.TemplateFieldsT{
 			AppName:      app.Name(),
-			GroupName:    agent.Term().Tile().GroupName(),
-			TileName:     agent.Term().Tile().Name(),
+			GroupName:    agt.Term().Tile().GroupName(),
+			TileName:     agt.Term().Tile().Name(),
 			TimeStart:    startTime.Format(historymd.FMT_DATE),
 			TimeEnd:      endTime.Format(historymd.FMT_DATE),
 			TimeDuration: endTime.Sub(startTime).String(),
-			Pwd:          agent.Meta.Pwd,
-			Agent:        agent.ServiceName(),
+			Pwd:          agt.Meta.Pwd,
+			Agent:        agt.ServiceName(),
 			Query:        query,
 			FullPrompt:   prompt,
 			Output:       result,
@@ -94,6 +118,6 @@ func askAI(agent *agent.Agent, prompt string, title string, query string) {
 		})
 
 		filename := <-filenameCh
-		agent.Renderer().NotesCreateAndOpen(filename, buf.String())
+		agt.Renderer().NotesCreateAndOpen(filename, buf.String())
 	}()
 }

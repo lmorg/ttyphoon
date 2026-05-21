@@ -1,6 +1,8 @@
 package types
 
-import "context"
+import (
+	"context"
+)
 
 type MenuCallbackT func(int)
 
@@ -29,6 +31,20 @@ type ContextMenu interface {
 const MENU_SEPARATOR = "-"
 
 type InputBoxCallbackT func(string)
+
+type InputBoxWT struct {
+	Options    InputBoxWTOptions
+	OkFunc     InputBoxCallbackT
+	CancelFunc InputBoxCallbackT
+}
+
+type InputBoxWTOptions struct {
+	Title       string   `json:"title"`
+	Prefill     string   `json:"prefill"`
+	Placeholder string   `json:"placeholder"`
+	History     []string `json:"history"`
+	Multiline   bool     `json:"multiline"`
+}
 
 type Renderer interface {
 	Start(*AppWindowTerms, any, context.Context)
@@ -60,6 +76,7 @@ type Renderer interface {
 	DisplayNotification(NotificationType, string)
 	DisplaySticky(NotificationType, string, func()) Notification
 	DisplayInputBox(string, string, InputBoxCallbackT, InputBoxCallbackT)
+	DisplayInputBoxW(*InputBoxWT)
 	DisplayMenu(title string, items []string, highlight MenuCallbackT, ok MenuCallbackT, cancel MenuCallbackT)
 	NewContextMenu() ContextMenu
 	AddToContextMenu(...MenuItem)

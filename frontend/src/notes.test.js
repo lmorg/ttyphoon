@@ -19,6 +19,7 @@ const saveImageDialogMock = vi.fn(() => Promise.resolve(''));
 const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
+const askAIMock = vi.fn(() => Promise.resolve());
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
 const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
     '# note.md',
@@ -69,6 +70,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     WindowPrint: windowPrintMock,
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
+    AskAI: askAIMock,
     GetCurrentProject: getCurrentProjectMock,
     GetFileMetaMarkdown: getFileMetaMarkdownMock,
     ResolveFilePath: resolveFilePathMock,
@@ -194,6 +196,7 @@ describe('notes rendering', () => {
         windowPrintMock.mockClear();
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
+        askAIMock.mockClear();
         getCurrentProjectMock.mockReset();
         getFileMetaMarkdownMock.mockReset();
         resolveFilePathMock.mockReset();
@@ -586,6 +589,76 @@ describe('notes rendering', () => {
 
         expect(displayHyperlinkMenuMock).toHaveBeenCalledWith('https://example.com/docs', 'Docs site');
         expect(showLocalMenuMock).not.toHaveBeenCalled();
+    });
+
+    it('shows Ask AI in editor context menu and sends current document content', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nHello from editor.', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        showLocalMenuMock.mockClear();
+
+        const editor = document.getElementById('notes-editor');
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 90, clientY: 120 }));
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        const askAIIndex = menuConfig.options.findIndex((option) => String(option).startsWith('Ask AI'));
+        expect(askAIIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(askAIIndex);
+        await flushPromises();
+
+        expect(askAIMock).toHaveBeenCalledTimes(1);
+        expect(askAIMock).toHaveBeenCalledWith(
+            'notesDocument',
+            '$NOTES/guide.md',
+            expect.stringContaining('Document: $NOTES/guide.md'),
+        );
+        expect(askAIMock.mock.calls[0][2]).toContain('Type: markdown');
+        expect(askAIMock.mock.calls[0][2]).toContain('Hello from editor.');
+    });
+
+    it('shows Ask AI in rendered preview context menu and sends current document content', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/summary.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        showLocalMenuMock.mockClear();
+
+        const preview = document.getElementById('notes-preview');
+        preview.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        const askAIIndex = menuConfig.options.findIndex((option) => String(option).startsWith('Ask AI'));
+        expect(askAIIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(askAIIndex);
+        await flushPromises();
+
+        expect(askAIMock).toHaveBeenCalledTimes(1);
+        expect(askAIMock).toHaveBeenCalledWith(
+            'notesDocument',
+            '$NOTES/summary.md',
+            expect.stringContaining('Document: $NOTES/summary.md'),
+        );
+        expect(askAIMock.mock.calls[0][2]).toContain('Type: markdown');
+        expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {

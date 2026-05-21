@@ -16,8 +16,11 @@ import (
 //go:embed system.md
 var _PROMPT_SYSTEM string
 
-//go:embed explain.md
-var _PROMPT_EXPLAIN string
+//go:embed explain_cmd.md
+var _PROMPT_EXPLAIN_CMD string
+
+//go:embed explain_doc.md
+var _PROMPT_EXPLAIN_DOC string
 
 //go:embed ask.md
 var _PROMPT_ASK string
@@ -27,8 +30,12 @@ var _PROMPT_TITLE string
 
 var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
 
-func GetExplain(agent *agent.Agent, userPrompt string) string {
-	return os.Expand(_PROMPT_EXPLAIN, promptVars(agent, userPrompt))
+func GetExplainCmd(agent *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agent, userPrompt))
+}
+
+func GetExplainDoc(agent *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agent, userPrompt))
 }
 
 func GetAsk(agent *agent.Agent, userPrompt string) string {

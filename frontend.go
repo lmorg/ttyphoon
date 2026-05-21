@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
@@ -1082,6 +1083,24 @@ func (a *WApp) CommandPaletteSelect(index int) {
 		return
 	}
 	renderer.CommandPaletteSelect(index)
+}
+
+func (a *WApp) AskAI(callerType, filename, contents string) {
+	switch callerType {
+	case "notesDocument":
+		renderer, ok := renderwebkit.CurrentRenderer()
+		if !ok {
+			return
+		}
+		tile := renderer.ActiveTile()
+		if tile == nil {
+			return
+		}
+		agt := agent.Get(tile.Id())
+		ai.ExplainDoc(agt, filename, contents)
+	default:
+		return
+	}
 }
 
 // --------------------
