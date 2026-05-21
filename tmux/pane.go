@@ -7,9 +7,9 @@ import (
 
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/debug"
-	virtualterm "github.com/lmorg/ttyphoon/term"
 	"github.com/lmorg/ttyphoon/types"
 	runebuf "github.com/lmorg/ttyphoon/utils/rune_buf"
+	"github.com/lmorg/ttyphoon/virtualterm"
 )
 
 /*
