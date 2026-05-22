@@ -163,7 +163,7 @@ func NewWindowStyle() *WindowStyleT {
 			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
 			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
 			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
-			Accent:        *types.SGR_COLOR_BLUE,
+			Accent:        *types.SGR_COLOR_ACCENT,
 			Selection:     *types.COLOR_SELECTION,
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,

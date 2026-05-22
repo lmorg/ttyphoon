@@ -6125,6 +6125,7 @@ function applyWindowStyle(result) {
         #notes-modal-create:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
+            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2) !important;
         }
 
         #notes-modal-actions {
@@ -6158,26 +6159,26 @@ function applyWindowStyle(result) {
         }
 
         #notes-modal-actions button:hover {
-            border-color: var(--selection);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
             transition: all 0.2s ease;
         }
 
         #notes-delete-modal-actions button:hover {
-            border-color: var(--selection);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
             transition: all 0.2s ease;
         }
 
         #notes-delete-confirm {
-            border-color: var(--error);
-            color: var(--error);
+            border-color: var(--error) !important;
+            color: var(--error) !important;
         }
 
         #notes-delete-confirm:hover {
             border-color: var(--error) !important;
             color: var(--error) !important;
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2) !important;
             transition: all 0.2s ease;
         }
 
@@ -6637,8 +6638,8 @@ function applyWindowStyle(result) {
         }
 
         .notes-ai-restore:hover {
-            border-color: var(--fg);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 1);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
         }
 
         .notes-ai-header {
@@ -7033,13 +7034,13 @@ function applyWindowStyle(result) {
         }
      
         .jupyter-btn:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1) !important;
             border-color: var(--accent);
             color: var(--accent);
         }
 
         .jupyter-btn:active {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
         }
 
         .jupyter-stop-notes {
@@ -7048,13 +7049,13 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-stop-notes:hover {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.2) !important;
             border-color: var(--red);
             color: var(--red);
         }
 
         .jupyter-stop-notes:active {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
         }
 
         .jupyter-runtime-dropdown {
@@ -7327,7 +7328,7 @@ function applyWindowStyle(result) {
         }
 
         .json-key {
-            color: var(--accent);
+            color: var(--yellow);
             word-break: break-all;
             overflow-wrap: anywhere;
         }

@@ -2,6 +2,7 @@ package rendererwebkit
 
 import (
 	"context"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -126,6 +127,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
 			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
 			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
+			Accent:        *types.SGR_COLOR_ACCENT,
 			Selection:     *types.COLOR_SELECTION,
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
@@ -160,6 +162,7 @@ type coloursPayload struct {
 	MagentaBright types.Colour `json:"magentaBright"`
 	CyanBright    types.Colour `json:"cyanBright"`
 	WhiteBright   types.Colour `json:"whiteBright"`
+	Accent        types.Colour `json:"accent"`
 	Selection     types.Colour `json:"selection"`
 	Link          types.Colour `json:"link"`
 	Error         types.Colour `json:"error"`
@@ -203,24 +206,25 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	wr.TriggerRedraw()
-	wr.updateNotes()
+	//wr.updateNotes()
+	wr.RefreshNotes()
 	wr.SetWindowTitle(wr.tmux.ActivePane().Name())
 }
 
-func (wr *webkitRender) updateNotes() {
-	if wr.termWin == nil {
+func (wr *webkitRender) RefreshNotes() {
+	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
 		// bit of a hack but this should only happen on application startup
 		time.Sleep(500 * time.Millisecond)
 	}
 	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
 }
 
-func (wr *webkitRender) RefreshNotes() {
+/*func (wr *webkitRender) RefreshNotes() {
 	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
 		return
 	}
 	wr.updateNotes()
-}
+}*/
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
 	if wr.tmux != nil {
