@@ -1,10 +1,5 @@
 # Metadata
 
-## Environment
-
-- Host: `{{ .Source.Host }}`
-- Pwd: `{{ .Source.Pwd }}`
-
 ## Timings
 
 | Property | Value | Units |
@@ -13,6 +8,18 @@
 | Start | {{ .TimeStart }} | hh:mm:ss |
 | End | {{ .TimeEnd }} | hh:mm:ss |
 | Duration | {{ .Duration}} | milliseconds |
+
+## Environment
+
+- Host: `{{ .Source.Host }}`
+- Pwd: `{{ .Source.Pwd }}`
+
+{{ if .Block.EnvVars }}
+| Key | Value |
+| --- | --- |
+{{ range $key, $value := .Block.EnvVars }}| {{ $key }} | {{ $value }} |
+{{ end }}
+{{ end }}
 
 ## {{ if .Block.AiMeta }}Query{{ else }}Command Line{{ end }}
 

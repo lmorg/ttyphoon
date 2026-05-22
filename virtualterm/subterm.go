@@ -43,7 +43,7 @@ func (term *Term) newSubTerm(cmdLine, content string, meta types.BlockMetaFlag, 
 	subTerm := NewTerminal(&tile, term.renderer, &types.XY{X: term.size.X, Y: 1}, false)
 	subTerm.Start(pty)
 
-	subTerm.beginOutputBlock([]rune(cmdLine))
+	subTerm.beginOutputBlock([]rune(cmdLine), map[string]string{})
 
 	err := pty.Write([]byte(content))
 	if err != nil {

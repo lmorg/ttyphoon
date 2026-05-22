@@ -5816,7 +5816,7 @@ function applyWindowStyle(result) {
         :root {
             --bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
-            --accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --accent: rgb(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue});
             --link: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
             --red: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
             --green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -6099,10 +6099,10 @@ function applyWindowStyle(result) {
         }
 
         #notes-rename:hover, #notes-find:hover {
-            color: var(--yellow) !important;
+            color: var(--accent) !important;
             border-radius: 5px;
-            border-color: var(--yellow) !important;
-            background-color: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0.3);
+            border-color: var(--accent) !important;
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
         }
 
         #notes-delete:hover {
@@ -6263,7 +6263,7 @@ function applyWindowStyle(result) {
             border-radius: 5px;
             border: none;
             background: transparent;
-            color: var(--yellow);
+            color: var(--accent);
             padding: 1px 6px;
             cursor: pointer;
             font-family: var(--font-family);
@@ -7387,7 +7387,7 @@ function applyWindowStyle(result) {
         }
 
         .json-value-boolean {
-            color: var(--yellow);
+            color: var(--accent);
         }
 
         .json-value-null {

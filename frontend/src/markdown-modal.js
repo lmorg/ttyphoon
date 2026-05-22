@@ -1,6 +1,7 @@
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import './markdown-modal.css';
 import { marked } from 'marked';
+import { showLocalMenu } from './popup_menu';
 import {
     configureMarked,
     applySyntaxHighlighting,
@@ -11,8 +12,45 @@ import {
 
 configureMarked();
 
+let markdownModalTableWordWrapEnabled = true;
+
+function applyTableWordWrapMode(container) {
+    if (!container) {
+        return;
+    }
+
+    if (markdownModalTableWordWrapEnabled) {
+        container.classList.remove('markdown-modal-table-wordwrap-off');
+    } else {
+        container.classList.add('markdown-modal-table-wordwrap-off');
+    }
+}
+
 function buildLineNumbers(lineCount) {
     return Array.from({ length: Math.max(1, lineCount) }, (_, index) => String(index + 1)).join('\n');
+}
+
+function wrapTablesForHorizontalScroll(container) {
+    if (!container) {
+        return;
+    }
+
+    const tables = container.querySelectorAll('table');
+    tables.forEach((table) => {
+        if (!(table instanceof HTMLElement)) {
+            return;
+        }
+
+        const parent = table.parentElement;
+        if (!parent || parent.classList.contains('notes-table-scroll-wrap') || parent.classList.contains('markdown-modal-table-scroll-wrap')) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'markdown-modal-table-scroll-wrap';
+        table.before(wrapper);
+        wrapper.appendChild(table);
+    });
 }
 
 function enhanceCodeBlocks(container) {
@@ -107,6 +145,8 @@ export async function showMarkdownModal(markdownContent) {
     await renderMermaidDiagrams(body);
     await applySyntaxHighlighting(body);
     await processWailsImages(body);
+    wrapTablesForHorizontalScroll(body);
+    applyTableWordWrapMode(body);
     enhanceCodeBlocks(body);
     enableFullscreenImages(body);
 
@@ -135,6 +175,38 @@ export function initMarkdownModal() {
             closeMarkdownModal();
         }
     }, true);
+
+    overlay.addEventListener('contextmenu', (e) => {
+        const body = document.getElementById('markdown-modal-body');
+        if (!body || overlay.style.display === 'none') {
+            return;
+        }
+
+        const target = e.target instanceof Element ? e.target : null;
+        const tableTarget = target?.closest?.('.markdown-modal-table-scroll-wrap, table, th, td');
+        if (!tableTarget) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isWrapEnabled = !body.classList.contains('markdown-modal-table-wordwrap-off');
+        const options = ['Word wrap'];
+
+        showLocalMenu({
+            title: 'Select an action',
+            options,
+            icons: [isWrapEnabled ? 0xf00c : 0x20],
+            x: e.clientX,
+            y: e.clientY,
+            showNextToMouseCursor: true,
+            onSelect: () => {
+                markdownModalTableWordWrapEnabled = !isWrapEnabled;
+                applyTableWordWrapMode(body);
+            },
+        });
+    });
 
     EventsOn('showMarkdownModal', (markdownContent) => {
         void showMarkdownModal(markdownContent);

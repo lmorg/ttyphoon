@@ -132,6 +132,7 @@ type ColoursT struct {
 	MagentaBright types.Colour `json:"magentaBright"`
 	CyanBright    types.Colour `json:"cyanBright"`
 	WhiteBright   types.Colour `json:"whiteBright"`
+	Accent        types.Colour `json:"accent"`
 	Selection     types.Colour `json:"selection"`
 	Link          types.Colour `json:"link"`
 	Error         types.Colour `json:"error"`
@@ -162,6 +163,7 @@ func NewWindowStyle() *WindowStyleT {
 			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
 			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
 			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
+			Accent:        *types.SGR_COLOR_BLUE,
 			Selection:     *types.COLOR_SELECTION,
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,

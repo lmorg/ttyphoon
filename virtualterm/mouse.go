@@ -204,16 +204,17 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Fn:        func() { notesCreateAndOpen(term, absBlockPos) },
 			},
 			{
-				Title:     fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
-				Icon:      0xf544,
-				Highlight: highlightFn,
-				Fn:        func() { ai.Explain(agt, true) },
-			},
-			{
 				Title:     "View command meta...",
 				Icon:      0x23,
 				Highlight: highlightFn,
 				Fn:        func() { commandMeta(term, absPosY) },
+			},
+			{Title: types.MENU_SEPARATOR},
+			{
+				Title:     fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
+				Icon:      0xf544,
+				Highlight: highlightFn,
+				Fn:        func() { ai.Explain(agt, true) },
 			},
 		}...)
 }

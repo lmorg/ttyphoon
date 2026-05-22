@@ -33,6 +33,7 @@ export namespace main {
 	    magentaBright: types.Colour;
 	    cyanBright: types.Colour;
 	    whiteBright: types.Colour;
+	    accent: types.Colour;
 	    selection: types.Colour;
 	    link: types.Colour;
 	    error: types.Colour;
@@ -61,6 +62,7 @@ export namespace main {
 	        this.magentaBright = this.convertValues(source["magentaBright"], types.Colour);
 	        this.cyanBright = this.convertValues(source["cyanBright"], types.Colour);
 	        this.whiteBright = this.convertValues(source["whiteBright"], types.Colour);
+	        this.accent = this.convertValues(source["accent"], types.Colour);
 	        this.selection = this.convertValues(source["selection"], types.Colour);
 	        this.link = this.convertValues(source["link"], types.Colour);
 	        this.error = this.convertValues(source["error"], types.Colour);

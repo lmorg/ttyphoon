@@ -100,7 +100,7 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}h4,
         ${prefix}h5,
         ${prefix}h6 {
-            color: ${classPrefix ? 'var(--accent)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`};
+            color: ${classPrefix ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`};
             font-family: "Jura", var(--font-family), sans-serif;
         }
 
@@ -183,7 +183,7 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
     const blueBright = useCssVars ? 'var(--blue-bright)' : `rgb(${colors.blueBright.Red}, ${colors.blueBright.Green}, ${colors.blueBright.Blue})`;
     const magenta = useCssVars ? 'var(--magenta)' : `rgb(${colors.magenta.Red}, ${colors.magenta.Green}, ${colors.magenta.Blue})`;
     const green = useCssVars ? 'var(--green)' : `rgb(${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue})`;
-    const yellow = useCssVars ? 'var(--accent)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
+    const yellow = useCssVars ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
     const cyan = useCssVars ? 'var(--cyan)' : `rgb(${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue})`;
     const red = useCssVars ? 'var(--red)' : `rgb(${colors.red.Red}, ${colors.red.Green}, ${colors.red.Blue})`;
 
