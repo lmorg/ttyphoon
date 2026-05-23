@@ -102,6 +102,8 @@ func (term *Term) osc7UpdatePath(params []string) {
 }
 
 func _osc7UpdatePath(term *Term, host, pwd string) {
+	term.tile.SetPwd(pwd)
+
 	rowSrc := types.RowSource{
 		Host: host,
 		Pwd:  pwd,

@@ -7421,9 +7421,6 @@ EventsOn('terminalStyleUpdate', payload => {
     }
 });
 
-refreshFiles();
-window.refreshFiles = refreshFiles;
-
 function insertEditorText(text, target = elements.editor) {
     if (!text) {
         return;

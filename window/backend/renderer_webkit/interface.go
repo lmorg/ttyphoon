@@ -2,10 +2,8 @@ package rendererwebkit
 
 import (
 	"context"
-	"log"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -206,25 +204,17 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	wr.TriggerRedraw()
-	//wr.updateNotes()
-	wr.RefreshNotes()
 	wr.SetWindowTitle(wr.tmux.ActivePane().Name())
 }
 
 func (wr *webkitRender) RefreshNotes() {
 	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
 		// bit of a hack but this should only happen on application startup
-		time.Sleep(500 * time.Millisecond)
+		//time.Sleep(500 * time.Millisecond)
+		return
 	}
 	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
 }
-
-/*func (wr *webkitRender) RefreshNotes() {
-	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
-		return
-	}
-	wr.updateNotes()
-}*/
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
 	if wr.tmux != nil {

@@ -378,6 +378,10 @@ func (term *Term) SetFocus(state bool) {
 	term._isFocused = state
 	//term._slowBlinkState = true
 	term.renderer.SetBlinkState(true)
+
+	if state {
+		term.renderer.RefreshNotes()
+	}
 }
 
 func (term *Term) IsFocused() bool {

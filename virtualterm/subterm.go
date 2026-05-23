@@ -30,6 +30,7 @@ func (stt *subTermTileT) Close()            {}
 func (stt *subTermTileT) GetTerm() types.Term     { return stt.term }
 func (stt *subTermTileT) SetTerm(term types.Term) { stt.term = term }
 func (stt *subTermTileT) Pwd() string             { return stt.curPath }
+func (stt *subTermTileT) SetPwd(pwd string)       { stt.curPath = pwd }
 
 func (term *Term) newSubTerm(cmdLine, content string, meta types.BlockMetaFlag, aiMeta *types.AiMetaT, startTime time.Time) types.Screen {
 	tile := subTermTileT{
