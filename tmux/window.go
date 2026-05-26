@@ -164,6 +164,10 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 }
 
 func (tmux *Tmux) ActiveWindow() *WindowT {
+	if tmux == nil {
+		panic("no open windows")
+	}
+
 	win := tmux.activeWindow
 	if win != nil {
 		return win

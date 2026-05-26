@@ -1,3 +1,222 @@
+export namespace lsp {
+	
+	export class ApplyCodeActionResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyCodeActionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+	export class CodeActionItem {
+	    title: string;
+	    kind?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeActionItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.kind = source["kind"];
+	    }
+	}
+	export class CompletionItem {
+	    label: string;
+	    detail?: string;
+	    insertText?: string;
+	    kind?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CompletionItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.detail = source["detail"];
+	        this.insertText = source["insertText"];
+	        this.kind = source["kind"];
+	    }
+	}
+	export class DefinitionLocation {
+	    uri: string;
+	    filePath?: string;
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefinitionLocation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
+	export class Position {
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Position(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
+	export class Range {
+	    start: Position;
+	    end: Position;
+	
+	    static createFrom(source: any = {}) {
+	        return new Range(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = this.convertValues(source["start"], Position);
+	        this.end = this.convertValues(source["end"], Position);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Diagnostic {
+	    range: Range;
+	    severity: number;
+	    code?: any;
+	    source?: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.range = this.convertValues(source["range"], Range);
+	        this.severity = source["severity"];
+	        this.code = source["code"];
+	        this.source = source["source"];
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DocumentSymbolItem {
+	    name: string;
+	    detail?: string;
+	    kind: number;
+	    line: number;
+	    character: number;
+	    containerName?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DocumentSymbolItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.detail = source["detail"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.containerName = source["containerName"];
+	    }
+	}
+	export class FormatResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FormatResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+	
+	export class PrepareRenameResult {
+	    canRename: boolean;
+	    placeholder?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrepareRenameResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.canRename = source["canRename"];
+	        this.placeholder = source["placeholder"];
+	    }
+	}
+	
+	export class RenameResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RenameResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class ClipboardData {

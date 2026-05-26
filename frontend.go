@@ -28,6 +28,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
+	"github.com/lmorg/ttyphoon/utils/lsp"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
@@ -56,6 +57,9 @@ type WApp struct {
 	visible       bool
 	notesKills    map[string]func()
 	notesStickies map[string]types.Notification
+	lspStartErrs  map[string]string
+	lspManager    *lsp.Manager
+	lspDocs       *lsp.DocumentStore
 }
 
 func docsDir(function string) string {
@@ -95,13 +99,49 @@ func NewWailsApp() *WApp {
 		visible:       true,
 		notesKills:    map[string]func(){},
 		notesStickies: map[string]types.Notification{},
+		lspStartErrs:  map[string]string{},
 		homeDir:       xdg.Home,
 		projRoot:      findProjectRoot(""),
 		//usrNotesDir: userDocs(),
 		globalNotes: docsDir("notes"),
+		lspManager:  lsp.NewManager(),
+		lspDocs:     lsp.NewDocumentStore(),
 	}
 
 	return a
+}
+
+func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) {
+	if err == nil {
+		return
+	}
+
+	log.Println(err)
+
+	message := err.Error() //fmt.Sprintf("LSP (%s) failed to start: %v", languageID, err)
+	/*if len(argv) > 0 {
+		message += ": " + strings.Join(argv, " ")
+	}*/
+
+	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	if prev, ok := a.lspStartErrs[key]; ok && prev == message {
+		log.Printf("lsp: %s", message)
+		return
+	}
+	a.lspStartErrs[key] = message
+
+	if renderer, ok := renderwebkit.CurrentRenderer(); ok {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, message)
+	} else {
+		log.Printf("lsp: renderer unavailable for notification: %s", message)
+	}
+
+	log.Printf("lsp: %s", message)
+}
+
+func (a *WApp) clearLspStartError(languageID string) {
+	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	delete(a.lspStartErrs, key)
 }
 
 type WindowStyleT struct {
@@ -858,6 +898,503 @@ func (a WApp) filePathWithProject(filename string, projectPath string) string {
 
 func (a *WApp) ResolveFilePath(filename string) string {
 	return a.filePath(filename)
+}
+
+// ResolveNotesLspLanguage returns the canonical language id for a filename.
+func (a *WApp) ResolveNotesLspLanguage(filename string) string {
+	return lsp.ResolveLanguageIDForFile(filename)
+}
+
+// ----------------------------------------------------------------------------
+// LSP document lifecycle bridge (called from JS)
+// ----------------------------------------------------------------------------
+
+// notesLspServerFor resolves the language server for the file's language id,
+// starting it if necessary. Wires the diagnostics listener on first start.
+// Returns nil if no server is configured.
+func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess {
+	if languageID == "" {
+		languageID = lsp.ResolveLanguageIDForFile(absPath)
+	}
+
+	var candidateIDs []string
+	if languageID != "" {
+		candidateIDs = append(candidateIDs, languageID)
+	}
+	for _, id := range lsp.ResolveLanguageIDsForFile(absPath) {
+		if id != "" && !slices.Contains(candidateIDs, id) {
+			candidateIDs = append(candidateIDs, id)
+		}
+	}
+
+	if len(candidateIDs) == 0 {
+		return nil
+	}
+
+	selectedLanguageID := ""
+	var argv []string
+	for _, id := range candidateIDs {
+		argv = lsp.LookupArgv(config.Config.Notes.LSP, id)
+		if len(argv) > 0 {
+			selectedLanguageID = id
+			break
+		}
+	}
+
+	if len(argv) == 0 {
+		return nil
+	}
+
+	alreadyRunning := a.lspManager.Has(a.projRoot, selectedLanguageID)
+
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv)
+	if err != nil {
+		a.notifyLspStartError(selectedLanguageID, argv, err)
+		return nil
+	}
+
+	// Start notification listener only on the first time this server is created.
+	if !alreadyRunning {
+		go lsp.ListenForNotifications(a.ctx, sp, func(uri string) (string, bool) {
+			doc := a.lspDocs.GetByURI(uri)
+			if doc != nil {
+				return doc.Content(), true
+			}
+
+			path, err := lsp.URIToFilePath(uri)
+			if err != nil {
+				return "", false
+			}
+
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return "", false
+			}
+
+			return string(b), true
+		}, func(payload lsp.DiagnosticsPayload) {
+			runtime.EventsEmit(a.ctx, "notesLspDiagnostics", payload)
+		}, func(payload lsp.LspProgressPayload) {
+			runtime.EventsEmit(a.ctx, "notesLspProgress", payload)
+		}, func(payload lsp.LspLogPayload) {
+			runtime.EventsEmit(a.ctx, "notesLspLog", payload)
+		})
+	}
+
+	if err := sp.EnsureInitialized(a.ctx, a.projRoot); err != nil {
+		a.notifyLspStartError(selectedLanguageID, argv, err)
+		return nil
+	}
+
+	a.clearLspStartError(selectedLanguageID)
+
+	return sp
+}
+
+// NotesLspOpenDocument notifies the language server that a file was opened.
+func (a *WApp) NotesLspOpenDocument(filePath, languageID, content string) {
+	absPath := a.filePath(filePath)
+	sp := a.notesLspServerFor(absPath, languageID)
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.lspDocs.DidOpen(a.ctx, t, absPath, languageID, content); err != nil {
+		log.Printf("lsp: DidOpen %q: %v", absPath, err)
+	}
+}
+
+// NotesLspChangeDocument notifies the language server of content changes.
+func (a *WApp) NotesLspChangeDocument(filePath, content string) {
+	absPath := a.filePath(filePath)
+	if !a.lspDocs.IsOpen(absPath) {
+		return
+	}
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return
+	}
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.lspDocs.DidChange(a.ctx, t, absPath, content); err != nil {
+		log.Printf("lsp: DidChange %q: %v", absPath, err)
+	}
+}
+
+// NotesLspSaveDocument notifies the language server that a file was saved.
+func (a *WApp) NotesLspSaveDocument(filePath string) {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return
+	}
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.lspDocs.DidSave(a.ctx, t, absPath); err != nil {
+		log.Printf("lsp: DidSave %q: %v", absPath, err)
+	}
+}
+
+// NotesLspCloseDocument notifies the language server that a file was closed.
+func (a *WApp) NotesLspCloseDocument(filePath string) {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return
+	}
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		a.lspDocs.DidClose(a.ctx, nil, absPath) //nolint:errcheck // just clean up store
+		return
+	}
+	t := sp.Transport()
+	if err := a.lspDocs.DidClose(a.ctx, t, absPath); err != nil {
+		log.Printf("lsp: DidClose %q: %v", absPath, err)
+	}
+}
+
+// NotesLspHover requests hover text at a document position.
+func (a *WApp) NotesLspHover(filePath string, line, character int) string {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return ""
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return ""
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return ""
+	}
+
+	text, err := lsp.RequestHover(a.ctx, t, doc.URI, doc.Content(), line, character, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: Hover %q (%d,%d): %v", absPath, line, character, err)
+		return ""
+	}
+
+	return text
+}
+
+// NotesLspSignatureHelp requests signature help at a document position.
+func (a *WApp) NotesLspSignatureHelp(filePath string, line, character, triggerKind int, triggerChar string) string {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return ""
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return ""
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return ""
+	}
+
+	text, err := lsp.RequestSignatureHelp(a.ctx, t, doc.URI, doc.Content(), line, character, triggerKind, triggerChar, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: SignatureHelp %q (%d,%d): %v", absPath, line, character, err)
+		return ""
+	}
+
+	return text
+}
+
+// NotesLspCompletion requests completion items at a document position.
+func (a *WApp) NotesLspCompletion(filePath string, line, character, triggerKind int, triggerChar string) []lsp.CompletionItem {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	items, err := lsp.RequestCompletion(a.ctx, t, doc.URI, doc.Content(), line, character, triggerKind, triggerChar, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: Completion %q (%d,%d): %v", absPath, line, character, err)
+		return nil
+	}
+
+	return items
+}
+
+// NotesLspDefinition requests definition locations at a document position.
+func (a *WApp) NotesLspDefinition(filePath string, line, character int) []lsp.DefinitionLocation {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	locations, err := lsp.RequestDefinition(a.ctx, t, doc.URI, doc.Content(), line, character, sp.PositionEncoding(), func(uri string) (string, bool) {
+		openDoc := a.lspDocs.GetByURI(uri)
+		if openDoc != nil {
+			return openDoc.Content(), true
+		}
+
+		path, err := lsp.URIToFilePath(uri)
+		if err != nil {
+			return "", false
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", false
+		}
+
+		return string(b), true
+	})
+	if err != nil {
+		log.Printf("lsp: Definition %q (%d,%d): %v", absPath, line, character, err)
+		return nil
+	}
+
+	return locations
+}
+
+// NotesLspDocumentSymbols requests symbols for the current document.
+func (a *WApp) NotesLspDocumentSymbols(filePath string) []lsp.DocumentSymbolItem {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	items, err := lsp.RequestDocumentSymbols(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: DocumentSymbols %q: %v", absPath, err)
+		return nil
+	}
+
+	return items
+}
+
+// NotesLspFormat requests whole-document formatting and returns updated content.
+func (a *WApp) NotesLspFormat(filePath string) lsp.FormatResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return lsp.FormatResult{}
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return lsp.FormatResult{}
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return lsp.FormatResult{}
+	}
+
+	result, err := lsp.RequestFormatting(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: Format %q: %v", absPath, err)
+		return lsp.FormatResult{}
+	}
+
+	return result
+}
+
+// NotesLspFormatRange requests range formatting and returns updated content.
+func (a *WApp) NotesLspFormatRange(filePath string, startLine, startCharacter, endLine, endCharacter int) lsp.FormatResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return lsp.FormatResult{}
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return lsp.FormatResult{}
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return lsp.FormatResult{}
+	}
+
+	result, err := lsp.RequestRangeFormatting(
+		a.ctx,
+		t,
+		doc.URI,
+		doc.Content(),
+		startLine,
+		startCharacter,
+		endLine,
+		endCharacter,
+		sp.PositionEncoding(),
+	)
+	if err != nil {
+		log.Printf("lsp: FormatRange %q (%d,%d)-(%d,%d): %v", absPath, startLine, startCharacter, endLine, endCharacter, err)
+		return lsp.FormatResult{}
+	}
+
+	return result
+}
+
+// NotesLspCodeActions requests code actions for a cursor position.
+func (a *WApp) NotesLspCodeActions(filePath string, line, character int, diagnostics []lsp.Diagnostic) []lsp.CodeActionItem {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	items, err := lsp.RequestCodeActions(a.ctx, t, doc.URI, doc.Content(), line, character, diagnostics, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: CodeActions %q (%d,%d): %v", absPath, line, character, err)
+		return nil
+	}
+
+	return items
+}
+
+// NotesLspApplyCodeAction applies a selected code action and returns updated content.
+func (a *WApp) NotesLspApplyCodeAction(filePath string, line, character, index int, diagnostics []lsp.Diagnostic) lsp.ApplyCodeActionResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return lsp.ApplyCodeActionResult{}
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return lsp.ApplyCodeActionResult{}
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return lsp.ApplyCodeActionResult{}
+	}
+
+	result, err := lsp.ApplyCodeAction(a.ctx, t, doc.URI, doc.Content(), line, character, diagnostics, index, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: ApplyCodeAction %q (%d,%d) #%d: %v", absPath, line, character, index, err)
+		return lsp.ApplyCodeActionResult{}
+	}
+
+	return result
+}
+
+// NotesLspPrepareRename checks if symbol rename is valid at a cursor position.
+func (a *WApp) NotesLspPrepareRename(filePath string, line, character int) lsp.PrepareRenameResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return lsp.PrepareRenameResult{}
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return lsp.PrepareRenameResult{}
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return lsp.PrepareRenameResult{}
+	}
+
+	result, err := lsp.RequestPrepareRename(a.ctx, t, doc.URI, doc.Content(), line, character, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: PrepareRename %q (%d,%d): %v", absPath, line, character, err)
+		return lsp.PrepareRenameResult{}
+	}
+
+	return result
+}
+
+// NotesLspRename applies LSP rename edits at a cursor position.
+func (a *WApp) NotesLspRename(filePath string, line, character int, newName string) lsp.RenameResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return lsp.RenameResult{}
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return lsp.RenameResult{}
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return lsp.RenameResult{}
+	}
+
+	result, err := lsp.RequestRename(a.ctx, t, doc.URI, doc.Content(), line, character, newName, sp.PositionEncoding())
+	if err != nil {
+		log.Printf("lsp: Rename %q (%d,%d) -> %q: %v", absPath, line, character, newName, err)
+		return lsp.RenameResult{}
+	}
+
+	return result
+}
+
+// NotesLspStopAll shuts down all running language servers (called on app exit).
+func (a *WApp) NotesLspStopAll() {
+	a.lspManager.StopAll()
 }
 
 // GetCurrentProject returns the absolute path of the current project root.

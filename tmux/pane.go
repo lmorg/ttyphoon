@@ -69,7 +69,7 @@ type PaneT struct {
 	active   bool
 	atBottom bool
 	windowId string
-	curPath  string
+	pwd      string
 	tmux     *Tmux
 	term     types.Term
 	buf      *runebuf.Buf
@@ -152,7 +152,7 @@ type paneInfo struct {
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
 	AtBottom  bool   `tmux:"?pane_at_bottom,true,false"`
-	CurPath   string `tmux:"pane_current_path"`
+	Path      string `tmux:"pane_path"`
 }
 
 // updatePaneInfo, paneId is optional. Leave blank to update all panes
@@ -209,7 +209,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	pane.right = int32(info.PosRight)
 	pane.bottom = int32(info.PosBottom)
 	pane.atBottom = info.AtBottom
-	pane.curPath = info.CurPath
+	pane.pwd = info.Path
 	if pane.term != nil {
 		pane.term.MakeVisible(info.WinActive)
 		pane.term.SetFocus(info.Active)

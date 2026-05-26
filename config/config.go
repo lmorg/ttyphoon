@@ -128,6 +128,7 @@ type configT struct {
 
 	Notes struct {
 		MaxFileSize int64 `yaml:"MaxFileSize"`
+		LSP         map[string][]string `yaml:"LSP"`
 	} `yaml:"Notes"`
 
 	TypeFace struct {

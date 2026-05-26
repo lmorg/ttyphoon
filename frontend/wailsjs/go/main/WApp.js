@@ -86,12 +86,80 @@ export function NotesKeyPress(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesKeyPress'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function NotesLspApplyCodeAction(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['NotesLspApplyCodeAction'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function NotesLspChangeDocument(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesLspChangeDocument'](arg1, arg2);
+}
+
+export function NotesLspCloseDocument(arg1) {
+  return window['go']['main']['WApp']['NotesLspCloseDocument'](arg1);
+}
+
+export function NotesLspCodeActions(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['NotesLspCodeActions'](arg1, arg2, arg3, arg4);
+}
+
+export function NotesLspCompletion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['NotesLspCompletion'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function NotesLspDefinition(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspDefinition'](arg1, arg2, arg3);
+}
+
+export function NotesLspDocumentSymbols(arg1) {
+  return window['go']['main']['WApp']['NotesLspDocumentSymbols'](arg1);
+}
+
+export function NotesLspFormat(arg1) {
+  return window['go']['main']['WApp']['NotesLspFormat'](arg1);
+}
+
+export function NotesLspFormatRange(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['NotesLspFormatRange'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function NotesLspHover(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspHover'](arg1, arg2, arg3);
+}
+
+export function NotesLspOpenDocument(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspOpenDocument'](arg1, arg2, arg3);
+}
+
+export function NotesLspPrepareRename(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspPrepareRename'](arg1, arg2, arg3);
+}
+
+export function NotesLspRename(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['NotesLspRename'](arg1, arg2, arg3, arg4);
+}
+
+export function NotesLspSaveDocument(arg1) {
+  return window['go']['main']['WApp']['NotesLspSaveDocument'](arg1);
+}
+
+export function NotesLspSignatureHelp(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['NotesLspSignatureHelp'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function NotesLspStopAll() {
+  return window['go']['main']['WApp']['NotesLspStopAll']();
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
 export function ResolveFilePath(arg1) {
   return window['go']['main']['WApp']['ResolveFilePath'](arg1);
+}
+
+export function ResolveNotesLspLanguage(arg1) {
+  return window['go']['main']['WApp']['ResolveNotesLspLanguage'](arg1);
 }
 
 export function RunAIAgentWithStream(arg1, arg2) {

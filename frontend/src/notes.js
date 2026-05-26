@@ -7,6 +7,12 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
+    ResolveNotesLspLanguage,
+    NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
+    NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
+    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    NotesLspSignatureHelp,
+    NotesLspPrepareRename, NotesLspRename,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -628,6 +634,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
+    currentFileUri: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
     dirty: false,
@@ -662,7 +669,20 @@ const state = {
     hexRenderedFile: '',
     hexLoadingPromise: null,
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
+    lspChangeTimer: null,
+    lspOpenFile: '',
+    lspHoverTimer: null,
+    lspHoverLastKey: '',
+    lspHoverMouseX: 0,
+    lspHoverMouseY: 0,
+    lspCompletionItems: [],
+    lspCompletionIndex: 0,
+    lspCompletionVisible: false,
 };
+
+const LSP_CHANGE_DEBOUNCE_MS = 200;
+const LSP_HOVER_DEBOUNCE_MS = 250;
+const LSP_COMPLETION_MAX_ITEMS = 10;
 
 let lastAutoCopiedViewerSelection = '';
 
@@ -853,6 +873,8 @@ function inferEditorLanguage(file, content) {
     const fileName = String(file || '').toLowerCase();
     const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
 
+
+    //const extensionMap = { foo: 'bar' }
     const extensionMap = {
         go: 'go',
         js: 'javascript',
@@ -982,6 +1004,9 @@ function renderEditorDecorations() {
     } catch {
         elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
     }
+
+    // Overlay LSP diagnostic squiggles on top of the freshly rendered syntax.
+    renderLspDiagnostics();
 
     syncEditorScrollDecorations();
 }
@@ -2663,6 +2688,656 @@ function scheduleAutoSave() {
     }, 1000);
 }
 
+function isCurrentFileLspEligible() {
+    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
+}
+
+function clearLspChangeTimer() {
+    if (state.lspChangeTimer) {
+        clearTimeout(state.lspChangeTimer);
+        state.lspChangeTimer = null;
+    }
+}
+
+function clearLspHoverTimer() {
+    if (state.lspHoverTimer) {
+        clearTimeout(state.lspHoverTimer);
+        state.lspHoverTimer = null;
+    }
+}
+
+function hideLspHoverTooltip() {
+    if (lspHoverTooltipEl) {
+        lspHoverTooltipEl.style.display = 'none';
+        lspHoverTooltipEl.innerHTML = '';
+    }
+}
+
+function hideLspCompletion() {
+    state.lspCompletionVisible = false;
+    state.lspCompletionItems = [];
+    state.lspCompletionIndex = 0;
+    if (lspCompletionEl) {
+        lspCompletionEl.style.display = 'none';
+        lspCompletionEl.innerHTML = '';
+    }
+}
+
+function replaceCurrentIdentifierWithCompletion(text) {
+    if (!elements.editor) {
+        return;
+    }
+
+    const source = elements.editor.value || '';
+    const cursor = elements.editor.selectionStart || 0;
+    const left = source.slice(0, cursor);
+    const match = left.match(/[A-Za-z0-9_]+$/);
+    const start = match ? cursor - match[0].length : cursor;
+    elements.editor.setSelectionRange(start, cursor);
+    elements.editor.setRangeText(String(text || ''), start, cursor, 'end');
+    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function renderLspCompletionPopup() {
+    if (!lspCompletionEl) {
+        return;
+    }
+
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        hideLspCompletion();
+        return;
+    }
+
+    const activeIndex = Math.max(0, Math.min(state.lspCompletionIndex, state.lspCompletionItems.length - 1));
+    state.lspCompletionIndex = activeIndex;
+
+    const fragment = document.createDocumentFragment();
+    state.lspCompletionItems.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'notes-lsp-completion-item';
+        row.dataset.active = idx === activeIndex ? 'true' : 'false';
+
+        const label = document.createElement('span');
+        label.className = 'notes-lsp-completion-label';
+        label.textContent = String(item.label || '');
+        row.appendChild(label);
+
+        if (item.detail) {
+            const detail = document.createElement('span');
+            detail.className = 'notes-lsp-completion-detail';
+            detail.textContent = String(item.detail);
+            row.appendChild(detail);
+        }
+
+        row.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            replaceCurrentIdentifierWithCompletion(item.insertText || item.label);
+            hideLspCompletion();
+        });
+
+        fragment.appendChild(row);
+    });
+
+    lspCompletionEl.innerHTML = '';
+    lspCompletionEl.appendChild(fragment);
+    lspCompletionEl.style.display = 'block';
+
+    const fallbackRect = elements.editor?.getBoundingClientRect();
+    const rawX = state.lspHoverMouseX || (fallbackRect ? fallbackRect.left + 20 : 20);
+    const rawY = state.lspHoverMouseY || (fallbackRect ? fallbackRect.top + 20 : 20);
+    const x = Math.min(rawX + 14, window.innerWidth - lspCompletionEl.offsetWidth - 8);
+    const y = Math.min(rawY + 18, window.innerHeight - lspCompletionEl.offsetHeight - 8);
+    lspCompletionEl.style.left = `${Math.max(8, x)}px`;
+    lspCompletionEl.style.top = `${Math.max(8, y)}px`;
+}
+
+async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        hideLspCompletion();
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    try {
+        const items = await NotesLspCompletion(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        const list = Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+        if (list.length === 0) {
+            hideLspCompletion();
+            return;
+        }
+
+        state.lspCompletionItems = list;
+        state.lspCompletionIndex = 0;
+        state.lspCompletionVisible = true;
+        renderLspCompletionPopup();
+    } catch {
+        hideLspCompletion();
+    }
+}
+
+async function requestLspCompletionAfterSync(content, triggerChar) {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        await NotesLspChangeDocument(state.currentFile, String(content || ''));
+    } catch {
+        // Fall through to completion request even when fast sync fails.
+    }
+
+    await requestLspCompletion(2, triggerChar);
+}
+
+function fileUriToPath(uri) {
+    const source = String(uri || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    try {
+        const parsed = new URL(source);
+        if (parsed.protocol !== 'file:') {
+            return '';
+        }
+
+        let path = decodeURIComponent(parsed.pathname || '');
+        if (/^\/[A-Za-z]:\//.test(path)) {
+            path = path.slice(1);
+        }
+        return path.replace(/\\/g, '/');
+    } catch {
+        return '';
+    }
+}
+
+function normalizePathForMatch(path) {
+    const source = String(path || '').trim().replace(/\\/g, '/');
+    if (!source) {
+        return '';
+    }
+    return source.endsWith('/') ? source.slice(0, -1) : source;
+}
+
+function lspPositionToEditorOffset(content, line, character) {
+    const source = String(content || '');
+    const lines = source.split('\n');
+    const safeLine = Math.max(0, Math.min(Number(line) || 0, Math.max(lines.length - 1, 0)));
+    const lineContent = lines[safeLine] || '';
+    const safeCharacter = Math.max(0, Math.min(Number(character) || 0, lineContent.length));
+
+    let offset = 0;
+    for (let i = 0; i < safeLine; i += 1) {
+        offset += (lines[i] || '').length + 1;
+    }
+
+    return offset + safeCharacter;
+}
+
+async function resolveNotesFileFromAbsolutePath(absPath) {
+    const normalizedTarget = normalizePathForMatch(absPath);
+    if (!normalizedTarget) {
+        return '';
+    }
+
+    if (state.currentFile) {
+        try {
+            const currentResolved = normalizePathForMatch(await ResolveFilePath(state.currentFile));
+            if (currentResolved === normalizedTarget) {
+                return state.currentFile;
+            }
+        } catch {
+            // Ignore and continue with file list lookup.
+        }
+    }
+
+    for (const file of state.files) {
+        try {
+            const resolved = normalizePathForMatch(await ResolveFilePath(file));
+            if (resolved === normalizedTarget) {
+                return file;
+            }
+        } catch {
+            // Keep scanning; one bad entry should not stop lookup.
+        }
+    }
+
+    return '';
+}
+
+async function requestLspDefinition() {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+
+    try {
+        const locations = await NotesLspDefinition(state.currentFile, pos.line, pos.character);
+        const target = Array.isArray(locations) && locations.length > 0 ? locations[0] : null;
+        if (!target) {
+            notifyTerminal('Definition not found', 'info');
+            return;
+        }
+
+        const targetAbsPath = normalizePathForMatch(target.filePath || fileUriToPath(target.uri));
+        if (!targetAbsPath) {
+            notifyTerminal('Definition target is not a local file', 'warn');
+            return;
+        }
+
+        const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
+        if (!targetNotesFile) {
+            notifyTerminal('Definition target is outside indexed Notes files', 'warn');
+            return;
+        }
+
+        await loadFile(targetNotesFile);
+
+        const targetLine = Math.max(0, Number(target.line) || 0);
+        const targetChar = Math.max(0, Number(target.character) || 0);
+        const offset = lspPositionToEditorOffset(elements.editor.value || '', targetLine, targetChar);
+        elements.editor.focus();
+        elements.editor.setSelectionRange(offset, offset);
+
+        const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+        elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
+        syncEditorScrollDecorations();
+
+        state.lspHoverLastKey = '';
+        scheduleLspHover();
+    } catch {
+        notifyTerminal('Failed to resolve definition', 'error');
+    }
+}
+
+async function formatCurrentLspDocument() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const selectionStart = Number(elements.editor.selectionStart) || 0;
+        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+
+        let result;
+        if (selectionEnd > selectionStart) {
+            const startPos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+            const endPos = offsetToLspPosition(elements.editor.value || '', selectionEnd);
+
+            result = await NotesLspFormatRange(
+                state.currentFile,
+                startPos.line,
+                startPos.character,
+                endPos.line,
+                endPos.character,
+            );
+        } else {
+            result = await NotesLspFormat(state.currentFile);
+        }
+
+        if (!result || !result.changed) {
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to format document', 'error');
+    }
+}
+
+function symbolDisplayLabel(item) {
+    const name = String(item?.name || '').trim();
+    const detail = String(item?.detail || '').trim();
+    const container = String(item?.containerName || '').trim();
+
+    let label = name;
+    if (detail) {
+        label += ` - ${detail}`;
+    }
+    if (container) {
+        label += ` (${container})`;
+    }
+
+    return label;
+}
+
+async function goToCurrentLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    let symbols = [];
+    try {
+        symbols = await NotesLspDocumentSymbols(state.currentFile);
+    } catch {
+        notifyTerminal('Failed to fetch document symbols', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(symbols)
+        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+        : [];
+
+    if (entries.length === 0) {
+        notifyTerminal('No symbols found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => symbolDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Go to symbol',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            const line = Math.max(0, Number(picked.line) || 0);
+            const character = Math.max(0, Number(picked.character) || 0);
+            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+
+            elements.editor.focus();
+            elements.editor.setSelectionRange(offset, offset);
+
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
+            syncEditorScrollDecorations();
+
+            state.lspHoverLastKey = '';
+            scheduleLspHover();
+        },
+    });
+}
+
+function isPositionWithinRange(line, character, range) {
+    if (!range || !range.start || !range.end) {
+        return false;
+    }
+
+    const startLine = Number(range.start.line) || 0;
+    const startChar = Number(range.start.character) || 0;
+    const endLine = Number(range.end.line) || startLine;
+    const endChar = Number(range.end.character) || startChar;
+
+    if (line < startLine || line > endLine) {
+        return false;
+    }
+    if (line === startLine && character < startChar) {
+        return false;
+    }
+    if (line === endLine && character > endChar) {
+        return false;
+    }
+
+    return true;
+}
+
+function lspDiagnosticsAtPosition(line, character) {
+    const uri = state.currentFileUri;
+    if (!uri) {
+        return [];
+    }
+
+    const diagnostics = lspDiagnosticsStore.get(uri) || [];
+    return diagnostics.filter((diag) => isPositionWithinRange(line, character, diag.range));
+}
+
+async function getLspCodeActionsForCursor() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return { line: 0, character: 0, diagnostics: [], actions: [] };
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
+
+    try {
+        const actions = await NotesLspCodeActions(state.currentFile, pos.line, pos.character, diagnostics);
+        return {
+            line: pos.line,
+            character: pos.character,
+            diagnostics,
+            actions: Array.isArray(actions) ? actions : [],
+        };
+    } catch {
+        return {
+            line: pos.line,
+            character: pos.character,
+            diagnostics,
+            actions: [],
+        };
+    }
+}
+
+async function applyLspCodeActionFromCursor(index, line, character, diagnostics) {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const result = await NotesLspApplyCodeAction(state.currentFile, line, character, index, diagnostics || []);
+        if (!result || !result.changed) {
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to apply code action', 'error');
+    }
+}
+
+async function renameCurrentLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const selectionStart = Number(elements.editor.selectionStart) || 0;
+    const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+    const currentSelection = selectionEnd > selectionStart
+        ? String(elements.editor.value || '').slice(selectionStart, selectionEnd)
+        : '';
+
+    const pos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+
+    let prepare;
+    try {
+        prepare = await NotesLspPrepareRename(state.currentFile, pos.line, pos.character);
+    } catch {
+        notifyTerminal('Failed to prepare symbol rename', 'error');
+        return;
+    }
+
+    if (!prepare || !prepare.canRename) {
+        notifyTerminal('Rename not available at this cursor position', 'info');
+        return;
+    }
+
+    const suggested = String(prepare.placeholder || currentSelection || '').trim();
+    const nextName = window.prompt('Rename symbol to:', suggested);
+    if (nextName === null) {
+        return;
+    }
+
+    const trimmedName = String(nextName).trim();
+    if (!trimmedName) {
+        notifyTerminal('Rename cancelled: new name is empty', 'warn');
+        return;
+    }
+
+    try {
+        const result = await NotesLspRename(state.currentFile, pos.line, pos.character, trimmedName);
+        if (!result || !result.changed) {
+            notifyTerminal('No rename edits applied', 'info');
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to rename symbol', 'error');
+    }
+}
+
+function offsetToLspPosition(content, offset) {
+    const source = String(content || '');
+    const clampedOffset = Math.max(0, Math.min(Number(offset) || 0, source.length));
+    const before = source.slice(0, clampedOffset);
+    const lines = before.split('\n');
+    return {
+        line: Math.max(0, lines.length - 1),
+        character: lines[lines.length - 1]?.length || 0,
+    };
+}
+
+function scheduleLspHover() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        hideLspHoverTooltip();
+        return;
+    }
+
+    clearLspHoverTimer();
+    state.lspHoverTimer = setTimeout(async () => {
+        state.lspHoverTimer = null;
+
+        const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+        const key = `${state.currentFile}:${pos.line}:${pos.character}`;
+        if (key === state.lspHoverLastKey) {
+            return;
+        }
+        state.lspHoverLastKey = key;
+
+        try {
+            const text = await NotesLspHover(state.currentFile, pos.line, pos.character);
+            if (!text) {
+                hideLspHoverTooltip();
+                return;
+            }
+
+            lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+            await processMarkdownContainer(lspHoverTooltipEl);
+            lspHoverTooltipEl.style.display = 'block';
+
+            const fallbackRect = elements.editor?.getBoundingClientRect();
+            const rawX = state.lspHoverMouseX || (fallbackRect ? fallbackRect.left + 20 : 20);
+            const rawY = state.lspHoverMouseY || (fallbackRect ? fallbackRect.top + 20 : 20);
+            const x = Math.min(rawX + 14, window.innerWidth - lspHoverTooltipEl.offsetWidth - 8);
+            const y = Math.min(rawY + 14, window.innerHeight - lspHoverTooltipEl.offsetHeight - 8);
+            lspHoverTooltipEl.style.left = `${Math.max(8, x)}px`;
+            lspHoverTooltipEl.style.top = `${Math.max(8, y)}px`;
+        } catch {
+            hideLspHoverTooltip();
+        }
+    }, LSP_HOVER_DEBOUNCE_MS);
+}
+
+async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = '') {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+
+    try {
+        const text = await NotesLspSignatureHelp(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        if (!text) {
+            notifyTerminal('No signature help available', 'info');
+            return;
+        }
+
+        lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+        await processMarkdownContainer(lspHoverTooltipEl);
+        lspHoverTooltipEl.style.display = 'block';
+
+        const fallbackRect = elements.editor?.getBoundingClientRect();
+        const rawX = state.lspHoverMouseX || (fallbackRect ? fallbackRect.left + 20 : 20);
+        const rawY = state.lspHoverMouseY || (fallbackRect ? fallbackRect.top + 20 : 20);
+        const x = Math.min(rawX + 14, window.innerWidth - lspHoverTooltipEl.offsetWidth - 8);
+        const y = Math.min(rawY + 14, window.innerHeight - lspHoverTooltipEl.offsetHeight - 8);
+        lspHoverTooltipEl.style.left = `${Math.max(8, x)}px`;
+        lspHoverTooltipEl.style.top = `${Math.max(8, y)}px`;
+    } catch {
+        notifyTerminal('Failed to fetch signature help', 'error');
+    }
+}
+
+async function closeOpenLspDocument() {
+    clearLspChangeTimer();
+    clearLspHoverTimer();
+    hideLspHoverTooltip();
+    hideLspCompletion();
+
+    const openFile = state.lspOpenFile;
+    if (!openFile) {
+        return;
+    }
+
+    try {
+        await NotesLspCloseDocument(openFile);
+    } catch (err) {
+        console.error('notes lsp close failed:', err);
+    } finally {
+        state.lspOpenFile = '';
+        state.lspHoverLastKey = '';
+    }
+}
+
+async function openCurrentLspDocument(content) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const languageID = await ResolveNotesLspLanguage(state.currentFile);
+        if (!languageID) {
+            return;
+        }
+
+        await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
+        state.lspOpenFile = state.currentFile;
+    } catch (err) {
+        console.error('notes lsp open failed:', err);
+    }
+}
+
+function scheduleLspDidChange() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    clearLspChangeTimer();
+    state.lspChangeTimer = setTimeout(async () => {
+        state.lspChangeTimer = null;
+        try {
+            await NotesLspChangeDocument(state.currentFile, elements.editor.value || '');
+        } catch (err) {
+            console.error('notes lsp change failed:', err);
+        }
+    }, LSP_CHANGE_DEBOUNCE_MS);
+}
+
 function setDirty(isDirty) {
     state.dirty = isDirty;
     const label = state.currentFile ? state.currentFile : 'No file selected';
@@ -4202,6 +4877,13 @@ async function loadFile(file) {
         return;
     }
 
+    if (state.currentFile && state.currentFile !== file) {
+        await closeOpenLspDocument();
+        // Clear rendered diagnostics immediately while the new file loads.
+        state.currentFileUri = '';
+        clearVisibleLspDiagnostics();
+    }
+
     const fileName = file ? getPathFileName(file) : 'json file';
     let stickyId = null;
 
@@ -4237,6 +4919,7 @@ async function loadFile(file) {
             // GetFile does. GetImage expects a path without a leading separator
             // (it prepends one itself), so strip it after resolution.
             const resolvedPath = await ResolveFilePath(file);
+            state.currentFileUri = filePathToUri(resolvedPath || file);
             const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
             if (imageData.startsWith('error:')) {
                 setStatus(`Failed to load image: ${imageData}`, true);
@@ -4263,6 +4946,7 @@ async function loadFile(file) {
         const result = await GetFile(file);
 
         state.currentFile = file;
+        state.currentFileUri = await resolveNotesFileUri(file);
         emitCurrentFileName();
         await refreshFileMetaMarkdown(file);
 
@@ -4428,6 +5112,10 @@ async function loadFile(file) {
         if (elements.findBar.dataset.open === 'true') {
             closeFindBar();
         }
+
+        if (isCurrentFileLspEligible()) {
+            await openCurrentLspDocument(elements.editor.value || '');
+        }
     } catch (err) {
         if (stickyId) {
             closeStickyProgress(stickyId, `Failed to load ${getPathFileName(file)}`, 'error');
@@ -4450,6 +5138,9 @@ async function saveFile() {
         
         // Use the saved project context to prevent overwrites if user switched projects
         await SaveFile(state.currentFile, content, state.currentFileProject || '');
+        if (state.lspOpenFile === state.currentFile && isCurrentFileLspEligible()) {
+            await NotesLspSaveDocument(state.currentFile);
+        }
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -4482,15 +5173,28 @@ async function confirmDelete() {
 
     const fileToDelete = state.deletingFile;
     const fileName = getPathFileName(fileToDelete);
+    const fileUri = state.currentFile === fileToDelete
+        ? state.currentFileUri
+        : await resolveNotesFileUri(fileToDelete);
 
     try {
+        if (state.currentFile === fileToDelete) {
+            await closeOpenLspDocument();
+        }
         await DeleteFile(fileToDelete);
+        if (fileUri) {
+            lspDiagnosticsStore.delete(fileUri);
+        }
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
+            state.currentFileUri = '';
             state.currentFileProject = '';
+            state.lspHoverLastKey = '';
             emitCurrentFileName();
             elements.editor.value = '';
             elements.swaggerView.innerHTML = '';
+            clearVisibleLspDiagnostics();
+            hideLspHoverTooltip();
             await renderMarkdown();
             setDirty(false);
         }
@@ -7405,6 +8109,131 @@ function applyWindowStyle(result) {
 
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
 
+        /* ------------------------------------------------------------------ */
+        /* LSP diagnostics                                                      */
+        /* ------------------------------------------------------------------ */
+
+        /* Squiggle underlines on the highlight overlay */
+        .lsp-squiggle-error {
+            text-decoration: underline wavy rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-warning {
+            text-decoration: underline wavy rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-info {
+            text-decoration: underline wavy rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-hint {
+            text-decoration: underline dotted rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45) 1px;
+            text-underline-offset: 3px;
+        }
+
+        /* Gutter severity markers — appended to gutter line spans */
+        .lsp-gutter-mark {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 4px;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .lsp-gutter-error  { background: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}); }
+        .lsp-gutter-warning{ background: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}); }
+        .lsp-gutter-info   { background: rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}); }
+        .lsp-gutter-hint   { background: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.35); }
+
+        /* Diagnostic tooltip popup */
+        #notes-lsp-tooltip {
+            position: fixed;
+            z-index: 9000;
+            pointer-events: auto;
+            max-width: 480px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--fg);
+            font-family: var(--font-family);
+            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            white-space: pre-wrap;
+            word-break: break-word;
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            display: none;
+        }
+        #notes-lsp-tooltip:hover { opacity: 1; }
+
+        #notes-lsp-hover-tooltip {
+            position: fixed;
+            z-index: 9001;
+            pointer-events: auto;
+            max-width: 520px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--fg);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            overflow-wrap: anywhere;
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            display: none;
+        }
+        #notes-lsp-hover-tooltip:hover { opacity: 1; }
+        #notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {
+            margin-top: 0.4em;
+            margin-bottom: 0.4em;
+        }
+        #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
+        #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
+
+        #notes-lsp-completion {
+            position: fixed;
+            z-index: 9002;
+            min-width: 220px;
+            max-width: 520px;
+            max-height: 280px;
+            overflow: auto;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--fg);
+            font-family: var(--font-family);
+            font-size: ${Math.max(result.fontSize - 1, 11)}px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            display: none;
+        }
+        #notes-lsp-completion:hover { opacity: 1; }
+        .notes-lsp-completion-item {
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            padding: 6px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .notes-lsp-completion-item[data-active="true"] {
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.35);
+        }
+        .notes-lsp-completion-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notes-lsp-completion-detail {
+            opacity: 0.7;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
     `;
 
     document.head.appendChild(style);
@@ -7418,6 +8247,308 @@ EventsOn('terminalStyleUpdate', payload => {
     const result = Array.isArray(payload?.[0]) ? payload[0] : payload;
     if (result && result.colors) {
         applyWindowStyle(result);
+    }
+});
+
+// ----------------------------------------------------------------------------
+// LSP Diagnostics
+// ----------------------------------------------------------------------------
+
+// Keyed by file URI → array of Diagnostic objects from the server.
+const lspDiagnosticsStore = new Map();
+
+// Tooltip element — created once and re-positioned on hover.
+const lspTooltipEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-tooltip';
+    document.body.appendChild(el);
+    return el;
+})();
+
+const lspHoverTooltipEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-hover-tooltip';
+    el.className = 'markdown-body';
+    el.addEventListener('mousedown', (e) => {
+        if (e.button === 0) e.preventDefault(); // left click: keep editor focus
+    });
+    el.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideLspHoverTooltip();
+    });
+    document.body.appendChild(el);
+    return el;
+})();
+
+const lspCompletionEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-completion';
+    document.body.appendChild(el);
+    return el;
+})();
+
+const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];
+
+function filePathToUri(filePath) {
+    const source = String(filePath || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    const normalized = source.replace(/\\/g, '/');
+    const prefixed = normalized.startsWith('/') ? normalized : `/${normalized}`;
+
+    try {
+        return new URL(`file://${encodeURI(prefixed)}`).toString();
+    } catch {
+        return `file://${prefixed}`;
+    }
+}
+
+async function resolveNotesFileUri(filePath) {
+    if (!filePath) {
+        return '';
+    }
+
+    try {
+        const resolved = await ResolveFilePath(filePath);
+        return filePathToUri(resolved || filePath);
+    } catch {
+        return filePathToUri(filePath);
+    }
+}
+
+function lspSeveritySquiggleClass(severity) {
+    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
+    return `lsp-squiggle-${name}`;
+}
+
+function lspSeverityGutterClass(severity) {
+    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
+    return `lsp-gutter-${name}`;
+}
+
+function clearVisibleLspDiagnostics() {
+    if (elements.editorGutter) {
+        elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+    }
+    clearLspSquiggles();
+    if (lspTooltipEl) {
+        lspTooltipEl.style.display = 'none';
+    }
+    hideLspHoverTooltip();
+    hideLspCompletion();
+}
+
+/**
+ * Apply diagnostic decorations to the editor gutter and highlight overlay.
+ * Squiggles are rendered by wrapping the affected character range in a
+ * <span> inside the highlight overlay. Gutter markers are small dots appended
+ * to the matching line number span.
+ */
+function renderLspDiagnostics() {
+    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+        return;
+    }
+
+    // Collect diagnostics for the currently open file.
+    const currentUri = state.currentFileUri || null;
+
+    // Clear previous gutter marks.
+    elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+
+    const diags = currentUri ? (lspDiagnosticsStore.get(currentUri) || []) : [];
+    if (diags.length === 0) {
+        // Remove any squiggle spans left in the highlight code.
+        clearLspSquiggles();
+        return;
+    }
+
+    // Build a map of line → highest-severity diagnostic for gutter markers.
+    const lineMap = new Map(); // line (0-based) → {severity, messages[]}
+    for (const d of diags) {
+        const line = d.range.start.line;
+        if (!lineMap.has(line)) {
+            lineMap.set(line, { severity: d.severity, messages: [d.message] });
+        } else {
+            const entry = lineMap.get(line);
+            if (d.severity < entry.severity) entry.severity = d.severity;
+            entry.messages.push(d.message);
+        }
+    }
+
+    // Apply gutter dots — gutter is a pre/text node; we replace it with spans.
+    applyGutterDiagnosticMarkers(lineMap);
+
+    // Apply squiggle spans to the highlight overlay.
+    applySquiggles(diags);
+}
+
+function applyGutterDiagnosticMarkers(lineMap) {
+    if (!elements.editorGutter) return;
+
+    const content = elements.editor.value || '';
+    const lineCount = Math.max(1, content.split('\n').length);
+
+    // Rebuild the gutter as individual line spans so we can attach markers.
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < lineCount; i++) {
+        const span = document.createElement('span');
+        span.className = 'lsp-gutter-line';
+        span.textContent = String(i + 1);
+
+        if (lineMap.has(i)) {
+            const { severity, messages } = lineMap.get(i);
+            const dot = document.createElement('span');
+            dot.className = `lsp-gutter-mark ${lspSeverityGutterClass(severity)}`;
+            dot.title = messages.join('\n');
+            span.appendChild(dot);
+        }
+
+        fragment.appendChild(span);
+        if (i < lineCount - 1) fragment.appendChild(document.createTextNode('\n'));
+    }
+
+    elements.editorGutter.textContent = '';
+    elements.editorGutter.appendChild(fragment);
+}
+
+function applySquiggles(diags) {
+    if (!elements.editorHighlightCode) return;
+
+    // Start from whatever highlight.js already rendered.
+    const html = elements.editorHighlightCode.innerHTML;
+    // Strip any existing lsp spans first.
+    const stripped = html.replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1');
+
+    const content = elements.editor.value || '';
+    // Sort diagnostics so outermost (longest) ranges are processed first, which
+    // avoids nested span conflicts. For now we only annotate single-line ranges.
+    const singleLine = diags.filter(d => d.range.start.line === d.range.end.line);
+
+    // Build a list of (charOffset, endCharOffset, class) sorted by start.
+    const ranges = singleLine.map(d => ({
+        line: d.range.start.line,
+        startChar: d.range.start.character,
+        endChar: d.range.end.character,
+        cls: lspSeveritySquiggleClass(d.severity),
+        msg: d.message,
+    })).sort((a, b) => a.line - b.line || a.startChar - b.startChar);
+
+    if (ranges.length === 0) {
+        elements.editorHighlightCode.innerHTML = stripped;
+        return;
+    }
+
+    // Map line/char ranges to byte offsets in raw content.
+    const lines = content.split('\n');
+    let lineOffsets = [];
+    let off = 0;
+    for (const l of lines) {
+        lineOffsets.push(off);
+        off += l.length + 1; // +1 for \n
+    }
+
+    // We need to annotate the HTML, not the raw text, to preserve hljs spans.
+    // Strategy: rebuild innerHTML by tracking text position and inserting wrappers.
+    // This is a best-effort approach that works well for non-overlapping ranges.
+    elements.editorHighlightCode.innerHTML = stripped;
+
+    // Walk text nodes and wrap the target char ranges.
+    wrapDiagnosticRanges(elements.editorHighlightCode, lines, lineOffsets, ranges, content);
+}
+
+function wrapDiagnosticRanges(container, lines, lineOffsets, ranges, content) {
+    // Collect all text nodes with their absolute byte offsets.
+    const textNodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node;
+    // Recompute offsets by walking the content matching text nodes.
+    let cursor = 0;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        textNodes.push({ node, start: cursor, end: cursor + text.length });
+        cursor += text.length;
+    }
+
+    // For each diagnostic range, find overlapping text nodes and wrap.
+    for (const r of ranges) {
+        if (r.line >= lines.length) continue;
+        const lineStart = lineOffsets[r.line];
+        const byteStart = lineStart + r.startChar;
+        const byteEnd = lineStart + Math.max(r.endChar, r.startChar + 1);
+
+        for (const tn of textNodes) {
+            if (tn.end <= byteStart || tn.start >= byteEnd) continue;
+
+            const localStart = Math.max(byteStart - tn.start, 0);
+            const localEnd = Math.min(byteEnd - tn.start, tn.node.nodeValue.length);
+            if (localStart >= localEnd) continue;
+
+            const text = tn.node.nodeValue;
+            const before = text.slice(0, localStart);
+            const middle = text.slice(localStart, localEnd);
+            const after = text.slice(localEnd);
+
+            const span = document.createElement('span');
+            span.className = r.cls;
+            span.title = r.msg;
+            span.textContent = middle;
+
+            const parent = tn.node.parentNode;
+            if (!parent) continue;
+
+            if (before) parent.insertBefore(document.createTextNode(before), tn.node);
+            parent.insertBefore(span, tn.node);
+            if (after) tn.node.nodeValue = after;
+            else parent.removeChild(tn.node);
+
+            // Update the text node record so subsequent ranges still work.
+            tn.node = after ? tn.node : null;
+            break; // one text node per range is enough for single-line squiggles
+        }
+    }
+}
+
+function clearLspSquiggles() {
+    if (!elements.editorHighlightCode) return;
+    const html = elements.editorHighlightCode.innerHTML;
+    elements.editorHighlightCode.innerHTML = html.replace(
+        /<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1'
+    );
+}
+
+// Hover tooltip on the gutter dots.
+document.addEventListener('mouseover', (e) => {
+    const dot = e.target.closest?.('.lsp-gutter-mark');
+    if (!dot) {
+        lspTooltipEl.style.display = 'none';
+        return;
+    }
+    lspTooltipEl.textContent = dot.title || '';
+    lspTooltipEl.style.display = 'block';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (lspTooltipEl.style.display !== 'block') return;
+    const x = Math.min(e.clientX + 14, window.innerWidth - lspTooltipEl.offsetWidth - 8);
+    const y = Math.min(e.clientY + 14, window.innerHeight - lspTooltipEl.offsetHeight - 8);
+    lspTooltipEl.style.left = `${x}px`;
+    lspTooltipEl.style.top = `${y}px`;
+});
+
+document.addEventListener('mouseout', (e) => {
+    if (e.target.closest?.('.lsp-gutter-mark')) {
+        lspTooltipEl.style.display = 'none';
+    }
+});
+
+EventsOn('notesLspDiagnostics', payload => {
+    const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (!data || typeof data.uri !== 'string') return;
+
+    lspDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
+    if (data.uri === state.currentFileUri) {
+        renderLspDiagnostics();
     }
 });
 
@@ -7553,6 +8684,17 @@ if (elements.editor) {
 
     elements.editor.addEventListener('input', () => {
         setDirty(true);
+        state.lspHoverLastKey = '';
+        hideLspHoverTooltip();
+        hideLspCompletion();
+
+        const cursor = elements.editor.selectionStart || 0;
+        const value = elements.editor.value || '';
+        const prevChar = cursor > 0 ? value[cursor - 1] : '';
+        if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+            void requestLspCompletionAfterSync(value, prevChar);
+        }
+
         if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
         } else if (state.currentFileType === 'csv') {
@@ -7574,13 +8716,35 @@ if (elements.editor) {
                 renderSwaggerUI();
             }
         }
+        scheduleLspDidChange();
         scheduleAutoSave();
     });
 
     elements.editor.addEventListener('scroll', () => {
+        hideLspHoverTooltip();
+        hideLspCompletion();
         if (usesCodeEditorDecorations()) {
             syncEditorScrollDecorations();
         }
+    });
+
+    elements.editor.addEventListener('mousemove', (event) => {
+        state.lspHoverMouseX = event.clientX;
+        state.lspHoverMouseY = event.clientY;
+    });
+
+    elements.editor.addEventListener('mouseup', () => {
+        state.lspHoverLastKey = '';
+        scheduleLspHover();
+    });
+
+    elements.editor.addEventListener('keyup', () => {
+        scheduleLspHover();
+    });
+
+    elements.editor.addEventListener('blur', () => {
+        hideLspHoverTooltip();
+        hideLspCompletion();
     });
 
     elements.editor.addEventListener('paste', (event) => {
@@ -7609,7 +8773,7 @@ elements.editor.addEventListener('mousedown', (e) => {
     }
 });
 
-elements.editor.addEventListener('contextmenu', (e) => {
+elements.editor.addEventListener('contextmenu', async (e) => {
     // Restore selection that WebKit changed on right-click
     if (_editorSelectionBeforeContextMenu !== null) {
         elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
@@ -7646,6 +8810,64 @@ elements.editor.addEventListener('contextmenu', (e) => {
                 formatStructuredEditorJson(true);
             },
         });
+    }
+
+    if (isCurrentFileLspEligible()) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Format document',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    void formatCurrentLspDocument();
+                },
+            },
+            {
+                title: 'Go to symbol...',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    void goToCurrentLspSymbol();
+                },
+            },
+            {
+                title: 'Signature help',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    void requestLspSignatureHelpFromCursor(1, '');
+                },
+            },
+            {
+                title: 'Rename symbol...',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    void renameCurrentLspSymbol();
+                },
+            },
+        );
+
+        const codeActionData = await getLspCodeActionsForCursor();
+        if (codeActionData.actions.length > 0) {
+            menuItems.push({ title: '-' });
+            codeActionData.actions.forEach((action, index) => {
+                const title = String(action?.title || '').trim();
+                if (!title) {
+                    return;
+                }
+
+                menuItems.push({
+                    title: `Quick fix: ${title}`,
+                    icon: CONTEXT_ICON_CODE,
+                    onSelect: () => {
+                        void applyLspCodeActionFromCursor(
+                            index,
+                            codeActionData.line,
+                            codeActionData.character,
+                            codeActionData.diagnostics,
+                        );
+                    },
+                });
+            });
+        }
     }
 
     menuItems.push(
@@ -7724,6 +8946,8 @@ elements.editor.addEventListener('contextmenu', (e) => {
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
 initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
+initRenderedNotesContextMenu(lspHoverTooltipEl, 'viewer');
+initRenderedNotesContextMenu(lspTooltipEl, 'viewer');
 
 elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -8080,6 +9304,7 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+        return;
     }
 
     if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
@@ -8144,6 +9369,11 @@ document.addEventListener('mouseup', (event) => {
     handleViewerSelectionAutoCopy();
 });
 
+window.addEventListener('beforeunload', () => {
+    closeOpenLspDocument();
+    NotesLspStopAll();
+});
+
 elements.modalInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
         event.preventDefault();
@@ -8163,6 +9393,9 @@ elements.findInput.addEventListener('keydown', (event) => {
 });
 
 setViewMode('editor');
+
+// Load initial notes list on startup; later notesUpdate events will refresh it.
+refreshFiles();
 
 if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {
     const swaggerPaneResizeObserver = new ResizeObserver(() => {

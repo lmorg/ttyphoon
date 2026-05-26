@@ -1154,3 +1154,18 @@
   PreRunCommand: [ go, tool, asm, -o, "${FILE}.o", "${FILE}" ]
   ExecuteCommand: [ go, tool, objdump, "${FILE}.o" ]
   ExecuteParameters: [ go, tool, objdump, "${FILE}.o", "${PARAMETERS}"]
+
+- Aliases: [ terraform, tf, hcl ]
+  Description: Terraform
+  Template: |-
+    {{ .Code }}
+  FileExtension: tf
+  ExecuteCommand: [ terraform, validate, -no-color, "${FILE}" ]
+
+- Aliases: [ opentofu, tf ]
+  Description: Terraform
+  Template: |-
+    {{ .Code }}
+  FileExtension: tf
+  ExecuteCommand: [ opentofu, validate, -no-color, "${FILE}" ]
+

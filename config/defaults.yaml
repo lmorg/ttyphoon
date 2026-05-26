@@ -114,6 +114,17 @@ Notes:
   # Maximum size of files that can be opened in Notes
   # Units: megabytes (MB)
   MaxFileSize: 50
+  LSP:
+    # Requires `gopls` to be installed and available on PATH.
+    go: [gopls]
+    # Requires `typescript-language-server` to be installed and available on PATH.
+    javascript: [typescript-language-server, --stdio]
+    # Requires `typescript-language-server` to be installed and available on PATH.
+    typescript: [typescript-language-server, --stdio]
+    # Requires `terraform-ls` to be installed and available on PATH.
+    terraform: [terraform-ls, serve]
+    # Requires `pylsp` to be installed and available on PATH.
+    python: [pylsp]
 
 Window:
   StatusBar: true

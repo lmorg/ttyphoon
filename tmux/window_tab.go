@@ -43,7 +43,13 @@ func (tmux *Tmux) GetTermTiles() *types.AppWindowTerms {
 	return aw
 }
 
-func (win *WindowT) Name() string { return win.name }
+func (win *WindowT) Name() string {
+	if win != nil {
+		return win.name
+	}
+	return ""
+}
+
 func (win *WindowT) Id() string   { return win.id }
 func (win *WindowT) Index() int   { return win.index }
 func (win *WindowT) Active() bool { return win.active }
