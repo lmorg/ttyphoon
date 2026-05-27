@@ -471,10 +471,7 @@ app.innerHTML = `
                 <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
-                    <button id="notes-wrap" type="button" class="notes-toolbar-btn" title="Toggle word wrap" aria-label="Toggle word wrap" style="display: none;">&#xf035;</button>
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
-                    <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
-                    <button id="notes-delete" type="button" class="notes-toolbar-btn" title="Delete" aria-label="Delete current note">&#xf2ed;</button>
                     <button id="notes-find" type="button" class="notes-toolbar-btn" title="Find" aria-label="Find">&#xf002;</button>
                 </div>
             </div>
@@ -578,10 +575,7 @@ const elements = {
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
-    rename: document.getElementById('notes-rename'),
-    delete: document.getElementById('notes-delete'),
     find: document.getElementById('notes-find'),
-    wrap: document.getElementById('notes-wrap'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabHex: document.getElementById('notes-tab-hex'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -3852,11 +3846,6 @@ function setViewMode(mode) {
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
-    // Show wrap button for all code-like files in edit mode
-    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
-    const showWrapButton = (isEditor || isStructuredEdit) && isCodeLike;
-    elements.wrap.style.display = showWrapButton ? 'block' : 'none';
-    
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
     const isSwaggerEdit = state.viewMode === 'swagger-edit';
@@ -3916,7 +3905,6 @@ function setEditorWrapMode(enabled) {
     const wrapEnabled = enabled === true;
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
-    elements.wrap.dataset.wrapActive = wrapEnabled ? 'true' : 'false';
 }
 
 function toggleMarkdownWrapMode() {
@@ -7214,28 +7202,11 @@ function applyWindowStyle(result) {
             color: var(--green) !important;
         }
 
-        #notes-rename:hover, #notes-find:hover {
+        #notes-find:hover {
             color: var(--accent) !important;
             border-radius: 5px;
             border-color: var(--accent) !important;
             background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
-        }
-
-        #notes-delete:hover {
-            color: var(--red) !important;
-        }
-
-        #notes-wrap:hover {
-            border-color: var(--cyan) !important;
-            color: var(--cyan) !important;
-            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.2);
-            border-radius: 5px;
-        }
-
-        #notes-wrap[data-wrap-active="true"] {
-            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.3);
-            border-color: var(--cyan) !important;
-            color: var(--cyan) !important;
         }
 
         #notes-modal-create:hover {
@@ -7575,17 +7546,6 @@ function applyWindowStyle(result) {
             border-color: var(--green) !important;
             color: var(--green) !important;
             background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-            border-radius: 5px;
-        }
-
-        #notes-delete {
-            color: var(--error);
-        }
-
-        #notes-delete:hover {
-            border-color: var(--error) !important;
-            color: var(--error);
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
             border-radius: 5px;
         }
 
@@ -9558,6 +9518,10 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         },
     ];
 
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
+    
+
     if (isJsonStructuredFile(state.currentFile)) {
         menuItems.push(
         { title: '-' },
@@ -9577,25 +9541,19 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         });
     }
 
-    if (isCurrentFileLspEligible()) {
+
+    if (isCodeLike && (state.viewMode === 'editor' || isStructuredEdit)) {
         menuItems.push(
             { title: '-' },
             {
-                title: 'LSP options...',
-                icon: CONTEXT_ICON_CODE,
-                onSelect: async () => {
-                    await showEditorLspOptionsMenu(e.clientX, e.clientY);
+                title: 'Word wrap',
+                icon: state.markdownWrapMode ? 0xf00c : 0x20,
+                onSelect: () => {
+                    toggleMarkdownWrapMode();
                 },
             },
         );
     }
-
-    menuItems.push(
-        { title: '-' },
-        createFindMenuItem('Find text...'),
-        createAskAIDocumentMenuItem(),
-        createPrintMenuItem('Print...'),
-    );
 
     if (state.currentFileType === 'markdown') {
         menuItems.push(
@@ -9659,6 +9617,26 @@ elements.editor.addEventListener('contextmenu', async (e) => {
             });
         }
     }
+
+    if (isCurrentFileLspEligible()) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'LSP options...',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: async () => {
+                    await showEditorLspOptionsMenu(e.clientX, e.clientY);
+                },
+            },
+        );
+    }
+
+    menuItems.push(
+        { title: '-' },
+        createFindMenuItem('Find text...'),
+        createAskAIDocumentMenuItem(),
+        createPrintMenuItem('Print...'),
+    );
 
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
@@ -9821,14 +9799,6 @@ elements.newFile.addEventListener('click', () => {
     openNewFilePrompt();
 });
 
-elements.rename.addEventListener('click', () => {
-    if (!state.currentFile) {
-        notifyTerminal('Select a note to rename.', 'warn');
-        return;
-    }
-    openRenamePrompt(state.currentFile);
-});
-
 elements.modalCancel.addEventListener('click', () => {
     closeNewFilePrompt();
 });
@@ -9857,20 +9827,8 @@ if (elements.modalLocation) {
     });
 }
 
-elements.delete.addEventListener('click', () => {
-    if (!state.currentFile) {
-        notifyTerminal('Select a note to delete.', 'warn');
-        return;
-    }
-    openDeletePrompt(state.currentFile);
-});
-
 elements.find.addEventListener('click', () => {
     openFindBar();
-});
-
-elements.wrap.addEventListener('click', () => {
-    toggleMarkdownWrapMode();
 });
 
 elements.deleteCancel.addEventListener('click', () => {

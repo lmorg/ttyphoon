@@ -1248,7 +1248,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-rename').click();
+        const fileActionDialogHandler = getEventHandler('fileActionDialog');
+        expect(fileActionDialogHandler).toBeTypeOf('function');
+        fileActionDialogHandler({ action: 'rename', filePath: '$GLOBAL/docs/todo.md' });
         await flushPromises();
 
         const modalInput = document.getElementById('notes-modal-input');
