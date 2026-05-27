@@ -2723,6 +2723,27 @@ function hideLspCompletion() {
     }
 }
 
+function closeOpenLspTooltips() {
+    let closedAny = false;
+
+    if (lspTooltipEl && lspTooltipEl.style.display !== 'none' && lspTooltipEl.style.display !== '') {
+        lspTooltipEl.style.display = 'none';
+        closedAny = true;
+    }
+
+    if (lspHoverTooltipEl && lspHoverTooltipEl.style.display !== 'none' && lspHoverTooltipEl.style.display !== '') {
+        hideLspHoverTooltip();
+        closedAny = true;
+    }
+
+    if (lspCompletionEl && lspCompletionEl.style.display !== 'none' && lspCompletionEl.style.display !== '') {
+        hideLspCompletion();
+        closedAny = true;
+    }
+
+    return closedAny;
+}
+
 function stripLspOverlayMarkup(html) {
     return String(html || '')
         .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
@@ -2793,7 +2814,25 @@ function replaceCurrentIdentifierWithCompletion(text) {
     const start = match ? cursor - match[0].length : cursor;
     elements.editor.setSelectionRange(start, cursor);
     elements.editor.setRangeText(String(text || ''), start, cursor, 'end');
+    // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
+    hideLspCompletion();
     elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function commitActiveLspCompletion() {
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        return false;
+    }
+
+    const index = Math.max(0, Math.min(state.lspCompletionIndex, state.lspCompletionItems.length - 1));
+    const item = state.lspCompletionItems[index];
+    if (!item) {
+        return false;
+    }
+
+    replaceCurrentIdentifierWithCompletion(item.insertText || item.label);
+    hideLspCompletion();
+    return true;
 }
 
 function renderLspCompletionPopup() {
@@ -2848,8 +2887,8 @@ function renderLspCompletionPopup() {
 
         row.addEventListener('mousedown', (event) => {
             event.preventDefault();
-            replaceCurrentIdentifierWithCompletion(item.insertText || item.label);
-            hideLspCompletion();
+            state.lspCompletionIndex = idx;
+            commitActiveLspCompletion();
         });
 
         fragment.appendChild(row);
@@ -2866,6 +2905,27 @@ function renderLspCompletionPopup() {
     const y = Math.min(rawY + 18, window.innerHeight - lspCompletionEl.offsetHeight - 8);
     lspCompletionEl.style.left = `${Math.max(8, x)}px`;
     lspCompletionEl.style.top = `${Math.max(8, y)}px`;
+}
+
+function moveLspCompletionSelection(delta) {
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        return false;
+    }
+
+    const count = state.lspCompletionItems.length;
+    const current = Math.max(0, Math.min(state.lspCompletionIndex, count - 1));
+    const next = (current + delta + count) % count;
+    state.lspCompletionIndex = next;
+    renderLspCompletionPopup();
+
+    if (lspCompletionEl) {
+        const activeRow = lspCompletionEl.querySelector('.notes-lsp-completion-item.is-active');
+        if (activeRow && typeof activeRow.scrollIntoView === 'function') {
+            activeRow.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    return true;
 }
 
 async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
@@ -2892,7 +2952,7 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
     }
 }
 
-async function requestLspCompletionAfterSync(content, triggerChar) {
+async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
@@ -2903,7 +2963,7 @@ async function requestLspCompletionAfterSync(content, triggerChar) {
         // Fall through to completion request even when fast sync fails.
     }
 
-    await requestLspCompletion(2, triggerChar);
+    await requestLspCompletion(triggerKind, triggerChar);
 }
 
 function fileUriToPath(uri) {
@@ -8575,12 +8635,12 @@ function applyWindowStyle(result) {
         #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
 
         #notes-lsp-completion {
-            --notes-lsp-completion-visible-rows: 9;
+            --notes-lsp-completion-visible-rows: 12;
             --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
             position: fixed;
             z-index: 9002;
-            min-width: 220px;
-            max-width: 520px;
+            min-width: 320px;
+            max-width: 700px;
             max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);
             overflow: auto;
             padding: 6px;
@@ -9423,7 +9483,66 @@ if (elements.editor) {
     elements.editor.addEventListener('keydown', (event) => {
         maybeDispatchInputFallbackAfterShortcut(event);
 
+        if (event.key === 'Escape' && closeOpenLspTooltips()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
+        if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+            if (event.key === 'Enter' && commitActiveLspCompletion()) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.key === 'ArrowDown' && moveLspCompletionSelection(1)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.key === 'ArrowUp' && moveLspCompletionSelection(-1)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+        }
+
         if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
+        if (state.lspCompletionVisible) {
+            // When completion is already open, Tab dismisses it and inserts indentation.
+            hideLspCompletion();
+            event.preventDefault();
+            event.stopPropagation();
+
+            const start = elements.editor.selectionStart;
+            const end = elements.editor.selectionEnd;
+            elements.editor.setRangeText('\t', start, end, 'end');
+            elements.editor.dispatchEvent(new Event('input'));
+            return;
+        }
+
+        const source = elements.editor.value || '';
+        const cursor = elements.editor.selectionStart || 0;
+        const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+        const leftOfCaret = source.slice(lineStart, cursor);
+        const isWhitespaceOnlyLeft = /^\s*$/.test(leftOfCaret);
+        const shouldTryLspCompletion = isCurrentFileLspEligible()
+            && state.currentFile
+            && state.lspOpenFile === state.currentFile
+            && !isWhitespaceOnlyLeft;
+
+        if (shouldTryLspCompletion) {
+            // With non-whitespace prefix on this line, use Tab to open completion rather than insert indentation.
+            event.preventDefault();
+            event.stopPropagation();
+            hideLspHoverTooltip();
+            hideLspCompletion();
+            void requestLspCompletion();
             return;
         }
 
@@ -9442,7 +9561,6 @@ if (elements.editor) {
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
-        hideLspCompletion();
         state.lspSemanticRequestId += 1;
         state.lspSemanticTokens = [];
         state.lspInlayRequestId += 1;
@@ -9451,8 +9569,23 @@ if (elements.editor) {
         const cursor = elements.editor.selectionStart || 0;
         const value = elements.editor.value || '';
         const prevChar = cursor > 0 ? value[cursor - 1] : '';
-        if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
-            void requestLspCompletionAfterSync(value, prevChar);
+
+        // If LSP completion menu is visible, keep it open and re-filter based on current position.
+        // Otherwise, check for trigger characters to open it.
+        if (state.lspCompletionVisible) {
+            // Menu is open - sync first, then re-request completion to filter by current text.
+            void requestLspCompletionAfterSync(value, '', 1);
+        } else {
+            // Menu is closed - check for trigger characters
+            if (prevChar === '.' || prevChar === ':' || prevChar === '>' || prevChar === '(') {
+                void requestLspCompletionAfterSync(value, prevChar);
+            } else {
+                // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
+                const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
+                if (!isIdentifierChar) {
+                    hideLspCompletion();
+                }
+            }
         }
 
         if (usesCodeEditorDecorations()) {
