@@ -204,7 +204,10 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	wr.TriggerRedraw()
-	wr.SetWindowTitle(wr.tmux.ActivePane().Name())
+	pane, err := wr.tmux.ActivePane()
+	if err == nil {
+		wr.SetWindowTitle(pane.Name())
+	}
 	wr.RefreshNotes()
 }
 

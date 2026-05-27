@@ -28,8 +28,6 @@ type Agent struct {
 	_tools      []Tool
 }
 
-
-
 type Meta struct {
 	CmdLine     string
 	Pwd         string

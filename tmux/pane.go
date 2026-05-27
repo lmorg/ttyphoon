@@ -233,8 +233,13 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	return pane
 }
 
-func (tmux *Tmux) ActivePane() *PaneT {
-	return tmux.ActiveWindow().ActivePane()
+func (tmux *Tmux) ActivePane() (*PaneT, error) {
+	win, err := tmux.ActiveWindow()
+	if err != nil {
+		return nil, err
+	}
+
+	return win.ActivePane(), nil
 }
 
 func (tmux *Tmux) SelectPane(paneId string) error {

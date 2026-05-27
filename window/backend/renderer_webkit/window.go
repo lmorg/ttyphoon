@@ -59,7 +59,10 @@ func (wr *webkitRender) ResizeWindow(size *types.XY) {
 
 	if wr.tmux != nil {
 		_ = wr.tmux.RefreshClient(size)
-		_ = wr.tmux.SelectAndResizeWindow(wr.tmux.ActiveWindow().Id(), size)
+		win, err := wr.tmux.ActiveWindow()
+		if err == nil {
+			_ = wr.tmux.SelectAndResizeWindow(win.Id(), size)
+		}
 	}
 }
 

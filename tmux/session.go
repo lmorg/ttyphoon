@@ -111,7 +111,10 @@ func (tmux *Tmux) initSession(renderer types.Renderer, size *types.XY) error {
 		return err
 	}
 
-	tmux.ActivePane().term.MakeVisible(true)
+	pane, err := tmux.ActivePane()
+	if err == nil {
+		pane.term.MakeVisible(true)
+	}
 	return nil
 }
 
