@@ -1556,8 +1556,7 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.appendChild(label);
 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
-        const hasActiveFilter = state.fileFilterQuery.trim() !== '';
-        const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
+        const expanded = state.expandedFolders[folderKey] !== false;
         folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
@@ -9388,7 +9387,42 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
 }
 
 if (elements.editor) {
+    let editorInputSequence = 0;
+
+    function maybeDispatchInputFallbackAfterShortcut(event) {
+        const isModifierShortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
+        if (!isModifierShortcut) {
+            return;
+        }
+
+        const key = String(event.key || '').toLowerCase();
+        if (key !== 'z' && key !== 'v') {
+            return;
+        }
+
+        if (document.activeElement !== elements.editor) {
+            return;
+        }
+
+        const valueBefore = elements.editor.value;
+        const seqBefore = editorInputSequence;
+
+        setTimeout(() => {
+            // Some WebKit edit paths can mutate textarea value without emitting `input`.
+            // Re-emit `input` only when content changed and no native input was observed.
+            if (editorInputSequence !== seqBefore) {
+                return;
+            }
+            if (elements.editor.value === valueBefore) {
+                return;
+            }
+            elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        }, 0);
+    }
+
     elements.editor.addEventListener('keydown', (event) => {
+        maybeDispatchInputFallbackAfterShortcut(event);
+
         if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
             return;
         }
@@ -9404,6 +9438,7 @@ if (elements.editor) {
     });
 
     elements.editor.addEventListener('input', () => {
+        editorInputSequence += 1;
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
@@ -9422,6 +9457,9 @@ if (elements.editor) {
 
         if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
+            if (state.currentFileType === 'markdown') {
+                scheduleRender();
+            }
         } else if (state.currentFileType === 'csv') {
             renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
         } else {

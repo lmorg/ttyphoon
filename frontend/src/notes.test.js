@@ -383,6 +383,35 @@ describe('notes rendering', () => {
         ]));
     });
 
+    it('keeps folders collapsible while the sidebar file filter is active', async () => {
+        listFilesMock.mockResolvedValue([
+            '$GLOBAL/docs/guide.md',
+            '$GLOBAL/docs/other.md',
+            '$NOTES/todo.md',
+        ]);
+
+        await importNotesModule();
+
+        const filterInput = document.getElementById('notes-list-filter');
+        filterInput.value = 'guide';
+        filterInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+        const docsFolder = document.querySelector('.notes-tree-folder[data-folder-key="$GLOBAL/docs"]');
+        expect(docsFolder?.dataset.expanded).toBe('true');
+
+        docsFolder.click();
+
+        const docsFolderAfterCollapse = document.querySelector('.notes-tree-folder[data-folder-key="$GLOBAL/docs"]');
+        expect(docsFolderAfterCollapse?.dataset.expanded).toBe('false');
+        expect(document.querySelector('[data-file="$GLOBAL/docs/guide.md"]')).toBeNull();
+
+        docsFolderAfterCollapse.click();
+
+        const docsFolderAfterExpand = document.querySelector('.notes-tree-folder[data-folder-key="$GLOBAL/docs"]');
+        expect(docsFolderAfterExpand?.dataset.expanded).toBe('true');
+        expect(document.querySelector('[data-file="$GLOBAL/docs/guide.md"]')).not.toBeNull();
+    });
+
     it('loads markdown content when a rendered file entry is clicked', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
@@ -397,6 +426,34 @@ describe('notes rendering', () => {
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/todo.md');
         expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
+    });
+
+    it('refreshes markdown preview after ctrl+z style edits when input is not emitted', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/todo.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const editor = document.getElementById('notes-editor');
+        const preview = document.getElementById('notes-preview');
+
+        tabEditor.click();
+        await flushPromises();
+
+        editor.focus();
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+        editor.value = '# Updated from undo';
+
+        await flushPromises();
+        await new Promise((resolve) => setTimeout(resolve, 160));
+
+        expect(preview?.textContent).toContain('Updated from undo');
     });
 
     it('handles diagnostics events without an active file', async () => {
@@ -521,6 +578,34 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('$NOTES/todo.md');
+    });
+
+    it('sends LSP didChange after ctrl+v style edits when input is not emitted', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}\n', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/main.go"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        notesLspChangeDocumentMock.mockClear();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+        editor.value = 'package main\n\nfunc main() { println("x") }\n';
+
+        await flushPromises();
+        await new Promise((resolve) => setTimeout(resolve, 260));
+
+        expect(notesLspChangeDocumentMock).toHaveBeenCalledWith(
+            '$NOTES/main.go',
+            expect.stringContaining('println("x")'),
+        );
     });
 
     it('requests and shows LSP hover tooltip at cursor', async () => {

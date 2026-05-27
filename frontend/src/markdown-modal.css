@@ -122,6 +122,8 @@
     flex: 1 1 auto;
     min-width: 0;
     max-height: var(--markdown-modal-code-max-height);
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .markdown-modal-code-pre {
@@ -129,8 +131,10 @@
     border: 0 !important;
     border-radius: 0 !important;
     padding: 12px !important;
+    min-width: 100%;
+    width: max-content;
     max-height: var(--markdown-modal-code-max-height);
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: auto;
     white-space: pre !important;
     word-wrap: normal !important;
