@@ -39,6 +39,71 @@ func TestParseDocumentSymbolsResult_DocumentSymbolHierarchy(t *testing.T) {
 	}
 }
 
+func TestParseWorkspaceSymbolsResult_SymbolInformation(t *testing.T) {
+	raw := json.RawMessage(`[
+		{
+			"name":"beta",
+			"detail":"func",
+			"kind":12,
+			"containerName":"alpha",
+			"location":{
+				"uri":"file:///tmp/project/beta.go",
+				"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":4}}
+			}
+		}
+	]`)
+
+	items, err := parseWorkspaceSymbolsResult(raw, func(uri string) (string, bool) {
+		if uri == "file:///tmp/project/beta.go" {
+			return "package main\n\nfunc beta() {}\n", true
+		}
+		return "", false
+	}, PositionEncodingUTF16)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].Name != "beta" || items[0].FilePath != "/tmp/project/beta.go" {
+		t.Fatalf("unexpected workspace symbol: %#v", items[0])
+	}
+	if items[0].Detail != "func" || items[0].ContainerName != "alpha" {
+		t.Fatalf("unexpected metadata: %#v", items[0])
+	}
+}
+
+func TestParseWorkspaceSymbolsResult_WorkspaceSymbolWire(t *testing.T) {
+	raw := json.RawMessage(`[
+		{
+			"name":"gamma",
+			"detail":"func",
+			"kind":12,
+			"containerName":"pkg",
+			"location":{
+				"uri":"file:///tmp/project/pkg/gamma.go",
+				"range":{"start":{"line":4,"character":0},"end":{"line":4,"character":5}}
+			}
+		}
+	]`)
+
+	items, err := parseWorkspaceSymbolsResult(raw, func(uri string) (string, bool) {
+		if uri == "file:///tmp/project/pkg/gamma.go" {
+			return "package pkg\n\nfunc gamma() {}\n", true
+		}
+		return "", false
+	}, PositionEncodingUTF16)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].FilePath != "/tmp/project/pkg/gamma.go" || items[0].Line != 4 {
+		t.Fatalf("unexpected parsed workspace symbol: %#v", items[0])
+	}
+}
+
 func TestParseDocumentSymbolsResult_SymbolInformation(t *testing.T) {
 	raw := json.RawMessage(`[
 		{

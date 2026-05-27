@@ -102,6 +102,10 @@ export function NotesLspCodeActions(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['NotesLspCodeActions'](arg1, arg2, arg3, arg4);
 }
 
+export function NotesLspCodeLens(arg1) {
+  return window['go']['main']['WApp']['NotesLspCodeLens'](arg1);
+}
+
 export function NotesLspCompletion(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesLspCompletion'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -114,6 +118,10 @@ export function NotesLspDocumentSymbols(arg1) {
   return window['go']['main']['WApp']['NotesLspDocumentSymbols'](arg1);
 }
 
+export function NotesLspExecuteCodeLens(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesLspExecuteCodeLens'](arg1, arg2);
+}
+
 export function NotesLspFormat(arg1) {
   return window['go']['main']['WApp']['NotesLspFormat'](arg1);
 }
@@ -124,6 +132,10 @@ export function NotesLspFormatRange(arg1, arg2, arg3, arg4, arg5) {
 
 export function NotesLspHover(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesLspHover'](arg1, arg2, arg3);
+}
+
+export function NotesLspInlayHints(arg1) {
+  return window['go']['main']['WApp']['NotesLspInlayHints'](arg1);
 }
 
 export function NotesLspOpenDocument(arg1, arg2, arg3) {
@@ -142,12 +154,20 @@ export function NotesLspSaveDocument(arg1) {
   return window['go']['main']['WApp']['NotesLspSaveDocument'](arg1);
 }
 
+export function NotesLspSemanticTokens(arg1) {
+  return window['go']['main']['WApp']['NotesLspSemanticTokens'](arg1);
+}
+
 export function NotesLspSignatureHelp(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesLspSignatureHelp'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function NotesLspStopAll() {
   return window['go']['main']['WApp']['NotesLspStopAll']();
+}
+
+export function NotesLspWorkspaceSymbols(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesLspWorkspaceSymbols'](arg1, arg2);
 }
 
 export function RenameFile(arg1, arg2) {

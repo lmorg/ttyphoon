@@ -28,11 +28,31 @@ export namespace lsp {
 	        this.kind = source["kind"];
 	    }
 	}
+	export class CodeLensItem {
+	    index: number;
+	    title: string;
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeLensItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.title = source["title"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
 	export class CompletionItem {
 	    label: string;
 	    detail?: string;
 	    insertText?: string;
 	    kind?: number;
+	    deprecated?: boolean;
+	    tags?: number[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CompletionItem(source);
@@ -44,6 +64,8 @@ export namespace lsp {
 	        this.detail = source["detail"];
 	        this.insertText = source["insertText"];
 	        this.kind = source["kind"];
+	        this.deprecated = source["deprecated"];
+	        this.tags = source["tags"];
 	    }
 	}
 	export class DefinitionLocation {
@@ -184,6 +206,30 @@ export namespace lsp {
 	        this.changed = source["changed"];
 	    }
 	}
+	export class InlayHintItem {
+	    label: string;
+	    tooltip?: string;
+	    kind?: number;
+	    line: number;
+	    character: number;
+	    paddingLeft?: boolean;
+	    paddingRight?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new InlayHintItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.tooltip = source["tooltip"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.paddingLeft = source["paddingLeft"];
+	        this.paddingRight = source["paddingRight"];
+	    }
+	}
 	
 	export class PrepareRenameResult {
 	    canRename: boolean;
@@ -212,6 +258,52 @@ export namespace lsp {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.content = source["content"];
 	        this.changed = source["changed"];
+	    }
+	}
+	export class SemanticTokenItem {
+	    line: number;
+	    character: number;
+	    length: number;
+	    tokenType: number;
+	    tokenModifiers: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SemanticTokenItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.length = source["length"];
+	        this.tokenType = source["tokenType"];
+	        this.tokenModifiers = source["tokenModifiers"];
+	    }
+	}
+	export class WorkspaceSymbolItem {
+	    name: string;
+	    detail?: string;
+	    kind: number;
+	    line: number;
+	    character: number;
+	    containerName?: string;
+	    uri?: string;
+	    filePath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceSymbolItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.detail = source["detail"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.containerName = source["containerName"];
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
 	    }
 	}
 

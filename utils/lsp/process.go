@@ -260,8 +260,30 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 			"general": map[string]any{
 				"positionEncodings": []string{string(PositionEncodingUTF16), string(PositionEncodingUTF8)},
 			},
-			"textDocument": map[string]any{},
-			"workspace":    map[string]any{},
+			"textDocument": map[string]any{
+				"inlayHint": map[string]any{
+					"dynamicRegistration": false,
+				},
+				"semanticTokens": map[string]any{
+					"dynamicRegistration": false,
+					"tokenTypes": []string{
+						"namespace", "type", "class", "enum", "interface", "struct", "typeParameter",
+						"parameter", "variable", "property", "enumMember", "event", "function", "method",
+						"macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator",
+					},
+					"tokenModifiers": []string{
+						"declaration", "definition", "readonly", "static", "deprecated",
+						"abstract", "async", "modification", "documentation", "defaultLibrary",
+					},
+					"requests": map[string]any{
+						"full": true,
+					},
+					"formats":                 []string{"relative"},
+					"multilineTokenSupport":   false,
+					"overlappingTokenSupport": true,
+				},
+			},
+			"workspace": map[string]any{},
 		},
 		"offsetEncoding": []string{string(PositionEncodingUTF16), string(PositionEncodingUTF8)},
 		"clientInfo": map[string]any{

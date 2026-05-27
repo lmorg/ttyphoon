@@ -15,6 +15,8 @@ type CompletionItem struct {
 	Detail     string `json:"detail,omitempty"`
 	InsertText string `json:"insertText,omitempty"`
 	Kind       int    `json:"kind,omitempty"`
+	Deprecated bool   `json:"deprecated,omitempty"`
+	Tags       []int  `json:"tags,omitempty"`
 }
 
 // RequestCompletion sends textDocument/completion and normalizes the result.
@@ -77,6 +79,14 @@ func normalizeCompletionItems(items []CompletionItem) []CompletionItem {
 	for _, item := range items {
 		if item.Label == "" {
 			continue
+		}
+		if !item.Deprecated {
+			for _, tag := range item.Tags {
+				if tag == 1 {
+					item.Deprecated = true
+					break
+				}
+			}
 		}
 		if item.InsertText == "" {
 			item.InsertText = item.Label

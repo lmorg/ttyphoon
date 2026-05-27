@@ -10,7 +10,10 @@ import {
     ResolveNotesLspLanguage,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
-    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    NotesLspSemanticTokens,
+    NotesLspCodeLens, NotesLspExecuteCodeLens,
+    NotesLspInlayHints,
+    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
 } from '../wailsjs/go/main/WApp';
@@ -675,6 +678,10 @@ const state = {
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
     lspHoverMouseY: 0,
+    lspSemanticTokens: [],
+    lspSemanticRequestId: 0,
+    lspInlayHints: [],
+    lspInlayRequestId: 0,
     lspCompletionItems: [],
     lspCompletionIndex: 0,
     lspCompletionVisible: false,
@@ -1005,8 +1012,8 @@ function renderEditorDecorations() {
         elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
     }
 
-    // Overlay LSP diagnostic squiggles on top of the freshly rendered syntax.
-    renderLspDiagnostics();
+    // Overlay LSP diagnostics and inlay hints on top of the freshly rendered syntax.
+    renderLspEditorDecorations();
 
     syncEditorScrollDecorations();
 }
@@ -2723,6 +2730,64 @@ function hideLspCompletion() {
     }
 }
 
+function stripLspOverlayMarkup(html) {
+    return String(html || '')
+        .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<span class="notes-lsp-semantic-token[^"]*"[^>]*>([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
+}
+
+function lspCompletionKindMeta(kind) {
+    switch (Number(kind || 0)) {
+    case 2:
+        return { icon: 'Md', badge: 'method', title: 'Method' };
+    case 3:
+        return { icon: 'Fn', badge: 'function', title: 'Function' };
+    case 4:
+        return { icon: 'Ct', badge: 'constructor', title: 'Constructor' };
+    case 5:
+        return { icon: 'Fld', badge: 'field', title: 'Field' };
+    case 6:
+        return { icon: 'Var', badge: 'variable', title: 'Variable' };
+    case 7:
+        return { icon: 'Cls', badge: 'class', title: 'Class' };
+    case 8:
+        return { icon: 'Ifc', badge: 'interface', title: 'Interface' };
+    case 9:
+        return { icon: 'Mod', badge: 'module', title: 'Module' };
+    case 10:
+        return { icon: 'Prop', badge: 'property', title: 'Property' };
+    case 11:
+        return { icon: 'Unit', badge: 'unit', title: 'Unit' };
+    case 12:
+        return { icon: 'Val', badge: 'value', title: 'Value' };
+    case 13:
+        return { icon: 'Enum', badge: 'enum', title: 'Enum' };
+    case 14:
+        return { icon: 'Kw', badge: 'keyword', title: 'Keyword' };
+    case 15:
+        return { icon: 'Snip', badge: 'snippet', title: 'Snippet' };
+    case 17:
+        return { icon: 'File', badge: 'file', title: 'File' };
+    case 18:
+        return { icon: 'Ref', badge: 'reference', title: 'Reference' };
+    case 19:
+        return { icon: 'Dir', badge: 'folder', title: 'Folder' };
+    case 21:
+        return { icon: 'Const', badge: 'constant', title: 'Constant' };
+    case 22:
+        return { icon: 'Struct', badge: 'struct', title: 'Struct' };
+    case 24:
+        return { icon: 'Evt', badge: 'event', title: 'Event' };
+    case 25:
+        return { icon: 'Op', badge: 'operator', title: 'Operator' };
+    case 26:
+        return { icon: 'Tp', badge: 'type', title: 'Type parameter' };
+    default:
+        return { icon: 'Sym', badge: '', title: 'Symbol' };
+    }
+}
+
 function replaceCurrentIdentifierWithCompletion(text) {
     if (!elements.editor) {
         return;
@@ -2754,11 +2819,22 @@ function renderLspCompletionPopup() {
     const fragment = document.createDocumentFragment();
     state.lspCompletionItems.forEach((item, idx) => {
         const row = document.createElement('div');
-        row.className = 'notes-lsp-completion-item';
+        row.className = 'tty-menu-row notes-lsp-completion-item';
         row.dataset.active = idx === activeIndex ? 'true' : 'false';
+        row.dataset.deprecated = item.deprecated === true ? 'true' : 'false';
+        row.classList.toggle('is-active', idx === activeIndex);
+        row.classList.toggle('is-deprecated', item.deprecated === true);
+
+        const kind = lspCompletionKindMeta(item.kind);
+
+        const icon = document.createElement('span');
+        icon.className = 'tty-menu-row-icon notes-lsp-completion-icon';
+        icon.textContent = kind.icon;
+        icon.title = kind.title;
+        row.appendChild(icon);
 
         const label = document.createElement('span');
-        label.className = 'notes-lsp-completion-label';
+        label.className = 'tty-menu-row-label notes-lsp-completion-label';
         label.textContent = String(item.label || '');
         row.appendChild(label);
 
@@ -2767,6 +2843,14 @@ function renderLspCompletionPopup() {
             detail.className = 'notes-lsp-completion-detail';
             detail.textContent = String(item.detail);
             row.appendChild(detail);
+        }
+
+        if (kind.badge) {
+            const badge = document.createElement('span');
+            badge.className = 'notes-lsp-completion-kind';
+            badge.textContent = kind.badge;
+            badge.title = kind.title;
+            row.appendChild(badge);
         }
 
         row.addEventListener('mousedown', (event) => {
@@ -2905,6 +2989,68 @@ async function resolveNotesFileFromAbsolutePath(absPath) {
     return '';
 }
 
+async function requestLspInlayHints() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        state.lspInlayRequestId += 1;
+        state.lspInlayHints = [];
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const requestId = state.lspInlayRequestId + 1;
+    state.lspInlayRequestId = requestId;
+
+    try {
+        const hints = await NotesLspInlayHints(state.currentFile);
+        if (requestId !== state.lspInlayRequestId || state.lspOpenFile !== state.currentFile) {
+            return;
+        }
+
+        state.lspInlayHints = Array.isArray(hints)
+            ? hints.filter((item) => item && String(item.label || '') !== '')
+            : [];
+        renderLspEditorDecorations();
+    } catch {
+        if (requestId !== state.lspInlayRequestId) {
+            return;
+        }
+
+        state.lspInlayHints = [];
+        renderLspEditorDecorations();
+    }
+}
+
+async function requestLspSemanticTokens() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const requestId = state.lspSemanticRequestId + 1;
+    state.lspSemanticRequestId = requestId;
+
+    try {
+        const tokens = await NotesLspSemanticTokens(state.currentFile);
+        if (requestId !== state.lspSemanticRequestId || state.lspOpenFile !== state.currentFile) {
+            return;
+        }
+
+        state.lspSemanticTokens = Array.isArray(tokens)
+            ? tokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
+            : [];
+        renderLspEditorDecorations();
+    } catch {
+        if (requestId !== state.lspSemanticRequestId) {
+            return;
+        }
+
+        state.lspSemanticTokens = [];
+        renderLspEditorDecorations();
+    }
+}
+
 async function requestLspDefinition() {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         return;
@@ -3008,6 +3154,23 @@ function symbolDisplayLabel(item) {
     return label;
 }
 
+function workspaceSymbolDisplayLabel(item) {
+    const base = symbolDisplayLabel(item);
+    const filePath = normalizePathForMatch(item?.filePath || fileUriToPath(item?.uri || ''));
+    if (!filePath) {
+        return base;
+    }
+
+    const shortPath = filePath.split('/').slice(-2).join('/');
+    return `${base} - ${shortPath}`;
+}
+
+function codeLensDisplayLabel(item) {
+    const title = String(item?.title || '').trim() || 'Code lens';
+    const line = Math.max(0, Number(item?.line) || 0);
+    return `${title} (line ${line + 1})`;
+}
+
 async function goToCurrentLspSymbol() {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return;
@@ -3058,6 +3221,126 @@ async function goToCurrentLspSymbol() {
 
             state.lspHoverLastKey = '';
             scheduleLspHover();
+        },
+    });
+}
+
+async function goToWorkspaceLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const rawQuery = window.prompt('Workspace symbol query:', '');
+    if (rawQuery === null) {
+        return;
+    }
+
+    const query = String(rawQuery || '').trim();
+    let symbols = [];
+    try {
+        symbols = await NotesLspWorkspaceSymbols(state.currentFile, query);
+    } catch {
+        notifyTerminal('Failed to fetch workspace symbols', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(symbols)
+        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+        : [];
+    if (entries.length === 0) {
+        notifyTerminal('No workspace symbols found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Go to workspace symbol',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: async (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            const targetAbsPath = normalizePathForMatch(picked.filePath || fileUriToPath(picked.uri));
+            if (!targetAbsPath) {
+                notifyTerminal('Workspace symbol target is not a local file', 'warn');
+                return;
+            }
+
+            const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
+            if (!targetNotesFile) {
+                notifyTerminal('Workspace symbol target is outside indexed Notes files', 'warn');
+                return;
+            }
+
+            await loadFile(targetNotesFile);
+
+            const line = Math.max(0, Number(picked.line) || 0);
+            const character = Math.max(0, Number(picked.character) || 0);
+            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+            elements.editor.focus();
+            elements.editor.setSelectionRange(offset, offset);
+
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
+            syncEditorScrollDecorations();
+
+            state.lspHoverLastKey = '';
+            scheduleLspHover();
+        },
+    });
+}
+
+async function runCurrentLspCodeLens() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    let lenses = [];
+    try {
+        lenses = await NotesLspCodeLens(state.currentFile);
+    } catch {
+        notifyTerminal('Failed to fetch code lens actions', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(lenses)
+        ? lenses.filter((item) => item && Number.isFinite(Number(item.index)))
+        : [];
+    if (entries.length === 0) {
+        notifyTerminal('No code lens actions found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => codeLensDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Code lens',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: async (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            try {
+                const applied = await NotesLspExecuteCodeLens(state.currentFile, Number(picked.index) || 0);
+                if (!applied) {
+                    notifyTerminal('Code lens had no executable command', 'info');
+                }
+            } catch {
+                notifyTerminal('Failed to run code lens', 'error');
+            }
         },
     });
 }
@@ -3119,6 +3402,127 @@ async function getLspCodeActionsForCursor() {
             actions: [],
         };
     }
+}
+
+function lspCodeActionMenuSection(kind) {
+    const value = String(kind || '').trim().toLowerCase();
+    if (value === 'quickfix' || value.startsWith('quickfix.')) {
+        return { key: 'quickfix', label: 'Quick fix', rank: 0 };
+    }
+    if (value === 'refactor' || value.startsWith('refactor.')) {
+        return { key: 'refactor', label: 'Refactor', rank: 1 };
+    }
+    if (value === 'source' || value.startsWith('source.')) {
+        return { key: 'source', label: 'Source action', rank: 2 };
+    }
+
+    return { key: 'other', label: 'Code action', rank: 3 };
+}
+
+function buildLspCodeActionMenuItems(actions, line, character, diagnostics) {
+    const grouped = new Map();
+
+    (Array.isArray(actions) ? actions : []).forEach((action, index) => {
+        const title = String(action?.title || '').trim();
+        if (!title) {
+            return;
+        }
+
+        const section = lspCodeActionMenuSection(action?.kind);
+        const entry = {
+            title: `${section.label}: ${title}`,
+            icon: CONTEXT_ICON_CODE,
+            rank: section.rank,
+            onSelect: () => {
+                void applyLspCodeActionFromCursor(index, line, character, diagnostics);
+            },
+        };
+
+        if (!grouped.has(section.key)) {
+            grouped.set(section.key, []);
+        }
+        grouped.get(section.key).push(entry);
+    });
+
+    const sections = Array.from(grouped.values())
+        .filter((items) => items.length > 0)
+        .sort((left, right) => (left[0]?.rank || 0) - (right[0]?.rank || 0));
+
+    const menuItems = [];
+    sections.forEach((items, index) => {
+        if (index > 0) {
+            menuItems.push({ title: '-' });
+        }
+        menuItems.push(...items);
+    });
+
+    return menuItems;
+}
+
+async function showEditorLspOptionsMenu(x, y) {
+    if (!isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const menuItems = [
+        {
+            title: 'Format document',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void formatCurrentLspDocument();
+            },
+        },
+        {
+            title: 'Go to symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void goToCurrentLspSymbol();
+            },
+        },
+        {
+            title: 'Go to workspace symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void goToWorkspaceLspSymbol();
+            },
+        },
+        {
+            title: 'Signature help',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void requestLspSignatureHelpFromCursor(1, '');
+            },
+        },
+        {
+            title: 'Code lens...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void runCurrentLspCodeLens();
+            },
+        },
+        {
+            title: 'Rename symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void renameCurrentLspSymbol();
+            },
+        },
+    ];
+
+    const codeActionData = await getLspCodeActionsForCursor();
+    if (codeActionData.actions.length > 0) {
+        menuItems.push({ title: '-' });
+        menuItems.push(
+            ...buildLspCodeActionMenuItems(
+                codeActionData.actions,
+                codeActionData.line,
+                codeActionData.character,
+                codeActionData.diagnostics,
+            ),
+        );
+    }
+
+    showNotesLocalMenu(menuItems, x, y, 'LSP options');
 }
 
 async function applyLspCodeActionFromCursor(index, line, character, diagnostics) {
@@ -3288,6 +3692,10 @@ async function closeOpenLspDocument() {
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
+    state.lspSemanticRequestId += 1;
+    state.lspSemanticTokens = [];
+    state.lspInlayRequestId += 1;
+    state.lspInlayHints = [];
 
     const openFile = state.lspOpenFile;
     if (!openFile) {
@@ -3317,6 +3725,8 @@ async function openCurrentLspDocument(content) {
 
         await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
         state.lspOpenFile = state.currentFile;
+        await requestLspSemanticTokens();
+        await requestLspInlayHints();
     } catch (err) {
         console.error('notes lsp open failed:', err);
     }
@@ -3332,6 +3742,8 @@ function scheduleLspDidChange() {
         state.lspChangeTimer = null;
         try {
             await NotesLspChangeDocument(state.currentFile, elements.editor.value || '');
+            await requestLspSemanticTokens();
+            await requestLspInlayHints();
         } catch (err) {
             console.error('notes lsp change failed:', err);
         }
@@ -8152,18 +8564,21 @@ function applyWindowStyle(result) {
             z-index: 9000;
             pointer-events: auto;
             max-width: 480px;
+            max-height: 50vh;
             padding: 8px 12px;
             border-radius: 8px;
             border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
             background: var(--terminal-menu-bg, var(--bg));
-            color: var(--fg);
-            font-family: var(--font-family);
-            font-size: ${Math.max(result.fontSize - 1, 11)}px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
             white-space: pre-wrap;
             word-break: break-word;
+            overflow-y: auto;
             opacity: 0.8;
             transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
             display: none;
         }
         #notes-lsp-tooltip:hover { opacity: 1; }
@@ -8173,15 +8588,20 @@ function applyWindowStyle(result) {
             z-index: 9001;
             pointer-events: auto;
             max-width: 520px;
+            max-height: 50vh;
             padding: 8px 12px;
             border-radius: 8px;
             border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
             background: var(--terminal-menu-bg, var(--bg));
-            color: var(--fg);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            overflow-y: auto;
             overflow-wrap: anywhere;
             opacity: 0.8;
             transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
             display: none;
         }
         #notes-lsp-hover-tooltip:hover { opacity: 1; }
@@ -8189,49 +8609,154 @@ function applyWindowStyle(result) {
             margin-top: 0.4em;
             margin-bottom: 0.4em;
         }
+        #notes-lsp-hover-tooltip :where(code, pre) {
+            font-family: var(--terminal-menu-font, var(--font-family));
+        }
         #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
         #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
 
         #notes-lsp-completion {
+            --notes-lsp-completion-visible-rows: 9;
+            --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
             position: fixed;
             z-index: 9002;
             min-width: 220px;
             max-width: 520px;
-            max-height: 280px;
+            max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);
             overflow: auto;
-            padding: 4px;
+            padding: 6px;
             border-radius: 8px;
             border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
             background: var(--terminal-menu-bg, var(--bg));
-            color: var(--fg);
-            font-family: var(--font-family);
-            font-size: ${Math.max(result.fontSize - 1, 11)}px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
             opacity: 0.8;
             transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
             display: none;
         }
         #notes-lsp-completion:hover { opacity: 1; }
         .notes-lsp-completion-item {
-            display: flex;
-            gap: 8px;
-            align-items: baseline;
-            padding: 6px 8px;
-            border-radius: 5px;
-            cursor: pointer;
+            align-items: center;
+            min-height: var(--notes-lsp-completion-row-height);
             white-space: nowrap;
         }
-        .notes-lsp-completion-item[data-active="true"] {
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.35);
+        .notes-lsp-completion-item.is-deprecated {
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 60%, transparent);
+        }
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-label,
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-detail {
+            text-decoration: line-through;
+            text-decoration-thickness: 1px;
+            text-decoration-color: color-mix(in srgb, currentColor 70%, transparent);
         }
         .notes-lsp-completion-label {
+            flex: 1;
+            min-width: 0;
+        }
+        .notes-lsp-completion-detail {
+            flex: 0 1 auto;
+            min-width: 0;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 72%, transparent);
+            overflow: hidden;
+            white-space: pre;
+            text-overflow: ellipsis;
+        }
+        .notes-lsp-completion-icon {
+            width: 28px;
+            min-width: 28px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 76%, transparent);
+        }
+        .notes-lsp-completion-kind {
+            flex: 0 0 auto;
+            max-width: 110px;
+            padding: 1px 6px;
+            border: 1px solid var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
+            border-radius: 999px;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 78%, transparent);
+            font-size: 10px;
+            line-height: 1.3;
+            text-transform: lowercase;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .notes-lsp-completion-detail {
-            opacity: 0.7;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-kind,
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-icon {
+            opacity: 0.65;
+        }
+        .notes-lsp-inlay-hint {
+            display: inline;
+            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.78);
+            opacity: 0.82;
+            font-size: 0.92em;
+            font-style: normal;
+            pointer-events: none;
+            user-select: none;
+            white-space: pre;
+        }
+        .notes-lsp-inlay-hint[data-kind="1"] {
+            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.78);
+        }
+        .notes-lsp-inlay-hint[data-kind="2"] {
+            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.78);
+        }
+        .notes-lsp-inlay-hint.has-padding-left {
+            margin-left: 0.5ch;
+        }
+        .notes-lsp-inlay-hint.has-padding-right {
+            margin-right: 0.5ch;
+        }
+        .notes-lsp-semantic-token {
+            display: inline;
+            font-weight: 560;
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 2px;
+            text-decoration-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.5);
+        }
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="false"] .notes-lsp-semantic-token {
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.12);
+            border-radius: 2px;
+        }
+        .notes-lsp-semantic-token[data-token-type="0"] {
+            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.96);
+        }
+        .notes-lsp-semantic-token[data-token-type="1"] {
+            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token[data-token-type="2"] {
+            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token[data-token-type="3"] {
+            color: rgba(${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token.mod-declaration,
+        .notes-lsp-semantic-token.mod-definition {
+            font-weight: 700;
+        }
+        .notes-lsp-semantic-token.mod-readonly {
+            text-decoration-style: dotted;
+        }
+        .notes-lsp-semantic-token.mod-static,
+        .notes-lsp-semantic-token.mod-defaultlibrary {
+            opacity: 0.82;
+        }
+        .notes-lsp-semantic-token.mod-deprecated {
+            text-decoration-line: underline line-through;
+            opacity: 0.68;
+        }
+        .notes-lsp-semantic-token.mod-documentation,
+        .notes-lsp-semantic-token.mod-abstract {
+            font-style: italic;
+        }
+        .notes-lsp-semantic-token.mod-async {
+            text-decoration-style: wavy;
         }
 
     `;
@@ -8418,7 +8943,7 @@ function applySquiggles(diags) {
     // Start from whatever highlight.js already rendered.
     const html = elements.editorHighlightCode.innerHTML;
     // Strip any existing lsp spans first.
-    const stripped = html.replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1');
+    const stripped = stripLspOverlayMarkup(html);
 
     const content = elements.editor.value || '';
     // Sort diagnostics so outermost (longest) ranges are processed first, which
@@ -8511,10 +9036,246 @@ function wrapDiagnosticRanges(container, lines, lineOffsets, ranges, content) {
 
 function clearLspSquiggles() {
     if (!elements.editorHighlightCode) return;
-    const html = elements.editorHighlightCode.innerHTML;
-    elements.editorHighlightCode.innerHTML = html.replace(
-        /<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1'
-    );
+    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+}
+
+function renderLspEditorDecorations() {
+    renderLspDiagnostics();
+    renderLspSemanticTokens();
+    renderLspInlayHints();
+}
+
+const LSP_SEMANTIC_TOKEN_MODIFIER_NAMES = [
+    'declaration',
+    'definition',
+    'readonly',
+    'static',
+    'deprecated',
+    'abstract',
+    'async',
+    'modification',
+    'documentation',
+    'defaultlibrary',
+];
+
+function semanticTokenModifierClassNames(mask) {
+    const bitset = Math.max(0, Number(mask) || 0);
+    if (bitset <= 0) {
+        return [];
+    }
+
+    const classes = [];
+    for (let index = 0; index < LSP_SEMANTIC_TOKEN_MODIFIER_NAMES.length; index += 1) {
+        if (((bitset >> index) & 1) === 1) {
+            classes.push(`mod-${LSP_SEMANTIC_TOKEN_MODIFIER_NAMES[index]}`);
+        }
+    }
+
+    return classes;
+}
+
+function renderLspSemanticTokens() {
+    if (!elements.editorHighlightCode) {
+        return;
+    }
+
+    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+
+    const tokens = Array.isArray(state.lspSemanticTokens)
+        ? state.lspSemanticTokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
+        : [];
+    if (tokens.length === 0) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+    const lines = content.split('\n');
+    const lineOffsets = [];
+    let offset = 0;
+    for (const line of lines) {
+        lineOffsets.push(offset);
+        offset += line.length + 1;
+    }
+
+    tokens
+        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
+        .forEach((token) => {
+            const line = Math.max(0, Math.min(Number(token.line) || 0, Math.max(lines.length - 1, 0)));
+            const lineContent = lines[line] || '';
+            const startChar = Math.max(0, Math.min(Number(token.character) || 0, lineContent.length));
+            const tokenLength = Math.max(1, Number(token.length) || 1);
+            const endChar = Math.max(startChar + 1, Math.min(startChar + tokenLength, lineContent.length));
+            if (endChar <= startChar) {
+                return;
+            }
+
+            const tokenEl = document.createElement('span');
+            tokenEl.className = 'notes-lsp-semantic-token';
+            tokenEl.dataset.tokenType = String(Math.max(0, Number(token.tokenType) || 0));
+            const tokenModifiers = Math.max(0, Number(token.tokenModifiers) || 0);
+            tokenEl.dataset.tokenModifiers = String(tokenModifiers);
+            const modifierClasses = semanticTokenModifierClassNames(tokenModifiers);
+            if (modifierClasses.length > 0) {
+                tokenEl.classList.add(...modifierClasses);
+            }
+
+            const startOffset = lineOffsets[line] + startChar;
+            const endOffset = lineOffsets[line] + endChar;
+            wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
+        });
+}
+
+function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+
+    let cursor = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        const nextCursor = cursor + text.length;
+        if (nextCursor <= startOffset || cursor >= endOffset) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        const localStart = Math.max(startOffset - cursor, 0);
+        const localEnd = Math.min(endOffset - cursor, text.length);
+        if (localStart >= localEnd) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        const before = text.slice(0, localStart);
+        const middle = text.slice(localStart, localEnd);
+        const after = text.slice(localEnd);
+        if (!middle) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        markerEl.textContent = middle;
+
+        const parent = node.parentNode;
+        if (!parent) {
+            return;
+        }
+
+        if (before) {
+            parent.insertBefore(document.createTextNode(before), node);
+        }
+        parent.insertBefore(markerEl, node);
+        if (after) {
+            node.nodeValue = after;
+        } else {
+            parent.removeChild(node);
+        }
+        return;
+    }
+}
+
+function renderLspInlayHints() {
+    if (!elements.editorHighlightCode) {
+        return;
+    }
+
+    elements.editorHighlightCode.innerHTML = String(elements.editorHighlightCode.innerHTML || '')
+        .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
+
+    const hints = Array.isArray(state.lspInlayHints)
+        ? state.lspInlayHints.filter((item) => item && String(item.label || '') !== '')
+        : [];
+    if (hints.length === 0) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+    const lines = content.split('\n');
+    const lineOffsets = [];
+    let offset = 0;
+    for (const line of lines) {
+        lineOffsets.push(offset);
+        offset += line.length + 1;
+    }
+
+    hints
+        .filter((item) => Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)))
+        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
+        .forEach((hint) => {
+            const line = Math.max(0, Math.min(Number(hint.line) || 0, Math.max(lines.length - 1, 0)));
+            const lineContent = lines[line] || '';
+            const character = Math.max(0, Math.min(Number(hint.character) || 0, lineContent.length));
+            const hintEl = document.createElement('span');
+            hintEl.className = 'notes-lsp-inlay-hint';
+            hintEl.dataset.kind = String(Number(hint.kind) || 0);
+            if (hint.paddingLeft === true) {
+                hintEl.classList.add('has-padding-left');
+            }
+            if (hint.paddingRight === true) {
+                hintEl.classList.add('has-padding-right');
+            }
+            if (hint.tooltip) {
+                hintEl.title = String(hint.tooltip);
+            }
+            hintEl.textContent = String(hint.label || '');
+
+            insertLspInlayHintAtOffset(elements.editorHighlightCode, lineOffsets[line] + character, hintEl);
+        });
+}
+
+function insertLspInlayHintAtOffset(container, targetOffset, hintEl) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+
+    let cursor = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        const nextCursor = cursor + text.length;
+        if (targetOffset <= nextCursor) {
+            const localOffset = Math.max(0, Math.min(targetOffset - cursor, text.length));
+            const parent = node.parentNode;
+            if (!parent) {
+                return;
+            }
+
+            if (localOffset === 0) {
+                parent.insertBefore(hintEl, node);
+                return;
+            }
+
+            if (localOffset === text.length) {
+                if (node.nextSibling) {
+                    parent.insertBefore(hintEl, node.nextSibling);
+                } else {
+                    parent.appendChild(hintEl);
+                }
+                return;
+            }
+
+            const afterNode = node.splitText(localOffset);
+            parent.insertBefore(hintEl, afterNode);
+            return;
+        }
+
+        cursor = nextCursor;
+    }
+
+    container.appendChild(hintEl);
 }
 
 // Hover tooltip on the gutter dots.
@@ -8548,7 +9309,7 @@ EventsOn('notesLspDiagnostics', payload => {
 
     lspDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
     if (data.uri === state.currentFileUri) {
-        renderLspDiagnostics();
+        renderLspEditorDecorations();
     }
 });
 
@@ -8687,6 +9448,10 @@ if (elements.editor) {
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
         hideLspCompletion();
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        state.lspInlayRequestId += 1;
+        state.lspInlayHints = [];
 
         const cursor = elements.editor.selectionStart || 0;
         const value = elements.editor.value || '';
@@ -8816,58 +9581,13 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         menuItems.push(
             { title: '-' },
             {
-                title: 'Format document',
+                title: 'LSP options...',
                 icon: CONTEXT_ICON_CODE,
-                onSelect: () => {
-                    void formatCurrentLspDocument();
-                },
-            },
-            {
-                title: 'Go to symbol...',
-                icon: CONTEXT_ICON_CODE,
-                onSelect: () => {
-                    void goToCurrentLspSymbol();
-                },
-            },
-            {
-                title: 'Signature help',
-                icon: CONTEXT_ICON_CODE,
-                onSelect: () => {
-                    void requestLspSignatureHelpFromCursor(1, '');
-                },
-            },
-            {
-                title: 'Rename symbol...',
-                icon: CONTEXT_ICON_CODE,
-                onSelect: () => {
-                    void renameCurrentLspSymbol();
+                onSelect: async () => {
+                    await showEditorLspOptionsMenu(e.clientX, e.clientY);
                 },
             },
         );
-
-        const codeActionData = await getLspCodeActionsForCursor();
-        if (codeActionData.actions.length > 0) {
-            menuItems.push({ title: '-' });
-            codeActionData.actions.forEach((action, index) => {
-                const title = String(action?.title || '').trim();
-                if (!title) {
-                    return;
-                }
-
-                menuItems.push({
-                    title: `Quick fix: ${title}`,
-                    icon: CONTEXT_ICON_CODE,
-                    onSelect: () => {
-                        void applyLspCodeActionFromCursor(
-                            index,
-                            codeActionData.line,
-                            codeActionData.character,
-                            codeActionData.diagnostics,
-                        );
-                    },
-                });
-            });
-        }
     }
 
     menuItems.push(

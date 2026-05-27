@@ -55,17 +55,23 @@ export function NotesLspCloseDocument(arg1:string):Promise<void>;
 
 export function NotesLspCodeActions(arg1:string,arg2:number,arg3:number,arg4:Array<lsp.Diagnostic>):Promise<Array<lsp.CodeActionItem>>;
 
+export function NotesLspCodeLens(arg1:string):Promise<Array<lsp.CodeLensItem>>;
+
 export function NotesLspCompletion(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<Array<lsp.CompletionItem>>;
 
 export function NotesLspDefinition(arg1:string,arg2:number,arg3:number):Promise<Array<lsp.DefinitionLocation>>;
 
 export function NotesLspDocumentSymbols(arg1:string):Promise<Array<lsp.DocumentSymbolItem>>;
 
+export function NotesLspExecuteCodeLens(arg1:string,arg2:number):Promise<boolean>;
+
 export function NotesLspFormat(arg1:string):Promise<lsp.FormatResult>;
 
 export function NotesLspFormatRange(arg1:string,arg2:number,arg3:number,arg4:number,arg5:number):Promise<lsp.FormatResult>;
 
 export function NotesLspHover(arg1:string,arg2:number,arg3:number):Promise<string>;
+
+export function NotesLspInlayHints(arg1:string):Promise<Array<lsp.InlayHintItem>>;
 
 export function NotesLspOpenDocument(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -75,9 +81,13 @@ export function NotesLspRename(arg1:string,arg2:number,arg3:number,arg4:string):
 
 export function NotesLspSaveDocument(arg1:string):Promise<void>;
 
+export function NotesLspSemanticTokens(arg1:string):Promise<Array<lsp.SemanticTokenItem>>;
+
 export function NotesLspSignatureHelp(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<string>;
 
 export function NotesLspStopAll():Promise<void>;
+
+export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<lsp.WorkspaceSymbolItem>>;
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 

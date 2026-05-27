@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseCompletionResult_DirectArray(t *testing.T) {
-	raw := json.RawMessage(`[{"label":"Println","detail":"fmt","insertText":"Println"}]`)
+	raw := json.RawMessage(`[{"label":"Println","detail":"fmt","insertText":"Println","deprecated":true}]`)
 	items, err := parseCompletionResult(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -18,10 +18,13 @@ func TestParseCompletionResult_DirectArray(t *testing.T) {
 	if items[0].Label != "Println" {
 		t.Fatalf("unexpected label: %q", items[0].Label)
 	}
+	if !items[0].Deprecated {
+		t.Fatalf("expected deprecated item to stay marked deprecated")
+	}
 }
 
 func TestParseCompletionResult_CompletionList(t *testing.T) {
-	raw := json.RawMessage(`{"isIncomplete":true,"items":[{"label":"fmt","detail":"package"}]}`)
+	raw := json.RawMessage(`{"isIncomplete":true,"items":[{"label":"fmt","detail":"package","tags":[1]}]}`)
 	items, err := parseCompletionResult(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -31,6 +34,9 @@ func TestParseCompletionResult_CompletionList(t *testing.T) {
 	}
 	if items[0].InsertText != "fmt" {
 		t.Fatalf("expected insertText fallback, got %q", items[0].InsertText)
+	}
+	if !items[0].Deprecated {
+		t.Fatalf("expected deprecated tag to be normalized into deprecated=true")
 	}
 }
 

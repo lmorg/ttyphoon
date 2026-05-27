@@ -45,6 +45,27 @@ func TestServerProcessEnsureInitialized(t *testing.T) {
 			return
 		}
 
+		var initParams struct {
+			Capabilities struct {
+				TextDocument struct {
+					SemanticTokens struct {
+						TokenTypes     []string `json:"tokenTypes"`
+						TokenModifiers []string `json:"tokenModifiers"`
+					} `json:"semanticTokens"`
+				} `json:"textDocument"`
+			} `json:"capabilities"`
+		}
+		if err := json.Unmarshal(initReq.Params, &initParams); err != nil {
+			t.Errorf("unmarshal initialize params: %v", err)
+			return
+		}
+		if len(initParams.Capabilities.TextDocument.SemanticTokens.TokenTypes) == 0 {
+			t.Errorf("initialize semanticTokens.tokenTypes should not be empty")
+		}
+		if len(initParams.Capabilities.TextDocument.SemanticTokens.TokenModifiers) == 0 {
+			t.Errorf("initialize semanticTokens.tokenModifiers should not be empty")
+		}
+
 		resp := Message{JSONRPC: "2.0", ID: initReq.ID, Result: mustMarshal(map[string]any{})}
 		if err := WriteMessage(serverToClientW, resp); err != nil {
 			t.Errorf("write initialize response: %v", err)

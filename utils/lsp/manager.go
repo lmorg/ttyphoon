@@ -70,6 +70,25 @@ func (m *Manager) Has(workspaceRoot, languageID string) bool {
 	return ok
 }
 
+// ServersForWorkspace returns a snapshot of running servers for one workspace root.
+func (m *Manager) ServersForWorkspace(workspaceRoot string) []*ServerProcess {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	servers := make([]*ServerProcess, 0, len(m.servers))
+	for key, sp := range m.servers {
+		if key.WorkspaceRoot == workspaceRoot {
+			servers = append(servers, sp)
+		}
+	}
+
+	return servers
+}
+
 // Stop shuts down the server for a given key and removes it.
 func (m *Manager) Stop(workspaceRoot, languageID string) {
 	if m == nil {

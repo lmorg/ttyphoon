@@ -53,9 +53,14 @@ const notesLspSaveDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspCloseDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspStopAllMock = vi.fn(() => Promise.resolve());
 const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
+const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve([]));
+const notesLspCodeLensMock = vi.fn(() => Promise.resolve([]));
+const notesLspExecuteCodeLensMock = vi.fn(() => Promise.resolve(false));
+const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
 const notesLspCompletionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDefinitionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDocumentSymbolsMock = vi.fn(() => Promise.resolve([]));
+const notesLspWorkspaceSymbolsMock = vi.fn(() => Promise.resolve([]));
 const notesLspSignatureHelpMock = vi.fn(() => Promise.resolve(''));
 const notesLspFormatMock = vi.fn(() => Promise.resolve({ changed: false, content: '' }));
 const notesLspFormatRangeMock = vi.fn(() => Promise.resolve({ changed: false, content: '' }));
@@ -98,9 +103,14 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspCloseDocument: notesLspCloseDocumentMock,
     NotesLspStopAll: notesLspStopAllMock,
     NotesLspHover: notesLspHoverMock,
+    NotesLspSemanticTokens: notesLspSemanticTokensMock,
+    NotesLspCodeLens: notesLspCodeLensMock,
+    NotesLspExecuteCodeLens: notesLspExecuteCodeLensMock,
+    NotesLspInlayHints: notesLspInlayHintsMock,
     NotesLspCompletion: notesLspCompletionMock,
     NotesLspDefinition: notesLspDefinitionMock,
     NotesLspDocumentSymbols: notesLspDocumentSymbolsMock,
+    NotesLspWorkspaceSymbols: notesLspWorkspaceSymbolsMock,
     NotesLspSignatureHelp: notesLspSignatureHelpMock,
     NotesLspFormat: notesLspFormatMock,
     NotesLspFormatRange: notesLspFormatRangeMock,
@@ -242,9 +252,14 @@ describe('notes rendering', () => {
         notesLspCloseDocumentMock.mockReset();
         notesLspStopAllMock.mockReset();
         notesLspHoverMock.mockReset();
+        notesLspSemanticTokensMock.mockReset();
+        notesLspCodeLensMock.mockReset();
+        notesLspExecuteCodeLensMock.mockReset();
+        notesLspInlayHintsMock.mockReset();
         notesLspCompletionMock.mockReset();
         notesLspDefinitionMock.mockReset();
         notesLspDocumentSymbolsMock.mockReset();
+        notesLspWorkspaceSymbolsMock.mockReset();
         notesLspSignatureHelpMock.mockReset();
         notesLspFormatMock.mockReset();
         notesLspFormatRangeMock.mockReset();
@@ -285,9 +300,14 @@ describe('notes rendering', () => {
         resolveFilePathMock.mockResolvedValue('');
         resolveNotesLspLanguageMock.mockResolvedValue('');
         notesLspHoverMock.mockResolvedValue('');
+        notesLspSemanticTokensMock.mockResolvedValue([]);
+        notesLspCodeLensMock.mockResolvedValue([]);
+        notesLspExecuteCodeLensMock.mockResolvedValue(false);
+        notesLspInlayHintsMock.mockResolvedValue([]);
         notesLspCompletionMock.mockResolvedValue([]);
         notesLspDefinitionMock.mockResolvedValue([]);
         notesLspDocumentSymbolsMock.mockResolvedValue([]);
+        notesLspWorkspaceSymbolsMock.mockResolvedValue([]);
         notesLspSignatureHelpMock.mockResolvedValue('');
         notesLspFormatMock.mockResolvedValue({ changed: false, content: '' });
         notesLspFormatRangeMock.mockResolvedValue({ changed: false, content: '' });
@@ -545,7 +565,7 @@ describe('notes rendering', () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
         notesLspCompletionMock.mockResolvedValue([
-            { label: 'Println', detail: 'fmt', insertText: 'Println', kind: 3 },
+            { label: 'Println', detail: 'fmt', insertText: 'Println', kind: 3, deprecated: true },
         ]);
         getFileMock.mockResolvedValue({ contents: '# Todo\n\nPrin', text: '', error: '' });
 
@@ -574,10 +594,134 @@ describe('notes rendering', () => {
 
         const firstItem = document.querySelector('.notes-lsp-completion-item');
         expect(firstItem).not.toBeNull();
+        expect(firstItem?.classList.contains('tty-menu-row')).toBe(true);
+        expect(firstItem?.classList.contains('is-deprecated')).toBe(true);
+        expect(firstItem?.querySelector('.notes-lsp-completion-icon')?.textContent).toBe('Fn');
+        expect(firstItem?.querySelector('.notes-lsp-completion-kind')?.textContent).toBe('function');
         firstItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
 
         expect(editor.value).toContain('Println');
+    });
+
+    it('requests and renders LSP inlay hints in the editor overlay', async () => {
+        listFilesMock.mockResolvedValue([]);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesLspInlayHintsMock.mockResolvedValue([
+            { label: ': string', kind: 1, line: 0, character: 4, paddingLeft: true },
+            { label: 'name:', kind: 2, line: 0, character: 0, paddingRight: true },
+        ]);
+        getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/main.go', contents: 'name := value\n' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
+
+        const hints = Array.from(document.querySelectorAll('.notes-lsp-inlay-hint'));
+        expect(hints).toHaveLength(2);
+        expect(hints[0]?.textContent).toBe('name:');
+        expect(hints[0]?.classList.contains('has-padding-right')).toBe(true);
+        expect(hints[1]?.textContent).toBe(': string');
+        expect(hints[1]?.classList.contains('has-padding-left')).toBe(true);
+
+        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
+        const styles = styleSheets.join('\n');
+        expect(styles).toContain('.notes-lsp-inlay-hint {');
+        expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
+    });
+
+    it('requests and renders LSP semantic tokens in the editor overlay', async () => {
+        listFilesMock.mockResolvedValue([]);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesLspSemanticTokensMock.mockResolvedValue([
+            { line: 0, character: 0, length: 4, tokenType: 1, tokenModifiers: 1 },
+        ]);
+        getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/main.go', contents: 'name := value\n' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(notesLspSemanticTokensMock).toHaveBeenCalledWith('$NOTES/main.go');
+
+        const token = document.querySelector('.notes-lsp-semantic-token');
+        expect(token).not.toBeNull();
+        expect(token?.textContent).toBe('name');
+        expect(token?.getAttribute('data-token-type')).toBe('1');
+        expect(token?.classList.contains('mod-declaration')).toBe(true);
+
+        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
+        const styles = styleSheets.join('\n');
+        expect(styles).toContain('.notes-lsp-semantic-token {');
+        expect(styles).toContain('.notes-lsp-semantic-token[data-token-type="1"] {');
+        expect(styles).toContain('.notes-lsp-semantic-token.mod-declaration,');
+    });
+
+    it('lists and executes code lens actions from editor context menu', async () => {
+        listFilesMock.mockResolvedValue([]);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesLspCodeLensMock.mockResolvedValue([
+            { index: 0, title: 'Run tests', line: 2, character: 0 },
+        ]);
+        notesLspExecuteCodeLensMock.mockResolvedValue(true);
+        getFileMock.mockResolvedValue({
+            contents: 'package main\n\nfunc main() {}\n',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({
+            filename: '$NOTES/main.go',
+            contents: 'package main\n\nfunc main() {}\n',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.selectionStart = 0;
+        editor.selectionEnd = 0;
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+
+        const contextMenu = showLocalMenuMock.mock.calls[0][0];
+        const lspOptionsIndex = contextMenu.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await contextMenu.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const lensIndex = lspMenu.options.findIndex((title) => title === 'Code lens...');
+        expect(lensIndex).toBeGreaterThanOrEqual(0);
+
+        lspMenu.onSelect(lensIndex);
+        await flushPromises();
+
+        expect(notesLspCodeLensMock).toHaveBeenCalledWith('$NOTES/main.go');
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
+
+        const lensMenu = showLocalMenuMock.mock.calls[2][0];
+        expect(lensMenu.options[0]).toContain('Run tests');
+        expect(lensMenu.options[0]).toContain('line 3');
+
+        await lensMenu.onSelect(0);
+        await flushPromises();
+
+        expect(notesLspExecuteCodeLensMock).toHaveBeenCalledWith('$NOTES/main.go', 0);
     });
 
     it('uses CSS-driven opacity rules for LSP hover and completion popups', async () => {
@@ -622,7 +766,10 @@ describe('notes rendering', () => {
         const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
         const styles = styleSheets.join('\n');
         expect(styles).toContain('#notes-lsp-completion {');
+        expect(styles).toContain('--notes-lsp-completion-visible-rows: 9;');
+        expect(styles).toContain('max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);');
         expect(styles).toContain('#notes-lsp-completion:hover { opacity: 1; }');
+        expect(styles).toContain('.notes-lsp-completion-item.is-deprecated .notes-lsp-completion-label,');
         expect(styles).toContain('#notes-lsp-hover-tooltip {');
         expect(styles).toContain('#notes-lsp-hover-tooltip:hover { opacity: 1; }');
     });
@@ -650,10 +797,17 @@ describe('notes rendering', () => {
 
         expect(showLocalMenuMock).toHaveBeenCalled();
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        const formatIndex = menuConfig.options.findIndex((title) => title === 'Format document');
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const formatIndex = lspMenu.options.findIndex((title) => title === 'Format document');
         expect(formatIndex).toBeGreaterThanOrEqual(0);
 
-        menuConfig.onSelect(formatIndex);
+        lspMenu.onSelect(formatIndex);
         await flushPromises();
         await flushPromises();
 
@@ -689,10 +843,17 @@ describe('notes rendering', () => {
 
         expect(showLocalMenuMock).toHaveBeenCalled();
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        const formatIndex = menuConfig.options.findIndex((title) => title === 'Format document');
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const formatIndex = lspMenu.options.findIndex((title) => title === 'Format document');
         expect(formatIndex).toBeGreaterThanOrEqual(0);
 
-        menuConfig.onSelect(formatIndex);
+        lspMenu.onSelect(formatIndex);
         await flushPromises();
         await flushPromises();
 
@@ -732,16 +893,23 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const contextMenu = showLocalMenuMock.mock.calls[0][0];
-        const gotoIndex = contextMenu.options.findIndex((title) => title === 'Go to symbol...');
+        const lspOptionsIndex = contextMenu.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await contextMenu.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const gotoIndex = lspMenu.options.findIndex((title) => title === 'Go to symbol...');
         expect(gotoIndex).toBeGreaterThanOrEqual(0);
 
-        contextMenu.onSelect(gotoIndex);
+        lspMenu.onSelect(gotoIndex);
         await flushPromises();
 
         expect(notesLspDocumentSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go');
-        expect(showLocalMenuMock).toHaveBeenCalledTimes(2);
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
 
-        const symbolMenu = showLocalMenuMock.mock.calls[1][0];
+        const symbolMenu = showLocalMenuMock.mock.calls[2][0];
         expect(symbolMenu.options[0]).toContain('alpha');
         expect(symbolMenu.options[1]).toContain('beta');
 
@@ -750,6 +918,92 @@ describe('notes rendering', () => {
 
         expect(editor.selectionStart).toBe('package main\n\nfunc alpha() {}\n'.length);
         expect(editor.selectionEnd).toBe(editor.selectionStart);
+    });
+
+    it('navigates to selected workspace symbol from editor context menu', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go', '$NOTES/pkg/beta.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesLspWorkspaceSymbolsMock.mockResolvedValue([
+            {
+                name: 'beta',
+                detail: 'func',
+                kind: 12,
+                line: 0,
+                character: 0,
+                containerName: 'alpha',
+                filePath: '/tmp/project/pkg/beta.go',
+            },
+        ]);
+        getFileMock.mockImplementation(async (path) => {
+            if (path === '$NOTES/main.go') {
+                return { contents: 'package main\n\nfunc alpha() {}\n', text: '', error: '' };
+            }
+            if (path === '$NOTES/pkg/beta.go') {
+                return { contents: 'func beta() {}\n', text: '', error: '' };
+            }
+            return { contents: '', text: '', error: '' };
+        });
+        resolveFilePathMock.mockImplementation(async (file) => {
+            if (file === '$NOTES/main.go') {
+                return '/tmp/project/main.go';
+            }
+            if (file === '$NOTES/pkg/beta.go') {
+                return '/tmp/project/pkg/beta.go';
+            }
+            return '';
+        });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({
+            filename: '$NOTES/main.go',
+            contents: 'package main\n\nfunc alpha() {}\n',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('beta');
+
+        const editor = document.getElementById('notes-editor');
+        editor.selectionStart = 0;
+        editor.selectionEnd = 0;
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+
+        const contextMenu = showLocalMenuMock.mock.calls[0][0];
+        const lspOptionsIndex = contextMenu.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await contextMenu.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const gotoIndex = lspMenu.options.findIndex((title) => title === 'Go to workspace symbol...');
+        expect(gotoIndex).toBeGreaterThanOrEqual(0);
+
+        lspMenu.onSelect(gotoIndex);
+        await flushPromises();
+
+        expect(promptSpy).toHaveBeenCalledWith('Workspace symbol query:', '');
+        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', 'beta');
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
+
+        const symbolMenu = showLocalMenuMock.mock.calls[2][0];
+        expect(symbolMenu.options[0]).toContain('beta');
+        expect(symbolMenu.options[0]).toContain('pkg/beta.go');
+
+        await symbolMenu.onSelect(0);
+        await flushPromises();
+        await flushPromises();
+
+        expect(getFileMock).toHaveBeenLastCalledWith('$NOTES/pkg/beta.go');
+        expect(editor.value).toBe('func beta() {}\n');
+        expect(editor.selectionStart).toBe(0);
+        expect(editor.selectionEnd).toBe(0);
+
+        promptSpy.mockRestore();
     });
 
     it('requests signature help from editor context menu action', async () => {
@@ -781,10 +1035,17 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        const sigHelpIndex = menuConfig.options.findIndex((title) => title === 'Signature help');
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const sigHelpIndex = lspMenu.options.findIndex((title) => title === 'Signature help');
         expect(sigHelpIndex).toBeGreaterThanOrEqual(0);
 
-        menuConfig.onSelect(sigHelpIndex);
+        lspMenu.onSelect(sigHelpIndex);
         await flushPromises();
         await flushPromises();
 
@@ -849,19 +1110,77 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(notesLspCodeActionsMock).toHaveBeenCalled();
         expect(showLocalMenuMock).toHaveBeenCalled();
 
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        const fixIndex = menuConfig.options.findIndex((title) => title === 'Quick fix: Use fmt.Errorf');
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        expect(notesLspCodeActionsMock).toHaveBeenCalled();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const fixIndex = lspMenu.options.findIndex((title) => title === 'Quick fix: Use fmt.Errorf');
         expect(fixIndex).toBeGreaterThanOrEqual(0);
 
-        menuConfig.onSelect(fixIndex);
+        lspMenu.onSelect(fixIndex);
         await flushPromises();
         await flushPromises();
 
         expect(notesLspApplyCodeActionMock).toHaveBeenCalled();
         expect(editor.value).toContain('import "fmt"');
+    });
+
+    it('groups LSP code actions by kind in the editor context menu', async () => {
+        listFilesMock.mockResolvedValue([]);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesLspCodeActionsMock.mockResolvedValue([
+            { title: 'Extract function', kind: 'refactor.extract' },
+            { title: 'Use fmt.Errorf', kind: 'quickfix' },
+            { title: 'Organize imports', kind: 'source.organizeImports' },
+        ]);
+        getFileMock.mockResolvedValue({ contents: 'package main\nfunc main(){_ = fmt.Errorf("x")}', text: '', error: '' });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/main.go', contents: 'package main\nfunc main(){_ = fmt.Errorf("x")}' });
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.selectionStart = editor.value.length;
+        editor.selectionEnd = editor.value.length;
+
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalled();
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        expect(lspMenu.options).toContain('Quick fix: Use fmt.Errorf');
+        expect(lspMenu.options).toContain('Refactor: Extract function');
+        expect(lspMenu.options).toContain('Source action: Organize imports');
+
+        const quickFixIndex = lspMenu.options.findIndex((title) => title === 'Quick fix: Use fmt.Errorf');
+        const refactorIndex = lspMenu.options.findIndex((title) => title === 'Refactor: Extract function');
+        const sourceIndex = lspMenu.options.findIndex((title) => title === 'Source action: Organize imports');
+        expect(quickFixIndex).toBeGreaterThanOrEqual(0);
+        expect(refactorIndex).toBeGreaterThan(quickFixIndex);
+        expect(sourceIndex).toBeGreaterThan(refactorIndex);
+
+        const separators = lspMenu.options.filter((title) => title === '-');
+        expect(separators.length).toBeGreaterThanOrEqual(2);
     });
 
     it('renames current symbol from editor context menu', async () => {
@@ -894,10 +1213,17 @@ describe('notes rendering', () => {
 
         expect(showLocalMenuMock).toHaveBeenCalled();
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        const renameIndex = menuConfig.options.findIndex((title) => title === 'Rename symbol...');
+        const lspOptionsIndex = menuConfig.options.findIndex((title) => title === 'LSP options...');
+        expect(lspOptionsIndex).toBeGreaterThanOrEqual(0);
+
+        await menuConfig.onSelect(lspOptionsIndex);
+        await flushPromises();
+
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        const renameIndex = lspMenu.options.findIndex((title) => title === 'Rename symbol...');
         expect(renameIndex).toBeGreaterThanOrEqual(0);
 
-        menuConfig.onSelect(renameIndex);
+        lspMenu.onSelect(renameIndex);
         await flushPromises();
         await flushPromises();
 
