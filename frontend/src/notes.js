@@ -674,6 +674,7 @@ const state = {
     lspHoverMouseY: 0,
     lspSemanticTokens: [],
     lspSemanticRequestId: 0,
+    lspSemanticSuppressedKey: '',
     lspInlayHints: [],
     lspInlayRequestId: 0,
     lspCompletionItems: [],
@@ -684,6 +685,8 @@ const state = {
 const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
+const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
+const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
 
 let lastAutoCopiedViewerSelection = '';
 
@@ -3077,6 +3080,20 @@ async function requestLspSemanticTokens() {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         state.lspSemanticRequestId += 1;
         state.lspSemanticTokens = [];
+        state.lspSemanticSuppressedKey = '';
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const contentLength = String(elements.editor?.value || '').length;
+    if (contentLength > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS) {
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        const suppressKey = `${state.currentFile}::size`;
+        if (state.lspSemanticSuppressedKey !== suppressKey) {
+            state.lspSemanticSuppressedKey = suppressKey;
+            notifyTerminal('Semantic token overlays disabled for very large files to keep Notes responsive.', 'info');
+        }
         renderLspEditorDecorations();
         return;
     }
@@ -3090,15 +3107,28 @@ async function requestLspSemanticTokens() {
             return;
         }
 
-        state.lspSemanticTokens = Array.isArray(tokens)
+        const filteredTokens = Array.isArray(tokens)
             ? tokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
             : [];
+
+        if (filteredTokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
+            state.lspSemanticTokens = [];
+            const suppressKey = `${state.currentFile}::tokens`;
+            if (state.lspSemanticSuppressedKey !== suppressKey) {
+                state.lspSemanticSuppressedKey = suppressKey;
+                notifyTerminal('Semantic token overlays disabled for dense token streams to keep Notes responsive.', 'info');
+            }
+        } else {
+            state.lspSemanticSuppressedKey = '';
+            state.lspSemanticTokens = filteredTokens;
+        }
         renderLspEditorDecorations();
     } catch {
         if (requestId !== state.lspSemanticRequestId) {
             return;
         }
 
+        state.lspSemanticSuppressedKey = '';
         state.lspSemanticTokens = [];
         renderLspEditorDecorations();
     }
@@ -3686,19 +3716,18 @@ function getEditorCaretViewportPoint() {
     const source = String(editor.value || '');
     const caretOffset = Math.max(0, Math.min(Number(editor.selectionStart) || 0, source.length));
     const beforeCaret = source.slice(0, caretOffset);
+    const afterCaret = source.slice(caretOffset);
+    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
 
-    mirror.style.position = 'fixed';
-    mirror.style.left = `${editorRect.left}px`;
-    mirror.style.top = `${editorRect.top}px`;
-    mirror.style.width = `${editorRect.width}px`;
-    mirror.style.height = `${editorRect.height}px`;
+    mirror.style.position = 'absolute';
+    mirror.style.left = '-10000px';
+    mirror.style.top = '-10000px';
     mirror.style.visibility = 'hidden';
     mirror.style.pointerEvents = 'none';
-    mirror.style.overflow = 'hidden';
-    mirror.style.whiteSpace = computed.whiteSpace;
-    mirror.style.wordBreak = computed.wordBreak;
-    mirror.style.overflowWrap = computed.overflowWrap;
-    mirror.style.wordWrap = computed.wordWrap;
+    mirror.style.whiteSpace = isWrapModeEnabled ? 'pre-wrap' : 'pre';
+    mirror.style.wordBreak = isWrapModeEnabled ? 'break-word' : 'normal';
+    mirror.style.overflowWrap = isWrapModeEnabled ? 'break-word' : 'normal';
+    mirror.style.wordWrap = isWrapModeEnabled ? 'break-word' : 'normal';
     mirror.style.tabSize = computed.tabSize;
     mirror.style.fontFamily = computed.fontFamily;
     mirror.style.fontSize = computed.fontSize;
@@ -3718,26 +3747,26 @@ function getEditorCaretViewportPoint() {
     mirror.style.borderRightWidth = computed.borderRightWidth;
     mirror.style.borderBottomWidth = computed.borderBottomWidth;
     mirror.style.borderLeftWidth = computed.borderLeftWidth;
+    mirror.style.borderStyle = computed.borderStyle;
     mirror.style.boxSizing = computed.boxSizing;
+    mirror.style.width = `${editor.clientWidth}px`;
 
     mirror.textContent = beforeCaret;
-    marker.textContent = '\u200b';
+    marker.textContent = afterCaret.length > 0 ? afterCaret[0] : ' ';
     mirror.appendChild(marker);
     document.body.appendChild(mirror);
 
-    mirror.scrollTop = editor.scrollTop;
-    mirror.scrollLeft = editor.scrollLeft;
-
-    const markerRect = marker.getBoundingClientRect();
+    const markerOffsetLeft = marker.offsetLeft;
+    const markerOffsetTop = marker.offsetTop;
     mirror.remove();
 
-    if (!Number.isFinite(markerRect.left) || !Number.isFinite(markerRect.top)) {
+    if (!Number.isFinite(markerOffsetLeft) || !Number.isFinite(markerOffsetTop)) {
         return null;
     }
 
     return {
-        x: markerRect.left,
-        y: markerRect.top,
+        x: editorRect.left + markerOffsetLeft - editor.scrollLeft,
+        y: editorRect.top + markerOffsetTop - editor.scrollTop,
     };
 }
 
@@ -9205,6 +9234,10 @@ function renderLspSemanticTokens() {
     }
 
     const content = elements.editor.value || '';
+    if (content.length > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS || tokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
+        return;
+    }
+
     const lines = content.split('\n');
     const lineOffsets = [];
     let offset = 0;
