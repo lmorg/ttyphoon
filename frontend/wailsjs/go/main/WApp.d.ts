@@ -5,8 +5,6 @@ import {types} from '../models';
 import {lsp} from '../models';
 import {swagger} from '../models';
 
-export function AddToFileList(arg1:string):Promise<void>;
-
 export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CloseNotification(arg1:number):Promise<void>;

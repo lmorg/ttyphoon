@@ -25,11 +25,11 @@ import (
 	"github.com/lmorg/ttyphoon/hotkeys"
 	metamd "github.com/lmorg/ttyphoon/tools/meta-md"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/cache"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/lsp"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
+	"github.com/lmorg/ttyphoon/utils/notes"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
@@ -53,44 +53,12 @@ type WApp struct {
 	usrNotesDir   string
 	homeDir       string
 	globalNotes   string
-	historyDir    string
 	visible       bool
 	notesKills    map[string]func()
 	notesStickies map[string]types.Notification
 	lspStartErrs  map[string]string
 	lspManager    *lsp.Manager
 	lspDocs       *lsp.DocumentStore
-}
-
-func docsDir(function string) string {
-	path := fmt.Sprintf("%s/Documents/%s/%s/", xdg.Home, app.DirName, function)
-
-	/*err :=*/
-	_ = os.MkdirAll(path, 0700)
-	/*if err != nil {
-		return err
-	}*/
-
-	return path
-}
-
-func findProjectRoot(cwd string) string {
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
-
-	pwd := cwd
-	home, _ := os.UserHomeDir()
-	for {
-		if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
-			return pwd
-		}
-		parent := filepath.Dir(cwd)
-		if parent == pwd || parent == home {
-			return ""
-		}
-		pwd = parent
-	}
 }
 
 // NewApp creates a new App application struct
@@ -101,11 +69,10 @@ func NewWailsApp() *WApp {
 		notesStickies: map[string]types.Notification{},
 		lspStartErrs:  map[string]string{},
 		homeDir:       xdg.Home,
-		projRoot:      findProjectRoot(""),
-		//usrNotesDir: userDocs(),
-		globalNotes: docsDir("notes"),
-		lspManager:  lsp.NewManager(),
-		lspDocs:     lsp.NewDocumentStore(),
+		projRoot:      notes.DirProjectRoot(""),
+		globalNotes:   notes.DirGlobal(),
+		lspManager:    lsp.NewManager(),
+		lspDocs:       lsp.NewDocumentStore(),
 	}
 
 	return a
@@ -761,106 +728,21 @@ func imageMime(ext string) string {
 }
 
 func (a *WApp) ListFiles() []string {
-	files := []string{}
-
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
-		return files
-	}
-
-	tile := renderer.ActiveTile()
-	if tile == nil {
-		return files
-	}
-
-	a.projRoot = findProjectRoot(tile.Pwd())
-	a.globalNotes = docsDir("notes")
-	a.usrNotesDir = a.globalNotes + tile.GroupName() + "/"
-
-	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
-	cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
-
-	files = append(files, listFiles(a.globalNotes, "GLOBAL")...)
-	files = append(files, listFiles(a.usrNotesDir, "NOTES")...)
-	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
-
-	if a.projRoot == "" {
-		return files
-	}
-
-	err := filepath.WalkDir(a.projRoot, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			log.Println(err)
-			return nil
-		}
-		if d.IsDir() {
-			if len(d.Name()) == 0 || d.Name()[0] == '.' || d.Name() == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if len(d.Name()) == 0 || d.Name()[0] == '.' {
-			return nil
-		}
-
-		if isSystemFileName(d.Name()) {
-			return nil
-		}
-
-		//if strings.HasSuffix(strings.ToLower(d.Name()), ".md") || strings.HasSuffix(strings.ToLower(d.Name()), ".json") ||
-		//	strings.HasSuffix(strings.ToLower(d.Name()), ".yml") || strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
-		filename := strings.Replace(path, a.projRoot, "$PROJECT", 1)
-		files = append(files, filename)
-		//}
-		return nil
-	})
-	if err != nil {
-		log.Println(err)
-	}
-	return files
-}
-
-func isSystemFileName(name string) bool {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "thumbs.db", "ehthumbs.db", "desktop.ini", ".ds_store":
-		return true
-	}
-
-	// macOS AppleDouble sidecar files
-	return strings.HasPrefix(name, "._")
-}
-
-func listFiles(path string, varName string) (files []string) {
-	return listFilesWithGlob(path, varName, "*")
-}
-
-func listFilesWithGlob(path string, varName string, pattern string) (files []string) {
-	if path == "" {
 		return []string{}
 	}
 
-	glob, err := filepath.Glob(fmt.Sprintf("%s/%s", path, pattern))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	replace := fmt.Sprintf("$%s/", varName)
-	for i := range glob {
-		info, err := os.Stat(glob[i])
-		if err != nil {
-			continue
-		}
+	ulf := notes.ListFiles(renderer)
 
-		if info.IsDir() || isSystemFileName(info.Name()) {
-			continue
-		}
+	a.globalNotes = ulf.PathGlobalNotes
+	a.usrNotesDir = ulf.PathUserNotes
+	a.projRoot = ulf.PathProjectRoot
 
-		files = append(files, strings.Replace(glob[i], path, replace, 1))
-	}
-	return
+	return ulf.Files
 }
 
-func (a *WApp) AddToFileList(filename string) {
+/*func (a *WApp) AddToFileList(filename string) {
 	var files []string
 
 	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
@@ -871,7 +753,7 @@ func (a *WApp) AddToFileList(filename string) {
 	}
 
 	files = append([]string{filename}, files...)
-}
+}*/
 
 func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 	switch s {
@@ -886,8 +768,8 @@ func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 		return a.homeDir
 	case "GLOBAL":
 		return a.globalNotes
-	case "HISTORY":
-		return a.historyDir
+	//case "HISTORY":
+	//	return a.historyDir
 	default:
 		return "error"
 	}
@@ -1790,12 +1672,12 @@ func (a *WApp) ViewFileInNotes() {
 		filename := files[i]
 
 		// If Notes is registered as an auxiliary tab, activate it.
-		for _, tab := range renderer.TerminalPaneTabs() {
+		/*for _, tab := range renderer.TerminalPaneTabs() {
 			if tab.ID == "notes" {
 				renderer.ActivateTerminalPaneTab("notes")
 				break
 			}
-		}
+		}*/
 
 		// Tell the frontend to open the file in the Notes pane.
 		runtime.EventsEmit(a.ctx, "viewFileInNotesOpen", filename)
