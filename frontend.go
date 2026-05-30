@@ -621,7 +621,7 @@ func (a *WApp) RunNote(id string, code, language string) {
 	ctx, kill := context.WithCancel(context.Background())
 	a.notesKills[id] = kill
 
-	go jupyter.RunNote(ctx, id, code, language, ch)
+	go jupyter.RunNote(ctx, id, a.projRoot, code, language, ch)
 
 	go func() {
 		for output := range ch {
@@ -646,7 +646,7 @@ type RunFunctionReturnT struct {
 }
 
 func (a *WApp) RunFunction(cellId, code string, parameters []string, language string) RunFunctionReturnT {
-	output, err := jupyter.RunFunction(context.Background(), code, parameters, language)
+	output, err := jupyter.RunFunction(context.Background(), a.projRoot, code, parameters, language)
 	if err != nil {
 		return RunFunctionReturnT{
 			Output:  err.Error(),

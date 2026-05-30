@@ -1,17 +1,21 @@
 package jupyter
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
+	"strings"
 	"text/template"
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
 )
 
-func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, binding *LanguageBindingT, parameters ...string) {
+func runNote(ctx context.Context, id, pwd, code string, ch chan<- *OutputT, binding *LanguageBindingT, parameters ...string) {
 	tempDir := os.TempDir()
 	tempFile, err := os.CreateTemp(tempDir, fmt.Sprintf("%s-note-*.%s", app.DirName, binding.FileExtension))
 	if err != nil {
@@ -66,15 +70,97 @@ func runNote(ctx context.Context, id string, code string, ch chan<- *OutputT, bi
 
 	var exitCode int
 	if len(pre1) > 0 {
-		exitCode = execute(ctx, id, pre1, ch)
+		exitCode = execute(ctx, id, pwd, pre1, ch)
 	}
 	if len(pre2) > 0 && exitCode == 0 {
-		exitCode = execute(ctx, id, pre2, ch)
+		exitCode = execute(ctx, id, pwd, pre2, ch)
 	}
 	if exitCode == 0 {
-		_ = execute(ctx, id, exe, ch)
+		_ = execute(ctx, id, pwd, exe, ch)
 	}
 
 	time.Sleep(500 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed
 	close(ch)
+}
+
+func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *OutputT) int {
+	select {
+	case <-ctx.Done():
+		return 1
+	default:
+	}
+
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+
+	cmd.Dir = pwd
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		ch <- &OutputT{
+			Id:     id,
+			Output: fmt.Sprintf("Error getting stdout: %v", err),
+			IsErr:  true,
+		}
+		return 1
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		ch <- &OutputT{
+			Id:     id,
+			Output: fmt.Sprintf("Error getting stderr: %v", err),
+			IsErr:  true,
+		}
+		return 1
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		ch <- &OutputT{
+			Id:     id,
+			Output: fmt.Sprintf("Error starting command: %v", err),
+			IsErr:  true,
+		}
+		return 1
+	}
+
+	go readAndEmit(id, ch, stdout, false)
+	go readAndEmit(id, ch, stderr, true)
+
+	err = cmd.Wait()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			ch <- &OutputT{
+				Id:     id,
+				Output: fmt.Sprintf("Error starting command: %v", err),
+				IsErr:  true,
+			}
+		}
+	}
+
+	return cmd.ProcessState.ExitCode()
+}
+
+func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		ch <- &OutputT{
+			Id:     id,
+			Output: line,
+			IsErr:  isStderr,
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		if strings.Contains(err.Error(), "file already closed") {
+			return
+		}
+
+		ch <- &OutputT{
+			Id:     id,
+			Output: fmt.Sprintf("Error reading output: %v", err),
+			IsErr:  true,
+		}
+	}
 }
