@@ -7049,12 +7049,27 @@ EventsOn("aiResponseStream", (chunk) => {
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
+// Opens the file and selects the first (default) tab for the file type.
 EventsOn('viewFileInNotesOpen', async (payload) => {
     const file = typeof payload === 'string' ? payload : String(payload ?? '');
     if (!file) return;
 
     try {
         await loadFile(file);
+    } catch (err) {
+        setStatus(`Failed to load file: ${file}`, true);
+        console.error(err);
+    }
+});
+
+// Event emitted by Go to open a file directly in the Edit tab.
+EventsOn('viewFileInNotesEdit', async (payload) => {
+    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    if (!file) return;
+
+    try {
+        await loadFile(file);
+        setViewMode('editor');
     } catch (err) {
         setStatus(`Failed to load file: ${file}`, true);
         console.error(err);

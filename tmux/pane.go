@@ -152,7 +152,7 @@ type paneInfo struct {
 	WindowId  string `tmux:"window_id"`
 	WinActive bool   `tmux:"?window_active,true,false"`
 	AtBottom  bool   `tmux:"?pane_at_bottom,true,false"`
-	Path      string `tmux:"pane_path"`
+	Path      string `tmux:"pane_current_path"`
 }
 
 // updatePaneInfo, paneId is optional. Leave blank to update all panes

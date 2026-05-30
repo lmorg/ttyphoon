@@ -85,6 +85,7 @@ type Renderer interface {
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int
 	RefreshNotes()
+	NotesEditFile(filename string)
 	NotesCreateAndOpen(filename, contents string)
 	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)

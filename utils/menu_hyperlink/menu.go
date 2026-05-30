@@ -75,6 +75,12 @@ func MenuItems(renderer types.Renderer, url, label string) []types.MenuItem {
 
 		menuItems = []types.MenuItem{
 			{
+				Title: "Edit file",
+				Fn:    func() { renderer.NotesEditFile(link.filePath + link.fileName) },
+				Icon:  0xf044,
+			},
+			{Title: types.MENU_SEPARATOR},
+			{
 				Title: "Copy file and path to clipboard",
 				Fn:    func() { copyLinkToClipboard(link.renderer, link.filePath+link.fileName) },
 				Icon:  0xf0c1,
