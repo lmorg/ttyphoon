@@ -131,7 +131,7 @@ And you can even execute the code blocks inline. Bringing you the flexibility of
 
 ![markdown](images/jupyter.png)
 
-### Notes LSP
+### Programming Language toos (LSP)
 
 Notes can attach a language server when the current file type resolves to a configured entry in `Notes.LSP`.
 
@@ -348,8 +348,8 @@ Support for the following platforms is planned:
   - [ ] tested on 13.x, Ventura
   - [x] tested on 14.x, Sonoma
   - [x] tested on 15.x, Sequoia
-- [x] Windows
-  - [x] PTY support implemented
+- [ ] Windows
+  - [ ] PTY support implemented
   - [ ] tested on Windows 10
   - [ ] tested on Windows 11
 
