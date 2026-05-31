@@ -68,6 +68,7 @@ const notesLspCodeActionsMock = vi.fn(() => Promise.resolve([]));
 const notesLspApplyCodeActionMock = vi.fn(() => Promise.resolve({ changed: false, content: '' }));
 const notesLspPrepareRenameMock = vi.fn(() => Promise.resolve({ canRename: true, placeholder: '' }));
 const notesLspRenameMock = vi.fn(() => Promise.resolve({ changed: false, content: '' }));
+const notesRecentFilesMock = vi.fn(() => Promise.resolve([]));
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -118,6 +119,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspApplyCodeAction: notesLspApplyCodeActionMock,
     NotesLspPrepareRename: notesLspPrepareRenameMock,
     NotesLspRename: notesLspRenameMock,
+    NotesRecentFiles: notesRecentFilesMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,

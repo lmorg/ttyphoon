@@ -166,6 +166,10 @@ export function NotesLspWorkspaceSymbols(arg1, arg2) {
   return window['go']['main']['WApp']['NotesLspWorkspaceSymbols'](arg1, arg2);
 }
 
+export function NotesRecentFiles() {
+  return window['go']['main']['WApp']['NotesRecentFiles']();
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }

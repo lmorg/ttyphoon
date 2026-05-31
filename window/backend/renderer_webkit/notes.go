@@ -1,6 +1,7 @@
 package rendererwebkit
 
 import (
+	"github.com/lmorg/ttyphoon/utils/notes"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -28,4 +29,20 @@ func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 		"filename": filename,
 		"contents": content,
 	})
+}
+
+func (wr *webkitRender) NotesRecentFiles() {
+	tile := wr.ActiveTile()
+	if tile == nil {
+		return
+	}
+
+	project := notes.DirProjectRoot(tile.Pwd())
+	recent := notes.GetRecentList(project)
+
+	okFn := func(i int) {
+		runtime.EventsEmit(wr.wapp, "viewFileInNotesOpen", recent[i])
+	}
+
+	wr.openMenu("Recent files", recent, nil, nil, okFn, nil, false)
 }
