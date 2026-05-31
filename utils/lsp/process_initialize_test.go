@@ -20,15 +20,11 @@ func TestServerProcessEnsureInitialized(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = transport.ReadLoop(ctx)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		reader := bufio.NewReader(clientToServerR)
 
 		initReq, err := ReadMessage(reader)
@@ -84,7 +80,7 @@ func TestServerProcessEnsureInitialized(t *testing.T) {
 		if initializedMsg.ID != nil {
 			t.Errorf("initialized should be notification")
 		}
-	}()
+	})
 
 	if err := sp.EnsureInitialized(context.Background(), "/tmp/workspace"); err != nil {
 		t.Fatalf("EnsureInitialized failed: %v", err)
@@ -109,15 +105,11 @@ func TestServerProcessEnsureInitialized_NegotiatesPositionEncoding(t *testing.T)
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = transport.ReadLoop(ctx)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		reader := bufio.NewReader(clientToServerR)
 
 		initReq, err := ReadMessage(reader)
@@ -149,7 +141,7 @@ func TestServerProcessEnsureInitialized_NegotiatesPositionEncoding(t *testing.T)
 		if initializedMsg.Method != "initialized" {
 			t.Errorf("expected initialized method, got %q", initializedMsg.Method)
 		}
-	}()
+	})
 
 	if err := sp.EnsureInitialized(context.Background(), "/tmp/workspace"); err != nil {
 		t.Fatalf("EnsureInitialized failed: %v", err)

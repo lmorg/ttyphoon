@@ -19,11 +19,9 @@ func TestServerProcessStop_SendsShutdownAndExit(t *testing.T) {
 	sp.cancel = cancel
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = transport.ReadLoop(ctx)
-	}()
+	})
 
 	serverDone := make(chan error, 1)
 	go func() {

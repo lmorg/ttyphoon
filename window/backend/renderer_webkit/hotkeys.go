@@ -96,6 +96,10 @@ func (wr *webkitRender) hotkeys() {
 			}
 			desc = "Open file..."
 			icon = 0xf07c
+		case "ReopenRecentFile":
+			fn = wr.NotesRecentFiles
+			desc = "Re-Open recent file..."
+			icon = 0xf07c
 
 		default:
 			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))

@@ -651,11 +651,12 @@ type GetFileReturnT struct {
 }
 
 func (a *WApp) GetFile(filename string) GetFileReturnT {
+	requestedFilename := strings.TrimSpace(filename)
 	filename = a.filePath(filename)
 
 	stat, err := os.Stat(filename)
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		return GetFileReturnT{Error: err.Error()}
 	}
 	if stat.Size() > config.Config.Notes.MaxFileSize*1024*1024 {
@@ -673,11 +674,16 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 
 	b, err := io.ReadAll(f)
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		return GetFileReturnT{Error: err.Error()}
 	}
 
 	a.mdBaseDir = filepath.Dir(filename)
+	err = notes.RecentListAdd(a.projRoot, requestedFilename)
+	if err != nil {
+		//log.Println(err)
+		return GetFileReturnT{Error: err.Error()}
+	}
 
 	if bytes.Contains(b[:min(1024, len(b))], []byte{0}) {
 		return GetFileReturnT{Contents: base64.StdEncoding.EncodeToString(b), Binary: true}
@@ -698,12 +704,15 @@ func (a *WApp) GetImage(path string) string {
 		return "error: extension not found"
 	}
 
-	path = string(filepath.Separator) + path
-	if _, err := os.Stat(path); err != nil {
-		path = a.mdBaseDir + path
+	resolvedPath := path
+	if !filepath.IsAbs(resolvedPath) {
+		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
+	}
+	if _, err := os.Stat(resolvedPath); err != nil {
+		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(resolvedPath)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
@@ -714,6 +723,10 @@ func (a *WApp) GetImage(path string) string {
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
+
+	/*if recentFile := a.notesFileForAbsolutePath(resolvedPath); recentFile != "" {
+		notes.RecentListAdd(a.projRoot, recentFile)
+	}*/
 
 	base64 := base64.StdEncoding.EncodeToString(b)
 
@@ -741,19 +754,6 @@ func (a *WApp) ListFiles() []string {
 
 	return ulf.Files
 }
-
-/*func (a *WApp) AddToFileList(filename string) {
-	var files []string
-
-	cache.Read(cache.NS_NOTESW_FILES, a.usrNotesDir, &files)
-	defer cache.Write(cache.NS_NOTESW_FILES, a.usrNotesDir, &files, cache.Days(365))
-
-	if slices.Contains(files, filename) {
-		return
-	}
-
-	files = append([]string{filename}, files...)
-}*/
 
 func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 	switch s {
@@ -1458,6 +1458,10 @@ func (a *WApp) GetCurrentProject() string {
 	return a.projRoot
 }
 
+func (a *WApp) NotesRecentFiles() []string {
+	return notes.GetRecentList(a.projRoot)
+}
+
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
@@ -1596,7 +1600,13 @@ func (a *WApp) GetClipboardData() ClipboardData {
 func (a *WApp) RenameFile(oldPath, newPath string) error {
 	oldAbsPath := a.filePath(oldPath)
 	newAbsPath := a.filePath(newPath)
-	if err := os.Rename(oldAbsPath, newAbsPath); err != nil {
+	err := os.Rename(oldAbsPath, newAbsPath)
+	if err != nil {
+		return err
+	}
+
+	err = notes.RecentListRename(a.projRoot, oldPath, newPath)
+	if err != nil {
 		return err
 	}
 
@@ -1609,7 +1619,13 @@ func (a *WApp) RenameFile(oldPath, newPath string) error {
 
 func (a *WApp) DeleteFile(filename string) error {
 	absPath := a.filePath(filename)
-	if err := os.Remove(absPath); err != nil {
+	err := os.Remove(absPath)
+	if err != nil {
+		return err
+	}
+
+	err = notes.RecentListDelete(a.projRoot, filename)
+	if err != nil {
 		return err
 	}
 

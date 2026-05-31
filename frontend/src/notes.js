@@ -7,7 +7,7 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
-    ResolveNotesLspLanguage,
+    ResolveNotesLspLanguage, NotesRecentFiles,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesLspSemanticTokens,
@@ -368,6 +368,7 @@ const CONTEXT_ICON_PASTE = 0xf0ea;
 const CONTEXT_ICON_FIND = 0xf002;
 const CONTEXT_ICON_PRINT = 0xf02f;
 const CONTEXT_ICON_CHECKBOX = 0xf14a;
+const CONTEXT_ICON_TICK = 0xf00c;
 const CONTEXT_ICON_CODE = 0xf121;
 const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
@@ -7653,6 +7654,11 @@ function applyWindowStyle(result) {
             color: var(--fg);
         }
 
+        #notes-status:hover {
+            cursor: pointer;
+            color: var(--accent);
+        }
+
         #notes-status[data-state="error"] {
             color: var(--error);
         }
@@ -10067,6 +10073,53 @@ elements.tabCsvRun.addEventListener('click', () => {
 elements.tabMeta.addEventListener('click', () => {
     setViewMode('meta');
 });
+
+if (elements.status) {
+    elements.status.title = 'Recent files';
+    elements.status.tabIndex = 0;
+    elements.status.setAttribute('role', 'button');
+
+    const openRecentFilesMenu = async (x, y) => {
+        try {
+            const recentFiles = await NotesRecentFiles();
+            const files = Array.isArray(recentFiles) ? recentFiles : [];
+            if (files.length === 0) {
+                setStatus('No recent files.', false);
+                return;
+            }
+
+            const menuItems = files.map((file) => ({
+                title: file,
+                icon: file === state.currentFile ? CONTEXT_ICON_TICK : 0,
+                onSelect: () => {
+                    loadFile(file).catch((err) => {
+                        setStatus(`Failed to load file: ${file}`, true);
+                        console.error(err);
+                    });
+                },
+            }));
+
+            showNotesLocalMenu(menuItems, x, y, 'Recent files');
+        } catch {
+            setStatus('Failed to open recent files menu.', true);
+        }
+    };
+
+    elements.status.addEventListener('click', (event) => {
+        event.preventDefault();
+        openRecentFilesMenu(event.clientX, event.clientY);
+    });
+
+    elements.status.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+
+        event.preventDefault();
+        const rect = elements.status.getBoundingClientRect();
+        openRecentFilesMenu(rect.left, rect.bottom);
+    });
+}
 
 function getVisibleNotesTabs() {
     if (state.currentFileType === 'json') {

@@ -87,6 +87,8 @@ export function NotesLspStopAll():Promise<void>;
 
 export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<lsp.WorkspaceSymbolItem>>;
 
+export function NotesRecentFiles():Promise<Array<string>>;
+
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveFilePath(arg1:string):Promise<string>;
