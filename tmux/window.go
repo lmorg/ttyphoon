@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -163,21 +164,25 @@ func (tmux *Tmux) updateWinInfo(winId string) error {
 	return nil
 }
 
-func (tmux *Tmux) ActiveWindow() *WindowT {
+func (tmux *Tmux) ActiveWindow() (*WindowT, error) {
+	if tmux == nil {
+		return nil, errors.New("no open windows")
+	}
+
 	win := tmux.activeWindow
 	if win != nil {
-		return win
+		return win, nil
 	}
 
 	if len(tmux.wins._map) == 0 {
-		panic("no open windows")
+		return nil, errors.New("no open windows")
 	}
 
 	// lets just pick one at random
 	for win = range tmux.wins.Each() {
 		break
 	}
-	return win
+	return win, nil
 }
 
 func (win *WindowT) ActivePane() *PaneT {

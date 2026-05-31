@@ -1,3 +1,314 @@
+export namespace lsp {
+	
+	export class ApplyCodeActionResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyCodeActionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+	export class CodeActionItem {
+	    title: string;
+	    kind?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeActionItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.kind = source["kind"];
+	    }
+	}
+	export class CodeLensItem {
+	    index: number;
+	    title: string;
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeLensItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.title = source["title"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
+	export class CompletionItem {
+	    label: string;
+	    detail?: string;
+	    insertText?: string;
+	    kind?: number;
+	    deprecated?: boolean;
+	    tags?: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CompletionItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.detail = source["detail"];
+	        this.insertText = source["insertText"];
+	        this.kind = source["kind"];
+	        this.deprecated = source["deprecated"];
+	        this.tags = source["tags"];
+	    }
+	}
+	export class DefinitionLocation {
+	    uri: string;
+	    filePath?: string;
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DefinitionLocation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
+	export class Position {
+	    line: number;
+	    character: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Position(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.character = source["character"];
+	    }
+	}
+	export class Range {
+	    start: Position;
+	    end: Position;
+	
+	    static createFrom(source: any = {}) {
+	        return new Range(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = this.convertValues(source["start"], Position);
+	        this.end = this.convertValues(source["end"], Position);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Diagnostic {
+	    range: Range;
+	    severity: number;
+	    code?: any;
+	    source?: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.range = this.convertValues(source["range"], Range);
+	        this.severity = source["severity"];
+	        this.code = source["code"];
+	        this.source = source["source"];
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DocumentSymbolItem {
+	    name: string;
+	    detail?: string;
+	    kind: number;
+	    line: number;
+	    character: number;
+	    containerName?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DocumentSymbolItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.detail = source["detail"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.containerName = source["containerName"];
+	    }
+	}
+	export class FormatResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FormatResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+	export class InlayHintItem {
+	    label: string;
+	    tooltip?: string;
+	    kind?: number;
+	    line: number;
+	    character: number;
+	    paddingLeft?: boolean;
+	    paddingRight?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new InlayHintItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.tooltip = source["tooltip"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.paddingLeft = source["paddingLeft"];
+	        this.paddingRight = source["paddingRight"];
+	    }
+	}
+	
+	export class PrepareRenameResult {
+	    canRename: boolean;
+	    placeholder?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrepareRenameResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.canRename = source["canRename"];
+	        this.placeholder = source["placeholder"];
+	    }
+	}
+	
+	export class RenameResult {
+	    content: string;
+	    changed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RenameResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.changed = source["changed"];
+	    }
+	}
+	export class SemanticTokenItem {
+	    line: number;
+	    character: number;
+	    length: number;
+	    tokenType: number;
+	    tokenModifiers: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SemanticTokenItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.length = source["length"];
+	        this.tokenType = source["tokenType"];
+	        this.tokenModifiers = source["tokenModifiers"];
+	    }
+	}
+	export class WorkspaceSymbolItem {
+	    name: string;
+	    detail?: string;
+	    kind: number;
+	    line: number;
+	    character: number;
+	    containerName?: string;
+	    uri?: string;
+	    filePath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceSymbolItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.detail = source["detail"];
+	        this.kind = source["kind"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.containerName = source["containerName"];
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class ClipboardData {
@@ -33,6 +344,7 @@ export namespace main {
 	    magentaBright: types.Colour;
 	    cyanBright: types.Colour;
 	    whiteBright: types.Colour;
+	    accent: types.Colour;
 	    selection: types.Colour;
 	    link: types.Colour;
 	    error: types.Colour;
@@ -61,6 +373,7 @@ export namespace main {
 	        this.magentaBright = this.convertValues(source["magentaBright"], types.Colour);
 	        this.cyanBright = this.convertValues(source["cyanBright"], types.Colour);
 	        this.whiteBright = this.convertValues(source["whiteBright"], types.Colour);
+	        this.accent = this.convertValues(source["accent"], types.Colour);
 	        this.selection = this.convertValues(source["selection"], types.Colour);
 	        this.link = this.convertValues(source["link"], types.Colour);
 	        this.error = this.convertValues(source["error"], types.Colour);

@@ -1,13 +1,10 @@
 package jupyter
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -60,13 +57,13 @@ func GetAllLanguageDescriptions() []string {
 	return descriptions
 }
 
-func RunNote(ctx context.Context, id, code, langRuntime string, ch chan<- *OutputT) {
+func RunNote(ctx context.Context, id, pwd, code, langRuntime string, ch chan<- *OutputT) {
 	for _, binding := range Languages {
 		if binding.Description != langRuntime {
 			continue
 		}
 
-		runNote(ctx, id, code, ch, binding)
+		runNote(ctx, id, pwd, code, ch, binding)
 		return
 	}
 
@@ -81,7 +78,7 @@ const _ID_FUNCTION = "#function"
 
 const _PARAMETERS = "${PARAMETERS}"
 
-func RunFunction(ctx context.Context, code string, parameters []string, langRuntime string) (string, error) {
+func RunFunction(ctx context.Context, pwd, code string, parameters []string, langRuntime string) (string, error) {
 	for _, binding := range Languages {
 		if binding.Description != langRuntime {
 			continue
@@ -93,7 +90,7 @@ func RunFunction(ctx context.Context, code string, parameters []string, langRunt
 			err string
 		)
 
-		go runNote(ctx, _ID_FUNCTION, code, ch, binding, parameters...)
+		go runNote(ctx, _ID_FUNCTION, pwd, code, ch, binding, parameters...)
 
 		for output := range ch {
 			if output.IsErr {
@@ -152,84 +149,4 @@ func expandParameters(slice []string, filename string, parameters []string) []st
 		}
 	}
 	return s
-}
-
-func execute(ctx context.Context, id string, argv []string, ch chan<- *OutputT) int {
-	select {
-	case <-ctx.Done():
-		return 1
-	default:
-	}
-
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error getting stdout: %v", err),
-			IsErr:  true,
-		}
-		return 1
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error getting stderr: %v", err),
-			IsErr:  true,
-		}
-		return 1
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error starting command: %v", err),
-			IsErr:  true,
-		}
-		return 1
-	}
-
-	go readAndEmit(id, ch, stdout, false)
-	go readAndEmit(id, ch, stderr, true)
-
-	err = cmd.Wait()
-	if err != nil {
-		if _, ok := err.(*exec.ExitError); !ok {
-			ch <- &OutputT{
-				Id:     id,
-				Output: fmt.Sprintf("Error starting command: %v", err),
-				IsErr:  true,
-			}
-		}
-	}
-
-	return cmd.ProcessState.ExitCode()
-}
-
-func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		ch <- &OutputT{
-			Id:     id,
-			Output: line,
-			IsErr:  isStderr,
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		if strings.Contains(err.Error(), "file already closed") {
-			return
-		}
-
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error reading output: %v", err),
-			IsErr:  true,
-		}
-	}
 }

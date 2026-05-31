@@ -20,8 +20,12 @@ func fnKeyNewWindow(tmux *Tmux) error {
 }
 
 func fnKeyKillPane(tmux *Tmux) error {
-	command := fmt.Sprintf("kill-pane -t %s", tmux.ActivePane().id)
-	_, err := tmux.SendCommand([]byte(command))
+	pane, err := tmux.ActivePane()
+	if err != nil {
+		return err
+	}
+	command := fmt.Sprintf("kill-pane -t %s", pane.id)
+	_, err = tmux.SendCommand([]byte(command))
 	return err
 }
 

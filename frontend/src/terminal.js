@@ -6,6 +6,7 @@ import { drawGauge } from './gauge';
 import { drawBlockChrome } from './block_chrome';
 import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
+import { initMarkdownModal } from './markdown-modal';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 import dingSound from './assets/sound/ding.mp3';
@@ -365,7 +366,7 @@ function applyTerminalStyles(result) {
         :root {
             --terminal-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --terminal-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
-            --terminal-accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --terminal-accent: rgb(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue});
             --terminal-selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
             --terminal-selection-20: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
             --terminal-green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -1245,6 +1246,7 @@ GetWindowStyle().then((result) => {
 });
 
 initInputBox(canvas);
+initMarkdownModal();
 
 // ------------------------------------------------------------------
 // Notification overlay

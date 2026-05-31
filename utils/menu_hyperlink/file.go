@@ -46,19 +46,3 @@ func menuItemsSchemaFile(link *link, menuItems []types.MenuItem) []types.MenuIte
 
 	return menuItems
 }
-
-/*func openMarkdownViewer(el *ElementHyperlink) {
-	windowStyle := dispatcher.NewWindowStyle()
-	//windowStyle.Pos = types.XY{}
-	//x, y := el.renderer.GetWindowMeta().(*sdl.Window).GetSize()
-	//windowStyle.Size = types.XY{X: x, Y: y}
-	//windowStyle.Title = string(el.label)
-
-	parameters := &dispatcher.PMarkdownT{Path: el.link}
-
-	_, _ = dispatcher.DisplayWindow(dispatcher.WindowMarkdown, windowStyle, parameters, func(msg *dispatcher.IpcMessageT) {
-		if msg.Error != nil {
-			el.renderer.DisplayNotification(types.NOTIFY_ERROR, msg.Error.Error())
-		}
-	})
-}*/

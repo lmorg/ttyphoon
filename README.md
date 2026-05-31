@@ -11,6 +11,7 @@
   - [Tmux Support](#tmux-support)
   - [Highlighted Search Results](#highlighted-search-results)
   - [Markdown Viewer](#markdown-viewer)
+  - [Notes LSP](#notes-lsp)
   - [Config Files](#config-files)
   - [Swagger](#swagger)
   - [Non-Intrusive AI](#non-intrusive-ai)
@@ -129,6 +130,56 @@ You can write notes in markdown alongside your terminal sessions. View readme's,
 And you can even execute the code blocks inline. Bringing you the flexibility of Jupyter Notebooks and the power of a full terminal emulator
 
 ![markdown](images/jupyter.png)
+
+### Notes LSP
+
+Notes can attach a language server when the current file type resolves to a configured entry in `Notes.LSP`.
+
+Current Notes LSP support includes:
+
+- diagnostics with gutter markers and inline squiggles
+- hover and signature help
+- completion
+- go to definition
+- workspace symbol
+- inlay hints
+- code lens actions
+- semantic tokens
+- document and range formatting
+- code actions / quick fixes
+- rename symbol
+- document symbols
+
+LSP servers are configured in the main config file under `Notes.LSP`. Keys are canonical language ids and values are the command argv used to start the server.
+
+Example:
+
+```yaml
+Notes:
+  LSP:
+    go: [gopls]
+    javascript: [typescript-language-server, --stdio]
+    typescript: [typescript-language-server, --stdio]
+    terraform: [terraform-ls, serve]
+    python: [pylsp]
+```
+
+Notes resolves the language id from the same Jupyter language metadata used elsewhere in the project, so file extensions such as `.go`, `.js`, `.ts`, `.tf`, and `.py` map onto the configured LSP entries automatically.
+
+Current Notes LSP behavior:
+
+- enablement is automatic when a matching `Notes.LSP.<language>` entry exists
+- startup failures are surfaced to the UI instead of failing silently
+- hover content supports markdown rendering and external links
+- inlay hints render inline in the editor overlay when the server provides them
+- code lens actions are available from the editor context menu when provided by the server
+- semantic tokens render in the editor overlay when the server provides them
+- completion and code actions are currently mouse-driven in the MVP UI
+
+Current limitations:
+
+- no dedicated LSP hotkeys in the MVP UI yet
+- incremental sync is not enabled yet
 
 ### Config Files
 

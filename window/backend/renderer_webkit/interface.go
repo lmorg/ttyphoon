@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
@@ -126,6 +125,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 			MagentaBright: *types.SGR_COLOR_MAGENTA_BRIGHT,
 			CyanBright:    *types.SGR_COLOR_CYAN_BRIGHT,
 			WhiteBright:   *types.SGR_COLOR_WHITE_BRIGHT,
+			Accent:        *types.SGR_COLOR_ACCENT,
 			Selection:     *types.COLOR_SELECTION,
 			Link:          *types.SGR_COLOR_BLUE,
 			Error:         *types.COLOR_ERROR,
@@ -160,6 +160,7 @@ type coloursPayload struct {
 	MagentaBright types.Colour `json:"magentaBright"`
 	CyanBright    types.Colour `json:"cyanBright"`
 	WhiteBright   types.Colour `json:"whiteBright"`
+	Accent        types.Colour `json:"accent"`
 	Selection     types.Colour `json:"selection"`
 	Link          types.Colour `json:"link"`
 	Error         types.Colour `json:"error"`
@@ -203,23 +204,11 @@ func (wr *webkitRender) RefreshWindowList() {
 	}
 
 	wr.TriggerRedraw()
-	wr.updateNotes()
-	wr.SetWindowTitle(wr.tmux.ActivePane().Name())
-}
-
-func (wr *webkitRender) updateNotes() {
-	if wr.termWin == nil {
-		// bit of a hack but this should only happen on application startup
-		time.Sleep(500 * time.Millisecond)
+	pane, err := wr.tmux.ActivePane()
+	if err == nil {
+		wr.SetWindowTitle(pane.Name())
 	}
-	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
-}
-
-func (wr *webkitRender) RefreshNotes() {
-	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
-		return
-	}
-	wr.updateNotes()
+	wr.RefreshNotes()
 }
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
@@ -283,10 +272,6 @@ func (wr *webkitRender) TriggerDeallocation(fn func()) {
 
 func (wr *webkitRender) TriggerQuit() {}
 
-func (wr *webkitRender) GetWindowMeta() any {
-	return wr.TerminalPaneTabs()
-}
-
 func (wr *webkitRender) SetTerminalPaneTabs(tabs []types.TerminalPaneTab) {
 	wr.auxTabsMu.Lock()
 	wr.auxTerminalTabs = append([]types.TerminalPaneTab(nil), tabs...)
@@ -310,13 +295,6 @@ func (wr *webkitRender) ActivateTerminalPaneTab(tabID string) {
 	}
 
 	runtime.EventsEmit(wr.wapp, "terminalActivateAuxTab", map[string]string{"id": tabID})
-}
-
-func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
-	runtime.EventsEmit(wr.wapp, "notesCreateAndOpen", map[string]string{
-		"filename": filename,
-		"contents": content,
-	})
 }
 
 func (wr *webkitRender) EmitAIResponseChunk(chunk string) {
@@ -365,4 +343,8 @@ func (wr *webkitRender) activeTerm() types.Term {
 
 func (wr *webkitRender) GetContext() context.Context {
 	return wr.wapp
+}
+
+func (wr *webkitRender) DisplayMarkdownModel(markdownContent string) {
+	runtime.EventsEmit(wr.wapp, "showMarkdownModal", markdownContent)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/integrations"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/notes"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -136,6 +137,16 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 			Icon:  0xf084,
 		},
 	}...)
+
+	// Edit Files
+	files := notes.ListFiles(wr).Files
+	for i := range files {
+		menu = append(menu, types.MenuItem{
+			Title: "Edit: " + files[i],
+			Fn:    func() { wr.NotesEditFile(files[i]) },
+			Icon:  0xf044,
+		})
+	}
 
 	return menu
 }

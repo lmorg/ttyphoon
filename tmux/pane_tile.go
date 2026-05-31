@@ -21,6 +21,7 @@ func (p *PaneT) AtBottom() bool { return p.atBottom }
 
 func (p *PaneT) GetTerm() types.Term     { return p.term }
 func (p *PaneT) SetTerm(term types.Term) { p.term = term }
-func (p *PaneT) Pwd() string             { return p.curPath }
+func (p *PaneT) Pwd() string             { return p.pwd }
+func (p *PaneT) SetPwd(path string)      { p.pwd = path }
 
 func (p *PaneT) Close() { agent.Close(p.Id()) }

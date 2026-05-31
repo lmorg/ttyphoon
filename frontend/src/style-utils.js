@@ -100,7 +100,7 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}h4,
         ${prefix}h5,
         ${prefix}h6 {
-            color: ${classPrefix ? 'var(--accent)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`};
+            color: ${classPrefix ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`};
             font-family: "Jura", var(--font-family), sans-serif;
         }
 
@@ -183,7 +183,7 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
     const blueBright = useCssVars ? 'var(--blue-bright)' : `rgb(${colors.blueBright.Red}, ${colors.blueBright.Green}, ${colors.blueBright.Blue})`;
     const magenta = useCssVars ? 'var(--magenta)' : `rgb(${colors.magenta.Red}, ${colors.magenta.Green}, ${colors.magenta.Blue})`;
     const green = useCssVars ? 'var(--green)' : `rgb(${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue})`;
-    const yellow = useCssVars ? 'var(--accent)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
+    const yellow = useCssVars ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
     const cyan = useCssVars ? 'var(--cyan)' : `rgb(${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue})`;
     const red = useCssVars ? 'var(--red)' : `rgb(${colors.red.Red}, ${colors.red.Green}, ${colors.red.Blue})`;
 
@@ -357,6 +357,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
     const cyanRgb = `${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue}`;
     const yellowRgb = `${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue}`;
     const blueBrightRgb = `${colors.blueBright.Red}, ${colors.blueBright.Green}, ${colors.blueBright.Blue}`;
+    const accentRgb = `${colors.accent.Red}, ${colors.accent.Green}, ${colors.accent.Blue}`;
 
     return `
         /* Swagger UI Container */
@@ -434,7 +435,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-info-meta-label {
-            color: var(--accent);
+            color: var(--yellow);
             font-weight: bold;
             font-size: 1em;
         }
@@ -627,7 +628,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-request-tab[aria-selected="true"],
         .swagger-response-tab[aria-selected="true"] {
-            color: var(--accent);
+            color: var(--fg);
             border-bottom-color: var(--accent);
         }
 
@@ -652,6 +653,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-header-item {
             display: flex;
+            align-items: center;
             gap: 12px;
             padding: 6px 8px;
             background-color: rgba(${fgRgb}, 0.03);
@@ -663,7 +665,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
 
         .swagger-header-name {
             font-weight: bold;
-            color: var(--accent);
+            color: var(--yellow);
             min-width: 150px;
             flex-shrink: 0;
         }
@@ -916,7 +918,7 @@ export function getSwaggerUIStyles(colors, fontSize) {
         }
 
         .swagger-endpoint-selected {
-            background-color: rgba(${yellowRgb}, 0.1);
+            background-color: rgba(${accentRgb}, 0.1);
             border-color: var(--accent);
         }
 

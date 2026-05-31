@@ -52,20 +52,6 @@ func (ib *inputBoxesT) pop(id int64) (inputBoxCallbacksT, bool) {
 	return cbs, ok
 }
 
-type DisplayInputBoxWT struct {
-	Options    DisplayInputBoxWTOptions
-	OkFunc     types.InputBoxCallbackT
-	CancelFunc types.InputBoxCallbackT
-}
-
-type DisplayInputBoxWTOptions struct {
-	Title       string   `json:"title"`
-	Prefill     string   `json:"prefill"`
-	Placeholder string   `json:"placeholder"`
-	History     []string `json:"history"`
-	Multiline   bool     `json:"multiline"`
-}
-
 type inputBoxPayload struct {
 	ID           int64    `json:"id"`
 	Title        string   `json:"title"`
@@ -76,7 +62,7 @@ type inputBoxPayload struct {
 }
 
 // DisplayInputBoxW displays an input box with options, supporting multiline input.
-func (wr *webkitRender) DisplayInputBoxW(parameters *DisplayInputBoxWT) {
+func (wr *webkitRender) DisplayInputBoxW(parameters *types.InputBoxWT) {
 	if parameters == nil {
 		return
 	}
@@ -137,8 +123,8 @@ func (wr *webkitRender) InputBoxSubmit(id int64, value string, isOk bool) {
 }
 
 func (wr *webkitRender) DisplayInputBox(title, defaultValue string, ok, cancel types.InputBoxCallbackT) {
-	params := &DisplayInputBoxWT{
-		Options: DisplayInputBoxWTOptions{
+	params := &types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
 			Title:   title,
 			Prefill: defaultValue,
 		},

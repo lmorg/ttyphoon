@@ -111,19 +111,22 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 
 	var params struct {
 		CmdLine string
+		EnvVars map[string]string
 	}
 
 	if err := apc.Parameters(&params); err != nil {
 		params.CmdLine = apc.Index(2)
+		params.EnvVars = map[string]string{}
 	}
 
-	term.beginOutputBlock([]rune(params.CmdLine))
+	term.beginOutputBlock([]rune(params.CmdLine), params.EnvVars)
 }
 
-func (term *Term) beginOutputBlock(cmdLine []rune) {
+func (term *Term) beginOutputBlock(cmdLine []rune, envvars map[string]string) {
 	term._blockMeta = NewRowBlockMeta(term)
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 	term._blockMeta.Query = cmdLine
+	term._blockMeta.EnvVars = envvars
 	(*term.screen)[term.curPos().Y].RowMeta.Set(types.META_ROW_BEGIN_BLOCK)
 }
 

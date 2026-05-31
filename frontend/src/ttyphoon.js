@@ -822,13 +822,22 @@ window.addEventListener('ttyphoon-focus-terminal', () => {
     focusTerminalPane();
 });
 
-// When Go selects a file to view, expand the notes side-panel if it is collapsed
-// (but not embedded as a terminal tab — that case is handled by terminalActivateAuxTab).
+// When Go selects a file to view, expand the notes side-panel if collapsed and focus it.
 EventsOn('viewFileInNotesOpen', () => {
     const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
     if (notesCollapsed && !embeddedInTerminal) {
         void toggleNotesPaneCollapsed();
     }
+    focusNotesPane();
+});
+
+// When Go opens a file in Notes for editing, expand/activate the panel and focus it.
+EventsOn('viewFileInNotesEdit', () => {
+    const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
+    if (notesCollapsed && !embeddedInTerminal) {
+        void toggleNotesPaneCollapsed();
+    }
+    focusNotesPane();
 });
 
 EventsOn('notesCreateAndOpen', payload => {

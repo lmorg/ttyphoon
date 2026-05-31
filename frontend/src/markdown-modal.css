@@ -1,0 +1,156 @@
+.markdown-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+}
+
+.markdown-modal-dialog {
+    background: var(--terminal-bg, #1e2228);
+    border: 2px solid var(--terminal-fg, #316db0);
+    color: var(--terminal-fg, #e6edf3);
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+    display: inline-block;
+    max-width: min(860px, calc(100vw - 80px));
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;
+}
+
+.markdown-modal-body {
+    padding: 12px 32px;
+    padding-top: 0px;
+}
+
+.markdown-modal-table-scroll-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed;
+}
+
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+}
+
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap th,
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap td {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word;
+    max-width: 0;
+}
+
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap th > *,
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap td > * {
+    white-space: inherit;
+    overflow-wrap: inherit;
+    word-break: inherit;
+}
+
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap th code,
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap td code {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word;
+}
+
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap th,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap td,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap th > *,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap td > *,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap th code,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap td code {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: normal;
+}
+
+.markdown-modal-code-shell {
+    --markdown-modal-code-font-size: 0.7em;
+    --markdown-modal-code-line-height: 1.5;
+    --markdown-modal-code-max-height: calc((25 * var(--markdown-modal-code-line-height) * 1em) + 24px);
+    display: flex;
+    align-items: stretch;
+    margin: 0.8em 0;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    overflow: hidden;
+    max-height: var(--markdown-modal-code-max-height);
+}
+
+.markdown-modal-code-lines {
+    flex: 0 0 auto;
+    min-width: 42px;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--terminal-fg, #e6edf3);
+    opacity: 0.45;
+    text-align: right;
+    white-space: pre;
+    user-select: none;
+    pointer-events: none;
+    overflow: hidden;
+    max-height: var(--markdown-modal-code-max-height);
+    font-size: var(--markdown-modal-code-font-size) !important;
+    line-height: var(--markdown-modal-code-line-height);
+}
+
+.markdown-modal-code-lines-inner {
+    padding: 12px 8px 12px 10px;
+    line-height: var(--markdown-modal-code-line-height);
+    transform: translateY(0);
+    will-change: transform;
+}
+
+.markdown-modal-code-viewport {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-height: var(--markdown-modal-code-max-height);
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.markdown-modal-code-pre {
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 12px !important;
+    min-width: 100%;
+    width: max-content;
+    max-height: var(--markdown-modal-code-max-height);
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    background: transparent !important;
+    font-size: var(--markdown-modal-code-font-size) !important;
+    line-height: var(--markdown-modal-code-line-height);
+}
+
+.markdown-modal-code-pre code,
+.markdown-modal-code-pre .hljs {
+    display: block;
+    white-space: pre !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    background: transparent !important;
+    font-size: inherit;
+    line-height: inherit;
+}

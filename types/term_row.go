@@ -37,6 +37,7 @@ type RowSource struct {
 type BlockMeta struct {
 	Id        int64
 	Query     []rune // typically command line
+	EnvVars   map[string]string
 	AiMeta    *AiMetaT
 	ExitNum   int
 	TimeStart time.Time

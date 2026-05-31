@@ -6,7 +6,16 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
-    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown,
+    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
+    ResolveNotesLspLanguage,
+    NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
+    NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
+    NotesLspSemanticTokens,
+    NotesLspCodeLens, NotesLspExecuteCodeLens,
+    NotesLspInlayHints,
+    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    NotesLspSignatureHelp,
+    NotesLspPrepareRename, NotesLspRename,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -363,6 +372,7 @@ const CONTEXT_ICON_CODE = 0xf121;
 const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
+const CONTEXT_ICON_ASK_AI = 0xf544;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -461,10 +471,7 @@ app.innerHTML = `
                 <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
-                    <button id="notes-wrap" type="button" class="notes-toolbar-btn" title="Toggle word wrap" aria-label="Toggle word wrap" style="display: none;">&#xf035;</button>
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
-                    <button id="notes-rename" type="button" class="notes-toolbar-btn" title="Rename" aria-label="Rename current note">&#xf044;</button>
-                    <button id="notes-delete" type="button" class="notes-toolbar-btn" title="Delete" aria-label="Delete current note">&#xf2ed;</button>
                     <button id="notes-find" type="button" class="notes-toolbar-btn" title="Find" aria-label="Find">&#xf002;</button>
                 </div>
             </div>
@@ -568,10 +575,7 @@ const elements = {
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
-    rename: document.getElementById('notes-rename'),
-    delete: document.getElementById('notes-delete'),
     find: document.getElementById('notes-find'),
-    wrap: document.getElementById('notes-wrap'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabHex: document.getElementById('notes-tab-hex'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -627,6 +631,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
+    currentFileUri: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
     dirty: false,
@@ -661,7 +666,27 @@ const state = {
     hexRenderedFile: '',
     hexLoadingPromise: null,
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
+    lspChangeTimer: null,
+    lspOpenFile: '',
+    lspHoverTimer: null,
+    lspHoverLastKey: '',
+    lspHoverMouseX: 0,
+    lspHoverMouseY: 0,
+    lspSemanticTokens: [],
+    lspSemanticRequestId: 0,
+    lspSemanticSuppressedKey: '',
+    lspInlayHints: [],
+    lspInlayRequestId: 0,
+    lspCompletionItems: [],
+    lspCompletionIndex: 0,
+    lspCompletionVisible: false,
 };
+
+const LSP_CHANGE_DEBOUNCE_MS = 200;
+const LSP_HOVER_DEBOUNCE_MS = 250;
+const LSP_COMPLETION_MAX_ITEMS = 10;
+const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
+const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
 
 let lastAutoCopiedViewerSelection = '';
 
@@ -852,6 +877,8 @@ function inferEditorLanguage(file, content) {
     const fileName = String(file || '').toLowerCase();
     const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
 
+
+    //const extensionMap = { foo: 'bar' }
     const extensionMap = {
         go: 'go',
         js: 'javascript',
@@ -981,6 +1008,9 @@ function renderEditorDecorations() {
     } catch {
         elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
     }
+
+    // Overlay LSP diagnostics and inlay hints on top of the freshly rendered syntax.
+    renderLspEditorDecorations();
 
     syncEditorScrollDecorations();
 }
@@ -1529,8 +1559,7 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.appendChild(label);
 
         const folderKey = `${category}${PRIMARY_PATH_SEPARATOR}${node.path}`;
-        const hasActiveFilter = state.fileFilterQuery.trim() !== '';
-        const expanded = hasActiveFilter || state.expandedFolders[folderKey] !== false;
+        const expanded = state.expandedFolders[folderKey] !== false;
         folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
@@ -2662,6 +2691,1244 @@ function scheduleAutoSave() {
     }, 1000);
 }
 
+function isCurrentFileLspEligible() {
+    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
+}
+
+function clearLspChangeTimer() {
+    if (state.lspChangeTimer) {
+        clearTimeout(state.lspChangeTimer);
+        state.lspChangeTimer = null;
+    }
+}
+
+function clearLspHoverTimer() {
+    if (state.lspHoverTimer) {
+        clearTimeout(state.lspHoverTimer);
+        state.lspHoverTimer = null;
+    }
+}
+
+function hideLspHoverTooltip() {
+    if (lspHoverTooltipEl) {
+        lspHoverTooltipEl.style.display = 'none';
+        lspHoverTooltipEl.innerHTML = '';
+    }
+}
+
+function hideLspCompletion() {
+    state.lspCompletionVisible = false;
+    state.lspCompletionItems = [];
+    state.lspCompletionIndex = 0;
+    if (lspCompletionEl) {
+        lspCompletionEl.style.display = 'none';
+        lspCompletionEl.innerHTML = '';
+    }
+}
+
+function closeOpenLspTooltips() {
+    let closedAny = false;
+
+    if (lspTooltipEl && lspTooltipEl.style.display !== 'none' && lspTooltipEl.style.display !== '') {
+        lspTooltipEl.style.display = 'none';
+        closedAny = true;
+    }
+
+    if (lspHoverTooltipEl && lspHoverTooltipEl.style.display !== 'none' && lspHoverTooltipEl.style.display !== '') {
+        hideLspHoverTooltip();
+        closedAny = true;
+    }
+
+    if (lspCompletionEl && lspCompletionEl.style.display !== 'none' && lspCompletionEl.style.display !== '') {
+        hideLspCompletion();
+        closedAny = true;
+    }
+
+    return closedAny;
+}
+
+function stripLspOverlayMarkup(html) {
+    return String(html || '')
+        .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<span class="notes-lsp-semantic-token[^"]*"[^>]*>([\s\S]*?)<\/span>/g, '$1')
+    .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
+}
+
+function lspCompletionKindMeta(kind) {
+    switch (Number(kind || 0)) {
+    case 2:
+        return { icon: 'Md', badge: 'method', title: 'Method' };
+    case 3:
+        return { icon: 'Fn', badge: 'function', title: 'Function' };
+    case 4:
+        return { icon: 'Ct', badge: 'constructor', title: 'Constructor' };
+    case 5:
+        return { icon: 'Fld', badge: 'field', title: 'Field' };
+    case 6:
+        return { icon: 'Var', badge: 'variable', title: 'Variable' };
+    case 7:
+        return { icon: 'Cls', badge: 'class', title: 'Class' };
+    case 8:
+        return { icon: 'Ifc', badge: 'interface', title: 'Interface' };
+    case 9:
+        return { icon: 'Mod', badge: 'module', title: 'Module' };
+    case 10:
+        return { icon: 'Prop', badge: 'property', title: 'Property' };
+    case 11:
+        return { icon: 'Unit', badge: 'unit', title: 'Unit' };
+    case 12:
+        return { icon: 'Val', badge: 'value', title: 'Value' };
+    case 13:
+        return { icon: 'Enum', badge: 'enum', title: 'Enum' };
+    case 14:
+        return { icon: 'Kw', badge: 'keyword', title: 'Keyword' };
+    case 15:
+        return { icon: 'Snip', badge: 'snippet', title: 'Snippet' };
+    case 17:
+        return { icon: 'File', badge: 'file', title: 'File' };
+    case 18:
+        return { icon: 'Ref', badge: 'reference', title: 'Reference' };
+    case 19:
+        return { icon: 'Dir', badge: 'folder', title: 'Folder' };
+    case 21:
+        return { icon: 'Const', badge: 'constant', title: 'Constant' };
+    case 22:
+        return { icon: 'Struct', badge: 'struct', title: 'Struct' };
+    case 24:
+        return { icon: 'Evt', badge: 'event', title: 'Event' };
+    case 25:
+        return { icon: 'Op', badge: 'operator', title: 'Operator' };
+    case 26:
+        return { icon: 'Tp', badge: 'type', title: 'Type parameter' };
+    default:
+        return { icon: 'Sym', badge: '', title: 'Symbol' };
+    }
+}
+
+function replaceCurrentIdentifierWithCompletion(text) {
+    if (!elements.editor) {
+        return;
+    }
+
+    const source = elements.editor.value || '';
+    const cursor = elements.editor.selectionStart || 0;
+    const left = source.slice(0, cursor);
+    const match = left.match(/[A-Za-z0-9_]+$/);
+    const start = match ? cursor - match[0].length : cursor;
+    elements.editor.setSelectionRange(start, cursor);
+    elements.editor.setRangeText(String(text || ''), start, cursor, 'end');
+    // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
+    hideLspCompletion();
+    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function commitActiveLspCompletion() {
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        return false;
+    }
+
+    const index = Math.max(0, Math.min(state.lspCompletionIndex, state.lspCompletionItems.length - 1));
+    const item = state.lspCompletionItems[index];
+    if (!item) {
+        return false;
+    }
+
+    replaceCurrentIdentifierWithCompletion(item.insertText || item.label);
+    hideLspCompletion();
+    return true;
+}
+
+function renderLspCompletionPopup() {
+    if (!lspCompletionEl) {
+        return;
+    }
+
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        hideLspCompletion();
+        return;
+    }
+
+    const activeIndex = Math.max(0, Math.min(state.lspCompletionIndex, state.lspCompletionItems.length - 1));
+    state.lspCompletionIndex = activeIndex;
+
+    const fragment = document.createDocumentFragment();
+    state.lspCompletionItems.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'tty-menu-row notes-lsp-completion-item';
+        row.dataset.active = idx === activeIndex ? 'true' : 'false';
+        row.dataset.deprecated = item.deprecated === true ? 'true' : 'false';
+        row.classList.toggle('is-active', idx === activeIndex);
+        row.classList.toggle('is-deprecated', item.deprecated === true);
+
+        const kind = lspCompletionKindMeta(item.kind);
+
+        const icon = document.createElement('span');
+        icon.className = 'tty-menu-row-icon notes-lsp-completion-icon';
+        icon.textContent = kind.icon;
+        icon.title = kind.title;
+        row.appendChild(icon);
+
+        const label = document.createElement('span');
+        label.className = 'tty-menu-row-label notes-lsp-completion-label';
+        label.textContent = String(item.label || '');
+        row.appendChild(label);
+
+        if (item.detail) {
+            const detail = document.createElement('span');
+            detail.className = 'notes-lsp-completion-detail';
+            detail.textContent = String(item.detail);
+            row.appendChild(detail);
+        }
+
+        if (kind.badge) {
+            const badge = document.createElement('span');
+            badge.className = 'notes-lsp-completion-kind';
+            badge.textContent = kind.badge;
+            badge.title = kind.title;
+            row.appendChild(badge);
+        }
+
+        row.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            state.lspCompletionIndex = idx;
+            commitActiveLspCompletion();
+        });
+
+        fragment.appendChild(row);
+    });
+
+    lspCompletionEl.innerHTML = '';
+    lspCompletionEl.appendChild(fragment);
+    lspCompletionEl.style.display = 'block';
+
+    const anchor = getLspAnchorViewportPoint();
+    const rawX = anchor.x;
+    const rawY = anchor.y;
+    const x = Math.min(rawX + 14, window.innerWidth - lspCompletionEl.offsetWidth - 8);
+    const y = Math.min(rawY + 18, window.innerHeight - lspCompletionEl.offsetHeight - 8);
+    lspCompletionEl.style.left = `${Math.max(8, x)}px`;
+    lspCompletionEl.style.top = `${Math.max(8, y)}px`;
+}
+
+function moveLspCompletionSelection(delta) {
+    if (!state.lspCompletionVisible || state.lspCompletionItems.length === 0) {
+        return false;
+    }
+
+    const count = state.lspCompletionItems.length;
+    const current = Math.max(0, Math.min(state.lspCompletionIndex, count - 1));
+    const next = (current + delta + count) % count;
+    state.lspCompletionIndex = next;
+    renderLspCompletionPopup();
+
+    if (lspCompletionEl) {
+        const activeRow = lspCompletionEl.querySelector('.notes-lsp-completion-item.is-active');
+        if (activeRow && typeof activeRow.scrollIntoView === 'function') {
+            activeRow.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    return true;
+}
+
+async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        hideLspCompletion();
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    try {
+        const items = await NotesLspCompletion(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        const list = Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+        if (list.length === 0) {
+            hideLspCompletion();
+            return;
+        }
+
+        state.lspCompletionItems = list;
+        state.lspCompletionIndex = 0;
+        state.lspCompletionVisible = true;
+        renderLspCompletionPopup();
+    } catch {
+        hideLspCompletion();
+    }
+}
+
+async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        await NotesLspChangeDocument(state.currentFile, String(content || ''));
+    } catch {
+        // Fall through to completion request even when fast sync fails.
+    }
+
+    await requestLspCompletion(triggerKind, triggerChar);
+}
+
+function fileUriToPath(uri) {
+    const source = String(uri || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    try {
+        const parsed = new URL(source);
+        if (parsed.protocol !== 'file:') {
+            return '';
+        }
+
+        let path = decodeURIComponent(parsed.pathname || '');
+        if (/^\/[A-Za-z]:\//.test(path)) {
+            path = path.slice(1);
+        }
+        return path.replace(/\\/g, '/');
+    } catch {
+        return '';
+    }
+}
+
+function normalizePathForMatch(path) {
+    const source = String(path || '').trim().replace(/\\/g, '/');
+    if (!source) {
+        return '';
+    }
+    return source.endsWith('/') ? source.slice(0, -1) : source;
+}
+
+function lspPositionToEditorOffset(content, line, character) {
+    const source = String(content || '');
+    const lines = source.split('\n');
+    const safeLine = Math.max(0, Math.min(Number(line) || 0, Math.max(lines.length - 1, 0)));
+    const lineContent = lines[safeLine] || '';
+    const safeCharacter = Math.max(0, Math.min(Number(character) || 0, lineContent.length));
+
+    let offset = 0;
+    for (let i = 0; i < safeLine; i += 1) {
+        offset += (lines[i] || '').length + 1;
+    }
+
+    return offset + safeCharacter;
+}
+
+async function resolveNotesFileFromAbsolutePath(absPath) {
+    const normalizedTarget = normalizePathForMatch(absPath);
+    if (!normalizedTarget) {
+        return '';
+    }
+
+    if (state.currentFile) {
+        try {
+            const currentResolved = normalizePathForMatch(await ResolveFilePath(state.currentFile));
+            if (currentResolved === normalizedTarget) {
+                return state.currentFile;
+            }
+        } catch {
+            // Ignore and continue with file list lookup.
+        }
+    }
+
+    for (const file of state.files) {
+        try {
+            const resolved = normalizePathForMatch(await ResolveFilePath(file));
+            if (resolved === normalizedTarget) {
+                return file;
+            }
+        } catch {
+            // Keep scanning; one bad entry should not stop lookup.
+        }
+    }
+
+    return '';
+}
+
+async function requestLspInlayHints() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        state.lspInlayRequestId += 1;
+        state.lspInlayHints = [];
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const requestId = state.lspInlayRequestId + 1;
+    state.lspInlayRequestId = requestId;
+
+    try {
+        const hints = await NotesLspInlayHints(state.currentFile);
+        if (requestId !== state.lspInlayRequestId || state.lspOpenFile !== state.currentFile) {
+            return;
+        }
+
+        state.lspInlayHints = Array.isArray(hints)
+            ? hints.filter((item) => item && String(item.label || '') !== '')
+            : [];
+        renderLspEditorDecorations();
+    } catch {
+        if (requestId !== state.lspInlayRequestId) {
+            return;
+        }
+
+        state.lspInlayHints = [];
+        renderLspEditorDecorations();
+    }
+}
+
+async function requestLspSemanticTokens() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        state.lspSemanticSuppressedKey = '';
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const contentLength = String(elements.editor?.value || '').length;
+    if (contentLength > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS) {
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        const suppressKey = `${state.currentFile}::size`;
+        if (state.lspSemanticSuppressedKey !== suppressKey) {
+            state.lspSemanticSuppressedKey = suppressKey;
+            notifyTerminal('Semantic token overlays disabled for very large files to keep Notes responsive.', 'info');
+        }
+        renderLspEditorDecorations();
+        return;
+    }
+
+    const requestId = state.lspSemanticRequestId + 1;
+    state.lspSemanticRequestId = requestId;
+
+    try {
+        const tokens = await NotesLspSemanticTokens(state.currentFile);
+        if (requestId !== state.lspSemanticRequestId || state.lspOpenFile !== state.currentFile) {
+            return;
+        }
+
+        const filteredTokens = Array.isArray(tokens)
+            ? tokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
+            : [];
+
+        if (filteredTokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
+            state.lspSemanticTokens = [];
+            const suppressKey = `${state.currentFile}::tokens`;
+            if (state.lspSemanticSuppressedKey !== suppressKey) {
+                state.lspSemanticSuppressedKey = suppressKey;
+                notifyTerminal('Semantic token overlays disabled for dense token streams to keep Notes responsive.', 'info');
+            }
+        } else {
+            state.lspSemanticSuppressedKey = '';
+            state.lspSemanticTokens = filteredTokens;
+        }
+        renderLspEditorDecorations();
+    } catch {
+        if (requestId !== state.lspSemanticRequestId) {
+            return;
+        }
+
+        state.lspSemanticSuppressedKey = '';
+        state.lspSemanticTokens = [];
+        renderLspEditorDecorations();
+    }
+}
+
+async function requestLspDefinition() {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+
+    try {
+        const locations = await NotesLspDefinition(state.currentFile, pos.line, pos.character);
+        const target = Array.isArray(locations) && locations.length > 0 ? locations[0] : null;
+        if (!target) {
+            notifyTerminal('Definition not found', 'info');
+            return;
+        }
+
+        const targetAbsPath = normalizePathForMatch(target.filePath || fileUriToPath(target.uri));
+        if (!targetAbsPath) {
+            notifyTerminal('Definition target is not a local file', 'warn');
+            return;
+        }
+
+        const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
+        if (!targetNotesFile) {
+            notifyTerminal('Definition target is outside indexed Notes files', 'warn');
+            return;
+        }
+
+        await loadFile(targetNotesFile);
+
+        const targetLine = Math.max(0, Number(target.line) || 0);
+        const targetChar = Math.max(0, Number(target.character) || 0);
+        const offset = lspPositionToEditorOffset(elements.editor.value || '', targetLine, targetChar);
+        elements.editor.focus();
+        elements.editor.setSelectionRange(offset, offset);
+
+        const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+        elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
+        syncEditorScrollDecorations();
+
+        state.lspHoverLastKey = '';
+        scheduleLspHover();
+    } catch {
+        notifyTerminal('Failed to resolve definition', 'error');
+    }
+}
+
+async function formatCurrentLspDocument() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const selectionStart = Number(elements.editor.selectionStart) || 0;
+        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+
+        let result;
+        if (selectionEnd > selectionStart) {
+            const startPos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+            const endPos = offsetToLspPosition(elements.editor.value || '', selectionEnd);
+
+            result = await NotesLspFormatRange(
+                state.currentFile,
+                startPos.line,
+                startPos.character,
+                endPos.line,
+                endPos.character,
+            );
+        } else {
+            result = await NotesLspFormat(state.currentFile);
+        }
+
+        if (!result || !result.changed) {
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to format document', 'error');
+    }
+}
+
+function symbolDisplayLabel(item) {
+    const name = String(item?.name || '').trim();
+    const detail = String(item?.detail || '').trim();
+    const container = String(item?.containerName || '').trim();
+
+    let label = name;
+    if (detail) {
+        label += ` - ${detail}`;
+    }
+    if (container) {
+        label += ` (${container})`;
+    }
+
+    return label;
+}
+
+function workspaceSymbolDisplayLabel(item) {
+    const base = symbolDisplayLabel(item);
+    const filePath = normalizePathForMatch(item?.filePath || fileUriToPath(item?.uri || ''));
+    if (!filePath) {
+        return base;
+    }
+
+    const shortPath = filePath.split('/').slice(-2).join('/');
+    return `${base} - ${shortPath}`;
+}
+
+function codeLensDisplayLabel(item) {
+    const title = String(item?.title || '').trim() || 'Code lens';
+    const line = Math.max(0, Number(item?.line) || 0);
+    return `${title} (line ${line + 1})`;
+}
+
+async function goToCurrentLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    let symbols = [];
+    try {
+        symbols = await NotesLspDocumentSymbols(state.currentFile);
+    } catch {
+        notifyTerminal('Failed to fetch document symbols', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(symbols)
+        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+        : [];
+
+    if (entries.length === 0) {
+        notifyTerminal('No symbols found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => symbolDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Go to symbol',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            const line = Math.max(0, Number(picked.line) || 0);
+            const character = Math.max(0, Number(picked.character) || 0);
+            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+
+            elements.editor.focus();
+            elements.editor.setSelectionRange(offset, offset);
+
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
+            syncEditorScrollDecorations();
+
+            state.lspHoverLastKey = '';
+            scheduleLspHover();
+        },
+    });
+}
+
+async function goToWorkspaceLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const rawQuery = window.prompt('Workspace symbol query:', '');
+    if (rawQuery === null) {
+        return;
+    }
+
+    const query = String(rawQuery || '').trim();
+    let symbols = [];
+    try {
+        symbols = await NotesLspWorkspaceSymbols(state.currentFile, query);
+    } catch {
+        notifyTerminal('Failed to fetch workspace symbols', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(symbols)
+        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+        : [];
+    if (entries.length === 0) {
+        notifyTerminal('No workspace symbols found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Go to workspace symbol',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: async (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            const targetAbsPath = normalizePathForMatch(picked.filePath || fileUriToPath(picked.uri));
+            if (!targetAbsPath) {
+                notifyTerminal('Workspace symbol target is not a local file', 'warn');
+                return;
+            }
+
+            const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
+            if (!targetNotesFile) {
+                notifyTerminal('Workspace symbol target is outside indexed Notes files', 'warn');
+                return;
+            }
+
+            await loadFile(targetNotesFile);
+
+            const line = Math.max(0, Number(picked.line) || 0);
+            const character = Math.max(0, Number(picked.character) || 0);
+            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+            elements.editor.focus();
+            elements.editor.setSelectionRange(offset, offset);
+
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
+            syncEditorScrollDecorations();
+
+            state.lspHoverLastKey = '';
+            scheduleLspHover();
+        },
+    });
+}
+
+async function runCurrentLspCodeLens() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    let lenses = [];
+    try {
+        lenses = await NotesLspCodeLens(state.currentFile);
+    } catch {
+        notifyTerminal('Failed to fetch code lens actions', 'error');
+        return;
+    }
+
+    const entries = Array.isArray(lenses)
+        ? lenses.filter((item) => item && Number.isFinite(Number(item.index)))
+        : [];
+    if (entries.length === 0) {
+        notifyTerminal('No code lens actions found', 'info');
+        return;
+    }
+
+    const options = entries.map((item) => codeLensDisplayLabel(item));
+    const icons = options.map(() => CONTEXT_ICON_CODE);
+    showLocalMenu({
+        title: 'Code lens',
+        options,
+        icons,
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        showNextToMouseCursor: true,
+        onSelect: async (index) => {
+            const picked = entries[index];
+            if (!picked) {
+                return;
+            }
+
+            try {
+                const applied = await NotesLspExecuteCodeLens(state.currentFile, Number(picked.index) || 0);
+                if (!applied) {
+                    notifyTerminal('Code lens had no executable command', 'info');
+                }
+            } catch {
+                notifyTerminal('Failed to run code lens', 'error');
+            }
+        },
+    });
+}
+
+function isPositionWithinRange(line, character, range) {
+    if (!range || !range.start || !range.end) {
+        return false;
+    }
+
+    const startLine = Number(range.start.line) || 0;
+    const startChar = Number(range.start.character) || 0;
+    const endLine = Number(range.end.line) || startLine;
+    const endChar = Number(range.end.character) || startChar;
+
+    if (line < startLine || line > endLine) {
+        return false;
+    }
+    if (line === startLine && character < startChar) {
+        return false;
+    }
+    if (line === endLine && character > endChar) {
+        return false;
+    }
+
+    return true;
+}
+
+function lspDiagnosticsAtPosition(line, character) {
+    const uri = state.currentFileUri;
+    if (!uri) {
+        return [];
+    }
+
+    const diagnostics = lspDiagnosticsStore.get(uri) || [];
+    return diagnostics.filter((diag) => isPositionWithinRange(line, character, diag.range));
+}
+
+async function getLspCodeActionsForCursor() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return { line: 0, character: 0, diagnostics: [], actions: [] };
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
+
+    try {
+        const actions = await NotesLspCodeActions(state.currentFile, pos.line, pos.character, diagnostics);
+        return {
+            line: pos.line,
+            character: pos.character,
+            diagnostics,
+            actions: Array.isArray(actions) ? actions : [],
+        };
+    } catch {
+        return {
+            line: pos.line,
+            character: pos.character,
+            diagnostics,
+            actions: [],
+        };
+    }
+}
+
+function lspCodeActionMenuSection(kind) {
+    const value = String(kind || '').trim().toLowerCase();
+    if (value === 'quickfix' || value.startsWith('quickfix.')) {
+        return { key: 'quickfix', label: 'Quick fix', rank: 0 };
+    }
+    if (value === 'refactor' || value.startsWith('refactor.')) {
+        return { key: 'refactor', label: 'Refactor', rank: 1 };
+    }
+    if (value === 'source' || value.startsWith('source.')) {
+        return { key: 'source', label: 'Source action', rank: 2 };
+    }
+
+    return { key: 'other', label: 'Code action', rank: 3 };
+}
+
+function buildLspCodeActionMenuItems(actions, line, character, diagnostics) {
+    const grouped = new Map();
+
+    (Array.isArray(actions) ? actions : []).forEach((action, index) => {
+        const title = String(action?.title || '').trim();
+        if (!title) {
+            return;
+        }
+
+        const section = lspCodeActionMenuSection(action?.kind);
+        const entry = {
+            title: `${section.label}: ${title}`,
+            icon: CONTEXT_ICON_CODE,
+            rank: section.rank,
+            onSelect: () => {
+                void applyLspCodeActionFromCursor(index, line, character, diagnostics);
+            },
+        };
+
+        if (!grouped.has(section.key)) {
+            grouped.set(section.key, []);
+        }
+        grouped.get(section.key).push(entry);
+    });
+
+    const sections = Array.from(grouped.values())
+        .filter((items) => items.length > 0)
+        .sort((left, right) => (left[0]?.rank || 0) - (right[0]?.rank || 0));
+
+    const menuItems = [];
+    sections.forEach((items, index) => {
+        if (index > 0) {
+            menuItems.push({ title: '-' });
+        }
+        menuItems.push(...items);
+    });
+
+    return menuItems;
+}
+
+async function showEditorLspOptionsMenu(x, y) {
+    if (!isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const menuItems = [
+        {
+            title: 'Format document',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void formatCurrentLspDocument();
+            },
+        },
+        {
+            title: 'Go to symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void goToCurrentLspSymbol();
+            },
+        },
+        {
+            title: 'Go to workspace symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void goToWorkspaceLspSymbol();
+            },
+        },
+        {
+            title: 'Signature help',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void requestLspSignatureHelpFromCursor(1, '');
+            },
+        },
+        {
+            title: 'Code lens...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void runCurrentLspCodeLens();
+            },
+        },
+        {
+            title: 'Rename symbol...',
+            icon: CONTEXT_ICON_CODE,
+            onSelect: () => {
+                void renameCurrentLspSymbol();
+            },
+        },
+    ];
+
+    const codeActionData = await getLspCodeActionsForCursor();
+    if (codeActionData.actions.length > 0) {
+        menuItems.push({ title: '-' });
+        menuItems.push(
+            ...buildLspCodeActionMenuItems(
+                codeActionData.actions,
+                codeActionData.line,
+                codeActionData.character,
+                codeActionData.diagnostics,
+            ),
+        );
+    }
+
+    showNotesLocalMenu(menuItems, x, y, 'LSP options');
+}
+
+async function applyLspCodeActionFromCursor(index, line, character, diagnostics) {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const result = await NotesLspApplyCodeAction(state.currentFile, line, character, index, diagnostics || []);
+        if (!result || !result.changed) {
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to apply code action', 'error');
+    }
+}
+
+async function renameCurrentLspSymbol() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const selectionStart = Number(elements.editor.selectionStart) || 0;
+    const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+    const currentSelection = selectionEnd > selectionStart
+        ? String(elements.editor.value || '').slice(selectionStart, selectionEnd)
+        : '';
+
+    const pos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+
+    let prepare;
+    try {
+        prepare = await NotesLspPrepareRename(state.currentFile, pos.line, pos.character);
+    } catch {
+        notifyTerminal('Failed to prepare symbol rename', 'error');
+        return;
+    }
+
+    if (!prepare || !prepare.canRename) {
+        notifyTerminal('Rename not available at this cursor position', 'info');
+        return;
+    }
+
+    const suggested = String(prepare.placeholder || currentSelection || '').trim();
+    const nextName = window.prompt('Rename symbol to:', suggested);
+    if (nextName === null) {
+        return;
+    }
+
+    const trimmedName = String(nextName).trim();
+    if (!trimmedName) {
+        notifyTerminal('Rename cancelled: new name is empty', 'warn');
+        return;
+    }
+
+    try {
+        const result = await NotesLspRename(state.currentFile, pos.line, pos.character, trimmedName);
+        if (!result || !result.changed) {
+            notifyTerminal('No rename edits applied', 'info');
+            return;
+        }
+
+        const nextContent = String(result.content || '');
+        if (nextContent === String(elements.editor.value || '')) {
+            return;
+        }
+
+        elements.editor.value = nextContent;
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+        notifyTerminal('Failed to rename symbol', 'error');
+    }
+}
+
+function offsetToLspPosition(content, offset) {
+    const source = String(content || '');
+    const clampedOffset = Math.max(0, Math.min(Number(offset) || 0, source.length));
+    const before = source.slice(0, clampedOffset);
+    const lines = before.split('\n');
+    return {
+        line: Math.max(0, lines.length - 1),
+        character: lines[lines.length - 1]?.length || 0,
+    };
+}
+
+function getEditorCaretViewportPoint() {
+    const editor = elements.editor;
+    if (!editor || typeof editor.selectionStart !== 'number') {
+        return null;
+    }
+
+    const editorRect = editor.getBoundingClientRect();
+    if (!editorRect || editorRect.width <= 0 || editorRect.height <= 0) {
+        return null;
+    }
+
+    const computed = window.getComputedStyle(editor);
+    const mirror = document.createElement('div');
+    const marker = document.createElement('span');
+    const source = String(editor.value || '');
+    const caretOffset = Math.max(0, Math.min(Number(editor.selectionStart) || 0, source.length));
+    const beforeCaret = source.slice(0, caretOffset);
+    const afterCaret = source.slice(caretOffset);
+    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
+
+    mirror.style.position = 'absolute';
+    mirror.style.left = '-10000px';
+    mirror.style.top = '-10000px';
+    mirror.style.visibility = 'hidden';
+    mirror.style.pointerEvents = 'none';
+    mirror.style.whiteSpace = isWrapModeEnabled ? 'pre-wrap' : 'pre';
+    mirror.style.wordBreak = isWrapModeEnabled ? 'break-word' : 'normal';
+    mirror.style.overflowWrap = isWrapModeEnabled ? 'break-word' : 'normal';
+    mirror.style.wordWrap = isWrapModeEnabled ? 'break-word' : 'normal';
+    mirror.style.tabSize = computed.tabSize;
+    mirror.style.fontFamily = computed.fontFamily;
+    mirror.style.fontSize = computed.fontSize;
+    mirror.style.fontWeight = computed.fontWeight;
+    mirror.style.fontStyle = computed.fontStyle;
+    mirror.style.fontVariant = computed.fontVariant;
+    mirror.style.letterSpacing = computed.letterSpacing;
+    mirror.style.lineHeight = computed.lineHeight;
+    mirror.style.textTransform = computed.textTransform;
+    mirror.style.textIndent = computed.textIndent;
+    mirror.style.textRendering = computed.textRendering;
+    mirror.style.paddingTop = computed.paddingTop;
+    mirror.style.paddingRight = computed.paddingRight;
+    mirror.style.paddingBottom = computed.paddingBottom;
+    mirror.style.paddingLeft = computed.paddingLeft;
+    mirror.style.borderTopWidth = computed.borderTopWidth;
+    mirror.style.borderRightWidth = computed.borderRightWidth;
+    mirror.style.borderBottomWidth = computed.borderBottomWidth;
+    mirror.style.borderLeftWidth = computed.borderLeftWidth;
+    mirror.style.borderStyle = computed.borderStyle;
+    mirror.style.boxSizing = computed.boxSizing;
+    mirror.style.width = `${editor.clientWidth}px`;
+
+    mirror.textContent = beforeCaret;
+    marker.textContent = afterCaret.length > 0 ? afterCaret[0] : ' ';
+    mirror.appendChild(marker);
+    document.body.appendChild(mirror);
+
+    const markerOffsetLeft = marker.offsetLeft;
+    const markerOffsetTop = marker.offsetTop;
+    mirror.remove();
+
+    if (!Number.isFinite(markerOffsetLeft) || !Number.isFinite(markerOffsetTop)) {
+        return null;
+    }
+
+    return {
+        x: editorRect.left + markerOffsetLeft - editor.scrollLeft,
+        y: editorRect.top + markerOffsetTop - editor.scrollTop,
+    };
+}
+
+function getLspAnchorViewportPoint() {
+    const caretPoint = getEditorCaretViewportPoint();
+    if (caretPoint) {
+        return caretPoint;
+    }
+
+    if (Number.isFinite(state.lspHoverMouseX) && Number.isFinite(state.lspHoverMouseY)
+        && (state.lspHoverMouseX !== 0 || state.lspHoverMouseY !== 0)) {
+        return {
+            x: state.lspHoverMouseX,
+            y: state.lspHoverMouseY,
+        };
+    }
+
+    const fallbackRect = elements.editor?.getBoundingClientRect();
+    if (fallbackRect) {
+        return {
+            x: fallbackRect.left + 20,
+            y: fallbackRect.top + 20,
+        };
+    }
+
+    return { x: 20, y: 20 };
+}
+
+function scheduleLspHover() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        hideLspHoverTooltip();
+        return;
+    }
+
+    clearLspHoverTimer();
+    state.lspHoverTimer = setTimeout(async () => {
+        state.lspHoverTimer = null;
+
+        const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+        const key = `${state.currentFile}:${pos.line}:${pos.character}`;
+        if (key === state.lspHoverLastKey) {
+            return;
+        }
+        state.lspHoverLastKey = key;
+
+        try {
+            const text = await NotesLspHover(state.currentFile, pos.line, pos.character);
+            if (!text) {
+                hideLspHoverTooltip();
+                return;
+            }
+
+            lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+            await processMarkdownContainer(lspHoverTooltipEl);
+            lspHoverTooltipEl.style.display = 'block';
+
+            const anchor = getLspAnchorViewportPoint();
+            const rawX = anchor.x;
+            const rawY = anchor.y;
+            const x = Math.min(rawX + 14, window.innerWidth - lspHoverTooltipEl.offsetWidth - 8);
+            const y = Math.min(rawY + 14, window.innerHeight - lspHoverTooltipEl.offsetHeight - 8);
+            lspHoverTooltipEl.style.left = `${Math.max(8, x)}px`;
+            lspHoverTooltipEl.style.top = `${Math.max(8, y)}px`;
+        } catch {
+            hideLspHoverTooltip();
+        }
+    }, LSP_HOVER_DEBOUNCE_MS);
+}
+
+async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = '') {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+
+    try {
+        const text = await NotesLspSignatureHelp(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        if (!text) {
+            notifyTerminal('No signature help available', 'info');
+            return;
+        }
+
+        lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+        await processMarkdownContainer(lspHoverTooltipEl);
+        lspHoverTooltipEl.style.display = 'block';
+
+        const anchor = getLspAnchorViewportPoint();
+        const rawX = anchor.x;
+        const rawY = anchor.y;
+        const x = Math.min(rawX + 14, window.innerWidth - lspHoverTooltipEl.offsetWidth - 8);
+        const y = Math.min(rawY + 14, window.innerHeight - lspHoverTooltipEl.offsetHeight - 8);
+        lspHoverTooltipEl.style.left = `${Math.max(8, x)}px`;
+        lspHoverTooltipEl.style.top = `${Math.max(8, y)}px`;
+    } catch {
+        notifyTerminal('Failed to fetch signature help', 'error');
+    }
+}
+
+async function closeOpenLspDocument() {
+    clearLspChangeTimer();
+    clearLspHoverTimer();
+    hideLspHoverTooltip();
+    hideLspCompletion();
+    state.lspSemanticRequestId += 1;
+    state.lspSemanticTokens = [];
+    state.lspInlayRequestId += 1;
+    state.lspInlayHints = [];
+
+    const openFile = state.lspOpenFile;
+    if (!openFile) {
+        return;
+    }
+
+    try {
+        await NotesLspCloseDocument(openFile);
+    } catch (err) {
+        console.error('notes lsp close failed:', err);
+    } finally {
+        state.lspOpenFile = '';
+        state.lspHoverLastKey = '';
+    }
+}
+
+async function openCurrentLspDocument(content) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    try {
+        const languageID = await ResolveNotesLspLanguage(state.currentFile);
+        if (!languageID) {
+            return;
+        }
+
+        await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
+        state.lspOpenFile = state.currentFile;
+        await requestLspSemanticTokens();
+        await requestLspInlayHints();
+    } catch (err) {
+        console.error('notes lsp open failed:', err);
+    }
+}
+
+function scheduleLspDidChange() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    clearLspChangeTimer();
+    state.lspChangeTimer = setTimeout(async () => {
+        state.lspChangeTimer = null;
+        try {
+            await NotesLspChangeDocument(state.currentFile, elements.editor.value || '');
+            await requestLspSemanticTokens();
+            await requestLspInlayHints();
+        } catch (err) {
+            console.error('notes lsp change failed:', err);
+        }
+    }, LSP_CHANGE_DEBOUNCE_MS);
+}
+
 function setDirty(isDirty) {
     state.dirty = isDirty;
     const label = state.currentFile ? state.currentFile : 'No file selected';
@@ -2764,11 +4031,6 @@ function setViewMode(mode) {
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
-    // Show wrap button for all code-like files in edit mode
-    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
-    const showWrapButton = (isEditor || isStructuredEdit) && isCodeLike;
-    elements.wrap.style.display = showWrapButton ? 'block' : 'none';
-    
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
     const isSwaggerEdit = state.viewMode === 'swagger-edit';
@@ -2828,7 +4090,6 @@ function setEditorWrapMode(enabled) {
     const wrapEnabled = enabled === true;
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
-    elements.wrap.dataset.wrapActive = wrapEnabled ? 'true' : 'false';
 }
 
 function toggleMarkdownWrapMode() {
@@ -4201,6 +5462,13 @@ async function loadFile(file) {
         return;
     }
 
+    if (state.currentFile && state.currentFile !== file) {
+        await closeOpenLspDocument();
+        // Clear rendered diagnostics immediately while the new file loads.
+        state.currentFileUri = '';
+        clearVisibleLspDiagnostics();
+    }
+
     const fileName = file ? getPathFileName(file) : 'json file';
     let stickyId = null;
 
@@ -4236,6 +5504,7 @@ async function loadFile(file) {
             // GetFile does. GetImage expects a path without a leading separator
             // (it prepends one itself), so strip it after resolution.
             const resolvedPath = await ResolveFilePath(file);
+            state.currentFileUri = filePathToUri(resolvedPath || file);
             const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
             if (imageData.startsWith('error:')) {
                 setStatus(`Failed to load image: ${imageData}`, true);
@@ -4262,6 +5531,7 @@ async function loadFile(file) {
         const result = await GetFile(file);
 
         state.currentFile = file;
+        state.currentFileUri = await resolveNotesFileUri(file);
         emitCurrentFileName();
         await refreshFileMetaMarkdown(file);
 
@@ -4427,6 +5697,10 @@ async function loadFile(file) {
         if (elements.findBar.dataset.open === 'true') {
             closeFindBar();
         }
+
+        if (isCurrentFileLspEligible()) {
+            await openCurrentLspDocument(elements.editor.value || '');
+        }
     } catch (err) {
         if (stickyId) {
             closeStickyProgress(stickyId, `Failed to load ${getPathFileName(file)}`, 'error');
@@ -4449,6 +5723,9 @@ async function saveFile() {
         
         // Use the saved project context to prevent overwrites if user switched projects
         await SaveFile(state.currentFile, content, state.currentFileProject || '');
+        if (state.lspOpenFile === state.currentFile && isCurrentFileLspEligible()) {
+            await NotesLspSaveDocument(state.currentFile);
+        }
         setDirty(false);
     } catch (err) {
         setStatus(`Failed to save ${state.currentFile}.`, true);
@@ -4481,15 +5758,28 @@ async function confirmDelete() {
 
     const fileToDelete = state.deletingFile;
     const fileName = getPathFileName(fileToDelete);
+    const fileUri = state.currentFile === fileToDelete
+        ? state.currentFileUri
+        : await resolveNotesFileUri(fileToDelete);
 
     try {
+        if (state.currentFile === fileToDelete) {
+            await closeOpenLspDocument();
+        }
         await DeleteFile(fileToDelete);
+        if (fileUri) {
+            lspDiagnosticsStore.delete(fileUri);
+        }
         if (state.currentFile === fileToDelete) {
             state.currentFile = '';
+            state.currentFileUri = '';
             state.currentFileProject = '';
+            state.lspHoverLastKey = '';
             emitCurrentFileName();
             elements.editor.value = '';
             elements.swaggerView.innerHTML = '';
+            clearVisibleLspDiagnostics();
+            hideLspHoverTooltip();
             await renderMarkdown();
             setDirty(false);
         }
@@ -4972,11 +6262,11 @@ function enableImageContextMenus(container) {
             
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI...'],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
-                icons: [0xf0c5, 0xf0c7],
+                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI],
                 onSelect: (index) => {
                     if (index === 0) {
                         TerminalCopyImageDataURL(dataURLToCopy).catch(() => {
@@ -4984,6 +6274,8 @@ function enableImageContextMenus(container) {
                         });
                     } else if (index === 1) {
                         saveImageToFile(filename, dataURLToCopy);
+                    } else if (index === 2) {
+                        askAIAboutCurrentDocument();
                     }
                 },
             });
@@ -5164,6 +6456,72 @@ function createPrintMenuItem(title = 'Print...') {
         icon: CONTEXT_ICON_PRINT,
         onSelect: () => {
             WindowPrint();
+        },
+    };
+}
+
+function getCurrentDocumentContentsForAI() {
+    const fileType = String(state.currentFileType || '').toLowerCase();
+
+    let contents = '';
+    if (fileType === 'image') {
+        contents = String(elements.imageViewImg?.src || '').trim();
+    } else if (fileType === 'binary') {
+        contents = String(state.hexSourceValue || elements.editor.value || '');
+    } else {
+        contents = String(elements.editor.value || '');
+    }
+
+    if (!contents && fileType === 'meta') {
+        contents = String(state.fileMetaMarkdown || elements.meta?.textContent || '');
+    }
+
+    const maxChars = 120000;
+    if (contents.length > maxChars) {
+        contents = `${contents.slice(0, maxChars)}\n\n[document truncated for AI input]`;
+    }
+
+    return contents;
+}
+
+async function askAIAboutCurrentDocument() {
+    if (!state.currentFile) {
+        setStatus('Open a document first.', true);
+        return;
+    }
+
+    const fileName = state.currentFile;
+    const fileType = state.currentFileType || 'unknown';
+    const contents = getCurrentDocumentContentsForAI();
+    if (!contents) {
+        setStatus('This document has no content to send to AI.', true);
+        return;
+    }
+
+    const aiContext = [
+        `Document: ${fileName}`,
+        `Type: ${fileType}`,
+        '',
+        contents,
+    ].join('\n');
+
+    clearAIOutput();
+    setAIPanelCollapsed(false);
+
+    try {
+        await AskAI('notesDocument', fileName, aiContext);
+    } catch (err) {
+        setStatus('Failed to ask AI about this document.', true);
+        console.error(err);
+    }
+}
+
+function createAskAIDocumentMenuItem() {
+    return {
+        title: 'Ask AI...',
+        icon: CONTEXT_ICON_ASK_AI,
+        onSelect: () => {
+            void askAIAboutCurrentDocument();
         },
     };
 }
@@ -5413,6 +6771,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
             ...tableItems,
             ...insertItems,
             createFindMenuItem('Find'),
+            createAskAIDocumentMenuItem(),
             createPrintMenuItem('Print'),
         ];
 
@@ -5496,6 +6855,8 @@ function initStructuredDataTreeContextMenu(container) {
                     }));
                 },
             },
+            { title: '-' },
+            createAskAIDocumentMenuItem(),
         ], e.clientX, e.clientY, 'JSON/YAML field');
     });
 }
@@ -5688,12 +7049,27 @@ EventsOn("aiResponseStream", (chunk) => {
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
+// Opens the file and selects the first (default) tab for the file type.
 EventsOn('viewFileInNotesOpen', async (payload) => {
     const file = typeof payload === 'string' ? payload : String(payload ?? '');
     if (!file) return;
 
     try {
         await loadFile(file);
+    } catch (err) {
+        setStatus(`Failed to load file: ${file}`, true);
+        console.error(err);
+    }
+});
+
+// Event emitted by Go to open a file directly in the Edit tab.
+EventsOn('viewFileInNotesEdit', async (payload) => {
+    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    if (!file) return;
+
+    try {
+        await loadFile(file);
+        setViewMode('editor');
     } catch (err) {
         setStatus(`Failed to load file: ${file}`, true);
         console.error(err);
@@ -5744,7 +7120,7 @@ function applyWindowStyle(result) {
         :root {
             --bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
             --fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
-            --accent: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --accent: rgb(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue});
             --link: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
             --red: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
             --green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
@@ -6026,33 +7402,17 @@ function applyWindowStyle(result) {
             color: var(--green) !important;
         }
 
-        #notes-rename:hover, #notes-find:hover {
-            color: var(--yellow) !important;
+        #notes-find:hover {
+            color: var(--accent) !important;
             border-radius: 5px;
-            border-color: var(--yellow) !important;
-            background-color: rgba(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}, 0.3);
-        }
-
-        #notes-delete:hover {
-            color: var(--red) !important;
-        }
-
-        #notes-wrap:hover {
-            border-color: var(--cyan) !important;
-            color: var(--cyan) !important;
-            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.2);
-            border-radius: 5px;
-        }
-
-        #notes-wrap[data-wrap-active="true"] {
-            background-color: rgba(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue}, 0.3);
-            border-color: var(--cyan) !important;
-            color: var(--cyan) !important;
+            border-color: var(--accent) !important;
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
         }
 
         #notes-modal-create:hover {
             border-color: var(--green) !important;
             color: var(--green) !important;
+            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2) !important;
         }
 
         #notes-modal-actions {
@@ -6086,26 +7446,26 @@ function applyWindowStyle(result) {
         }
 
         #notes-modal-actions button:hover {
-            border-color: var(--selection);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
             transition: all 0.2s ease;
         }
 
         #notes-delete-modal-actions button:hover {
-            border-color: var(--selection);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
             transition: all 0.2s ease;
         }
 
         #notes-delete-confirm {
-            border-color: var(--error);
-            color: var(--error);
+            border-color: var(--error) !important;
+            color: var(--error) !important;
         }
 
         #notes-delete-confirm:hover {
             border-color: var(--error) !important;
             color: var(--error) !important;
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2) !important;
             transition: all 0.2s ease;
         }
 
@@ -6191,7 +7551,7 @@ function applyWindowStyle(result) {
             border-radius: 5px;
             border: none;
             background: transparent;
-            color: var(--yellow);
+            color: var(--accent);
             padding: 1px 6px;
             cursor: pointer;
             font-family: var(--font-family);
@@ -6389,17 +7749,6 @@ function applyWindowStyle(result) {
             border-radius: 5px;
         }
 
-        #notes-delete {
-            color: var(--error);
-        }
-
-        #notes-delete:hover {
-            border-color: var(--error) !important;
-            color: var(--error);
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
-            border-radius: 5px;
-        }
-
         #notes-panel {
             position: relative;
             flex: 1;
@@ -6565,8 +7914,8 @@ function applyWindowStyle(result) {
         }
 
         .notes-ai-restore:hover {
-            border-color: var(--fg);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 1);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
         }
 
         .notes-ai-header {
@@ -6961,13 +8310,13 @@ function applyWindowStyle(result) {
         }
      
         .jupyter-btn:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1) !important;
             border-color: var(--accent);
             color: var(--accent);
         }
 
         .jupyter-btn:active {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.5);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
         }
 
         .jupyter-stop-notes {
@@ -6976,13 +8325,13 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-stop-notes:hover {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.2) !important;
             border-color: var(--red);
             color: var(--red);
         }
 
         .jupyter-stop-notes:active {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
         }
 
         .jupyter-runtime-dropdown {
@@ -7255,7 +8604,7 @@ function applyWindowStyle(result) {
         }
 
         .json-key {
-            color: var(--accent);
+            color: var(--yellow);
             word-break: break-all;
             overflow-wrap: anywhere;
         }
@@ -7315,7 +8664,7 @@ function applyWindowStyle(result) {
         }
 
         .json-value-boolean {
-            color: var(--yellow);
+            color: var(--accent);
         }
 
         .json-value-null {
@@ -7331,6 +8680,244 @@ function applyWindowStyle(result) {
         }
 
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
+
+        /* ------------------------------------------------------------------ */
+        /* LSP diagnostics                                                      */
+        /* ------------------------------------------------------------------ */
+
+        /* Squiggle underlines on the highlight overlay */
+        .lsp-squiggle-error {
+            text-decoration: underline wavy rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-warning {
+            text-decoration: underline wavy rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-info {
+            text-decoration: underline wavy rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}) 1.5px;
+            text-underline-offset: 3px;
+        }
+        .lsp-squiggle-hint {
+            text-decoration: underline dotted rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45) 1px;
+            text-underline-offset: 3px;
+        }
+
+        /* Gutter severity markers — appended to gutter line spans */
+        .lsp-gutter-mark {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 4px;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .lsp-gutter-error  { background: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}); }
+        .lsp-gutter-warning{ background: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}); }
+        .lsp-gutter-info   { background: rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}); }
+        .lsp-gutter-hint   { background: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.35); }
+
+        /* Diagnostic tooltip popup */
+        #notes-lsp-tooltip {
+            position: fixed;
+            z-index: 9000;
+            pointer-events: auto;
+            max-width: 480px;
+            max-height: 50vh;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-y: auto;
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
+            display: none;
+        }
+        #notes-lsp-tooltip:hover { opacity: 1; }
+
+        #notes-lsp-hover-tooltip {
+            position: fixed;
+            z-index: 9001;
+            pointer-events: auto;
+            max-width: 520px;
+            max-height: 50vh;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
+            display: none;
+        }
+        #notes-lsp-hover-tooltip:hover { opacity: 1; }
+        #notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {
+            margin-top: 0.4em;
+            margin-bottom: 0.4em;
+        }
+        #notes-lsp-hover-tooltip :where(code, pre) {
+            font-family: var(--terminal-menu-font, var(--font-family));
+        }
+        #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
+        #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
+
+        #notes-lsp-completion {
+            --notes-lsp-completion-visible-rows: 12;
+            --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
+            position: fixed;
+            z-index: 9002;
+            min-width: 320px;
+            max-width: 700px;
+            max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);
+            overflow: auto;
+            padding: 6px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            opacity: 0.8;
+            transition: opacity 0.15s ease;
+            animation: tty-menu-appear 0.15s ease-out;
+            display: none;
+        }
+        #notes-lsp-completion:hover { opacity: 1; }
+        .notes-lsp-completion-item {
+            align-items: center;
+            min-height: var(--notes-lsp-completion-row-height);
+            white-space: nowrap;
+        }
+        .notes-lsp-completion-item.is-deprecated {
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 60%, transparent);
+        }
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-label,
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-detail {
+            text-decoration: line-through;
+            text-decoration-thickness: 1px;
+            text-decoration-color: color-mix(in srgb, currentColor 70%, transparent);
+        }
+        .notes-lsp-completion-label {
+            flex: 1;
+            min-width: 0;
+        }
+        .notes-lsp-completion-detail {
+            flex: 0 1 auto;
+            min-width: 0;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 72%, transparent);
+            overflow: hidden;
+            white-space: pre;
+            text-overflow: ellipsis;
+        }
+        .notes-lsp-completion-icon {
+            width: 28px;
+            min-width: 28px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 76%, transparent);
+        }
+        .notes-lsp-completion-kind {
+            flex: 0 0 auto;
+            max-width: 110px;
+            padding: 1px 6px;
+            border: 1px solid var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
+            border-radius: 999px;
+            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 78%, transparent);
+            font-size: 10px;
+            line-height: 1.3;
+            text-transform: lowercase;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-kind,
+        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-icon {
+            opacity: 0.65;
+        }
+        .notes-lsp-inlay-hint {
+            display: inline;
+            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.78);
+            opacity: 0.82;
+            font-size: 0.92em;
+            font-style: normal;
+            pointer-events: none;
+            user-select: none;
+            white-space: pre;
+        }
+        .notes-lsp-inlay-hint[data-kind="1"] {
+            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.78);
+        }
+        .notes-lsp-inlay-hint[data-kind="2"] {
+            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.78);
+        }
+        .notes-lsp-inlay-hint.has-padding-left {
+            margin-left: 0.5ch;
+        }
+        .notes-lsp-inlay-hint.has-padding-right {
+            margin-right: 0.5ch;
+        }
+        .notes-lsp-semantic-token {
+            display: inline;
+            font-weight: 560;
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 2px;
+            text-decoration-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.5);
+        }
+        #notes-editor-shell[data-code-view="true"][data-wrap-mode="false"] .notes-lsp-semantic-token {
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.12);
+            border-radius: 2px;
+        }
+        .notes-lsp-semantic-token[data-token-type="0"] {
+            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.96);
+        }
+        .notes-lsp-semantic-token[data-token-type="1"] {
+            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token[data-token-type="2"] {
+            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token[data-token-type="3"] {
+            color: rgba(${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue}, 0.95);
+        }
+        .notes-lsp-semantic-token.mod-declaration,
+        .notes-lsp-semantic-token.mod-definition {
+            font-weight: 700;
+        }
+        .notes-lsp-semantic-token.mod-readonly {
+            text-decoration-style: dotted;
+        }
+        .notes-lsp-semantic-token.mod-static,
+        .notes-lsp-semantic-token.mod-defaultlibrary {
+            opacity: 0.82;
+        }
+        .notes-lsp-semantic-token.mod-deprecated {
+            text-decoration-line: underline line-through;
+            opacity: 0.68;
+        }
+        .notes-lsp-semantic-token.mod-documentation,
+        .notes-lsp-semantic-token.mod-abstract {
+            font-style: italic;
+        }
+        .notes-lsp-semantic-token.mod-async {
+            text-decoration-style: wavy;
+        }
 
     `;
 
@@ -7348,8 +8935,547 @@ EventsOn('terminalStyleUpdate', payload => {
     }
 });
 
-refreshFiles();
-window.refreshFiles = refreshFiles;
+// ----------------------------------------------------------------------------
+// LSP Diagnostics
+// ----------------------------------------------------------------------------
+
+// Keyed by file URI → array of Diagnostic objects from the server.
+const lspDiagnosticsStore = new Map();
+
+// Tooltip element — created once and re-positioned on hover.
+const lspTooltipEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-tooltip';
+    document.body.appendChild(el);
+    return el;
+})();
+
+const lspHoverTooltipEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-hover-tooltip';
+    el.className = 'markdown-body';
+    el.addEventListener('mousedown', (e) => {
+        if (e.button === 0) e.preventDefault(); // left click: keep editor focus
+    });
+    el.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideLspHoverTooltip();
+    });
+    document.body.appendChild(el);
+    return el;
+})();
+
+const lspCompletionEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-lsp-completion';
+    document.body.appendChild(el);
+    return el;
+})();
+
+const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];
+
+function filePathToUri(filePath) {
+    const source = String(filePath || '').trim();
+    if (!source) {
+        return '';
+    }
+
+    const normalized = source.replace(/\\/g, '/');
+    const prefixed = normalized.startsWith('/') ? normalized : `/${normalized}`;
+
+    try {
+        return new URL(`file://${encodeURI(prefixed)}`).toString();
+    } catch {
+        return `file://${prefixed}`;
+    }
+}
+
+async function resolveNotesFileUri(filePath) {
+    if (!filePath) {
+        return '';
+    }
+
+    try {
+        const resolved = await ResolveFilePath(filePath);
+        return filePathToUri(resolved || filePath);
+    } catch {
+        return filePathToUri(filePath);
+    }
+}
+
+function lspSeveritySquiggleClass(severity) {
+    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
+    return `lsp-squiggle-${name}`;
+}
+
+function lspSeverityGutterClass(severity) {
+    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
+    return `lsp-gutter-${name}`;
+}
+
+function clearVisibleLspDiagnostics() {
+    if (elements.editorGutter) {
+        elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+    }
+    clearLspSquiggles();
+    if (lspTooltipEl) {
+        lspTooltipEl.style.display = 'none';
+    }
+    hideLspHoverTooltip();
+    hideLspCompletion();
+}
+
+/**
+ * Apply diagnostic decorations to the editor gutter and highlight overlay.
+ * Squiggles are rendered by wrapping the affected character range in a
+ * <span> inside the highlight overlay. Gutter markers are small dots appended
+ * to the matching line number span.
+ */
+function renderLspDiagnostics() {
+    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+        return;
+    }
+
+    // Collect diagnostics for the currently open file.
+    const currentUri = state.currentFileUri || null;
+
+    // Clear previous gutter marks.
+    elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+
+    const diags = currentUri ? (lspDiagnosticsStore.get(currentUri) || []) : [];
+    if (diags.length === 0) {
+        // Remove any squiggle spans left in the highlight code.
+        clearLspSquiggles();
+        return;
+    }
+
+    // Build a map of line → highest-severity diagnostic for gutter markers.
+    const lineMap = new Map(); // line (0-based) → {severity, messages[]}
+    for (const d of diags) {
+        const line = d.range.start.line;
+        if (!lineMap.has(line)) {
+            lineMap.set(line, { severity: d.severity, messages: [d.message] });
+        } else {
+            const entry = lineMap.get(line);
+            if (d.severity < entry.severity) entry.severity = d.severity;
+            entry.messages.push(d.message);
+        }
+    }
+
+    // Apply gutter dots — gutter is a pre/text node; we replace it with spans.
+    applyGutterDiagnosticMarkers(lineMap);
+
+    // Apply squiggle spans to the highlight overlay.
+    applySquiggles(diags);
+}
+
+function applyGutterDiagnosticMarkers(lineMap) {
+    if (!elements.editorGutter) return;
+
+    const content = elements.editor.value || '';
+    const lineCount = Math.max(1, content.split('\n').length);
+
+    // Rebuild the gutter as individual line spans so we can attach markers.
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < lineCount; i++) {
+        const span = document.createElement('span');
+        span.className = 'lsp-gutter-line';
+        span.textContent = String(i + 1);
+
+        if (lineMap.has(i)) {
+            const { severity, messages } = lineMap.get(i);
+            const dot = document.createElement('span');
+            dot.className = `lsp-gutter-mark ${lspSeverityGutterClass(severity)}`;
+            dot.title = messages.join('\n');
+            span.appendChild(dot);
+        }
+
+        fragment.appendChild(span);
+        if (i < lineCount - 1) fragment.appendChild(document.createTextNode('\n'));
+    }
+
+    elements.editorGutter.textContent = '';
+    elements.editorGutter.appendChild(fragment);
+}
+
+function applySquiggles(diags) {
+    if (!elements.editorHighlightCode) return;
+
+    // Start from whatever highlight.js already rendered.
+    const html = elements.editorHighlightCode.innerHTML;
+    // Strip any existing lsp spans first.
+    const stripped = stripLspOverlayMarkup(html);
+
+    const content = elements.editor.value || '';
+    // Sort diagnostics so outermost (longest) ranges are processed first, which
+    // avoids nested span conflicts. For now we only annotate single-line ranges.
+    const singleLine = diags.filter(d => d.range.start.line === d.range.end.line);
+
+    // Build a list of (charOffset, endCharOffset, class) sorted by start.
+    const ranges = singleLine.map(d => ({
+        line: d.range.start.line,
+        startChar: d.range.start.character,
+        endChar: d.range.end.character,
+        cls: lspSeveritySquiggleClass(d.severity),
+        msg: d.message,
+    })).sort((a, b) => a.line - b.line || a.startChar - b.startChar);
+
+    if (ranges.length === 0) {
+        elements.editorHighlightCode.innerHTML = stripped;
+        return;
+    }
+
+    // Map line/char ranges to byte offsets in raw content.
+    const lines = content.split('\n');
+    let lineOffsets = [];
+    let off = 0;
+    for (const l of lines) {
+        lineOffsets.push(off);
+        off += l.length + 1; // +1 for \n
+    }
+
+    // We need to annotate the HTML, not the raw text, to preserve hljs spans.
+    // Strategy: rebuild innerHTML by tracking text position and inserting wrappers.
+    // This is a best-effort approach that works well for non-overlapping ranges.
+    elements.editorHighlightCode.innerHTML = stripped;
+
+    // Walk text nodes and wrap the target char ranges.
+    wrapDiagnosticRanges(elements.editorHighlightCode, lines, lineOffsets, ranges, content);
+}
+
+function wrapDiagnosticRanges(container, lines, lineOffsets, ranges, content) {
+    // Collect all text nodes with their absolute byte offsets.
+    const textNodes = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node;
+    // Recompute offsets by walking the content matching text nodes.
+    let cursor = 0;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        textNodes.push({ node, start: cursor, end: cursor + text.length });
+        cursor += text.length;
+    }
+
+    // For each diagnostic range, find overlapping text nodes and wrap.
+    for (const r of ranges) {
+        if (r.line >= lines.length) continue;
+        const lineStart = lineOffsets[r.line];
+        const byteStart = lineStart + r.startChar;
+        const byteEnd = lineStart + Math.max(r.endChar, r.startChar + 1);
+
+        for (const tn of textNodes) {
+            if (tn.end <= byteStart || tn.start >= byteEnd) continue;
+
+            const localStart = Math.max(byteStart - tn.start, 0);
+            const localEnd = Math.min(byteEnd - tn.start, tn.node.nodeValue.length);
+            if (localStart >= localEnd) continue;
+
+            const text = tn.node.nodeValue;
+            const before = text.slice(0, localStart);
+            const middle = text.slice(localStart, localEnd);
+            const after = text.slice(localEnd);
+
+            const span = document.createElement('span');
+            span.className = r.cls;
+            span.title = r.msg;
+            span.textContent = middle;
+
+            const parent = tn.node.parentNode;
+            if (!parent) continue;
+
+            if (before) parent.insertBefore(document.createTextNode(before), tn.node);
+            parent.insertBefore(span, tn.node);
+            if (after) tn.node.nodeValue = after;
+            else parent.removeChild(tn.node);
+
+            // Update the text node record so subsequent ranges still work.
+            tn.node = after ? tn.node : null;
+            break; // one text node per range is enough for single-line squiggles
+        }
+    }
+}
+
+function clearLspSquiggles() {
+    if (!elements.editorHighlightCode) return;
+    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+}
+
+function renderLspEditorDecorations() {
+    renderLspDiagnostics();
+    renderLspSemanticTokens();
+    renderLspInlayHints();
+}
+
+const LSP_SEMANTIC_TOKEN_MODIFIER_NAMES = [
+    'declaration',
+    'definition',
+    'readonly',
+    'static',
+    'deprecated',
+    'abstract',
+    'async',
+    'modification',
+    'documentation',
+    'defaultlibrary',
+];
+
+function semanticTokenModifierClassNames(mask) {
+    const bitset = Math.max(0, Number(mask) || 0);
+    if (bitset <= 0) {
+        return [];
+    }
+
+    const classes = [];
+    for (let index = 0; index < LSP_SEMANTIC_TOKEN_MODIFIER_NAMES.length; index += 1) {
+        if (((bitset >> index) & 1) === 1) {
+            classes.push(`mod-${LSP_SEMANTIC_TOKEN_MODIFIER_NAMES[index]}`);
+        }
+    }
+
+    return classes;
+}
+
+function renderLspSemanticTokens() {
+    if (!elements.editorHighlightCode) {
+        return;
+    }
+
+    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+
+    const tokens = Array.isArray(state.lspSemanticTokens)
+        ? state.lspSemanticTokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
+        : [];
+    if (tokens.length === 0) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+    if (content.length > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS || tokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
+        return;
+    }
+
+    const lines = content.split('\n');
+    const lineOffsets = [];
+    let offset = 0;
+    for (const line of lines) {
+        lineOffsets.push(offset);
+        offset += line.length + 1;
+    }
+
+    tokens
+        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
+        .forEach((token) => {
+            const line = Math.max(0, Math.min(Number(token.line) || 0, Math.max(lines.length - 1, 0)));
+            const lineContent = lines[line] || '';
+            const startChar = Math.max(0, Math.min(Number(token.character) || 0, lineContent.length));
+            const tokenLength = Math.max(1, Number(token.length) || 1);
+            const endChar = Math.max(startChar + 1, Math.min(startChar + tokenLength, lineContent.length));
+            if (endChar <= startChar) {
+                return;
+            }
+
+            const tokenEl = document.createElement('span');
+            tokenEl.className = 'notes-lsp-semantic-token';
+            tokenEl.dataset.tokenType = String(Math.max(0, Number(token.tokenType) || 0));
+            const tokenModifiers = Math.max(0, Number(token.tokenModifiers) || 0);
+            tokenEl.dataset.tokenModifiers = String(tokenModifiers);
+            const modifierClasses = semanticTokenModifierClassNames(tokenModifiers);
+            if (modifierClasses.length > 0) {
+                tokenEl.classList.add(...modifierClasses);
+            }
+
+            const startOffset = lineOffsets[line] + startChar;
+            const endOffset = lineOffsets[line] + endChar;
+            wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
+        });
+}
+
+function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+
+    let cursor = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        const nextCursor = cursor + text.length;
+        if (nextCursor <= startOffset || cursor >= endOffset) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        const localStart = Math.max(startOffset - cursor, 0);
+        const localEnd = Math.min(endOffset - cursor, text.length);
+        if (localStart >= localEnd) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        const before = text.slice(0, localStart);
+        const middle = text.slice(localStart, localEnd);
+        const after = text.slice(localEnd);
+        if (!middle) {
+            cursor = nextCursor;
+            continue;
+        }
+
+        markerEl.textContent = middle;
+
+        const parent = node.parentNode;
+        if (!parent) {
+            return;
+        }
+
+        if (before) {
+            parent.insertBefore(document.createTextNode(before), node);
+        }
+        parent.insertBefore(markerEl, node);
+        if (after) {
+            node.nodeValue = after;
+        } else {
+            parent.removeChild(node);
+        }
+        return;
+    }
+}
+
+function renderLspInlayHints() {
+    if (!elements.editorHighlightCode) {
+        return;
+    }
+
+    elements.editorHighlightCode.innerHTML = String(elements.editorHighlightCode.innerHTML || '')
+        .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
+
+    const hints = Array.isArray(state.lspInlayHints)
+        ? state.lspInlayHints.filter((item) => item && String(item.label || '') !== '')
+        : [];
+    if (hints.length === 0) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+    const lines = content.split('\n');
+    const lineOffsets = [];
+    let offset = 0;
+    for (const line of lines) {
+        lineOffsets.push(offset);
+        offset += line.length + 1;
+    }
+
+    hints
+        .filter((item) => Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)))
+        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
+        .forEach((hint) => {
+            const line = Math.max(0, Math.min(Number(hint.line) || 0, Math.max(lines.length - 1, 0)));
+            const lineContent = lines[line] || '';
+            const character = Math.max(0, Math.min(Number(hint.character) || 0, lineContent.length));
+            const hintEl = document.createElement('span');
+            hintEl.className = 'notes-lsp-inlay-hint';
+            hintEl.dataset.kind = String(Number(hint.kind) || 0);
+            if (hint.paddingLeft === true) {
+                hintEl.classList.add('has-padding-left');
+            }
+            if (hint.paddingRight === true) {
+                hintEl.classList.add('has-padding-right');
+            }
+            if (hint.tooltip) {
+                hintEl.title = String(hint.tooltip);
+            }
+            hintEl.textContent = String(hint.label || '');
+
+            insertLspInlayHintAtOffset(elements.editorHighlightCode, lineOffsets[line] + character, hintEl);
+        });
+}
+
+function insertLspInlayHintAtOffset(container, targetOffset, hintEl) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+
+    let cursor = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+        const text = node.nodeValue || '';
+        const nextCursor = cursor + text.length;
+        if (targetOffset <= nextCursor) {
+            const localOffset = Math.max(0, Math.min(targetOffset - cursor, text.length));
+            const parent = node.parentNode;
+            if (!parent) {
+                return;
+            }
+
+            if (localOffset === 0) {
+                parent.insertBefore(hintEl, node);
+                return;
+            }
+
+            if (localOffset === text.length) {
+                if (node.nextSibling) {
+                    parent.insertBefore(hintEl, node.nextSibling);
+                } else {
+                    parent.appendChild(hintEl);
+                }
+                return;
+            }
+
+            const afterNode = node.splitText(localOffset);
+            parent.insertBefore(hintEl, afterNode);
+            return;
+        }
+
+        cursor = nextCursor;
+    }
+
+    container.appendChild(hintEl);
+}
+
+// Hover tooltip on the gutter dots.
+document.addEventListener('mouseover', (e) => {
+    const dot = e.target.closest?.('.lsp-gutter-mark');
+    if (!dot) {
+        lspTooltipEl.style.display = 'none';
+        return;
+    }
+    lspTooltipEl.textContent = dot.title || '';
+    lspTooltipEl.style.display = 'block';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (lspTooltipEl.style.display !== 'block') return;
+    const x = Math.min(e.clientX + 14, window.innerWidth - lspTooltipEl.offsetWidth - 8);
+    const y = Math.min(e.clientY + 14, window.innerHeight - lspTooltipEl.offsetHeight - 8);
+    lspTooltipEl.style.left = `${x}px`;
+    lspTooltipEl.style.top = `${y}px`;
+});
+
+document.addEventListener('mouseout', (e) => {
+    if (e.target.closest?.('.lsp-gutter-mark')) {
+        lspTooltipEl.style.display = 'none';
+    }
+});
+
+EventsOn('notesLspDiagnostics', payload => {
+    const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (!data || typeof data.uri !== 'string') return;
+
+    lspDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
+    if (data.uri === state.currentFileUri) {
+        renderLspEditorDecorations();
+    }
+});
 
 function insertEditorText(text, target = elements.editor) {
     if (!text) {
@@ -7466,8 +9592,102 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
 }
 
 if (elements.editor) {
+    let editorInputSequence = 0;
+
+    function maybeDispatchInputFallbackAfterShortcut(event) {
+        const isModifierShortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
+        if (!isModifierShortcut) {
+            return;
+        }
+
+        const key = String(event.key || '').toLowerCase();
+        if (key !== 'z' && key !== 'v') {
+            return;
+        }
+
+        if (document.activeElement !== elements.editor) {
+            return;
+        }
+
+        const valueBefore = elements.editor.value;
+        const seqBefore = editorInputSequence;
+
+        setTimeout(() => {
+            // Some WebKit edit paths can mutate textarea value without emitting `input`.
+            // Re-emit `input` only when content changed and no native input was observed.
+            if (editorInputSequence !== seqBefore) {
+                return;
+            }
+            if (elements.editor.value === valueBefore) {
+                return;
+            }
+            elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        }, 0);
+    }
+
     elements.editor.addEventListener('keydown', (event) => {
+        maybeDispatchInputFallbackAfterShortcut(event);
+
+        if (event.key === 'Escape' && closeOpenLspTooltips()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
+        if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+            if (event.key === 'Enter' && commitActiveLspCompletion()) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.key === 'ArrowDown' && moveLspCompletionSelection(1)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
+            if (event.key === 'ArrowUp' && moveLspCompletionSelection(-1)) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+        }
+
         if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
+        if (state.lspCompletionVisible) {
+            // When completion is already open, Tab dismisses it and inserts indentation.
+            hideLspCompletion();
+            event.preventDefault();
+            event.stopPropagation();
+
+            const start = elements.editor.selectionStart;
+            const end = elements.editor.selectionEnd;
+            elements.editor.setRangeText('\t', start, end, 'end');
+            elements.editor.dispatchEvent(new Event('input'));
+            return;
+        }
+
+        const source = elements.editor.value || '';
+        const cursor = elements.editor.selectionStart || 0;
+        const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+        const leftOfCaret = source.slice(lineStart, cursor);
+        const isWhitespaceOnlyLeft = /^\s*$/.test(leftOfCaret);
+        const shouldTryLspCompletion = isCurrentFileLspEligible()
+            && state.currentFile
+            && state.lspOpenFile === state.currentFile
+            && !isWhitespaceOnlyLeft;
+
+        if (shouldTryLspCompletion) {
+            // With non-whitespace prefix on this line, use Tab to open completion rather than insert indentation.
+            event.preventDefault();
+            event.stopPropagation();
+            hideLspHoverTooltip();
+            hideLspCompletion();
+            void requestLspCompletion();
             return;
         }
 
@@ -7482,9 +9702,42 @@ if (elements.editor) {
     });
 
     elements.editor.addEventListener('input', () => {
+        editorInputSequence += 1;
         setDirty(true);
+        state.lspHoverLastKey = '';
+        hideLspHoverTooltip();
+        state.lspSemanticRequestId += 1;
+        state.lspSemanticTokens = [];
+        state.lspInlayRequestId += 1;
+        state.lspInlayHints = [];
+
+        const cursor = elements.editor.selectionStart || 0;
+        const value = elements.editor.value || '';
+        const prevChar = cursor > 0 ? value[cursor - 1] : '';
+
+        // If LSP completion menu is visible, keep it open and re-filter based on current position.
+        // Otherwise, check for trigger characters to open it.
+        if (state.lspCompletionVisible) {
+            // Menu is open - sync first, then re-request completion to filter by current text.
+            void requestLspCompletionAfterSync(value, '', 1);
+        } else {
+            // Menu is closed - check for trigger characters
+            if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+                void requestLspCompletionAfterSync(value, prevChar);
+            } else {
+                // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
+                const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
+                if (!isIdentifierChar) {
+                    hideLspCompletion();
+                }
+            }
+        }
+
         if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
+            if (state.currentFileType === 'markdown') {
+                scheduleRender();
+            }
         } else if (state.currentFileType === 'csv') {
             renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
         } else {
@@ -7504,13 +9757,35 @@ if (elements.editor) {
                 renderSwaggerUI();
             }
         }
+        scheduleLspDidChange();
         scheduleAutoSave();
     });
 
     elements.editor.addEventListener('scroll', () => {
+        hideLspHoverTooltip();
+        hideLspCompletion();
         if (usesCodeEditorDecorations()) {
             syncEditorScrollDecorations();
         }
+    });
+
+    elements.editor.addEventListener('mousemove', (event) => {
+        state.lspHoverMouseX = event.clientX;
+        state.lspHoverMouseY = event.clientY;
+    });
+
+    elements.editor.addEventListener('mouseup', () => {
+        state.lspHoverLastKey = '';
+        scheduleLspHover();
+    });
+
+    elements.editor.addEventListener('keyup', () => {
+        scheduleLspHover();
+    });
+
+    elements.editor.addEventListener('blur', () => {
+        hideLspHoverTooltip();
+        hideLspCompletion();
     });
 
     elements.editor.addEventListener('paste', (event) => {
@@ -7539,7 +9814,7 @@ elements.editor.addEventListener('mousedown', (e) => {
     }
 });
 
-elements.editor.addEventListener('contextmenu', (e) => {
+elements.editor.addEventListener('contextmenu', async (e) => {
     // Restore selection that WebKit changed on right-click
     if (_editorSelectionBeforeContextMenu !== null) {
         elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
@@ -7558,6 +9833,10 @@ elements.editor.addEventListener('contextmenu', (e) => {
             },
         },
     ];
+
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
+    
 
     if (isJsonStructuredFile(state.currentFile)) {
         menuItems.push(
@@ -7578,11 +9857,19 @@ elements.editor.addEventListener('contextmenu', (e) => {
         });
     }
 
-    menuItems.push(
-        { title: '-' },
-        createFindMenuItem('Find text...'),
-        createPrintMenuItem('Print...'),
-    );
+
+    if (isCodeLike && (state.viewMode === 'editor' || isStructuredEdit)) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Word wrap',
+                icon: state.markdownWrapMode ? 0xf00c : 0x20,
+                onSelect: () => {
+                    toggleMarkdownWrapMode();
+                },
+            },
+        );
+    }
 
     if (state.currentFileType === 'markdown') {
         menuItems.push(
@@ -7647,12 +9934,34 @@ elements.editor.addEventListener('contextmenu', (e) => {
         }
     }
 
+    if (isCurrentFileLspEligible()) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'LSP options...',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: async () => {
+                    await showEditorLspOptionsMenu(e.clientX, e.clientY);
+                },
+            },
+        );
+    }
+
+    menuItems.push(
+        { title: '-' },
+        createFindMenuItem('Find text...'),
+        createAskAIDocumentMenuItem(),
+        createPrintMenuItem('Print...'),
+    );
+
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
 initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
+initRenderedNotesContextMenu(lspHoverTooltipEl, 'viewer');
+initRenderedNotesContextMenu(lspTooltipEl, 'viewer');
 
 elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -7666,6 +9975,8 @@ elements.csvView.addEventListener('contextmenu', (e) => {
             menuItems.push({ title: '-' }, ...insertItems);
         }
     }
+
+    menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
 
     let highlightCallback = null;
     let cancelCallback = null;
@@ -7804,14 +10115,6 @@ elements.newFile.addEventListener('click', () => {
     openNewFilePrompt();
 });
 
-elements.rename.addEventListener('click', () => {
-    if (!state.currentFile) {
-        notifyTerminal('Select a note to rename.', 'warn');
-        return;
-    }
-    openRenamePrompt(state.currentFile);
-});
-
 elements.modalCancel.addEventListener('click', () => {
     closeNewFilePrompt();
 });
@@ -7840,20 +10143,8 @@ if (elements.modalLocation) {
     });
 }
 
-elements.delete.addEventListener('click', () => {
-    if (!state.currentFile) {
-        notifyTerminal('Select a note to delete.', 'warn');
-        return;
-    }
-    openDeletePrompt(state.currentFile);
-});
-
 elements.find.addEventListener('click', () => {
     openFindBar();
-});
-
-elements.wrap.addEventListener('click', () => {
-    toggleMarkdownWrapMode();
 });
 
 elements.deleteCancel.addEventListener('click', () => {
@@ -8007,6 +10298,7 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+        return;
     }
 
     if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
@@ -8071,6 +10363,11 @@ document.addEventListener('mouseup', (event) => {
     handleViewerSelectionAutoCopy();
 });
 
+window.addEventListener('beforeunload', () => {
+    closeOpenLspDocument();
+    NotesLspStopAll();
+});
+
 elements.modalInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
         event.preventDefault();
@@ -8090,6 +10387,9 @@ elements.findInput.addEventListener('keydown', (event) => {
 });
 
 setViewMode('editor');
+
+// Load initial notes list on startup; later notesUpdate events will refresh it.
+refreshFiles();
 
 if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {
     const swaggerPaneResizeObserver = new ResizeObserver(() => {

@@ -102,12 +102,15 @@ func (term *Term) osc7UpdatePath(params []string) {
 }
 
 func _osc7UpdatePath(term *Term, host, pwd string) {
+	term.tile.SetPwd(pwd)
+
 	rowSrc := types.RowSource{
 		Host: host,
 		Pwd:  pwd,
 	}
 	term._rowSource = &rowSrc
 	(*term.screen)[term.curPos().Y].Source = term._rowSource
+
 	term.renderer.RefreshNotes()
 }
 

@@ -22,7 +22,6 @@ func (agent *Agent) McpMenu(cancel types.MenuCallbackT) {
 		}()
 		agent.McpMenu(cancel)
 	}
-
 	agent.renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
