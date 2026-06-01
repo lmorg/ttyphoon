@@ -21,7 +21,7 @@ func TestParseAspellOutput(t *testing.T) {
 				"hello", "helot", "help", "halo", "hell", "heal", "heel", "held", "helm", "hero",
 				"he'll", "Hal", "Hale", "hale", "hole", "Hall", "Hill", "Hull", "hall", "hill",
 				"holy", "hula", "hull",
-			},
+			}[:MaxSuggestions],
 		},
 		{
 			MisspeltWord: "wrold",
@@ -36,7 +36,7 @@ func TestParseAspellOutput(t *testing.T) {
 				"prowled", "trolled", "Lord", "RD", "Rd", "Roland", "Ronald", "lord", "rd",
 				"clod", "plod", "relied", "rowdy", "relaid", "LLD", "paroled", "rad", "red",
 				"rel", "rot",
-			},
+			}[:MaxSuggestions],
 		},
 	}
 

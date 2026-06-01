@@ -519,14 +519,27 @@ app.innerHTML = `
                         </section>
                     </div>
                 </div>
-                <div id="notes-ai-panel" class="notes-ai-panel" data-collapsed="true">
-                    <div class="notes-ai-header">
-                        <button id="notes-ai-toggle" type="button" class="notes-ai-toggle" title="Toggle AI panel">AI ▾</button>
-                        <button id="notes-ai-clear" type="button" class="notes-ai-clear" title="Clear AI output">Clear</button>
+                <div id="notes-tools-panel" class="notes-tools-panel" data-collapsed="true">
+                    <div class="notes-tools-header">
+                        <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
+                            <button id="notes-tools-tab-ai" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
+                        </div>
+                        <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
                     </div>
-                    <div id="notes-ai-output" class="notes-ai-output"></div>
+                    <div id="notes-tools-content" class="notes-tools-content">
+                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="true">
+                            <div class="notes-tools-pane-header">
+                                <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
+                            </div>
+                            <div id="notes-ai-output" class="notes-ai-output"></div>
+                        </div>
+                        <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
+                            <div id="notes-tools-toc" class="notes-tools-toc"></div>
+                        </div>
+                    </div>
                 </div>
-                <button id="notes-ai-restore" type="button" class="notes-ai-restore" title="Show AI panel">AI</button>
+                <button id="notes-tools-restore" type="button" class="notes-tools-restore" title="Show Tools panel">Tools</button>
             </div>
         </main>
     </div>
@@ -622,11 +635,17 @@ const elements = {
     findPrev: document.getElementById('notes-find-prev'),
     findNext: document.getElementById('notes-find-next'),
     findClose: document.getElementById('notes-find-close'),
-    aiPanel: document.getElementById('notes-ai-panel'),
-    aiToggle: document.getElementById('notes-ai-toggle'),
-    aiClear: document.getElementById('notes-ai-clear'),
+    toolsTabs: document.getElementById('notes-tools-tabs'),
+    toolsTabAI: document.getElementById('notes-tools-tab-ai'),
+    toolsTabToC: document.getElementById('notes-tools-tab-toc'),
+    toolsAIPane: document.getElementById('notes-tools-ai-pane'),
+    toolsToCPane: document.getElementById('notes-tools-toc-pane'),
+    toolsToC: document.getElementById('notes-tools-toc'),
+    toolsPanel: document.getElementById('notes-tools-panel'),
+    toolsMinimize: document.getElementById('notes-tools-minimize'),
+    toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
-    aiRestore: document.getElementById('notes-ai-restore')
+    toolsRestore: document.getElementById('notes-tools-restore')
 };
 
 const state = {
@@ -1683,11 +1702,221 @@ async function renderMarkdown() {
     // Enable column sorting on all tables
     setupTableSorting(elements.preview);
 
+    refreshToolsToC();
+
     // Re-apply find highlights if find bar is open and in viewer mode
     if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
             performFind();
         }, 0);
+    }
+}
+
+function getToCHeadingKey(level, text) {
+    return `${String(level)}::${String(text || '').trim().toLowerCase()}`;
+}
+
+function getHeadingDescriptors(root) {
+    const headings = Array.from(root?.querySelectorAll?.('h1, h2, h3, h4, h5, h6') || []);
+    const seen = new Map();
+    const descriptors = [];
+
+    headings.forEach((heading) => {
+        const level = Number.parseInt(String(heading.tagName).slice(1), 10) || 1;
+        const text = String(heading.textContent || '').trim();
+        if (!text) {
+            return;
+        }
+
+        const key = getToCHeadingKey(level, text);
+        const occurrence = seen.get(key) || 0;
+        seen.set(key, occurrence + 1);
+
+        descriptors.push({
+            heading,
+            level,
+            text,
+            occurrence,
+            anchor: String(heading.id || ''),
+        });
+    });
+
+    return descriptors;
+}
+
+function setToolsToCActiveItem(activeEntry) {
+    const tocItems = elements.toolsToC?.querySelectorAll('.notes-tools-toc-item') || [];
+    let activeButton = null;
+
+    for (const item of tocItems) {
+        const isActive = Boolean(activeEntry)
+            && String(item.dataset.level) === String(activeEntry.level)
+            && String(item.dataset.text || '').trim().toLowerCase() === String(activeEntry.text || '').trim().toLowerCase()
+            && String(item.dataset.occurrence) === String(activeEntry.occurrence);
+
+        item.dataset.active = isActive ? 'true' : 'false';
+        if (isActive) {
+            activeButton = item;
+        }
+    }
+
+    if (activeButton) {
+        activeButton.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function clearToolsToCHighlight(resetScroll = false) {
+    setToolsToCActiveItem(null);
+    if (resetScroll && elements.toolsToC) {
+        elements.toolsToC.scrollTop = 0;
+    }
+}
+
+function getToolsToCModeContext() {
+    if (state.viewMode === 'jupyter') {
+        return {
+            scrollContainer: elements.jupyterWrap,
+            headingRoot: elements.jupyter,
+        };
+    }
+
+    if (state.viewMode === 'viewer') {
+        return {
+            scrollContainer: elements.previewWrap,
+            headingRoot: elements.preview,
+        };
+    }
+
+    return null;
+}
+
+function syncToolsToCHighlightForMode() {
+    if (!elements.toolsToC || state.currentFileType !== 'markdown') {
+        clearToolsToCHighlight(true);
+        return;
+    }
+
+    if (state.viewMode !== 'viewer' && state.viewMode !== 'jupyter') {
+        clearToolsToCHighlight(true);
+        return;
+    }
+
+    const modeContext = getToolsToCModeContext();
+    if (!modeContext?.scrollContainer || !modeContext?.headingRoot) {
+        clearToolsToCHighlight(false);
+        return;
+    }
+
+    const descriptors = getHeadingDescriptors(modeContext.headingRoot);
+    if (!descriptors.length) {
+        clearToolsToCHighlight(false);
+        return;
+    }
+
+    const containerRect = modeContext.scrollContainer.getBoundingClientRect();
+    const threshold = containerRect.top + 28;
+
+    let activeEntry = null;
+    for (const descriptor of descriptors) {
+        const rect = descriptor.heading.getBoundingClientRect();
+        if (rect.top <= threshold) {
+            activeEntry = descriptor;
+        } else {
+            break;
+        }
+    }
+
+    if (!activeEntry) {
+        activeEntry = descriptors[0];
+    }
+
+    setToolsToCActiveItem(activeEntry);
+}
+
+function refreshToolsToC() {
+    if (!elements.toolsToC) {
+        return;
+    }
+
+    if (state.currentFileType !== 'markdown') {
+        elements.toolsToC.innerHTML = '';
+        return;
+    }
+
+    const descriptors = getHeadingDescriptors(elements.preview);
+    if (!descriptors.length) {
+        elements.toolsToC.innerHTML = '<div class="notes-tools-toc-empty">No headings found</div>';
+        clearToolsToCHighlight(false);
+        return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'notes-tools-toc-list';
+
+    descriptors.forEach((entry) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'notes-tools-toc-item';
+        item.dataset.level = String(entry.level);
+        item.dataset.text = entry.text;
+        item.dataset.occurrence = String(entry.occurrence);
+        item.dataset.anchor = String(entry.anchor || '');
+        item.style.paddingLeft = `${Math.max(0, entry.level - 1) * 14 + 10}px`;
+        item.textContent = entry.text;
+        list.appendChild(item);
+    });
+
+    if (!list.childElementCount) {
+        elements.toolsToC.innerHTML = '<div class="notes-tools-toc-empty">No headings found</div>';
+        return;
+    }
+
+    elements.toolsToC.replaceChildren(list);
+    syncToolsToCHighlightForMode();
+}
+
+function scrollToToolsToCHeading(entryButton) {
+    const modeContext = getToolsToCModeContext();
+    if (!modeContext?.headingRoot) {
+        return;
+    }
+
+    const headingId = String(entryButton?.dataset?.anchor || '');
+    if (headingId) {
+        const byId = modeContext.headingRoot.querySelector(`#${CSS.escape(headingId)}`);
+        if (byId) {
+            byId.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+    }
+
+    const level = Number.parseInt(String(entryButton?.dataset?.level || '1'), 10) || 1;
+    const text = String(entryButton?.dataset?.text || '').trim().toLowerCase();
+    const occurrence = Number.parseInt(String(entryButton?.dataset?.occurrence || '0'), 10) || 0;
+
+    const candidates = Array.from(modeContext.headingRoot.querySelectorAll(`h${level}`))
+        .filter((heading) => String(heading.textContent || '').trim().toLowerCase() === text);
+
+    const target = candidates[occurrence] || candidates[0];
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function updateToolsTabVisibility(fileType) {
+    const showToC = fileType === 'markdown';
+    if (elements.toolsTabToC) {
+        elements.toolsTabToC.style.display = showToC ? '' : 'none';
+    }
+
+    if (!showToC && elements.toolsTabToC?.getAttribute('aria-selected') === 'true') {
+        setToolsTab('ai');
+    }
+
+    if (showToC) {
+        refreshToolsToC();
+    } else {
+        clearToolsToCHighlight(true);
     }
 }
 
@@ -4074,6 +4303,7 @@ function setViewMode(mode) {
     }
 
     updateFindAvailability();
+    syncToolsToCHighlightForMode();
 
     if (isHex) {
         void ensureHexDumpForCurrentFile();
@@ -4731,6 +4961,8 @@ function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder action
  * Show/hide tabs based on file type
  */
 function updateTabVisibility(fileType) {
+    updateToolsTabVisibility(fileType);
+
     if (fileType === 'error') {
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
@@ -6507,7 +6739,7 @@ async function askAIAboutCurrentDocument() {
     ].join('\n');
 
     clearAIOutput();
-    setAIPanelCollapsed(false);
+    setToolsPanelCollapsed(false);
 
     try {
         await AskAI('notesDocument', fileName, aiContext);
@@ -7009,20 +7241,38 @@ EventsOn("noteComplete", (data) => {
     if (stopBtn) stopBtn.style.display = 'none';
 });
 
-// AI Panel Event Handlers
-function setAIPanelCollapsed(collapsed) {
+// Tools Panel Event Handlers
+function setToolsPanelCollapsed(collapsed) {
     const isCollapsed = collapsed === true;
-    elements.aiPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
-    elements.aiToggle.textContent = isCollapsed ? 'AI ▲' : 'AI ▼';
-    if (elements.aiRestore) {
-        elements.aiRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
+    elements.toolsPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
+    if (elements.toolsRestore) {
+        elements.toolsRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
     }
-    localStorage.setItem('notes-ai-panel-collapsed', String(isCollapsed));
+    localStorage.setItem('notes-tools-panel-collapsed', String(isCollapsed));
 }
 
-function toggleAIPanel() {
-    const isCollapsed = elements.aiPanel.dataset.collapsed === 'true';
-    setAIPanelCollapsed(!isCollapsed);
+function toggleToolsPanel() {
+    const isCollapsed = elements.toolsPanel.dataset.collapsed === 'true';
+    setToolsPanelCollapsed(!isCollapsed);
+}
+
+function setToolsTab(tabName) {
+    const nextTab = String(tabName || '').trim().toLowerCase();
+    if (!nextTab) {
+        return;
+    }
+
+    const tabButtons = elements.toolsTabs?.querySelectorAll('[role="tab"]') || [];
+    for (const button of tabButtons) {
+        const isActive = button.dataset.tab === nextTab;
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+
+    const panes = elements.toolsPanel?.querySelectorAll('.notes-tools-pane') || [];
+    for (const pane of panes) {
+        const isActive = pane.dataset.tab === nextTab;
+        pane.dataset.active = isActive ? 'true' : 'false';
+    }
 }
 
 function clearAIOutput() {
@@ -7042,9 +7292,9 @@ EventsOn("aiResponseStream", (chunk) => {
     const text = String(chunk ?? '');
     if (text) {
         appendAIText(text);
-        // Auto-expand AI panel when response starts
-        if (elements.aiPanel.dataset.collapsed === 'true') {
-            toggleAIPanel();
+        // Auto-expand Tools panel when response starts
+        if (elements.toolsPanel.dataset.collapsed === 'true') {
+            toggleToolsPanel();
         }
     }
 });
@@ -7094,19 +7344,51 @@ EventsOn('fileActionDialog', (payload) => {
     }
 });
 
-// Setup AI panel listeners
-if (elements.aiToggle) {
-    elements.aiToggle.addEventListener('click', toggleAIPanel);
+// Setup Tools panel listeners
+if (elements.toolsMinimize) {
+    elements.toolsMinimize.addEventListener('click', toggleToolsPanel);
 }
-if (elements.aiClear) {
-    elements.aiClear.addEventListener('click', clearAIOutput);
+if (elements.toolsClear) {
+    elements.toolsClear.addEventListener('click', clearAIOutput);
 }
-if (elements.aiRestore) {
-    elements.aiRestore.addEventListener('click', () => setAIPanelCollapsed(false));
+if (elements.toolsRestore) {
+    elements.toolsRestore.addEventListener('click', () => setToolsPanelCollapsed(false));
+}
+if (elements.toolsTabAI) {
+    elements.toolsTabAI.addEventListener('click', () => setToolsTab('ai'));
+}
+if (elements.toolsTabToC) {
+    elements.toolsTabToC.addEventListener('click', () => setToolsTab('toc'));
+}
+if (elements.toolsToC) {
+    elements.toolsToC.addEventListener('click', (event) => {
+        const tocButton = event.target.closest('.notes-tools-toc-item');
+        if (!tocButton) {
+            return;
+        }
+
+        if (state.viewMode !== 'viewer' && state.viewMode !== 'jupyter') {
+            return;
+        }
+
+        scrollToToolsToCHeading(tocButton);
+    });
+}
+if (elements.previewWrap) {
+    elements.previewWrap.addEventListener('scroll', () => {
+        syncToolsToCHighlightForMode();
+    });
+}
+if (elements.jupyterWrap) {
+    elements.jupyterWrap.addEventListener('scroll', () => {
+        syncToolsToCHighlightForMode();
+    });
 }
 
+setToolsTab('ai');
+
 // Always start minimized on application launch.
-setAIPanelCollapsed(true);
+setToolsPanelCollapsed(true);
 
 function applyWindowStyle(result) {
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
@@ -7881,7 +8163,7 @@ function applyWindowStyle(result) {
             padding: 8px;
         }
 
-        .notes-ai-panel {
+        .notes-tools-panel {
             display: flex;
             flex-direction: column;
             border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.5);
@@ -7889,12 +8171,12 @@ function applyWindowStyle(result) {
             overflow: hidden;
         }
 
-        .notes-ai-panel[data-collapsed="false"] {
+        .notes-tools-panel[data-collapsed="false"] {
             flex: 0 1 35%;
             overflow-y: auto;
         }
 
-        .notes-ai-panel[data-collapsed="true"] {
+        .notes-tools-panel[data-collapsed="true"] {
             flex: 0 0 0;
             min-height: 0;
             border-top: 0;
@@ -7902,7 +8184,7 @@ function applyWindowStyle(result) {
             pointer-events: none;
         }
 
-        .notes-ai-restore {
+        .notes-tools-restore {
             display: none;
             position: absolute;
             right: 12px;
@@ -7919,23 +8201,56 @@ function applyWindowStyle(result) {
             justify-content: center;
         }
 
-        .notes-ai-restore:hover {
+        .notes-tools-restore:hover {
             border-color: var(--accent);
             background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
         }
 
-        .notes-ai-header {
+        .notes-tools-header {
             display: flex;
-            gap: 8px;
             align-items: center;
-            padding: 8px 12px;
+            justify-content: space-between;
+            padding: 0 8px;
             background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.1);
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             flex-shrink: 0;
         }
 
-        .notes-ai-header button {
-            border-radius: 3px;
+        .tools-tabs-container {
+            display: flex;
+            gap: 8px;
+            padding-top: 6px;
+        }
+
+        .tools-tab {
+            border-radius: 0;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--fg);
+            padding: 6px 12px;
+            cursor: pointer;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            border: 1px solid;
+            border-bottom: 0;
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+        }
+
+        .tools-tab[aria-selected="true"] {
+            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        }
+
+        .tools-tab[aria-selected="false"] {
+            opacity: 0.85;
+        }
+
+        .tools-tab:hover {
+            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        }
+
+        .notes-tools-minimize,
+        .notes-tools-clear {
             border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
             background: transparent;
             color: var(--fg);
@@ -7943,14 +8258,91 @@ function applyWindowStyle(result) {
             cursor: pointer;
             font-size: ${result.fontSize - 2}px;
             transition: all 0.2s ease;
+            border-radius: 3px;
         }
 
-        .notes-ai-header button:hover {
+        .notes-tools-minimize {
+            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 900;
+        }
+
+        .notes-tools-minimize:hover,
+        .notes-tools-clear:hover {
             border-color: var(--fg);
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
         }
 
-        #notes-ai-clear:hover {
+        .notes-tools-pane {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .notes-tools-pane[data-active="false"] {
+            display: none;
+        }
+
+        .notes-tools-toc {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 8px 0;
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        .notes-tools-toc-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notes-tools-toc-item {
+            border: 0;
+            border-left: 2px solid transparent;
+            background: transparent;
+            color: var(--fg);
+            text-align: left;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: ${result.fontSize - 1}px;
+            line-height: 1.35;
+        }
+
+        .notes-tools-toc-item:hover {
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
+            border-left-color: var(--accent);
+        }
+
+        .notes-tools-toc-item[data-active="true"] {
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.24);
+            border-left-color: var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .notes-tools-toc-empty {
+            padding: 12px;
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        .notes-tools-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .notes-tools-pane-header {
+            display: flex;
+            justify-content: flex-end;
+            padding: 8px 12px;
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05);
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            flex-shrink: 0;
+        }
+
+        #notes-tools-clear:hover {
             color: var(--error);
             border-color: var(--error);
         }
