@@ -19,6 +19,10 @@ const (
 	compactOpTable
 )
 
+const (
+	compactFlagFolded int32 = 1 << 5
+)
+
 type DrawOpTuple []any
 
 func encodeDrawCommands(commands []DrawCommand) []DrawOpTuple {
@@ -49,7 +53,11 @@ func encodeDrawCommands(commands []DrawCommand) []DrawOpTuple {
 			ops = append(ops, DrawOpTuple{compactOpRectColour, cmd.X, cmd.Y, cmd.Width, cmd.Height, packColour24(cmd.Bg)})
 
 		case DrawOpBlockChrome:
-			ops = append(ops, DrawOpTuple{compactOpBlockChrome, cmd.X, cmd.Y, cmd.Height, cmd.EndX, packColour24(cmd.Fg)})
+			flags := int32(0)
+			if cmd.Folded {
+				flags |= compactFlagFolded
+			}
+			ops = append(ops, DrawOpTuple{compactOpBlockChrome, cmd.X, cmd.Y, cmd.Height, cmd.EndX, packColour24(cmd.Fg), flags})
 
 		case DrawOpGaugeH:
 			ops = append(ops, DrawOpTuple{compactOpGaugeH, cmd.X, cmd.Y, cmd.Width, cmd.Value, cmd.Max, packColour24(cmd.Fg)})

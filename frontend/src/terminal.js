@@ -44,7 +44,7 @@ const REDRAW_OP = {
 };
 
 const REDRAW_FLAG = {
-    FOLDED: 1 << 7,
+    FOLDED: 1 << 5,
 };
 
 // SGR_FLAG mirrors the Go types.SgrFlag iota bit layout.

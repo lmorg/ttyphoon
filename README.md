@@ -11,7 +11,7 @@
   - [Tmux Support](#tmux-support)
   - [Highlighted Search Results](#highlighted-search-results)
   - [Markdown Viewer](#markdown-viewer)
-  - [Notes LSP](#notes-lsp)
+  - [Programming Language Tools (LSP)](#programming-language-tools-lsp)
   - [Config Files](#config-files)
   - [Swagger](#swagger)
   - [Non-Intrusive AI](#non-intrusive-ai)
@@ -131,7 +131,7 @@ And you can even execute the code blocks inline. Bringing you the flexibility of
 
 ![markdown](images/jupyter.png)
 
-### Programming Language toos (LSP)
+### Programming Language Tools (LSP)
 
 Notes can attach a language server when the current file type resolves to a configured entry in `Notes.LSP`.
 

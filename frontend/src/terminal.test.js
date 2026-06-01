@@ -229,9 +229,9 @@ describe('terminal compact redraw decoder', () => {
         drawBlockChromeMock.mockClear();
 
         // [op=5(block_chrome), x, y, height, endX, fg24, flags]
-        // flags: folded only = 1 << 7 = 128
+        // flags: folded only = 1 << 5 = 32
         redraw([
-            [5, 1, 4, 3, 20, 0x778899, 128],
+            [5, 1, 4, 3, 20, 0x778899, 32],
         ]);
 
         expect(drawBlockChromeMock).toHaveBeenCalledTimes(1);
