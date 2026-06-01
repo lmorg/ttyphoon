@@ -353,6 +353,7 @@ import {
 } from './swagger-utils.js';
 import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
 import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
+import { updateMarkdownTableOfContentsText } from './markdown_toc.js';
 import {
     evaluateTableFormula,
     isTableFormula,
@@ -2859,6 +2860,38 @@ function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
         }
         // Don't re-render jupyter here to avoid resetting checkbox focus
     }
+}
+
+function updateMarkdownTableOfContents() {
+    if (state.currentFileType !== 'markdown') {
+        return;
+    }
+
+    const source = String(elements.editor.value || '');
+    const result = updateMarkdownTableOfContentsText(source);
+    if (!result.updated) {
+        notifyTerminal('No headings found to generate a table of contents.', 'info');
+        return;
+    }
+
+    elements.editor.value = result.text;
+    if (usesCodeEditorDecorations()) {
+        refreshEditorLanguage(state.currentFile, elements.editor.value);
+    }
+    hideLspHoverTooltip();
+    hideLspCompletion();
+    elements.editor.focus();
+    elements.editor.setSelectionRange(0, 0);
+    elements.editor.scrollTop = 0;
+    elements.editor.scrollLeft = 0;
+    if (usesCodeEditorDecorations()) {
+        syncEditorScrollDecorations();
+    }
+    setDirty(true);
+    scheduleRender();
+    scheduleAutoSave();
+    saveFile();
+    notifyTerminal('Table of contents updated.', 'info');
 }
 
 function updateMarkdownCodeBlock(blockIndex, newContent) {
@@ -10301,6 +10334,13 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                 onSelect: () => {
                     elements.editor.focus();
                     document.execCommand('insertText', false, '| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
+                },
+            },
+            {
+                title: 'Update Table of Contents',
+                icon: 0xf0ae,
+                onSelect: () => {
+                    updateMarkdownTableOfContents();
                 },
             },
         );
