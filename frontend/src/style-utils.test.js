@@ -5,6 +5,7 @@ import { getAllMarkdownStyles, getSwaggerUIStyles } from './style-utils';
 const colors = {
     fg: { Red: 230, Green: 237, Blue: 243 },
     bg: { Red: 30, Green: 34, Blue: 40 },
+    accent: { Red: 120, Green: 180, Blue: 240 },
     green: { Red: 61, Green: 127, Blue: 199 },
     red: { Red: 220, Green: 80, Blue: 80 },
     cyan: { Red: 90, Green: 180, Blue: 220 },

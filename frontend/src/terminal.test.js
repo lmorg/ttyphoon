@@ -13,6 +13,7 @@ const getWindowStyleMock = vi.fn(async () => ({
     colors: {
         bg: { Red: 10, Green: 20, Blue: 30 },
         fg: { Red: 220, Green: 220, Blue: 220 },
+        accent: { Red: 120, Green: 180, Blue: 240 },
         yellow: { Red: 220, Green: 180, Blue: 40 },
         selection: { Red: 80, Green: 120, Blue: 200 },
         green: { Red: 70, Green: 180, Blue: 110 },

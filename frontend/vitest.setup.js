@@ -34,6 +34,14 @@ if (typeof window !== 'undefined') {
     });
 }
 
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: () => {},
+        configurable: true,
+        writable: true,
+    });
+}
+
 afterEach(() => {
     document.body.innerHTML = '';
     localStorageMock.clear();
