@@ -472,6 +472,41 @@ export namespace main {
 
 }
 
+export namespace notes {
+	
+	export class DocumentCacheT {
+	    DocumentTab: string;
+	    ToolsOpen: boolean;
+	    ToolsTab: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DocumentCacheT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.DocumentTab = source["DocumentTab"];
+	        this.ToolsOpen = source["ToolsOpen"];
+	        this.ToolsTab = source["ToolsTab"];
+	    }
+	}
+	export class ProjectCacheT {
+	    FileListCollapsed: Record<string, Array<string>>;
+	    LastDocument: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectCacheT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.FileListCollapsed = source["FileListCollapsed"];
+	        this.LastDocument = source["LastDocument"];
+	    }
+	}
+
+}
+
 export namespace swagger {
 	
 	export class RequestT {

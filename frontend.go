@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -50,12 +51,14 @@ type WApp struct {
 	ctx           context.Context
 	mdBaseDir     string
 	projRoot      string
+	groupName     string
 	usrNotesDir   string
 	homeDir       string
 	globalNotes   string
 	visible       bool
 	notesKills    map[string]func()
 	notesStickies map[string]types.Notification
+	notesMu       sync.Mutex
 	lspStartErrs  map[string]string
 	lspManager    *lsp.Manager
 	lspDocs       *lsp.DocumentStore
@@ -545,12 +548,16 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 		default:
 			notifType = types.NOTIFY_INFO
 		}
+		a.notesMu.Lock()
 		if existing, ok := a.notesStickies[id]; ok {
 			existing.Close()
 			delete(a.notesStickies, id)
 		}
+		a.notesMu.Unlock()
 		sticky := renderer.DisplaySticky(notifType, message, func() {})
+		a.notesMu.Lock()
 		a.notesStickies[id] = sticky
+		a.notesMu.Unlock()
 
 	case "terminal-sticky-update":
 		id := strings.TrimSpace(parameters["id"])
@@ -558,7 +565,10 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 		if id == "" || message == "" {
 			return
 		}
-		if sticky, ok := a.notesStickies[id]; ok {
+		a.notesMu.Lock()
+		sticky, ok := a.notesStickies[id]
+		a.notesMu.Unlock()
+		if ok {
 			sticky.SetMessage(message)
 		}
 
@@ -567,10 +577,12 @@ func (a *WApp) SendIpc(eventName string, parameters map[string]string) {
 		if id == "" {
 			return
 		}
+		a.notesMu.Lock()
 		if sticky, ok := a.notesStickies[id]; ok {
 			sticky.Close()
 			delete(a.notesStickies, id)
 		}
+		a.notesMu.Unlock()
 	}
 }
 
@@ -586,7 +598,9 @@ func (a *WApp) RunNote(id string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
 
 	ctx, kill := context.WithCancel(context.Background())
+	a.notesMu.Lock()
 	a.notesKills[id] = kill
+	a.notesMu.Unlock()
 
 	go jupyter.RunNote(ctx, id, a.projRoot, code, language, ch)
 
@@ -602,7 +616,9 @@ func (a *WApp) RunNote(id string, code, language string) {
 		runtime.EventsEmit(a.ctx, "noteComplete", map[string]string{
 			"blockId": id,
 		})
+		a.notesMu.Lock()
 		delete(a.notesKills, id)
+		a.notesMu.Unlock()
 	}()
 }
 
@@ -630,9 +646,12 @@ func (a *WApp) RunFunction(cellId, code string, parameters []string, language st
 }
 
 func (a *WApp) StopNote(id string) {
+	a.notesMu.Lock()
 	fn, ok := a.notesKills[id]
+	a.notesMu.Unlock()
 	if !ok {
 		log.Printf("cannot stop note %s because no kill function exists", id)
+		return
 	}
 
 	fn()
@@ -751,6 +770,7 @@ func (a *WApp) ListFiles() []string {
 	a.globalNotes = ulf.PathGlobalNotes
 	a.usrNotesDir = ulf.PathUserNotes
 	a.projRoot = ulf.PathProjectRoot
+	a.groupName = ulf.GroupName
 
 	return ulf.Files
 }
@@ -1460,6 +1480,22 @@ func (a *WApp) GetCurrentProject() string {
 
 func (a *WApp) NotesRecentFiles() []string {
 	return notes.GetRecentList(a.projRoot)
+}
+
+func (a *WApp) GetProjectCache() *notes.ProjectCacheT {
+	return notes.GetProjectCache(a.groupName)
+}
+
+func (a *WApp) SetProjectCache(ptr *notes.ProjectCacheT) {
+	notes.SetProjectCache(a.groupName, ptr)
+}
+
+func (a *WApp) GetDocumentCache(filename string) *notes.DocumentCacheT {
+	return notes.GetDocumentCache(a.projRoot, filename)
+}
+
+func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
+	notes.SetDocumentCache(a.projRoot, filename, ptr)
 }
 
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {

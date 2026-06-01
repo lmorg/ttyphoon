@@ -24,20 +24,63 @@ func DirGlobal() string {
 }
 
 func DirProjectRoot(cwd string) string {
-	if cwd == "" {
-		cwd, _ = os.Getwd()
+	home, _ := os.UserHomeDir()
+	path := dirProjectRoot(cwd, home)
+
+	if path == home {
+		path = xdg.Home + "/Documents/"
 	}
 
-	pwd := cwd
-	home, _ := os.UserHomeDir()
-	for {
-		if _, err := os.Stat(filepath.Join(cwd, ".git")); err == nil {
-			return pwd
-		}
-		parent := filepath.Dir(cwd)
-		if parent == pwd || parent == home {
+	return path
+}
+
+// DirProjectRoot finds the root of a git project by searching for a .git directory
+// starting from cwd and moving up the directory tree.
+// Returns:
+// - The directory containing .git if found
+// - The original cwd if root or home directory is reached without finding .git
+// - Empty string if os.Getwd() fails when cwd is empty
+func dirProjectRoot(cwd string, home string) string {
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
 			return ""
 		}
-		pwd = parent
 	}
+
+	current := cwd
+
+	for {
+		// Check if current directory contains .git
+		if hasGitDirectory(current) {
+			return current
+		}
+
+		// Move to parent directory
+		parent := filepath.Dir(current)
+
+		// Check stopping conditions
+		if parent == current {
+			// Reached filesystem root (Dir("/") returns "/")
+			return cwd
+		}
+		if current == home {
+			// Reached home directory without finding .git
+			return cwd
+		}
+
+		// Move up one level
+		current = parent
+	}
+}
+
+// hasGitDirectory checks if a directory contains a .git subdirectory
+func hasGitDirectory(path string) bool {
+	gitPath := filepath.Join(path, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

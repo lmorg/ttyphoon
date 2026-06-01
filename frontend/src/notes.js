@@ -8,6 +8,8 @@ import {
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
     ResolveNotesLspLanguage, NotesRecentFiles,
+    GetProjectCache, SetProjectCache,
+    GetDocumentCache, SetDocumentCache,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesLspSemanticTokens,
@@ -523,8 +525,8 @@ app.innerHTML = `
                 <div id="notes-tools-panel" class="notes-tools-panel" data-collapsed="true">
                     <div class="notes-tools-header">
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
-                            <button id="notes-tools-tab-ai" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
+                                <button id="notes-tools-tab-ai" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                         </div>
                         <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
                     </div>
@@ -655,6 +657,7 @@ const state = {
     currentFileUri: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
+    suspendDocumentCacheSave: false,
     dirty: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -672,6 +675,8 @@ const state = {
         '$HISTORY': false,
     },
     expandedFolders: {},
+    currentProjectRoot: '',      // current project root, used to index FileListCollapsed map
+    lastRestoredDocument: null,  // sentinel: LastDocument value at the time it was last restored; null means never restored
     jupyterCodeBlocks: {},
     jupyterBlockCounter: 0,
     swaggerSpec: null,
@@ -687,6 +692,7 @@ const state = {
     hexRenderedFile: '',
     hexLoadingPromise: null,
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
+    markdownTableWordWrapMode: false,  // track table word wrap mode for View/Run modes
     lspChangeTimer: null,
     lspOpenFile: '',
     lspHoverTimer: null,
@@ -1910,7 +1916,9 @@ function updateToolsTabVisibility(fileType) {
         elements.toolsTabToC.style.display = showToC ? '' : 'none';
     }
 
-    if (!showToC && elements.toolsTabToC?.getAttribute('aria-selected') === 'true') {
+    if (showToC) {
+        setToolsTab('toc');
+    } else if (elements.toolsTabToC?.getAttribute('aria-selected') === 'true') {
         setToolsTab('ai');
     }
 
@@ -2053,6 +2061,17 @@ function wrapTablesForHorizontalScroll(container) {
         table.before(wrapper);
         wrapper.appendChild(table);
     });
+}
+
+function applyNotesTableWordWrapMode(container) {
+    if (!container) {
+        return;
+    }
+    if (state.markdownTableWordWrapMode) {
+        container.classList.add('notes-table-wordwrap-on');
+    } else {
+        container.classList.remove('notes-table-wordwrap-on');
+    }
 }
 
 function parseMarkdownTableRow(line) {
@@ -4347,6 +4366,7 @@ function setViewMode(mode) {
         performFind();
     }
 
+    saveDocumentCache();
     focusActiveEditorForViewMode();
 }
 
@@ -4800,11 +4820,77 @@ async function refreshFiles() {
     try {
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
+        state.currentProjectRoot = await GetCurrentProject();
+        await loadProjectCache();
         renderFileList();
     } catch (err) {
         setStatus('Failed to load file list.', true);
         console.error(err);
     }
+}
+
+async function loadProjectCache() {
+    try {
+        const cache = await GetProjectCache();
+        const collapsed = cache?.FileListCollapsed?.[state.currentProjectRoot] || [];
+        state.expandedFolders = {};
+        for (const key of collapsed) {
+            state.expandedFolders[key] = false;
+        }
+        const lastDoc = cache?.LastDocument || '';
+        if (lastDoc && lastDoc !== state.lastRestoredDocument) {
+            state.lastRestoredDocument = lastDoc;
+            await loadFile(lastDoc);
+        }
+    } catch (err) {
+        console.error('Failed to load project cache:', err);
+    }
+}
+
+async function restoreDocumentCache(file) {
+    const documentCache = await GetDocumentCache(file);
+    if (!documentCache) {
+        return;
+    }
+
+    if (documentCache.DocumentTab) {
+        setViewMode(documentCache.DocumentTab);
+
+        if (documentCache.DocumentTab === 'jupyter') {
+            await renderJupyterView();
+        } else if (documentCache.DocumentTab === 'swagger-view') {
+            renderSwaggerJsonView();
+        } else if (documentCache.DocumentTab === 'swagger-run') {
+            updateSwaggerLayoutMode();
+            renderSwaggerUI();
+        }
+    }
+
+    if (typeof documentCache.ToolsOpen === 'boolean') {
+        setToolsPanelCollapsed(!documentCache.ToolsOpen);
+    }
+    if (documentCache.ToolsTab) {
+        setToolsTab(documentCache.ToolsTab);
+    }
+}
+
+function saveProjectCache({ lastDocument } = {}) {
+    const collapsed = Object.entries(state.expandedFolders)
+        .filter(([, expanded]) => expanded === false)
+        .map(([key]) => key);
+    GetProjectCache().then((cache) => {
+        const updated = cache || { FileListCollapsed: {}, LastDocument: {} };
+        if (!updated.FileListCollapsed) {
+            updated.FileListCollapsed = {};
+        }
+        updated.FileListCollapsed[state.currentProjectRoot] = collapsed;
+        if (lastDocument !== undefined) {
+            updated.LastDocument = lastDocument;
+        }
+        return SetProjectCache(updated);
+    }).catch((err) => {
+        console.error('Failed to save project cache:', err);
+    });
 }
 
 function getFilteredFiles() {
@@ -4934,6 +5020,7 @@ function toggleCategory(category) {
 
 function toggleFolder(folderKey) {
     state.expandedFolders[folderKey] = !(state.expandedFolders[folderKey] !== false);
+    saveProjectCache();
     renderFileList();
 }
 
@@ -4962,6 +5049,7 @@ function setFolderExpansionState(folderKeys, expanded) {
     folderKeys.forEach((key) => {
         state.expandedFolders[key] = expanded;
     });
+    saveProjectCache();
 }
 
 function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder actions') {
@@ -5728,6 +5816,8 @@ async function loadFile(file) {
         return;
     }
 
+    state.suspendDocumentCacheSave = true;
+
     if (state.currentFile && state.currentFile !== file) {
         await closeOpenLspDocument();
         // Clear rendered diagnostics immediately while the new file loads.
@@ -5782,6 +5872,9 @@ async function loadFile(file) {
             enableImageContextMenus(elements.imageViewWrap);
 
             setViewMode('image-view');
+            await restoreDocumentCache(file);
+            state.suspendDocumentCacheSave = false;
+            saveDocumentCache();
             setDirty(false);
             renderFileList();
             if (elements.findBar.dataset.open === 'true') {
@@ -5967,7 +6060,15 @@ async function loadFile(file) {
         if (isCurrentFileLspEligible()) {
             await openCurrentLspDocument(elements.editor.value || '');
         }
+
+        await restoreDocumentCache(file);
+
+        state.suspendDocumentCacheSave = false;
+        saveDocumentCache();
+
+        saveProjectCache({ lastDocument: file });
     } catch (err) {
+        state.suspendDocumentCacheSave = false;
         if (stickyId) {
             closeStickyProgress(stickyId, `Failed to load ${getPathFileName(file)}`, 'error');
         }
@@ -7030,11 +7131,23 @@ function initRenderedNotesContextMenu(container, viewMode) {
         const insertItems = (table && isRunMode && container.contains(table))
             ? [...createTableInsertMenuItems(table, e.target, tableIndex), { title: '-' }]
             : [];
+        const wordWrapItems = (table && container.contains(table) && (viewMode === 'viewer' || viewMode === 'jupyter'))
+            ? [{
+                title: 'Word wrap table contents',
+                icon: state.markdownTableWordWrapMode ? 0xf00c : 0x20,
+                onSelect: () => {
+                    state.markdownTableWordWrapMode = !state.markdownTableWordWrapMode;
+                    applyNotesTableWordWrapMode(elements.preview);
+                    applyNotesTableWordWrapMode(elements.jupyter);
+                },
+            }, { title: '-' }]
+            : [];
 
         const allMenuItems = [
             createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
             { title: '-' },
             ...tableItems,
+            ...wordWrapItems,
             ...insertItems,
             createFindMenuItem('Find'),
             createAskAIDocumentMenuItem(),
@@ -7282,6 +7395,7 @@ function setToolsPanelCollapsed(collapsed) {
         elements.toolsRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
     }
     localStorage.setItem('notes-tools-panel-collapsed', String(isCollapsed));
+    saveDocumentCache();
 }
 
 function toggleToolsPanel() {
@@ -7306,6 +7420,27 @@ function setToolsTab(tabName) {
         const isActive = pane.dataset.tab === nextTab;
         pane.dataset.active = isActive ? 'true' : 'false';
     }
+
+    saveDocumentCache();
+}
+
+function saveDocumentCache() {
+    if (!state.currentFile || state.suspendDocumentCacheSave) {
+        return;
+    }
+    const toolsCollapsed = elements.toolsPanel?.dataset?.collapsed === 'true';
+    const selectedToolsTab = elements.toolsTabs
+        ? Array.from(elements.toolsTabs.querySelectorAll('[role="tab"]'))
+            .find((tab) => tab.getAttribute('aria-selected') === 'true')?.dataset?.tab || ''
+        : '';
+
+    SetDocumentCache(state.currentFile, {
+        DocumentTab: state.viewMode || '',
+        ToolsOpen: !toolsCollapsed,
+        ToolsTab: selectedToolsTab,
+    }).catch((err) => {
+        console.error('Failed to save document cache:', err);
+    });
 }
 
 function clearAIOutput() {
@@ -8086,7 +8221,7 @@ function applyWindowStyle(result) {
             flex: 1;
             display: none;
             min-height: 0;
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            border-bottom: 0;
         }
 
         #notes-preview-wrap,
@@ -8630,6 +8765,41 @@ function applyWindowStyle(result) {
             max-width: 100%;
             overflow-x: auto;
             overflow-y: hidden;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table {
+            width: 100%;
+            min-width: 100%;
+            table-layout: fixed;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th,
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word;
+            max-width: 0;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td > *,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td > * {
+            white-space: inherit;
+            overflow-wrap: inherit;
+            word-break: inherit;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td code,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word;
         }
 
         #notes-find-bar {

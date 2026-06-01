@@ -14,6 +14,7 @@ type ListFilesReturnT struct {
 	PathProjectRoot string
 	PathGlobalNotes string
 	PathUserNotes   string
+	GroupName       string // tmux window name (tab name)
 	Files           []string
 }
 
@@ -27,7 +28,8 @@ func ListFiles(renderer types.Renderer) *ListFilesReturnT {
 
 	ulf.PathProjectRoot = DirProjectRoot(tile.Pwd())
 	ulf.PathGlobalNotes = DirGlobal()
-	ulf.PathUserNotes = ulf.PathGlobalNotes + tile.GroupName() + "/"
+	ulf.GroupName = tile.GroupName()
+	ulf.PathUserNotes = ulf.PathGlobalNotes + ulf.GroupName + "/"
 
 	cache.Read(cache.NS_NOTESW_FILES, ulf.PathUserNotes, &ulf.Files)
 	cache.Write(cache.NS_NOTESW_FILES, ulf.PathUserNotes, &ulf.Files, cache.Days(365))

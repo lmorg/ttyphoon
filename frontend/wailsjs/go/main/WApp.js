@@ -46,6 +46,10 @@ export function GetCustomRegexp() {
   return window['go']['main']['WApp']['GetCustomRegexp']();
 }
 
+export function GetDocumentCache(arg1) {
+  return window['go']['main']['WApp']['GetDocumentCache'](arg1);
+}
+
 export function GetFile(arg1) {
   return window['go']['main']['WApp']['GetFile'](arg1);
 }
@@ -64,6 +68,10 @@ export function GetImage(arg1) {
 
 export function GetLanguageDescriptions(arg1) {
   return window['go']['main']['WApp']['GetLanguageDescriptions'](arg1);
+}
+
+export function GetProjectCache() {
+  return window['go']['main']['WApp']['GetProjectCache']();
 }
 
 export function GetTerminalGlyphSize() {
@@ -216,6 +224,14 @@ export function SendIpc(arg1, arg2) {
 
 export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
+}
+
+export function SetDocumentCache(arg1, arg2) {
+  return window['go']['main']['WApp']['SetDocumentCache'](arg1, arg2);
+}
+
+export function SetProjectCache(arg1) {
+  return window['go']['main']['WApp']['SetProjectCache'](arg1);
 }
 
 export function ShowCommandPalette() {
