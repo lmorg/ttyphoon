@@ -17,7 +17,7 @@ func (wr *webkitRender) DrawGaugeH(tile types.Tile, topLeft *types.XY, width int
 	wr.enqueueDrawCommand(DrawCommand{
 		Op:    DrawOpGaugeH,
 		X:     topLeft.X + tile.Left() + 1,
-		Y:     topLeft.Y + tile.Top(),
+		Y:     topLeft.Y + tile.Top() - 1,
 		Width: width,
 		Value: int32(value),
 		Max:   int32(max),
@@ -40,8 +40,8 @@ func (wr *webkitRender) DrawGaugeV(tile types.Tile, topLeft *types.XY, height in
 	wr.enqueueDrawCommand(DrawCommand{
 		Op:     DrawOpGaugeV,
 		X:      topLeft.X + tile.Left(),
-		Y:      topLeft.Y + tile.Top(),
-		Height: height,
+		Y:      topLeft.Y + tile.Top() - 1,
+		Height: height + 1,
 		Value:  int32(value),
 		Max:    int32(max),
 		Fg:     c,

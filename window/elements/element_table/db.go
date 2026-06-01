@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -40,6 +41,11 @@ func (el *ElementTable) createDb() error {
 		return fmt.Errorf("could not open database: %s", err.Error())
 	}
 
+	// SQLite in-memory databases are per-connection. Pinning the pool to a
+	// single connection ensures every query sees the same database, preventing
+	// "no such table" errors when the pool hands out a fresh connection.
+	el.db.SetMaxOpenConns(1)
+
 	return nil
 }
 
@@ -50,7 +56,7 @@ func (el *ElementTable) createTable(headings []string) error {
 		return fmt.Errorf("cannot create table '%s': no titles supplied", el.name)
 	}
 
-	el.name = "csv"
+	el.name = fmt.Sprintf("term_%d", time.Now().UnixMicro())
 
 	var sHeadings string
 	for i := range headings {

@@ -1,10 +1,20 @@
 package element_table
 
 import (
+	"fmt"
+	"os"
+	"runtime/debug"
+
 	"github.com/lmorg/ttyphoon/types"
 )
 
 func (el *ElementTable) Draw(pos *types.XY) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "panic in ElementTable.Draw: %v\n%s\n", r, debug.Stack())
+		}
+	}()
+
 	pos.X += el.renderOffset
 
 	cell := &types.Cell{Sgr: &types.Sgr{}}
@@ -55,7 +65,7 @@ skipOrderGlyph:
 
 	el.renderer.DrawTable(el.tile, pos, int32(len(el.table)), el.boundaries)
 
-	el.renderScrollbars(pos.Y, types.SGR_COLOR_BACKGROUND)
+	el.renderScrollbars(pos.Y, types.SGR_COLOR_FOREGROUND)
 }
 
 func (el *ElementTable) renderScrollbars(posY int32, c *types.Colour) {
@@ -90,6 +100,6 @@ func (el *ElementTable) renderScrollbarVertical(posY int32, c *types.Colour) {
 	if height >= el.lines {
 		return
 	}
-	
+
 	el.renderer.DrawGaugeV(el.tile, topleft, height-2, int(el.limitOffset+el.size.Y), int(el.lines), c)
 }
