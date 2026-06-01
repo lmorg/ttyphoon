@@ -14,13 +14,14 @@ export function drawGauge(offCtx, getCellSize, cmd) {
     if (cmd.op === 'gauge_h') {
         const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 1;
         const fullW = widthCells * cellWidth;
+        const gaugeY = y + cellHeight - cellWidth;
 
-        offCtx.globalAlpha = 0.13;
+        offCtx.globalAlpha = 0.15;
         offCtx.fillStyle = base;
-        offCtx.fillRect(x, y, fullW, cellHeight);
+        offCtx.fillRect(x, gaugeY, fullW, cellWidth);
 
-        offCtx.globalAlpha = 0.75;
-        offCtx.fillRect(x, y, Math.floor(fullW * ratio), cellHeight);
+        offCtx.globalAlpha = 0.35;
+        offCtx.fillRect(x, gaugeY, Math.floor(fullW * ratio), cellWidth);
         offCtx.globalAlpha = 1;
         return;
     }
@@ -29,12 +30,12 @@ export function drawGauge(offCtx, getCellSize, cmd) {
         const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
         const fullH = heightCells * cellHeight;
 
-        offCtx.globalAlpha = 0.13;
+        offCtx.globalAlpha = 0.15;
         offCtx.fillStyle = base;
         offCtx.fillRect(x, y, cellWidth, fullH);
 
         const fillH = Math.floor(fullH * ratio);
-        offCtx.globalAlpha = 0.75;
+        offCtx.globalAlpha = 0.35;
         offCtx.fillRect(x, y, cellWidth, fillH);
         offCtx.globalAlpha = 1;
     }

@@ -124,6 +124,7 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 		id:   info.Id,
 		tmux: tmux,
 		buf:  runebuf.New(),
+		pwd:  info.Path,
 	}
 
 	virtualterm.NewTerminal(

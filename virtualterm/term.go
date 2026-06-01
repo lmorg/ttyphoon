@@ -149,14 +149,9 @@ func NewTerminal(tile types.Tile, renderer types.Renderer, size *types.XY, visib
 		host = "localhost"
 	}
 
-	pwd, err := os.Getwd()
-	if err != nil {
-		pwd = tile.Pwd()
-	}
-
 	term._rowSource = &types.RowSource{
 		Host: host,
-		Pwd:  pwd,
+		Pwd:  tile.Pwd(),
 	}
 
 	term.reset(size)
