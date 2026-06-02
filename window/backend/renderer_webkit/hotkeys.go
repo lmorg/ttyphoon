@@ -101,6 +101,19 @@ func (wr *webkitRender) hotkeys() {
 			desc = "Re-Open recent file..."
 			icon = 0xf07c
 
+		case "LspMenu":
+			fn = wr.NotesLspOptions
+			desc = "LSP Menu..."
+			icon = 0xf0c9
+		case "LspFormatDocument":
+			fn = wr.NotesLspFormatDocument
+			desc = "LSP: format document"
+			icon = 0xf121
+		case "LspJumpToSymbol":
+			fn = wr.NotesLspGoToSymbol
+			desc = "LSP: jump to symbol..."
+			icon = 0xf121
+
 		default:
 			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))
 			continue

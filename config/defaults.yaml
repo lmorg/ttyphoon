@@ -37,6 +37,10 @@ Hotkeys:
     "F3::c":  SearchClear
     #"F3::a": SearchAIPrompts
     "F3::h":  SearchCommandLines
+    "F11::F11": LspMenu
+    "F11::f": LspFormatDocument
+    "F11::j": LspJumpToSymbol
+
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.

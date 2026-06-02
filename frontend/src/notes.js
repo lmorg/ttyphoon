@@ -707,9 +707,11 @@ const state = {
     lspCompletionItems: [],
     lspCompletionIndex: 0,
     lspCompletionVisible: false,
+    lastEditorInputAt: 0,
 };
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
+const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
 const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
@@ -5891,6 +5893,7 @@ async function loadFile(file) {
 
         state.currentFile = file;
         state.currentFileUri = await resolveNotesFileUri(file);
+        clearCurrentFileLspDiagnosticsCache();
         emitCurrentFileName();
         await refreshFileMetaMarkdown(file);
 
@@ -7355,6 +7358,72 @@ EventsOn("notesCreateAndOpen", params => {
 EventsOn("notesUpdate", group => {
     elements.title.innerText = group;
     refreshFiles();
+});
+
+EventsOn("notesFileChanged", async () => {
+    if (!state.currentFile) {
+        return;
+    }
+
+    if (state.dirty) {
+        setStatus('File changed on disk but has unsaved edits in Notes.', true);
+        return;
+    }
+
+    try {
+        await loadFile(state.currentFile);
+    } catch (err) {
+        setStatus(`Failed to reload ${state.currentFile}.`, true);
+        console.error(err);
+    }
+});
+
+EventsOn("notesShowLspOptions", async () => {
+    if (!isCurrentFileLspEligible() || !elements.editor) {
+        notifyTerminal("No Language Server Protocol (LSP) is not supported for this file type", "warn");
+        return;
+    }
+
+    const languageID = await ResolveNotesLspLanguage(state.currentFile);
+    if (!languageID) {
+        notifyTerminal("No Language Server Protocol (LSP) has been defined for this file type", "warn");
+        return;
+    }
+
+    const rect = elements.editor.getBoundingClientRect();
+    const x = Math.max(rect.left + 24, Math.min(rect.right - 24, rect.left + rect.width / 2));
+    const y = Math.max(rect.top + 24, Math.min(rect.bottom - 24, rect.top + rect.height / 2));
+    await showEditorLspOptionsMenu(x, y);
+});
+
+EventsOn("notesRunLspFormatDocument", async () => {
+    if (!isCurrentFileLspEligible()) {
+        notifyTerminal("No Language Server Protocol (LSP) is not supported for this file type", "warn");
+        return;
+    }
+
+    const languageID = await ResolveNotesLspLanguage(state.currentFile);
+    if (!languageID) {
+        notifyTerminal("No Language Server Protocol (LSP) has been defined for this file type", "warn");
+        return;
+    }
+
+    await formatCurrentLspDocument();
+});
+
+EventsOn("notesRunLspGoToSymbol", async () => {
+    if (!isCurrentFileLspEligible()) {
+        notifyTerminal("No Language Server Protocol (LSP) is not supported for this file type", "warn");
+        return;
+    }
+
+    const languageID = await ResolveNotesLspLanguage(state.currentFile);
+    if (!languageID) {
+        notifyTerminal("No Language Server Protocol (LSP) has been defined for this file type", "warn");
+        return;
+    }
+
+    await goToCurrentLspSymbol();
 });
 
 EventsOn("noteRun", (data) => {
@@ -9625,6 +9694,13 @@ function clearVisibleLspDiagnostics() {
     hideLspCompletion();
 }
 
+function clearCurrentFileLspDiagnosticsCache() {
+    if (!state.currentFileUri) {
+        return;
+    }
+    lspDiagnosticsStore.delete(state.currentFileUri);
+}
+
 /**
  * Apply diagnostic decorations to the editor gutter and highlight overlay.
  * Squiggles are rendered by wrapping the affected character range in a
@@ -10074,6 +10150,11 @@ EventsOn('notesLspDiagnostics', payload => {
 
     lspDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
     if (data.uri === state.currentFileUri) {
+        // While the user is actively typing, avoid repainting diagnostics from an
+        // older editor snapshot; wait for a short idle window.
+        if (state.lspChangeTimer || (Date.now() - state.lastEditorInputAt) < LSP_DIAGNOSTIC_RENDER_IDLE_MS) {
+            return;
+        }
         renderLspEditorDecorations();
     }
 });
@@ -10304,6 +10385,7 @@ if (elements.editor) {
 
     elements.editor.addEventListener('input', () => {
         editorInputSequence += 1;
+        state.lastEditorInputAt = Date.now();
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
@@ -10311,6 +10393,8 @@ if (elements.editor) {
         state.lspSemanticTokens = [];
         state.lspInlayRequestId += 1;
         state.lspInlayHints = [];
+        clearCurrentFileLspDiagnosticsCache();
+        clearVisibleLspDiagnostics();
 
         const cursor = elements.editor.selectionStart || 0;
         const value = elements.editor.value || '';

@@ -1,4 +1,4 @@
-package metamd
+package meta
 
 import (
 	"bytes"

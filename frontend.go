@@ -24,8 +24,9 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
-	metamd "github.com/lmorg/ttyphoon/tools/meta-md"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file/meta"
+	"github.com/lmorg/ttyphoon/utils/file/watcher"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/lsp"
@@ -37,7 +38,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
-	mac "github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.design/x/clipboard"
@@ -698,6 +699,7 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 	}
 
 	a.mdBaseDir = filepath.Dir(filename)
+	watcher.Watch(filename)
 	err = notes.RecentListAdd(a.projRoot, requestedFilename)
 	if err != nil {
 		//log.Println(err)
@@ -1561,6 +1563,8 @@ func (a *WApp) SaveFile(filename, contents, projectPath string) error {
 		absPath = a.filePathWithProject(filename, projectPath)
 	}
 
+	watcher.NoteWrite(absPath, []byte(contents))
+
 	_, statErr := os.Stat(absPath)
 	created := os.IsNotExist(statErr)
 
@@ -1620,7 +1624,7 @@ type ClipboardData struct {
 }
 
 func (a *WApp) GetFileMetaMarkdown(filename string) string {
-	return metamd.DocumentForPath(a.filePath(filename))
+	return meta.DocumentForPath(a.filePath(filename))
 }
 
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
@@ -1782,6 +1786,12 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
 	hotkeys.SetTerminalFocusFn(a.FocusTerminalPane)
+	watcher.SetEventCallback(func(filename string) {
+		if a.ctx == nil {
+			return
+		}
+		runtime.EventsEmit(a.ctx, "notesFileChanged", filename)
+	})
 
 	globalhotkeys.Register(func(key string) {
 		switch key {
@@ -1789,6 +1799,10 @@ func (a *WApp) startup(ctx context.Context) {
 			a.WindowShowHide()
 		}
 	})
+}
+
+func (a *WApp) shutdown(ctx context.Context) {
+	watcher.Close()
 }
 
 func (a *WApp) domReady(ctx context.Context) {
@@ -1821,6 +1835,7 @@ func startWails() {
 			A: 255,
 		},
 		OnStartup:  wapp.startup,
+		OnShutdown: wapp.shutdown,
 		OnDomReady: wapp.domReady,
 		Bind:       []any{wapp},
 		Mac: &mac.Options{

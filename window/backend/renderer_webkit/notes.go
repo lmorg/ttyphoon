@@ -46,3 +46,27 @@ func (wr *webkitRender) NotesRecentFiles() {
 
 	wr.openMenu("Recent files", recent, nil, nil, okFn, nil, false)
 }
+
+func (wr *webkitRender) NotesLspOptions() {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "notesShowLspOptions")
+}
+
+func (wr *webkitRender) NotesLspFormatDocument() {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "notesRunLspFormatDocument")
+}
+
+func (wr *webkitRender) NotesLspGoToSymbol() {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "notesRunLspGoToSymbol")
+}

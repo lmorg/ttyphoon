@@ -98,19 +98,18 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 	skills := skills.ReadSkills()
 	if len(skills) > 0 {
 		menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
-	}
-	for _, skill := range skills {
-		menu = append(menu, types.MenuItem{
-			Title: fmt.Sprintf("AI Skill /%s: %s", skill.FunctionName, skill.Description),
-			Fn:    func() { askAiSkill(wr, skill) },
-			Icon:  0xf544,
-		})
+
+		for _, skill := range skills {
+			menu = append(menu, types.MenuItem{
+				Title: fmt.Sprintf("AI Skill /%s: %s", skill.FunctionName, skill.Description),
+				Fn:    func() { askAiSkill(wr, skill) },
+				Icon:  0xf544,
+			})
+		}
 	}
 
 	menu = append(menu, []types.MenuItem{
-		{
-			Title: types.MENU_SEPARATOR,
-		},
+		{Title: types.MENU_SEPARATOR},
 		{
 			Title: fmt.Sprintf("AI: Change AI Model (%s %s)", meta.ServiceName(), meta.ModelName()),
 			Fn:    func() { meta.SelectServiceModel(nil) },
@@ -139,6 +138,8 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 	}...)
 
 	// Edit Files
+	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
+
 	files := notes.ListFiles(wr).Files
 	for i := range files {
 		menu = append(menu, types.MenuItem{

@@ -4,13 +4,47 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/utils/or"
+	"github.com/mark3labs/mcp-go/client/transport"
 )
+
+func logOAuthDebugf(format string, args ...any) {
+	_, _ = fmt.Fprintf(os.Stderr, "[mcp oauth] "+format+"\n", args...)
+}
+
+func logOAuthHandlerDetails(ctx context.Context, serverURL, redirectURI string, h *transport.OAuthHandler) {
+	if h == nil {
+		logOAuthDebugf("handler unavailable for server=%q redirect=%q", serverURL, redirectURI)
+		return
+	}
+
+	logOAuthDebugf("server=%q redirect_uri=%q client_id=%q client_secret_set=%t", serverURL, redirectURI, h.GetClientID(), h.GetClientSecret() != "")
+
+	metadata, err := h.GetServerMetadata(ctx)
+	if err != nil {
+		logOAuthDebugf("metadata discovery failed for server=%q: %v", serverURL, err)
+		return
+	}
+	if metadata == nil {
+		logOAuthDebugf("metadata discovery returned nil for server=%q", serverURL)
+		return
+	}
+
+	logOAuthDebugf(
+		"metadata for server=%q issuer=%q authorization_endpoint=%q token_endpoint=%q registration_endpoint=%q",
+		serverURL,
+		metadata.Issuer,
+		metadata.AuthorizationEndpoint,
+		metadata.TokenEndpoint,
+		metadata.RegistrationEndpoint,
+	)
+}
 
 type OAuthUIHooks struct {
 	OpenBrowser               func(string)
@@ -99,13 +133,15 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 	return cfg
 }
 
-func AuthenticateOAuthInteractive(oauthErr error, redirectURI string, overrides *mcp_config.OverrideT, openBrowser func(string), promptCallbackURL func() (string, error), onAutoCallbackUnavailable func(error)) error {
+func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string, overrides *mcp_config.OverrideT, openBrowser func(string), promptCallbackURL func() (string, error), onAutoCallbackUnavailable func(error)) error {
 	h := GetOAuthHandler(oauthErr)
 	if h == nil {
+		logOAuthDebugf("no OAuth handler available for server=%q redirect_uri=%q error=%v", serverURL, redirectURI, oauthErr)
 		return oauthErr
 	}
 
 	ctx := context.Background()
+	logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 
 	codeVerifier, err := GenerateCodeVerifier()
 	if err != nil {
@@ -124,10 +160,14 @@ func AuthenticateOAuthInteractive(oauthErr error, redirectURI string, overrides 
 	}
 
 	if h.GetClientID() == "" {
+		logOAuthDebugf("dynamic client registration starting for server=%q app_name=%q", serverURL, appName)
 		err = h.RegisterClient(ctx, appName)
 		if err != nil {
+			logOAuthDebugf("dynamic client registration failed for server=%q: %v", serverURL, err)
+			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("cannot register OAuth client dynamically: %w", err)
 		}
+		logOAuthDebugf("dynamic client registration succeeded for server=%q client_id=%q", serverURL, h.GetClientID())
 	}
 
 	callback, err := StartOAuthCallbackServer(redirectURI)
@@ -136,24 +176,33 @@ func AuthenticateOAuthInteractive(oauthErr error, redirectURI string, overrides 
 
 		authURL, authErr := h.GetAuthorizationURL(ctx, state, codeChallenge)
 		if authErr != nil {
+			logOAuthDebugf("authorization URL build failed for server=%q: %v", serverURL, authErr)
+			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("cannot build OAuth authorization URL: %w", authErr)
 		}
+		logOAuthDebugf("authorization URL for server=%q: %s", serverURL, authURL)
 		if openBrowser != nil {
 			openBrowser(authURL)
 		}
 
 		params, waitErr := callback.Wait(2 * time.Minute)
 		if waitErr != nil {
+			logOAuthDebugf("callback wait failed for server=%q: %v", serverURL, waitErr)
 			return waitErr
 		}
 
 		err = h.ProcessAuthorizationResponse(ctx, params.Code, params.State, codeVerifier)
 		if err != nil {
+			logOAuthDebugf("token exchange failed for server=%q: %v", serverURL, err)
+			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("OAuth token exchange failed: %w", err)
 		}
+		logOAuthDebugf("token exchange succeeded for server=%q", serverURL)
 
 		return nil
 	}
+
+	logOAuthDebugf("automatic callback server unavailable for server=%q redirect_uri=%q: %v", serverURL, redirectURI, err)
 
 	if onAutoCallbackUnavailable != nil {
 		onAutoCallbackUnavailable(err)
@@ -173,8 +222,11 @@ func AuthenticateOAuthInteractive(oauthErr error, redirectURI string, overrides 
 
 	authURL, err := oauthHandler.GetAuthorizationURL(ctx, state, codeChallenge)
 	if err != nil {
+		logOAuthDebugf("manual authorization URL build failed for server=%q: %v", serverURL, err)
+		logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 		return fmt.Errorf("cannot build OAuth authorization URL: %w", err)
 	}
+	logOAuthDebugf("manual authorization URL for server=%q: %s", serverURL, authURL)
 	if openBrowser != nil {
 		openBrowser(authURL)
 	}
@@ -191,8 +243,11 @@ func AuthenticateOAuthInteractive(oauthErr error, redirectURI string, overrides 
 
 	err = oauthHandler.ProcessAuthorizationResponse(ctx, code, returnedState, codeVerifier)
 	if err != nil {
+		logOAuthDebugf("manual token exchange failed for server=%q: %v", serverURL, err)
+		logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 		return fmt.Errorf("OAuth token exchange failed: %w", err)
 	}
+	logOAuthDebugf("manual token exchange succeeded for server=%q", serverURL)
 
 	return nil
 }
@@ -202,6 +257,7 @@ func ConnectHttpOAuthInteractive(overrides *mcp_config.OverrideT, serverURL stri
 	if err != nil && IsAuthorizationFailure(err) {
 		err = AuthenticateOAuthInteractive(
 			err,
+			serverURL,
 			oauthCfg.RedirectURI,
 			overrides,
 			hooks.OpenBrowser,
