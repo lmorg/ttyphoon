@@ -1,7 +1,9 @@
 package rendererwebkit
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -139,8 +141,8 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 
 	// Edit Files
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
-
-	files := notes.ListFiles(wr).Files
+	timeout, _ := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	files := notes.ListFiles(timeout, wr).Files
 	for i := range files {
 		menu = append(menu, types.MenuItem{
 			Title: "Edit: " + files[i],

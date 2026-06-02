@@ -6,6 +6,10 @@ export function AskAI(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['AskAI'](arg1, arg2, arg3);
 }
 
+export function CancelNotesListFiles() {
+  return window['go']['main']['WApp']['CancelNotesListFiles']();
+}
+
 export function CloseNotification(arg1) {
   return window['go']['main']['WApp']['CloseNotification'](arg1);
 }
@@ -36,6 +40,10 @@ export function GetAppTitle() {
 
 export function GetClipboardData() {
   return window['go']['main']['WApp']['GetClipboardData']();
+}
+
+export function GetCurrentGroupName() {
+  return window['go']['main']['WApp']['GetCurrentGroupName']();
 }
 
 export function GetCurrentProject() {
@@ -84,6 +92,22 @@ export function GetWindowStyle() {
 
 export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
+}
+
+export function NotesHistoryAdd(arg1) {
+  return window['go']['main']['WApp']['NotesHistoryAdd'](arg1);
+}
+
+export function NotesHistoryCurrent() {
+  return window['go']['main']['WApp']['NotesHistoryCurrent']();
+}
+
+export function NotesHistoryNext() {
+  return window['go']['main']['WApp']['NotesHistoryNext']();
+}
+
+export function NotesHistoryPrevious() {
+  return window['go']['main']['WApp']['NotesHistoryPrevious']();
 }
 
 export function NotesKeyPress(arg1, arg2, arg3, arg4, arg5) {

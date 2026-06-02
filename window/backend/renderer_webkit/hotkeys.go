@@ -101,9 +101,9 @@ func (wr *webkitRender) hotkeys() {
 			desc = "Re-Open recent file..."
 			icon = 0xf07c
 
-		case "LspMenu":
+		case "LspOptionsMenu":
 			fn = wr.NotesLspOptions
-			desc = "LSP Menu..."
+			desc = "LSP: options menu..."
 			icon = 0xf0c9
 		case "LspFormatDocument":
 			fn = wr.NotesLspFormatDocument

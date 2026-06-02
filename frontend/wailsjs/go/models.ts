@@ -492,7 +492,6 @@ export namespace notes {
 	}
 	export class ProjectCacheT {
 	    FileListCollapsed: Record<string, Array<string>>;
-	    LastDocument: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProjectCacheT(source);
@@ -501,7 +500,6 @@ export namespace notes {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.FileListCollapsed = source["FileListCollapsed"];
-	        this.LastDocument = source["LastDocument"];
 	    }
 	}
 

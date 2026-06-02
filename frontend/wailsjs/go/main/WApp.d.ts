@@ -8,6 +8,8 @@ import {swagger} from '../models';
 
 export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function CancelNotesListFiles():Promise<void>;
+
 export function CloseNotification(arg1:number):Promise<void>;
 
 export function CommandPaletteSelect(arg1:number):Promise<void>;
@@ -23,6 +25,8 @@ export function GetAllLanguageDescriptions():Promise<Array<string>>;
 export function GetAppTitle():Promise<string>;
 
 export function GetClipboardData():Promise<main.ClipboardData>;
+
+export function GetCurrentGroupName():Promise<string>;
 
 export function GetCurrentProject():Promise<string>;
 
@@ -47,6 +51,14 @@ export function GetTerminalGlyphSize():Promise<types.XY>;
 export function GetWindowStyle():Promise<main.WindowStyleT>;
 
 export function ListFiles():Promise<Array<string>>;
+
+export function NotesHistoryAdd(arg1:string):Promise<void>;
+
+export function NotesHistoryCurrent():Promise<string>;
+
+export function NotesHistoryNext():Promise<string>;
+
+export function NotesHistoryPrevious():Promise<string>;
 
 export function NotesKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<Record<string, boolean>>;
 

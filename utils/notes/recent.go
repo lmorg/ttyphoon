@@ -65,7 +65,7 @@ func RecentListRename(projectRoot, oldFile, newFile string) error {
 	recent := getRecentList(projectRoot)
 
 	for i := range recent {
-		if recent[i] != oldFile {
+		if recent[i] == oldFile {
 			recent[i] = newFile
 			break
 		}

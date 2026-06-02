@@ -355,7 +355,15 @@ func _respSessionRenamed(tmux *Tmux, b []byte) {
 func _respSessionWindowChanged(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
 	go func() {
-		tmux.updateWinInfo(string(params[2]))
+		windowID := string(params[2])
+		tmux.updateWinInfo(windowID)
+		if tmux.activeWindow != nil {
+			tmux.activeWindow.active = false
+		}
+		if win := tmux.wins.Get(windowID); win != nil {
+			tmux.activeWindow = win
+			win.active = true
+		}
 		tmux.renderer.RefreshWindowList()
 	}()
 }

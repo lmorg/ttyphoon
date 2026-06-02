@@ -10,7 +10,6 @@ import (
 
 type ProjectCacheT struct {
 	FileListCollapsed map[string][]string // directories that have been collapsed. The map key will be the project root. And slice will be a list of directories collapsed
-	LastDocument      string              // filename of last document open in that window/tab. "" means don't reopen any docs
 }
 
 func GetProjectCache(projectRoot string) *ProjectCacheT {

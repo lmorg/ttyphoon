@@ -1,6 +1,8 @@
 package notes
 
 import (
+	"context"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,7 +20,7 @@ type ListFilesReturnT struct {
 	Files           []string
 }
 
-func ListFiles(renderer types.Renderer) *ListFilesReturnT {
+func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 	ulf := &ListFilesReturnT{}
 
 	tile := renderer.ActiveTile()
@@ -42,7 +44,17 @@ func ListFiles(renderer types.Renderer) *ListFilesReturnT {
 		return ulf
 	}
 
+	projectFiles := make([]string, 0, 128)
+
 	err := filepath.WalkDir(ulf.PathProjectRoot, func(path string, d os.DirEntry, err error) error {
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+
 		if err != nil {
 			log.Println(err)
 			return nil
@@ -62,12 +74,17 @@ func ListFiles(renderer types.Renderer) *ListFilesReturnT {
 		}
 
 		filename := strings.Replace(path, ulf.PathProjectRoot, "$PROJECT", 1)
-		ulf.Files = append(ulf.Files, filename)
+		projectFiles = append(projectFiles, filename)
 
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return ulf
+		}
 		log.Println(err)
 	}
+
+	ulf.Files = append(ulf.Files, projectFiles...)
 	return ulf
 }

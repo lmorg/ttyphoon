@@ -1,13 +1,15 @@
 import {
     GetWindowStyle, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
+    CancelNotesListFiles,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
-    ShowCommandPalette, GetCurrentProject, GetFileMetaMarkdown, AskAI,
+    ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
     ResolveNotesLspLanguage, NotesRecentFiles,
+    NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent,
     GetProjectCache, SetProjectCache,
     GetDocumentCache, SetDocumentCache,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
@@ -476,6 +478,8 @@ app.innerHTML = `
                 <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
                 <div id="notes-toolbar" class="notes-toolbar">
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
+                    <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
+                    <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
                     <button id="notes-find" type="button" class="notes-toolbar-btn" title="Find" aria-label="Find">&#xf002;</button>
                 </div>
             </div>
@@ -592,6 +596,8 @@ const elements = {
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
+    historyPrev: document.getElementById('notes-history-prev'),
+    historyNext: document.getElementById('notes-history-next'),
     find: document.getElementById('notes-find'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabHex: document.getElementById('notes-tab-hex'),
@@ -1623,6 +1629,7 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         }
 
         item.addEventListener('click', () => {
+            NotesHistoryAdd(node.file).catch(() => {});
             loadFile(node.file);
         });
 
@@ -3593,19 +3600,22 @@ async function goToCurrentLspSymbol() {
 }
 
 async function goToWorkspaceLspSymbol() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
 
-    const rawQuery = window.prompt('Workspace symbol query:', '');
-    if (rawQuery === null) {
+    if (state.lspOpenFile !== state.currentFile) {
+        await openCurrentLspDocument(elements.editor.value || '');
+    }
+
+    if (state.lspOpenFile !== state.currentFile) {
+        notifyTerminal('Language server is not active for the current file', 'warn');
         return;
     }
 
-    const query = String(rawQuery || '').trim();
     let symbols = [];
     try {
-        symbols = await NotesLspWorkspaceSymbols(state.currentFile, query);
+        symbols = await NotesLspWorkspaceSymbols(state.currentFile, '');
     } catch {
         notifyTerminal('Failed to fetch workspace symbols', 'error');
         return;
@@ -3627,39 +3637,46 @@ async function goToWorkspaceLspSymbol() {
         icons,
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
+        showSearch: true,
+        hideItemsUntilQuery: true,
         showNextToMouseCursor: true,
         onSelect: async (index) => {
-            const picked = entries[index];
-            if (!picked) {
-                return;
+            try {
+                const picked = entries[index];
+                if (!picked) {
+                    return;
+                }
+
+                const targetAbsPath = normalizePathForMatch(picked.filePath || fileUriToPath(picked.uri));
+                if (!targetAbsPath) {
+                    notifyTerminal('Workspace symbol target is not a local file', 'warn');
+                    return;
+                }
+
+                const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
+                if (!targetNotesFile) {
+                    notifyTerminal('Workspace symbol target is outside indexed Notes files', 'warn');
+                    return;
+                }
+
+                await loadFile(targetNotesFile);
+
+                const line = Math.max(0, Number(picked.line) || 0);
+                const character = Math.max(0, Number(picked.character) || 0);
+                const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+                elements.editor.focus();
+                elements.editor.setSelectionRange(offset, offset);
+
+                const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+                elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
+                syncEditorScrollDecorations();
+
+                state.lspHoverLastKey = '';
+                scheduleLspHover();
+            } catch (err) {
+                console.error('Workspace symbol navigation failed:', err);
+                notifyTerminal('Failed to navigate to workspace symbol', 'error');
             }
-
-            const targetAbsPath = normalizePathForMatch(picked.filePath || fileUriToPath(picked.uri));
-            if (!targetAbsPath) {
-                notifyTerminal('Workspace symbol target is not a local file', 'warn');
-                return;
-            }
-
-            const targetNotesFile = await resolveNotesFileFromAbsolutePath(targetAbsPath);
-            if (!targetNotesFile) {
-                notifyTerminal('Workspace symbol target is outside indexed Notes files', 'warn');
-                return;
-            }
-
-            await loadFile(targetNotesFile);
-
-            const line = Math.max(0, Number(picked.line) || 0);
-            const character = Math.max(0, Number(picked.character) || 0);
-            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
-            elements.editor.focus();
-            elements.editor.setSelectionRange(offset, offset);
-
-            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
-            syncEditorScrollDecorations();
-
-            state.lspHoverLastKey = '';
-            scheduleLspHover();
         },
     });
 }
@@ -4823,10 +4840,11 @@ async function refreshFiles() {
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
+        elements.title.innerText = await GetCurrentGroupName();
         await loadProjectCache();
         renderFileList();
     } catch (err) {
-        setStatus('Failed to load file list.', true);
+        notifyTerminal('Failed to load file list', 'error');
         console.error(err);
     }
 }
@@ -4839,10 +4857,12 @@ async function loadProjectCache() {
         for (const key of collapsed) {
             state.expandedFolders[key] = false;
         }
-        const lastDoc = cache?.LastDocument || '';
-        if (lastDoc && lastDoc !== state.lastRestoredDocument) {
-            state.lastRestoredDocument = lastDoc;
-            await loadFile(lastDoc);
+        const historyDoc = await NotesHistoryCurrent();
+        if (historyDoc && historyDoc !== state.lastRestoredDocument) {
+            state.lastRestoredDocument = historyDoc;
+            await loadFile(historyDoc);
+        } else if (!historyDoc) {
+            state.lastRestoredDocument = '';
         }
     } catch (err) {
         console.error('Failed to load project cache:', err);
@@ -4876,19 +4896,16 @@ async function restoreDocumentCache(file) {
     }
 }
 
-function saveProjectCache({ lastDocument } = {}) {
+function saveProjectCache() {
     const collapsed = Object.entries(state.expandedFolders)
         .filter(([, expanded]) => expanded === false)
         .map(([key]) => key);
     GetProjectCache().then((cache) => {
-        const updated = cache || { FileListCollapsed: {}, LastDocument: {} };
+        const updated = cache || { FileListCollapsed: {} };
         if (!updated.FileListCollapsed) {
             updated.FileListCollapsed = {};
         }
         updated.FileListCollapsed[state.currentProjectRoot] = collapsed;
-        if (lastDocument !== undefined) {
-            updated.LastDocument = lastDocument;
-        }
         return SetProjectCache(updated);
     }).catch((err) => {
         console.error('Failed to save project cache:', err);
@@ -5215,7 +5232,7 @@ function formatStructuredEditorJson(pretty) {
 
         elements.editor.dispatchEvent(new Event('input'));
     } catch {
-        setStatus('Cannot format invalid JSON content.', true);
+        notifyTerminal('Cannot format invalid JSON content', 'warn');
     }
 }
 
@@ -5349,7 +5366,7 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
         setDirty(true);
         await saveFile();
     } catch (err) {
-        setStatus(err?.message || 'Failed to apply structured document edit.', true);
+        notifyTerminal(err?.message || 'Failed to apply structured document edit', 'error');
         console.error(err);
     }
 }
@@ -5865,7 +5882,7 @@ async function loadFile(file) {
             state.currentFileUri = filePathToUri(resolvedPath || file);
             const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
             if (imageData.startsWith('error:')) {
-                setStatus(`Failed to load image: ${imageData}`, true);
+                notifyTerminal(`Failed to load image: ${imageData}`, 'error');
                 return;
             }
             elements.imageViewImg.src = imageData;
@@ -6069,20 +6086,20 @@ async function loadFile(file) {
         state.suspendDocumentCacheSave = false;
         saveDocumentCache();
 
-        saveProjectCache({ lastDocument: file });
+        saveProjectCache();
     } catch (err) {
         state.suspendDocumentCacheSave = false;
         if (stickyId) {
             closeStickyProgress(stickyId, `Failed to load ${getPathFileName(file)}`, 'error');
         }
-        setStatus(`Failed to load ${file}.`, true);
+        notifyTerminal(`Failed to load ${file}`, 'error');
         console.error(err);
     }
 }
 
 async function saveFile() {
     if (!state.currentFile) {
-        setStatus('Select a note before saving.', true);
+        setStatus('Select a note before saving', true);
         return;
     }
 
@@ -6098,7 +6115,7 @@ async function saveFile() {
         }
         setDirty(false);
     } catch (err) {
-        setStatus(`Failed to save ${state.currentFile}.`, true);
+        notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
         console.error(err);
     }
 }
@@ -6122,7 +6139,7 @@ function closeDeletePrompt() {
 
 async function confirmDelete() {
     if (!state.deletingFile) {
-        setStatus('Select a note to delete.', true);
+        setStatus('Select a note to delete', true);
         return;
     }
 
@@ -6155,9 +6172,9 @@ async function confirmDelete() {
         }
         closeDeletePrompt();
         await refreshFiles();
-        setStatus(`Deleted ${fileName}.`, false);
+        setStatus(`Deleted ${fileName}`, false);
     } catch (err) {
-        setStatus(`Failed to delete ${fileName}.`, true);
+        notifyTerminal(`Failed to delete ${fileName}`, 'error');
         console.error(err);
     }
 }
@@ -6640,7 +6657,7 @@ function enableImageContextMenus(container) {
                 onSelect: (index) => {
                     if (index === 0) {
                         TerminalCopyImageDataURL(dataURLToCopy).catch(() => {
-                            setStatus('Failed to copy image to clipboard.', true);
+                            notifyTerminal('Failed to copy image to clipboard', 'error');
                         });
                     } else if (index === 1) {
                         saveImageToFile(filename, dataURLToCopy);
@@ -6686,7 +6703,7 @@ async function openFileListContextMenu(file, x, y) {
             const resolvedMenuItems = await GetHyperlinkMenuActions(fileUrl, fileLabel || fileUrl);
             goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
         } catch {
-            setStatus('Failed to load file actions.', true);
+            setStatus('Failed to load file actions', true);
         }
     }
 
@@ -6700,7 +6717,7 @@ async function openFileListContextMenu(file, x, y) {
                 onSelect: () => {
                     RunHyperlinkMenuAction(fileUrl, fileLabel || fileUrl, String(item?.action || ''))
                         .catch(() => {
-                            setStatus('Failed to execute file action.', true);
+                            setStatus('Failed to execute file action', true);
                         });
                 },
             });
@@ -6739,7 +6756,7 @@ async function openHyperlinkContextMenu(anchor) {
     try {
         await DisplayHyperlinkMenu(absoluteUrl, label);
     } catch {
-        setStatus('Failed to open hyperlink actions.', true);
+        setStatus('Failed to open hyperlink actions', true);
     }
 }
 
@@ -6856,7 +6873,7 @@ function getCurrentDocumentContentsForAI() {
 
 async function askAIAboutCurrentDocument() {
     if (!state.currentFile) {
-        setStatus('Open a document first.', true);
+        setStatus('Open a document first', true);
         return;
     }
 
@@ -6864,7 +6881,7 @@ async function askAIAboutCurrentDocument() {
     const fileType = state.currentFileType || 'unknown';
     const contents = getCurrentDocumentContentsForAI();
     if (!contents) {
-        setStatus('This document has no content to send to AI.', true);
+        notifyTerminal('This document has no content to send to AI', 'warn');
         return;
     }
 
@@ -6881,7 +6898,7 @@ async function askAIAboutCurrentDocument() {
     try {
         await AskAI('notesDocument', fileName, aiContext);
     } catch (err) {
-        setStatus('Failed to ask AI about this document.', true);
+        notifyTerminal('Failed to ask AI about this document', 'error');
         console.error(err);
     }
 }
@@ -7248,7 +7265,7 @@ async function createNewFile() {
     if (state.renamingFile) {
         const name = (elements.modalInput.value || '').trim();
         if (name === '') {
-            setStatus('File name cannot be empty.', true);
+            notifyTerminal('File name cannot be empty', 'warn');
             return;
         }
 
@@ -7264,9 +7281,9 @@ async function createNewFile() {
                 await loadFile(fileName);
             }
             closeNewFilePrompt();
-            setStatus(`Renamed to ${fileName}.`, false);
+            setStatus(`Renamed to ${fileName}`, false);
         } catch (err) {
-            setStatus(`Failed to rename file.`, true);
+            notifyTerminal(`Failed to rename file`, 'error');
             console.error(err);
         }
         return;
@@ -7274,7 +7291,7 @@ async function createNewFile() {
 
     const name = normalizeNoteName(elements.modalInput.value);
     if (name === '') {
-        setStatus('File name cannot be empty.', true);
+        notifyTerminal('File name cannot be empty', 'warn');
         return;
     }
 
@@ -7289,7 +7306,7 @@ async function createNewFile() {
     if (exists) {
         closeNewFilePrompt();
         await loadFile(fileName);
-        setStatus(`${fileName} already exists.`, false);
+        notifyTerminal(`${fileName} already exists`, 'warn');
         return;
     }
 
@@ -7299,9 +7316,9 @@ async function createNewFile() {
         await loadFile(fileName);
         setViewMode('editor');
         closeNewFilePrompt();
-        setStatus(`Created ${fileName}.`, false);
+        setStatus(`Created ${fileName}`, false);
     } catch (err) {
-        setStatus(`Failed to create ${fileName}.`, true);
+        notifyTerminal(`Failed to create ${fileName}`, 'error');
         console.error(err);
     }
 }
@@ -7319,9 +7336,9 @@ async function createAndOpenFile(filename, contents) {
         await loadFile(fileName);
         //setViewMode('editor');
         setViewMode('viewer');
-        setStatus(`Created ${fileName}.`, false);
+        setStatus(`Created ${fileName}`, false);
     } catch (err) {
-        setStatus(`Failed to create ${fileName}.`, true);
+        notifyTerminal(`Failed to create ${fileName}`, 'error');
         console.error(err);
     }
 }
@@ -7344,9 +7361,9 @@ async function saveImageToFile(filename, dataURL) {
         
         // Save the file
         await SaveBinaryFile(savedPath, base64Data);
-        setStatus(`Image saved to ${savedPath}.`, false);
+        setStatus(`Image saved to ${savedPath}`, false);
     } catch (err) {
-        setStatus(`Failed to save image: ${err.message || err}`, true);
+        notifyTerminal(`Failed to save image: ${err.message || err}`, 'error');
         console.error('Error saving image:', err);
     }
 }
@@ -7355,9 +7372,10 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("notesUpdate", group => {
-    elements.title.innerText = group;
-    refreshFiles();
+EventsOn("notesUpdate", () => {
+    CancelNotesListFiles().catch(() => {}).finally(() => {
+        refreshFiles();
+    });
 });
 
 EventsOn("notesFileChanged", async () => {
@@ -7366,14 +7384,14 @@ EventsOn("notesFileChanged", async () => {
     }
 
     if (state.dirty) {
-        setStatus('File changed on disk but has unsaved edits in Notes.', true);
+        setStatus('File changed on disk but has unsaved edits in Notes', true);
         return;
     }
 
     try {
         await loadFile(state.currentFile);
     } catch (err) {
-        setStatus(`Failed to reload ${state.currentFile}.`, true);
+        setStatus(`Failed to reload ${state.currentFile}`, true);
         console.error(err);
     }
 });
@@ -7543,9 +7561,10 @@ EventsOn('viewFileInNotesOpen', async (payload) => {
     if (!file) return;
 
     try {
+        NotesHistoryAdd(file).catch(() => {});
         await loadFile(file);
     } catch (err) {
-        setStatus(`Failed to load file: ${file}`, true);
+        notifyTerminal(`Failed to load file: ${file}`, 'warn');
         console.error(err);
     }
 });
@@ -7556,10 +7575,11 @@ EventsOn('viewFileInNotesEdit', async (payload) => {
     if (!file) return;
 
     try {
+        NotesHistoryAdd(file).catch(() => {});
         await loadFile(file);
         setViewMode('editor');
     } catch (err) {
-        setStatus(`Failed to load file: ${file}`, true);
+        notifyTerminal(`Failed to load file: ${file}`, 'warn');
         console.error(err);
     }
 });
@@ -10170,13 +10190,13 @@ function insertEditorText(text, target = elements.editor) {
 
 async function savePastedImageDataUrl(dataUrl, mimeType) {
     if (!state.currentFile) {
-        setStatus('Select a note before pasting an image.', true);
+        notifyTerminal('Select a note before pasting an image', 'info');
         return;
     }
 
     const comma = dataUrl.indexOf(',');
     if (comma <= 0 || comma >= dataUrl.length - 1) {
-        setStatus('Clipboard image format is invalid.', true);
+        notifyTerminal('Clipboard image format is invalid', 'error');
         return;
     }
 
@@ -10201,9 +10221,9 @@ async function savePastedImageDataUrl(dataUrl, mimeType) {
         setDirty(true);
         scheduleRender();
         scheduleAutoSave();
-        setStatus(`Saved image ${paths.imageFileName}.`, false);
+        notifyTerminal(`Saved image ${paths.imageFileName}`, 'info');
     } catch (err) {
-        setStatus('Failed to save pasted image.', true);
+        notifyTerminal('Failed to save pasted image', 'error');
         console.error(err);
     }
 }
@@ -10268,7 +10288,7 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
             insertEditorText(text, targetEditor);
         }
     } catch (err) {
-        setStatus('Failed to paste from clipboard.', true);
+        notifyTerminal('Failed to paste from clipboard.', 'error');
         console.error(err);
     }
 }
@@ -10770,7 +10790,7 @@ if (elements.status) {
             const recentFiles = await NotesRecentFiles();
             const files = Array.isArray(recentFiles) ? recentFiles : [];
             if (files.length === 0) {
-                setStatus('No recent files.', false);
+                setStatus('No recent files', false);
                 return;
             }
 
@@ -10778,8 +10798,9 @@ if (elements.status) {
                 title: file,
                 icon: file === state.currentFile ? CONTEXT_ICON_TICK : 0,
                 onSelect: () => {
+                    NotesHistoryAdd(file).catch(() => {});
                     loadFile(file).catch((err) => {
-                        setStatus(`Failed to load file: ${file}`, true);
+                        notifyTerminal(`Failed to load file: ${file}`, 'warn');
                         console.error(err);
                     });
                 },
@@ -10787,7 +10808,7 @@ if (elements.status) {
 
             showNotesLocalMenu(menuItems, x, y, 'Recent files');
         } catch {
-            setStatus('Failed to open recent files menu.', true);
+            setStatus('Failed to open recent files menu', true);
         }
     };
 
@@ -10849,6 +10870,26 @@ function cycleNotesTabs(direction = 1) {
     const nextIndex = (baseIndex + step + visibleTabs.length) % visibleTabs.length;
     visibleTabs[nextIndex].click();
 }
+
+elements.historyPrev.addEventListener('click', async () => {
+    try {
+        const file = await NotesHistoryPrevious();
+        await loadFile(file);
+    } catch (err) {
+        notifyTerminal(String(err && err.message ? err.message : err), 'info');
+        focusActiveEditorForViewMode();
+    }
+});
+
+elements.historyNext.addEventListener('click', async () => {
+    try {
+        const file = await NotesHistoryNext();
+        await loadFile(file);
+    } catch (err) {
+        notifyTerminal(String(err && err.message ? err.message : err), 'info');
+        focusActiveEditorForViewMode();
+    }
+});
 
 elements.newFile.addEventListener('click', () => {
     openNewFilePrompt();

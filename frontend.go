@@ -49,20 +49,23 @@ var wailsAssets embed.FS
 
 // App struct
 type WApp struct {
-	ctx           context.Context
-	mdBaseDir     string
-	projRoot      string
-	groupName     string
-	usrNotesDir   string
-	homeDir       string
-	globalNotes   string
-	visible       bool
-	notesKills    map[string]func()
-	notesStickies map[string]types.Notification
-	notesMu       sync.Mutex
-	lspStartErrs  map[string]string
-	lspManager    *lsp.Manager
-	lspDocs       *lsp.DocumentStore
+	ctx             context.Context
+	mdBaseDir       string
+	projRoot        string
+	groupName       string
+	usrNotesDir     string
+	homeDir         string
+	globalNotes     string
+	visible         bool
+	notesKills      map[string]func()
+	notesStickies   map[string]types.Notification
+	notesMu         sync.Mutex
+	notesListMu     sync.Mutex
+	notesListCancel context.CancelFunc
+	notesListSeq    uint64
+	lspStartErrs    map[string]string
+	lspManager      *lsp.Manager
+	lspDocs         *lsp.DocumentStore
 }
 
 // NewApp creates a new App application struct
@@ -767,7 +770,23 @@ func (a *WApp) ListFiles() []string {
 		return []string{}
 	}
 
-	ulf := notes.ListFiles(renderer)
+	a.notesListMu.Lock()
+	if a.notesListCancel != nil {
+		a.notesListCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.notesListCancel = cancel
+	a.notesListSeq++
+	scanID := a.notesListSeq
+	a.notesListMu.Unlock()
+
+	ulf := notes.ListFiles(ctx, renderer)
+
+	a.notesListMu.Lock()
+	if a.notesListSeq == scanID {
+		a.notesListCancel = nil
+	}
+	a.notesListMu.Unlock()
 
 	a.globalNotes = ulf.PathGlobalNotes
 	a.usrNotesDir = ulf.PathUserNotes
@@ -775,6 +794,20 @@ func (a *WApp) ListFiles() []string {
 	a.groupName = ulf.GroupName
 
 	return ulf.Files
+}
+
+func (a *WApp) CancelNotesListFiles() {
+	a.notesListMu.Lock()
+	defer a.notesListMu.Unlock()
+
+	if a.notesListCancel != nil {
+		a.notesListCancel()
+		a.notesListCancel = nil
+	}
+}
+
+func (a *WApp) GetCurrentGroupName() string {
+	return a.groupName
 }
 
 func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
@@ -795,6 +828,39 @@ func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 	default:
 		return "error"
 	}
+}
+
+func (a *WApp) notesPathForHistory(filename string) string {
+	cleanFile := filepath.Clean(strings.TrimSpace(filename))
+	if cleanFile == "." || cleanFile == "" {
+		return ""
+	}
+
+	replacements := []struct {
+		prefix   string
+		variable string
+	}{
+		{prefix: filepath.Clean(a.projRoot), variable: "$PROJECT"},
+		{prefix: filepath.Clean(a.usrNotesDir), variable: "$NOTES"},
+		{prefix: filepath.Clean(a.globalNotes), variable: "$GLOBAL"},
+		{prefix: filepath.Clean(a.homeDir), variable: "$HOME"},
+	}
+
+	for _, replacement := range replacements {
+		if replacement.prefix == "." || replacement.prefix == "" {
+			continue
+		}
+		if cleanFile == replacement.prefix {
+			return replacement.variable
+		}
+
+		prefix := replacement.prefix + string(filepath.Separator)
+		if strings.HasPrefix(cleanFile, prefix) {
+			return replacement.variable + string(filepath.Separator) + strings.TrimPrefix(cleanFile, prefix)
+		}
+	}
+
+	return cleanFile
 }
 
 func (a WApp) filePath(filename string) string {
@@ -1484,12 +1550,45 @@ func (a *WApp) NotesRecentFiles() []string {
 	return notes.GetRecentList(a.projRoot)
 }
 
+func (a *WApp) NotesHistoryAdd(filename string) {
+	expanded := a.filePath(filename)
+	if err := notes.HistoryListAdd(a.projRoot, expanded); err != nil {
+		if renderer, ok := renderwebkit.CurrentRenderer(); ok {
+			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		} else {
+			panic(err)
+		}
+	}
+}
+
+func (a *WApp) NotesHistoryCurrent() string {
+	return a.notesPathForHistory(notes.HistoryListCurrent(a.projRoot))
+}
+
+func (a *WApp) NotesHistoryPrevious() (string, error) {
+	file, err := notes.HistoryListPrevious(a.projRoot)
+	if err != nil {
+		return "", err
+	}
+
+	return a.notesPathForHistory(file), nil
+}
+
+func (a *WApp) NotesHistoryNext() (string, error) {
+	file, err := notes.HistoryListNext(a.projRoot)
+	if err != nil {
+		return "", err
+	}
+
+	return a.notesPathForHistory(file), nil
+}
+
 func (a *WApp) GetProjectCache() *notes.ProjectCacheT {
-	return notes.GetProjectCache(a.groupName)
+	return notes.GetProjectCache(a.projRoot)
 }
 
 func (a *WApp) SetProjectCache(ptr *notes.ProjectCacheT) {
-	notes.SetProjectCache(a.groupName, ptr)
+	notes.SetProjectCache(a.projRoot, ptr)
 }
 
 func (a *WApp) GetDocumentCache(filename string) *notes.DocumentCacheT {
@@ -1649,6 +1748,10 @@ func (a *WApp) RenameFile(oldPath, newPath string) error {
 	if err != nil {
 		return err
 	}
+	err = notes.HistoryListRename(a.projRoot, oldAbsPath, newAbsPath)
+	if err != nil {
+		return err
+	}
 
 	a.notifyLspWorkspaceFiles(func(t *lsp.Transport) error {
 		return lsp.NotifyDidRenameFiles(t, [][2]string{{oldAbsPath, newAbsPath}})
@@ -1665,6 +1768,10 @@ func (a *WApp) DeleteFile(filename string) error {
 	}
 
 	err = notes.RecentListDelete(a.projRoot, filename)
+	if err != nil {
+		return err
+	}
+	err = notes.HistoryListDelete(a.projRoot, absPath)
 	if err != nil {
 		return err
 	}

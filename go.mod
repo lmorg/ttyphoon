@@ -8,7 +8,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/djherbis/times v1.6.0
 	github.com/forPelevin/gomoji v1.4.1
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/lmorg/mcp-web-scraper v1.0.1
 	github.com/lmorg/murex v0.0.0-20260202231244-8678ad89405c
 	github.com/mark3labs/mcp-go v0.54.1
