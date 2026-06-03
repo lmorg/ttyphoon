@@ -548,6 +548,9 @@ app.innerHTML = `
                         </div>
                         <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
                             <div class="notes-tools-pane-header">
+                                <button id="notes-tools-log-copy" type="button" class="notes-tools-clear" title="Copy log to clipboard">Copy</button>
+                                <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear" title="Deselect log lines">Deselect</button>
+                                <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
                                 <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
                                 <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
                                 <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
@@ -593,6 +596,7 @@ app.innerHTML = `
 `;
 
 const elements = {
+    appRoot: app,
     title: document.getElementById('notes-title'),
     list: document.getElementById('notes-list'),
     listFilter: document.getElementById('notes-list-filter'),
@@ -667,8 +671,11 @@ const elements = {
     toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
     logOutput: document.getElementById('notes-log-output'),
+    toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
     toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
     toolsLogWordwrap: document.getElementById('notes-tools-log-wordwrap'),
+    toolsLogCopy: document.getElementById('notes-tools-log-copy'),
+    toolsLogDeselect: document.getElementById('notes-tools-log-deselect'),
     toolsLogClear: document.getElementById('notes-tools-log-clear'),
     toolsRestore: document.getElementById('notes-tools-restore')
 };
@@ -8635,12 +8642,68 @@ function applyWindowStyle(result) {
             border-color: var(--error);
         }
 
+        #notes-tools-log-copy:hover {
+            color: var(--green);
+            border-color: var(--green);
+        }
+
+        #notes-tools-log-deselect:hover {
+            border-color: var(--accent);
+        }
+
+        #notes-tools-log-copy {
+            background-image:
+                linear-gradient(
+                    to right,
+                    rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05),
+                    rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05)
+                ),
+                linear-gradient(
+                    to right,
+                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.35),
+                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.35)
+                );
+            background-repeat: no-repeat;
+            background-position: center center, center center;
+            background-size: 0 100%, 0 100%;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+
+        #notes-tools-log-copy[data-copied="true"] {
+            border-color: var(--green);
+            animation: notes-tools-log-copy-feedback 0.48s ease-out;
+        }
+
+        @keyframes notes-tools-log-copy-feedback {
+            0% {
+                background-size: 0 100%, 0 100%;
+            }
+
+            52% {
+                background-size: 0 100%, 100% 100%;
+            }
+
+            100% {
+                background-size: 100% 100%, 100% 100%;
+            }
+        }
+
         #notes-tools-log-wordwrap:hover {
+            border-color: var(--accent);
+        }
+
+        #notes-tools-log-maximize:hover {
             border-color: var(--accent);
         }
 
         #notes-tools-log-timestamp:hover {
             border-color: var(--accent);
+        }
+
+        #notes-tools-log-maximize[data-enabled="true"] {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
         }
 
         #notes-tools-log-wordwrap[data-wrapped="true"] {
@@ -8698,11 +8761,69 @@ function applyWindowStyle(result) {
         }
 
         .notes-log-line {
+            position: relative;
             white-space: inherit;
-            display: list-item;
-            list-style-type: disc;
-            list-style-position: outside;
-            margin-left: 1.2em;
+            display: block;
+            margin: 1px 0;
+            padding: 0px 8px 0px 18px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #notes-log-output[data-wordwrap="false"] .notes-log-line {
+            width: max-content;
+            min-width: 100%;
+            box-sizing: border-box;
+        }
+
+        #notes-log-output[data-wordwrap="true"] .notes-log-line {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .notes-log-line::after {
+            content: "";
+            position: absolute;
+            left: 7px;
+            top: 50%;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
+            transform: translateY(-50%);
+        }
+
+        #notes-log-output[data-wordwrap="true"] .notes-log-line::after {
+            top: 0.75em;
+            transform: translateY(-50%);
+        }
+
+        .notes-log-line:hover {
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1);
+        }
+
+        .notes-log-line[data-selected="true"] {
+            border-color: var(--accent);
+            padding-left: 18px;
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
+        }
+
+        .notes-log-line[data-selected="true"]::after {
+            display: none;
+        }
+
+        .notes-log-line[data-selected="true"]::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            background-color: var(--accent);
+            border-top-left-radius: 3px;
+            border-bottom-left-radius: 3px;
         }
 
         .notes-log-timestamp {
@@ -8710,15 +8831,78 @@ function applyWindowStyle(result) {
         }
 
         .notes-log-ts-text {
-            color: var(--fg);
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
         }
 
         .notes-log-ts-punct {
-            color: var(--blue);
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
         }
 
         #notes-log-output[data-show-timestamp="true"] .notes-log-timestamp {
             display: inline;
+        }
+
+        [data-log-maximized="true"] #notes-sidebar,
+        [data-log-maximized="true"] #notes-splitter,
+        [data-log-maximized="true"] #notes-tabs,
+        [data-log-maximized="true"] #notes-editor-wrap,
+        [data-log-maximized="true"] #notes-hex-wrap,
+        [data-log-maximized="true"] #notes-preview-wrap,
+        [data-log-maximized="true"] #notes-jupyter-wrap,
+        [data-log-maximized="true"] #notes-csv-view-wrap,
+        [data-log-maximized="true"] #notes-image-view-wrap,
+        [data-log-maximized="true"] #notes-meta-wrap,
+        [data-log-maximized="true"] #notes-swagger-view-wrap,
+        [data-log-maximized="true"] #notes-swagger-run-wrap,
+        [data-log-maximized="true"] .notes-tools-restore,
+        [data-log-maximized="true"] #notes-tools-ai-pane,
+        [data-log-maximized="true"] #notes-tools-toc-pane,
+        [data-log-maximized="true"] #notes-tools-tab-ai,
+        [data-log-maximized="true"] #notes-tools-tab-toc,
+        [data-log-maximized="true"] #notes-tools-tab-log,
+        [data-log-maximized="true"] #notes-tools-minimize {
+            display: none !important;
+        }
+
+        [data-log-maximized="true"] #notes-main,
+        [data-log-maximized="true"] #notes-panel,
+        [data-log-maximized="true"] #notes-app {
+            width: 100%;
+            height: 100%;
+        }
+
+        [data-log-maximized="true"] .notes-tools-panel {
+            position: fixed;
+            top: 32px;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 50;
+            border-top: 0;
+            opacity: 1;
+            pointer-events: auto;
+            flex: 1 1 auto;
+            background-color: var(--bg);
+        }
+
+        [data-log-maximized="true"] .notes-tools-content {
+            height: 100%;
+            background-color: var(--bg);
+        }
+
+        [data-log-maximized="true"] #notes-tools-log-pane {
+            display: flex !important;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            background-color: var(--bg);
+        }
+
+        [data-log-maximized="true"] #notes-log-output {
+            flex: 1;
+            min-height: 0;
+            overflow-x: auto;
+            overflow-y: auto;
         }
 
         #notes-editor {

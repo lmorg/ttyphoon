@@ -194,51 +194,174 @@ export function initNotesLogPanel(elements, eventsOn) {
         return;
     }
 
+    const appRoot = elements.appRoot || document.getElementById('notes-pane') || document.getElementById('app') || document.body;
+    let isWordWrapped = false;
+    let isTimestampVisible = false;
+    let isLogMaximized = false;
+    let restoreWordWrapOnClose = false;
+    let restoreTimestampOnClose = false;
+
+    const setWordWrap = (enabled) => {
+        isWordWrapped = enabled === true;
+        if (isWordWrapped) {
+            elements.logOutput.style.whiteSpace = 'pre-wrap';
+            elements.logOutput.style.overflowWrap = 'break-word';
+        } else {
+            elements.logOutput.style.whiteSpace = 'pre';
+            elements.logOutput.style.overflowWrap = 'normal';
+        }
+
+        elements.logOutput.dataset.wordwrap = isWordWrapped ? 'true' : 'false';
+
+        if (elements.toolsLogWordwrap) {
+            elements.toolsLogWordwrap.dataset.wrapped = isWordWrapped ? 'true' : 'false';
+        }
+    };
+
+    const setTimestampVisible = (enabled) => {
+        isTimestampVisible = enabled === true;
+        if (elements.toolsLogTimestamp) {
+            elements.toolsLogTimestamp.dataset.enabled = isTimestampVisible ? 'true' : 'false';
+        }
+        elements.logOutput.dataset.showTimestamp = isTimestampVisible ? 'true' : 'false';
+    };
+
+    const setLogMaximized = (enabled) => {
+        const nextState = enabled === true;
+        if (nextState === isLogMaximized) {
+            return;
+        }
+
+        isLogMaximized = nextState;
+        appRoot.dataset.logMaximized = isLogMaximized ? 'true' : 'false';
+
+        if (elements.toolsLogMaximize) {
+            elements.toolsLogMaximize.dataset.enabled = isLogMaximized ? 'true' : 'false';
+            elements.toolsLogMaximize.textContent = 'Maximize';
+        }
+
+        if (isLogMaximized) {
+            restoreWordWrapOnClose = isWordWrapped;
+            restoreTimestampOnClose = isTimestampVisible;
+            setWordWrap(true);
+            setTimestampVisible(true);
+        } else {
+            setWordWrap(restoreWordWrapOnClose);
+            setTimestampVisible(restoreTimestampOnClose);
+        }
+    };
+
+    const handleKeyDownCloseMaximized = (event) => {
+        if (!isLogMaximized) {
+            return;
+        }
+
+        if (event.defaultPrevented) {
+            return;
+        }
+
+        setLogMaximized(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDownCloseMaximized, true);
+
     if (elements.toolsLogClear) {
         elements.toolsLogClear.addEventListener('click', () => {
             elements.logOutput.textContent = '';
         });
     }
 
-    if (elements.toolsLogWordwrap) {
-        let isWordWrapped = false;
-
-        const updateWrapButtonState = () => {
-            elements.toolsLogWordwrap.dataset.wrapped = isWordWrapped ? 'true' : 'false';
-        };
-
-        elements.toolsLogWordwrap.addEventListener('click', () => {
-            isWordWrapped = !isWordWrapped;
-            if (isWordWrapped) {
-                elements.logOutput.style.whiteSpace = 'pre-wrap';
-                elements.logOutput.style.overflowWrap = 'break-word';
-            } else {
-                elements.logOutput.style.whiteSpace = 'pre';
-                elements.logOutput.style.overflowWrap = 'normal';
+    if (elements.logOutput) {
+        elements.logOutput.addEventListener('click', (event) => {
+            const line = event.target.closest('.notes-log-line');
+            if (!line || !elements.logOutput.contains(line)) {
+                return;
             }
 
-            updateWrapButtonState();
+            line.dataset.selected = line.dataset.selected === 'true' ? 'false' : 'true';
         });
+    }
 
-        // No-wrap by default
-        updateWrapButtonState();
+    if (elements.toolsLogDeselect) {
+        elements.toolsLogDeselect.addEventListener('click', () => {
+            const selectedLines = elements.logOutput.querySelectorAll('.notes-log-line[data-selected="true"]');
+            for (const line of selectedLines) {
+                line.dataset.selected = 'false';
+            }
+        });
+    }
+
+    if (elements.toolsLogCopy) {
+        elements.toolsLogCopy.addEventListener('click', async () => {
+            const lines = Array.from(elements.logOutput.querySelectorAll('.notes-log-line'));
+            const selectedLines = lines.filter((line) => line.dataset.selected === 'true');
+            const linesToCopy = selectedLines.length > 0 ? selectedLines : lines;
+            const text = linesToCopy.length > 0
+                ? linesToCopy.map((line) => String(line.textContent || '')).join('\n')
+                : String(elements.logOutput.textContent || '');
+
+            const triggerCopyFeedback = () => {
+                elements.toolsLogCopy.dataset.copied = 'false';
+                // Force reflow so repeated clicks replay the transition.
+                void elements.toolsLogCopy.offsetWidth;
+                elements.toolsLogCopy.dataset.copied = 'true';
+                window.setTimeout(() => {
+                    elements.toolsLogCopy.dataset.copied = 'false';
+                }, 520);
+            };
+
+            try {
+                await navigator.clipboard.writeText(text);
+                triggerCopyFeedback();
+            } catch (err) {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.setAttribute('readonly', 'true');
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    textarea.style.pointerEvents = 'none';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (!ok) {
+                        throw new Error('document.execCommand(copy) returned false');
+                    }
+
+                    triggerCopyFeedback();
+                } catch (fallbackErr) {
+                    console.error('Failed to copy log output:', fallbackErr || err);
+                }
+            }
+        });
+    }
+
+    if (elements.toolsLogWordwrap) {
+        elements.toolsLogWordwrap.addEventListener('click', () => {
+            setWordWrap(!isWordWrapped);
+        });
     }
 
     if (elements.toolsLogTimestamp && elements.logOutput) {
-        let isTimestampVisible = false;
-
-        const updateTimestampButtonState = () => {
-            elements.toolsLogTimestamp.dataset.enabled = isTimestampVisible ? 'true' : 'false';
-            elements.logOutput.dataset.showTimestamp = isTimestampVisible ? 'true' : 'false';
-        };
-
         elements.toolsLogTimestamp.addEventListener('click', () => {
-            isTimestampVisible = !isTimestampVisible;
-            updateTimestampButtonState();
+            setTimestampVisible(!isTimestampVisible);
         });
+    }
 
-        // Timestamps are hidden by default.
-        updateTimestampButtonState();
+    if (elements.toolsLogMaximize) {
+        elements.toolsLogMaximize.addEventListener('click', () => {
+            setLogMaximized(!isLogMaximized);
+        });
+    }
+
+    // No-wrap and hidden timestamps by default.
+    setWordWrap(false);
+    setTimestampVisible(false);
+
+    if (elements.toolsLogMaximize) {
+        elements.toolsLogMaximize.dataset.enabled = 'false';
+        elements.toolsLogMaximize.textContent = 'Maximize';
     }
 
     eventsOn('notesLog', (message) => {
