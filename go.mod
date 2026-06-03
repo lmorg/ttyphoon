@@ -94,7 +94,7 @@ require (
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260529124908-c761662dc8c9 // indirect
 	golang.org/x/exp/shiny v0.0.0-20260529124908-c761662dc8c9 // indirect
-	golang.org/x/mobile v0.0.0-20260529142300-ecb4cd65260a // indirect
+	golang.org/x/mobile v0.0.0-20260602190626-68735029466e // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

@@ -2,6 +2,7 @@ package mcp_client
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"path"
 	"regexp"
@@ -117,5 +118,7 @@ func DefaultTokenFile(serverName, rawURL string) string {
 		name = "default"
 	}
 
-	return path.Join(xdg.CacheHome, app.DirName, "mcp-tokens", name+".json")
+	cacheFile := path.Join(xdg.CacheHome, app.DirName, "mcp-tokens", name+".json")
+	log.Printf(`MCP OAuth: DefaultTokenFile="%s"`, cacheFile)
+	return cacheFile
 }

@@ -3,6 +3,7 @@ package notes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ type ListFilesReturnT struct {
 	GroupName       string // tmux window name (tab name)
 	Files           []string
 }
+
+const MAX_FILES = 5_000
 
 func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 	ulf := &ListFilesReturnT{}
@@ -44,9 +47,18 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 		return ulf
 	}
 
-	projectFiles := make([]string, 0, 128)
+	var (
+		projectFiles []string
+		count        int
+	)
 
 	err := filepath.WalkDir(ulf.PathProjectRoot, func(path string, d os.DirEntry, err error) error {
+		count++
+
+		if count > MAX_FILES {
+			return fmt.Errorf(`filesystem walk: too many files. MAX_FILES=%d`, MAX_FILES)
+		}
+
 		if ctx != nil {
 			select {
 			case <-ctx.Done():
@@ -56,7 +68,7 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 		}
 
 		if err != nil {
-			log.Println(err)
+			log.Printf("filesystem walk: %v", err)
 			return nil
 		}
 		if d.IsDir() {
@@ -78,13 +90,12 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 
 		return nil
 	})
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return ulf
-		}
+
+	ulf.Files = append(ulf.Files, projectFiles...)
+
+	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Println(err)
 	}
 
-	ulf.Files = append(ulf.Files, projectFiles...)
 	return ulf
 }
