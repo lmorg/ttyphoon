@@ -1890,8 +1890,35 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 
 // --------------------
 
+// logWriter captures log output and sends it to the frontend
+type logWriter struct {
+	ctx context.Context
+}
+
+var rxLogCategory = regexp.MustCompile(`^\[[a-z]+\] `)
+
+func (lw *logWriter) Write(p []byte) (int, error) {
+	// Send each line to frontend, also write to original stderr
+	text := string(p) //strings.TrimSpace(string(p))
+	if !rxLogCategory.MatchString(text[20:]) {
+		text = text[:20] + "[debug] " + text[20:]
+	}
+
+	if text != "" && lw.ctx != nil {
+		runtime.EventsEmit(lw.ctx, "notesLog", text)
+	}
+	// Also output to stderr so it's visible in console
+	os.Stderr.Write(p) //nolint:errcheck
+	return len(p), nil
+}
+
 func (a *WApp) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Set up log capture to emit events
+	lw := &logWriter{ctx: ctx}
+	log.SetOutput(lw)
+
 	hotkeys.SetTerminalFocusFn(a.FocusTerminalPane)
 	watcher.SetEventCallback(func(filename string) {
 		if a.ctx == nil {

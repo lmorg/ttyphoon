@@ -24,6 +24,7 @@ import {
 import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
 import { showLocalMenu } from './popup_menu';
+import { initNotesLogPanel } from './notes-log-panel';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -530,7 +531,8 @@ app.innerHTML = `
                     <div class="notes-tools-header">
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
-                                <button id="notes-tools-tab-ai" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
                         </div>
                         <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
                     </div>
@@ -543,6 +545,14 @@ app.innerHTML = `
                         </div>
                         <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
                             <div id="notes-tools-toc" class="notes-tools-toc"></div>
+                        </div>
+                        <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
+                            <div class="notes-tools-pane-header">
+                                <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
+                                <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
+                                <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
+                            </div>
+                            <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>
                         </div>
                     </div>
                 </div>
@@ -647,13 +657,19 @@ const elements = {
     toolsTabs: document.getElementById('notes-tools-tabs'),
     toolsTabAI: document.getElementById('notes-tools-tab-ai'),
     toolsTabToC: document.getElementById('notes-tools-tab-toc'),
+    toolsTabLog: document.getElementById('notes-tools-tab-log'),
     toolsAIPane: document.getElementById('notes-tools-ai-pane'),
     toolsToCPane: document.getElementById('notes-tools-toc-pane'),
+    toolsLogPane: document.getElementById('notes-tools-log-pane'),
     toolsToC: document.getElementById('notes-tools-toc'),
     toolsPanel: document.getElementById('notes-tools-panel'),
     toolsMinimize: document.getElementById('notes-tools-minimize'),
     toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
+    logOutput: document.getElementById('notes-log-output'),
+    toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
+    toolsLogWordwrap: document.getElementById('notes-tools-log-wordwrap'),
+    toolsLogClear: document.getElementById('notes-tools-log-clear'),
     toolsRestore: document.getElementById('notes-tools-restore')
 };
 
@@ -7617,6 +7633,12 @@ if (elements.toolsTabAI) {
 if (elements.toolsTabToC) {
     elements.toolsTabToC.addEventListener('click', () => setToolsTab('toc'));
 }
+
+if (elements.toolsTabLog) {
+    elements.toolsTabLog.addEventListener('click', () => setToolsTab('log'));
+}
+
+initNotesLogPanel(elements, EventsOn);
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
         const tocButton = event.target.closest('.notes-tools-toc-item');
@@ -8599,9 +8621,38 @@ function applyWindowStyle(result) {
             flex-shrink: 0;
         }
 
+        #notes-tools-log-pane .notes-tools-pane-header {
+            gap: 8px;
+        }
+
         #notes-tools-clear:hover {
             color: var(--error);
             border-color: var(--error);
+        }
+
+        #notes-tools-log-clear:hover {
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        #notes-tools-log-wordwrap:hover {
+            border-color: var(--accent);
+        }
+
+        #notes-tools-log-timestamp:hover {
+            border-color: var(--accent);
+        }
+
+        #notes-tools-log-wordwrap[data-wrapped="true"] {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
+        }
+
+        #notes-tools-log-timestamp[data-enabled="true"] {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
         }
 
         #notes-ai-output {
@@ -8624,6 +8675,50 @@ function applyWindowStyle(result) {
             content: "No AI response yet";
             opacity: 0.5;
             font-style: italic;
+        }
+
+        #notes-log-output {
+            flex: 1;
+            padding: 12px;
+            font-size: ${result.fontSize}px;
+            line-height: 1.5;
+            overflow-x: auto;
+            overflow-y: auto;
+            white-space: pre;
+            overflow-wrap: normal;
+            font-family: var(--font-family);
+            color: var(--fg);
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+        }
+
+        #notes-log-output:empty::before {
+            content: "No log output yet";
+            opacity: 0.5;
+            font-style: italic;
+        }
+
+        .notes-log-line {
+            white-space: inherit;
+            display: list-item;
+            list-style-type: disc;
+            list-style-position: outside;
+            margin-left: 1.2em;
+        }
+
+        .notes-log-timestamp {
+            display: none;
+        }
+
+        .notes-log-ts-text {
+            color: var(--fg);
+        }
+
+        .notes-log-ts-punct {
+            color: var(--blue);
+        }
+
+        #notes-log-output[data-show-timestamp="true"] .notes-log-timestamp {
+            display: inline;
         }
 
         #notes-editor {

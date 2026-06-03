@@ -16,23 +16,23 @@ import (
 
 func logOAuthHandlerDetails(ctx context.Context, serverURL, redirectURI string, h *transport.OAuthHandler) {
 	if h == nil {
-		log.Printf("[mcp oauth] handler unavailable for server=%q redirect=%q", serverURL, redirectURI)
+		log.Printf("MCP OAuth: handler unavailable for server=%q redirect=%q", serverURL, redirectURI)
 		return
 	}
 
-	log.Printf("[mcp oauth] server=%q redirect_uri=%q client_id=%q client_secret_set=%t", serverURL, redirectURI, h.GetClientID(), h.GetClientSecret() != "")
+	log.Printf("MCP OAuth: server=%q redirect_uri=%q client_id=%q client_secret_set=%t", serverURL, redirectURI, h.GetClientID(), h.GetClientSecret() != "")
 
 	metadata, err := h.GetServerMetadata(ctx)
 	if err != nil {
-		log.Printf("[mcp oauth] metadata discovery failed for server=%q: %v", serverURL, err)
+		log.Printf("MCP OAuth: metadata discovery failed for server=%q: %v", serverURL, err)
 		return
 	}
 	if metadata == nil {
-		log.Printf("[mcp oauth] metadata discovery returned nil for server=%q", serverURL)
+		log.Printf("MCP OAuth: metadata discovery returned nil for server=%q", serverURL)
 		return
 	}
 
-	log.Printf("[mcp oauth] metadata for server=%q issuer=%q authorization_endpoint=%q token_endpoint=%q registration_endpoint=%q",
+	log.Printf("MCP OAuth: metadata for server=%q issuer=%q authorization_endpoint=%q token_endpoint=%q registration_endpoint=%q",
 		serverURL,
 		metadata.Issuer,
 		metadata.AuthorizationEndpoint,
@@ -131,7 +131,7 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string, overrides *mcp_config.OverrideT, openBrowser func(string), promptCallbackURL func() (string, error), onAutoCallbackUnavailable func(error)) error {
 	h := GetOAuthHandler(oauthErr)
 	if h == nil {
-		log.Printf("[mcp oauth] no OAuth handler available for server=%q redirect_uri=%q error=%v", serverURL, redirectURI, oauthErr)
+		log.Printf("MCP OAuth: no OAuth handler available for server=%q redirect_uri=%q error=%v", serverURL, redirectURI, oauthErr)
 		return oauthErr
 	}
 
@@ -155,14 +155,14 @@ func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string,
 	}
 
 	if h.GetClientID() == "" {
-		log.Printf("[mcp oauth] dynamic client registration starting for server=%q app_name=%q", serverURL, appName)
+		log.Printf("MCP OAuth: dynamic client registration starting for server=%q app_name=%q", serverURL, appName)
 		err = h.RegisterClient(ctx, appName)
 		if err != nil {
-			log.Printf("[mcp oauth] dynamic client registration failed for server=%q: %v", serverURL, err)
+			log.Printf("MCP OAuth: dynamic client registration failed for server=%q: %v", serverURL, err)
 			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("cannot register OAuth client dynamically: %w", err)
 		}
-		log.Printf("[mcp oauth] dynamic client registration succeeded for server=%q client_id=%q", serverURL, h.GetClientID())
+		log.Printf("MCP OAuth: dynamic client registration succeeded for server=%q client_id=%q", serverURL, h.GetClientID())
 	}
 
 	callback, err := StartOAuthCallbackServer(redirectURI)
@@ -171,33 +171,33 @@ func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string,
 
 		authURL, authErr := h.GetAuthorizationURL(ctx, state, codeChallenge)
 		if authErr != nil {
-			log.Printf("[mcp oauth] authorization URL build failed for server=%q: %v", serverURL, authErr)
+			log.Printf("MCP OAuth: authorization URL build failed for server=%q: %v", serverURL, authErr)
 			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("cannot build OAuth authorization URL: %w", authErr)
 		}
-		log.Printf("[mcp oauth] authorization URL for server=%q: %s", serverURL, authURL)
+		log.Printf("MCP OAuth: authorization URL for server=%q: %s", serverURL, authURL)
 		if openBrowser != nil {
 			openBrowser(authURL)
 		}
 
 		params, waitErr := callback.Wait(2 * time.Minute)
 		if waitErr != nil {
-			log.Printf("[mcp oauth] callback wait failed for server=%q: %v", serverURL, waitErr)
+			log.Printf("MCP OAuth: callback wait failed for server=%q: %v", serverURL, waitErr)
 			return waitErr
 		}
 
 		err = h.ProcessAuthorizationResponse(ctx, params.Code, params.State, codeVerifier)
 		if err != nil {
-			log.Printf("[mcp oauth] token exchange failed for server=%q: %v", serverURL, err)
+			log.Printf("MCP OAuth: token exchange failed for server=%q: %v", serverURL, err)
 			logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 			return fmt.Errorf("OAuth token exchange failed: %w", err)
 		}
-		log.Printf("[mcp oauth] token exchange succeeded for server=%q", serverURL)
+		log.Printf("MCP OAuth: token exchange succeeded for server=%q", serverURL)
 
 		return nil
 	}
 
-	log.Printf("[mcp oauth] automatic callback server unavailable for server=%q redirect_uri=%q: %v", serverURL, redirectURI, err)
+	log.Printf("MCP OAuth: automatic callback server unavailable for server=%q redirect_uri=%q: %v", serverURL, redirectURI, err)
 
 	if onAutoCallbackUnavailable != nil {
 		onAutoCallbackUnavailable(err)
@@ -217,11 +217,11 @@ func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string,
 
 	authURL, err := oauthHandler.GetAuthorizationURL(ctx, state, codeChallenge)
 	if err != nil {
-		log.Printf("[mcp oauth] manual authorization URL build failed for server=%q: %v", serverURL, err)
+		log.Printf("MCP OAuth: manual authorization URL build failed for server=%q: %v", serverURL, err)
 		logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 		return fmt.Errorf("cannot build OAuth authorization URL: %w", err)
 	}
-	log.Printf("[mcp oauth] manual authorization URL for server=%q: %s", serverURL, authURL)
+	log.Printf("MCP OAuth: manual authorization URL for server=%q: %s", serverURL, authURL)
 	if openBrowser != nil {
 		openBrowser(authURL)
 	}
@@ -238,11 +238,11 @@ func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string,
 
 	err = oauthHandler.ProcessAuthorizationResponse(ctx, code, returnedState, codeVerifier)
 	if err != nil {
-		log.Printf("[mcp oauth] manual token exchange failed for server=%q: %v", serverURL, err)
+		log.Printf("MCP OAuth: manual token exchange failed for server=%q: %v", serverURL, err)
 		logOAuthHandlerDetails(ctx, serverURL, redirectURI, h)
 		return fmt.Errorf("OAuth token exchange failed: %w", err)
 	}
-	log.Printf("[mcp oauth] manual token exchange succeeded for server=%q", serverURL)
+	log.Printf("MCP OAuth: manual token exchange succeeded for server=%q", serverURL)
 
 	return nil
 }

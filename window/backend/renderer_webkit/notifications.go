@@ -116,7 +116,7 @@ func (n *notifyT) addTimed(nt *notificationT) {
 	n.mutex.Unlock()
 
 	nt.emit()
-	log.Printf("NOTIFICATION: %s", nt.msg)
+	log.Printf("[%s] %s", nt.typ, nt.msg)
 
 	go func() {
 		<-nt.ctx.Done()
@@ -142,7 +142,7 @@ func (n *notifyT) addSticky(nt *notificationT) {
 	n.mutex.Unlock()
 
 	nt.emit()
-	log.Printf("NOTIFICATION: %s", nt.msg)
+	log.Printf("[%s] %s", nt.typ, nt.msg)
 }
 
 func (n *notifyT) delete(nt *notificationT) {
