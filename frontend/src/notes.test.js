@@ -42,6 +42,8 @@ const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
     '- Other: `r--`',
 ].join('\n')));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
+const resolveNoteLocationMock = vi.fn(() => Promise.resolve('$NOTES'));
+const composeNoteLocationPathMock = vi.fn((location, name) => `${location}/${String(name || '').replace(/^\/+/, '')}`);
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const displayHyperlinkMenuMock = vi.fn(() => Promise.resolve());
@@ -97,6 +99,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetCurrentProject: getCurrentProjectMock,
     GetFileMetaMarkdown: getFileMetaMarkdownMock,
     ResolveFilePath: resolveFilePathMock,
+    ComposeNoteLocationPath: composeNoteLocationPathMock,
+    ResolveNoteLocation: resolveNoteLocationMock,
     ResolveNotesLspLanguage: resolveNotesLspLanguageMock,
     NotesLspOpenDocument: notesLspOpenDocumentMock,
     NotesLspChangeDocument: notesLspChangeDocumentMock,

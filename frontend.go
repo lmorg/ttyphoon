@@ -1726,6 +1726,14 @@ func (a *WApp) GetFileMetaMarkdown(filename string) string {
 	return meta.DocumentForPath(a.filePath(filename))
 }
 
+func (a *WApp) ComposeNoteLocationPath(location, name string) string {
+	return filepath.Join(location, name)
+}
+
+func (a *WApp) ResolveNoteLocation(path string) string {
+	return a.notesPathForHistory(path)
+}
+
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
 func (a *WApp) GetClipboardData() ClipboardData {
 	b := clipboard.Read(clipboard.FmtImage)

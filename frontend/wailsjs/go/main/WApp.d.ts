@@ -14,6 +14,8 @@ export function CloseNotification(arg1:number):Promise<void>;
 
 export function CommandPaletteSelect(arg1:number):Promise<void>;
 
+export function ComposeNoteLocationPath(arg1:string,arg2:string):Promise<string>;
+
 export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
@@ -109,6 +111,8 @@ export function NotesRecentFiles():Promise<Array<string>>;
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveFilePath(arg1:string):Promise<string>;
+
+export function ResolveNoteLocation(arg1:string):Promise<string>;
 
 export function ResolveNotesLspLanguage(arg1:string):Promise<string>;
 

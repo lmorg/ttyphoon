@@ -18,6 +18,10 @@ export function CommandPaletteSelect(arg1) {
   return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
 }
 
+export function ComposeNoteLocationPath(arg1, arg2) {
+  return window['go']['main']['WApp']['ComposeNoteLocationPath'](arg1, arg2);
+}
+
 export function DeleteFile(arg1) {
   return window['go']['main']['WApp']['DeleteFile'](arg1);
 }
@@ -208,6 +212,10 @@ export function RenameFile(arg1, arg2) {
 
 export function ResolveFilePath(arg1) {
   return window['go']['main']['WApp']['ResolveFilePath'](arg1);
+}
+
+export function ResolveNoteLocation(arg1) {
+  return window['go']['main']['WApp']['ResolveNoteLocation'](arg1);
 }
 
 export function ResolveNotesLspLanguage(arg1) {

@@ -8,7 +8,7 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
-    ResolveNotesLspLanguage, NotesRecentFiles,
+    ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent,
     GetProjectCache, SetProjectCache,
     GetDocumentCache, SetDocumentCache,
@@ -749,32 +749,6 @@ const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
 let lastAutoCopiedViewerSelection = '';
 
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
-
-function splitNoteLocation(path) {
-    const source = String(path || '').trim();
-    for (const location of NOTE_LOCATIONS) {
-        if (source === location) {
-            return { location, name: '' };
-        }
-        const prefix = `${location}/`;
-        if (source.startsWith(prefix)) {
-            return { location, name: source.slice(prefix.length) };
-        }
-    }
-
-    return { location: '$NOTES', name: source };
-}
-
-function composeNoteLocationPath(location, name) {
-    const safeLocation = NOTE_LOCATIONS.includes(location) ? location : '$NOTES';
-    const safeName = String(name || '').replace(/^\/+/, '');
-    return `${safeLocation}/${safeName}`;
-}
-
-function hasKnownNoteLocationPrefix(path) {
-    const source = String(path || '').trim();
-    return NOTE_LOCATIONS.some((location) => source === location || source.startsWith(`${location}/`));
-}
 
 function activeViewerWrap() {
     return elements.previewWrap || null;
@@ -1658,7 +1632,7 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
 
         item.addEventListener('dblclick', (e) => {
             e.preventDefault();
-            openRenamePrompt(node.file);
+            void openRenamePrompt(node.file);
         });
 
 	    item.addEventListener('contextmenu', async (e) => {
@@ -6490,21 +6464,27 @@ function openNewFilePrompt() {
     }, 0);
 }
 
-function openRenamePrompt(file) {
+async function openRenamePrompt(file) {
     const source = String(file || '').trim();
-    const split = splitNoteLocation(source);
     state.renamingFile = file;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
-    if (hasKnownNoteLocationPrefix(source)) {
-        elements.modalLocation.textContent = split.location;
-        elements.modalLocation.style.display = '';
-        elements.modalInput.value = split.name;
-    } else {
-        elements.modalLocation.textContent = '$NOTES';
-        elements.modalLocation.style.display = 'none';
-        elements.modalInput.value = source;
+    let location = '$NOTES';
+    let name = source;
+
+    try {
+        const resolved = await ResolveNoteLocation(source);
+        const parsed = splitResolvedNoteLocation(resolved);
+        location = parsed.location;
+        name = parsed.name;
+    } catch {
+        location = '$NOTES';
+        name = source;
     }
+
+    elements.modalLocation.textContent = location;
+    elements.modalLocation.style.display = '';
+    elements.modalInput.value = name;
     elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
@@ -6543,6 +6523,27 @@ function normalizeNotePath(rawName) {
     }
 
     return `$NOTES/${fileName}`;
+}
+
+function splitResolvedNoteLocation(rawPath) {
+    const source = String(rawPath || '').trim();
+    for (const location of NOTE_LOCATIONS) {
+        if (source === location) {
+            return { location, name: '' };
+        }
+
+        if (source.startsWith(`${location}/`) || source.startsWith(`${location}\\`)) {
+            return {
+                location,
+                name: source.slice(location.length + 1),
+            };
+        }
+    }
+
+    return {
+        location: '$NOTES',
+        name: source,
+    };
 }
 
 function deriveImageExtension(mimeType) {
@@ -7294,7 +7295,7 @@ async function createNewFile() {
 
         const useLocationSelector = elements.modalLocation.style.display !== 'none';
         const fileName = useLocationSelector
-            ? composeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
+            ? ComposeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
             : name;
 
         try {
@@ -7318,7 +7319,7 @@ async function createNewFile() {
         return;
     }
 
-    const fileName = composeNoteLocationPath(
+    const fileName = ComposeNoteLocationPath(
         (elements.modalLocation.textContent || '$NOTES').trim(),
         name,
     );
@@ -7616,7 +7617,7 @@ EventsOn('fileActionDialog', (payload) => {
     
     switch (action) {
         case 'rename':
-            openRenamePrompt(filePath);
+            void openRenamePrompt(filePath);
             break;
         case 'delete':
             openDeletePrompt(filePath);
