@@ -200,6 +200,7 @@ export function initTerminalPopupMenu(canvas) {
     let showSearch = false;
     let hideItemsUntilQuery = false;
     let showNextToMouseCursor = false;
+    let mouseHighlightEnabled = true;
 
     const listRoot = document.createElement('div');
     listRoot.id = LISTBOX_ROOT_ID;
@@ -230,6 +231,12 @@ export function initTerminalPopupMenu(canvas) {
     listRoot.appendChild(listSearchWrap);
     listRoot.appendChild(listBody);
     document.body.appendChild(listRoot);
+
+    function syncMouseHighlightState() {
+        listRoot.dataset.hoverHighlight = mouseHighlightEnabled ? 'true' : 'false';
+    }
+
+    syncMouseHighlightState();
 
     function menuConstraints() {
         let rect = canvas?.getBoundingClientRect();
@@ -301,6 +308,8 @@ export function initTerminalPopupMenu(canvas) {
         showSearch = false;
         hideItemsUntilQuery = false;
         showNextToMouseCursor = false;
+        mouseHighlightEnabled = true;
+        syncMouseHighlightState();
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
         
@@ -366,6 +375,31 @@ export function initTerminalPopupMenu(canvas) {
         if (row) {
             row.scrollIntoView({ block: 'nearest' });
         }
+    }
+
+    function setHighlightFromMouse(visibleIndex) {
+        if (!mouseHighlightEnabled) {
+            return;
+        }
+
+        if (highlightVisibleIndex === visibleIndex) {
+            return;
+        }
+
+        setHighlightByVisibleIndex(visibleIndex);
+        renderListbox();
+    }
+
+    function selectMenuItem(item) {
+        _menuOperationInProgress = true;
+        if (activeListMenuId !== null) {
+            menuSelect(activeListMenuId, item.index);
+        }
+        hideListMenu(false);
+        // Allow async clipboard/IO operations to complete, then clear flag
+        setTimeout(() => {
+            _menuOperationInProgress = false;
+        }, 500);
     }
 
     function cycleHighlight(direction) {
@@ -435,28 +469,27 @@ export function initTerminalPopupMenu(canvas) {
                 row.classList.add('is-active');
             }
 
-            row.addEventListener('mouseenter', () => {
-                const prev = listBody.querySelector('.tty-menu-row.is-active');
-                if (prev) prev.classList.remove('is-active');
-                row.classList.add('is-active');
-                highlightVisibleIndex = i;
-                if (activeListMenuId !== null) {
-                    menuHighlight(activeListMenuId, item.index);
-                }
+            row.addEventListener('mousemove', () => {
+                setHighlightFromMouse(i);
             });
 
             row.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                _menuOperationInProgress = true;
-                if (activeListMenuId !== null) {
-                    menuSelect(activeListMenuId, item.index);
+                if (e.button !== 0) {
+                    return;
                 }
-                hideListMenu(false);
-                // Allow async clipboard/IO operations to complete, then clear flag
-                setTimeout(() => {
-                    _menuOperationInProgress = false;
-                }, 500);
+                selectMenuItem(item);
+            });
+
+            row.addEventListener('mousedown', (e) => {
+                if (e.button !== 2) {
+                    return;
+                }
+
+                e.stopPropagation();
+                e.preventDefault();
+                selectMenuItem(item);
             });
 
             listBody.appendChild(row);
@@ -502,6 +535,8 @@ export function initTerminalPopupMenu(canvas) {
         listSearchInput.value = '';
         listSearchWrap.style.display = showSearch ? 'block' : 'none';
         highlightVisibleIndex = -1;
+        mouseHighlightEnabled = true;
+        syncMouseHighlightState();
 
         renderListbox();
 
@@ -517,6 +552,11 @@ export function initTerminalPopupMenu(canvas) {
     window.addEventListener('mousemove', (event) => {
         mouseX = event.clientX;
         mouseY = event.clientY;
+
+        if (listRoot.style.display !== 'none') {
+            mouseHighlightEnabled = true;
+            syncMouseHighlightState();
+        }
     });
 
     window.addEventListener('mousedown', (event) => {
@@ -555,12 +595,16 @@ export function initTerminalPopupMenu(canvas) {
             }
 
             if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+                mouseHighlightEnabled = false;
+                syncMouseHighlightState();
                 cycleHighlight(1);
                 renderListbox();
                 return;
             }
 
             if (event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey)) {
+                mouseHighlightEnabled = false;
+                syncMouseHighlightState();
                 cycleHighlight(-1);
                 renderListbox();
                 return;

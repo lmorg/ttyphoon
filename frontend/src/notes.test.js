@@ -21,6 +21,7 @@ const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
+const getCurrentGroupNameMock = vi.fn(() => Promise.resolve(''));
 const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
     '# note.md',
     '',
@@ -97,6 +98,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
     GetCurrentProject: getCurrentProjectMock,
+    GetCurrentGroupName: getCurrentGroupNameMock,
     GetFileMetaMarkdown: getFileMetaMarkdownMock,
     ResolveFilePath: resolveFilePathMock,
     ComposeNoteLocationPath: composeNoteLocationPathMock,
@@ -249,6 +251,7 @@ describe('notes rendering', () => {
         swaggerRequestMock.mockClear();
         askAIMock.mockClear();
         getCurrentProjectMock.mockReset();
+        getCurrentGroupNameMock.mockReset();
         getFileMetaMarkdownMock.mockReset();
         resolveFilePathMock.mockReset();
         resolveNotesLspLanguageMock.mockReset();
@@ -283,6 +286,7 @@ describe('notes rendering', () => {
         getWindowStyleMock.mockResolvedValue(theme);
         getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
         getCurrentProjectMock.mockResolvedValue('');
+        getCurrentGroupNameMock.mockResolvedValue('');
         getFileMetaMarkdownMock.mockResolvedValue([
             '# note.md',
             '',
@@ -1629,6 +1633,37 @@ describe('notes rendering', () => {
 
         expect(renameFileMock).toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt');
         expect(renameFileMock).not.toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt.md');
+    });
+
+    it('awaits composed rename path before calling RenameFile', async () => {
+        listFilesMock
+            .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
+            .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
+        composeNoteLocationPathMock.mockResolvedValueOnce('$PROJECT/docs/todo.txt');
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$GLOBAL/docs/todo.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const fileActionDialogHandler = getEventHandler('fileActionDialog');
+        fileActionDialogHandler({ action: 'rename', filePath: '$GLOBAL/docs/todo.md' });
+        await flushPromises();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        const modalLocation = document.getElementById('notes-modal-location');
+        modalLocation.textContent = '$PROJECT';
+        modalInput.value = 'docs/todo.txt';
+
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(renameFileMock).toHaveBeenCalledWith('$GLOBAL/docs/todo.md', '$PROJECT/docs/todo.txt');
+        expect(typeof renameFileMock.mock.calls[0][1]).toBe('string');
     });
 
     it('creates notes using selected location and normalized filename', async () => {

@@ -245,7 +245,7 @@ body {
 }
 
 .tty-menu-row.is-active,
-.tty-menu-row:hover {
+.tty-listbox[data-hover-highlight="true"] .tty-menu-row:hover {
     background: var(--terminal-menu-hover);
 }
 

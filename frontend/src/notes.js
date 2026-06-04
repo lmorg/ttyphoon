@@ -7295,7 +7295,7 @@ async function createNewFile() {
 
         const useLocationSelector = elements.modalLocation.style.display !== 'none';
         const fileName = useLocationSelector
-            ? ComposeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
+            ? await ComposeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
             : name;
 
         try {
@@ -7307,7 +7307,7 @@ async function createNewFile() {
             closeNewFilePrompt();
             setStatus(`Renamed to ${fileName}`, false);
         } catch (err) {
-            notifyTerminal(`Failed to rename file`, 'error');
+            notifyTerminal(`Failed to rename file: ${err}`, 'error');
             console.error(err);
         }
         return;
@@ -7319,7 +7319,7 @@ async function createNewFile() {
         return;
     }
 
-    const fileName = ComposeNoteLocationPath(
+    const fileName = await ComposeNoteLocationPath(
         (elements.modalLocation.textContent || '$NOTES').trim(),
         name,
     );
@@ -8767,8 +8767,8 @@ function applyWindowStyle(result) {
             display: block;
             margin: 1px 0;
             padding: 0px 8px 0px 18px;
-            border: 1px solid transparent;
-            border-radius: 4px;
+            border: 2px solid transparent;
+            /*border-radius: 4px;*/
             cursor: pointer;
         }
 
@@ -8823,8 +8823,8 @@ function applyWindowStyle(result) {
             bottom: 0;
             width: 10px;
             background-color: var(--accent);
-            border-top-left-radius: 3px;
-            border-bottom-left-radius: 3px;
+            /*border-top-left-radius: 3px;
+            border-bottom-left-radius: 3px;*/
         }
 
         .notes-log-timestamp {

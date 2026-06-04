@@ -157,6 +157,65 @@ describe('popup menu hide/show transitions', () => {
         expect(terminalMenuHighlightMock).toHaveBeenCalledWith(6, 0);
     });
 
+    it('selects a menu item with right mouse button', async () => {
+        const { initTerminalPopupMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        const listMenuEvent = eventsOnMock.mock.calls.find(([eventName]) => eventName === 'terminalListMenu');
+        const showMenu = listMenuEvent[1];
+
+        showMenu({ menuId: 7, title: 'Test', options: ['Alpha', 'Beta'] });
+
+        const row = document.querySelector('.tty-menu-row');
+        row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }));
+
+        expect(terminalMenuSelectMock).toHaveBeenCalledWith(7, 0);
+    });
+
+    it('keeps keyboard highlight until the mouse moves again', async () => {
+        const { initTerminalPopupMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        const listMenuEvent = eventsOnMock.mock.calls.find(([eventName]) => eventName === 'terminalListMenu');
+        const showMenu = listMenuEvent[1];
+
+        showMenu({ menuId: 8, title: 'Test', options: ['Alpha', 'Beta', 'Gamma'] });
+        const listRoot = document.getElementById('ttyphoon-listbox-menu');
+        terminalMenuHighlightMock.mockClear();
+
+        const rows = Array.from(document.querySelectorAll('.tty-menu-row'));
+        rows[2].dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 10, clientY: 30 }));
+
+        expect(terminalMenuHighlightMock).toHaveBeenLastCalledWith(8, 2);
+
+        terminalMenuHighlightMock.mockClear();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+
+        expect(terminalMenuHighlightMock).toHaveBeenCalledWith(8, 1);
+        expect(document.querySelector('.tty-menu-row.is-active')?.textContent).toContain('Beta');
+        expect(listRoot?.dataset.hoverHighlight).toBe('false');
+
+        terminalMenuHighlightMock.mockClear();
+        rows[2].dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 10, clientY: 30 }));
+
+        expect(terminalMenuHighlightMock).not.toHaveBeenCalled();
+        expect(document.querySelector('.tty-menu-row.is-active')?.textContent).toContain('Beta');
+
+        window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 11, clientY: 31 }));
+    expect(listRoot?.dataset.hoverHighlight).toBe('true');
+        const refreshedRows = Array.from(document.querySelectorAll('.tty-menu-row'));
+        refreshedRows[2].dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: 12, clientY: 32 }));
+
+        expect(terminalMenuHighlightMock).toHaveBeenCalledWith(8, 2);
+        expect(document.querySelector('.tty-menu-row.is-active')?.textContent).toContain('Gamma');
+    });
+
     it('still hides the menu when the current hide animation completes', async () => {
         const { initTerminalPopupMenu } = await import('./popup_menu.js');
 
