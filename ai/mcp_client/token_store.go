@@ -8,8 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
+	"golang.org/x/oauth2"
 )
 
 type FileTokenStore struct {
@@ -20,7 +19,7 @@ func NewFileTokenStore(path string) *FileTokenStore {
 	return &FileTokenStore{path: path}
 }
 
-func (s *FileTokenStore) GetToken(ctx context.Context) (*client.Token, error) {
+func (s *FileTokenStore) GetToken(ctx context.Context) (*oauth2.Token, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -28,24 +27,20 @@ func (s *FileTokenStore) GetToken(ctx context.Context) (*client.Token, error) {
 	b, err := os.ReadFile(s.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, transport.ErrNoToken
+			return nil, fmt.Errorf("token not found")
 		}
 		return nil, fmt.Errorf("read token file: %w", err)
 	}
 
-	var tok client.Token
+	var tok oauth2.Token
 	if err := json.Unmarshal(b, &tok); err != nil {
 		return nil, fmt.Errorf("parse token file: %w", err)
-	}
-
-	if tok.AccessToken == "" {
-		return nil, transport.ErrNoToken
 	}
 
 	return &tok, nil
 }
 
-func (s *FileTokenStore) SaveToken(ctx context.Context, token *client.Token) error {
+func (s *FileTokenStore) StoreToken(ctx context.Context, token *oauth2.Token) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

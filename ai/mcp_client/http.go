@@ -1,8 +1,10 @@
 package mcp_client
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"path"
 	"regexp"
@@ -11,83 +13,64 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/app"
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
+	"golang.org/x/oauth2"
 )
 
 type OAuthConfig struct {
 	ClientID              string
+	ClientURI             string
 	ClientSecret          string
 	RedirectURI           string
 	Scopes                []string
 	AuthServerMetadataURL string
 	PKCEEnabled           bool
-	TokenStore            client.TokenStore
 }
-
-type TokenStore = client.TokenStore
-type Token = client.Token
-type MemoryTokenStore = client.MemoryTokenStore
 
 var rxUnsafeTokenPath = regexp.MustCompile(`[^-_a-zA-Z0-9.]+`)
 
-func NewMemoryTokenStore() *MemoryTokenStore {
-	return client.NewMemoryTokenStore()
-}
-
 func ConnectHttp(overrides *mcp_config.OverrideT, url string) (*Client, error) {
-	c, err := client.NewStreamableHttpClient(url)
+	// Use the Go-SDK HTTP adapter for HTTP transport
+	g, err := ConnectHttpGoSDK(overrides, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return nil, fmt.Errorf("failed to create HTTP MCP client: %w", err)
 	}
-	return initClient(c, overrides)
+
+	return initClientFromGoSDK(g, overrides)
 }
 
 func ConnectHttpOAuth(overrides *mcp_config.OverrideT, url string, oauthCfg OAuthConfig) (*Client, error) {
-	cfg := client.OAuthConfig{
-		ClientID:              oauthCfg.ClientID,
-		ClientSecret:          oauthCfg.ClientSecret,
-		RedirectURI:           oauthCfg.RedirectURI,
-		Scopes:                oauthCfg.Scopes,
-		TokenStore:            oauthCfg.TokenStore,
-		AuthServerMetadataURL: oauthCfg.AuthServerMetadataURL,
-		PKCEEnabled:           oauthCfg.PKCEEnabled,
+	// Build OAuth config for go-sdk
+	var simple *simpleOAuthHandler
+	if oauthCfg.RedirectURI != "" || len(oauthCfg.Scopes) > 0 {
+		ts := NewFilePersistingTokenSource("", nil)
+		simple = &simpleOAuthHandler{ts: ts}
 	}
 
-	c, err := client.NewOAuthStreamableHttpClient(url, cfg)
+	g, err := ConnectHttpGoSDK(overrides, url, simple)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OAuth client: %w", err)
+		return nil, fmt.Errorf("failed to create OAuth MCP client: %w", err)
 	}
 
-	return initClient(c, overrides)
+	return initClientFromGoSDK(g, overrides)
 }
 
-func IsOAuthAuthorizationRequiredError(err error) bool {
-	return client.IsOAuthAuthorizationRequiredError(err)
+// simpleOAuthHandler is a minimal OAuthHandler that exposes a TokenSource but
+// does not perform interactive authorization itself.
+type simpleOAuthHandler struct {
+	ts oauth2.TokenSource
 }
 
-func GetOAuthHandler(err error) *transport.OAuthHandler {
-	return client.GetOAuthHandler(err)
+func (h *simpleOAuthHandler) TokenSource(ctx context.Context) (oauth2.TokenSource, error) {
+	return h.ts, nil
 }
 
-func GenerateCodeVerifier() (string, error) {
-	return client.GenerateCodeVerifier()
-}
-
-func GenerateCodeChallenge(verifier string) string {
-	return client.GenerateCodeChallenge(verifier)
-}
-
-func GenerateState() (string, error) {
-	return client.GenerateState()
+func (h *simpleOAuthHandler) Authorize(ctx context.Context, req *http.Request, resp *http.Response) error {
+	return fmt.Errorf("authorization required")
 }
 
 func IsAuthorizationFailure(err error) bool {
 	if err == nil {
 		return false
-	}
-	if IsOAuthAuthorizationRequiredError(err) {
-		return true
 	}
 
 	msg := strings.ToLower(err.Error())
@@ -99,6 +82,10 @@ func IsAuthorizationFailure(err error) bool {
 
 func DefaultRedirectURI() string {
 	return "http://127.0.0.1:7700/"
+}
+
+func DefaultClientURI() string {
+	return "https://ttyphoon.com/oauth/client-metadata.json"
 }
 
 func DefaultTokenFile(serverName, rawURL string) string {
