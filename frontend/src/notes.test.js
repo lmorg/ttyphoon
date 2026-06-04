@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as swaggerUtils from './swagger-utils.js';
 
 const getWindowStyleMock = vi.fn();
 const getFileMock = vi.fn();
@@ -72,6 +73,14 @@ const notesLspApplyCodeActionMock = vi.fn(() => Promise.resolve({ changed: false
 const notesLspPrepareRenameMock = vi.fn(() => Promise.resolve({ canRename: true, placeholder: '' }));
 const notesLspRenameMock = vi.fn(() => Promise.resolve({ changed: false, content: '' }));
 const notesRecentFilesMock = vi.fn(() => Promise.resolve([]));
+const notesHistoryPreviousMock = vi.fn(() => Promise.resolve(''));
+const notesHistoryNextMock = vi.fn(() => Promise.resolve(''));
+const notesHistoryAddMock = vi.fn(() => Promise.resolve());
+const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
+const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
+const setProjectCacheMock = vi.fn(() => Promise.resolve());
+const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
+const setDocumentCacheMock = vi.fn(() => Promise.resolve());
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -126,6 +135,14 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspPrepareRename: notesLspPrepareRenameMock,
     NotesLspRename: notesLspRenameMock,
     NotesRecentFiles: notesRecentFilesMock,
+    NotesHistoryPrevious: notesHistoryPreviousMock,
+    NotesHistoryNext: notesHistoryNextMock,
+    NotesHistoryAdd: notesHistoryAddMock,
+    NotesHistoryCurrent: notesHistoryCurrentMock,
+    GetProjectCache: getProjectCacheMock,
+    SetProjectCache: setProjectCacheMock,
+    GetDocumentCache: getDocumentCacheMock,
+    SetDocumentCache: setDocumentCacheMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
@@ -276,6 +293,14 @@ describe('notes rendering', () => {
         notesLspApplyCodeActionMock.mockReset();
         notesLspPrepareRenameMock.mockReset();
         notesLspRenameMock.mockReset();
+        notesHistoryPreviousMock.mockReset();
+        notesHistoryNextMock.mockReset();
+        notesHistoryAddMock.mockReset();
+        notesHistoryCurrentMock.mockReset();
+        getProjectCacheMock.mockReset();
+        setProjectCacheMock.mockReset();
+        getDocumentCacheMock.mockReset();
+        setDocumentCacheMock.mockReset();
         getHyperlinkMenuActionsMock.mockReset();
         runHyperlinkMenuActionMock.mockReset();
         displayHyperlinkMenuMock.mockReset();
@@ -323,7 +348,18 @@ describe('notes rendering', () => {
         notesLspFormatRangeMock.mockResolvedValue({ changed: false, content: '' });
         notesLspCodeActionsMock.mockResolvedValue([]);
         notesLspApplyCodeActionMock.mockResolvedValue({ changed: false, content: '' });
+        notesHistoryPreviousMock.mockResolvedValue('');
+        notesHistoryNextMock.mockResolvedValue('');
+        notesHistoryAddMock.mockResolvedValue();
+        notesHistoryCurrentMock.mockResolvedValue('');
+        getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
+        setProjectCacheMock.mockResolvedValue();
+        getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
+        setDocumentCacheMock.mockResolvedValue();
         getHyperlinkMenuActionsMock.mockResolvedValue([]);
+        vi.mocked(swaggerUtils.hasSwaggerKey).mockReturnValue(false);
+        vi.mocked(swaggerUtils.parseSwaggerSpec).mockReturnValue(null);
+        vi.mocked(swaggerUtils.extractPaths).mockReturnValue([]);
         clipboardSetTextMock.mockResolvedValue();
         runHyperlinkMenuActionMock.mockResolvedValue();
     });
@@ -2003,6 +2039,147 @@ describe('notes rendering', () => {
 
         expect(displayHyperlinkMenuMock).toHaveBeenCalledWith('https://go.dev/', 'https://go.dev');
         expect(showLocalMenuMock).not.toHaveBeenCalled();
+    });
+
+    it('switches to AI tools tab when AI response stream starts', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const toolsPanel = document.getElementById('notes-tools-panel');
+        const tabAI = document.getElementById('notes-tools-tab-ai');
+        const tabToC = document.getElementById('notes-tools-tab-toc');
+        const paneAI = document.getElementById('notes-tools-ai-pane');
+        const paneToC = document.getElementById('notes-tools-toc-pane');
+
+        tabToC.click();
+        expect(tabToC.getAttribute('aria-selected')).toBe('true');
+        expect(tabAI.getAttribute('aria-selected')).toBe('false');
+        expect(paneToC.dataset.active).toBe('true');
+        expect(paneAI.dataset.active).toBe('false');
+
+        toolsPanel.dataset.collapsed = 'true';
+
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+        aiResponseHandler('hello from ai');
+        await flushPromises();
+
+        expect(tabAI.getAttribute('aria-selected')).toBe('true');
+        expect(tabToC.getAttribute('aria-selected')).toBe('false');
+        expect(paneAI.dataset.active).toBe('true');
+        expect(paneToC.dataset.active).toBe('false');
+        expect(toolsPanel.dataset.collapsed).toBe('false');
+    });
+
+    it('opens Find tools tab from the toolbar Find button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nfind me', text: '', error: '' });
+
+        await importNotesModule();
+
+        const toolsPanel = document.getElementById('notes-tools-panel');
+        const tabFind = document.getElementById('notes-tools-tab-find');
+        const tabAI = document.getElementById('notes-tools-tab-ai');
+        const paneFind = document.getElementById('notes-tools-find-pane');
+        const paneAI = document.getElementById('notes-tools-ai-pane');
+        const findButton = document.getElementById('notes-find');
+
+        expect(tabFind).not.toBeNull();
+        expect(tabAI).not.toBeNull();
+
+        toolsPanel.dataset.collapsed = 'true';
+        findButton.click();
+        await flushPromises();
+
+        expect(toolsPanel.dataset.collapsed).toBe('false');
+        expect(tabFind.getAttribute('aria-selected')).toBe('true');
+        expect(tabAI.getAttribute('aria-selected')).toBe('false');
+        expect(paneFind.dataset.active).toBe('true');
+        expect(paneAI.dataset.active).toBe('false');
+    });
+
+    it('hides Find tools tab in Hex and Meta modes', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nfind me', text: '', error: '' });
+
+        await importNotesModule();
+
+        const tabFind = document.getElementById('notes-tools-tab-find');
+        const tabHex = document.getElementById('notes-tab-hex');
+        const tabMeta = document.getElementById('notes-tab-meta');
+        const tabViewer = document.getElementById('notes-tab-viewer');
+
+        expect(tabFind.style.display).not.toBe('none');
+
+        tabHex.click();
+        await flushPromises();
+        expect(tabFind.style.display).toBe('none');
+
+        tabMeta.click();
+        await flushPromises();
+        expect(tabFind.style.display).toBe('none');
+
+        tabViewer.click();
+        await flushPromises();
+        expect(tabFind.style.display).not.toBe('none');
+    });
+
+    it('hides Find tools tab in Swagger Run mode', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/openapi.json']);
+        vi.mocked(swaggerUtils.parseSwaggerSpec).mockReturnValue({
+            swagger: '2.0',
+            paths: {
+                '/ping': {
+                    get: {
+                        responses: {
+                            200: { description: 'ok' },
+                        },
+                    },
+                },
+            },
+        });
+        vi.mocked(swaggerUtils.hasSwaggerKey).mockReturnValue(true);
+        vi.mocked(swaggerUtils.extractPaths).mockReturnValue(['/ping']);
+        getFileMock.mockResolvedValue({
+            contents: JSON.stringify({
+                swagger: '2.0',
+                info: { title: 'Test API', version: '1.0.0' },
+                paths: {
+                    '/ping': {
+                        get: {
+                            responses: {
+                                200: { description: 'ok' },
+                            },
+                        },
+                    },
+                },
+            }),
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/openapi.json"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabFind = document.getElementById('notes-tools-tab-find');
+        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
+        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
+
+        expect(tabFind.style.display).not.toBe('none');
+
+        tabSwaggerRun.click();
+        await flushPromises();
+        expect(tabFind.style.display).toBe('none');
+
+        tabSwaggerEdit.click();
+        await flushPromises();
+        expect(tabFind.style.display).not.toBe('none');
     });
 
     it('auto-copies markdown viewer selection when highlighted', async () => {

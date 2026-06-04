@@ -531,6 +531,7 @@ app.innerHTML = `
                     <div class="notes-tools-header">
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
+                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
                             <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                             <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
                         </div>
@@ -545,6 +546,17 @@ app.innerHTML = `
                         </div>
                         <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
                             <div id="notes-tools-toc" class="notes-tools-toc"></div>
+                        </div>
+                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="false">
+                            <div class="notes-tools-find-wrap">
+                                <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                <div id="notes-find-controls">
+                                    <span id="notes-find-counter"></span>
+                                    <button id="notes-find-prev" type="button" title="Previous match">↑</button>
+                                    <button id="notes-find-next" type="button" title="Next match">↓</button>
+                                    <button id="notes-find-close" type="button" title="Close find">✕</button>
+                                </div>
+                            </div>
                         </div>
                         <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
                             <div class="notes-tools-pane-header">
@@ -585,13 +597,6 @@ app.innerHTML = `
                 <button id="notes-delete-confirm" type="button">Delete</button>
             </div>
         </div>
-    </div>
-    <div id="notes-find-bar" data-open="false" aria-hidden="true">
-        <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <span id="notes-find-counter"></span>
-        <button id="notes-find-prev" type="button" title="Previous match" tabindex="-1">↑</button>
-        <button id="notes-find-next" type="button" title="Next match" tabindex="-1">↓</button>
-        <button id="notes-find-close" type="button" title="Close find" tabindex="-1">✕</button>
     </div>
 `;
 
@@ -652,16 +657,17 @@ const elements = {
     deleteModalBody: document.getElementById('notes-delete-modal-body'),
     deleteCancel: document.getElementById('notes-delete-cancel'),
     deleteConfirm: document.getElementById('notes-delete-confirm'),
-    findBar: document.getElementById('notes-find-bar'),
     findInput: document.getElementById('notes-find-input'),
     findCounter: document.getElementById('notes-find-counter'),
     findPrev: document.getElementById('notes-find-prev'),
     findNext: document.getElementById('notes-find-next'),
     findClose: document.getElementById('notes-find-close'),
     toolsTabs: document.getElementById('notes-tools-tabs'),
+    toolsTabFind: document.getElementById('notes-tools-tab-find'),
     toolsTabAI: document.getElementById('notes-tools-tab-ai'),
     toolsTabToC: document.getElementById('notes-tools-tab-toc'),
     toolsTabLog: document.getElementById('notes-tools-tab-log'),
+    toolsFindPane: document.getElementById('notes-tools-find-pane'),
     toolsAIPane: document.getElementById('notes-tools-ai-pane'),
     toolsToCPane: document.getElementById('notes-tools-toc-pane'),
     toolsLogPane: document.getElementById('notes-tools-log-pane'),
@@ -1717,8 +1723,8 @@ async function renderMarkdown() {
 
     refreshToolsToC();
 
-    // Re-apply find highlights if find bar is open and in viewer mode
-    if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'viewer') {
+    // Re-apply find highlights when Find tab is active in viewer mode.
+    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery && state.viewMode === 'viewer') {
         setTimeout(() => {
             performFind();
         }, 0);
@@ -1933,6 +1939,8 @@ function updateToolsTabVisibility(fileType) {
     } else {
         clearToolsToCHighlight(true);
     }
+
+    updateFindAvailability();
 }
 
 function renderMetaView() {
@@ -4377,8 +4385,8 @@ function setViewMode(mode) {
         void ensureHexDumpForCurrentFile();
     }
     
-    // Re-perform find if find bar is open
-    if (elements.findBar.dataset.open === 'true' && state.findQuery) {
+    // Re-perform find if Find tab is currently active.
+    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery) {
         performFind();
     }
 
@@ -4441,8 +4449,8 @@ async function renderJupyterView() {
             // Enable column sorting on all tables
             setupTableSorting(elements.jupyter);
 
-            // Re-apply find highlights if find bar is open and in jupyter mode
-            if (elements.findBar.dataset.open === 'true' && state.findQuery && state.viewMode === 'jupyter') {
+            // Re-apply find highlights when Find tab is active in jupyter mode.
+            if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery && state.viewMode === 'jupyter') {
                 setTimeout(() => {
                     performFind();
                 }, 0);
@@ -5893,7 +5901,7 @@ async function loadFile(file) {
             saveDocumentCache();
             setDirty(false);
             renderFileList();
-            if (elements.findBar.dataset.open === 'true') {
+            if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
             return;
@@ -5948,7 +5956,7 @@ async function loadFile(file) {
             setDirty(false);
             renderFileList();
 
-            if (elements.findBar.dataset.open === 'true') {
+            if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
             return;
@@ -6069,8 +6077,8 @@ async function loadFile(file) {
             renderSwaggerJsonView();
         }
         
-        // Close find bar when loading a new file
-        if (elements.findBar.dataset.open === 'true') {
+        // Close active Find tab state when loading a new file.
+        if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
         }
 
@@ -6182,8 +6190,11 @@ function openFindBar() {
         return;
     }
 
-    elements.findBar.dataset.open = 'true';
-    elements.findBar.setAttribute('aria-hidden', 'false');
+    if (elements.toolsPanel.dataset.collapsed === 'true') {
+        setToolsPanelCollapsed(false);
+    }
+
+    setToolsTab('find');
     setTimeout(() => {
         elements.findInput.focus();
         elements.findInput.select();
@@ -6208,17 +6219,24 @@ function scrollEditorToSelection(editor, selectionStart) {
 }
 
 function closeFindBar() {
-    elements.findBar.dataset.open = 'false';
-    elements.findBar.setAttribute('aria-hidden', 'true');
     clearHighlights();
     state.findMatches = [];
     state.findCurrentIndex = -1;
     state.findQuery = '';
+    elements.findInput.value = '';
     elements.findCounter.textContent = '';
+
+    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
+        const nextTab = elements.toolsTabToC?.style.display !== 'none' ? 'toc' : 'ai';
+        setToolsTab(nextTab);
+    }
 }
 
 function isFindAvailableInCurrentMode() {
-    return state.viewMode !== 'swagger-run' && state.viewMode !== 'image-view' && state.viewMode !== 'hex';
+    return state.viewMode !== 'swagger-run'
+        && state.viewMode !== 'image-view'
+        && state.viewMode !== 'hex'
+        && state.viewMode !== 'meta';
 }
 
 function updateFindAvailability() {
@@ -6226,8 +6244,12 @@ function updateFindAvailability() {
     // Do not set disabled — that swallows click events and prevents the
     // notification from firing. Use aria-disabled for accessibility only.
     elements.find.setAttribute('aria-disabled', available ? 'false' : 'true');
+    if (elements.toolsTabFind) {
+        elements.toolsTabFind.style.display = available ? '' : 'none';
+        elements.toolsTabFind.setAttribute('aria-disabled', available ? 'false' : 'true');
+    }
 
-    if (!available && elements.findBar.dataset.open === 'true') {
+    if (!available && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
         closeFindBar();
     }
 }
@@ -6285,7 +6307,11 @@ function performFind() {
 
     const query = elements.findInput.value;
     if (!query) {
-        closeFindBar();
+        clearHighlights();
+        state.findMatches = [];
+        state.findCurrentIndex = -1;
+        state.findQuery = '';
+        updateFindCounter();
         return;
     }
 
@@ -7571,6 +7597,7 @@ EventsOn("aiResponseStream", (chunk) => {
     const text = String(chunk ?? '');
     if (text) {
         appendAIText(text);
+        setToolsTab('ai');
         // Auto-expand Tools panel when response starts
         if (elements.toolsPanel.dataset.collapsed === 'true') {
             toggleToolsPanel();
@@ -7640,6 +7667,11 @@ if (elements.toolsTabAI) {
 }
 if (elements.toolsTabToC) {
     elements.toolsTabToC.addEventListener('click', () => setToolsTab('toc'));
+}
+if (elements.toolsTabFind) {
+    elements.toolsTabFind.addEventListener('click', () => {
+        openFindBar();
+    });
 }
 
 if (elements.toolsTabLog) {
@@ -7973,6 +8005,14 @@ function applyWindowStyle(result) {
         }
 
         #notes-find:hover {
+            color: var(--accent) !important;
+            border-radius: 5px;
+            border-color: var(--accent) !important;
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
+        }
+
+        #notes-history-prev:hover,
+        #notes-history-next:hover {
             color: var(--accent) !important;
             border-radius: 5px;
             border-color: var(--accent) !important;
@@ -8858,8 +8898,10 @@ function applyWindowStyle(result) {
         [data-log-maximized="true"] .notes-tools-restore,
         [data-log-maximized="true"] #notes-tools-ai-pane,
         [data-log-maximized="true"] #notes-tools-toc-pane,
+        [data-log-maximized="true"] #notes-tools-find-pane,
         [data-log-maximized="true"] #notes-tools-tab-ai,
         [data-log-maximized="true"] #notes-tools-tab-toc,
+        [data-log-maximized="true"] #notes-tools-tab-find,
         [data-log-maximized="true"] #notes-tools-tab-log,
         [data-log-maximized="true"] #notes-tools-minimize {
             display: none !important;
@@ -9171,22 +9213,15 @@ function applyWindowStyle(result) {
             word-break: break-word;
         }
 
-        #notes-find-bar {
-            border-radius: 5px;
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            display: none;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: var(--bg);
-            border: 2px solid var(--fg);
-            z-index: 100;
+        #notes-tools-find-pane {
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
-        #notes-find-bar[data-open="true"] {
+        .notes-tools-find-wrap {
             display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
         }
 
         #notes-find-input {
@@ -9197,20 +9232,28 @@ function applyWindowStyle(result) {
             padding: 4px 8px;
             font-size: ${result.fontSize}px;
             outline: none;
-            min-width: 200px;
+            width: 100%;
+            min-width: 0;
         }
 
         #notes-find-input:focus {
             border-color: var(--accent);
         }
 
+        #notes-find-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         #notes-find-counter {
+            flex: 1;
             font-size: ${result.fontSize - 2}px;
             opacity: 0.8;
             white-space: nowrap;
         }
 
-        #notes-find-bar button {
+        #notes-find-controls button {
             border-radius: 5px;
             border: 2px solid var(--fg);
             background: transparent;
@@ -9220,7 +9263,7 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize}px;
         }
 
-        #notes-find-bar button:hover {
+        #notes-find-controls button:hover {
             border-color: var(--accent);
             color: var(--accent);
             transition: all 0.2s ease;
@@ -11361,7 +11404,7 @@ document.addEventListener('keydown', (event) => {
         return;
     }
 
-    if (event.key === 'Escape' && elements.findBar.dataset.open === 'true') {
+    if (event.key === 'Escape' && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
         event.preventDefault();
         closeFindBar();
     } else if (event.key === 'Escape' && elements.modal.dataset.open === 'true') {
