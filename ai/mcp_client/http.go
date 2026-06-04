@@ -84,6 +84,10 @@ func DefaultRedirectURI() string {
 	return "http://127.0.0.1:7700/"
 }
 
+func DefaultClientURI() string {
+	return "https://ttyphoon.com/oauth/client-metadata.json"
+}
+
 func DefaultTokenFile(serverName, rawURL string) string {
 	host := serverName
 	if u, err := url.Parse(rawURL); err == nil {

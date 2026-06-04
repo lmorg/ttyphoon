@@ -8742,7 +8742,7 @@ function applyWindowStyle(result) {
 
         #notes-log-output {
             flex: 1;
-            padding: 12px;
+            padding: 2px;
             font-size: ${result.fontSize}px;
             line-height: 1.5;
             overflow-x: auto;

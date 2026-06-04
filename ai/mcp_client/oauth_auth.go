@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -107,8 +108,9 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 
 func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthConfig {
 	redirectURI := DefaultRedirectURI()
+	clientURI := DefaultClientURI()
 	pkceEnabled := true
-	var clientID, clientURI, clientSecret, authServerMetadataURL string
+	var clientID, clientSecret, authServerMetadataURL string
 	var scopes []string
 
 	if oauth != nil {
@@ -119,7 +121,9 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 			pkceEnabled = oauth.PKCEEnabled
 		}
 		clientID = oauth.ClientID
-		clientURI = oauth.ClientURI
+		if oauth.ClientURI != "" {
+			clientURI = oauth.ClientURI
+		}
 		clientSecret = oauth.ClientSecret
 		scopes = oauth.Scopes
 		authServerMetadataURL = oauth.AuthServerMetadataURL
@@ -373,36 +377,38 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 		return
 	}
 
-	issuerToForce := strings.TrimSpace(g.preferredAuthIssuer)
-	if issuerToForce == "" {
-		if rmURL := resourceMetadataURLFromChallenges(challenges); rmURL != "" {
-			normalizedIssuer, nErr := normalizedIssuerFromResourceMetadata(context.Background(), rmURL, req.URL.String())
-			if nErr != nil {
-				log.Printf("MCP OAuth: failed to derive normalized issuer from resource metadata: %v", nErr)
-			} else if normalizedIssuer != "" {
-				issuerToForce = normalizedIssuer
-				log.Printf("MCP OAuth: derived normalized issuer from challenge resource metadata issuer=%q", issuerToForce)
-
-				fallbackMetadataURL := defaultOpenIDMetadataURLForAuthDomain(issuerToForce)
-				if fallbackMetadataURL != "" {
-					log.Printf("MCP OAuth: trying fallback auth metadata URL=%q", sanitizeURLForLog(fallbackMetadataURL))
-					if discoveredIssuer, dErr := resolvePreferredAuthIssuer(context.Background(), fallbackMetadataURL, http.DefaultClient); dErr != nil {
-						log.Printf("MCP OAuth: fallback metadata lookup failed: %v", dErr)
-					} else if discoveredIssuer != "" {
-						issuerToForce = discoveredIssuer
-						log.Printf("MCP OAuth: fallback metadata lookup succeeded issuer=%q", issuerToForce)
-					}
-				}
-			}
+	rmURL := resourceMetadataURLFromChallenges(challenges)
+	if rmURL == "" {
+		if !isPRMShimEnabled() {
+			log.Printf("MCP OAuth: PRM shim disabled by default (set TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM=1 to enable)")
 		}
-	}
-
-	if issuerToForce == "" {
 		return
 	}
 
+	// Fetch PRM once to get the raw (possibly pathful) authorization server issuer
+	rawIssuer, err := extractIssuerFromResourceMetadata(context.Background(), rmURL)
+	if err != nil {
+		log.Printf("MCP OAuth: failed to extract issuer from resource_metadata: %v", err)
+		return
+	}
+
+	// Auto-enable if pathful issuer detected (e.g. Atlassian's tenant-scoped issuers)
+	if issuerHasPathComponent(rawIssuer) {
+		log.Printf("MCP OAuth: detected pathful issuer in resource_metadata, auto-enabling PRM shim for normalization issuer=%q", rawIssuer)
+	} else if !isPRMShimEnabled() {
+		log.Printf("MCP OAuth: PRM shim disabled by default (set TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM=1 to enable)")
+		return
+	}
+
+	// Fetch the real auth server metadata from the pathful issuer URL.
+	// This is where providers like Atlassian advertise their registration_endpoint.
+	realMeta, metaErr := fetchAuthServerMetadataForPathfulIssuer(context.Background(), rawIssuer)
+	if metaErr != nil {
+		log.Printf("MCP OAuth: failed to fetch auth server metadata for issuer=%q: %v (continuing without)", rawIssuer, metaErr)
+	}
+
 	resource := req.URL.String()
-	prmURL, err := g.ensureLocalProtectedResourceMetadataURL(resource, issuerToForce)
+	prmURL, err := g.ensureLocalProtectedResourceMetadataEndpoints(resource, realMeta)
 	if err != nil {
 		log.Printf("MCP OAuth: failed to create local PRM endpoint: %v", err)
 		return
@@ -411,39 +417,59 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	canonical := http.CanonicalHeaderKey("WWW-Authenticate")
 	existing := append([]string{}, resp.Header[canonical]...)
 	resp.Header[canonical] = append([]string{fmt.Sprintf(`Bearer resource_metadata=%q`, prmURL)}, existing...)
-	log.Printf("MCP OAuth: injected local PRM metadata URL for issuer alignment prm_url=%q issuer=%q", prmURL, issuerToForce)
+	log.Printf("MCP OAuth: injected local PRM metadata URL prm_url=%q raw_issuer=%q", prmURL, rawIssuer)
 }
 
-func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataURL(resource, issuer string) (string, error) {
+// ensureLocalProtectedResourceMetadataEndpoints starts a local HTTP server (once) that serves:
+//   - /.well-known/oauth-protected-resource  — PRM pointing to the local server as auth server
+//   - /.well-known/oauth-authorization-server — synthetic auth server metadata with a local issuer
+//     (matching the PRM entry) plus all real endpoints including registration_endpoint
+//
+// This lets go-sdk pass strict issuer validation while still finding the provider's DCR endpoint.
+func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resource string, realMeta *realAuthServerMeta) (string, error) {
 	g.prmMu.Lock()
 	defer g.prmMu.Unlock()
 
 	if g.prmMetadataBaseURL == "" {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return "", fmt.Errorf("listen local PRM endpoint: %w", err)
+		}
+
+		localBase := "http://" + ln.Addr().String()
+
+		// Build auth server metadata JSON once: real endpoints + local issuer for strict validation
+		authMetaJSON, _ := json.Marshal(buildSyntheticAuthServerMetadata(localBase, realMeta))
+
 		mux := http.NewServeMux()
+
+		// PRM: authorization_servers points to our local server (which has the correct issuer)
 		mux.HandleFunc("/.well-known/oauth-protected-resource", func(w http.ResponseWriter, r *http.Request) {
 			requestedResource := r.URL.Query().Get("resource")
 			if requestedResource == "" {
 				requestedResource = resource
 			}
-
 			payload := map[string]any{
 				"resource":              requestedResource,
-				"authorization_servers": []string{issuer},
+				"authorization_servers": []string{localBase},
 			}
-
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(payload); err != nil {
 				log.Printf("MCP OAuth: failed writing local PRM response: %v", err)
 			}
 		})
 
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			return "", fmt.Errorf("listen local PRM endpoint: %w", err)
+		// Auth server metadata: issuer == localBase (so go-sdk validation passes)
+		// All real provider endpoints are preserved so auth/token/DCR flows reach the real server.
+		serveAuthMeta := func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(authMetaJSON)
 		}
+		mux.HandleFunc("/.well-known/oauth-authorization-server", serveAuthMeta)
+		mux.HandleFunc("/.well-known/openid-configuration", serveAuthMeta)
 
 		g.prmMetadataServerAddr = ln.Addr().String()
-		g.prmMetadataBaseURL = "http://" + g.prmMetadataServerAddr + "/.well-known/oauth-protected-resource"
+		g.prmMetadataBaseURL = localBase + "/.well-known/oauth-protected-resource"
 		g.prmMetadataServer = &http.Server{Handler: mux}
 
 		go func() {
@@ -452,10 +478,71 @@ func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataURL(resource, is
 			}
 		}()
 
-		log.Printf("MCP OAuth: started local PRM endpoint at %q for issuer=%q", g.prmMetadataBaseURL, issuer)
+		regEndpoint := ""
+		if realMeta != nil {
+			regEndpoint = realMeta.registrationEndpoint
+		}
+		log.Printf("MCP OAuth: started local shim at %q local_issuer=%q registration_endpoint=%q",
+			g.prmMetadataBaseURL, localBase, sanitizeURLForLog(regEndpoint))
 	}
 
 	return g.prmMetadataBaseURL + "?resource=" + url.QueryEscape(resource), nil
+}
+
+type realAuthServerMeta struct {
+	raw                  map[string]interface{}
+	registrationEndpoint string
+}
+
+// fetchAuthServerMetadataForPathfulIssuer fetches auth server metadata from a potentially
+// pathful issuer URL (e.g. https://auth.atlassian.com/tenant-id/...).
+// It tries {issuer}/.well-known/oauth-authorization-server, which is where providers like
+// Atlassian advertise the tenant-scoped registration_endpoint.
+func fetchAuthServerMetadataForPathfulIssuer(ctx context.Context, pathfulIssuer string) (*realAuthServerMeta, error) {
+	metaURL := strings.TrimRight(pathfulIssuer, "/") + "/.well-known/oauth-authorization-server"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metaURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", metaURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetch %s: status %d", metaURL, resp.StatusCode)
+	}
+
+	var raw map[string]interface{}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", metaURL, err)
+	}
+
+	regEndpoint, _ := raw["registration_endpoint"].(string)
+	log.Printf("MCP OAuth: fetched pathful issuer metadata from %q registration_endpoint=%q",
+		sanitizeURLForLog(metaURL), sanitizeURLForLog(regEndpoint))
+
+	return &realAuthServerMeta{raw: raw, registrationEndpoint: regEndpoint}, nil
+}
+
+// buildSyntheticAuthServerMetadata builds an auth server metadata document for the local shim.
+// It copies all real fields from realMeta (so real endpoints like authorize/token/registration
+// are preserved), but patches the issuer to localBase so go-sdk's strict issuer validation passes.
+func buildSyntheticAuthServerMetadata(localBase string, realMeta *realAuthServerMeta) map[string]any {
+	m := map[string]any{
+		"issuer": localBase,
+	}
+	if realMeta != nil && realMeta.raw != nil {
+		for k, v := range realMeta.raw {
+			if k != "issuer" {
+				m[k] = v
+			}
+		}
+	}
+	return m
 }
 
 func resourceMetadataURLFromChallenges(cs []oauthex.Challenge) string {
@@ -650,4 +737,51 @@ func enrichOAuthConnectError(err error, oauthCfg OAuthConfig) error {
 	}
 
 	return err
+}
+
+func isPRMShimEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func issuerHasPathComponent(issuer string) bool {
+	if issuer == "" {
+		return false
+	}
+	u, err := url.Parse(issuer)
+	if err != nil {
+		return false
+	}
+	path := strings.TrimSpace(u.Path)
+	// Has path component if non-empty and not just "/"
+	return path != "" && path != "/"
+}
+
+func extractIssuerFromResourceMetadata(ctx context.Context, metadataURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch metadata: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	var prm struct {
+		AuthorizationServers []string `json:"authorization_servers"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&prm); err != nil {
+		return "", fmt.Errorf("decode JSON: %w", err)
+	}
+	if len(prm.AuthorizationServers) == 0 {
+		return "", fmt.Errorf("no authorization_servers")
+	}
+
+	return strings.TrimSpace(prm.AuthorizationServers[0]), nil
 }
