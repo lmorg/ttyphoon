@@ -550,9 +550,9 @@ app.innerHTML = `
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-log-copy" type="button" class="notes-tools-clear" title="Copy log to clipboard">Copy</button>
                                 <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear" title="Deselect log lines">Deselect</button>
-                                <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
                                 <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
                                 <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
+                                <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
                                 <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
                             </div>
                             <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>

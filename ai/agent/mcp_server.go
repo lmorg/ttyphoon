@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -86,7 +87,10 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 	agent.McpServerAdd(server, c)
 
 	for i := range c.Tools.Tools {
-		jsonSchema, err := c.Tools.Tools[i].MarshalJSON()
+		tool := c.Tools.Tools[i]
+
+		// Marshal the InputSchema to JSON
+		jsonSchema, err := json.Marshal(tool.InputSchema)
 		if err != nil {
 			return err
 		}
@@ -95,10 +99,10 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 			client: c,
 			server: server,
 			path:   cfgPath,
-			name:   c.Tools.Tools[i].GetName(),
+			name:   tool.Name,
 			schema: jsonSchema,
 			description: fmt.Sprintf("%s\nInput schema: %s",
-				c.Tools.Tools[i].Description,
+				tool.Description,
 				string(jsonSchema),
 			),
 		})

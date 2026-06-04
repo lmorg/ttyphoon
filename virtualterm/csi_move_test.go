@@ -381,6 +381,7 @@ func TestCsiInsertCharacters(t *testing.T) {
 
 	test.RunTests(t)
 }
+
 // TestMoveCursorToRow_DefaultParam verifies that row=0 (the default when no
 // CSI parameter is given) is treated as row 1, placing the cursor at the top
 // of the screen (row index 0).

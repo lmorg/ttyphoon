@@ -15,7 +15,7 @@ const _testTermWidth = 10
 // NewTestTerminal creates a new virtual term used for unit tests
 func NewTestTerminal() *Term {
 	config.Config.Tmux.Enabled = false
-	
+
 	size := &types.XY{X: _testTermWidth, Y: _testTermHeight}
 
 	term := &Term{}

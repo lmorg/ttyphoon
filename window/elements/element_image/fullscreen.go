@@ -1,6 +1,5 @@
 package element_image
 
-
 // fullscreen displays the image in a fullscreen overlay for WebKit.
 //
 // The image asset is extracted and displayed in a scrollable, fullscreen overlay
