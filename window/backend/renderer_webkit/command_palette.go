@@ -12,6 +12,7 @@ import (
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/integrations"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/notes"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -107,6 +108,27 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 				Fn:    func() { askAiSkill(wr, skill) },
 				Icon:  0xf544,
 			})
+		}
+	}
+
+	agt := agent.Get(tile.Id())
+	if agt != nil {
+		mcp := file.GetConfigFiles("mcp", ".json")
+		if len(mcp) > 0 {
+			menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
+
+			for i := range mcp {
+				menu = append(menu, types.MenuItem{
+					Title: fmt.Sprintf("MCP servers: %s", mcp[i]),
+					Fn: func() {
+						err := agt.StartServersFromJson(mcp[i])
+						if err != nil {
+							wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Cannot start MCP server from %s: %v", mcp[i], err))
+						}
+					},
+					Icon: 0xf544,
+				})
+			}
 		}
 	}
 

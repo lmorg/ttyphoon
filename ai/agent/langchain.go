@@ -62,6 +62,21 @@ func initLLM(agent *Agent) error {
 
 const _ERR_UNABLE_TO_PARSE_AGENT_OUTPUT = "unable to parse agent output: "
 
+// this is a kludge to workaround the following error:
+// API returned unexpected status code: 400: Unsupported parameter: 'stop' is not supported with this model.
+func modelDisallowsStopParameter(agent *Agent) bool {
+	if agent == nil {
+		return false
+	}
+
+	if agent.ServiceName() != LLM_OPENAI {
+		return false
+	}
+
+	model := strings.ToLower(strings.TrimSpace(agent.ModelName()))
+	return strings.HasPrefix(model, "gpt-5")
+}
+
 // RunLLMWithStream calls the LLM with the prompt string and streams responses.
 // Use `ai` package to create specific prompts.
 func (agent *Agent) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (result string, err error) {
@@ -85,10 +100,7 @@ func (agent *Agent) RunLLMWithStream(ctx context.Context, prompt string, streamC
 		}
 	}
 
-	result, err = chains.Run(
-		ctx,
-		agent.executor,
-		prompt,
+	runOptions := []chains.ChainCallOption{
 		chains.WithTemperature(1),
 		chains.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 			if streamCallback != nil && len(chunk) > 0 {
@@ -96,6 +108,19 @@ func (agent *Agent) RunLLMWithStream(ctx context.Context, prompt string, streamC
 			}
 			return nil
 		}),
+	}
+
+	if modelDisallowsStopParameter(agent) {
+		// langchaingo's one-shot agent adds stop words by default.
+		// GPT-5-family models reject `stop`, so explicitly clear it.
+		runOptions = append(runOptions, chains.WithStopWords(nil))
+	}
+
+	result, err = chains.Run(
+		ctx,
+		agent.executor,
+		prompt,
+		runOptions...,
 	)
 
 	if err == nil {

@@ -368,6 +368,7 @@ import {
     resolveTableFunctionArgs,
     resolveTableFunctionArgsAsync,
 } from './table-expressions.js';
+import { createAIPipelineFormatter } from './ai_pipeline_formatter.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -6942,11 +6943,12 @@ async function askAIAboutCurrentDocument() {
         contents,
     ].join('\n');
 
-    clearAIOutput();
+    startAIJob();
     setToolsPanelCollapsed(false);
 
     try {
         await AskAI('notesDocument', fileName, aiContext);
+        finishAIJob();
     } catch (err) {
         notifyTerminal('Failed to ask AI about this document', 'error');
         console.error(err);
@@ -7581,16 +7583,26 @@ function saveDocumentCache() {
 }
 
 function clearAIOutput() {
-    elements.aiOutput.textContent = '';
+    aiPipelineFormatter.clear();
+}
+
+function startAIJob() {
+    aiPipelineFormatter.startJob();
+}
+
+function finishAIJob() {
+    aiPipelineFormatter.finishJob();
 }
 
 function appendAIText(text) {
-    if (elements.aiOutput.textContent === 'No AI response yet') {
-        elements.aiOutput.textContent = '';
-    }
-    elements.aiOutput.appendChild(document.createTextNode(text));
-    elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+    aiPipelineFormatter.appendChunk(text);
 }
+
+const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
+    marked,
+    processMarkdownContainer,
+    codeMaxLines: 10,
+});
 
 // Event listener for streaming AI responses
 EventsOn("aiResponseStream", (chunk) => {
@@ -8766,7 +8778,7 @@ function applyWindowStyle(result) {
             line-height: 1.5;
             overflow-x: hidden;
             overflow-y: auto;
-            white-space: pre-wrap;
+            white-space: normal;
             word-wrap: break-word;
             overflow-wrap: anywhere;
             word-break: break-word;
@@ -8775,9 +8787,61 @@ function applyWindowStyle(result) {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
+        #notes-ai-output .notes-ai-section {
+            margin-bottom: 14px;
+        }
+
+        #notes-ai-output .notes-ai-heading {
+            margin: 0 0 8px;
+            font-size: 1.05em;
+            line-height: 1.3;
+            color: var(--accent);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            padding-bottom: 4px;
+        }
+
+        #notes-ai-output .notes-ai-markdown {
+            margin: 0;
+            font-size: inherit;
+        }
+
+        #notes-ai-output .notes-ai-code {
+            margin: 0;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.24);
+            white-space: pre-wrap;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-height: calc(1.5em * 10 + 16px);
+        }
+
+        #notes-ai-output .notes-ai-code code {
+            white-space: inherit;
+            overflow-wrap: inherit;
+            word-break: inherit;
+        }
+
         #notes-ai-output:empty::before {
             content: "No AI response yet";
             opacity: 0.5;
+            font-style: italic;
+        }
+
+        #notes-ai-output .notes-ai-separator {
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.14);
+            margin: 18px 0 14px;
+        }
+
+        #notes-ai-output .notes-ai-timestamp {
+            margin: 8px 0 0;
+            font-size: 0.8em;
+            opacity: 0.45;
+            text-align: right;
             font-style: italic;
         }
 
@@ -10025,7 +10089,8 @@ function lspSeverityGutterClass(severity) {
     return `lsp-gutter-${name}`;
 }
 
-function clearVisibleLspDiagnostics() {
+function clearVisibleLspDiagnostics(options = {}) {
+    const preserveCompletion = options && options.preserveCompletion === true;
     if (elements.editorGutter) {
         elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
     }
@@ -10034,7 +10099,9 @@ function clearVisibleLspDiagnostics() {
         lspTooltipEl.style.display = 'none';
     }
     hideLspHoverTooltip();
-    hideLspCompletion();
+    if (!preserveCompletion) {
+        hideLspCompletion();
+    }
 }
 
 function clearCurrentFileLspDiagnosticsCache() {
@@ -10737,7 +10804,7 @@ if (elements.editor) {
         state.lspInlayRequestId += 1;
         state.lspInlayHints = [];
         clearCurrentFileLspDiagnosticsCache();
-        clearVisibleLspDiagnostics();
+        clearVisibleLspDiagnostics({ preserveCompletion: true });
 
         const cursor = elements.editor.selectionStart || 0;
         const value = elements.editor.value || '';

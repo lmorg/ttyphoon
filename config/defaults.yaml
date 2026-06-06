@@ -146,9 +146,9 @@ AI:
   AvailableModels:
     ChatGPT:
       # https://platform.openai.com/docs/models
-      - gpt-5.2
-      - gpt-5-mini
-      - gpt-5-nano
+      - gpt-5.5
+      - gpt-5.4
+      - gpt-5.4-mini
     Claude:
       # https://platform.claude.com/docs/en/about-claude/models/overview
       - claude-opus-4-5

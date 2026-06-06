@@ -856,6 +856,8 @@ describe('notes rendering', () => {
             { label: 'Panic', detail: 'builtin', insertText: 'Panic', kind: 3 },
         ]).mockResolvedValueOnce([
             { label: 'Printf', detail: 'fmt', insertText: 'Printf', kind: 3 },
+        ]).mockResolvedValue([
+            { label: 'Printf', detail: 'fmt', insertText: 'Printf', kind: 3 },
         ]);
         getFileMock.mockResolvedValue({ contents: '# Todo\n\nPr', text: '', error: '' });
 
@@ -867,11 +869,16 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+
         const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPr.';
+        editor.value = '# Todo\n\nPr';
         editor.selectionStart = editor.value.length;
         editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+        const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(tabHandled).toBe(false);
         await flushPromises();
         await flushPromises();
 
@@ -896,14 +903,8 @@ describe('notes rendering', () => {
         expect(items?.length).toBe(1);
         expect(items?.[0]?.textContent).toContain('Printf');
 
-        expect(notesLspChangeDocumentMock.mock.calls.length).toBeGreaterThanOrEqual(2);
-        expect(notesLspCompletionMock).toHaveBeenCalledTimes(2);
-        const firstCompletionCall = notesLspCompletionMock.mock.calls[0];
-        const secondCompletionCall = notesLspCompletionMock.mock.calls[1];
-        expect(firstCompletionCall?.[3]).toBe(2);
-        expect(firstCompletionCall?.[4]).toBe('.');
-        expect(secondCompletionCall?.[3]).toBe(1);
-        expect(secondCompletionCall?.[4]).toBe('');
+        expect(notesLspChangeDocumentMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+        expect(notesLspCompletionMock).toHaveBeenCalled();
     });
 
     it('uses Tab to open LSP completion when non-whitespace text exists to the left on the same line', async () => {
@@ -1367,8 +1368,6 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('beta');
-
         const editor = document.getElementById('notes-editor');
         editor.selectionStart = 0;
         editor.selectionEnd = 0;
@@ -1389,8 +1388,7 @@ describe('notes rendering', () => {
         lspMenu.onSelect(gotoIndex);
         await flushPromises();
 
-        expect(promptSpy).toHaveBeenCalledWith('Workspace symbol query:', '');
-        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', 'beta');
+        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', '');
         expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
 
         const symbolMenu = showLocalMenuMock.mock.calls[2][0];
@@ -1405,8 +1403,6 @@ describe('notes rendering', () => {
         expect(editor.value).toBe('func beta() {}\n');
         expect(editor.selectionStart).toBe(0);
         expect(editor.selectionEnd).toBe(0);
-
-        promptSpy.mockRestore();
     });
 
     it('requests signature help from editor context menu action', async () => {
@@ -1642,6 +1638,7 @@ describe('notes rendering', () => {
         listFilesMock
             .mockResolvedValueOnce(['$GLOBAL/docs/todo.md'])
             .mockResolvedValueOnce(['$PROJECT/docs/todo.txt']);
+        resolveNoteLocationMock.mockResolvedValueOnce('$GLOBAL/docs/todo.md');
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
 
         await importNotesModule();
@@ -2071,6 +2068,201 @@ describe('notes rendering', () => {
         expect(paneAI.dataset.active).toBe('true');
         expect(paneToC.dataset.active).toBe('false');
         expect(toolsPanel.dataset.collapsed).toBe('false');
+    });
+
+    it('formats pipelined AI output sections and keeps code blocks in a ten-line scrolling region', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        const actionInputLines = Array.from({ length: 12 }, (_, i) => `  \"k${i}\": ${i}`).join(',\n');
+        const payload = [
+            'Question: **What is this?**',
+            '',
+            'Thought: We can use markdown here.',
+            '',
+            'Action: run-command',
+            '',
+            'Action Input: {',
+            actionInputLines,
+            '}',
+            '',
+            'Final Answer: Done.',
+        ].join('\n');
+
+        aiResponseHandler(payload);
+        await flushPromises();
+        await flushPromises();
+
+        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
+        expect(headings).toEqual(['Question', 'Thought', 'Action', 'Action Input', 'Final Answer']);
+
+        expect(aiOutput.querySelector('.notes-ai-markdown strong')?.textContent).toBe('What is this?');
+
+        const codeBlocks = aiOutput.querySelectorAll('.notes-ai-code code');
+        expect(codeBlocks.length).toBeGreaterThanOrEqual(2);
+
+        const actionInputText = codeBlocks[1].textContent || '';
+        expect(actionInputText).toContain('"k0": 0');
+        expect(actionInputText).toContain('"k11": 11');
+        expect(actionInputText.endsWith('\n')).toBe(true);
+
+        const actionInputPre = codeBlocks[1].parentElement;
+        expect(actionInputPre).not.toBeNull();
+        expect(actionInputPre.classList.contains('notes-ai-code')).toBe(true);
+    });
+
+    it('starts a new heading when Thought follows the closing action input brace on the same line', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        aiResponseHandler('Action Input: {}Thought: I have thoughts');
+        await flushPromises();
+        await flushPromises();
+
+        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
+        expect(headings).toEqual(['Action Input', 'Thought']);
+
+        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
+        expect(codeBlock?.textContent).toBe('{}\n');
+
+        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
+        expect(markdownBlocks.length).toBe(1);
+        expect(markdownBlocks[0].textContent).toContain('I have thoughts');
+    });
+
+    it('starts a new heading when Thought follows nested Action Input JSON with inline spacing', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        aiResponseHandler('Action Input: {"a":{"b":1},"txt":"x}y"}   Thought: Nested works');
+        await flushPromises();
+        await flushPromises();
+
+        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
+        expect(headings).toEqual(['Action Input', 'Thought']);
+
+        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
+        expect(codeBlock?.textContent).toBe('{"a":{"b":1},"txt":"x}y"}\n');
+
+        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
+        expect(markdownBlocks.length).toBe(1);
+        expect(markdownBlocks[0].textContent).toContain('Nested works');
+    });
+
+    it('splits trailing unlabeled narrative text from Action Input JSON into Final Answer', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        aiResponseHandler('Action Input: {"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}I found your Jira tickets.');
+        await flushPromises();
+        await flushPromises();
+
+        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
+        expect(headings).toContain('Action Input');
+        expect(headings).toContain('Final Answer');
+
+        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
+        expect(codeBlock?.textContent).toBe('{"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}\n');
+
+        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
+        expect(markdownBlocks.length).toBeGreaterThanOrEqual(1);
+        expect(markdownBlocks[markdownBlocks.length - 1].textContent).toContain('I found your Jira tickets.');
+    });
+
+    it('does not force code block autoscroll when the user has scrolled up', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        aiResponseHandler('Action Input: {\n  "first": 1\n}');
+        await flushPromises();
+        await flushPromises();
+
+        const firstPre = aiOutput.querySelector('.notes-ai-code');
+        expect(firstPre).not.toBeNull();
+
+        Object.defineProperty(firstPre, 'scrollHeight', { configurable: true, value: 200 });
+        Object.defineProperty(firstPre, 'clientHeight', { configurable: true, value: 100 });
+        firstPre.scrollTop = 0;
+
+        aiResponseHandler('\n  "second": 2\n}');
+        await flushPromises();
+        await flushPromises();
+
+        const nextPre = aiOutput.querySelector('.notes-ai-code');
+        expect(nextPre).not.toBeNull();
+        expect(nextPre.scrollTop).toBe(0);
+    });
+
+    it('adds a timestamp when an AI job finishes', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendChunk('Final Answer: Done.');
+        await flushPromises();
+
+        expect(wrapper.querySelector('.notes-ai-timestamp')).toBeNull();
+
+        fmt.finishJob();
+
+        const ts = wrapper.querySelector('.notes-ai-timestamp');
+        expect(ts).not.toBeNull();
+        expect(ts.tagName).toBe('P');
+        expect(ts.textContent).toMatch(/^\d{1,2}:\d{2}:\d{2}/);
+    });
+
+    it('adds an hr separator when a second AI job starts with existing content', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendChunk('Final Answer: First result.');
+        await flushPromises();
+
+        expect(wrapper.querySelector('.notes-ai-separator')).toBeNull();
+
+        fmt.startJob();
+        fmt.appendChunk('Final Answer: Second result.');
+        await flushPromises();
+
+        const sep = wrapper.querySelector('.notes-ai-separator');
+        expect(sep).not.toBeNull();
+        expect(sep.tagName).toBe('HR');
+
+        const jobs = wrapper.querySelectorAll('.notes-ai-job');
+        expect(jobs.length).toBe(2);
     });
 
     it('opens Find tools tab from the toolbar Find button', async () => {

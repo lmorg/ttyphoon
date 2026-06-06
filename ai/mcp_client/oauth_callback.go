@@ -2,9 +2,9 @@ package mcp_client
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
-	"html"
-	"io"
+	"html/template"
 	"log"
 	"net"
 	"net/http"
@@ -12,7 +12,30 @@ import (
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/types"
 )
+
+//go:embed callback_complete.html
+var _HTML_CALLBACK_COMPLETE string
+
+var oauthCallbackPageTemplate = template.Must(template.New("oauth-callback-page").Parse(_HTML_CALLBACK_COMPLETE))
+
+type oauthCallbackPageModel struct {
+	AppName string
+	Bg      *types.Colour
+	Fg      *types.Colour
+	Accent  *types.Colour
+}
+
+func renderOAuthCallbackPage(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return oauthCallbackPageTemplate.Execute(w, oauthCallbackPageModel{
+		AppName: app.Name(),
+		Bg:      types.SGR_COLOR_BACKGROUND,
+		Fg:      types.SGR_COLOR_FOREGROUND,
+		Accent:  types.SGR_COLOR_ACCENT,
+	})
+}
 
 type OAuthCallbackServer struct {
 	server *http.Server
@@ -60,7 +83,10 @@ func StartOAuthCallbackServer(redirectURI string) (*OAuthCallbackServer, error) 
 			return
 		}
 
-		_, _ = io.WriteString(w, "<html><body><h1>Authentication complete</h1><p>You can close this window and return to "+html.EscapeString(app.Name())+".</p><script>window.close();</script></body></html>")
+		if err := renderOAuthCallbackPage(w); err != nil {
+			log.Printf("MCP OAuth: failed to render callback page: %v", err)
+			http.Error(w, "Authentication complete. You can close this window.", http.StatusOK)
+		}
 		select {
 		case result <- OAuthCallbackResult{Code: code, State: state}:
 		default:
