@@ -118,11 +118,11 @@ export function ResolveNotesLspLanguage(arg1:string):Promise<string>;
 
 export function RunAIAgentWithStream(arg1:string,arg2:string):Promise<void>;
 
-export function RunFunction(arg1:string,arg2:string,arg3:Array<string>,arg4:string):Promise<main.RunFunctionReturnT>;
+export function RunFunction(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<string>,arg6:string):Promise<main.RunFunctionReturnT>;
 
 export function RunHyperlinkMenuAction(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function RunNote(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function RunNote(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function SaveBinaryFile(arg1:string,arg2:string):Promise<void>;
 

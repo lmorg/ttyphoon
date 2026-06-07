@@ -226,16 +226,16 @@ export function RunAIAgentWithStream(arg1, arg2) {
   return window['go']['main']['WApp']['RunAIAgentWithStream'](arg1, arg2);
 }
 
-export function RunFunction(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['WApp']['RunFunction'](arg1, arg2, arg3, arg4);
+export function RunFunction(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['WApp']['RunFunction'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function RunHyperlinkMenuAction(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['RunHyperlinkMenuAction'](arg1, arg2, arg3);
 }
 
-export function RunNote(arg1, arg2, arg3) {
-  return window['go']['main']['WApp']['RunNote'](arg1, arg2, arg3);
+export function RunNote(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['RunNote'](arg1, arg2, arg3, arg4);
 }
 
 export function SaveBinaryFile(arg1, arg2) {

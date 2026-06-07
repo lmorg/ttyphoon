@@ -2808,7 +2808,9 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(runFunctionMock.mock.calls.length).toBeGreaterThan(0);
-        const [cellId, executedCode, parameters, runtime] = runFunctionMock.mock.calls[0];
+        const [docPath, functionName, cellId, executedCode, parameters, runtime] = runFunctionMock.mock.calls[0];
+        expect(docPath).toBe('$NOTES/table-fn.md');
+        expect(functionName).toBe('Add');
         expect(cellId).toBe('A2');
         expect(executedCode).toContain('int(args[0])');
         expect(executedCode).toContain('int(args[1])');
@@ -2888,7 +2890,9 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(runFunctionMock.mock.calls.length).toBeGreaterThan(0);
-        const [cellId, , parameters] = runFunctionMock.mock.calls[0];
+        const [docPath, functionName, cellId, , parameters] = runFunctionMock.mock.calls[0];
+        expect(docPath).toBe('$NOTES/table-fn-range.md');
+        expect(functionName).toBe('Sum');
         expect(cellId).toBe('D2');
         expect(parameters).toEqual(['1', '2', '3', 'B', '2', '5', '4', '5', '6', '']);
     });
@@ -2935,12 +2939,16 @@ describe('notes rendering', () => {
         expect(runFunctionMock.mock.calls.length).toBeGreaterThanOrEqual(2);
         
         // First call should be nested Sum(B2:C2) with parameters ['2', '3']
-        const [firstCallCellId, , firstCallParams] = runFunctionMock.mock.calls[0];
+        const [firstDocPath, firstFunctionName, firstCallCellId, , firstCallParams] = runFunctionMock.mock.calls[0];
+        expect(firstDocPath).toBe('$NOTES/table-fn-nested.md');
+        expect(firstFunctionName).toBe('Sum');
         expect(firstCallCellId).toBe('D2');
         expect(firstCallParams).toEqual(['2', '3']);
         
         // Second call should be outer Sum(A2, 5) with parameters ['1', '5']
-        const [secondCallCellId, , secondCallParams] = runFunctionMock.mock.calls[1];
+        const [secondDocPath, secondFunctionName, secondCallCellId, , secondCallParams] = runFunctionMock.mock.calls[1];
+        expect(secondDocPath).toBe('$NOTES/table-fn-nested.md');
+        expect(secondFunctionName).toBe('Sum');
         expect(secondCallCellId).toBe('D2');
         expect(secondCallParams).toEqual(['1', '5']);
 
@@ -2951,7 +2959,7 @@ describe('notes rendering', () => {
 
     it('evaluates multiple cells calling the same function without #ERR', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/table-fn-multi.md']);
-        runFunctionMock.mockImplementation(async (cellId, _code, parameters) => {
+        runFunctionMock.mockImplementation(async (_docPath, _functionName, cellId, _code, parameters) => {
             return {
                 Output: String((parseInt(parameters[0], 10) || 0) + (parseInt(parameters[1], 10) || 0)),
                 IsError: false,
@@ -2985,10 +2993,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(runFunctionMock.mock.calls.length).toBeGreaterThanOrEqual(2);
-        const calledWithOneTwo = runFunctionMock.mock.calls.some((call) => JSON.stringify(call[2]) === JSON.stringify(['1', '2']));
-        const calledWithThreeFour = runFunctionMock.mock.calls.some((call) => JSON.stringify(call[2]) === JSON.stringify(['3', '4']));
-        const calledWithCellA2 = runFunctionMock.mock.calls.some((call) => call[0] === 'A2');
-        const calledWithCellA3 = runFunctionMock.mock.calls.some((call) => call[0] === 'A3');
+        const calledWithOneTwo = runFunctionMock.mock.calls.some((call) => JSON.stringify(call[4]) === JSON.stringify(['1', '2']));
+        const calledWithThreeFour = runFunctionMock.mock.calls.some((call) => JSON.stringify(call[4]) === JSON.stringify(['3', '4']));
+        const calledWithCellA2 = runFunctionMock.mock.calls.some((call) => call[2] === 'A2');
+        const calledWithCellA3 = runFunctionMock.mock.calls.some((call) => call[2] === 'A3');
         expect(calledWithOneTwo).toBe(true);
         expect(calledWithThreeFour).toBe(true);
         expect(calledWithCellA2).toBe(true);
@@ -3004,7 +3012,7 @@ describe('notes rendering', () => {
 
     it('respects dependencies when one function cell references another function cell', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/table-fn-deps.md']);
-        runFunctionMock.mockImplementation(async (_cellId, _code, parameters) => {
+        runFunctionMock.mockImplementation(async (_docPath, _functionName, _cellId, _code, parameters) => {
             const left = parseInt(parameters[0], 10);
             const right = parseInt(parameters[1], 10);
             if (Number.isNaN(left) || Number.isNaN(right)) {

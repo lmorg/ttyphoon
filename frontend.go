@@ -598,15 +598,17 @@ func (a *WApp) GetAllLanguageDescriptions() []string {
 	return jupyter.GetAllLanguageDescriptions()
 }
 
-func (a *WApp) RunNote(id string, code, language string) {
+func (a *WApp) RunNote(docPath, id string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
+
+	bookID := jupyter.BookId(a.projRoot, a.filePath(docPath))
 
 	ctx, kill := context.WithCancel(context.Background())
 	a.notesMu.Lock()
 	a.notesKills[id] = kill
 	a.notesMu.Unlock()
 
-	go jupyter.RunNote(ctx, id, a.projRoot, code, language, ch)
+	go jupyter.RunNote(ctx, bookID, id, a.projRoot, code, language, ch)
 
 	go func() {
 		for output := range ch {
@@ -632,8 +634,10 @@ type RunFunctionReturnT struct {
 	CellId  string
 }
 
-func (a *WApp) RunFunction(cellId, code string, parameters []string, language string) RunFunctionReturnT {
-	output, err := jupyter.RunFunction(context.Background(), a.projRoot, code, parameters, language)
+func (a *WApp) RunFunction(docPath, functionName, cellId, code string, parameters []string, language string) RunFunctionReturnT {
+	bookID := jupyter.BookId(a.projRoot, a.filePath(docPath))
+
+	output, err := jupyter.RunFunction(context.Background(), a.projRoot, bookID, functionName, code, parameters, language)
 	if err != nil {
 		return RunFunctionReturnT{
 			Output:  err.Error(),

@@ -11,11 +11,12 @@
     }
     {{ end }}
   FileExtension: go
-  PreRunCommand: [ goimports, -w, "${FILE}" ]
-  ExecuteCommand: [ go, run, "${FILE}" ]
-  ExecuteParameters: [ go, run, "${FILE}", "${PARAMETERS}"]
+  FormatCommand: [ goimports, -w, "${FILE}" ]
+  BuildCommand: [ go, build, -o, "${FILE}.out", "${FILE}" ]
+  ExecuteCommand: [ "${FILE}.out" ]
+  ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
-- Aliases: [ go, golang, tinygo ]
+- Aliases: [ go, golang, tinygo ] 
   Description: Go (TinyGo)
   Template: |-
     {{ if begins "package" }}
@@ -28,6 +29,7 @@
     }
     {{ end }}
   FileExtension: go
+  FormatCommand: [ goimports, -w, "${FILE}" ]
   ExecuteCommand: [ tinygo, run, "${FILE}" ]
   ExecuteParameters: [ tinygo, run, "${FILE}", "${PARAMETERS}"]
 
@@ -36,6 +38,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: py
+  FormatCommand: [ ruff, check, --fix, "${FILE}" ]
   ExecuteCommand: [ python3, "${FILE}" ]
   ExecuteParameters: [ python3, "${FILE}", "${PARAMETERS}"]
 
@@ -52,6 +55,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: py
+  FormatCommand: [ ruff, check, --fix, "${FILE}" ]
   ExecuteCommand: [ pypy3, "${FILE}" ]
   ExecuteParameters: [ pypy3, "${FILE}", "${PARAMETERS}"]
 
@@ -60,6 +64,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: py
+  FormatCommand: [ ruff, check, --fix, "${FILE}" ]
   ExecuteCommand: [ ipython, "${FILE}" ]
   ExecuteParameters: [ ipython, "${FILE}", "${PARAMETERS}"]
 
@@ -68,6 +73,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: sh
+  FormatCommand: [ shfmt, -w, "${FILE}" ]
   ExecuteCommand: [ bash, "${FILE}" ]
   ExecuteParameters: [ bash, "${FILE}", "${PARAMETERS}"]
 
@@ -76,6 +82,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: sh
+  FormatCommand: [ shfmt, -w, "${FILE}" ]
   ExecuteCommand: [ sh, "${FILE}" ]
   ExecuteParameters: [ sh, "${FILE}", "${PARAMETERS}"]
 
@@ -84,6 +91,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: sh
+  FormatCommand: [ shfmt, -w, "${FILE}" ]
   ExecuteCommand: [ dash, "${FILE}" ]
   ExecuteParameters: [ dash, "${FILE}", "${PARAMETERS}"]
 
@@ -116,6 +124,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: zsh
+  FormatCommand: [ shfmt, -w, "${FILE}" ]
   ExecuteCommand: [ zsh, "${FILE}" ]
   ExecuteParameters: [ zsh, "${FILE}", "${PARAMETERS}"]
 
@@ -140,7 +149,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: Dockerfile
-  PreRunCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "${DIR}" ]
+  BuildCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "${DIR}" ]
   ExecuteCommand: [ docker, run, --rm, ttyphoon-jupyter:latest ]
   ExecuteParameters: [ docker, run, --rm, ttyphoon-jupyter:latest, "${PARAMETERS}"]
 
@@ -149,6 +158,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: rb
+  FormatCommand: [ rubocop, -A, "${FILE}" ]
   ExecuteCommand: [ ruby, "${FILE}" ]
   ExecuteParameters: [ ruby, "${FILE}", "${PARAMETERS}"]
 
@@ -157,6 +167,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: rb
+  FormatCommand: [ rubocop, -A, "${FILE}" ]
   ExecuteCommand: [ jruby, "${FILE}" ]
   ExecuteParameters: [ jruby, "${FILE}", "${PARAMETERS}"]
 
@@ -165,6 +176,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: rb
+  FormatCommand: [ rubocop, -A, "${FILE}" ]
   ExecuteCommand: [ truffleruby, "${FILE}" ]
   ExecuteParameters: [ truffleruby, "${FILE}", "${PARAMETERS}"]
 
@@ -173,6 +185,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: js
+  FormatCommand: [ biome, check, --write, "${FILE}" ]
   ExecuteCommand: [ node, "${FILE}" ]
   ExecuteParameters: [ node, "${FILE}", "${PARAMETERS}"]
 
@@ -181,6 +194,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: js
+  FormatCommand: [ deno, fmt, "${FILE}" ]
   ExecuteCommand: [ deno, run, "${FILE}" ]
   ExecuteParameters: [ deno, run, "${FILE}", --, "${PARAMETERS}"]
 
@@ -189,6 +203,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: js
+  FormatCommand: [ biome, check, --write, "${FILE}" ]
   ExecuteCommand: [ bun, "${FILE}" ]
   ExecuteParameters: [ bun, "${FILE}", "${PARAMETERS}"]
 
@@ -203,7 +218,8 @@
     }
     {{ end }}
   FileExtension: kt
-  PreRunCommand: [ kotlinc, "${FILE}", -include-runtime, -d, "${FILE}.jar" ]
+  FormatCommand: [ ktlint, -F, "${FILE}" ]
+  BuildCommand: [ kotlinc, "${FILE}", -include-runtime, -d, "${FILE}.jar" ]
   ExecuteCommand: [ java, -jar, "${FILE}.jar" ]
   ExecuteParameters: [ java, -jar, "${FILE}.jar", "${PARAMETERS}"]
 
@@ -212,6 +228,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: kts
+  FormatCommand: [ ktlint, -F, "${FILE}" ]
   ExecuteCommand: [ kotlinc, -script, "${FILE}" ]
   ExecuteParameters: [ kotlinc, -script, "${FILE}", "${PARAMETERS}"]
 
@@ -220,6 +237,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: swift
+  FormatCommand: [ swift-format, format, -i, "${FILE}" ]
   ExecuteCommand: [ swift, "${FILE}" ]
   ExecuteParameters: [ swift, "${FILE}", "${PARAMETERS}"]
 
@@ -228,7 +246,8 @@
   Template: |-
     {{ .Code }}
   FileExtension: swift
-  PreRunCommand: [ swiftc, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ swift-format, format, -i, "${FILE}" ]
+  BuildCommand: [ swiftc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -344,7 +363,7 @@
         {{ .Code }}
     {{ end }}
   FileExtension: elm
-  PreRunCommand: [ elm, make, "${FILE}", '--output="${FILE}.html"' ]
+  BuildCommand: [ elm, make, "${FILE}", '--output="${FILE}.html"' ]
   ExecuteCommand: [ cat, "${FILE}.html" ]
   ExecuteParameters: [ cat, "${FILE}.html" ]
 
@@ -451,6 +470,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: ts
+  FormatCommand: [ biome, check, --write, "${FILE}" ]
   ExecuteCommand: [ ts-node, "${FILE}" ]
   ExecuteParameters: [ ts-node, "${FILE}", "${PARAMETERS}"]
 
@@ -459,6 +479,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: ts
+  FormatCommand: [ biome, check, --write, "${FILE}" ]
   ExecuteCommand: [ tsx, "${FILE}" ]
   ExecuteParameters: [ tsx, "${FILE}", "${PARAMETERS}"]
 
@@ -467,6 +488,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: ts
+  FormatCommand: [ deno, fmt, "${FILE}" ]
   ExecuteCommand: [ deno, run, "${FILE}" ]
   ExecuteParameters: [ deno, run, "${FILE}", "${PARAMETERS}"]
 
@@ -499,7 +521,8 @@
     }
     {{ end }}
   FileExtension: java
-  PreRunCommand: [ javac, "${FILE}" ]
+  FormatCommand: [ google-java-format, -i, "${FILE}" ]
+  BuildCommand: [ javac, "${FILE}" ]
   ExecuteCommand: [ java, -cp, "${DIR}", Main ]
   ExecuteParameters: [ java, -cp, "${DIR}", Main, "${PARAMETERS}"]
 
@@ -527,7 +550,8 @@
     }
     {{ end }}
   FileExtension: m
-  PreRunCommand: [ clang, -framework, Foundation, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ clang, -framework, Foundation, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -544,7 +568,7 @@
     }
     {{ end }}
   FileExtension: d
-  PreRunCommand: [ dmd, "${FILE}", "-of=${FILE}.out" ]
+  BuildCommand: [ dmd, "${FILE}", "-of=${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -561,7 +585,7 @@
     }
     {{ end }}
   FileExtension: d
-  PreRunCommand: [ ldc2, "${FILE}", "-of=${FILE}.out" ]
+  BuildCommand: [ ldc2, "${FILE}", "-of=${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -578,7 +602,7 @@
     }
     {{ end }}
   FileExtension: d
-  PreRunCommand: [ gdc, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ gdc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -596,7 +620,8 @@
     }
     {{ end }}
   FileExtension: c
-  PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -614,7 +639,8 @@
     }
     {{ end }}
   FileExtension: c
-  PreRunCommand: [ gcc, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ gcc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -632,7 +658,8 @@
     }
     {{ end }}
   FileExtension: c
-  PreRunCommand: [ clang, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ clang, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -650,7 +677,8 @@
     }
     {{ end }}
   FileExtension: c
-  PreRunCommand: [ cl.exe, /nologo, "${FILE}", "/Fe:${FILE}.exe" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ cl.exe, /nologo, "${FILE}", "/Fe:${FILE}.exe" ]
   ExecuteCommand: [ "${FILE}.exe" ]
   ExecuteParameters: [ "${FILE}.exe", "${PARAMETERS}"]
 
@@ -668,7 +696,8 @@
     }
     {{ end }}
   FileExtension: cpp
-  PreRunCommand: [ c++, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ c++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -686,7 +715,8 @@
     }
     {{ end }}
   FileExtension: cpp
-  PreRunCommand: [ g++, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ g++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -704,7 +734,8 @@
     }
     {{ end }}
   FileExtension: cpp
-  PreRunCommand: [ clang++, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ clang++, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -722,7 +753,8 @@
     }
     {{ end }}
   FileExtension: cpp
-  PreRunCommand: [ cl.exe, /nologo, /EHsc, "${FILE}", "/Fe:${FILE}.exe" ]
+  FormatCommand: [ clang-format, -i, "${FILE}" ]
+  BuildCommand: [ cl.exe, /nologo, /EHsc, "${FILE}", "/Fe:${FILE}.exe" ]
   ExecuteCommand: [ "${FILE}.exe" ]
   ExecuteParameters: [ "${FILE}.exe", "${PARAMETERS}"]
 
@@ -737,7 +769,8 @@
     }
     {{ end }}
   FileExtension: rs
-  PreRunCommand: [ rustc, "${FILE}", -o, "${FILE}.out" ]
+  FormatCommand: [ rustfmt, "${FILE}" ]
+  BuildCommand: [ rustc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -821,7 +854,7 @@
       {{ .Code }}
     {{ end }}
   FileExtension: nim
-  PreRunCommand: [ nim, c, "-o:${FILE}.out", "${FILE}" ]
+  BuildCommand: [ nim, c, "-o:${FILE}.out", "${FILE}" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -836,7 +869,7 @@
     end program main
     {{ end }}
   FileExtension: f90
-  PreRunCommand: [ gfortran, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ gfortran, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -851,7 +884,7 @@
     end program main
     {{ end }}
   FileExtension: f90
-  PreRunCommand: [ flang, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ flang, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -866,7 +899,7 @@
     end program main
     {{ end }}
   FileExtension: f90
-  PreRunCommand: [ ifx, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ ifx, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -875,7 +908,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: cbl
-  PreRunCommand: [ cobc, -x, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ cobc, -x, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -979,7 +1012,7 @@
     End Module
     {{ end }}
   FileExtension: vb
-  PreRunCommand: [ vbnc, "${FILE}", '-out:"${FILE}.exe"' ]
+  BuildCommand: [ vbnc, "${FILE}", '-out:"${FILE}.exe"' ]
   ExecuteCommand: [ mono, "${FILE}.exe" ]
   ExecuteParameters: [ mono, "${FILE}.exe", "${PARAMETERS}"]
 
@@ -1021,7 +1054,7 @@
     end Main;
     {{ end }}
   FileExtension: adb
-  PreRunCommand: [ gnatmake, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ gnatmake, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1039,7 +1072,7 @@
     end Main;
     {{ end }}
   FileExtension: adb
-  PreRunCommand: [ gprbuild, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ gprbuild, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1079,7 +1112,7 @@
     end.
     {{ end }}
   FileExtension: pas
-  PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
+  BuildCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1095,7 +1128,7 @@
     end.
     {{ end }}
   FileExtension: pas
-  PreRunCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
+  BuildCommand: [ fpc, "${FILE}", "-o${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1104,7 +1137,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: bas
-  PreRunCommand: [ fbc, "${FILE}", "-x", "${FILE}.out" ]
+  BuildCommand: [ fbc, "${FILE}", "-x", "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1113,7 +1146,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: s
-  PreRunCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
+  BuildCommand: [ cc, "${FILE}", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1122,8 +1155,8 @@
   Template: |-
     {{ .Code }}
   FileExtension: asm
-  PreRunCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
-  PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
+  BuildCommand: [ nasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
+  BuildCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1132,8 +1165,8 @@
   Template: |-
     {{ .Code }}
   FileExtension: asm
-  PreRunCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
-  PreRunCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
+  BuildCommand: [ yasm, -f, elf64, "${FILE}", -o, "${FILE}.o" ]
+  BuildCommand2: [ ld, "${FILE}.o", -o, "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1142,7 +1175,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: asm
-  PreRunCommand: [ fasm, "${FILE}", "${FILE}.out" ]
+  BuildCommand: [ fasm, "${FILE}", "${FILE}.out" ]
   ExecuteCommand: [ "${FILE}.out" ]
   ExecuteParameters: [ "${FILE}.out", "${PARAMETERS}"]
 
@@ -1151,7 +1184,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: s
-  PreRunCommand: [ go, tool, asm, -o, "${FILE}.o", "${FILE}" ]
+  BuildCommand: [ go, tool, asm, -o, "${FILE}.o", "${FILE}" ]
   ExecuteCommand: [ go, tool, objdump, "${FILE}.o" ]
   ExecuteParameters: [ go, tool, objdump, "${FILE}.o", "${PARAMETERS}"]
 
@@ -1160,6 +1193,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: tf
+  FormatCommand: [ terraform, fmt, "${FILE}" ]
   ExecuteCommand: [ terraform, validate, -no-color, "${FILE}" ]
 
 - Aliases: [ opentofu, tf ]
@@ -1167,5 +1201,6 @@
   Template: |-
     {{ .Code }}
   FileExtension: tf
+  FormatCommand: [ opentofu, fmt, "${FILE}" ]
   ExecuteCommand: [ opentofu, validate, -no-color, "${FILE}" ]
 

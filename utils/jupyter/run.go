@@ -2,88 +2,98 @@ package jupyter
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
-	"text/template"
+	"sync"
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
 )
 
-func runNote(ctx context.Context, id, pwd, code string, ch chan<- *OutputT, binding *LanguageBindingT, parameters ...string) {
-	tempDir := os.TempDir()
-	tempFile, err := os.CreateTemp(tempDir, fmt.Sprintf("%s-note-*.%s", app.DirName, binding.FileExtension))
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error creating temp file: %v", err),
-			IsErr:  true,
-		}
-		return
-	}
-	defer os.Remove(tempFile.Name())
-
-	buf := bytes.NewBuffer([]byte{})
-	tmpl, err := template.New(id).Funcs(templateFuncs(code)).Parse(binding.Template)
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
-		}
-		return
-	}
-	err = tmpl.Execute(buf, map[string]string{"Code": code})
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
-		}
-		return
-	}
-
-	_, err = tempFile.Write(buf.Bytes())
-	tempFile.Close()
-	if err != nil {
-		ch <- &OutputT{
-			Id:     id,
-			Output: fmt.Sprintf("Error writing temp file: %v", err),
-			IsErr:  true,
-		}
-		return
-	}
-
-	pre1 := expandVars(binding.PreRunCommand, tempFile.Name())
-	pre2 := expandVars(binding.PreRunCommand, tempFile.Name())
-	var exe []string
-	if id == _ID_FUNCTION {
-		exe = expandParameters(binding.ExecuteParameters, tempFile.Name(), parameters)
-	} else {
-		exe = expandVars(binding.ExecuteCommand, tempFile.Name())
-	}
-
-	var exitCode int
-	if len(pre1) > 0 {
-		exitCode = execute(ctx, id, pwd, pre1, ch)
-	}
-	if len(pre2) > 0 && exitCode == 0 {
-		exitCode = execute(ctx, id, pwd, pre2, ch)
-	}
-	if exitCode == 0 {
-		_ = execute(ctx, id, pwd, exe, ch)
-	}
-
-	time.Sleep(500 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed
-	close(ch)
+type cacheT struct {
+	code string
+	mu   sync.Mutex
 }
 
-func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *OutputT) int {
+var (
+	cache      = map[string]*cacheT{}
+	cacheMutex sync.Mutex
+)
+
+func runNote(ctx context.Context, bookId, codeId, pwd, code string, ch chan *OutputT, binding *LanguageBindingT, parameters ...string) {
+	tempDir := filepath.Join(os.TempDir(), app.DirName, "runbook", bookId)
+	fileName := fmt.Sprintf("%s.%s", codeId, binding.FileExtension)
+	filePath := filepath.Join(tempDir, fileName)
+
+	var exitCode int
+
+	cacheMutex.Lock()
+	c := cache[filePath]
+	cached := true
+	if c == nil {
+		cached = false
+		c = &cacheT{code: code}
+		cache[filePath] = c
+	}
+	c.mu.Lock()
+	cacheMutex.Unlock()
+
+	cached = cached && c.code == code
+
+	log.Printf("[debug] runNote: cached=%v filePath=%s", cached, filePath)
+
+	if !cached {
+		err := writeRenderedSource(tempDir, fileName, code, binding)
+		if err != nil {
+			ch <- &OutputT{
+				Id:     codeId,
+				Output: err.Error(),
+				IsErr:  true,
+			}
+			c.mu.Unlock()
+			return
+		}
+
+		format := expandVars(binding.FormatCommand, filePath)
+		if len(format) > 0 {
+			execute(ctx, codeId, pwd, format, ch)
+		}
+
+		build1 := expandVars(binding.BuildCommand, filePath)
+		if len(build1) > 0 && exitCode == 0 {
+			exitCode = execute(ctx, codeId, pwd, build1, ch)
+		}
+		build2 := expandVars(binding.BuildCommand2, filePath)
+		if len(build2) > 0 && exitCode == 0 {
+			exitCode = execute(ctx, codeId, pwd, build2, ch)
+		}
+	}
+
+	c.mu.Unlock()
+
+	if exitCode == 0 {
+		var exe []string
+		if len(parameters) > 0 {
+			exe = expandParameters(binding.ExecuteParameters, filePath, parameters)
+		} else {
+			exe = expandVars(binding.ExecuteCommand, filePath)
+		}
+		_ = execute(ctx, codeId, pwd, exe, ch)
+	}
+
+	go func() {
+		time.Sleep(250 * time.Millisecond) // just to avoid any chance of the channel closing before the output has finished being flushed
+		close(ch)
+	}()
+}
+
+func execute(ctx context.Context, codeId, pwd string, argv []string, ch chan *OutputT) int {
 	select {
 	case <-ctx.Done():
 		return 1
@@ -97,7 +107,7 @@ func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *Outp
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		ch <- &OutputT{
-			Id:     id,
+			Id:     codeId,
 			Output: fmt.Sprintf("Error getting stdout: %v", err),
 			IsErr:  true,
 		}
@@ -107,7 +117,7 @@ func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *Outp
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		ch <- &OutputT{
-			Id:     id,
+			Id:     codeId,
 			Output: fmt.Sprintf("Error getting stderr: %v", err),
 			IsErr:  true,
 		}
@@ -117,21 +127,21 @@ func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *Outp
 	err = cmd.Start()
 	if err != nil {
 		ch <- &OutputT{
-			Id:     id,
+			Id:     codeId,
 			Output: fmt.Sprintf("Error starting command: %v", err),
 			IsErr:  true,
 		}
 		return 1
 	}
 
-	go readAndEmit(id, ch, stdout, false)
-	go readAndEmit(id, ch, stderr, true)
+	go readAndEmit(codeId, ch, stdout, false)
+	go readAndEmit(codeId, ch, stderr, true)
 
 	err = cmd.Wait()
 	if err != nil {
 		if _, ok := err.(*exec.ExitError); !ok {
 			ch <- &OutputT{
-				Id:     id,
+				Id:     codeId,
 				Output: fmt.Sprintf("Error starting command: %v", err),
 				IsErr:  true,
 			}
@@ -141,7 +151,19 @@ func execute(ctx context.Context, id, pwd string, argv []string, ch chan<- *Outp
 	return cmd.ProcessState.ExitCode()
 }
 
-func readAndEmit(id string, ch chan<- *OutputT, reader io.Reader, isStderr bool) {
+var _LOG_TYPE = map[bool]string{true: "warn", false: "info"}
+
+func readAndEmit(id string, ch chan *OutputT, reader io.Reader, isStderr bool) {
+	if ch == nil {
+		ch = make(chan *OutputT)
+
+		go func() {
+			for output := range ch {
+				log.Printf("[%s] Code formatter: %s", _LOG_TYPE[output.IsErr], output.Output)
+			}
+		}()
+	}
+
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()

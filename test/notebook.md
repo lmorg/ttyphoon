@@ -132,7 +132,7 @@ int main() {
 And this is a one-liner
 
 ```cpp
-std::cout << "hello world!!" << std::endl;
+std::cout << "hello world!" << std::endl;
 ```
 
 ## JavaScript

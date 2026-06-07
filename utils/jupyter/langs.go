@@ -16,8 +16,9 @@ type LanguageBindingT struct {
 	Description       string   `yaml:"Description"`
 	Template          string   `yaml:"Template"`
 	FileExtension     string   `yaml:"FileExtension"`     // Must exclude `.` prefix
-	PreRunCommand     []string `yaml:"PreRunCommand"`     // `$FILE` is replaced with the filename
-	PreRunCommand2    []string `yaml:"PreRunCommand2"`    // `$FILE` is replaced with the filename
+	FormatCommand     []string `yaml:"FormatCommand"`     // `$FILE` is replaced with the filename
+	BuildCommand      []string `yaml:"BuildCommand"`      // `$FILE` is replaced with the filename
+	BuildCommand2     []string `yaml:"BuildCommand2"`     // `$FILE` is replaced with the filename
 	ExecuteCommand    []string `yaml:"ExecuteCommand"`    // `$FILE` is replace with the filename
 	ExecuteParameters []string `yaml:"ExecuteParameters"` // `$FILE` is replace with the filename
 }
@@ -57,40 +58,32 @@ func GetAllLanguageDescriptions() []string {
 	return descriptions
 }
 
-func RunNote(ctx context.Context, id, pwd, code, langRuntime string, ch chan<- *OutputT) {
-	for _, binding := range Languages {
-		if binding.Description != langRuntime {
-			continue
-		}
-
-		runNote(ctx, id, pwd, code, ch, binding)
+func RunNote(ctx context.Context, bookId, codeId, pwd, code, langRuntime string, ch chan *OutputT) {
+	binding := getBindingByDescription(langRuntime)
+	if binding != nil {
+		runNote(ctx, bookId, codeId, pwd, code, ch, binding)
 		return
 	}
 
 	ch <- &OutputT{
-		Id:     id,
+		Id:     codeId,
 		Output: fmt.Sprintf("Unsupported language: %s", langRuntime),
 		IsErr:  true,
 	}
 }
 
-const _ID_FUNCTION = "#function"
-
 const _PARAMETERS = "${PARAMETERS}"
 
-func RunFunction(ctx context.Context, pwd, code string, parameters []string, langRuntime string) (string, error) {
-	for _, binding := range Languages {
-		if binding.Description != langRuntime {
-			continue
-		}
-
+func RunFunction(ctx context.Context, pwd, bookId, functionName, code string, parameters []string, langRuntime string) (string, error) {
+	binding := getBindingByDescription(langRuntime)
+	if binding != nil {
 		var (
 			ch  = make(chan *OutputT)
 			out string
 			err string
 		)
 
-		go runNote(ctx, _ID_FUNCTION, pwd, code, ch, binding, parameters...)
+		go runNote(ctx, bookId, functionName, pwd, code, ch, binding, parameters...)
 
 		for output := range ch {
 			if output.IsErr {
@@ -108,6 +101,16 @@ func RunFunction(ctx context.Context, pwd, code string, parameters []string, lan
 	}
 
 	return "", fmt.Errorf("Unsupported language: %s", langRuntime)
+}
+
+func getBindingByDescription(langRuntime string) *LanguageBindingT {
+	for _, binding := range Languages {
+		if binding.Description == langRuntime {
+			return binding
+		}
+	}
+
+	return nil
 }
 
 func templateFuncs(code string) template.FuncMap {

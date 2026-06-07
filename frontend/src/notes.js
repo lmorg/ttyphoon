@@ -2554,7 +2554,7 @@ async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, row
     const runtime = await resolveRuntimeForFunctionLanguage(block.language);
 
     try {
-        const result = await RunFunction(currentCellId, block.code, resolvedArgs, runtime);
+        const result = await RunFunction(state.currentFile, fnName, currentCellId, block.code, resolvedArgs, runtime);
 
         // Backward compatibility: support both structured and string responses.
         const isStructured = result && typeof result === 'object';
@@ -4789,7 +4789,7 @@ async function runCodeBlockInNotes(blockId) {
     }
     
     try {
-        await RunNote(blockId, block.currentContent, block.runtime);
+        await RunNote(state.currentFile, blockId, block.currentContent, block.runtime);
     } catch (err) {
         console.error('Error running code:', err);
         const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
