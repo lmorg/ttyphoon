@@ -732,6 +732,7 @@ const state = {
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
     markdownTableWordWrapMode: false,  // track table word wrap mode for View/Run modes
     lspChangeTimer: null,
+    lspEditorFormatTimer: null,
     lspOpenFile: '',
     lspHoverTimer: null,
     lspHoverLastKey: '',
@@ -750,6 +751,7 @@ const state = {
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_BLOCK_SAVE_DEBOUNCE_MS = 1000;
+const LSP_EDITOR_FORMAT_DEBOUNCE_MS = 1300;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
@@ -3499,17 +3501,20 @@ async function requestLspDefinition() {
     }
 }
 
-async function formatCurrentLspDocument() {
+async function formatCurrentLspDocument(options = {}) {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
+
+    const preferSelection = options.preferSelection !== false;
+    const notifyOnError = options.notifyOnError !== false;
 
     try {
         const selectionStart = Number(elements.editor.selectionStart) || 0;
         const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
 
         let result;
-        if (selectionEnd > selectionStart) {
+        if (preferSelection && selectionEnd > selectionStart) {
             const startPos = offsetToLspPosition(elements.editor.value || '', selectionStart);
             const endPos = offsetToLspPosition(elements.editor.value || '', selectionEnd);
 
@@ -3533,10 +3538,20 @@ async function formatCurrentLspDocument() {
             return;
         }
 
+        const prevContent = String(elements.editor.value || '');
+        const prevLen = prevContent.length;
+        const nextLen = nextContent.length;
+        const ratio = prevLen > 0 ? nextLen / prevLen : 1;
+        const nextSelectionStart = Math.min(Math.round(selectionStart * ratio), nextLen);
+        const nextSelectionEnd = Math.min(Math.round(selectionEnd * ratio), nextLen);
+
         elements.editor.value = nextContent;
+        elements.editor.setSelectionRange(nextSelectionStart, nextSelectionEnd);
         elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
     } catch {
-        notifyTerminal('Failed to format document', 'error');
+        if (notifyOnError) {
+            notifyTerminal('Failed to format document', 'error');
+        }
     }
 }
 
@@ -4201,6 +4216,7 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
 
 async function closeOpenLspDocument() {
     clearLspChangeTimer();
+    clearLspEditorFormatTimer();
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
@@ -4260,6 +4276,29 @@ function scheduleLspDidChange() {
             console.error('notes lsp change failed:', err);
         }
     }, LSP_CHANGE_DEBOUNCE_MS);
+}
+
+function clearLspEditorFormatTimer() {
+    if (state.lspEditorFormatTimer) {
+        clearTimeout(state.lspEditorFormatTimer);
+        state.lspEditorFormatTimer = null;
+    }
+}
+
+function scheduleLspEditorAutoFormat() {
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    if (state.viewMode !== 'editor' && state.viewMode !== 'swagger-edit') {
+        return;
+    }
+
+    clearLspEditorFormatTimer();
+    state.lspEditorFormatTimer = setTimeout(async () => {
+        state.lspEditorFormatTimer = null;
+        await formatCurrentLspDocument({ preferSelection: false, notifyOnError: false });
+    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
 }
 
 function scheduleLspBlockSave(blockId, editableCode) {
@@ -7768,8 +7807,30 @@ EventsOn("notesFileChanged", async () => {
         return;
     }
 
+    const shouldRestoreCaret = (state.viewMode === 'editor' || state.viewMode === 'swagger-edit') && !!elements.editor;
+    const previousSelection = shouldRestoreCaret
+        ? {
+            start: Number(elements.editor.selectionStart) || 0,
+            end: Number(elements.editor.selectionEnd) || 0,
+            length: String(elements.editor.value || '').length,
+            hadFocus: document.activeElement === elements.editor,
+        }
+        : null;
+
     try {
         await loadFile(state.currentFile);
+
+        if (previousSelection && (state.viewMode === 'editor' || state.viewMode === 'swagger-edit')) {
+            const nextLen = String(elements.editor.value || '').length;
+            const ratio = previousSelection.length > 0 ? nextLen / previousSelection.length : 1;
+            const nextStart = Math.min(Math.round(previousSelection.start * ratio), nextLen);
+            const nextEnd = Math.min(Math.round(previousSelection.end * ratio), nextLen);
+
+            if (previousSelection.hadFocus) {
+                elements.editor.focus();
+            }
+            elements.editor.setSelectionRange(nextStart, nextEnd);
+        }
     } catch (err) {
         setStatus(`Failed to reload ${state.currentFile}`, true);
         console.error(err);
@@ -11202,6 +11263,7 @@ if (elements.editor) {
             }
         }
         scheduleLspDidChange();
+        scheduleLspEditorAutoFormat();
         scheduleAutoSave();
     });
 

@@ -658,6 +658,12 @@ func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.
 	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.projRoot, code, language)
 }
 
+func (a *WApp) FormatCodeFile(docPath, language string) {
+	filePath := a.filePathWithProject(docPath, a.projRoot)
+	log.Printf(`[debug] FormatCodeFile: pwd="%s" docPath="%s" language="%s"`, a.projRoot, filePath, language)
+	jupyter.FormatFile(context.Background(), a.projRoot, filePath, language)
+}
+
 func (a *WApp) StopNote(id string) {
 	a.notesMu.Lock()
 	fn, ok := a.notesKills[id]

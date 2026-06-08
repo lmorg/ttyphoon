@@ -25,6 +25,8 @@ export function FocusTerminalPane():Promise<void>;
 
 export function FormatCodeBlock(arg1:string,arg2:string,arg3:string,arg4:string):Promise<jupyter.FormatCodeReturnT>;
 
+export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
+
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
 export function GetAppTitle():Promise<string>;

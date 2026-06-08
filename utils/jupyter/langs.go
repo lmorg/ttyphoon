@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+
+	"github.com/lmorg/murex/utils/lists"
 )
 
 type LanguageBindingT struct {
@@ -106,6 +108,16 @@ func RunFunction(ctx context.Context, pwd, bookId, functionName, code string, pa
 func getBindingByDescription(langRuntime string) *LanguageBindingT {
 	for _, binding := range Languages {
 		if binding.Description == langRuntime {
+			return binding
+		}
+	}
+
+	return nil
+}
+
+func getBindingByAlias(lang string) *LanguageBindingT {
+	for _, binding := range Languages {
+		if lists.Match(binding.Aliases, lang) {
 			return binding
 		}
 	}

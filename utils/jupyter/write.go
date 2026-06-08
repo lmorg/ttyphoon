@@ -94,3 +94,14 @@ func FormatCode(ctx context.Context, bookId, codeId, pwd, code, langRuntime stri
 
 	return &FormatCodeReturnT{Code: string(b), FilePath: filePath}
 }
+
+func FormatFile(ctx context.Context, pwd, filePath, lang string) {
+	binding := getBindingByAlias(lang)
+	if binding == nil || len(binding.FormatCommand) == 0 {
+		log.Printf(`[debug] FormatFile: no bindings for %s`, lang)
+		return
+	}
+
+	exitCode := execute(ctx, filePath, pwd, expandVars(binding.FormatCommand, filePath), nil)
+	log.Printf(`[debug] FormatFile: exitCode=%d`, exitCode)
+}

@@ -38,6 +38,10 @@ export function FormatCodeBlock(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['FormatCodeBlock'](arg1, arg2, arg3, arg4);
 }
 
+export function FormatCodeFile(arg1, arg2) {
+  return window['go']['main']['WApp']['FormatCodeFile'](arg1, arg2);
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
