@@ -653,6 +653,11 @@ func (a *WApp) RunFunction(docPath, functionName, cellId, code string, parameter
 	}
 }
 
+func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.FormatCodeReturnT {
+	bookId := jupyter.BookId(a.projRoot, a.filePath(docPath))
+	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.projRoot, code, language)
+}
+
 func (a *WApp) StopNote(id string) {
 	a.notesMu.Lock()
 	fn, ok := a.notesKills[id]

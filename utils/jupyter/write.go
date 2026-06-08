@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -58,11 +59,38 @@ func writeRenderedSource(tempDir, fileName, code string, binding *LanguageBindin
 	return nil
 }
 
-func FormatCode(ctx context.Context, pwd, id, filePath, langRuntime string, ch chan *OutputT) {
+type FormatCodeReturnT struct {
+	Code     string
+	FilePath string
+	Err      string
+}
+
+func FormatCode(ctx context.Context, bookId, codeId, pwd, code, langRuntime string) *FormatCodeReturnT {
+	log.Printf(`[debug] FormatCode: bookId="%s", codeId="%s", pwd="%s", langRuntime="%s"`, bookId, codeId, pwd, langRuntime)
+
 	binding := getBindingByDescription(langRuntime)
 	if binding == nil || len(binding.FormatCommand) == 0 {
-		return
+		return &FormatCodeReturnT{Err: fmt.Sprintf(`[error] cannot format code: no language definitions exist for %s`, langRuntime)}
 	}
 
-	execute(ctx, id, pwd, expandVars(binding.FormatCommand, filePath), ch)
+	tempDir := tempDir(bookId)
+	fileName := fileName(codeId, binding)
+	filePath := filepath.Join(tempDir, fileName)
+
+	err := writeRenderedSource(tempDir, fileName, code, binding)
+	if err != nil {
+		return &FormatCodeReturnT{Err: err.Error()}
+	}
+	exitNum := execute(ctx, codeId, pwd, expandVars(binding.FormatCommand, filePath), nil)
+	if exitNum != 0 {
+		return &FormatCodeReturnT{FilePath: filePath}
+	}
+
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Printf(`[error] cannot format node: %v`, err.Error())
+		return &FormatCodeReturnT{FilePath: filePath}
+	}
+
+	return &FormatCodeReturnT{Code: string(b), FilePath: filePath}
 }

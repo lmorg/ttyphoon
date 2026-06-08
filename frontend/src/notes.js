@@ -11,7 +11,7 @@ import {
     ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent,
     GetProjectCache, SetProjectCache,
-    GetDocumentCache, SetDocumentCache,
+    GetDocumentCache, SetDocumentCache, FormatCodeBlock,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesLspSemanticTokens,
@@ -715,6 +715,8 @@ const state = {
     lastRestoredDocument: null,  // sentinel: LastDocument value at the time it was last restored; null means never restored
     jupyterCodeBlocks: {},
     jupyterBlockCounter: 0,
+    lspActiveBlockId: null,
+    lspActiveBlockEditor: null,
     swaggerSpec: null,
     swaggerRunAvailable: false,
     swaggerSelectedEndpoint: null,
@@ -747,6 +749,7 @@ const state = {
 };
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
+const LSP_BLOCK_SAVE_DEBOUNCE_MS = 1000;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
@@ -2992,6 +2995,18 @@ function isCurrentFileLspEligible() {
     return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
 }
 
+// Returns the active Jupyter code block LSP context, or null when the main editor is active.
+function getActiveLspTarget() {
+    if (!state.lspActiveBlockId || !state.lspActiveBlockEditor) {
+        return null;
+    }
+    const block = state.jupyterCodeBlocks[state.lspActiveBlockId];
+    if (!block || !block.lspMode || !block.lspFilePath) {
+        return null;
+    }
+    return { filePath: block.lspFilePath, editor: state.lspActiveBlockEditor };
+}
+
 function clearLspChangeTimer() {
     if (state.lspChangeTimer) {
         clearTimeout(state.lspChangeTimer);
@@ -3103,20 +3118,22 @@ function lspCompletionKindMeta(kind) {
 }
 
 function replaceCurrentIdentifierWithCompletion(text) {
-    if (!elements.editor) {
+    const target = getActiveLspTarget();
+    const editor = target ? target.editor : elements.editor;
+    if (!editor) {
         return;
     }
 
-    const source = elements.editor.value || '';
-    const cursor = elements.editor.selectionStart || 0;
+    const source = editor.value || '';
+    const cursor = editor.selectionStart || 0;
     const left = source.slice(0, cursor);
     const match = left.match(/[A-Za-z0-9_]+$/);
     const start = match ? cursor - match[0].length : cursor;
-    elements.editor.setSelectionRange(start, cursor);
-    elements.editor.setRangeText(String(text || ''), start, cursor, 'end');
+    editor.setSelectionRange(start, cursor);
+    editor.setRangeText(String(text || ''), start, cursor, 'end');
     // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
     hideLspCompletion();
-    elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function commitActiveLspCompletion() {
@@ -3229,14 +3246,17 @@ function moveLspCompletionSelection(delta) {
 }
 
 async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    const blockTarget = getActiveLspTarget();
+    if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspCompletion();
         return;
     }
 
-    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const completionFile = blockTarget ? blockTarget.filePath : state.currentFile;
+    const completionEditor = blockTarget ? blockTarget.editor : elements.editor;
+    const pos = offsetToLspPosition(completionEditor.value || '', completionEditor.selectionStart || 0);
     try {
-        const items = await NotesLspCompletion(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        const items = await NotesLspCompletion(completionFile, pos.line, pos.character, triggerKind, triggerChar);
         const list = Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
         if (list.length === 0) {
             hideLspCompletion();
@@ -3253,12 +3273,14 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
 }
 
 async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    const blockTarget = getActiveLspTarget();
+    if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         return;
     }
 
+    const syncFile = blockTarget ? blockTarget.filePath : state.currentFile;
     try {
-        await NotesLspChangeDocument(state.currentFile, String(content || ''));
+        await NotesLspChangeDocument(syncFile, String(content || ''));
     } catch {
         // Fall through to completion request even when fast sync fails.
     }
@@ -4103,24 +4125,28 @@ function getLspAnchorViewportPoint() {
 }
 
 function scheduleLspHover() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    const blockTarget = getActiveLspTarget();
+    if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspHoverTooltip();
         return;
     }
+
+    const hoverFilePath = blockTarget ? blockTarget.filePath : state.currentFile;
+    const hoverEditor = blockTarget ? blockTarget.editor : elements.editor;
 
     clearLspHoverTimer();
     state.lspHoverTimer = setTimeout(async () => {
         state.lspHoverTimer = null;
 
-        const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
-        const key = `${state.currentFile}:${pos.line}:${pos.character}`;
+        const pos = offsetToLspPosition(hoverEditor.value || '', hoverEditor.selectionStart || 0);
+        const key = `${hoverFilePath}:${pos.line}:${pos.character}`;
         if (key === state.lspHoverLastKey) {
             return;
         }
         state.lspHoverLastKey = key;
 
         try {
-            const text = await NotesLspHover(state.currentFile, pos.line, pos.character);
+            const text = await NotesLspHover(hoverFilePath, pos.line, pos.character);
             if (!text) {
                 hideLspHoverTooltip();
                 return;
@@ -4234,6 +4260,53 @@ function scheduleLspDidChange() {
             console.error('notes lsp change failed:', err);
         }
     }, LSP_CHANGE_DEBOUNCE_MS);
+}
+
+function scheduleLspBlockSave(blockId, editableCode) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block || !block.lspMode || !block.lspFilePath) {
+        return;
+    }
+
+    if (block.lspSaveTimer) {
+        clearTimeout(block.lspSaveTimer);
+        block.lspSaveTimer = null;
+    }
+
+    block.lspSaveTimer = setTimeout(async () => {
+        block.lspSaveTimer = null;
+        const currentContent = editableCode.value;
+
+        try {
+            const result = await FormatCodeBlock(state.currentFile, blockId, currentContent, block.runtime);
+            const goErr = typeof result?.Err === 'string' ? result.Err : '';
+            if (goErr) {
+                notifyTerminal(goErr, 'error');
+                return;
+            }
+
+            const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
+            if (formattedCode.length > 0 && formattedCode !== editableCode.value) {
+                // Preserve caret position: find the best offset in the formatted text.
+                const prevSelStart = editableCode.selectionStart || 0;
+                const prevSelEnd = editableCode.selectionEnd || 0;
+                const prevLen = editableCode.value.length;
+                const newLen = formattedCode.length;
+
+                // Map offset proportionally, then clamp to new length.
+                const ratio = prevLen > 0 ? newLen / prevLen : 1;
+                const newStart = Math.min(Math.round(prevSelStart * ratio), newLen);
+                const newEnd = Math.min(Math.round(prevSelEnd * ratio), newLen);
+
+                editableCode.value = formattedCode;
+                block.currentContent = formattedCode;
+                editableCode.setSelectionRange(newStart, newEnd);
+                editableCode.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        } catch (err) {
+            console.error('LSP block autosave failed:', err);
+        }
+    }, LSP_BLOCK_SAVE_DEBOUNCE_MS);
 }
 
 function setDirty(isDirty) {
@@ -4475,7 +4548,10 @@ function convertToJupyterCodeBlocks() {
             language,
             runtime: language,
             originalContent: content,
-            currentContent: content
+            currentContent: content,
+            lspMode: false,
+            lspFilePath: '',
+            lspSaveTimer: null
         };
         
         const wrapper = document.createElement('div');
@@ -4503,6 +4579,13 @@ function convertToJupyterCodeBlocks() {
         runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
         runTerminalBtn.textContent = 'Send to terminal';
         runTerminalBtn.addEventListener('click', () => runCodeBlockInTerminal(blockId));
+        
+        const lspBtn = document.createElement('button');
+        lspBtn.type = 'button';
+        lspBtn.className = 'jupyter-btn jupyter-lsp-notes';
+        lspBtn.textContent = 'LSP';
+        lspBtn.dataset.lspEnabled = 'false';
+        lspBtn.addEventListener('click', () => toggleLspModeForBlock(blockId));
         
         const runtimeLink = document.createElement('button');
         runtimeLink.type = 'button';
@@ -4578,6 +4661,9 @@ function convertToJupyterCodeBlocks() {
                 state.jupyterCodeBlocks[blockId].runtime = fallback;
                 runtimeLink.textContent = fallback;
             }
+            
+            // Restore LSP mode and other state from document cache
+            await restoreJupyterBlockState(blockId);
         })();
 
         runtimeLink.addEventListener('click', () => {
@@ -4599,6 +4685,7 @@ function convertToJupyterCodeBlocks() {
         
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(stopNotesBtn);
+        toolbar.appendChild(lspBtn);
         toolbar.appendChild(runTerminalBtn);
         toolbar.appendChild(runtimeLink);
         
@@ -4686,6 +4773,26 @@ function convertToJupyterCodeBlocks() {
             }
             blockState.currentContent = editableCode.value;
 
+            if (blockState.lspMode && blockState.lspFilePath) {
+                scheduleLspBlockSave(blockId, editableCode);
+
+                // Trigger completion on LSP trigger characters.
+                if (state.lspActiveBlockId === blockId) {
+                    const cursor = editableCode.selectionStart || 0;
+                    const value = editableCode.value || '';
+                    const prevChar = cursor > 0 ? value[cursor - 1] : '';
+                    state.lspHoverLastKey = '';
+                    hideLspHoverTooltip();
+                    if (state.lspCompletionVisible) {
+                        void requestLspCompletionAfterSync(value, '', 1);
+                    } else if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+                        void requestLspCompletionAfterSync(value, prevChar);
+                    } else if (!/[A-Za-z0-9_-]/.test(prevChar)) {
+                        hideLspCompletion();
+                    }
+                }
+            }
+
             const blockIndex = parseInt(blockId.replace('jupyter-block-', ''), 10);
             if (Number.isNaN(blockIndex)) {
                 return;
@@ -4700,9 +4807,94 @@ function convertToJupyterCodeBlocks() {
             scheduleRender();
             scheduleAutoSave();
         });
+        editableCode.addEventListener('focus', () => {
+            const block = state.jupyterCodeBlocks[blockId];
+            if (block && block.lspMode && block.lspFilePath) {
+                state.lspActiveBlockId = blockId;
+                state.lspActiveBlockEditor = editableCode;
+            }
+        });
+
+        editableCode.addEventListener('blur', () => {
+            if (state.lspActiveBlockId === blockId) {
+                state.lspActiveBlockId = null;
+                state.lspActiveBlockEditor = null;
+                hideLspHoverTooltip();
+                hideLspCompletion();
+                state.lspHoverLastKey = '';
+            }
+        });
+
+        editableCode.addEventListener('mousemove', (event) => {
+            state.lspHoverMouseX = event.clientX;
+            state.lspHoverMouseY = event.clientY;
+        });
+
+        editableCode.addEventListener('mouseup', () => {
+            if (state.lspActiveBlockId === blockId) {
+                state.lspHoverLastKey = '';
+                scheduleLspHover();
+            }
+        });
+
+        editableCode.addEventListener('keyup', () => {
+            if (state.lspActiveBlockId === blockId) {
+                scheduleLspHover();
+            }
+        });
+
         editableCode.addEventListener('keydown', (event) => {
+            if (state.lspActiveBlockId === blockId && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                if (event.key === 'Escape' && closeOpenLspTooltips()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (event.key === 'Enter' && commitActiveLspCompletion()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (event.key === 'ArrowDown' && moveLspCompletionSelection(1)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (event.key === 'ArrowUp' && moveLspCompletionSelection(-1)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+            }
+
             if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
                 return;
+            }
+
+            if (state.lspActiveBlockId === blockId && state.lspCompletionVisible) {
+                hideLspCompletion();
+                event.preventDefault();
+                event.stopPropagation();
+                const start = editableCode.selectionStart;
+                const end = editableCode.selectionEnd;
+                editableCode.setRangeText('\t', start, end, 'end');
+                editableCode.dispatchEvent(new Event('input'));
+                return;
+            }
+
+            if (state.lspActiveBlockId === blockId) {
+                const source = editableCode.value || '';
+                const cursor = editableCode.selectionStart || 0;
+                const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+                const leftOfCaret = source.slice(lineStart, cursor);
+                if (!/^\s*$/.test(leftOfCaret)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    hideLspHoverTooltip();
+                    hideLspCompletion();
+                    void requestLspCompletion();
+                    return;
+                }
             }
 
             // Insert tab character and keep focus in the code editor
@@ -4716,6 +4908,10 @@ function convertToJupyterCodeBlocks() {
         });
         editableCode.addEventListener('scroll', () => {
             syncHighlightViewport();
+            if (state.lspActiveBlockId === blockId) {
+                hideLspHoverTooltip();
+                hideLspCompletion();
+            }
         });
         // Set initial height and highlight
         setTimeout(() => {
@@ -4839,6 +5035,138 @@ async function runCodeBlockInTerminal(blockId) {
         } catch (err) {
             console.error('Error sending to terminal:', err);
         }
+}
+
+async function toggleLspModeForBlock(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) return;
+
+    const lspBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-lsp-notes`);
+    const editableElement = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable`);
+
+    if (!lspBtn || !editableElement) return;
+
+    // Toggle LSP mode
+    block.lspMode = !block.lspMode;
+    lspBtn.dataset.lspEnabled = String(block.lspMode);
+
+    // If enabling LSP mode, format the code
+    if (block.lspMode) {
+        block.currentContent = editableElement.value;
+        
+        try {
+            const result = await FormatCodeBlock(state.currentFile, blockId, block.currentContent, block.runtime);
+            const goErr = typeof result?.Err === 'string' ? result.Err : '';
+
+            if (goErr) {
+                notifyTerminal(goErr, 'error');
+                // Disable LSP mode on error
+                block.lspMode = false;
+                lspBtn.dataset.lspEnabled = 'false';
+                return;
+            }
+
+            const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
+            const formattedFilePath = typeof result?.FilePath === 'string' ? result.FilePath : '';
+
+            if (formattedCode.length > 0) {
+                editableElement.value = formattedCode;
+                block.currentContent = formattedCode;
+
+                // Trigger input event to update syntax highlighting and markdown source.
+                editableElement.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (formattedFilePath.length > 0) {
+                block.lspFilePath = formattedFilePath;
+                await NotesLspOpenDocument(formattedFilePath, '', block.currentContent);
+
+                // If this block's textarea is currently focused, activate it as the LSP target.
+                if (document.activeElement === editableElement) {
+                    state.lspActiveBlockId = blockId;
+                    state.lspActiveBlockEditor = editableElement;
+                }
+            }
+        } catch (err) {
+            console.error('Error formatting code:', err);
+            notifyTerminal(String(err && err.message ? err.message : err), 'error');
+            // Disable LSP mode on error
+            block.lspMode = false;
+            lspBtn.dataset.lspEnabled = 'false';
+        }
+    } else if (block.lspFilePath) {
+        try {
+            await NotesLspCloseDocument(block.lspFilePath);
+        } catch (err) {
+            console.error('Error closing LSP document for code block:', err);
+        }
+        block.lspFilePath = '';
+        // Clear active LSP target if this block was active.
+        if (state.lspActiveBlockId === blockId) {
+            state.lspActiveBlockId = null;
+            state.lspActiveBlockEditor = null;
+            hideLspHoverTooltip();
+            hideLspCompletion();
+        }
+    }
+
+    // Persist LSP mode state to document cache
+    await persistJupyterBlockState(blockId);
+}
+
+async function persistJupyterBlockState(blockId) {
+    try {
+        const docCache = await GetDocumentCache(state.currentFile);
+        if (!docCache) return;
+
+        if (!docCache.jupyterBlockState) {
+            docCache.jupyterBlockState = {};
+        }
+
+        const block = state.jupyterCodeBlocks[blockId];
+        if (block) {
+            docCache.jupyterBlockState[blockId] = {
+                lspMode: block.lspMode,
+                runtime: block.runtime
+            };
+        }
+
+        await SetDocumentCache(state.currentFile, docCache);
+    } catch (err) {
+        console.error('Error persisting code block state:', err);
+    }
+}
+
+async function restoreJupyterBlockState(blockId) {
+    try {
+        const docCache = await GetDocumentCache(state.currentFile);
+        if (!docCache || !docCache.jupyterBlockState || !docCache.jupyterBlockState[blockId]) {
+            return;
+        }
+
+        const savedState = docCache.jupyterBlockState[blockId];
+        const block = state.jupyterCodeBlocks[blockId];
+
+        if (block && savedState) {
+            if (savedState.lspMode) {
+                block.lspMode = true;
+                const lspBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-lsp-notes`);
+                if (lspBtn) {
+                    lspBtn.dataset.lspEnabled = 'true';
+                }
+            }
+
+            if (savedState.runtime) {
+                block.runtime = savedState.runtime;
+                const runtimeLink = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-runtime-dropdown`);
+                if (runtimeLink) {
+                    runtimeLink.textContent = savedState.runtime;
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error restoring code block state:', err);
+    }
 }
 
 async function refreshFiles() {
@@ -9409,6 +9737,27 @@ function applyWindowStyle(result) {
 
         .jupyter-stop-notes:active {
             background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
+        }
+
+        .jupyter-lsp-notes {
+            border-color: var(--fg);
+            color: var(--fg);
+        }
+
+        .jupyter-lsp-notes[data-lsp-enabled="true"] {
+            border-color: var(--red);
+            color: var(--red);
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.2);
+        }
+
+        .jupyter-lsp-notes[data-lsp-enabled="true"]:hover {
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .jupyter-lsp-notes[data-lsp-enabled="true"]:active {
+            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5) !important;
         }
 
         .jupyter-runtime-dropdown {

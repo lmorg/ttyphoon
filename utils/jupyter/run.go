@@ -26,9 +26,17 @@ var (
 	cacheMutex sync.Mutex
 )
 
+func tempDir(bookId string) string {
+	return filepath.Join(os.TempDir(), app.DirName, "runbook", bookId)
+}
+
+func fileName(codeId string, binding *LanguageBindingT) string {
+	return fmt.Sprintf("%s.%s", codeId, binding.FileExtension)
+}
+
 func runNote(ctx context.Context, bookId, codeId, pwd, code string, ch chan *OutputT, binding *LanguageBindingT, parameters ...string) {
-	tempDir := filepath.Join(os.TempDir(), app.DirName, "runbook", bookId)
-	fileName := fmt.Sprintf("%s.%s", codeId, binding.FileExtension)
+	tempDir := tempDir(bookId)
+	fileName := fileName(codeId, binding)
 	filePath := filepath.Join(tempDir, fileName)
 
 	var exitCode int
@@ -45,8 +53,6 @@ func runNote(ctx context.Context, bookId, codeId, pwd, code string, ch chan *Out
 	cacheMutex.Unlock()
 
 	cached = cached && c.code == code
-
-	log.Printf("[debug] runNote: cached=%v filePath=%s", cached, filePath)
 
 	if !cached {
 		err := writeRenderedSource(tempDir, fileName, code, binding)

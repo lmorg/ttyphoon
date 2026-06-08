@@ -1,3 +1,24 @@
+export namespace jupyter {
+	
+	export class FormatCodeReturnT {
+	    Code: string;
+	    FilePath: string;
+	    Err: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FormatCodeReturnT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Code = source["Code"];
+	        this.FilePath = source["FilePath"];
+	        this.Err = source["Err"];
+	    }
+	}
+
+}
+
 export namespace lsp {
 	
 	export class ApplyCodeActionResult {

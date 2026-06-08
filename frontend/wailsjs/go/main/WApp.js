@@ -34,6 +34,10 @@ export function FocusTerminalPane() {
   return window['go']['main']['WApp']['FocusTerminalPane']();
 }
 
+export function FormatCodeBlock(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['FormatCodeBlock'](arg1, arg2, arg3, arg4);
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
