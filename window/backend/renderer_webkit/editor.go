@@ -9,9 +9,9 @@ func (wr *webkitRender) VisualEditor() {
 			Placeholder: "Text to send to terminal",
 			Multiline:   true,
 		},
-		OkFunc: func(value string) {
-			if value != "" {
-				wr.termWin.Active.GetTerm().Reply([]byte(value))
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			if v.Value != "" {
+				wr.termWin.Active.GetTerm().Reply([]byte(v.Value))
 			}
 		},
 	}

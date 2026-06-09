@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
@@ -30,14 +29,14 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 	log.Printf("MCP server %s: %s", server, serverURL)
 	hooks := mcp_client.OAuthUIHooks{
 		OpenBrowser: func(authURL string) {
-			rctx := agent.Renderer().GetContext()
+			rctx := agent.Renderer().GetWindowContext()
 			if rctx != nil {
 				runtime.BrowserOpenURL(rctx, authURL)
 			}
 		},
-		PromptCallbackURL: func() (string, error) {
+		/*PromptCallbackURL: func() (string, error) {
 			return promptString(agent, "Paste OAuth callback URL")
-		},
+		},*/
 		OnAutoCallbackUnavailable: func(callbackErr error) {
 			agent.Renderer().DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Automatic OAuth callback unavailable (%v). Falling back to pasted callback URL.", callbackErr))
 		},
@@ -58,7 +57,7 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 	)
 }
 
-func promptString(agent *Agent, prompt string) (string, error) {
+/*func promptString(agent *Agent, prompt string) (string, error) {
 	ch := make(chan string)
 	errCh := make(chan error)
 
@@ -76,7 +75,7 @@ func promptString(agent *Agent, prompt string) (string, error) {
 	case err := <-errCh:
 		return "", err
 	}
-}
+}*/
 
 func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Client) error {
 	err := c.ListTools()

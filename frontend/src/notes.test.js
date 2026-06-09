@@ -2058,9 +2058,9 @@ describe('notes rendering', () => {
 
         toolsPanel.dataset.collapsed = 'true';
 
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-        aiResponseHandler('hello from ai');
+        const aiJobStartHandler = getEventHandler('aiJobStart');
+        expect(typeof aiJobStartHandler).toBe('function');
+        aiJobStartHandler();
         await flushPromises();
 
         expect(tabAI.getAttribute('aria-selected')).toBe('true');
@@ -2223,23 +2223,34 @@ describe('notes rendering', () => {
         expect(nextPre.scrollTop).toBe(0);
     });
 
-    it('adds a timestamp when an AI job finishes', async () => {
+    it('adds a timestamp when an AI job starts', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
 
-        fmt.startJob();
-        fmt.appendChunk('Final Answer: Done.');
-        await flushPromises();
-
+        // Before startJob, no timestamp
         expect(wrapper.querySelector('.notes-ai-timestamp')).toBeNull();
 
-        fmt.finishJob();
-
-        const ts = wrapper.querySelector('.notes-ai-timestamp');
+        fmt.startJob();
+        
+        // After startJob, timestamp exists at the start
+        let ts = wrapper.querySelector('.notes-ai-timestamp');
         expect(ts).not.toBeNull();
         expect(ts.tagName).toBe('P');
         expect(ts.textContent).toMatch(/^\d{1,2}:\d{2}:\d{2}/);
+
+        fmt.appendChunk('Final Answer: Done.');
+        await flushPromises();
+
+        // Timestamp should still be there
+        ts = wrapper.querySelector('.notes-ai-timestamp');
+        expect(ts).not.toBeNull();
+
+        fmt.finishJob();
+
+        // Timestamp should still be present after finishJob
+        ts = wrapper.querySelector('.notes-ai-timestamp');
+        expect(ts).not.toBeNull();
     });
 
     it('adds an hr separator when a second AI job starts with existing content', async () => {

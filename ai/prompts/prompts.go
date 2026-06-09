@@ -2,6 +2,7 @@ package prompts
 
 import (
 	_ "embed"
+	"fmt"
 	"os"
 	"regexp"
 	"runtime"
@@ -30,58 +31,65 @@ var _PROMPT_TITLE string
 
 var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
 
-func GetExplainCmd(agent *agent.Agent, userPrompt string) string {
-	return os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agent, userPrompt))
+func GetExplainCmd(agt *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agt, userPrompt))
 }
 
-func GetExplainDoc(agent *agent.Agent, userPrompt string) string {
-	return os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agent, userPrompt))
+func GetExplainDoc(agt *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agt, userPrompt))
 }
 
-func GetAsk(agent *agent.Agent, userPrompt string) string {
+func GetAsk(agt *agent.Agent, userPrompt string) string {
 	fn := rxSkillFunction.FindString(userPrompt)
 	if fn == "" {
-		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
+		return os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt))
 	}
 
-	agent.Meta.Function = strings.TrimRight(fn[1:], " ")
-	skill := skills.ReadSkills().FromFunctionName(agent.Meta.Function)
+	agt.Meta.Function = strings.TrimRight(fn[1:], " ")
+	skill := skills.ReadSkills().FromFunctionName(agt.Meta.Function)
 	if skill == nil {
-		return os.Expand(_PROMPT_ASK, promptVars(agent, userPrompt))
+		return os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt))
 	}
 
-	err := agent.SkillStartTools(skill)
+	err := agt.SkillStartTools(skill)
 	if err != nil {
-		agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
-	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agent, userPrompt))
+	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agt, userPrompt))
 }
 
-func GetTitle(agent *agent.Agent, userPrompt string) string {
-	return os.Expand(_PROMPT_TITLE, promptVars(agent, userPrompt))
+func GetTitle(agt *agent.Agent, userPrompt string) string {
+	return os.Expand(_PROMPT_TITLE, promptVars(agt, userPrompt))
 }
 
-func promptVars(agent *agent.Agent, userPrompt string) func(string) string {
+func promptVars(agt *agent.Agent, userPrompt string) func(string) string {
 	return func(s string) string {
 		switch s {
 		case "SYSTEM_PROMPT":
-			return os.Expand(_PROMPT_SYSTEM, promptVars(agent, userPrompt))
+			return os.Expand(_PROMPT_SYSTEM, promptVars(agt, userPrompt))
 		case "MAX_ITERATIONS":
-			return strconv.Itoa(agent.MaxIterations())
+			return strconv.Itoa(agt.MaxIterations())
 		case "HOST_OS":
 			return runtime.GOOS
 		case "HOST_CPU":
 			return runtime.GOARCH
 		case "HISTORY":
-			return agent.History.String()
+			return agt.History.String()
 		case "USER_PROMPT":
 			return userPrompt
 		case "COMMAND_LINE":
-			return agent.Meta.CmdLine
+			return agt.Meta.CmdLine
 		case "COMMAND_OUTPUT":
-			return agent.Meta.OutputBlock
+			return agt.Meta.OutputBlock
 		default:
-			return "$" + s
+			if len(agt.Meta.Variables) == 0 {
+				return "$" + s
+			}
+			val, ok := agt.Meta.Variables[s]
+			if !ok {
+				return "$" + s
+			}
+			return fmt.Sprintf("%v", val)
 		}
 	}
 }

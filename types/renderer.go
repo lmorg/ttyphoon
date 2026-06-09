@@ -30,7 +30,16 @@ type ContextMenu interface {
 
 const MENU_SEPARATOR = "-"
 
-type InputBoxCallbackT func(string)
+type InputBoxCallbackT func(*InputBoxCallbackResultT)
+
+type InputBoxCallbackResultT struct {
+	Value     string         `json:"value"`
+	Variables map[string]any `json:"variables"`
+}
+
+func (ibcr InputBoxCallbackResultT) String() string {
+	return ibcr.Value
+}
 
 type InputBoxWT struct {
 	Options    InputBoxWTOptions
@@ -39,11 +48,20 @@ type InputBoxWT struct {
 }
 
 type InputBoxWTOptions struct {
-	Title       string   `json:"title"`
-	Prefill     string   `json:"prefill"`
-	Placeholder string   `json:"placeholder"`
-	History     []string `json:"history"`
-	Multiline   bool     `json:"multiline"`
+	Title       string                `json:"title"`
+	Prefill     string                `json:"prefill"`
+	Placeholder string                `json:"placeholder"`
+	History     []string              `json:"history"`
+	Multiline   bool                  `json:"multiline"`
+	Variables   []InputBoxWTVariables `json:"variables"`
+}
+
+type InputBoxWTVariables struct {
+	Name        string `json:"name",yaml:"name"`
+	Label       string `json:"label",yaml:"label"`
+	Description string `json:"description",yaml:"description"`
+	Default     string `json:"default",yaml:"default"`
+	Type        string `json:"type",yaml:"type"`
 }
 
 type Renderer interface {
@@ -87,10 +105,9 @@ type Renderer interface {
 	RefreshNotes()
 	NotesEditFile(filename string)
 	NotesCreateAndOpen(filename, contents string)
-	EmitAIResponseChunk(chunk string)
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	ActiveTile() Tile
-	GetContext() context.Context
+	GetWindowContext() context.Context
 	Close()
 }
 

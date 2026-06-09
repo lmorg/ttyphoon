@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/adrg/frontmatter"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
 )
 
@@ -20,11 +21,20 @@ type SkillT struct {
 	Tools         []*skillToolT     `yaml:"-"`
 	Prompt        string            `yaml:"-"`
 	FunctionName  string            `yaml:"function-name"`
+
+	Variables []types.InputBoxWTVariables `yaml:"variables"`
 }
 
 type skillToolT struct {
 	Name       string
 	Parameters string
+}
+
+type skillVarsT struct {
+	Label       string `yaml:"label"`
+	Description string `yaml:"description"`
+	Default     string `yaml:"default"`
+	Type        string `yaml:"type"`
 }
 
 type Skills []*SkillT

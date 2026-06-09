@@ -64,10 +64,10 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 			return
 
 		case 2:
-			el.renderer.DisplayInputBox(fmt.Sprintf("SELECT * FROM '%s' WHERE ... (empty query to reset view)", el.name), el.filter, func(filter string) {
+			el.renderer.DisplayInputBox(fmt.Sprintf("SELECT * FROM '%s' WHERE ... (empty query to reset view)", el.name), el.filter, func(v *types.InputBoxCallbackResultT) {
 				el.renderOffset = 0
 				el.limitOffset = 0
-				el.filter = filter
+				el.filter = v.String()
 				err := el.runQuery()
 				if err != nil {
 					el.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot sort table: "+err.Error())

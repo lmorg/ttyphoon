@@ -180,7 +180,7 @@ func ConnectHttpOAuthInteractive(overrides *mcp_config.OverrideT, serverURL stri
 	}
 
 	// If go-sdk flow fails, return error (no fallback to legacy)
-	return nil, fmt.Errorf("failed to establish OAuth connection to %s", serverURL)
+	//return nil, fmt.Errorf("failed to establish OAuth connection to %s", serverURL)
 }
 
 // buildGoSDKAuthHandler constructs an auth.OAuthHandler backed by the
@@ -689,13 +689,13 @@ func sanitizeURLForLog(raw string) string {
 	return u.String()
 }
 
-func defaultOpenIDMetadataURLForAuthDomain(authDomain string) string {
+/*func defaultOpenIDMetadataURLForAuthDomain(authDomain string) string {
 	u, err := url.Parse(strings.TrimSpace(authDomain))
 	if err != nil || u == nil || u.Scheme == "" || u.Host == "" {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host + "/.well-known/openid-configuration"
-}
+}*/
 
 func oauthRegistrationMethodsSummary(oauthCfg OAuthConfig) string {
 	methods := make([]string, 0, 3)

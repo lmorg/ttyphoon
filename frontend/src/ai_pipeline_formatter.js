@@ -242,17 +242,21 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
         streamText = '';
         renderVersion += 1;
+
+        // Timestamp sits directly in container (before jobRoot) so the render
+        // loop, which owns jobRoot's contents, cannot accidentally wipe it.
+        const ts = document.createElement('p');
+        ts.className = 'notes-ai-timestamp';
+        const now = new Date();
+        ts.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        container.appendChild(ts);
+
         jobRoot = document.createElement('div');
         jobRoot.className = 'notes-ai-job';
         container.appendChild(jobRoot);
     }
 
     function finishJob() {
-        const ts = document.createElement('p');
-        ts.className = 'notes-ai-timestamp';
-        const now = new Date();
-        ts.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        container.appendChild(ts);
         container.scrollTop = container.scrollHeight;
     }
 

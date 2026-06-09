@@ -713,6 +713,10 @@ function setTerminalFocusState(focused, options = {}) {
     TerminalSetFocus(focused).catch(() => {});
 }
 
+window.ttyphoonSetTerminalFocusState = (focused, options = {}) => {
+    setTerminalFocusState(Boolean(focused), options);
+};
+
 function focusNotesPane() {
     if (!notesPane) {
         return;
@@ -765,6 +769,10 @@ EventsOn('focusTerminalPane', () => {
 });
 
 window.addEventListener('keydown', (event) => {
+    if (window.ttyphoonInputboxOpen === true) {
+        return;
+    }
+
     if (event.key === 'Tab' && event.altKey && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         event.stopPropagation();

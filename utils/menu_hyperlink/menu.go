@@ -140,7 +140,7 @@ func MenuItems(renderer types.Renderer, url, label string) []types.MenuItem {
 			{
 				Title: "Rename file",
 				Fn: func() {
-					runtime.EventsEmit(link.renderer.GetContext(), "fileActionDialog", map[string]string{
+					runtime.EventsEmit(link.renderer.GetWindowContext(), "fileActionDialog", map[string]string{
 						"action":   "rename",
 						"filePath": filePath,
 						"fileName": fileName,
@@ -151,7 +151,7 @@ func MenuItems(renderer types.Renderer, url, label string) []types.MenuItem {
 			{
 				Title: "Delete file",
 				Fn: func() {
-					runtime.EventsEmit(link.renderer.GetContext(), "fileActionDialog", map[string]string{
+					runtime.EventsEmit(link.renderer.GetWindowContext(), "fileActionDialog", map[string]string{
 						"action":   "delete",
 						"filePath": filePath,
 						"fileName": fileName,

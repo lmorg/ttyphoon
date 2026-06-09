@@ -52,7 +52,7 @@ func (wr *webkitRender) hotkeys() {
 			term = true
 
 		case "AskAI":
-			fn = func() { askAi(wr) }
+			fn = func() { wr.askAi() }
 			desc = "Ask AI..."
 			icon = 0xf544
 		case "AgentSkills":

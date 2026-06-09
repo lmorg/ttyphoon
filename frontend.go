@@ -477,13 +477,13 @@ func (a *WApp) NotesKeyPress(key string, ctrl, alt, shift, meta bool) map[string
 	}
 }
 
-func (a *WApp) TerminalInputBoxSubmit(id int64, value string, isOk bool) {
+func (a *WApp) TerminalInputBoxSubmit(id int64, v *types.InputBoxCallbackResultT, isOk bool) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
 		return
 	}
 
-	renderer.InputBoxSubmit(id, value, isOk)
+	renderer.InputBoxSubmit(id, v, isOk)
 }
 
 func (a *WApp) startTerminalWindow() {

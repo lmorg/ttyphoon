@@ -42,18 +42,18 @@ func (term *Term) search() {
 	term.renderer.DisplayInputBox("Value to search for", term._searchLastString, term.searchBuf, nil)
 }
 
-func (term *Term) searchBuf(search string) {
-	if len(search) == 1 {
+func (term *Term) searchBuf(v *types.InputBoxCallbackResultT) {
+	if len(v.Value) == 1 {
 		term.renderer.DisplayNotification(types.NOTIFY_WARN, "Search string too short. Minimum search length is 2")
 		return
 	}
 
-	if search == "" {
+	if v.Value == "" {
 		return
 	}
 
-	search = strings.ToLower(search)
-	term._searchLastString = search
+	v.Value = strings.ToLower(v.Value)
+	term._searchLastString = v.Value
 
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
@@ -62,7 +62,7 @@ func (term *Term) searchBuf(search string) {
 		return strings.Contains(phrase, search)
 	}*/
 
-	rxMatch, err := regexp.Compile(search)
+	rxMatch, err := regexp.Compile(v.Value)
 	if err != nil {
 		term.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
 		return
@@ -86,7 +86,7 @@ func (term *Term) searchBuf(search string) {
 		return
 	}
 
-	term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Search string not found: '%s'", search))
+	term.renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Search string not found: '%s'", v.Value))
 }
 
 func (term *Term) SearchClearResults() {

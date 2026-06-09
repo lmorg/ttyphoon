@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/types"
 	"golang.design/x/clipboard"
@@ -92,7 +91,7 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 	)
 }
 
-func (wr *webkitRender) askAi() {
+/*func (wr *webkitRender) askAi() {
 	if wr.termWin == nil || wr.termWin.Active == nil {
 		return
 	}
@@ -103,15 +102,15 @@ func (wr *webkitRender) askAi() {
 	wr.DisplayInputBox(
 		fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
 		"",
-		func(prompt string) {
-			if prompt == "" {
+		func(v *types.InputBoxCallbackResultT) {
+			if v.Value == "" {
 				return
 			}
-			ai.AskAI(agt, prompt)
+			ai.AskAI(agt, v.Value)
 		},
 		nil,
 	)
-}
+}*/
 
 func (wr *webkitRender) clipboardPaste() {
 	term := wr.activeTerm()

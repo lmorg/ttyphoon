@@ -35,10 +35,10 @@ func (input *InputT) Get(renderer types.Renderer) (string, error) {
 	var err error
 
 	renderer.DisplayInputBox(input.Description, "",
-		func(s string) {
-			ch <- s
+		func(v *types.InputBoxCallbackResultT) {
+			ch <- v.String()
 		},
-		func(_ string) {
+		func(_ *types.InputBoxCallbackResultT) {
 			err = fmt.Errorf("input required for '%s'", input.Id)
 			ch <- ""
 		})

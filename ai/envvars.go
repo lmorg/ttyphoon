@@ -12,13 +12,13 @@ const (
 )
 
 func EnvOpenAi(renderer types.Renderer, callback func()) {
-	renderer.DisplayInputBox("OpenAI (ChatGPT) API Key", "", func(s string) {
-		_ = os.Setenv(_OPENAI_ENV_VAR, s)
+	renderer.DisplayInputBox("OpenAI (ChatGPT) API Key", "", func(v *types.InputBoxCallbackResultT) {
+		_ = os.Setenv(_OPENAI_ENV_VAR, v.String())
 	}, nil)
 }
 
 func EnvAnthropic(renderer types.Renderer, callback func()) {
-	renderer.DisplayInputBox("Anthropic (Claude) API Key", "", func(s string) {
-		_ = os.Setenv(_ANTHROPIC_ENV_VAR, s)
+	renderer.DisplayInputBox("Anthropic (Claude) API Key", "", func(v *types.InputBoxCallbackResultT) {
+		_ = os.Setenv(_ANTHROPIC_ENV_VAR, v.String())
 	}, nil)
 }

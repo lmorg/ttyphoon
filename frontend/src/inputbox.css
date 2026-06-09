@@ -49,6 +49,116 @@
     border-color: var(--terminal-accent);
 }
 
+.inputbox-variable-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.inputbox-variable-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.inputbox-variable-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 140px;
+    font-size: 12px;
+    color: var(--terminal-fg, #99c0d3);
+    cursor: help;
+}
+
+.inputbox-variable-tooltip {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 1;
+    min-width: 180px;
+    max-width: 280px;
+    padding: 6px 8px;
+    border: 1px solid var(--terminal-fg, #316db0);
+    border-radius: 4px;
+    background: var(--terminal-bg, #1e2228);
+    color: var(--terminal-fg, #e6edf3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    font-size: 11px;
+    font-weight: normal;
+    line-height: 1.35;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-2px);
+    transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.inputbox-variable-label:hover .inputbox-variable-tooltip,
+.inputbox-variable-label:focus-within .inputbox-variable-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.inputbox-variable-line > .inputbox-input,
+.inputbox-variable-line > .inputbox-variable-checkbox-wrap {
+    flex: 1 1 auto;
+}
+
+.inputbox-variable-checkbox-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.inputbox-variable-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    width: 13px;
+    height: 13px;
+    border: 2px solid var(--red);
+    background: transparent;
+    position: relative;
+    vertical-align: middle;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.inputbox-variable-checkbox:hover {
+    border-color: var(--accent);
+}
+
+.inputbox-variable-checkbox:checked {
+    background: var(--green);
+    border-color: var(--green);
+}
+
+.inputbox-variable-checkbox:checked:hover {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.inputbox-variable-checkbox:checked::after {
+    content: '✓';
+    position: absolute;
+    color: var(--bg);
+    font-size: 13px;
+    font-weight: bold;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.inputbox-variable-list-btn {
+    text-align: left;
+}
+
 .inputbox-hint {
     display: flex;
     align-items: center;
@@ -93,8 +203,8 @@
 }
 
 .inputbox-cancel:hover {
-    border-color: var(--terminal-selection, #316db0);
-    background: var(--terminal-selection-20, rgba(49, 109, 176, 0.2));
+    border-color: var(--terminal-accent, #316db0);
+    background: var(--terminal-accent-20, rgba(49, 109, 176, 0.2));
 }
 
 .inputbox-history-btn {
@@ -109,6 +219,6 @@
 }
 
 .inputbox-history-btn:hover {
-    border-color: var(--terminal-selection, #316db0);
-    background: var(--terminal-selection-20, rgba(49, 109, 176, 0.2));
+    border-color: var(--terminal-accent, #316db0);
+    background: var(--terminal-accent-20, rgba(49, 109, 176, 0.2));
 }

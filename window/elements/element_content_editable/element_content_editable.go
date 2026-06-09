@@ -250,5 +250,5 @@ func (el *ElementContentEditable) visualEditor() {
 	text := el.text
 	el.mu.RUnlock()
 	text = rxAnsiSgr.ReplaceAllString(text, "")
-	el.renderer.DisplayInputBox("Visual editor", text, el.reply, nil)
+	el.renderer.DisplayInputBox("Visual editor", text, func(v *types.InputBoxCallbackResultT) { el.reply(v.String()) }, nil)
 }

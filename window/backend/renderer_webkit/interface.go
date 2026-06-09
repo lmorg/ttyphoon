@@ -297,13 +297,6 @@ func (wr *webkitRender) ActivateTerminalPaneTab(tabID string) {
 	runtime.EventsEmit(wr.wapp, "terminalActivateAuxTab", map[string]string{"id": tabID})
 }
 
-func (wr *webkitRender) EmitAIResponseChunk(chunk string) {
-	if wr.wapp == nil || chunk == "" {
-		return
-	}
-	runtime.EventsEmit(wr.wapp, "aiResponseStream", chunk)
-}
-
 func (wr *webkitRender) DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32) {
 	if wr.wapp == nil || dataURL == "" {
 		return
@@ -341,7 +334,7 @@ func (wr *webkitRender) activeTerm() types.Term {
 	return nil
 }
 
-func (wr *webkitRender) GetContext() context.Context {
+func (wr *webkitRender) GetWindowContext() context.Context {
 	return wr.wapp
 }
 

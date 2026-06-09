@@ -10,17 +10,18 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func askAi(wr *webkitRender) {
+func (wr *webkitRender) askAi() {
 	agt := agent.Get(wr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 
 	wr.DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:     fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
-			Multiline: true, // Enable multiline input for AI prompt
+			Multiline: true,
+			Variables: []types.InputBoxWTVariables{ai.SaveMarkdownToggle(false)},
 		},
-		OkFunc: func(prompt string) {
-			ai.AskAI(agt, prompt)
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			ai.AskAI(agt, v.String())
 		},
 	})
 }
@@ -64,9 +65,11 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 		Options: types.InputBoxWTOptions{
 			Title:     strings.Title(skill.Description),
 			Multiline: true,
+			Variables: append(skill.Variables, ai.SaveMarkdownToggle(false)),
 		},
-		OkFunc: func(prompt string) {
-			ai.AskAI(agt, fmt.Sprintf("/%s %s", skill.FunctionName, prompt))
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			agt.Meta.Variables = v.Variables
+			ai.AskAI(agt, fmt.Sprintf("/%s %s", skill.FunctionName, v.String()))
 		},
 	}
 	wr.DisplayInputBoxW(parameters)

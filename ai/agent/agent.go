@@ -33,6 +33,7 @@ type Meta struct {
 	Pwd         string
 	OutputBlock string
 	Function    string
+	Variables   map[string]any
 }
 
 type allTheAgentsT struct {

@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/lmorg/ttyphoon/codes"
-	"github.com/lmorg/ttyphoon/debug"
 )
 
 func (term *Term) readLoop() {
@@ -18,8 +17,7 @@ func (term *Term) readLoop() {
 		if err != nil {
 			return
 		}
-		//term._slowBlinkState = true
-		//term.renderer.SetBlinkState(true)
+
 		term.renderer.TriggerLazyRedraw()
 
 		term._mutex.Lock()
@@ -87,6 +85,11 @@ func (term *Term) readChar(r rune) {
 		// Ctrl+O: Shift In (SI)
 		term._activeCharSet = 0
 
+	case 22, 23:
+		// Ctrl+V: Synchronous Idle
+		// Ctrl+W: End of Transmission Block
+		return // do nothing
+
 	case codes.AsciiEscape:
 		// 27: escape, {ESC}
 		switch term._vtMode {
@@ -114,7 +117,7 @@ func (term *Term) readChar(r rune) {
 	}
 }
 
-func writeDebuggingRune(r rune) {
+/*func writeDebuggingRune(r rune) {
 	if !debug.Enabled {
 		return
 	}
@@ -124,4 +127,4 @@ func writeDebuggingRune(r rune) {
 	} else {
 		debug.Log(string(r))
 	}
-}
+}*/

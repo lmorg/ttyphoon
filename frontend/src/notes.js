@@ -7414,12 +7414,10 @@ async function askAIAboutCurrentDocument() {
         contents,
     ].join('\n');
 
-    startAIJob();
     setToolsPanelCollapsed(false);
 
     try {
         await AskAI('notesDocument', fileName, aiContext);
-        finishAIJob();
     } catch (err) {
         notifyTerminal('Failed to ask AI about this document', 'error');
         console.error(err);
@@ -8097,16 +8095,25 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
     codeMaxLines: 10,
 });
 
+// Event emitted by Go when an AI job begins (before first chunk)
+EventsOn("aiJobStart", () => {
+    startAIJob();
+    setToolsTab('ai');
+    if (elements.toolsPanel.dataset.collapsed === 'true') {
+        toggleToolsPanel();
+    }
+});
+
+// Event emitted by Go when an AI job finishes
+EventsOn("aiJobFinish", () => {
+    finishAIJob();
+});
+
 // Event listener for streaming AI responses
 EventsOn("aiResponseStream", (chunk) => {
     const text = String(chunk ?? '');
     if (text) {
         appendAIText(text);
-        setToolsTab('ai');
-        // Auto-expand Tools panel when response starts
-        if (elements.toolsPanel.dataset.collapsed === 'true') {
-            toggleToolsPanel();
-        }
     }
 });
 
@@ -9326,16 +9333,16 @@ function applyWindowStyle(result) {
 
         #notes-ai-output .notes-ai-separator {
             border: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.14);
+            border-top: 1px solid var(--accent);
             margin: 18px 0 14px;
         }
 
         #notes-ai-output .notes-ai-timestamp {
-            margin: 8px 0 0;
+            margin: 0 0 6px;
             font-size: 0.8em;
-            opacity: 0.45;
-            text-align: right;
+            opacity: 0.55;
             font-style: italic;
+            color: var(--accent);
         }
 
         #notes-log-output {
@@ -11971,6 +11978,10 @@ document.addEventListener('keydown', (event) => {
         return;
     }
 
+    if (window.ttyphoonInputboxOpen === true) {
+        return;
+    }
+
     if (window.terminalFocusedState === true) {
         return;
     }
@@ -12014,6 +12025,10 @@ let notesHotkeyPrefixActive = false;
 document.addEventListener('keydown', (event) => {
     // Block keyboard shortcuts if fullscreen image overlay is open
     if (document.getElementById('fullscreen-image-overlay')) {
+        return;
+    }
+
+    if (window.ttyphoonInputboxOpen === true) {
         return;
     }
 

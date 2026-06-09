@@ -59,6 +59,8 @@ type inputBoxPayload struct {
 	Placeholder  string   `json:"placeholder"`
 	History      []string `json:"history"`
 	Multiline    bool     `json:"multiline"`
+
+	Variables []types.InputBoxWTVariables `json:"variables"`
 }
 
 // DisplayInputBoxW displays an input box with options, supporting multiline input.
@@ -68,11 +70,11 @@ func (wr *webkitRender) DisplayInputBoxW(parameters *types.InputBoxWT) {
 	}
 	ok := parameters.OkFunc
 	if ok == nil {
-		ok = func(string) {}
+		ok = func(*types.InputBoxCallbackResultT) {}
 	}
 	cancel := parameters.CancelFunc
 	if cancel == nil {
-		cancel = func(string) {}
+		cancel = func(*types.InputBoxCallbackResultT) {}
 	}
 
 	// get history
@@ -101,24 +103,25 @@ func (wr *webkitRender) DisplayInputBoxW(parameters *types.InputBoxWT) {
 			Placeholder:  parameters.Options.Placeholder,
 			History:      parameters.Options.History,
 			Multiline:    parameters.Options.Multiline,
+			Variables:    parameters.Options.Variables,
 		})
 	}
 }
 
 // InputBoxSubmit is called from wails.go when JS submits the input box.
-func (wr *webkitRender) InputBoxSubmit(id int64, value string, isOk bool) {
+func (wr *webkitRender) InputBoxSubmit(id int64, v *types.InputBoxCallbackResultT, isOk bool) {
 	cbs, ok := wr.inputBoxes.pop(id)
 	if !ok {
 		return
 	}
 	if isOk {
 		if cbs.cacheKey != "" {
-			cbs.history = prependHistory(value, cbs.history)
+			cbs.history = prependHistory(v.String(), cbs.history)
 			cache.Write(cache.NS_INPUTBOXW_HISTORY, cbs.cacheKey, &cbs.history, cache.Days(365))
 		}
-		cbs.ok(value)
+		cbs.ok(v)
 	} else {
-		cbs.cancel(value)
+		cbs.cancel(v)
 	}
 }
 

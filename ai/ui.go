@@ -12,6 +12,7 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func Explain(agent *agent.Agent, promptDialogue bool) {
@@ -20,8 +21,8 @@ func Explain(agent *agent.Agent, promptDialogue bool) {
 		return
 	}
 
-	fn := func(userPrompt string) {
-		askAI(agent, prompts.GetExplainCmd(agent, userPrompt), "> "+userPrompt, userPrompt)
+	fn := func(v *types.InputBoxCallbackResultT) {
+		askAI(agent, prompts.GetExplainCmd(agent, v.String()), "> "+v.String(), v.String())
 	}
 
 	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
@@ -44,8 +45,8 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 			Placeholder: "Optional",
 			Multiline:   true,
 		},
-		OkFunc: func(userPrompt string) {
-			askAI(agt, prompts.GetExplainDoc(agt, userPrompt), "> "+userPrompt, userPrompt)
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			askAI(agt, prompts.GetExplainDoc(agt, v.String()), "> "+v.String(), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -59,6 +60,8 @@ func AskAI(agt *agent.Agent, prompt string) {
 	}()
 }
 
+const SAVE_RESPONSE = "saveResponse"
+
 func askAI(agt *agent.Agent, prompt string, title string, query string) {
 	prompt += prompts.AgentsMd()
 	sticky := agt.Renderer().DisplaySticky(
@@ -71,23 +74,37 @@ func askAI(agt *agent.Agent, prompt string, title string, query string) {
 		startTime := time.Now()
 		noteTime := startTime
 		filenameCh := make(chan string, 1)
+		saveResponse := true
 
-		// Generate the note filename in parallel so it is ready when output is rendered.
-		go func() {
-			filenameCh <- buildAINoteFilename(agt, query, noteTime)
-		}()
+		if len(agt.Meta.Variables) > 0 {
+			if val, ok := agt.Meta.Variables[SAVE_RESPONSE]; ok {
+				if b, ok := val.(bool); ok {
+					saveResponse = b
+				}
+			}
+		}
+
+		if saveResponse {
+			// Generate the note filename in parallel so it is ready when output is rendered.
+			go func() {
+				filenameCh <- buildAINoteFilename(agt, query, noteTime)
+			}()
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 
+		startAIJob(agt)
+
 		result, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
 			if chunk == "" {
 				return
 			}
-			agt.Renderer().EmitAIResponseChunk(chunk)
+			emitAIResponseChunk(agt, chunk)
 		})
 		sticky.Close()
+		finishAIJob(agt)
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
@@ -117,7 +134,31 @@ func askAI(agt *agent.Agent, prompt string, title string, query string) {
 			return tmpl.Execute(buf, data)
 		})
 
-		filename := <-filenameCh
-		agt.Renderer().NotesCreateAndOpen(filename, buf.String())
+		if saveResponse {
+			filename := <-filenameCh
+			agt.Renderer().NotesCreateAndOpen(filename, buf.String())
+		}
 	}()
+}
+
+func SaveMarkdownToggle(Default bool) types.InputBoxWTVariables {
+	return types.InputBoxWTVariables{
+		Name:        SAVE_RESPONSE,
+		Label:       "Save response",
+		Description: "Write output to disk?",
+		Type:        "boolean",
+		Default:     fmt.Sprintf("%v", Default),
+	}
+}
+
+func startAIJob(agt *agent.Agent) {
+	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart")
+}
+
+func emitAIResponseChunk(agt *agent.Agent, chunk string) {
+	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseStream", chunk)
+}
+
+func finishAIJob(agt *agent.Agent) {
+	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobFinish")
 }
