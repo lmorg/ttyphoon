@@ -10,7 +10,8 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
-func (wr *webkitRender) askAi() {
+func (wr *webkitRender) AskAi() {
+	//log.Println("[debug] *webkitRender.AskAi()")
 	agt := agent.Get(wr.termWin.Active.Id())
 	agt.Meta = &agent.Meta{}
 

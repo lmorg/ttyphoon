@@ -25,6 +25,7 @@ import { EventsOn, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
 import { showLocalMenu } from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
+import { initNotesAIPanel } from './notes-ai-panel';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -541,6 +542,8 @@ app.innerHTML = `
                     <div id="notes-tools-content" class="notes-tools-content">
                         <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="true">
                             <div class="notes-tools-pane-header">
+                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
+                                <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
                                 <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
                             </div>
                             <div id="notes-ai-output" class="notes-ai-output"></div>
@@ -675,6 +678,8 @@ const elements = {
     toolsToC: document.getElementById('notes-tools-toc'),
     toolsPanel: document.getElementById('notes-tools-panel'),
     toolsMinimize: document.getElementById('notes-tools-minimize'),
+    toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
+    toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
     toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
     logOutput: document.getElementById('notes-log-output'),
@@ -7424,6 +7429,18 @@ async function askAIAboutCurrentDocument() {
     }
 }
 
+async function askAIFromToolbar() {
+    setToolsPanelCollapsed(false);
+    setToolsTab('ai');
+
+    try {
+        await AskAI('notesPrompt', '', '');
+    } catch (err) {
+        notifyTerminal('Failed to ask AI', 'error');
+        console.error(err);
+    }
+}
+
 function createAskAIDocumentMenuItem() {
     return {
         title: 'Ask AI...',
@@ -8171,6 +8188,11 @@ if (elements.toolsMinimize) {
 if (elements.toolsClear) {
     elements.toolsClear.addEventListener('click', clearAIOutput);
 }
+if (elements.toolsAIAsk) {
+    elements.toolsAIAsk.addEventListener('click', () => {
+        void askAIFromToolbar();
+    });
+}
 if (elements.toolsRestore) {
     elements.toolsRestore.addEventListener('click', () => setToolsPanelCollapsed(false));
 }
@@ -8191,6 +8213,7 @@ if (elements.toolsTabLog) {
 }
 
 initNotesLogPanel(elements, EventsOn);
+initNotesAIPanel(elements);
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
         const tocButton = event.target.closest('.notes-tools-toc-item');
@@ -9107,8 +9130,8 @@ function applyWindowStyle(result) {
 
         .notes-tools-minimize:hover,
         .notes-tools-clear:hover {
-            border-color: var(--fg);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
         }
 
         .notes-tools-pane {
@@ -9179,25 +9202,25 @@ function applyWindowStyle(result) {
             background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05);
             border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
             flex-shrink: 0;
-        }
-
-        #notes-tools-log-pane .notes-tools-pane-header {
             gap: 8px;
         }
 
         #notes-tools-clear:hover {
             color: var(--error);
             border-color: var(--error);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
         }
 
         #notes-tools-log-clear:hover {
             color: var(--error);
             border-color: var(--error);
+            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
         }
 
         #notes-tools-log-copy:hover {
             color: var(--green);
             border-color: var(--green);
+            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
         }
 
         #notes-tools-log-deselect:hover {
@@ -9208,8 +9231,8 @@ function applyWindowStyle(result) {
             background-image:
                 linear-gradient(
                     to right,
-                    rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05),
-                    rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05)
+                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.05),
+                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.05)
                 ),
                 linear-gradient(
                     to right,
@@ -9249,11 +9272,21 @@ function applyWindowStyle(result) {
             border-color: var(--accent);
         }
 
+        #notes-tools-ai-maximize:hover {
+            border-color: var(--accent);
+        }
+
         #notes-tools-log-timestamp:hover {
             border-color: var(--accent);
         }
 
         #notes-tools-log-maximize[data-enabled="true"] {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
+        }
+
+        #notes-tools-ai-maximize[data-enabled="true"] {
             background-color: var(--accent);
             border-color: var(--accent);
             color: var(--bg);
@@ -9489,6 +9522,73 @@ function applyWindowStyle(result) {
             opacity: 1;
             pointer-events: auto;
             flex: 1 1 auto;
+            background-color: var(--bg);
+        }
+
+        [data-ai-maximized="true"] #notes-sidebar,
+        [data-ai-maximized="true"] #notes-splitter,
+        [data-ai-maximized="true"] #notes-tabs,
+        [data-ai-maximized="true"] #notes-editor-wrap,
+        [data-ai-maximized="true"] #notes-hex-wrap,
+        [data-ai-maximized="true"] #notes-preview-wrap,
+        [data-ai-maximized="true"] #notes-jupyter-wrap,
+        [data-ai-maximized="true"] #notes-csv-view-wrap,
+        [data-ai-maximized="true"] #notes-image-view-wrap,
+        [data-ai-maximized="true"] #notes-meta-wrap,
+        [data-ai-maximized="true"] #notes-swagger-view-wrap,
+        [data-ai-maximized="true"] #notes-swagger-run-wrap,
+        [data-ai-maximized="true"] .notes-tools-restore,
+        [data-ai-maximized="true"] #notes-tools-log-pane,
+        [data-ai-maximized="true"] #notes-tools-toc-pane,
+        [data-ai-maximized="true"] #notes-tools-find-pane,
+        [data-ai-maximized="true"] #notes-tools-tab-ai,
+        [data-ai-maximized="true"] #notes-tools-tab-toc,
+        [data-ai-maximized="true"] #notes-tools-tab-find,
+        [data-ai-maximized="true"] #notes-tools-tab-log,
+        [data-ai-maximized="true"] #notes-tools-minimize {
+            display: none !important;
+        }
+
+        [data-ai-maximized="true"] #notes-main,
+        [data-ai-maximized="true"] #notes-panel,
+        [data-ai-maximized="true"] #notes-app {
+            width: 100%;
+            height: 100%;
+        }
+
+        [data-ai-maximized="true"] .notes-tools-panel {
+            position: fixed;
+            top: 32px;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 50;
+            border-top: 0;
+            opacity: 1;
+            pointer-events: auto;
+            flex: 1 1 auto;
+            background-color: var(--bg);
+        }
+
+        [data-ai-maximized="true"] .notes-tools-content {
+            padding: 0;
+        }
+
+        [data-ai-maximized="true"] #notes-tools-ai-pane {
+            display: flex !important;
+            flex-direction: column;
+            height: 100%;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+        }
+
+        [data-ai-maximized="true"] #notes-ai-output {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 12px;
+            border: none;
+            border-radius: 0;
             background-color: var(--bg);
         }
 

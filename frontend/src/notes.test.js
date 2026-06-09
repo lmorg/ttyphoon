@@ -2012,6 +2012,22 @@ describe('notes rendering', () => {
         expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
+    it('invokes backend AskAI notesPrompt caller from toolbar Ask button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
+
+        await importNotesModule();
+
+        const askButton = document.getElementById('notes-tools-ai-ask');
+        expect(askButton).not.toBeNull();
+
+        askButton.click();
+        await flushPromises();
+
+        expect(askAIMock).toHaveBeenCalledTimes(1);
+        expect(askAIMock).toHaveBeenCalledWith('notesPrompt', '', '');
+    });
+
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
         getFileMock.mockResolvedValue({ contents: '# Readme', text: '', error: '' });
@@ -2301,6 +2317,32 @@ describe('notes rendering', () => {
         expect(tabAI.getAttribute('aria-selected')).toBe('false');
         expect(paneFind.dataset.active).toBe('true');
         expect(paneAI.dataset.active).toBe('false');
+    });
+
+    it('toggles AI maximize state from the AI pane button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const appRoot = document.getElementById('notes-pane') || document.getElementById('app');
+        const aiMaximize = document.getElementById('notes-tools-ai-maximize');
+
+        expect(aiMaximize).not.toBeNull();
+        expect(aiMaximize.dataset.enabled).toBe('false');
+        expect(appRoot.dataset.aiMaximized).toBeUndefined();
+
+        aiMaximize.click();
+        await flushPromises();
+
+        expect(aiMaximize.dataset.enabled).toBe('true');
+        expect(appRoot.dataset.aiMaximized).toBe('true');
+
+        aiMaximize.click();
+        await flushPromises();
+
+        expect(aiMaximize.dataset.enabled).toBe('false');
+        expect(appRoot.dataset.aiMaximized).toBe('false');
     });
 
     it('hides Find tools tab in Hex and Meta modes', async () => {

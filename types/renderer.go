@@ -108,6 +108,7 @@ type Renderer interface {
 	DisplayImageFullscreen(dataURL string, sourceWidth, sourceHeight int32)
 	ActiveTile() Tile
 	GetWindowContext() context.Context
+	AskAi()
 	Close()
 }
 

@@ -45,7 +45,7 @@ func (wr *webkitRender) showRightClickContextMenu(_ *types.XY, _ bool) {
 		{Title: types.MENU_SEPARATOR},
 		{
 			Title: fmt.Sprintf("Ask AI (%s)", agent.Get(wr.termWin.Active.Id()).ServiceName()),
-			Fn:    wr.askAi,
+			Fn:    wr.AskAi,
 			Icon:  0xf544,
 		},
 		{Title: types.MENU_SEPARATOR},

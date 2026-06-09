@@ -1951,18 +1951,27 @@ func (a *WApp) CommandPaletteSelect(index int) {
 }
 
 func (a *WApp) AskAI(callerType, filename, contents string) {
+	log.Printf(`[debug] WApp AskAI: callerType="%s"`, callerType)
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
 	switch callerType {
 	case "notesDocument":
-		renderer, ok := renderwebkit.CurrentRenderer()
-		if !ok {
-			return
-		}
 		tile := renderer.ActiveTile()
 		if tile == nil {
 			return
 		}
+
 		agt := agent.Get(tile.Id())
+		if agt == nil {
+			return
+		}
 		ai.ExplainDoc(agt, filename, contents)
+	case "notesPrompt":
+		renderer.AskAi()
 	default:
 		return
 	}
