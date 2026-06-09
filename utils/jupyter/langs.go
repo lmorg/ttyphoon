@@ -125,6 +125,59 @@ func getBindingByAlias(lang string) *LanguageBindingT {
 	return nil
 }
 
+func normalizeLanguage(s string) string {
+	return strings.TrimSpace(strings.ToLower(s))
+}
+
+func canonicalAlias(binding *LanguageBindingT) string {
+	if binding == nil {
+		return ""
+	}
+
+	for _, alias := range binding.Aliases {
+		if normalized := normalizeLanguage(alias); normalized != "" {
+			return normalized
+		}
+	}
+
+	return ""
+}
+
+func getBindingByExtension(ext string) *LanguageBindingT {
+	ext = strings.TrimPrefix(normalizeLanguage(ext), ".")
+	if ext == "" {
+		return nil
+	}
+
+	for _, binding := range Languages {
+		if strings.EqualFold(strings.TrimPrefix(binding.FileExtension, "."), ext) {
+			return binding
+		}
+	}
+
+	return nil
+}
+
+// ResolveLanguageAlias returns a canonical language alias for a runtime name,
+// alias, or file extension. Returns an empty string when no mapping exists.
+func ResolveLanguageAlias(language string) string {
+	if binding := getBindingByAlias(language); binding != nil {
+		return canonicalAlias(binding)
+	}
+
+	for _, binding := range Languages {
+		if strings.EqualFold(binding.Description, strings.TrimSpace(language)) {
+			return canonicalAlias(binding)
+		}
+	}
+
+	if binding := getBindingByExtension(language); binding != nil {
+		return canonicalAlias(binding)
+	}
+
+	return ""
+}
+
 func templateFuncs(code string) template.FuncMap {
 	return template.FuncMap{
 		"begins":   func(s string) bool { return strings.HasPrefix(code, s) },

@@ -11,7 +11,7 @@ import {
     ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent,
     GetProjectCache, SetProjectCache,
-    GetDocumentCache, SetDocumentCache, FormatCodeBlock,
+    GetDocumentCache, SetDocumentCache, FormatCodeBlock, CompleteSyntax,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesLspSemanticTokens,
@@ -1069,6 +1069,102 @@ function refreshEditorLanguage(file, content) {
 
 function usesCodeEditorDecorations() {
     return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
+}
+
+const SYNTAX_COMPLETION_TRIGGER_KEYS = new Set(['(', '[', '{', '"', "'", '`', '<', '>']);
+const syntaxCompletionRequestSeq = new WeakMap();
+
+function nextSyntaxCompletionRequestSeq(textarea) {
+    const next = (syntaxCompletionRequestSeq.get(textarea) || 0) + 1;
+    syntaxCompletionRequestSeq.set(textarea, next);
+    return next;
+}
+
+function isLatestSyntaxCompletionRequest(textarea, seq) {
+    return (syntaxCompletionRequestSeq.get(textarea) || 0) === seq;
+}
+
+function syntaxCompletionTriggerFromKey(key) {
+    return key === 'Enter' ? '\n' : key;
+}
+
+function isSyntaxCompletionKeyEvent(event) {
+    if (!event || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
+        return false;
+    }
+
+    if (event.key === 'Enter') {
+        return true;
+    }
+
+    return SYNTAX_COMPLETION_TRIGGER_KEYS.has(String(event.key || ''));
+}
+
+function applyTextareaEdit(textarea, start, end, text, cursor) {
+    if (!textarea) {
+        return;
+    }
+
+    const safeStart = Math.max(0, Math.min(Number(start) || 0, textarea.value.length));
+    const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, textarea.value.length));
+    textarea.setRangeText(String(text || ''), safeStart, safeEnd, 'preserve');
+
+    const nextCursor = Math.max(0, Math.min(Number(cursor) || (safeStart + String(text || '').length), textarea.value.length));
+    textarea.setSelectionRange(nextCursor, nextCursor);
+    textarea.dispatchEvent(new Event('input'));
+}
+
+function maybeHandleSyntaxCompletionKey(event, textarea, options = {}) {
+    if (!isSyntaxCompletionKeyEvent(event) || !textarea) {
+        return false;
+    }
+
+    const trigger = syntaxCompletionTriggerFromKey(event.key);
+    const source = textarea.value || '';
+    const selectionStart = textarea.selectionStart || 0;
+    const selectionEnd = textarea.selectionEnd || 0;
+    const cursor = selectionStart;
+    const requestSeq = nextSyntaxCompletionRequestSeq(textarea);
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const applyFallback = () => {
+        if (!isLatestSyntaxCompletionRequest(textarea, requestSeq)) {
+            return;
+        }
+        applyTextareaEdit(textarea, selectionStart, selectionEnd, trigger, selectionStart + trigger.length);
+    };
+
+    void CompleteSyntax(
+        options.docPath || '',
+        options.languageHint || '',
+        source,
+        cursor,
+        selectionStart,
+        selectionEnd,
+        trigger,
+    ).then((result) => {
+        if (!isLatestSyntaxCompletionRequest(textarea, requestSeq)) {
+            return;
+        }
+
+        if (!result || result.error) {
+            applyFallback();
+            return;
+        }
+
+        if (!result.applied) {
+            applyFallback();
+            return;
+        }
+
+        applyTextareaEdit(textarea, result.start, result.end, result.text, result.cursor);
+    }).catch(() => {
+        applyFallback();
+    });
+
+    return true;
 }
 
 function isMarkdownNotesFile(fileName) {
@@ -4904,6 +5000,14 @@ function convertToJupyterCodeBlocks() {
                     event.stopPropagation();
                     return;
                 }
+            }
+
+            const blockState = state.jupyterCodeBlocks[blockId] || {};
+            if (maybeHandleSyntaxCompletionKey(event, editableCode, {
+                docPath: state.currentFile || '',
+                languageHint: blockState.runtime || blockState.language || editableCode.dataset.language || '',
+            })) {
+                return;
             }
 
             if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
@@ -11154,6 +11258,13 @@ if (elements.editor) {
                 event.stopPropagation();
                 return;
             }
+        }
+
+        if (maybeHandleSyntaxCompletionKey(event, elements.editor, {
+            docPath: state.currentFile || '',
+            languageHint: state.editorLanguage || '',
+        })) {
+            return;
         }
 
         if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {

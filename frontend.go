@@ -33,6 +33,7 @@ import (
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/notes"
 	"github.com/lmorg/ttyphoon/utils/swagger"
+	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -66,6 +67,7 @@ type WApp struct {
 	lspStartErrs    map[string]string
 	lspManager      *lsp.Manager
 	lspDocs         *lsp.DocumentStore
+	syntaxEngine    *syntaxcompletion.Engine
 }
 
 // NewApp creates a new App application struct
@@ -80,6 +82,13 @@ func NewWailsApp() *WApp {
 		globalNotes:   notes.DirGlobal(),
 		lspManager:    lsp.NewManager(),
 		lspDocs:       lsp.NewDocumentStore(),
+	}
+
+	engine, err := syntaxcompletion.NewDefaultEngine()
+	if err != nil {
+		log.Printf("syntax completion: engine init failed: %v", err)
+	} else {
+		a.syntaxEngine = engine
 	}
 
 	return a
@@ -632,6 +641,54 @@ type RunFunctionReturnT struct {
 	Output  string
 	IsError bool
 	CellId  string
+}
+
+type CompleteSyntaxReturnT struct {
+	Applied bool   `json:"applied"`
+	Start   int    `json:"start"`
+	End     int    `json:"end"`
+	Text    string `json:"text"`
+	Cursor  int    `json:"cursor"`
+	Error   string `json:"error"`
+}
+
+func (a *WApp) CompleteSyntax(docPath, language, source string, cursor, selectionStart, selectionEnd int, trigger string) CompleteSyntaxReturnT {
+	if a.syntaxEngine == nil {
+		engine, err := syntaxcompletion.NewDefaultEngine()
+		if err != nil {
+			return CompleteSyntaxReturnT{Error: err.Error()}
+		}
+		a.syntaxEngine = engine
+	}
+
+	resolvedLanguage := jupyter.ResolveLanguageAlias(language)
+	if resolvedLanguage == "" && docPath != "" {
+		ext := strings.TrimPrefix(filepath.Ext(a.filePath(docPath)), ".")
+		resolvedLanguage = jupyter.ResolveLanguageAlias(ext)
+	}
+	if resolvedLanguage == "" {
+		resolvedLanguage = strings.TrimSpace(strings.ToLower(language))
+	}
+
+	result, err := a.syntaxEngine.Complete(syntaxcompletion.Request{
+		Language:       resolvedLanguage,
+		Source:         source,
+		Cursor:         cursor,
+		SelectionStart: selectionStart,
+		SelectionEnd:   selectionEnd,
+		Trigger:        trigger,
+	})
+	if err != nil {
+		return CompleteSyntaxReturnT{Error: err.Error()}
+	}
+
+	return CompleteSyntaxReturnT{
+		Applied: result.Applied,
+		Start:   result.Start,
+		End:     result.End,
+		Text:    result.Text,
+		Cursor:  result.Cursor,
+	}
 }
 
 func (a *WApp) RunFunction(docPath, functionName, cellId, code string, parameters []string, language string) RunFunctionReturnT {

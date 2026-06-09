@@ -18,6 +18,10 @@ export function CommandPaletteSelect(arg1) {
   return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
 }
 
+export function CompleteSyntax(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['WApp']['CompleteSyntax'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
 export function ComposeNoteLocationPath(arg1, arg2) {
   return window['go']['main']['WApp']['ComposeNoteLocationPath'](arg1, arg2);
 }

@@ -1,0 +1,339 @@
+languages:
+  go:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  json:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "{"
+        close: "}"
+      - open: "["
+        close: "]"
+      - open: "\""
+        close: "\""
+        skip_close: true
+  markdown:
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+    list_continuation:
+      enabled: true
+      unordered_markers: ["-", "*", "+", "- [ ]"]
+      ordered: true
+      exit_on_empty_item: true
+  html:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+    auto_close_tags:
+      enabled: true
+      allowed: ["p", "div", "span", "li", "ul", "ol", "strong", "em", "section", "article", "header", "footer"]
+  bash:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  c:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  cpp:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+      - open: "<"
+        close: ">"
+  csharp:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  css:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  java:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  javascript:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+      - open: "`"
+        close: "`"
+        skip_close: true
+  julia:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  ocaml:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  php:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  python:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  ruby:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  rust:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+      - open: "<"
+        close: ">"
+  scala:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+  typescript:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true
+      - open: "`"
+        close: "`"
+        skip_close: true
+  verilog:
+    context_guard:
+      enabled: true
+      disallow_in: ["comment", "string"]
+    pairs:
+      - open: "("
+        close: ")"
+      - open: "["
+        close: "]"
+      - open: "{"
+        close: "}"
+      - open: "\""
+        close: "\""
+        skip_close: true
+      - open: "'"
+        close: "'"
+        skip_close: true

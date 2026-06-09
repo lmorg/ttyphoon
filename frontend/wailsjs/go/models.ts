@@ -418,6 +418,28 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class CompleteSyntaxReturnT {
+	    applied: boolean;
+	    start: number;
+	    end: number;
+	    text: string;
+	    cursor: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CompleteSyntaxReturnT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applied = source["applied"];
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.text = source["text"];
+	        this.cursor = source["cursor"];
+	        this.error = source["error"];
+	    }
+	}
 	export class GetFileReturnT {
 	    contents: string;
 	    binary: boolean;
