@@ -1,7 +1,10 @@
 import { TerminalInputBoxSubmit } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { showLocalMenu } from './popup_menu';
+import { initLineNavigationKeys } from './line-navigation.js';
 import './inputbox.css';
+
+initLineNavigationKeys(document);
 
 function ensureInputBoxDom() {
     if (document.getElementById('terminal-inputbox')) {

@@ -370,6 +370,7 @@ import {
     resolveTableFunctionArgsAsync,
 } from './table-expressions.js';
 import { createAIPipelineFormatter } from './ai_pipeline_formatter.js';
+import { initLineNavigationKeys } from './line-navigation.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -451,6 +452,8 @@ const app = document.getElementById('notes-pane') || document.getElementById('ap
 })();
 
 document.title = 'Notes';
+
+initLineNavigationKeys(document);
 
 app.innerHTML = `
     <div id="notes-app">

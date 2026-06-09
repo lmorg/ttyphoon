@@ -474,6 +474,45 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
 
+    it('maps Home and End to current line boundaries in editor fields', async () => {
+        listFilesMock.mockResolvedValue([]);
+        getFileMock.mockResolvedValue({ contents: 'first line\nsecond line\nthird line', text: '', error: '' });
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/sample.md', contents: 'first line\nsecond line\nthird line' });
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+
+        const secondLineStart = editor.value.indexOf('second line');
+        const secondLineEnd = secondLineStart + 'second line'.length;
+        const caretInSecondLine = secondLineStart + 6;
+
+        editor.selectionStart = caretInSecondLine;
+        editor.selectionEnd = caretInSecondLine;
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+        expect(editor.selectionStart).toBe(secondLineStart);
+        expect(editor.selectionEnd).toBe(secondLineStart);
+
+        editor.selectionStart = secondLineStart + 2;
+        editor.selectionEnd = secondLineStart + 2;
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+        expect(editor.selectionStart).toBe(secondLineEnd);
+        expect(editor.selectionEnd).toBe(secondLineEnd);
+
+        editor.selectionStart = secondLineStart + 3;
+        editor.selectionEnd = secondLineStart + 5;
+        editor.selectionDirection = 'forward';
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', shiftKey: true, bubbles: true, cancelable: true }));
+        expect(editor.selectionStart).toBe(secondLineStart + 3);
+        expect(editor.selectionEnd).toBe(secondLineEnd);
+    });
+
     it('refreshes markdown preview after ctrl+z style edits when input is not emitted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });

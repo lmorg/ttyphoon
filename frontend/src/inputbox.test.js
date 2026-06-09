@@ -125,6 +125,40 @@ describe('inputbox', () => {
         }, false);
     });
 
+    it('maps Home and End to current line boundaries in multiline input', async () => {
+        const { initInputBox } = await import('./inputbox.js');
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+
+        initInputBox(canvas);
+
+        const openHandler = eventsOnMock.mock.calls[0][1];
+        openHandler({
+            id: 11,
+            title: 'Multiline',
+            defaultValue: 'one line\ntwo line\nthree line',
+            placeholder: '',
+            multiline: true,
+            history: [],
+        });
+
+        const input = document.querySelector('.inputbox-input');
+        const secondLineStart = input.value.indexOf('two line');
+        const secondLineEnd = secondLineStart + 'two line'.length;
+
+        input.selectionStart = secondLineStart + 4;
+        input.selectionEnd = secondLineStart + 4;
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+        expect(input.selectionStart).toBe(secondLineStart);
+        expect(input.selectionEnd).toBe(secondLineStart);
+
+        input.selectionStart = secondLineStart + 1;
+        input.selectionEnd = secondLineStart + 1;
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+        expect(input.selectionStart).toBe(secondLineEnd);
+        expect(input.selectionEnd).toBe(secondLineEnd);
+    });
+
     it('submits value and typed variable map when dynamic fields are present', async () => {
         const { initInputBox } = await import('./inputbox.js');
         const canvas = document.createElement('canvas');
