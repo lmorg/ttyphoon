@@ -115,8 +115,8 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 			Icon:  0xf0c5,
 		},
 		{
-			Title: fmt.Sprintf("Learn more about code (%s)", agt.ServiceName()),
-			Fn:    func() { ai.Explain(agt, true) },
+			Title: fmt.Sprintf("Explain this code (%s)", agt.ServiceName()),
+			Fn:    func() { ai.ExplainCmdOutput(agt) },
 			Icon:  0xf544,
 		},
 	}

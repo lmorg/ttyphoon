@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as swaggerUtils from './swagger-utils.js';
 
 const getWindowStyleMock = vi.fn();
+const getNotesMaxLogLinesMock = vi.fn();
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const saveFileMock = vi.fn(() => Promise.resolve());
@@ -87,6 +88,7 @@ const showLocalMenuMock = vi.fn();
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
+    GetNotesMaxLogLines: getNotesMaxLogLinesMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,
     SaveFile: saveFileMock,
@@ -248,6 +250,7 @@ describe('notes rendering', () => {
         }
 
         getWindowStyleMock.mockReset();
+        getNotesMaxLogLinesMock.mockReset();
         getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
@@ -309,6 +312,7 @@ describe('notes rendering', () => {
         showLocalMenuMock.mockReset();
 
         getWindowStyleMock.mockResolvedValue(theme);
+        getNotesMaxLogLinesMock.mockResolvedValue(1000);
         getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
         getCurrentProjectMock.mockResolvedValue('');
         getCurrentGroupNameMock.mockResolvedValue('');
@@ -2278,6 +2282,49 @@ describe('notes rendering', () => {
         expect(nextPre.scrollTop).toBe(0);
     });
 
+    it('reuses markdown processing pipeline for AI code sections', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const markdownUtils = await import('./markdown-utils.js');
+        vi.mocked(markdownUtils.processMarkdownContainer).mockClear();
+
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        aiResponseHandler('Action Input: {"a": 1}');
+        await flushPromises();
+        await flushPromises();
+
+        expect(markdownUtils.processMarkdownContainer).toHaveBeenCalled();
+    });
+
+    it('shows AI output context menu with copy and table word-wrap actions', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        aiOutput.innerHTML = '<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>V</td></tr></tbody></table>';
+        const tableCell = aiOutput.querySelector('td');
+
+        tableCell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalled();
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toContain('Copy');
+        expect(menuConfig.options).toContain('Copy table (CSV)');
+        expect(menuConfig.options).toContain('Copy table (Markdown)');
+        expect(menuConfig.options).toContain('Word wrap table contents');
+        expect(menuConfig.options).not.toContain('Find');
+        expect(menuConfig.options).not.toContain('Ask AI...');
+        expect(menuConfig.options).not.toContain('Print');
+    });
+
     it('adds a timestamp when an AI job starts', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
@@ -2306,6 +2353,67 @@ describe('notes rendering', () => {
         // Timestamp should still be present after finishJob
         ts = wrapper.querySelector('.notes-ai-timestamp');
         expect(ts).not.toBeNull();
+    });
+
+    it('renders job title as markdown after the timestamp when provided', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const { marked } = await import('marked');
+        const wrapper = document.createElement('div');
+        const processMarkdownContainerMock = vi.fn();
+        const fmt = createAIPipelineFormatter(wrapper, {
+            marked,
+            processMarkdownContainer: processMarkdownContainerMock,
+        });
+
+        fmt.startJob('> What is this?');
+        await flushPromises();
+
+        // Title element exists and contains the query text
+        const title = wrapper.querySelector('.notes-ai-title');
+        expect(title).not.toBeNull();
+        expect(title.textContent).toContain('What is this?');
+
+        // Title appears after the timestamp in DOM order
+        const children = Array.from(wrapper.children);
+        const tsIdx = children.indexOf(wrapper.querySelector('.notes-ai-timestamp'));
+        const titleIdx = children.indexOf(title);
+        expect(titleIdx).toBeGreaterThan(tsIdx);
+
+        // Title appears before the stream output root
+        const jobIdx = children.indexOf(wrapper.querySelector('.notes-ai-job'));
+        expect(titleIdx).toBeLessThan(jobIdx);
+
+        // Markdown processing was applied to the title element
+        expect(processMarkdownContainerMock).toHaveBeenCalledWith(title);
+    });
+
+    it('omits the title element when startJob is called without a title', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+
+        expect(wrapper.querySelector('.notes-ai-title')).toBeNull();
+    });
+
+    it('passes job title from aiJobStart event through to the AI panel', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiJobStartHandler = getEventHandler('aiJobStart');
+        expect(typeof aiJobStartHandler).toBe('function');
+
+        aiJobStartHandler('> How do I do this?');
+        await flushPromises();
+        await flushPromises();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const title = aiOutput.querySelector('.notes-ai-title');
+        expect(title).not.toBeNull();
+        expect(title.textContent).toContain('How do I do this?');
     });
 
     it('adds an hr separator when a second AI job starts with existing content', async () => {
@@ -2356,6 +2464,91 @@ describe('notes rendering', () => {
         expect(tabAI.getAttribute('aria-selected')).toBe('false');
         expect(paneFind.dataset.active).toBe('true');
         expect(paneAI.dataset.active).toBe('false');
+    });
+
+    it('renders replace controls and removes the close button in Find panel', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nfind me', text: '', error: '' });
+
+        await importNotesModule();
+
+        const findClose = document.getElementById('notes-find-close');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceOne = document.getElementById('notes-replace-one');
+        const replaceAll = document.getElementById('notes-replace-all');
+
+        expect(findClose).toBeNull();
+        expect(replaceInput).not.toBeNull();
+        expect(replaceOne).not.toBeNull();
+        expect(replaceAll).not.toBeNull();
+    });
+
+    it('greys out replace controls when not in Edit tab and enables them in Edit tab', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nfind me', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const findButton = document.getElementById('notes-find');
+        findButton.click();
+        await flushPromises();
+
+        const replaceControls = document.getElementById('notes-replace-controls');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceOne = document.getElementById('notes-replace-one');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const tabEditor = document.getElementById('notes-tab-editor');
+
+        // Markdown opens in View mode by default, so replace should be disabled.
+        expect(replaceControls.dataset.disabled).toBe('true');
+        expect(replaceInput.disabled).toBe(true);
+        expect(replaceOne.disabled).toBe(true);
+        expect(replaceAll.disabled).toBe(true);
+
+        tabEditor.click();
+        await flushPromises();
+
+        expect(replaceControls.dataset.disabled).toBe('false');
+        expect(replaceInput.disabled).toBe(false);
+        expect(replaceOne.disabled).toBe(false);
+        expect(replaceAll.disabled).toBe(false);
+    });
+
+    it('replaces all matches from the Find panel when editing', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: 'alpha beta alpha', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+
+        document.getElementById('notes-find').click();
+        await flushPromises();
+
+        const findInput = document.getElementById('notes-find-input');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const editor = document.getElementById('notes-editor');
+
+        findInput.value = 'alpha';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        replaceInput.value = 'omega';
+
+        replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('omega beta omega');
     });
 
     it('toggles AI maximize state from the AI pane button', async () => {

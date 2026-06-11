@@ -122,6 +122,8 @@ Notes:
 
   MaxRecentFiles: 10
 
+  MaxLogLines: 1000
+
 Window:
   StatusBar: true
 

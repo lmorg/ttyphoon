@@ -196,6 +196,7 @@ function splitActionInputContent(content) {
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
+    const processCodeContainer = options.processCodeContainer || processMarkdownContainer;
 
     let streamText = '';
     let renderVersion = 0;
@@ -232,7 +233,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         container.textContent = '';
     }
 
-    function startJob() {
+    function startJob(title = '') {
         const hasContent = container.children.length > 0
             || container.textContent.trim().length > 0;
         if (hasContent) {
@@ -250,6 +251,24 @@ export function createAIPipelineFormatter(container, options = {}) {
         const now = new Date();
         ts.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         container.appendChild(ts);
+
+        // Title is already markdown-formatted text from the caller (e.g. "> query" or a code fence).
+        if (title) {
+            const titleEl = document.createElement('div');
+            titleEl.className = 'notes-ai-title markdown-body';
+            // Render immediately as plain text so the element is visible at once,
+            // then asynchronously upgrade to full markdown.
+            titleEl.textContent = title;
+            container.appendChild(titleEl);
+            if (markedInstance) {
+                void (async () => {
+                    titleEl.innerHTML = markedInstance.parse(title);
+                    if (processMarkdownContainer) {
+                        await processMarkdownContainer(titleEl);
+                    }
+                })();
+            }
+        }
 
         jobRoot = document.createElement('div');
         jobRoot.className = 'notes-ai-job';
@@ -292,6 +311,13 @@ export function createAIPipelineFormatter(container, options = {}) {
         markdownRoot.innerHTML = markedInstance ? markedInstance.parse(content || '') : content;
         if (processMarkdownContainer) {
             await processMarkdownContainer(markdownRoot);
+        }
+        return version === renderVersion;
+    }
+
+    async function patchCodeSection(sectionEl, version) {
+        if (processCodeContainer) {
+            await processCodeContainer(sectionEl);
         }
         return version === renderVersion;
     }
@@ -357,6 +383,10 @@ export function createAIPipelineFormatter(container, options = {}) {
                         const pre = el.querySelector('.notes-ai-code');
                         const sticky = isNearBottom(pre);
                         code.textContent = content;
+                        const ok = await patchCodeSection(el, version);
+                        if (!ok) {
+                            return;
+                        }
                         if (sticky) {
                             pre.scrollTop = pre.scrollHeight;
                         }
@@ -371,6 +401,10 @@ export function createAIPipelineFormatter(container, options = {}) {
                     } else {
                         root.appendChild(newEl);
                         existingEls.push(newEl);
+                    }
+                    const ok = await patchCodeSection(newEl, version);
+                    if (!ok) {
+                        return;
                     }
                     // New code block always starts scrolled to bottom.
                     const pre = newEl.querySelector('.notes-ai-code');

@@ -59,6 +59,8 @@ export function GetTerminalGlyphSize():Promise<types.XY>;
 
 export function GetWindowStyle():Promise<main.WindowStyleT>;
 
+export function GetNotesMaxLogLines():Promise<number>;
+
 export function ListFiles():Promise<Array<string>>;
 
 export function NotesHistoryAdd(arg1:string):Promise<void>;

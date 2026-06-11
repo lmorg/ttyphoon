@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetFile, GetImage,
+    GetWindowStyle, GetNotesMaxLogLines, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     CancelNotesListFiles,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
@@ -561,7 +561,13 @@ app.innerHTML = `
                                     <span id="notes-find-counter"></span>
                                     <button id="notes-find-prev" type="button" title="Previous match">↑</button>
                                     <button id="notes-find-next" type="button" title="Next match">↓</button>
-                                    <button id="notes-find-close" type="button" title="Close find">✕</button>
+                                </div>
+                                <div id="notes-replace-controls" data-disabled="true">
+                                    <input id="notes-replace-input" type="text" placeholder="Replace..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                    <div id="notes-replace-actions">
+                                        <button id="notes-replace-one" type="button" title="Replace current match">Replace</button>
+                                        <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -668,7 +674,10 @@ const elements = {
     findCounter: document.getElementById('notes-find-counter'),
     findPrev: document.getElementById('notes-find-prev'),
     findNext: document.getElementById('notes-find-next'),
-    findClose: document.getElementById('notes-find-close'),
+    replaceControls: document.getElementById('notes-replace-controls'),
+    replaceInput: document.getElementById('notes-replace-input'),
+    replaceOne: document.getElementById('notes-replace-one'),
+    replaceAll: document.getElementById('notes-replace-all'),
     toolsTabs: document.getElementById('notes-tools-tabs'),
     toolsTabFind: document.getElementById('notes-tools-tab-find'),
     toolsTabAI: document.getElementById('notes-tools-tab-ai'),
@@ -6732,6 +6741,103 @@ function updateFindAvailability() {
     if (!available && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
         closeFindBar();
     }
+
+    updateReplaceAvailability();
+}
+
+function isReplaceAvailableInCurrentMode() {
+    return Boolean(getActiveFindEditor());
+}
+
+function updateReplaceAvailability() {
+    const enabled = isReplaceAvailableInCurrentMode();
+
+    if (elements.replaceControls) {
+        elements.replaceControls.dataset.disabled = enabled ? 'false' : 'true';
+    }
+
+    if (elements.replaceInput) {
+        elements.replaceInput.disabled = !enabled;
+    }
+
+    if (elements.replaceOne) {
+        elements.replaceOne.disabled = !enabled;
+    }
+
+    if (elements.replaceAll) {
+        elements.replaceAll.disabled = !enabled;
+    }
+}
+
+function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceCurrentMatch() {
+    const editorEl = getActiveFindEditor();
+    if (!editorEl) {
+        return;
+    }
+
+    const query = String(elements.findInput?.value || '');
+    if (!query) {
+        return;
+    }
+
+    const replacement = String(elements.replaceInput?.value || '');
+
+    if (!state.findQuery || state.findQuery !== query || state.findMatches.length === 0) {
+        performFind();
+    }
+
+    if (state.findMatches.length === 0) {
+        return;
+    }
+
+    const currentIndex = state.findCurrentIndex >= 0 ? state.findCurrentIndex : 0;
+    const match = state.findMatches[currentIndex];
+    if (!match || typeof match.start !== 'number' || typeof match.end !== 'number') {
+        return;
+    }
+
+    editorEl.focus();
+    editorEl.setSelectionRange(match.start, match.end);
+    editorEl.setRangeText(replacement, match.start, match.end, 'end');
+    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+    performFind();
+}
+
+function replaceAllMatches() {
+    const editorEl = getActiveFindEditor();
+    if (!editorEl) {
+        return;
+    }
+
+    const query = String(elements.findInput?.value || '');
+    if (!query) {
+        return;
+    }
+
+    const source = String(editorEl.value || '');
+    if (!source) {
+        return;
+    }
+
+    const replacement = String(elements.replaceInput?.value || '');
+    const pattern = new RegExp(escapeRegExp(query), 'gi');
+    if (!pattern.test(source)) {
+        return;
+    }
+
+    const next = source.replace(pattern, replacement);
+    if (next === source) {
+        return;
+    }
+
+    editorEl.value = next;
+    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    performFind();
 }
 
 function getActiveFindContainer() {
@@ -7667,6 +7773,74 @@ function createTableInsertMenuItems(table, target, tableIndex) {
     ];
 }
 
+function initAIOutputContextMenu(container) {
+    if (!container) {
+        return;
+    }
+
+    container.addEventListener('contextmenu', (e) => {
+        const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+        if (anchor && container.contains(anchor)) {
+            e.preventDefault();
+            e.stopPropagation();
+            openHyperlinkContextMenu(anchor);
+            return;
+        }
+
+        e.preventDefault();
+
+        const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const tableItems = table && container.contains(table)
+            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            : [];
+
+        const wordWrapItems = (table && container.contains(table))
+            ? [{
+                title: 'Word wrap table contents',
+                icon: state.markdownTableWordWrapMode ? 0xf00c : 0x20,
+                onSelect: () => {
+                    state.markdownTableWordWrapMode = !state.markdownTableWordWrapMode;
+                    applyNotesTableWordWrapMode(elements.preview);
+                    applyNotesTableWordWrapMode(elements.jupyter);
+                    applyNotesTableWordWrapMode(elements.aiOutput);
+                },
+            }, { title: '-' }]
+            : [];
+
+        const menuItems = [
+            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+            { title: '-' },
+            ...tableItems,
+            ...wordWrapItems,
+        ];
+
+        let highlightCallback = null;
+        let cancelCallback = null;
+        if (table && container.contains(table)) {
+            highlightCallback = (itemIndex) => {
+                const item = menuItems[itemIndex];
+                if (!item) {
+                    return;
+                }
+                clearTableHighlight(table);
+                if (item.title.toLowerCase().includes('copy table') || item.title.toLowerCase().includes('word wrap table')) {
+                    highlightEntireTable(table, true);
+                }
+            };
+            cancelCallback = () => clearTableHighlight(table);
+        }
+
+        showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
+    });
+}
+
+async function processAIMarkdownContainer(container) {
+    await processMarkdownContainer(container);
+    wrapTablesForHorizontalScroll(container);
+    setupTableSorting(container);
+    applyNotesTableWordWrapMode(container);
+}
+
 function initRenderedNotesContextMenu(container, viewMode) {
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
@@ -8097,8 +8271,8 @@ function clearAIOutput() {
     aiPipelineFormatter.clear();
 }
 
-function startAIJob() {
-    aiPipelineFormatter.startJob();
+function startAIJob(title) {
+    aiPipelineFormatter.startJob(String(title || ''));
 }
 
 function finishAIJob() {
@@ -8111,13 +8285,14 @@ function appendAIText(text) {
 
 const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
     marked,
-    processMarkdownContainer,
+    processMarkdownContainer: processAIMarkdownContainer,
+    processCodeContainer: processAIMarkdownContainer,
     codeMaxLines: 10,
 });
 
 // Event emitted by Go when an AI job begins (before first chunk)
-EventsOn("aiJobStart", () => {
-    startAIJob();
+EventsOn("aiJobStart", (title) => {
+    startAIJob(title);
     setToolsTab('ai');
     if (elements.toolsPanel.dataset.collapsed === 'true') {
         toggleToolsPanel();
@@ -8215,7 +8390,13 @@ if (elements.toolsTabLog) {
     elements.toolsTabLog.addEventListener('click', () => setToolsTab('log'));
 }
 
-initNotesLogPanel(elements, EventsOn);
+const notesLogPanel = initNotesLogPanel(elements, EventsOn);
+GetNotesMaxLogLines().then((maxLogLines) => {
+    notesLogPanel?.setMaxLogLines?.(maxLogLines);
+}).catch((err) => {
+    console.error('Failed to load notes log line limit:', err);
+});
+
 initNotesAIPanel(elements);
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
@@ -9374,11 +9555,28 @@ function applyWindowStyle(result) {
         }
 
         #notes-ai-output .notes-ai-timestamp {
-            margin: 0 0 6px;
+            margin: 0 0 4px;
             font-size: 0.8em;
             opacity: 0.55;
             font-style: italic;
             color: var(--accent);
+        }
+
+        #notes-ai-output .notes-ai-title {
+            margin: 0 0 10px;
+            padding: 4px 8px 4px 10px;
+            border-left: 2px solid var(--accent);
+            opacity: 0.8;
+            font-size: 0.9em;
+            overflow-wrap: anywhere;
+        }
+
+        #notes-ai-output .notes-ai-title p:first-child {
+            margin-top: 0;
+        }
+
+        #notes-ai-output .notes-ai-title p:last-child {
+            margin-bottom: 0;
         }
 
         #notes-log-output {
@@ -9852,10 +10050,24 @@ function applyWindowStyle(result) {
             table-layout: fixed;
         }
 
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table {
+            width: 100%;
+            min-width: 100%;
+            table-layout: fixed;
+        }
+
         #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th,
         #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td,
         #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th,
         #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word;
+            max-width: 0;
+        }
+
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th,
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td {
             white-space: normal !important;
             overflow-wrap: anywhere !important;
             word-break: break-word;
@@ -9871,6 +10083,13 @@ function applyWindowStyle(result) {
             word-break: inherit;
         }
 
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td > * {
+            white-space: inherit;
+            overflow-wrap: inherit;
+            word-break: inherit;
+        }
+
         #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
         #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td code,
         #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
@@ -9880,8 +10099,20 @@ function applyWindowStyle(result) {
             word-break: break-word;
         }
 
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word;
+        }
+
         #notes-tools-find-pane {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
+            transition: background-color 120ms ease;
+        }
+
+        #notes-tools-find-pane:focus-within {
+            background-color: var(--bg);
         }
 
         .notes-tools-find-wrap {
@@ -9913,6 +10144,45 @@ function applyWindowStyle(result) {
             gap: 8px;
         }
 
+        #notes-replace-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            opacity: 1;
+            transition: opacity 0.2s ease;
+        }
+
+        #notes-replace-controls[data-disabled="true"] {
+            opacity: 0.45;
+        }
+
+        #notes-replace-input {
+            border-radius: 0;
+            border: 1px solid var(--fg);
+            background: transparent;
+            color: var(--fg);
+            padding: 4px 8px;
+            font-size: ${result.fontSize}px;
+            outline: none;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #notes-replace-input:focus {
+            border-color: var(--accent);
+        }
+
+        #notes-replace-input:disabled {
+            opacity: 0.75;
+            cursor: not-allowed;
+        }
+
+        #notes-replace-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         #notes-find-counter {
             flex: 1;
             font-size: ${result.fontSize - 2}px;
@@ -9920,9 +10190,10 @@ function applyWindowStyle(result) {
             white-space: nowrap;
         }
 
-        #notes-find-controls button {
+        #notes-find-controls button,
+        #notes-replace-actions button {
             border-radius: 5px;
-            border: 2px solid var(--fg);
+            border: 1px solid var(--fg);
             background: transparent;
             color: var(--fg);
             padding: 4px 8px;
@@ -9930,11 +10201,23 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize}px;
         }
 
-        #notes-find-controls button:hover {
+        #notes-find-controls button:hover,
+        #notes-replace-actions button:hover {
             border-color: var(--accent);
             color: var(--accent);
             transition: all 0.2s ease;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+        }
+
+        #notes-replace-actions button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        #notes-replace-actions button:disabled:hover {
+            border-color: var(--fg);
+            color: var(--fg);
+            background: transparent;
         }
 
         .find-highlight {
@@ -11696,6 +11979,7 @@ initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
 initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initRenderedNotesContextMenu(lspHoverTooltipEl, 'viewer');
 initRenderedNotesContextMenu(lspTooltipEl, 'viewer');
+initAIOutputContextMenu(elements.aiOutput);
 
 elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -11961,6 +12245,20 @@ elements.findInput.addEventListener('input', () => {
     performFind();
 });
 
+if (elements.replaceOne) {
+    elements.replaceOne.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        replaceCurrentMatch();
+    });
+}
+
+if (elements.replaceAll) {
+    elements.replaceAll.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        replaceAllMatches();
+    });
+}
+
 if (elements.listFilter) {
     elements.listFilter.addEventListener('input', (event) => {
         state.fileFilterQuery = event.target.value || '';
@@ -11994,11 +12292,6 @@ elements.findNext.addEventListener('mousedown', (event) => {
 elements.findPrev.addEventListener('mousedown', (event) => {
     event.preventDefault();
     prevMatch();
-});
-
-elements.findClose.addEventListener('mousedown', (event) => {
-    event.preventDefault();
-    closeFindBar();
 });
 
 // Initialize splitter for resizable panels
@@ -12195,6 +12488,21 @@ elements.findInput.addEventListener('keydown', (event) => {
         }
     }
 });
+
+if (elements.replaceInput) {
+    elements.replaceInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+
+        event.preventDefault();
+        if (event.shiftKey) {
+            replaceAllMatches();
+        } else {
+            replaceCurrentMatch();
+        }
+    });
+}
 
 setViewMode('editor');
 

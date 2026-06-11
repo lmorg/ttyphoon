@@ -129,6 +129,7 @@ type configT struct {
 	Notes struct {
 		MaxFileSize    int64               `yaml:"MaxFileSize"`
 		MaxRecentFiles int                 `yaml:"MaxRecentFiles"`
+		MaxLogLines    int                 `yaml:"MaxLogLines"`
 		LSP            map[string][]string `yaml:"LSP"`
 	} `yaml:"Notes"`
 

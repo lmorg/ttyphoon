@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"text/template"
 	"time"
 
@@ -15,17 +16,25 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func Explain(agent *agent.Agent, promptDialogue bool) {
-	if !promptDialogue {
-		askAI(agent, prompts.GetExplainCmd(agent, ""), fmt.Sprintf("```\n%s\n```", agent.Meta.CmdLine), agent.Meta.CmdLine)
-		return
-	}
-
+func ExplainCmdOutput(agt *agent.Agent) {
 	fn := func(v *types.InputBoxCallbackResultT) {
-		askAI(agent, prompts.GetExplainCmd(agent, v.String()), "> "+v.String(), v.String())
+		query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
+		query = strings.TrimSpace(query)
+		askAI(agt, prompts.GetExplainCmd(agt, query), query)
 	}
 
-	agent.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
+	params := &types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:       "Explain output",
+			Placeholder: "Optional",
+			Multiline:   true,
+			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
+		},
+		OkFunc: fn,
+	}
+	agt.Renderer().DisplayInputBoxW(params)
+
+	//agt.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
 func ExplainDoc(agt *agent.Agent, filename, contents string) {
@@ -44,9 +53,10 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 			Title:       "Ask AI about " + filename,
 			Placeholder: "Optional",
 			Multiline:   true,
+			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
-			askAI(agt, prompts.GetExplainDoc(agt, v.String()), "> "+v.String(), v.String())
+			askAI(agt, prompts.GetExplainDoc(agt, v.String()), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -56,13 +66,13 @@ const _STICKY_MESSAGE = "Asking %s...."
 
 func AskAI(agt *agent.Agent, prompt string) {
 	go func() {
-		askAI(agt, prompts.GetAsk(agt, prompt), "> "+prompt, prompt)
+		askAI(agt, prompts.GetAsk(agt, prompt), prompt)
 	}()
 }
 
 const SAVE_RESPONSE = "saveResponse"
 
-func askAI(agt *agent.Agent, prompt string, title string, query string) {
+func askAI(agt *agent.Agent, prompt string, query string) {
 	prompt += prompts.AgentsMd()
 	sticky := agt.Renderer().DisplaySticky(
 		types.NOTIFY_INFO,
@@ -95,7 +105,7 @@ func askAI(agt *agent.Agent, prompt string, title string, query string) {
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 
-		startAIJob(agt)
+		startAIJob(agt, query)
 
 		result, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
 			if chunk == "" {
@@ -110,7 +120,7 @@ func askAI(agt *agent.Agent, prompt string, title string, query string) {
 			result = err.Error()
 
 		} else {
-			agt.AddHistory(title, result)
+			agt.AddHistory(query, result)
 		}
 
 		endTime := time.Now()
@@ -151,8 +161,8 @@ func SaveMarkdownToggle(Default bool) types.InputBoxWTVariables {
 	}
 }
 
-func startAIJob(agt *agent.Agent) {
-	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart")
+func startAIJob(agt *agent.Agent, title string) {
+	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart", title)
 }
 
 func emitAIResponseChunk(agt *agent.Agent, chunk string) {

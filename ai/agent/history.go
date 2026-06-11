@@ -49,3 +49,14 @@ func (h HistoryT) String() string {
 	debug.Log(result)
 	return result
 }
+
+/*func quote(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	s = strings.ReplaceAll(s, "\n", "\n> ")
+	s = strings.TrimSuffix(s, "> ")
+	return s
+}*/

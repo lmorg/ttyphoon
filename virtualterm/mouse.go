@@ -214,7 +214,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 				Title:     fmt.Sprintf("Explain output block (%s)", agt.ServiceName()),
 				Icon:      0xf544,
 				Highlight: highlightFn,
-				Fn:        func() { ai.Explain(agt, true) },
+				Fn:        func() { ai.ExplainCmdOutput(agt) },
 			},
 		}...)
 }

@@ -178,7 +178,23 @@ function appendColourisedLogLine(logOutput, line) {
     logOutput.appendChild(lineEl);
 }
 
-function appendColourisedLogMessage(logOutput, message) {
+const DEFAULT_MAX_LOG_LINES = 1000;
+
+function normalizeMaxLogLines(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return DEFAULT_MAX_LOG_LINES;
+    }
+    return parsed;
+}
+
+function trimLogLines(logOutput, maxLogLines) {
+    while (logOutput.childElementCount > maxLogLines) {
+        logOutput.removeChild(logOutput.firstElementChild);
+    }
+}
+
+function appendColourisedLogMessage(logOutput, message, maxLogLines) {
     const lines = String(message ?? '').split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
         if (i === lines.length - 1 && lines[i] === '') {
@@ -186,10 +202,11 @@ function appendColourisedLogMessage(logOutput, message) {
         }
         appendColourisedLogLine(logOutput, lines[i]);
     }
+    trimLogLines(logOutput, maxLogLines);
     logOutput.scrollTop = logOutput.scrollHeight;
 }
 
-export function initNotesLogPanel(elements, eventsOn) {
+export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_LOG_LINES) {
     if (!elements?.logOutput) {
         return;
     }
@@ -200,6 +217,7 @@ export function initNotesLogPanel(elements, eventsOn) {
     let isLogMaximized = false;
     let restoreWordWrapOnClose = false;
     let restoreTimestampOnClose = false;
+    let lineLimit = normalizeMaxLogLines(maxLogLines);
 
     const setWordWrap = (enabled) => {
         isWordWrapped = enabled === true;
@@ -365,6 +383,13 @@ export function initNotesLogPanel(elements, eventsOn) {
     }
 
     eventsOn('notesLog', (message) => {
-        appendColourisedLogMessage(elements.logOutput, message);
+        appendColourisedLogMessage(elements.logOutput, message, lineLimit);
     });
+
+    return {
+        setMaxLogLines(nextMaxLogLines) {
+            lineLimit = normalizeMaxLogLines(nextMaxLogLines);
+            trimLogLines(elements.logOutput, lineLimit);
+        },
+    };
 }

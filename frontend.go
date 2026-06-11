@@ -222,6 +222,10 @@ func (a *WApp) GetWindowStyle() WindowStyleT {
 	return *NewWindowStyle()
 }
 
+func (a *WApp) GetNotesMaxLogLines() int {
+	return config.Config.Notes.MaxLogLines
+}
+
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if ok {

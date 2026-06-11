@@ -106,6 +106,10 @@ export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
 }
 
+export function GetNotesMaxLogLines() {
+  return window['go']['main']['WApp']['GetNotesMaxLogLines']();
+}
+
 export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
