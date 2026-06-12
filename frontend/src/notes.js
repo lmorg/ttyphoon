@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetNotesMaxLogLines, GetFile, GetImage,
+    GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile, GetImage,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     CancelNotesListFiles,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
@@ -1566,6 +1566,7 @@ function renderCsvView(content, options = {}) {
 
     // Enable column sorting (available in both view and run mode)
     setupTableSorting(elements.csvView);
+    void setupTableColumnResizing(elements.csvView, false, state.currentFile);
 }
 
 function setCodeEditorMode(enabled) {
@@ -1839,6 +1840,9 @@ async function renderMarkdown() {
 
     // Enable column sorting on all tables
     setupTableSorting(elements.preview);
+
+    // Enable resizable table columns with persisted widths.
+    await setupTableColumnResizing(elements.preview, state.markdownTableWordWrapMode, state.currentFile);
 
     refreshToolsToC();
 
@@ -2205,6 +2209,9 @@ function applyNotesTableWordWrapMode(container) {
     } else {
         container.classList.remove('notes-table-wordwrap-on');
     }
+
+    const filename = container === elements.aiOutput ? '' : state.currentFile;
+    void setupTableColumnResizing(container, state.markdownTableWordWrapMode, filename);
 }
 
 function parseMarkdownTableRow(line) {
@@ -2877,18 +2884,220 @@ function setupInteractiveMarkdownTables(container, isEditable) {
     );
 }
 
+function getTableCellTextContent(cell) {
+    if (!cell) {
+        return '';
+    }
+
+    const clone = cell.cloneNode(true);
+    if (!(clone instanceof HTMLElement)) {
+        return String(cell.textContent || '').trim();
+    }
+
+    clone.querySelectorAll('.notes-sort-icon, .notes-table-col-resize-handle, .notes-cellref').forEach((el) => el.remove());
+    return String(clone.textContent || '').trim();
+}
+
+function getTableHeadingValues(table) {
+    if (!table) {
+        return [];
+    }
+
+    const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'));
+    if (headerCells.length > 0) {
+        return headerCells.map((cell) => getTableCellTextContent(cell));
+    }
+
+    const firstRowCells = Array.from(table.querySelectorAll('tr:first-child th, tr:first-child td'));
+    return firstRowCells.map((cell) => getTableCellTextContent(cell));
+}
+
+function ensureTableColGroup(table, columnCount) {
+    let colgroup = table.querySelector('colgroup.notes-table-colgroup');
+    if (!colgroup) {
+        colgroup = document.createElement('colgroup');
+        colgroup.className = 'notes-table-colgroup';
+        table.prepend(colgroup);
+    }
+
+    while (colgroup.children.length < columnCount) {
+        colgroup.appendChild(document.createElement('col'));
+    }
+    while (colgroup.children.length > columnCount) {
+        colgroup.lastElementChild.remove();
+    }
+
+    return colgroup;
+}
+
+function applyTableColumnWidths(table, widths) {
+    if (!table || !Array.isArray(widths) || widths.length === 0) {
+        return;
+    }
+
+    const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'));
+    if (headerCells.length === 0) {
+        return;
+    }
+
+    const colgroup = ensureTableColGroup(table, headerCells.length);
+    const cols = Array.from(colgroup.querySelectorAll('col'));
+
+    cols.forEach((col, idx) => {
+        const width = Number(widths[idx]);
+        if (!Number.isFinite(width) || width <= 0) {
+            return;
+        }
+        col.style.width = `${Math.max(48, Math.round(width))}px`;
+    });
+
+    table.style.tableLayout = 'fixed';
+}
+
+function collectTableColumnWidths(table) {
+    if (!table) {
+        return [];
+    }
+
+    const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'));
+    if (headerCells.length === 0) {
+        return [];
+    }
+
+    const colgroup = ensureTableColGroup(table, headerCells.length);
+    const cols = Array.from(colgroup.querySelectorAll('col'));
+
+    return cols.map((col, idx) => {
+        const fromStyle = Number.parseFloat(col.style.width || '');
+        if (Number.isFinite(fromStyle) && fromStyle > 0) {
+            return Math.max(48, Math.round(fromStyle));
+        }
+
+        const measured = headerCells[idx]?.getBoundingClientRect?.().width || 0;
+        return Math.max(48, Math.round(measured));
+    });
+}
+
+async function setupTableColumnResizing(container, wrapped, filename = state.currentFile) {
+    if (!container || filename === null) {
+        return;
+    }
+
+    const viewName = container === elements.preview
+        ? 'view'
+        : container === elements.jupyter
+            ? 'run'
+            : container === elements.csvView
+                ? 'csv'
+                : container === elements.aiOutput
+                    ? 'ai-panel'
+                    : String(state.viewMode || 'view');
+
+    const tables = Array.from(container.querySelectorAll('table'));
+    for (const table of tables) {
+        if (!(table instanceof HTMLTableElement)) {
+            continue;
+        }
+
+        const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'));
+        if (headerCells.length === 0) {
+            continue;
+        }
+
+        const headings = getTableHeadingValues(table);
+        if (headings.length === 0) {
+            continue;
+        }
+
+        const storedWidths = await GetNotesColumnWidths(filename, viewName, headings, wrapped).catch(() => []);
+        if (Array.isArray(storedWidths) && storedWidths.length > 0) {
+            applyTableColumnWidths(table, storedWidths);
+        }
+
+        const colgroup = ensureTableColGroup(table, headerCells.length);
+        const cols = Array.from(colgroup.querySelectorAll('col'));
+
+        const startColumnResize = (columnIndex, event, handle) => {
+            if (event.button !== 0) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            table.dataset.resizeDragActive = 'true';
+            handle?.classList.add('is-dragging');
+
+            const column = cols[columnIndex];
+            if (!column) {
+                return;
+            }
+
+            const widthAnchor = headerCells[columnIndex];
+            const currentWidth = Number.parseFloat(column.style.width || '') || widthAnchor.getBoundingClientRect().width;
+            const startX = event.clientX;
+            table.style.tableLayout = 'fixed';
+
+            const onMouseMove = (moveEvent) => {
+                const deltaX = moveEvent.clientX - startX;
+                const nextWidth = Math.max(48, Math.round(currentWidth + deltaX));
+                column.style.width = `${nextWidth}px`;
+            };
+
+            const onMouseUp = () => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+                handle?.classList.remove('is-dragging');
+
+                setTimeout(() => {
+                    delete table.dataset.resizeDragActive;
+                }, 0);
+
+                const widths = collectTableColumnWidths(table);
+                if (widths.length === 0) {
+                    return;
+                }
+
+                SetNotesColumnWidths(filename, viewName, headings, wrapped, widths).catch((err) => {
+                    console.error('Failed to save table column widths:', err);
+                });
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        };
+
+        const rows = Array.from(table.querySelectorAll('tr'));
+        rows.forEach((row) => {
+            const cells = Array.from(row.querySelectorAll('th, td'));
+            cells.forEach((cell, columnIndex) => {
+                if (columnIndex >= headerCells.length) {
+                    return;
+                }
+
+                let handle = cell.querySelector('.notes-table-col-resize-handle');
+                if (!handle) {
+                    handle = document.createElement('span');
+                    handle.className = 'notes-table-col-resize-handle';
+                    handle.setAttribute('aria-hidden', 'true');
+                    cell.appendChild(handle);
+                }
+
+                if (handle.dataset.bound === 'true') {
+                    return;
+                }
+                handle.dataset.bound = 'true';
+                handle.addEventListener('mousedown', (event) => startColumnResize(columnIndex, event, handle));
+            });
+        });
+    }
+}
+
 function setupTableSorting(container) {
     if (!container) return;
 
     const getCellText = (cell) => {
-        const wrap = cell.querySelector('.notes-table-cell-wrap > span:first-child');
-        if (wrap) return String(wrap.textContent || '').trim();
-        // Exclude sort icon from raw text comparison
-        return Array.from(cell.childNodes)
-            .filter(n => !n.classList?.contains('notes-sort-icon'))
-            .map(n => n.textContent)
-            .join('')
-            .trim();
+        return getTableCellTextContent(cell);
     };
 
     Array.from(container.querySelectorAll('table')).forEach((table) => {
@@ -2946,6 +3155,12 @@ function setupTableSorting(container) {
 
         headerCells.forEach((th, colIndex) => {
             th.addEventListener('click', (e) => {
+                if (table.dataset.resizeDragActive === 'true') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -4674,6 +4889,8 @@ async function renderJupyterView() {
 
             // Enable column sorting on all tables
             setupTableSorting(elements.jupyter);
+
+            void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, state.currentFile);
 
             // Re-apply find highlights when Find tab is active in jupyter mode.
             if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery && state.viewMode === 'jupyter') {
@@ -7835,6 +8052,7 @@ function initAIOutputContextMenu(container) {
 }
 
 async function processAIMarkdownContainer(container) {
+    void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
     await processMarkdownContainer(container);
     wrapTablesForHorizontalScroll(container);
     setupTableSorting(container);
@@ -10041,6 +10259,43 @@ function applyWindowStyle(result) {
             max-width: 100%;
             overflow-x: auto;
             overflow-y: hidden;
+        }
+
+        .notes-table-scroll-wrap th,
+        .notes-table-scroll-wrap td {
+            position: relative;
+        }
+
+        .notes-table-col-resize-handle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 100%;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 2;
+        }
+
+        .notes-table-col-resize-handle::before {
+            content: '';
+            position: absolute;
+            top: 3px;
+            bottom: 3px;
+            left: 50%;
+            width: 1px;
+            transform: translateX(-50%);
+            background: var(--bg);
+            transition: background-color 120ms ease;
+        }
+
+        .notes-table-scroll-wrap th .notes-table-col-resize-handle::before {
+            background: var(--fg);
+        }
+
+        .notes-table-col-resize-handle:hover::before,
+        .notes-table-col-resize-handle.is-dragging::before {
+            background: var(--accent);
         }
 
         #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table,

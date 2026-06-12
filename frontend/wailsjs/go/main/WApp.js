@@ -94,6 +94,14 @@ export function GetLanguageDescriptions(arg1) {
   return window['go']['main']['WApp']['GetLanguageDescriptions'](arg1);
 }
 
+export function GetNotesColumnWidths(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['WApp']['GetNotesColumnWidths'](arg1, arg2, arg3, arg4);
+}
+
+export function GetNotesMaxLogLines() {
+  return window['go']['main']['WApp']['GetNotesMaxLogLines']();
+}
+
 export function GetProjectCache() {
   return window['go']['main']['WApp']['GetProjectCache']();
 }
@@ -104,10 +112,6 @@ export function GetTerminalGlyphSize() {
 
 export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
-}
-
-export function GetNotesMaxLogLines() {
-  return window['go']['main']['WApp']['GetNotesMaxLogLines']();
 }
 
 export function ListFiles() {
@@ -276,6 +280,10 @@ export function SendToTerminal(arg1) {
 
 export function SetDocumentCache(arg1, arg2) {
   return window['go']['main']['WApp']['SetDocumentCache'](arg1, arg2);
+}
+
+export function SetNotesColumnWidths(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['WApp']['SetNotesColumnWidths'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SetProjectCache(arg1) {

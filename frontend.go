@@ -1675,6 +1675,14 @@ func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
 	notes.SetDocumentCache(a.projRoot, filename, ptr)
 }
 
+func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {
+	return notes.GetColumnWidths(filename, view, headings, wrapped)
+}
+
+func (a *WApp) SetNotesColumnWidths(filename, view string, headings []string, wrapped bool, widths []float64) {
+	notes.SetColumnWidths(filename, view, headings, wrapped, widths)
+}
+
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {

@@ -53,13 +53,15 @@ export function GetImage(arg1:string):Promise<string>;
 
 export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
 
+export function GetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<Array<number>>;
+
+export function GetNotesMaxLogLines():Promise<number>;
+
 export function GetProjectCache():Promise<notes.ProjectCacheT>;
 
 export function GetTerminalGlyphSize():Promise<types.XY>;
 
 export function GetWindowStyle():Promise<main.WindowStyleT>;
-
-export function GetNotesMaxLogLines():Promise<number>;
 
 export function ListFiles():Promise<Array<string>>;
 
@@ -144,6 +146,8 @@ export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 export function SendToTerminal(arg1:string):Promise<void>;
 
 export function SetDocumentCache(arg1:string,arg2:notes.DocumentCacheT):Promise<void>;
+
+export function SetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean,arg5:Array<number>):Promise<void>;
 
 export function SetProjectCache(arg1:notes.ProjectCacheT):Promise<void>;
 

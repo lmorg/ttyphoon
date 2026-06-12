@@ -3,6 +3,8 @@ import * as swaggerUtils from './swagger-utils.js';
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
+const getNotesColumnWidthsMock = vi.fn();
+const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const saveFileMock = vi.fn(() => Promise.resolve());
@@ -89,6 +91,7 @@ const showLocalMenuMock = vi.fn();
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesMaxLogLines: getNotesMaxLogLinesMock,
+    GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,
     SaveFile: saveFileMock,
@@ -145,6 +148,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
     SetDocumentCache: setDocumentCacheMock,
+    SetNotesColumnWidths: setNotesColumnWidthsMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
@@ -251,6 +255,8 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockReset();
         getNotesMaxLogLinesMock.mockReset();
+        getNotesColumnWidthsMock.mockReset();
+        setNotesColumnWidthsMock.mockReset();
         getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
@@ -313,6 +319,8 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockResolvedValue(theme);
         getNotesMaxLogLinesMock.mockResolvedValue(1000);
+        getNotesColumnWidthsMock.mockResolvedValue([]);
+        setNotesColumnWidthsMock.mockResolvedValue();
         getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
         getCurrentProjectMock.mockResolvedValue('');
         getCurrentGroupNameMock.mockResolvedValue('');
@@ -3705,4 +3713,5 @@ describe('notes rendering', () => {
             });
         });
     });
+
 });
