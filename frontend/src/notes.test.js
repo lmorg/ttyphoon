@@ -168,6 +168,7 @@ vi.mock('./markdown-utils.js', () => ({
     configureMarked: vi.fn(),
     processMarkdownContainer: vi.fn(),
     enableFullscreenImages: vi.fn(),
+    applySyntaxHighlighting: vi.fn(),
 }));
 
 vi.mock('./style-utils.js', () => ({
@@ -2182,6 +2183,7 @@ describe('notes rendering', () => {
         const actionInputPre = codeBlocks[1].parentElement;
         expect(actionInputPre).not.toBeNull();
         expect(actionInputPre.classList.contains('notes-ai-code')).toBe(true);
+        expect(codeBlocks[1].classList.contains('language-json')).toBe(true);
     });
 
     it('starts a new heading when Thought follows the closing action input brace on the same line', async () => {
@@ -2232,6 +2234,27 @@ describe('notes rendering', () => {
         const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
         expect(markdownBlocks.length).toBe(1);
         expect(markdownBlocks[0].textContent).toContain('Nested works');
+    });
+
+    it('does not duplicate Final Answer when trailing text and a real Final Answer label both carry the same content', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        expect(typeof aiResponseHandler).toBe('function');
+
+        // The model outputs trailing text after the JSON AND a proper Final Answer label
+        // with the same content — previously this produced two Final Answer sections.
+        aiResponseHandler('Action Input: {"tool":"search"}Here is the result\nFinal Answer: Here is the result');
+        await flushPromises();
+        await flushPromises();
+
+        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
+        const finalAnswerCount = headings.filter((h) => h === 'Final Answer').length;
+        expect(finalAnswerCount).toBe(1);
     });
 
     it('splits trailing unlabeled narrative text from Action Input JSON into Final Answer', async () => {
@@ -2365,11 +2388,9 @@ describe('notes rendering', () => {
 
     it('renders job title as markdown after the timestamp when provided', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
-        const { marked } = await import('marked');
         const wrapper = document.createElement('div');
         const processMarkdownContainerMock = vi.fn();
         const fmt = createAIPipelineFormatter(wrapper, {
-            marked,
             processMarkdownContainer: processMarkdownContainerMock,
         });
 
@@ -2393,6 +2414,25 @@ describe('notes rendering', () => {
 
         // Markdown processing was applied to the title element
         expect(processMarkdownContainerMock).toHaveBeenCalledWith(title);
+    });
+
+    it('highlights a slash-command prefix in quoted AI prompts', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob('> /jira show my tickets');
+        await flushPromises();
+
+        const title = wrapper.querySelector('.notes-ai-title');
+        expect(title).not.toBeNull();
+
+        const spans = title.querySelectorAll('blockquote p span');
+        expect(spans).toHaveLength(2);
+        expect(spans[0].textContent).toBe('/jira ');
+        expect(spans[0].getAttribute('style')).toContain('var(--yellow)');
+        expect(spans[1].textContent).toBe('show my tickets');
+        expect(spans[1].getAttribute('style')).toContain('var(--fg)');
     });
 
     it('omits the title element when startJob is called without a title', async () => {

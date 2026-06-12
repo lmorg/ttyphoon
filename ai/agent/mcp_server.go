@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
@@ -34,9 +35,9 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 				runtime.BrowserOpenURL(rctx, authURL)
 			}
 		},
-		/*PromptCallbackURL: func() (string, error) {
+		PromptCallbackURL: func() (string, error) {
 			return promptString(agent, "Paste OAuth callback URL")
-		},*/
+		},
 		OnAutoCallbackUnavailable: func(callbackErr error) {
 			agent.Renderer().DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Automatic OAuth callback unavailable (%v). Falling back to pasted callback URL.", callbackErr))
 		},
@@ -57,13 +58,13 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 	)
 }
 
-/*func promptString(agent *Agent, prompt string) (string, error) {
+func promptString(agent *Agent, prompt string) (string, error) {
 	ch := make(chan string)
 	errCh := make(chan error)
 
 	agent.Renderer().DisplayInputBox(prompt, "",
-		func(s string) { ch <- s },
-		func(_ string) { errCh <- fmt.Errorf("OAuth authorization canceled") },
+		func(v *types.InputBoxCallbackResultT) { ch <- v.String() },
+		func(_ *types.InputBoxCallbackResultT) { errCh <- fmt.Errorf("OAuth authorization canceled") },
 	)
 
 	select {
@@ -75,7 +76,7 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 	case err := <-errCh:
 		return "", err
 	}
-}*/
+}
 
 func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Client) error {
 	err := c.ListTools()

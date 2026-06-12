@@ -1,5 +1,15 @@
+import { applySyntaxHighlighting } from './markdown-utils.js';
+
 function normalizeChunk(value) {
     return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 const SECTION_REGEX = /^(Question|Thought|Final Answer|Action|Action Input):[ \t]*/gm;
@@ -142,7 +152,8 @@ function parseSections(source) {
     }
 
     const expanded = [];
-    for (const section of sections) {
+    for (let i = 0; i < sections.length; i += 1) {
+        const section = sections[i];
         if (section.label !== 'Action Input') {
             expanded.push(section);
             continue;
@@ -154,7 +165,11 @@ function parseSections(source) {
             content: split.actionInput,
         });
 
-        if (split.trailingFinalAnswer) {
+        // Only synthesise a trailing Final Answer if the next real section is
+        // NOT already a Final Answer — otherwise the same text would appear twice.
+        const nextSection = sections[i + 1];
+        const nextIsFinalAnswer = nextSection && nextSection.label === 'Final Answer';
+        if (split.trailingFinalAnswer && !nextIsFinalAnswer) {
             expanded.push({
                 label: 'Final Answer',
                 kind: 'markdown',
@@ -193,6 +208,18 @@ function splitActionInputContent(content) {
     };
 }
 
+function renderPromptTitleHtml(title) {
+    const source = String(title || '');
+    const prompt = source.replace(/^\s*>\s?/, '');
+    const commandMatch = prompt.match(/^(\/[\-_.a-zA-Z0-9]+ )(.*)$/s);
+
+    if (!commandMatch) {
+        return `<blockquote><p><span style="color: var(--fg);">${escapeHtml(prompt)}</span></p></blockquote>`;
+    }
+
+    return `<blockquote><p><span style="color: var(--yellow);">${escapeHtml(commandMatch[1])}</span><span style="color: var(--fg);">${escapeHtml(commandMatch[2])}</span></p></blockquote>`;
+}
+
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
@@ -201,6 +228,8 @@ export function createAIPipelineFormatter(container, options = {}) {
     let streamText = '';
     let renderVersion = 0;
     let jobRoot = null;
+    let isRendering = false;
+    let needsRender = false;
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -230,6 +259,8 @@ export function createAIPipelineFormatter(container, options = {}) {
     function clear() {
         streamText = '';
         jobRoot = null;
+        isRendering = false;
+        needsRender = false;
         container.textContent = '';
     }
 
@@ -243,6 +274,8 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
         streamText = '';
         renderVersion += 1;
+        isRendering = false;
+        needsRender = false;
 
         // Timestamp sits directly in container (before jobRoot) so the render
         // loop, which owns jobRoot's contents, cannot accidentally wipe it.
@@ -252,22 +285,17 @@ export function createAIPipelineFormatter(container, options = {}) {
         ts.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         container.appendChild(ts);
 
-        // Title is already markdown-formatted text from the caller (e.g. "> query" or a code fence).
         if (title) {
             const titleEl = document.createElement('div');
             titleEl.className = 'notes-ai-title markdown-body';
-            // Render immediately as plain text so the element is visible at once,
-            // then asynchronously upgrade to full markdown.
             titleEl.textContent = title;
             container.appendChild(titleEl);
-            if (markedInstance) {
-                void (async () => {
-                    titleEl.innerHTML = markedInstance.parse(title);
-                    if (processMarkdownContainer) {
-                        await processMarkdownContainer(titleEl);
-                    }
-                })();
-            }
+            void (async () => {
+                titleEl.innerHTML = renderPromptTitleHtml(title);
+                if (processMarkdownContainer) {
+                    await processMarkdownContainer(titleEl);
+                }
+            })();
         }
 
         jobRoot = document.createElement('div');
@@ -295,6 +323,9 @@ export function createAIPipelineFormatter(container, options = {}) {
         const pre = document.createElement('pre');
         pre.className = 'notes-ai-code';
         const code = document.createElement('code');
+        if (label === 'Action Input') {
+            code.className = 'language-json';
+        }
         code.textContent = content;
         pre.appendChild(code);
         sectionEl.appendChild(pre);
@@ -319,6 +350,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         if (processCodeContainer) {
             await processCodeContainer(sectionEl);
         }
+        await applySyntaxHighlighting(sectionEl);
         return version === renderVersion;
     }
 
@@ -455,8 +487,23 @@ export function createAIPipelineFormatter(container, options = {}) {
 
         streamText += text;
         renderVersion += 1;
-        const version = renderVersion;
-        void renderCurrentStream(version);
+
+        if (isRendering) {
+            needsRender = true;
+            return;
+        }
+
+        void (async () => {
+            isRendering = true;
+            try {
+                do {
+                    needsRender = false;
+                    await renderCurrentStream(renderVersion);
+                } while (needsRender);
+            } finally {
+                isRendering = false;
+            }
+        })();
     }
 
     return {
