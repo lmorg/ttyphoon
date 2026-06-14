@@ -456,6 +456,56 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class NotesGrepResultT {
+	    fileName: string;
+	    path: string;
+	    line: number;
+	    context: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NotesGrepResultT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fileName = source["fileName"];
+	        this.path = source["path"];
+	        this.line = source["line"];
+	        this.context = source["context"];
+	    }
+	}
+	export class NotesGrepReturnT {
+	    results: NotesGrepResultT[];
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotesGrepReturnT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.results = this.convertValues(source["results"], NotesGrepResultT);
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class RunFunctionReturnT {
 	    Output: string;
 	    IsError: boolean;

@@ -195,7 +195,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 				{
 					Name:        "tools",
 					Label:       "Tools",
-					Description: "Tools and MCP servers to use",
+					Description: "Tools and MCP servers to use:\n",
 					Default:     tools,
 					Type:        "string",
 					Options:     toolOptions,

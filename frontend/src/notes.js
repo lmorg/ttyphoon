@@ -9,7 +9,7 @@ import {
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
     ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
-    NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent,
+    NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrep,
     GetProjectCache, SetProjectCache,
     GetDocumentCache, SetDocumentCache, FormatCodeBlock, CompleteSyntax,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
@@ -555,12 +555,15 @@ app.innerHTML = `
                             <div id="notes-tools-toc" class="notes-tools-toc"></div>
                         </div>
                         <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="false">
-                            <div class="notes-tools-find-wrap">
-                                <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                                <div id="notes-find-controls">
+                            <div class="notes-tools-find-wrap markdown-body">
+                                <h1 class="notes-find-heading">In open file</h1>
+                                <div id="notes-find-controls" data-disabled="false">
+                                    <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                    <div id="notes-find-actions">
                                     <span id="notes-find-counter"></span>
                                     <button id="notes-find-prev" type="button" title="Previous match">↑</button>
                                     <button id="notes-find-next" type="button" title="Next match">↓</button>
+                                    </div>
                                 </div>
                                 <div id="notes-replace-controls" data-disabled="true">
                                     <input id="notes-replace-input" type="text" placeholder="Replace..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
@@ -569,6 +572,9 @@ app.innerHTML = `
                                         <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
                                     </div>
                                 </div>
+                                <h1 class="notes-find-heading">For files containing</h1>
+                                <input id="notes-find-files-input" type="text" placeholder="Search project files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                <div id="notes-find-files-results"></div>
                             </div>
                         </div>
                         <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
@@ -671,9 +677,12 @@ const elements = {
     deleteCancel: document.getElementById('notes-delete-cancel'),
     deleteConfirm: document.getElementById('notes-delete-confirm'),
     findInput: document.getElementById('notes-find-input'),
+    findControls: document.getElementById('notes-find-controls'),
     findCounter: document.getElementById('notes-find-counter'),
     findPrev: document.getElementById('notes-find-prev'),
     findNext: document.getElementById('notes-find-next'),
+    findFilesInput: document.getElementById('notes-find-files-input'),
+    findFilesResults: document.getElementById('notes-find-files-results'),
     replaceControls: document.getElementById('notes-replace-controls'),
     replaceInput: document.getElementById('notes-replace-input'),
     replaceOne: document.getElementById('notes-replace-one'),
@@ -720,6 +729,13 @@ const state = {
     findMatches: [],
     findCurrentIndex: -1,
     findQuery: '',
+    findFilesQuery: '',
+    findFilesResults: [],
+    findFilesBusy: false,
+    findFilesError: '',
+    findFilesTimer: null,
+    findFilesSeq: 0,
+    findFilesSelectedKey: '',
     fileFilterQuery: '',
     expandedCategories: {
         '$GLOBAL': true,
@@ -2106,10 +2122,71 @@ function setupInteractiveCheckboxes(container, isEditable) {
     });
 }
 
-function setupCollapsibleHeadings(container) {
-    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+function getCollapsibleSectionWrapper(heading) {
+    const wrapper = heading?.nextElementSibling;
+    return wrapper?.classList?.contains('collapsible-section') ? wrapper : null;
+}
 
-    headings.forEach((heading) => {
+function collapseCollapsibleHeading(heading) {
+    const wrapper = getCollapsibleSectionWrapper(heading);
+    if (!heading || !wrapper) {
+        return;
+    }
+
+    if (heading.dataset.collapsed === 'true') {
+        return;
+    }
+
+    const height = wrapper.scrollHeight;
+    wrapper.style.transition = 'none';
+    wrapper.style.maxHeight = `${height}px`;
+    wrapper.offsetHeight;
+    wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+    requestAnimationFrame(() => {
+        wrapper.style.maxHeight = '0px';
+        wrapper.style.opacity = '0';
+    });
+    heading.dataset.collapsed = 'true';
+    heading.style.fontStyle = 'italic';
+}
+
+function expandCollapsibleHeading(heading) {
+    const wrapper = getCollapsibleSectionWrapper(heading);
+    if (!heading || !wrapper) {
+        return;
+    }
+
+    if (heading.dataset.collapsed !== 'true') {
+        wrapper.style.maxHeight = '100000px';
+        wrapper.style.opacity = '1';
+        heading.style.fontStyle = '';
+        return;
+    }
+
+    wrapper.style.maxHeight = `${wrapper.scrollHeight}px`;
+    wrapper.style.opacity = '1';
+    wrapper.addEventListener('transitionend', () => {
+        if (heading.dataset.collapsed !== 'true') {
+            wrapper.style.maxHeight = '100000px';
+        }
+    }, { once: true });
+    heading.dataset.collapsed = 'false';
+    heading.style.fontStyle = '';
+}
+
+function setCollapsibleHeadingState(heading, collapsed) {
+    if (collapsed) {
+        collapseCollapsibleHeading(heading);
+    } else {
+        expandCollapsibleHeading(heading);
+    }
+}
+
+function setupCollapsibleHeadings(container, exclusive = false) {
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const headingList = Array.from(headings);
+
+    headingList.forEach((heading) => {
         const level = parseInt(heading.tagName[1], 10);
 
         // Collect the sibling elements that belong to this heading's section.
@@ -2129,6 +2206,7 @@ function setupCollapsibleHeadings(container) {
 
         // Wrap section content in a div so we can animate it as a unit.
         const wrapper = document.createElement('div');
+        wrapper.classList.add('collapsible-section');
         wrapper.style.overflowY = 'hidden';
         wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
         wrapper.style.maxHeight = '100000px';
@@ -2146,34 +2224,49 @@ function setupCollapsibleHeadings(container) {
         });
 
         heading.addEventListener('click', () => {
+            if (exclusive) {
+                headingList.forEach((otherHeading) => {
+                    setCollapsibleHeadingState(otherHeading, otherHeading !== heading);
+                });
+                return;
+            }
+
             const isCollapsed = heading.dataset.collapsed === 'true';
 
             if (isCollapsed) {
                 // Expand: animate from 0 → scrollHeight, then release max-height cap.
-                wrapper.style.maxHeight = wrapper.scrollHeight + 'px';
-                wrapper.style.opacity = '1';
-                wrapper.addEventListener('transitionend', () => {
-                    if (heading.dataset.collapsed !== 'true') {
-                        wrapper.style.maxHeight = '100000px';
-                    }
-                }, { once: true });
-                heading.dataset.collapsed = 'false';
-                heading.style.fontStyle = '';
+                expandCollapsibleHeading(heading);
             } else {
                 // Collapse: pin to exact current height (no jump), then animate to 0.
-                const height = wrapper.scrollHeight;
-                wrapper.style.transition = 'none';
-                wrapper.style.maxHeight = height + 'px';
-                wrapper.offsetHeight; // force reflow so the pin takes effect
-                wrapper.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
-                requestAnimationFrame(() => {
-                    wrapper.style.maxHeight = '0px';
-                    wrapper.style.opacity = '0';
-                });
-                heading.dataset.collapsed = 'true';
-                heading.style.fontStyle = 'italic';
+                collapseCollapsibleHeading(heading);
             }
         });
+    });
+}
+
+function syncFindPaneHeadingState() {
+    if (!elements.toolsFindPane) {
+        return;
+    }
+
+    const headings = Array.from(elements.toolsFindPane.querySelectorAll('.notes-find-heading'));
+    if (headings.length < 2) {
+        return;
+    }
+
+    if (state.findFilesBusy) {
+        return;
+    }
+
+    if (state.findFilesResults.length > 0) {
+        headings.forEach((heading, index) => {
+            setCollapsibleHeadingState(heading, index === 0);
+        });
+        return;
+    }
+
+    headings.forEach((heading) => {
+        setCollapsibleHeadingState(heading, false);
     });
 }
 
@@ -5743,6 +5836,23 @@ function renderFileList() {
     });
 }
 
+function scrollActiveFileListItemIntoView() {
+    if (!state.currentFile || !elements.list) {
+        return;
+    }
+
+    const items = Array.from(elements.list.querySelectorAll('.notes-file'));
+    const activeItem = items.find((item) => item?.dataset?.file === state.currentFile);
+    if (!activeItem || typeof activeItem.scrollIntoView !== 'function') {
+        return;
+    }
+
+    activeItem.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+    });
+}
+
 function toggleCategory(category) {
     state.expandedCategories[category] = !state.expandedCategories[category];
     renderFileList();
@@ -6541,10 +6651,13 @@ function setupSwaggerTabSwitching() {
     });
 }
 
-async function loadFile(file) {
+async function loadFile(file, options = {}) {
     if (!file) {
         return;
     }
+
+    const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
+    const keepFindTabOpen = Boolean(options?.keepFindTabOpen);
 
     state.suspendDocumentCacheSave = true;
 
@@ -6602,12 +6715,15 @@ async function loadFile(file) {
             enableImageContextMenus(elements.imageViewWrap);
 
             setViewMode('image-view');
-            await restoreDocumentCache(file);
+            if (!skipDocumentCacheRestore) {
+                await restoreDocumentCache(file);
+            }
             state.suspendDocumentCacheSave = false;
             saveDocumentCache();
             setDirty(false);
             renderFileList();
-            if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
+            scrollActiveFileListItemIntoView();
+            if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
             return;
@@ -6635,6 +6751,7 @@ async function loadFile(file) {
             setViewMode('meta');
             setDirty(false);
             renderFileList();
+            scrollActiveFileListItemIntoView();
             return;
         }
 
@@ -6661,8 +6778,9 @@ async function loadFile(file) {
 
             setDirty(false);
             renderFileList();
+            scrollActiveFileListItemIntoView();
 
-            if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
+            if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
             return;
@@ -6777,6 +6895,7 @@ async function loadFile(file) {
         
         setDirty(false);
         renderFileList();
+        scrollActiveFileListItemIntoView();
         
         // Refresh the JSON viewer when switching to JSON files
         if (state.currentFileType === 'json') {
@@ -6784,7 +6903,7 @@ async function loadFile(file) {
         }
         
         // Close active Find tab state when loading a new file.
-        if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
+        if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
         }
 
@@ -6792,7 +6911,9 @@ async function loadFile(file) {
             await openCurrentLspDocument(elements.editor.value || '');
         }
 
-        await restoreDocumentCache(file);
+        if (!skipDocumentCacheRestore) {
+            await restoreDocumentCache(file);
+        }
 
         state.suspendDocumentCacheSave = false;
         saveDocumentCache();
@@ -6891,17 +7012,15 @@ async function confirmDelete() {
 }
 
 function openFindBar() {
-    if (!isFindAvailableInCurrentMode()) {
-        notifyTerminal('Find not supported in this view', 'info');
-        return;
-    }
-
     if (elements.toolsPanel.dataset.collapsed === 'true') {
         setToolsPanelCollapsed(false);
     }
 
     setToolsTab('find');
     setTimeout(() => {
+        if (elements.findInput?.disabled) {
+            return;
+        }
         elements.findInput.focus();
         elements.findInput.select();
     }, 0);
@@ -6932,9 +7051,249 @@ function closeFindBar() {
     elements.findInput.value = '';
     elements.findCounter.textContent = '';
 
+    if (state.findFilesTimer) {
+        clearTimeout(state.findFilesTimer);
+        state.findFilesTimer = null;
+    }
+    state.findFilesQuery = '';
+    state.findFilesResults = [];
+    state.findFilesBusy = false;
+    state.findFilesError = '';
+    state.findFilesSelectedKey = '';
+    if (elements.findFilesInput) {
+        elements.findFilesInput.value = '';
+    }
+    renderProjectFindResults();
+
     if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
         const nextTab = elements.toolsTabToC?.style.display !== 'none' ? 'toc' : 'ai';
         setToolsTab(nextTab);
+    }
+}
+
+function editorOffsetForLine(lineNumber) {
+    const editor = elements.editor;
+    if (!editor) {
+        return 0;
+    }
+
+    const targetLine = Math.max(1, Number.parseInt(String(lineNumber), 10) || 1);
+    const text = String(editor.value || '');
+    let currentLine = 1;
+    let offset = 0;
+
+    while (currentLine < targetLine && offset < text.length) {
+        const nextBreak = text.indexOf('\n', offset);
+        if (nextBreak === -1) {
+            offset = text.length;
+            break;
+        }
+        offset = nextBreak + 1;
+        currentLine += 1;
+    }
+
+    return offset;
+}
+
+function jumpEditorToLine(lineNumber) {
+    const editor = elements.editor;
+    if (!editor) {
+        return;
+    }
+
+    const start = editorOffsetForLine(lineNumber);
+    const text = String(editor.value || '');
+    const nextBreak = text.indexOf('\n', start);
+    const end = nextBreak === -1 ? text.length : nextBreak;
+
+    editor.focus();
+    editor.setSelectionRange(start, end);
+    scrollEditorToSelection(editor, start);
+}
+
+function renderProjectFindResults() {
+    if (!elements.findFilesResults) {
+        return;
+    }
+
+    const query = String(state.findFilesQuery || '').trim();
+    elements.findFilesResults.innerHTML = '';
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'notes-find-files-empty';
+
+    if (state.findFilesBusy) {
+        placeholder.textContent = 'Searching...';
+        elements.findFilesResults.appendChild(placeholder);
+        syncFindPaneHeadingState();
+        return;
+    }
+
+    if (state.findFilesError) {
+        placeholder.textContent = state.findFilesError;
+        elements.findFilesResults.appendChild(placeholder);
+        syncFindPaneHeadingState();
+        return;
+    }
+
+    if (!query) {
+        placeholder.textContent = 'Enter text to search project files.';
+        elements.findFilesResults.appendChild(placeholder);
+        syncFindPaneHeadingState();
+        return;
+    }
+
+    if (!state.findFilesResults.length) {
+        placeholder.textContent = 'No matches found.';
+        elements.findFilesResults.appendChild(placeholder);
+        syncFindPaneHeadingState();
+        return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'notes-find-files-list';
+
+    for (const item of state.findFilesResults) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'notes-find-files-item';
+        const itemKey = `${String(item?.path || '')}:${Number.parseInt(String(item?.line), 10) || 1}`;
+        const isSelected = itemKey === state.findFilesSelectedKey;
+        button.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+
+        const title = document.createElement('span');
+        title.className = 'notes-find-files-item-title';
+        title.textContent = String(item?.fileName || '');
+
+        const detail = document.createElement('span');
+        detail.className = 'notes-find-files-item-detail';
+        detail.textContent = `${String(item?.path || '')}:${Number.parseInt(String(item?.line), 10) || 1}`;
+
+        button.appendChild(title);
+        button.appendChild(detail);
+
+        const ctx = Array.isArray(item?.context) ? item.context : [];
+        if (ctx.length > 0) {
+            const lineNo = Number.parseInt(String(item?.line), 10) || 1;
+            // The match line is either the second element (when a preceding line
+            // exists) or the first if the match is at line 1.
+            const matchIndex = lineNo === 1 ? 0 : Math.min(1, ctx.length - 1);
+            const pre = document.createElement('pre');
+            pre.className = 'notes-find-files-item-context';
+            ctx.forEach((ctxLine, i) => {
+                const span = document.createElement('span');
+                span.className = i === matchIndex
+                    ? 'notes-find-files-context-match'
+                    : 'notes-find-files-context-other';
+                span.textContent = ctxLine;
+                pre.appendChild(span);
+            });
+            button.appendChild(pre);
+        }
+
+        button.addEventListener('click', () => {
+            state.findFilesSelectedKey = itemKey;
+            renderProjectFindResults();
+            openProjectFindResult(item);
+        });
+        list.appendChild(button);
+    }
+
+    elements.findFilesResults.appendChild(list);
+    syncFindPaneHeadingState();
+}
+
+async function runProjectFindSearch(query) {
+    const trimmed = String(query || '').trim();
+    state.findFilesQuery = trimmed;
+
+    if (!trimmed) {
+        state.findFilesBusy = false;
+        state.findFilesError = '';
+        state.findFilesResults = [];
+        renderProjectFindResults();
+        return;
+    }
+
+    const searchSeq = state.findFilesSeq + 1;
+    state.findFilesSeq = searchSeq;
+    state.findFilesBusy = true;
+    state.findFilesError = '';
+    renderProjectFindResults();
+
+    try {
+        const response = await NotesGrep(trimmed);
+        if (state.findFilesSeq !== searchSeq) {
+            return;
+        }
+
+        state.findFilesError = String(response?.error || '');
+        const results = Array.isArray(response?.results) ? response.results : [];
+        state.findFilesResults = results.map((item) => ({
+            fileName: String(item?.fileName || ''),
+            path: String(item?.path || ''),
+            line: Number.parseInt(String(item?.line), 10) || 1,
+            context: Array.isArray(item?.context) ? item.context.map((l) => String(l)) : [],
+        }));
+    } catch (err) {
+        if (state.findFilesSeq !== searchSeq) {
+            return;
+        }
+        state.findFilesError = String(err && err.message ? err.message : err);
+        state.findFilesResults = [];
+    } finally {
+        if (state.findFilesSeq === searchSeq) {
+            state.findFilesBusy = false;
+            renderProjectFindResults();
+        }
+    }
+}
+
+function scheduleProjectFindSearch() {
+    const query = String(elements.findFilesInput?.value || '');
+    state.findFilesQuery = query;
+
+    if (state.findFilesTimer) {
+        clearTimeout(state.findFilesTimer);
+        state.findFilesTimer = null;
+    }
+
+    if (!query.trim()) {
+        state.findFilesError = '';
+        state.findFilesResults = [];
+        state.findFilesBusy = false;
+        renderProjectFindResults();
+        return;
+    }
+
+    state.findFilesTimer = setTimeout(() => {
+        state.findFilesTimer = null;
+        runProjectFindSearch(query);
+    }, 180);
+}
+
+async function openProjectFindResult(item) {
+    const file = String(item?.path || '');
+    if (!file) {
+        return;
+    }
+
+    try {
+        state.findFilesSelectedKey = `${file}:${Number.parseInt(String(item?.line), 10) || 1}`;
+        renderProjectFindResults();
+        await NotesHistoryAdd(file);
+        await loadFile(file, {
+            skipDocumentCacheRestore: true,
+            keepFindTabOpen: true,
+        });
+        setViewMode('editor');
+        setToolsPanelCollapsed(false);
+        setToolsTab('find');
+        renderProjectFindResults();
+        jumpEditorToLine(item?.line);
+    } catch (err) {
+        notifyTerminal(String(err && err.message ? err.message : err), 'error');
+        console.error(err);
     }
 }
 
@@ -6951,12 +7310,23 @@ function updateFindAvailability() {
     // notification from firing. Use aria-disabled for accessibility only.
     elements.find.setAttribute('aria-disabled', available ? 'false' : 'true');
     if (elements.toolsTabFind) {
-        elements.toolsTabFind.style.display = available ? '' : 'none';
         elements.toolsTabFind.setAttribute('aria-disabled', available ? 'false' : 'true');
     }
 
-    if (!available && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-        closeFindBar();
+    if (elements.findControls) {
+        elements.findControls.dataset.disabled = available ? 'false' : 'true';
+    }
+
+    if (elements.findInput) {
+        elements.findInput.disabled = !available;
+    }
+
+    if (elements.findPrev) {
+        elements.findPrev.disabled = !available;
+    }
+
+    if (elements.findNext) {
+        elements.findNext.disabled = !available;
     }
 
     updateReplaceAvailability();
@@ -10381,6 +10751,7 @@ function applyWindowStyle(result) {
         #notes-tools-find-pane {
             background-color: ${DARKEN_BACKGROUND_OVERLAY};
             transition: background-color 120ms ease;
+            overflow: hidden;
         }
 
         #notes-tools-find-pane:focus-within {
@@ -10392,6 +10763,31 @@ function applyWindowStyle(result) {
             flex-direction: column;
             gap: 8px;
             padding: 10px 12px;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #notes-tools-find-pane input,
+        #notes-tools-find-pane textarea {
+            user-select: text;
+        }
+
+        #notes-tools-find-pane .collapsible-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        #notes-tools-find-pane .notes-find-heading:nth-of-type(2) + .collapsible-section {
+            flex: 1 1 auto;
+        }
+
+        .notes-find-heading {
+            margin: 0;
+            font-size: 1em;
         }
 
         #notes-find-input {
@@ -10410,10 +10806,143 @@ function applyWindowStyle(result) {
             border-color: var(--accent);
         }
 
+        #notes-find-files-input {
+            border-radius: 0;
+            border: 1px solid var(--fg);
+            background: transparent;
+            color: var(--fg);
+            padding: 4px 8px;
+            font-size: ${result.fontSize}px;
+            outline: none;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #notes-find-files-input:focus {
+            border-color: var(--accent);
+        }
+
+        #notes-find-files-results {
+            min-height: 0;
+            max-height: none;
+            flex: 1 1 auto;
+            overflow: auto;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.25);
+        }
+
+        .notes-find-files-empty {
+            font-size: ${result.fontSize - 2}px;
+            opacity: 0.8;
+            padding: 8px;
+        }
+
+        .notes-find-files-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notes-find-files-item {
+            border: 0;
+            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
+            background: transparent;
+            color: var(--fg);
+            text-align: left;
+            padding: 6px 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .notes-find-files-item:last-child {
+            border-bottom: 0;
+        }
+
+        .notes-find-files-item:hover,
+        .notes-find-files-item:focus-visible {
+            outline: none;
+            color: var(--accent);
+            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.22);
+        }
+
+        .notes-find-files-item[aria-selected="true"] {
+            background-color: var(--accent);
+            color: var(--bg);
+        }
+
+        .notes-find-files-item[aria-selected="true"]:hover,
+        .notes-find-files-item[aria-selected="true"]:focus-visible {
+            background-color: var(--accent);
+            color: var(--bg);
+        }
+
+        .notes-find-files-item-title {
+            font-size: ${result.fontSize}px;
+            font-weight: 600;
+        }
+
+        .notes-find-files-item-detail {
+            font-size: ${result.fontSize - 2}px;
+            opacity: 0.85;
+            font-family: monospace;
+        }
+
+        .notes-find-files-item-context {
+            margin: 2px 0 0;
+            padding: 4px 6px;
+            font-size: ${result.fontSize - 2}px;
+            font-family: monospace;
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.5);
+            border-left: 2px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
+            line-height: 1.5;
+        }
+
+        .notes-find-files-context-match,
+        .notes-find-files-context-other {
+            display: block;
+            white-space: pre;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .notes-find-files-context-match {
+            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.35);
+            border-left: 2px solid var(--accent);
+            margin-left: -8px;
+            padding-left: 6px;
+        }
+
+        .notes-find-files-context-other {
+            opacity: 0.65;
+        }
+
+        .notes-find-files-item:hover .notes-find-files-item-context,
+        .notes-find-files-item:focus-visible .notes-find-files-item-context {
+            border-left-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.5);
+        }
+
         #notes-find-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            opacity: 1;
+            transition: opacity 0.2s ease;
+        }
+
+        #notes-find-controls[data-disabled="true"] {
+            opacity: 0.45;
+        }
+
+        #notes-find-actions {
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        #notes-find-input:disabled {
+            opacity: 0.75;
+            cursor: not-allowed;
         }
 
         #notes-replace-controls {
@@ -10462,7 +10991,7 @@ function applyWindowStyle(result) {
             white-space: nowrap;
         }
 
-        #notes-find-controls button,
+        #notes-find-actions button,
         #notes-replace-actions button {
             border-radius: 5px;
             border: 1px solid var(--fg);
@@ -10473,12 +11002,23 @@ function applyWindowStyle(result) {
             font-size: ${result.fontSize}px;
         }
 
-        #notes-find-controls button:hover,
+        #notes-find-actions button:hover,
         #notes-replace-actions button:hover {
             border-color: var(--accent);
             color: var(--accent);
             transition: all 0.2s ease;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
+        }
+
+        #notes-find-actions button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        #notes-find-actions button:disabled:hover {
+            border-color: var(--fg);
+            color: var(--fg);
+            background: transparent;
         }
 
         #notes-replace-actions button:disabled {
@@ -12517,6 +13057,26 @@ elements.findInput.addEventListener('input', () => {
     performFind();
 });
 
+if (elements.findFilesInput) {
+    elements.findFilesInput.addEventListener('input', () => {
+        scheduleProjectFindSearch();
+    });
+
+    elements.findFilesInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+
+        event.preventDefault();
+        const query = String(elements.findFilesInput.value || '').trim();
+        if (!query) {
+            return;
+        }
+
+        runProjectFindSearch(query);
+    });
+}
+
 if (elements.replaceOne) {
     elements.replaceOne.addEventListener('mousedown', (event) => {
         event.preventDefault();
@@ -12777,6 +13337,11 @@ if (elements.replaceInput) {
 }
 
 setViewMode('editor');
+if (elements.toolsFindPane) {
+    setupCollapsibleHeadings(elements.toolsFindPane, true);
+    syncFindPaneHeadingState();
+}
+renderProjectFindResults();
 
 // Load initial notes list on startup; later notesUpdate events will refresh it.
 refreshFiles();

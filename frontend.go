@@ -28,6 +28,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/file/meta"
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
+	grepfiles "github.com/lmorg/ttyphoon/utils/grep"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/lsp"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
@@ -749,6 +750,18 @@ type GetFileReturnT struct {
 	Error    string `json:"error"`
 }
 
+type NotesGrepResultT struct {
+	FileName string   `json:"fileName"`
+	Path     string   `json:"path"`
+	Line     int      `json:"line"`
+	Context  []string `json:"context"`
+}
+
+type NotesGrepReturnT struct {
+	Results []NotesGrepResultT `json:"results"`
+	Error   string             `json:"error"`
+}
+
 func (a *WApp) GetFile(filename string) GetFileReturnT {
 	requestedFilename := strings.TrimSpace(filename)
 	filename = a.filePath(filename)
@@ -870,6 +883,49 @@ func (a *WApp) ListFiles() []string {
 	a.groupName = ulf.GroupName
 
 	return ulf.Files
+}
+
+func (a *WApp) NotesGrep(query string) NotesGrepReturnT {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return NotesGrepReturnT{Results: []NotesGrepResultT{}}
+	}
+
+	searchRoot := strings.TrimSpace(a.projRoot)
+	if searchRoot == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return NotesGrepReturnT{Error: err.Error()}
+		}
+		searchRoot = wd
+	}
+
+	matches, err := grepfiles.Search(searchRoot, query)
+	if err != nil {
+		return NotesGrepReturnT{Error: err.Error()}
+	}
+
+	results := make([]NotesGrepResultT, 0, len(matches))
+	for i := range matches {
+		path := a.notesPathForHistory(matches[i].Path)
+		if path == "" {
+			path = matches[i].Path
+		}
+
+		fileName := matches[i].FileName
+		if fileName == "" {
+			fileName = filepath.Base(path)
+		}
+
+		results = append(results, NotesGrepResultT{
+			FileName: fileName,
+			Path:     path,
+			Line:     matches[i].Line,
+			Context:  matches[i].Context,
+		})
+	}
+
+	return NotesGrepReturnT{Results: results}
 }
 
 func (a *WApp) CancelNotesListFiles() {

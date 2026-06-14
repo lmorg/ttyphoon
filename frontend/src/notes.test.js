@@ -80,6 +80,7 @@ const notesHistoryPreviousMock = vi.fn(() => Promise.resolve(''));
 const notesHistoryNextMock = vi.fn(() => Promise.resolve(''));
 const notesHistoryAddMock = vi.fn(() => Promise.resolve());
 const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
+const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -144,6 +145,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryNext: notesHistoryNextMock,
     NotesHistoryAdd: notesHistoryAddMock,
     NotesHistoryCurrent: notesHistoryCurrentMock,
+    NotesGrep: notesGrepMock,
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -307,6 +309,7 @@ describe('notes rendering', () => {
         notesHistoryNextMock.mockReset();
         notesHistoryAddMock.mockReset();
         notesHistoryCurrentMock.mockReset();
+        notesGrepMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -365,6 +368,7 @@ describe('notes rendering', () => {
         notesHistoryNextMock.mockResolvedValue('');
         notesHistoryAddMock.mockResolvedValue();
         notesHistoryCurrentMock.mockResolvedValue('');
+        notesGrepMock.mockResolvedValue({ results: [], error: '' });
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -2625,13 +2629,17 @@ describe('notes rendering', () => {
         expect(appRoot.dataset.aiMaximized).toBe('false');
     });
 
-    it('hides Find tools tab in Hex and Meta modes', async () => {
+    it('keeps Find tools tab visible but disables controls in Hex and Meta modes', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide\n\nfind me', text: '', error: '' });
 
         await importNotesModule();
 
         const tabFind = document.getElementById('notes-tools-tab-find');
+        const findControls = document.getElementById('notes-find-controls');
+        const findInput = document.getElementById('notes-find-input');
+        const findPrev = document.getElementById('notes-find-prev');
+        const findNext = document.getElementById('notes-find-next');
         const tabHex = document.getElementById('notes-tab-hex');
         const tabMeta = document.getElementById('notes-tab-meta');
         const tabViewer = document.getElementById('notes-tab-viewer');
@@ -2640,18 +2648,30 @@ describe('notes rendering', () => {
 
         tabHex.click();
         await flushPromises();
-        expect(tabFind.style.display).toBe('none');
+        expect(tabFind.style.display).not.toBe('none');
+        expect(findControls.dataset.disabled).toBe('true');
+        expect(findInput.disabled).toBe(true);
+        expect(findPrev.disabled).toBe(true);
+        expect(findNext.disabled).toBe(true);
 
         tabMeta.click();
         await flushPromises();
-        expect(tabFind.style.display).toBe('none');
+        expect(tabFind.style.display).not.toBe('none');
+        expect(findControls.dataset.disabled).toBe('true');
+        expect(findInput.disabled).toBe(true);
+        expect(findPrev.disabled).toBe(true);
+        expect(findNext.disabled).toBe(true);
 
         tabViewer.click();
         await flushPromises();
         expect(tabFind.style.display).not.toBe('none');
+        expect(findControls.dataset.disabled).toBe('false');
+        expect(findInput.disabled).toBe(false);
+        expect(findPrev.disabled).toBe(false);
+        expect(findNext.disabled).toBe(false);
     });
 
-    it('hides Find tools tab in Swagger Run mode', async () => {
+    it('keeps Find tools tab visible but disables controls in Swagger Run mode', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/openapi.json']);
         vi.mocked(swaggerUtils.parseSwaggerSpec).mockReturnValue({
             swagger: '2.0',
@@ -2693,6 +2713,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const tabFind = document.getElementById('notes-tools-tab-find');
+        const findControls = document.getElementById('notes-find-controls');
+        const findInput = document.getElementById('notes-find-input');
+        const findPrev = document.getElementById('notes-find-prev');
+        const findNext = document.getElementById('notes-find-next');
         const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
         const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
 
@@ -2700,11 +2724,19 @@ describe('notes rendering', () => {
 
         tabSwaggerRun.click();
         await flushPromises();
-        expect(tabFind.style.display).toBe('none');
+        expect(tabFind.style.display).not.toBe('none');
+        expect(findControls.dataset.disabled).toBe('true');
+        expect(findInput.disabled).toBe(true);
+        expect(findPrev.disabled).toBe(true);
+        expect(findNext.disabled).toBe(true);
 
         tabSwaggerEdit.click();
         await flushPromises();
         expect(tabFind.style.display).not.toBe('none');
+        expect(findControls.dataset.disabled).toBe('false');
+        expect(findInput.disabled).toBe(false);
+        expect(findPrev.disabled).toBe(false);
+        expect(findNext.disabled).toBe(false);
     });
 
     it('auto-copies markdown viewer selection when highlighted', async () => {
