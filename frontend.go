@@ -1982,8 +1982,18 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 			return
 		}
 		ai.ExplainDoc(agt, filename, contents)
-	case "notesPrompt":
+	case "notesPromptToolbar":
 		renderer.AskAi()
+	case "notesPromptUri":
+		tile := renderer.ActiveTile()
+		if tile == nil {
+			return
+		}
+		agt := agent.Get(tile.Id())
+		if agt == nil {
+			return
+		}
+		ai.UriPrompt(agt, filename, contents)
 	default:
 		return
 	}

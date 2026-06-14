@@ -107,6 +107,16 @@ export function initInputBox(canvas) {
         return options;
     }
 
+    function parseDefinitionOptions(definition) {
+        if (!definition || !Array.isArray(definition.options)) {
+            return [];
+        }
+
+        return definition.options
+            .map((item) => String(item ?? '').trim())
+            .filter((item) => item.length > 0);
+    }
+
     function openInputboxHistoryMenu(x, y) {
         if (!inputboxInput || inputboxHistoryItems.length === 0) {
             return;
@@ -299,6 +309,10 @@ export function initInputBox(canvas) {
             control.className = 'inputbox-input';
             const defaultValue = String(definition.default ?? '').trim();
             control.value = defaultValue;
+            const placeholderOptions = parseDefinitionOptions(definition);
+            if (placeholderOptions.length > 0) {
+                control.placeholder = placeholderOptions[0];
+            }
             line.appendChild(control);
 
             getter = () => {
@@ -306,8 +320,18 @@ export function initInputBox(canvas) {
                 return Number.isFinite(parsed) ? parsed : 0;
             };
         } else if (fieldType === 'list') {
-            const options = parseListOptions(definition.default);
+            let options = parseDefinitionOptions(definition);
+            if (options.length === 0) {
+                // Backward compatibility for existing definitions that still pass
+                // comma-separated choices via default.
+                options = parseListOptions(definition.default);
+            }
+
             let selected = options[0];
+            const defaultValue = String(definition.default ?? '').trim();
+            if (defaultValue.length > 0 && options.includes(defaultValue)) {
+                selected = defaultValue;
+            }
 
             control = document.createElement('button');
             control.type = 'button';
@@ -340,6 +364,10 @@ export function initInputBox(canvas) {
             control.type = 'text';
             control.className = 'inputbox-input';
             control.value = String(definition.default ?? '');
+            const placeholderOptions = parseDefinitionOptions(definition);
+            if (placeholderOptions.length > 0) {
+                control.placeholder = placeholderOptions[0];
+            }
             control.setAttribute('autocomplete', 'off');
             control.setAttribute('autocorrect', 'off');
             control.setAttribute('autocapitalize', 'off');

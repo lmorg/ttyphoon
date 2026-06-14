@@ -7760,7 +7760,7 @@ async function askAIFromToolbar() {
     setToolsTab('ai');
 
     try {
-        await AskAI('notesPrompt', '', '');
+        await AskAI('notesPromptToolbar', '', '');
     } catch (err) {
         notifyTerminal('Failed to ask AI', 'error');
         console.error(err);
@@ -8520,6 +8520,23 @@ EventsOn("aiJobStart", (title) => {
 // Event emitted by Go when an AI job finishes
 EventsOn("aiJobFinish", () => {
     finishAIJob();
+});
+
+// Intercept ttyphoon://ai/... links rendered anywhere in the notes UI
+document.addEventListener('ttyphoon-ai-prompt', async (e) => {
+    const prompt = e.detail?.prompt;
+    if (!prompt) {
+        return;
+    }
+    const tools = String(e.detail?.tools ?? '');
+    setToolsPanelCollapsed(false);
+    setToolsTab('ai');
+    try {
+        await AskAI('notesPromptUri', prompt, tools);
+    } catch (err) {
+        notifyTerminal('Failed to ask AI', 'error');
+        console.error(err);
+    }
 });
 
 // Event listener for streaming AI responses

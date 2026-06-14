@@ -10,6 +10,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/prompts"
+	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
@@ -18,6 +19,11 @@ import (
 
 func ExplainCmdOutput(agt *agent.Agent) {
 	fn := func(v *types.InputBoxCallbackResultT) {
+		if agt.Meta == nil {
+			agt.Meta = &agent.Meta{}
+		}
+		agt.Meta.Variables = v.Variables
+
 		query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
 		query = strings.TrimSpace(query)
 		askAI(agt, prompts.GetExplainCmd(agt, query), query)
@@ -56,6 +62,7 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			agt.Meta.Variables = v.Variables
 			askAI(agt, prompts.GetExplainDoc(agt, v.String()), v.String())
 		},
 	}
@@ -171,4 +178,65 @@ func emitAIResponseChunk(agt *agent.Agent, chunk string) {
 
 func finishAIJob(agt *agent.Agent) {
 	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobFinish")
+}
+
+func UriPrompt(agt *agent.Agent, prompt, tools string) {
+	agt.Meta = &agent.Meta{}
+	toolOptions := []string{""}
+	if tools == "" {
+		toolOptions[0] = "eg mcp(atlassian)"
+	}
+	agt.Renderer().DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:     "Invoke prompt from URI?",
+			Multiline: true,
+			Prefill:   prompt,
+			Variables: []types.InputBoxWTVariables{
+				{
+					Name:        "tools",
+					Label:       "Tools",
+					Description: "Tools and MCP servers to use",
+					Default:     tools,
+					Type:        "string",
+					Options:     toolOptions,
+				},
+				agt.ListModelsInputVariable(),
+				SaveMarkdownToggle(false),
+			},
+		},
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			if agt.Meta == nil {
+				agt.Meta = &agent.Meta{}
+			}
+			agt.Meta.Variables = v.Variables
+
+			if raw, ok := v.Variables["model"]; ok {
+				selectedModel := strings.TrimSpace(fmt.Sprint(raw))
+				if selectedModel != "" {
+					err := agt.SetServiceModelFromSelection(selectedModel)
+					if err != nil {
+						agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+						return
+					}
+				}
+			}
+
+			selectedTools := tools
+			if raw, ok := v.Variables["tools"]; ok {
+				selectedTools = strings.TrimSpace(fmt.Sprint(raw))
+			}
+
+			parsedTools, err := skills.ParseTools(selectedTools)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+			err = agt.StartTools(parsedTools)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+			AskAI(agt, v.String())
+		},
+	})
 }

@@ -22,6 +22,7 @@ func (wr *webkitRender) AskAi() {
 			Variables: []types.InputBoxWTVariables{ai.SaveMarkdownToggle(false)},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			agt.Meta.Variables = v.Variables
 			ai.AskAI(agt, v.String())
 		},
 	})

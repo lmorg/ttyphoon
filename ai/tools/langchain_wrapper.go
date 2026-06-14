@@ -45,10 +45,10 @@ func (t *Wrapper) Description() string { return t.tool.Description() }
 
 func (t *Wrapper) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
-		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
+		//log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
-			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
-			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
+			log.Printf("[debug] agent tool '%s' response: %s", t.Name(), response)
+			log.Printf("[error] agent tool '%s' error: %v", t.Name(), err)
 		}()
 	}
 

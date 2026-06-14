@@ -245,6 +245,52 @@ describe('inputbox', () => {
         }, true);
     });
 
+    it('shows list default from options array when provided', async () => {
+        const { initInputBox } = await import('./inputbox.js');
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+
+        initInputBox(canvas);
+
+        const openHandler = eventsOnMock.mock.calls[0][1];
+        openHandler({
+            id: 23,
+            title: 'Select model',
+            defaultValue: 'prompt',
+            placeholder: '',
+            multiline: false,
+            history: [],
+            variables: [
+                {
+                    name: 'model',
+                    label: 'Model',
+                    type: 'list',
+                    default: 'Claude: claude-3-5-sonnet',
+                    options: [
+                        'ChatGPT: gpt-4o',
+                        'Claude: claude-3-5-sonnet',
+                        'Claude: claude-3-haiku',
+                    ],
+                },
+            ],
+        });
+
+        const listButton = document.querySelector('.inputbox-variable-list-btn');
+        expect(listButton).toBeTruthy();
+        expect(listButton.textContent).toBe('Claude: claude-3-5-sonnet');
+
+        listButton.click();
+        expect(showLocalMenuMock).toHaveBeenLastCalledWith(expect.objectContaining({
+            title: 'Model',
+            options: [
+                'ChatGPT: gpt-4o',
+                'Claude: claude-3-5-sonnet',
+                'Claude: claude-3-haiku',
+            ],
+            onSelect: expect.any(Function),
+        }));
+    });
+
     it('keeps Tab navigation inside the inputbox modal while open', async () => {
         const { initInputBox } = await import('./inputbox.js');
         const canvas = document.createElement('canvas');

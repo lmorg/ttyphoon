@@ -156,7 +156,29 @@
 }
 
 .inputbox-variable-list-btn {
+    border: none !important;
+    /*margin: 8px;*/
+    /*padding: 5px 24px 5px 12px;*/
+    padding-left: 0;
+    background-color: transparent !important;
+    color: var(--fg, #99c0d3);
+    /*font-size: 12px;*/
+    /*opacity: 0.8;*/
+    cursor: pointer;
+    outline: none;
     text-align: left;
+    font-family: var(--font-family);
+    width: auto !important;
+}
+
+.inputbox-variable-list-btn:hover {
+    opacity: 1;
+    color: var(--terminal-accent, #e6edf3);
+}
+
+.inputbox-variable-list-btn:focus {
+    opacity: 1;
+    color: var(--terminal-accent, #e6edf3);
 }
 
 .inputbox-hint {

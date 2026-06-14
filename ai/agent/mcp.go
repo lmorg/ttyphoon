@@ -25,9 +25,9 @@ func (agent *Agent) McpMenu(cancel types.MenuCallbackT) {
 	agent.renderer.DisplayMenu("Select a config file to load", files, nil, load, cancel)
 }
 
-func (agent *Agent) SkillStartTools(skill *skills.SkillT) error {
+func (agent *Agent) StartTools(tools []*skills.ToolsT) error {
 	var err error
-	for _, tool := range skill.Tools {
+	for _, tool := range tools {
 		switch tool.Name {
 		case "mcp":
 			var filename string

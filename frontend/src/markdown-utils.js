@@ -300,6 +300,25 @@ export function processLinks(container, options = {}) {
             return;
         }
 
+        if (rawHref.startsWith('ttyphoon://ai')) {
+            // AI prompt link — parse query string params and dispatch a custom event.
+            // Example: ttyphoon://ai?prompt=Summarise%20this&tools=jira
+            const qStart = rawHref.indexOf('?');
+            const params = new URLSearchParams(qStart !== -1 ? rawHref.slice(qStart + 1) : '');
+            const prompt = params.get('prompt') || '';
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                const detail = { prompt };
+                params.forEach((value, key) => { if (key !== 'prompt') detail[key] = value; });
+                a.dispatchEvent(new CustomEvent('ttyphoon-ai-prompt', {
+                    detail,
+                    bubbles: true,
+                    composed: true,
+                }));
+            });
+            return;
+        }
+
         if (!a.href.match(rxWailsUrl)) {
             // External link - open in browser
             a.addEventListener('click', (e) => {

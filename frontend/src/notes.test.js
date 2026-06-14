@@ -2064,7 +2064,7 @@ describe('notes rendering', () => {
         expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
-    it('invokes backend AskAI notesPrompt caller from toolbar Ask button', async () => {
+    it('invokes backend AskAI notesPromptToolbar caller from toolbar Ask button', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
         getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
 
@@ -2077,7 +2077,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(askAIMock).toHaveBeenCalledTimes(1);
-        expect(askAIMock).toHaveBeenCalledWith('notesPrompt', '', '');
+        expect(askAIMock).toHaveBeenCalledWith('notesPromptToolbar', '', '');
     });
 
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {

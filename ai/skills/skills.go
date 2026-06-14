@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -18,23 +19,16 @@ type SkillT struct {
 	Compatibility string            `yaml:"compatibility"`
 	Meta          map[string]string `yaml:"metadata"`
 	ToolsRaw      string            `yaml:"allowed-tools"`
-	Tools         []*skillToolT     `yaml:"-"`
+	Tools         []*ToolsT         `yaml:"-"`
 	Prompt        string            `yaml:"-"`
 	FunctionName  string            `yaml:"function-name"`
 
 	Variables []types.InputBoxWTVariables `yaml:"variables"`
 }
 
-type skillToolT struct {
+type ToolsT struct {
 	Name       string
 	Parameters string
-}
-
-type skillVarsT struct {
-	Label       string `yaml:"label"`
-	Description string `yaml:"description"`
-	Default     string `yaml:"default"`
-	Type        string `yaml:"type"`
 }
 
 type Skills []*SkillT
@@ -80,16 +74,28 @@ func ReadSkills() Skills {
 
 var rxSkillToolParams = regexp.MustCompile(`(([-a-zA-Z0-9]+)|([-a-zA-Z0-9]+)\((.*?)\))`)
 
-func parseSkillTools(skill *SkillT) {
+func parseSkillTools(skill *SkillT) error {
 	if skill.ToolsRaw == "" {
-		return
+		return nil
 	}
 
-	tools := strings.Split(skill.ToolsRaw, " ")
-	for i := range tools {
+	tools, err := ParseTools(skill.ToolsRaw)
+	if err != nil {
+		return fmt.Errorf("error in skill %s: %w", skill.Name, err)
+	}
 
-		match := rxSkillToolParams.FindAllStringSubmatch(tools[i], -1)
-		tool := new(skillToolT)
+	skill.Tools = tools
+	return nil
+}
+
+func ParseTools(toolsRaw string) ([]*ToolsT, error) {
+	var tools []*ToolsT
+
+	split := strings.Split(toolsRaw, " ")
+
+	for i := range split {
+		match := rxSkillToolParams.FindAllStringSubmatch(split[i], -1)
+		tool := new(ToolsT)
 		switch len(match) {
 		case 2:
 			tool.Parameters = match[1][0]
@@ -97,9 +103,12 @@ func parseSkillTools(skill *SkillT) {
 		case 1:
 			tool.Name = match[0][0]
 		default:
-			log.Printf("Cannot parse skill '%s' tool '%s'", skill.Name, tools[i])
-			continue
+			//log.Printf("[error] Cannot parse tool '%s'", split[i])
+			return nil, fmt.Errorf("cannot parse tool '%s'", split[i])
+			//continue
 		}
-		skill.Tools = append(skill.Tools, tool)
+		tools = append(tools, tool)
 	}
+
+	return tools, nil
 }

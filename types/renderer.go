@@ -57,11 +57,12 @@ type InputBoxWTOptions struct {
 }
 
 type InputBoxWTVariables struct {
-	Name        string `json:"name",yaml:"name"`
-	Label       string `json:"label",yaml:"label"`
-	Description string `json:"description",yaml:"description"`
-	Default     string `json:"default",yaml:"default"`
-	Type        string `json:"type",yaml:"type"`
+	Name        string   `json:"name" yaml:"name"`
+	Label       string   `json:"label" yaml:"label"`
+	Description string   `json:"description" yaml:"description"`
+	Default     string   `json:"default" yaml:"default"`
+	Options     []string `json:"options" yaml:"options"`
+	Type        string   `json:"type" yaml:"type"`
 }
 
 type Renderer interface {

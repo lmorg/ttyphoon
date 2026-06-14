@@ -51,7 +51,7 @@ func GetAsk(agt *agent.Agent, userPrompt string) string {
 		return os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt))
 	}
 
-	err := agt.SkillStartTools(skill)
+	err := agt.StartTools(skill.Tools)
 	if err != nil {
 		agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
