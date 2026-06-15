@@ -4,6 +4,7 @@ import {main} from '../models';
 import {jupyter} from '../models';
 import {notes} from '../models';
 import {types} from '../models';
+import {grep} from '../models';
 import {lsp} from '../models';
 import {swagger} from '../models';
 
@@ -65,7 +66,9 @@ export function GetWindowStyle():Promise<main.WindowStyleT>;
 
 export function ListFiles():Promise<Array<string>>;
 
-export function NotesGrep(arg1:string):Promise<main.NotesGrepReturnT>;
+export function NotesGrep(arg1:string):Promise<grep.ReturnValue>;
+
+export function NotesGrepWithOptions(arg1:string,arg2:grep.Options):Promise<grep.ReturnValue>;
 
 export function NotesHistoryAdd(arg1:string):Promise<void>;
 

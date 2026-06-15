@@ -11,6 +11,20 @@ import (
 	"strings"
 )
 
+// Result represents a single search result with JSON tags for Wails binding.
+type Result struct {
+	FileName string   `json:"fileName"`
+	Path     string   `json:"path"`
+	Line     int      `json:"line"`
+	Context  []string `json:"context"`
+}
+
+// ReturnValue represents the return value for grep searches with results and error.
+type ReturnValue struct {
+	Results []Result `json:"results"`
+	Error   string   `json:"error"`
+}
+
 // Match represents a single search hit in a file.
 type Match struct {
 	FileName string
@@ -21,6 +35,13 @@ type Match struct {
 	Context []string
 }
 
+// Options configures the search behavior.
+type Options struct {
+	CaseSensitive bool
+	Regex         bool
+	WholeWord     bool
+}
+
 // SearchProject searches from the current working directory.
 func SearchProject(query string) ([]Match, error) {
 	cwd, err := os.Getwd()
@@ -29,6 +50,16 @@ func SearchProject(query string) ([]Match, error) {
 	}
 
 	return Search(cwd, query)
+}
+
+// SearchProjectWithOptions searches from the current working directory with options.
+func SearchProjectWithOptions(query string, opts Options) ([]Match, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	return SearchWithOptions(cwd, query, opts)
 }
 
 // Search looks for query in files under projectDir.
@@ -42,15 +73,75 @@ func Search(projectDir, query string) ([]Match, error) {
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
 
+	return SearchWithOptions(projectDir, query, Options{})
+}
+
+// SearchWithOptions looks for query in files under projectDir with given options.
+// It prefers ripgrep and falls back to grep.
+func SearchWithOptions(projectDir, query string, opts Options) ([]Match, error) {
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" {
+		return nil, fmt.Errorf("project directory cannot be empty")
+	}
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("search query cannot be empty")
+	}
+
 	if _, err := exec.LookPath("rg"); err == nil {
-		return runSearch("rg", []string{"-uu", "-n", "-F", "--no-heading", "--color", "never", query, "."}, projectDir)
+		return runSearch("rg", buildRgArgs(query, opts), projectDir)
 	}
 
 	if _, err := exec.LookPath("grep"); err == nil {
-		return runSearch("grep", []string{"-R", "-n", "-F", "--binary-files=without-match", query, "."}, projectDir)
+		return runSearch("grep", buildGrepArgs(query, opts), projectDir)
 	}
 
 	return nil, fmt.Errorf("neither ripgrep ('rg') nor grep found in PATH")
+}
+
+// buildRgArgs builds ripgrep command arguments based on options.
+func buildRgArgs(query string, opts Options) []string {
+	args := []string{"-uu", "-n", "--no-heading", "--color", "never"}
+
+	if opts.Regex {
+		// Regex mode (default for rg without -F)
+	} else {
+		// Plain text/literal mode
+		args = append(args, "-F")
+	}
+
+	if !opts.CaseSensitive {
+		args = append(args, "-i")
+	}
+
+	if opts.WholeWord {
+		args = append(args, "-w")
+	}
+
+	args = append(args, query, ".")
+	return args
+}
+
+// buildGrepArgs builds grep command arguments based on options.
+func buildGrepArgs(query string, opts Options) []string {
+	args := []string{"-R", "-n", "--binary-files=without-match"}
+
+	if opts.Regex {
+		args = append(args, "-E")
+	} else {
+		// Plain text/literal mode
+		args = append(args, "-F")
+	}
+
+	if !opts.CaseSensitive {
+		args = append(args, "-i")
+	}
+
+	if opts.WholeWord {
+		args = append(args, "-w")
+	}
+
+	args = append(args, query, ".")
+	return args
 }
 
 func runSearch(bin string, args []string, dir string) ([]Match, error) {
@@ -158,4 +249,52 @@ func readContext(path string, lineNo int) []string {
 		result = append(result, all[i])
 	}
 	return result
+}
+
+// SearchAndReturn performs a search and returns results with error handling for API consumption.
+// It handles empty queries and returns a ReturnValue suitable for Wails bindings.
+// Optional pathMapper function can transform file paths (e.g., for history mapping).
+func SearchAndReturn(searchRoot, query string, opts Options, pathMapper func(string) string) ReturnValue {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return ReturnValue{Results: []Result{}}
+	}
+
+	searchRoot = strings.TrimSpace(searchRoot)
+	if searchRoot == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return ReturnValue{Error: err.Error()}
+		}
+		searchRoot = wd
+	}
+
+	matches, err := SearchWithOptions(searchRoot, query, opts)
+	if err != nil {
+		return ReturnValue{Error: err.Error()}
+	}
+
+	results := make([]Result, 0, len(matches))
+	for i := range matches {
+		path := matches[i].Path
+		if pathMapper != nil {
+			if mapped := pathMapper(path); mapped != "" {
+				path = mapped
+			}
+		}
+
+		fileName := matches[i].FileName
+		if fileName == "" {
+			fileName = filepath.Base(path)
+		}
+
+		results = append(results, Result{
+			FileName: fileName,
+			Path:     path,
+			Line:     matches[i].Line,
+			Context:  matches[i].Context,
+		})
+	}
+
+	return ReturnValue{Results: results}
 }

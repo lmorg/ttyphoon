@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	LLM_OPENAI    = "ChatGPT"
-	LLM_ANTHROPIC = "Claude"
+	LLM_OPENAI    = "OpenAI"
+	LLM_ANTHROPIC = "Anthropic"
 	LLM_OLLAMA    = "Ollama"
 )
 

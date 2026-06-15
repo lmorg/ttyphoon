@@ -81,6 +81,7 @@ const notesHistoryNextMock = vi.fn(() => Promise.resolve(''));
 const notesHistoryAddMock = vi.fn(() => Promise.resolve());
 const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
 const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
+const notesGrepWithOptionsMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -146,6 +147,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryAdd: notesHistoryAddMock,
     NotesHistoryCurrent: notesHistoryCurrentMock,
     NotesGrep: notesGrepMock,
+    NotesGrepWithOptions: notesGrepWithOptionsMock,
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -310,6 +312,7 @@ describe('notes rendering', () => {
         notesHistoryAddMock.mockReset();
         notesHistoryCurrentMock.mockReset();
         notesGrepMock.mockReset();
+        notesGrepWithOptionsMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -369,6 +372,7 @@ describe('notes rendering', () => {
         notesHistoryAddMock.mockResolvedValue();
         notesHistoryCurrentMock.mockResolvedValue('');
         notesGrepMock.mockResolvedValue({ results: [], error: '' });
+        notesGrepWithOptionsMock.mockResolvedValue({ results: [], error: '' });
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -556,6 +560,81 @@ describe('notes rendering', () => {
         await new Promise((resolve) => setTimeout(resolve, 160));
 
         expect(preview?.textContent).toContain('Updated from undo');
+    });
+
+    it('applies replace all using case-sensitive + whole-word find options', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/find.md']);
+        getFileMock.mockResolvedValue({ contents: 'foo Foo food foo', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/find.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const findInput = document.getElementById('notes-find-input');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const caseBtn = document.getElementById('notes-find-doc-option-case');
+        const wholeWordBtn = document.getElementById('notes-find-doc-option-word');
+        const editor = document.getElementById('notes-editor');
+
+        tabEditor.click();
+        await flushPromises();
+
+        document.getElementById('notes-find').click();
+        await flushPromises();
+
+        findInput.value = 'foo';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+        caseBtn.click();
+        wholeWordBtn.click();
+        await flushPromises();
+
+        replaceInput.value = 'X';
+        replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('X Foo food X');
+    });
+
+    it('applies regex replace all for in-document find', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/find.md']);
+        getFileMock.mockResolvedValue({ contents: 'item1 item22 item333', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/find.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const findInput = document.getElementById('notes-find-input');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const regexBtn = document.getElementById('notes-find-doc-option-regex');
+        const editor = document.getElementById('notes-editor');
+
+        tabEditor.click();
+        await flushPromises();
+
+        document.getElementById('notes-find').click();
+        await flushPromises();
+
+        regexBtn.click();
+        findInput.value = 'item\\d+';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        replaceInput.value = 'Y';
+        replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('Y Y Y');
     });
 
     it('handles diagnostics events without an active file', async () => {
