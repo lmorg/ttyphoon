@@ -117,7 +117,8 @@ func buildRgArgs(query string, opts Options) []string {
 		args = append(args, "-w")
 	}
 
-	args = append(args, query, ".")
+	// End of options marker ensures patterns beginning with '-' are treated as queries.
+	args = append(args, "--", query, ".")
 	return args
 }
 
@@ -140,7 +141,8 @@ func buildGrepArgs(query string, opts Options) []string {
 		args = append(args, "-w")
 	}
 
-	args = append(args, query, ".")
+	// End of options marker ensures patterns beginning with '-' are treated as queries.
+	args = append(args, "--", query, ".")
 	return args
 }
 

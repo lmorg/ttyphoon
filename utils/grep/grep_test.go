@@ -182,6 +182,13 @@ func TestBuildRgArgs(t *testing.T) {
 			hasFlag: []string{"-w"},
 			noFlag:  []string{"-F", "-i"},
 		},
+		{
+			name:    "query starts with hyphen",
+			query:   "-x",
+			opts:    Options{Regex: false},
+			hasFlag: []string{"-F"},
+			noFlag:  []string{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -222,6 +229,11 @@ func TestBuildRgArgs(t *testing.T) {
 			}
 			if args[len(args)-1] != "." {
 				t.Errorf("Expected '.' at last position, got %v", args)
+			}
+
+			// Ensure end-of-options separator is present before query.
+			if args[len(args)-3] != "--" {
+				t.Errorf("Expected '--' before query, got %v", args)
 			}
 		})
 	}
@@ -278,6 +290,13 @@ func TestBuildGrepArgs(t *testing.T) {
 			hasFlag: []string{"-E", "-w"},
 			noFlag:  []string{"-F", "-i"},
 		},
+		{
+			name:    "query starts with hyphen",
+			query:   "-x",
+			opts:    Options{Regex: false},
+			hasFlag: []string{"-F"},
+			noFlag:  []string{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -318,6 +337,11 @@ func TestBuildGrepArgs(t *testing.T) {
 			}
 			if args[len(args)-1] != "." {
 				t.Errorf("Expected '.' at last position, got %v", args)
+			}
+
+			// Ensure end-of-options separator is present before query.
+			if args[len(args)-3] != "--" {
+				t.Errorf("Expected '--' before query, got %v", args)
 			}
 		})
 	}
