@@ -132,6 +132,25 @@ func TestMarkdownUnorderedListContinuation(t *testing.T) {
 	}
 }
 
+func TestMarkdownChecklistContinuation(t *testing.T) {
+	eng := mustDefaultEngine(t)
+	src := "- [ ] item"
+	res, err := eng.Complete(Request{Language: "markdown", Source: src, Cursor: len(src), Trigger: "\n"})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if !res.Applied {
+		t.Fatalf("expected completion to apply")
+	}
+	out, _, err := Apply(src, res)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if out != "- [ ] item\n- [ ] " {
+		t.Fatalf("output mismatch: got %q", out)
+	}
+}
+
 func TestMarkdownOrderedListContinuation(t *testing.T) {
 	eng := mustDefaultEngine(t)
 	src := "9. thing"
@@ -166,6 +185,25 @@ func TestMarkdownExitOnEmptyItem(t *testing.T) {
 		t.Fatalf("Apply() error = %v", err)
 	}
 	if out != "  - \n  " {
+		t.Fatalf("output mismatch: got %q", out)
+	}
+}
+
+func TestMarkdownExitOnEmptyChecklistItem(t *testing.T) {
+	eng := mustDefaultEngine(t)
+	src := "  - [ ] "
+	res, err := eng.Complete(Request{Language: "markdown", Source: src, Cursor: len(src), Trigger: "\n"})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if !res.Applied {
+		t.Fatalf("expected completion to apply")
+	}
+	out, _, err := Apply(src, res)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if out != "  - [ ] \n  " {
 		t.Fatalf("output mismatch: got %q", out)
 	}
 }

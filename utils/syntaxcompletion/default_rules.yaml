@@ -38,7 +38,7 @@ languages:
         close: "}"
     list_continuation:
       enabled: true
-      unordered_markers: ["-", "*", "+", "- [ ]"]
+      unordered_markers: ["- [ ]", "-", "*", "+"]
       ordered: true
       exit_on_empty_item: true
   html:
