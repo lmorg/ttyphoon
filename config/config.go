@@ -74,6 +74,13 @@ func readConfigFile(r io.Reader) error {
 		}
 	}
 
+	// Lowercase all language keys in the Languages map
+	lowercasedLanguages := make(LanguagesT)
+	for k, v := range Config.Notes.Languages {
+		lowercasedLanguages[strings.ToLower(k)] = v
+	}
+	Config.Notes.Languages = lowercasedLanguages
+
 	return nil
 }
 
@@ -127,10 +134,11 @@ type configT struct {
 	} `yaml:"Window"`
 
 	Notes struct {
-		MaxFileSize    int64               `yaml:"MaxFileSize"`
-		MaxRecentFiles int                 `yaml:"MaxRecentFiles"`
-		MaxLogLines    int                 `yaml:"MaxLogLines"`
-		LSP            map[string][]string `yaml:"LSP"`
+		MaxFileSize    int64 `yaml:"MaxFileSize"`
+		MaxRecentFiles int   `yaml:"MaxRecentFiles"`
+		MaxLogLines    int   `yaml:"MaxLogLines"`
+
+		Languages LanguagesT `yaml:"Languages"`
 	} `yaml:"Notes"`
 
 	TypeFace struct {
@@ -147,6 +155,36 @@ type configT struct {
 		DefaultModels   map[string]string   `yaml:"DefaultModels"`
 		DefaultService  string              `yaml:"DefaultService"`
 	} `yaml:"AI"`
+}
+
+type LanguagesT map[string]struct {
+	TabSpaceIndent int      `yaml:"TabSpaceIndent"`
+	LSP            []string `yaml:"LSP"`
+}
+
+// GetTabIndent returns the number of spaces to use for indentation for a given language.
+// If the language is not found, it falls back to the "default" key.
+func (lt LanguagesT) GetTabIndent(language string) int {
+	lang := strings.ToLower(language)
+	if lang == "" {
+		lang = "default"
+	}
+
+	if settings, ok := lt[lang]; ok {
+		if settings.TabSpaceIndent > 0 {
+			return settings.TabSpaceIndent
+		}
+	}
+
+	// Fallback to default
+	if settings, ok := lt["default"]; ok {
+		if settings.TabSpaceIndent > 0 {
+			return settings.TabSpaceIndent
+		}
+	}
+
+	// Final fallback if nothing is configured
+	return 4
 }
 
 type HotkeyFunctionsT map[string]string

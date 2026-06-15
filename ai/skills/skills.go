@@ -91,6 +91,11 @@ func parseSkillTools(skill *SkillT) error {
 func ParseTools(toolsRaw string) ([]*ToolsT, error) {
 	var tools []*ToolsT
 
+	toolsRaw = strings.TrimSpace(toolsRaw)
+	if toolsRaw == "" {
+		return tools, nil
+	}
+
 	split := strings.Split(toolsRaw, " ")
 
 	for i := range split {

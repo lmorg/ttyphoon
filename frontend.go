@@ -227,6 +227,11 @@ func (a *WApp) GetNotesMaxLogLines() int {
 	return config.Config.Notes.MaxLogLines
 }
 
+// GetNotesLanguageTabIndent returns the number of spaces to use for tab indentation for a given language
+func (a *WApp) GetNotesLanguageTabIndent(language string) int {
+	return config.Config.Notes.Languages.GetTabIndent(language)
+}
+
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if ok {
@@ -1020,8 +1025,8 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 	selectedLanguageID := ""
 	var argv []string
 	for _, id := range candidateIDs {
-		argv = lsp.LookupArgv(config.Config.Notes.LSP, id)
-		if len(argv) > 0 {
+		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP) > 0 {
+			argv = settings.LSP
 			selectedLanguageID = id
 			break
 		}

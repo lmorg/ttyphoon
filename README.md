@@ -156,12 +156,18 @@ Example:
 
 ```yaml
 Notes:
-  LSP:
-    go: [gopls]
-    javascript: [typescript-language-server, --stdio]
-    typescript: [typescript-language-server, --stdio]
-    terraform: [terraform-ls, serve]
-    python: [pylsp]
+  Languages:
+    go:
+      LSP: [gopls]
+    javascript:
+      LSP: [typescript-language-server, --stdio]
+    typescript:
+      LSP: [typescript-language-server, --stdio]
+    terraform:
+      LSP: [terraform-ls, serve]
+      TabSpaceIndent: 2
+    python:
+      LSP: [pylsp]
 ```
 
 Notes resolves the language id from the same Jupyter language metadata used elsewhere in the project, so file extensions such as `.go`, `.js`, `.ts`, `.tf`, and `.py` map onto the configured LSP entries automatically.

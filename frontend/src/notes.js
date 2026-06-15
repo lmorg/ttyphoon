@@ -18,6 +18,7 @@ import {
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
     NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    GetNotesLanguageTabIndent,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
 } from '../wailsjs/go/main/WApp';
@@ -1132,6 +1133,13 @@ function refreshEditorLanguage(file, content) {
         elements.editorHighlightCode.className = `hljs language-${state.editorLanguage || 'plaintext'}`;
     }
     renderEditorDecorations();
+}
+
+// Get indentation string (spaces) for the current language
+async function getIndentationString() {
+    const language = state.editorLanguage || '';
+    const spaceCount = await GetNotesLanguageTabIndent(language);
+    return ' '.repeat(Math.max(1, spaceCount || 4));
 }
 
 function usesCodeEditorDecorations() {
@@ -5339,7 +5347,7 @@ function convertToJupyterCodeBlocks() {
             }
         });
 
-        editableCode.addEventListener('keydown', (event) => {
+        editableCode.addEventListener('keydown', async (event) => {
             if (state.lspActiveBlockId === blockId && !event.ctrlKey && !event.metaKey && !event.altKey) {
                 if (event.key === 'Escape' && closeOpenLspTooltips()) {
                     event.preventDefault();
@@ -5381,7 +5389,8 @@ function convertToJupyterCodeBlocks() {
                 event.stopPropagation();
                 const start = editableCode.selectionStart;
                 const end = editableCode.selectionEnd;
-                editableCode.setRangeText('\t', start, end, 'end');
+                const indentation = await getIndentationString();
+                editableCode.setRangeText(indentation, start, end, 'end');
                 editableCode.dispatchEvent(new Event('input'));
                 return;
             }
@@ -5407,7 +5416,8 @@ function convertToJupyterCodeBlocks() {
 
             const start = editableCode.selectionStart;
             const end = editableCode.selectionEnd;
-            editableCode.setRangeText('\t', start, end, 'end');
+            const indentation = await getIndentationString();
+            editableCode.setRangeText(indentation, start, end, 'end');
             editableCode.dispatchEvent(new Event('input'));
         });
         editableCode.addEventListener('scroll', () => {
@@ -9702,7 +9712,9 @@ function applyWindowStyle(result) {
             color: var(--accent);
         }
 
-        .notes-file:hover {
+        .notes-file:hover,
+        .notes-file:focus {
+            outline: none;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
         }
 
@@ -12623,7 +12635,7 @@ if (elements.editor) {
         }, 0);
     }
 
-    elements.editor.addEventListener('keydown', (event) => {
+    elements.editor.addEventListener('keydown', async (event) => {
         maybeDispatchInputFallbackAfterShortcut(event);
 
         if (event.key === 'Escape' && closeOpenLspTooltips()) {
@@ -12671,7 +12683,8 @@ if (elements.editor) {
 
             const start = elements.editor.selectionStart;
             const end = elements.editor.selectionEnd;
-            elements.editor.setRangeText('\t', start, end, 'end');
+            const indentation = await getIndentationString();
+            elements.editor.setRangeText(indentation, start, end, 'end');
             elements.editor.dispatchEvent(new Event('input'));
             return;
         }
@@ -12702,7 +12715,8 @@ if (elements.editor) {
 
         const start = elements.editor.selectionStart;
         const end = elements.editor.selectionEnd;
-        elements.editor.setRangeText('\t', start, end, 'end');
+        const indentation = await getIndentationString();
+        elements.editor.setRangeText(indentation, start, end, 'end');
         elements.editor.dispatchEvent(new Event('input'));
     });
 
@@ -13339,6 +13353,50 @@ if (elements.listFilter) {
             elements.listFilter.value = '';
             state.fileFilterQuery = '';
             renderFileList();
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const items = Array.from(elements.list.querySelectorAll('.notes-file'));
+            if (items.length > 0) {
+                items[0].focus();
+            }
+        }
+    });
+
+    elements.list.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter') {
+            return;
+        }
+
+        const focused = document.activeElement;
+        if (!focused || !focused.classList.contains('notes-file')) {
+            return;
+        }
+
+        const items = Array.from(elements.list.querySelectorAll('.notes-file'));
+        const currentIndex = items.indexOf(focused);
+        if (currentIndex === -1) {
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            focused.click();
+        } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const next = items[currentIndex + 1];
+            if (next) {
+                next.focus();
+            }
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (currentIndex === 0) {
+                elements.listFilter.focus();
+            } else {
+                items[currentIndex - 1].focus();
+            }
         }
     });
 }

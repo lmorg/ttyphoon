@@ -124,6 +124,12 @@ Notes:
 
   MaxLogLines: 1000
 
+  Languages:
+    yaml:
+      TabSpaceIndent: 2
+    default:
+      TabSpaceIndent: 4
+
 Window:
   StatusBar: true
 

@@ -3,6 +3,7 @@ import * as swaggerUtils from './swagger-utils.js';
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
+const getNotesLanguageTabIndentMock = vi.fn();
 const getNotesColumnWidthsMock = vi.fn();
 const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
@@ -93,6 +94,7 @@ const showLocalMenuMock = vi.fn();
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesMaxLogLines: getNotesMaxLogLinesMock,
+    GetNotesLanguageTabIndent: getNotesLanguageTabIndentMock,
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,
@@ -260,6 +262,7 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockReset();
         getNotesMaxLogLinesMock.mockReset();
+        getNotesLanguageTabIndentMock.mockReset();
         getNotesColumnWidthsMock.mockReset();
         setNotesColumnWidthsMock.mockReset();
         getFileMock.mockReset();
@@ -326,6 +329,7 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockResolvedValue(theme);
         getNotesMaxLogLinesMock.mockResolvedValue(1000);
+        getNotesLanguageTabIndentMock.mockResolvedValue(4);
         getNotesColumnWidthsMock.mockResolvedValue([]);
         setNotesColumnWidthsMock.mockResolvedValue();
         getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
@@ -1101,7 +1105,7 @@ describe('notes rendering', () => {
         const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
 
         expect(tabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\n    \t');
+        expect(editor.value).toBe('# Todo\n\n        ');
         expect(notesLspCompletionMock).not.toHaveBeenCalled();
     });
 
@@ -1138,7 +1142,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(secondTabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\nPrin\t');
+        expect(editor.value).toBe('# Todo\n\nPrin    ');
         expect(document.getElementById('notes-lsp-completion')?.style.display).toBe('none');
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
