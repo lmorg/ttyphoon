@@ -66,6 +66,8 @@ export function GetTerminalGlyphSize():Promise<types.XY>;
 
 export function GetWindowStyle():Promise<main.WindowStyleT>;
 
+export function HyperlinkOpenWithDefault(arg1:string):Promise<void>;
+
 export function ListFiles():Promise<Array<string>>;
 
 export function NotesGrepStream(arg1:string,arg2:grep.Options):Promise<void>;

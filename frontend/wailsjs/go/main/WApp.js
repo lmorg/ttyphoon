@@ -118,6 +118,10 @@ export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
 }
 
+export function HyperlinkOpenWithDefault(arg1) {
+  return window['go']['main']['WApp']['HyperlinkOpenWithDefault'](arg1);
+}
+
 export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }

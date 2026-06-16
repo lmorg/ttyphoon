@@ -2,7 +2,7 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetImage, GetCustomRegexp } from '../wailsjs/go/main/WApp';
+import { GetImage, GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
@@ -84,8 +84,8 @@ export function configureMarked() {
 /**
  * Regular expressions for Wails URLs
  */
-const rxWailsUrl = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)/;
-const rxBookmark = /^(wails:\/\/wails\/|http:\/\/localhost:[0-9]+\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+const rxWailsUrl = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)/;
+const rxBookmark = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
 
 /**
  * Render Mermaid diagrams in a container
@@ -319,11 +319,20 @@ export function processLinks(container, options = {}) {
             return;
         }
 
+        // Other ttyphoon:// schemes are handled by the application
+        if (rawHref.startsWith('ttyphoon://')) {
+            return;
+        }
+
         if (!a.href.match(rxWailsUrl)) {
-            // External link - open in browser
             a.addEventListener('click', (e) => {
                 e.preventDefault();
-                BrowserOpenURL(a.href);
+                const scheme = (a.href.split('://')[0] || '').toLowerCase();
+                if (scheme === 'http' || scheme === 'https') {
+                    BrowserOpenURL(a.href);
+                } else {
+                    HyperlinkOpenWithDefault(a.href);
+                }
             });
         }
     });

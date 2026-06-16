@@ -1793,6 +1793,15 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 	menu.DisplayMenu("Hyperlink action", true)
 }
 
+func (a *WApp) HyperlinkOpenWithDefault(url string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	menuhyperlink.OpenWithDefault(renderer, url, "")
+}
+
 // SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.
 // If projectPath is set, $PROJECT in filename is expanded against projectPath,
 // which keeps autosave bound to the project where the file was opened.
