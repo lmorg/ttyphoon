@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -882,12 +883,21 @@ func (a *WApp) ListFiles() []string {
 	return ulf.Files
 }
 
-func (a *WApp) NotesGrep(query string) NotesGrepReturnT {
-	return a.NotesGrepWithOptions(query, NotesGrepOptionsT{})
+// NotesGrepStream performs a streaming grep search, sending results via EventsEmit in batches.
+// This is non-blocking and suitable for large result sets.
+// The frontend should listen for "notesGrepBatch" events containing batched Results,
+// "notesGrepError" for errors, and "notesGrepDone" when finished.
+func (a *WApp) NotesGrepStream(query string, opts NotesGrepOptionsT) {
+	go a.notesGrepStream(query, opts)
 }
 
-func (a *WApp) NotesGrepWithOptions(query string, opts NotesGrepOptionsT) NotesGrepReturnT {
+func (a *WApp) notesGrepStream(query string, opts NotesGrepOptionsT) {
 	searchRoot := strings.TrimSpace(a.projRoot)
+	if searchRoot == "" {
+		runtime.EventsEmit(a.ctx, "notesGrepError", "search root is empty")
+		return
+	}
+
 	pathMapper := func(absPath string) string {
 		mapped := a.notesPathForHistory(absPath)
 		if mapped != "" {
@@ -895,7 +905,29 @@ func (a *WApp) NotesGrepWithOptions(query string, opts NotesGrepOptionsT) NotesG
 		}
 		return absPath
 	}
-	return grep.SearchAndReturn(searchRoot, query, opts, pathMapper)
+
+	resultsChan := make(chan []*grep.Result, 1)
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- grep.BatchedStreamResults(searchRoot, query, opts, pathMapper, resultsChan)
+	}()
+
+	// Emit batches as they arrive
+	for batch := range resultsChan {
+		runtime.EventsEmit(a.ctx, "notesGrepBatch", batch)
+	}
+
+	// Check for error
+	if err := <-errChan; err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("[debug] NotesGrepStream canceled: %v", err)
+		} else {
+			runtime.EventsEmit(a.ctx, "notesGrepError", err.Error())
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "notesGrepDone", nil)
 }
 
 func (a *WApp) CancelNotesListFiles() {
@@ -965,7 +997,7 @@ func (a *WApp) notesPathForHistory(filename string) string {
 	return cleanFile
 }
 
-func (a WApp) filePath(filename string) string {
+func (a *WApp) filePath(filename string) string {
 	filename = os.Expand(filename, func(s string) string {
 		return a.expandMappingFuncWithProject(s, "")
 	})
@@ -977,7 +1009,7 @@ func (a WApp) filePath(filename string) string {
 
 // filePathWithProject returns the expanded file path using a specific project root.
 // This uses the same expansion logic as filePath but allows overriding $PROJECT.
-func (a WApp) filePathWithProject(filename string, projectPath string) string {
+func (a *WApp) filePathWithProject(filename string, projectPath string) string {
 	filename = os.Expand(filename, func(s string) string {
 		return a.expandMappingFuncWithProject(s, projectPath)
 	})

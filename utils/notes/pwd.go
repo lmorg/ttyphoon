@@ -53,7 +53,7 @@ func dirProjectRoot(cwd string, home string) string {
 
 	for {
 		// Check if current directory contains .git
-		if hasGitDirectory(current) {
+		if hasGitDirectory(current) || hasProjectConfig(current) {
 			return current
 		}
 
@@ -78,6 +78,15 @@ func dirProjectRoot(cwd string, home string) string {
 // hasGitDirectory checks if a directory contains a .git subdirectory
 func hasGitDirectory(path string) bool {
 	gitPath := filepath.Join(path, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+func hasProjectConfig(path string) bool {
+	gitPath := filepath.Join(path, "project.ttyphoon")
 	info, err := os.Stat(gitPath)
 	if err != nil {
 		return false

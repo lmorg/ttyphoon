@@ -7,216 +7,52 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 )
 
-// Result represents a single search result with JSON tags for Wails binding.
-type Result struct {
-	FileName string   `json:"fileName"`
-	Path     string   `json:"path"`
-	Line     int      `json:"line"`
-	Context  []string `json:"context"`
-}
+const (
+	_BUF_MIN    = 64 * 1024
+	_BUF_MAX    = 10 * 1024 * 1024
+	_BATCH_SIZE = 50
+)
 
-// ReturnValue represents the return value for grep searches with results and error.
-type ReturnValue struct {
-	Results []Result `json:"results"`
-	Error   string   `json:"error"`
-}
+var (
+	cachedCmd     *exec.Cmd
+	cachedSearch  string
+	cachedResults []*Result
+	cacheMutex    sync.Mutex
+)
 
-// Match represents a single search hit in a file.
-type Match struct {
-	FileName string
-	Path     string
-	Line     int
-	// Context holds up to 3 lines: [line before match, matching line, line after match].
-	// Absent lines (e.g. at start/end of file) are omitted; the slice may be 1–3 items long.
-	Context []string
-}
+func readContextWithCache(path string, lineNo int, cache map[string][]string) []string {
+	var lines []string
 
-// Options configures the search behavior.
-type Options struct {
-	CaseSensitive bool
-	Regex         bool
-	WholeWord     bool
-}
-
-// SearchProject searches from the current working directory.
-func SearchProject(query string) ([]Match, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-
-	return Search(cwd, query)
-}
-
-// SearchProjectWithOptions searches from the current working directory with options.
-func SearchProjectWithOptions(query string, opts Options) ([]Match, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-
-	return SearchWithOptions(cwd, query, opts)
-}
-
-// Search looks for query in files under projectDir.
-// It prefers ripgrep and falls back to grep.
-func Search(projectDir, query string) ([]Match, error) {
-	projectDir = strings.TrimSpace(projectDir)
-	if projectDir == "" {
-		return nil, fmt.Errorf("project directory cannot be empty")
-	}
-	if strings.TrimSpace(query) == "" {
-		return nil, fmt.Errorf("search query cannot be empty")
-	}
-
-	return SearchWithOptions(projectDir, query, Options{})
-}
-
-// SearchWithOptions looks for query in files under projectDir with given options.
-// It prefers ripgrep and falls back to grep.
-func SearchWithOptions(projectDir, query string, opts Options) ([]Match, error) {
-	projectDir = strings.TrimSpace(projectDir)
-	if projectDir == "" {
-		return nil, fmt.Errorf("project directory cannot be empty")
-	}
-	if strings.TrimSpace(query) == "" {
-		return nil, fmt.Errorf("search query cannot be empty")
-	}
-
-	if _, err := exec.LookPath("rg"); err == nil {
-		return runSearch("rg", buildRgArgs(query, opts), projectDir)
-	}
-
-	if _, err := exec.LookPath("grep"); err == nil {
-		return runSearch("grep", buildGrepArgs(query, opts), projectDir)
-	}
-
-	return nil, fmt.Errorf("neither ripgrep ('rg') nor grep found in PATH")
-}
-
-// buildRgArgs builds ripgrep command arguments based on options.
-func buildRgArgs(query string, opts Options) []string {
-	args := []string{"-uu", "-n", "--no-heading", "--color", "never"}
-
-	if opts.Regex {
-		// Regex mode (default for rg without -F)
+	if cached, ok := cache[path]; ok {
+		lines = cached
 	} else {
-		// Plain text/literal mode
-		args = append(args, "-F")
+		lines = readLines(path)
+		cache[path] = lines
 	}
 
-	if !opts.CaseSensitive {
-		args = append(args, "-i")
+	idx := lineNo - 1 // convert to 0-based
+	if idx < 0 || idx >= len(lines) {
+		return nil
 	}
 
-	if opts.WholeWord {
-		args = append(args, "-w")
+	start := max(idx-1, 0)
+	end := idx + 1
+	if end >= len(lines) {
+		end = len(lines) - 1
 	}
 
-	// End of options marker ensures patterns beginning with '-' are treated as queries.
-	args = append(args, "--", query, ".")
-	return args
+	result := make([]string, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		result = append(result, strings.TrimSpace(lines[i]))
+	}
+	return result
 }
 
-// buildGrepArgs builds grep command arguments based on options.
-func buildGrepArgs(query string, opts Options) []string {
-	args := []string{"-R", "-n", "--binary-files=without-match"}
-
-	if opts.Regex {
-		args = append(args, "-E")
-	} else {
-		// Plain text/literal mode
-		args = append(args, "-F")
-	}
-
-	if !opts.CaseSensitive {
-		args = append(args, "-i")
-	}
-
-	if opts.WholeWord {
-		args = append(args, "-w")
-	}
-
-	// End of options marker ensures patterns beginning with '-' are treated as queries.
-	args = append(args, "--", query, ".")
-	return args
-}
-
-func runSearch(bin string, args []string, dir string) ([]Match, error) {
-	cmd := exec.Command(bin, args...)
-	cmd.Dir = dir
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			// Exit code 1 means no matches for both rg and grep.
-			return []Match{}, nil
-		}
-
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return nil, fmt.Errorf("%s failed: %s", bin, msg)
-		}
-		return nil, fmt.Errorf("%s failed: %w", bin, err)
-	}
-
-	return parseOutput(stdout.String(), dir)
-}
-
-func parseOutput(output, projectDir string) ([]Match, error) {
-	matches := make([]Match, 0)
-	scanner := bufio.NewScanner(strings.NewReader(output))
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		parts := strings.SplitN(line, ":", 3)
-		if len(parts) < 2 {
-			continue
-		}
-
-		lineNo, err := strconv.Atoi(parts[1])
-		if err != nil {
-			continue
-		}
-
-		absPath := parts[0]
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(projectDir, absPath)
-		}
-		absPath, _ = filepath.Abs(absPath)
-
-		matches = append(matches, Match{
-			FileName: filepath.Base(absPath),
-			Path:     absPath,
-			Line:     lineNo,
-			Context:  readContext(absPath, lineNo),
-		})
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return matches, nil
-}
-
-// readContext returns up to 3 lines around lineNo (1-based):
-// the line before, the matching line, and the line after.
-// Missing lines at file boundaries are simply omitted.
-func readContext(path string, lineNo int) []string {
+func readLines(path string) []string {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -224,79 +60,124 @@ func readContext(path string, lineNo int) []string {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
-	var all []string
+	scanner.Buffer(make([]byte, 0, _BUF_MIN), _BUF_MAX)
+	var lines []string
 	for scanner.Scan() {
-		all = append(all, scanner.Text())
+		lines = append(lines, scanner.Text())
 	}
-	if scanner.Err() != nil || len(all) == 0 {
+	if scanner.Err() != nil {
 		return nil
 	}
 
-	idx := lineNo - 1 // convert to 0-based
-	if idx < 0 || idx >= len(all) {
-		return nil
-	}
-
-	start := idx - 1
-	if start < 0 {
-		start = 0
-	}
-	end := idx + 1
-	if end >= len(all) {
-		end = len(all) - 1
-	}
-
-	result := make([]string, 0, end-start+1)
-	for i := start; i <= end; i++ {
-		result = append(result, all[i])
-	}
-	return result
+	return lines
 }
 
-// SearchAndReturn performs a search and returns results with error handling for API consumption.
-// It handles empty queries and returns a ReturnValue suitable for Wails bindings.
-// Optional pathMapper function can transform file paths (e.g., for history mapping).
-func SearchAndReturn(searchRoot, query string, opts Options, pathMapper func(string) string) ReturnValue {
+func BatchedStreamResults(searchRoot, query string, opts Options, pathMapper func(string) string, results chan<- []*Result) error {
+	if !cacheMutex.TryLock() {
+		if cachedCmd != nil && cachedCmd.Process != nil {
+			_ = cachedCmd.Process.Kill()
+		}
+		cacheMutex.Lock()
+	}
+
+	var wg sync.WaitGroup
+
+	defer func() {
+		wg.Wait()
+		close(results)
+		cacheMutex.Unlock()
+	}()
+
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return ReturnValue{Results: []Result{}}
+		return nil
 	}
 
-	searchRoot = strings.TrimSpace(searchRoot)
-	if searchRoot == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return ReturnValue{Error: err.Error()}
-		}
-		searchRoot = wd
-	}
-
-	matches, err := SearchWithOptions(searchRoot, query, opts)
+	cmd, bin, err := buildSearchCommand(query, opts)
 	if err != nil {
-		return ReturnValue{Error: err.Error()}
+		return err
 	}
 
-	results := make([]Result, 0, len(matches))
-	for i := range matches {
-		path := matches[i].Path
-		if pathMapper != nil {
-			if mapped := pathMapper(path); mapped != "" {
-				path = mapped
-			}
-		}
-
-		fileName := matches[i].FileName
-		if fileName == "" {
-			fileName = filepath.Base(path)
-		}
-
-		results = append(results, Result{
-			FileName: fileName,
-			Path:     path,
-			Line:     matches[i].Line,
-			Context:  matches[i].Context,
-		})
+	cmd.Dir = searchRoot
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
 	}
 
-	return ReturnValue{Results: results}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	batch := make([]*Result, 0, _BATCH_SIZE)
+	contextCache := map[string][]string{}
+
+	flushBatch := func() {
+		copyBatch := make([]*Result, len(batch))
+		copy(copyBatch, batch)
+
+		go func() {
+			results <- copyBatch
+			wg.Done()
+		}()
+
+		batch = batch[:0]
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, _BUF_MIN), _BUF_MAX)
+
+	var fnFilter func(*Result) bool
+	filter := strings.TrimSpace(opts.FileFilter)
+	if filter == "" {
+		fnFilter = func(m *Result) bool { return true }
+	} else {
+		filter = strings.ToLower(filter)
+		fnFilter = func(m *Result) bool {
+			return strings.Contains(strings.ToLower(m.Path), filter)
+		}
+	}
+
+	wg.Add(1)
+	for scanner.Scan() {
+		match, ok := parseOutputLine(scanner.Text(), searchRoot)
+		if !ok {
+			continue
+		}
+
+		if !fnFilter(match) {
+			continue
+		}
+
+		match.Context = readContextWithCache(match.Path, match.Line, contextCache)
+		match.FileName = filepath.Base(match.Path)
+		match.Path = pathMapper(match.Path)
+
+		batch = append(batch, match)
+
+		if len(batch) >= _BATCH_SIZE {
+			flushBatch()
+			wg.Add(1)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+
+	if len(batch) > 0 {
+		flushBatch()
+	} else {
+		wg.Done()
+	}
+
+	msg := strings.TrimSpace(stderr.String())
+	if msg != "" {
+		return fmt.Errorf("%s failed: %s", bin, msg)
+	}
+
+	return nil
 }

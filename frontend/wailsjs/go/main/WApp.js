@@ -122,12 +122,8 @@ export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
 
-export function NotesGrep(arg1) {
-  return window['go']['main']['WApp']['NotesGrep'](arg1);
-}
-
-export function NotesGrepWithOptions(arg1, arg2) {
-  return window['go']['main']['WApp']['NotesGrepWithOptions'](arg1, arg2);
+export function NotesGrepStream(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesGrepStream'](arg1, arg2);
 }
 
 export function NotesHistoryAdd(arg1) {

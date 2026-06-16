@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -28,6 +29,18 @@ func schemaOrPath(link *link) string {
 		return link.path
 	} else {
 		return link.url
+	}
+}
+
+func OpenWithDefault(renderer types.Renderer, url string, label string) {
+	link := makeLink(renderer, url, label)
+	if link.url == "" {
+		return
+	}
+
+	_, cmd := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(link.scheme)
+	if len(cmd) > 0 {
+		OpenWith(renderer, url, string(label), cmd[0])
 	}
 }
 

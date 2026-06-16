@@ -68,9 +68,7 @@ export function GetWindowStyle():Promise<main.WindowStyleT>;
 
 export function ListFiles():Promise<Array<string>>;
 
-export function NotesGrep(arg1:string):Promise<grep.ReturnValue>;
-
-export function NotesGrepWithOptions(arg1:string,arg2:grep.Options):Promise<grep.ReturnValue>;
+export function NotesGrepStream(arg1:string,arg2:grep.Options):Promise<void>;
 
 export function NotesHistoryAdd(arg1:string):Promise<void>;
 
