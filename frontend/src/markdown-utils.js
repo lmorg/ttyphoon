@@ -3,7 +3,6 @@
  */
 
 import { GetImage, GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
-import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -327,10 +326,11 @@ export function processLinks(container, options = {}) {
         if (!a.href.match(rxWailsUrl)) {
             a.addEventListener('click', (e) => {
                 e.preventDefault();
-                const scheme = (a.href.split('://')[0] || '').toLowerCase();
-                if (scheme === 'http' || scheme === 'https') {
-                    BrowserOpenURL(a.href);
-                } else {
+                HyperlinkOpenWithDefault(a.href);
+            });
+            a.addEventListener('auxclick', (e) => {
+                if (e.button === 1) {
+                    e.preventDefault();
                     HyperlinkOpenWithDefault(a.href);
                 }
             });

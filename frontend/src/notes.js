@@ -491,7 +491,7 @@ app.innerHTML = `
                     <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
                     <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
                     <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
-                    <button id="notes-find" type="button" class="notes-toolbar-btn" title="Find" aria-label="Find">&#xf002;</button>
+                    <button id="notes-fullsize-btn" type="button" class="notes-toolbar-btn" title="Full size" aria-label="Full size">&#xf065;</button>
                 </div>
             </div>
             <div id="notes-panel">
@@ -664,7 +664,6 @@ const elements = {
     newFile: document.getElementById('notes-new'),
     historyPrev: document.getElementById('notes-history-prev'),
     historyNext: document.getElementById('notes-history-next'),
-    find: document.getElementById('notes-find'),
     tabEditor: document.getElementById('notes-tab-editor'),
     tabHex: document.getElementById('notes-tab-hex'),
     tabViewer: document.getElementById('notes-tab-viewer'),
@@ -7659,7 +7658,7 @@ function updateFindAvailability() {
     const available = isFindAvailableInCurrentMode();
     // Do not set disabled — that swallows click events and prevents the
     // notification from firing. Use aria-disabled for accessibility only.
-    elements.find.setAttribute('aria-disabled', available ? 'false' : 'true');
+    document.getElementById('notes-find')?.setAttribute('aria-disabled', available ? 'false' : 'true');
     if (elements.toolsTabFind) {
         elements.toolsTabFind.setAttribute('aria-disabled', available ? 'false' : 'true');
     }
@@ -9735,7 +9734,7 @@ function applyWindowStyle(result) {
             color: var(--green) !important;
         }
 
-        #notes-find:hover {
+        #notes-fullsize-btn:hover {
             color: var(--accent) !important;
             border-radius: 5px;
             border-color: var(--accent) !important;
@@ -13541,8 +13540,8 @@ if (elements.modalLocation) {
     });
 }
 
-elements.find.addEventListener('click', () => {
-    openFindBar();
+document.getElementById('notes-fullsize-btn')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
 });
 
 elements.deleteCancel.addEventListener('click', () => {
@@ -13878,6 +13877,12 @@ document.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         saveFile();
+        return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        openFindBar();
         return;
     }
 

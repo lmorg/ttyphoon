@@ -171,6 +171,8 @@ let terminalJupyterHost;
 let notesOriginalParent;
 let notesOriginalNextSibling;
 let notesOriginalStyle;
+let notesFullsizeOverlay = null;
+let notesFullsizeActive = false;
 
 let isDraggingSplit = false;
 let notesCollapsed = false;
@@ -824,6 +826,105 @@ EventsOn('terminalWindowTitle', (title) => {
 
 window.addEventListener('ttyphoon-focus-notes', () => {
     focusNotesPane();
+});
+
+function enterNotesFullsize() {
+    if (notesFullsizeActive || !notesPane) return;
+
+    // Snapshot where notesPane currently lives so we can restore it.
+    notesFullsizeActive = true;
+    const savedParent = notesPane.parentElement;
+    const savedSibling = notesPane.nextElementSibling;
+    const savedStyle = {
+        width:        notesPane.style.width,
+        height:       notesPane.style.height,
+        position:     notesPane.style.position,
+        overflow:     notesPane.style.overflow,
+        flexShrink:   notesPane.style.flexShrink,
+        borderRight:  notesPane.style.borderRight,
+        borderRadius: notesPane.style.borderRadius,
+    };
+
+    const overlay = document.createElement('div');
+    overlay.id = 'notes-fullsize-overlay';
+    overlay.style.cssText = [
+        'position: fixed',
+        'inset: 0',
+        'z-index: 500',
+        'display: flex',
+        'align-items: center',
+        'justify-content: center',
+        'background: rgba(0, 0, 0, 0.7)',
+    ].join('; ');
+    // Clicking the darkened border exits full-size mode.
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) exitNotesFullsize();
+    });
+
+    overlay.appendChild(notesPane);
+    document.body.appendChild(overlay);
+    notesFullsizeOverlay = overlay;
+
+    notesPane.style.width        = 'calc(100vw - 100px)';
+    notesPane.style.height       = 'calc(100vh - 100px)';
+    notesPane.style.position     = 'relative';
+    notesPane.style.overflow     = 'hidden';
+    notesPane.style.flexShrink   = '0';
+    notesPane.style.borderRight  = '0';
+    notesPane.style.borderRadius = '8px';
+
+    // Store restore info on the overlay element for use in exitNotesFullsize.
+    overlay._savedParent  = savedParent;
+    overlay._savedSibling = savedSibling;
+    overlay._savedStyle   = savedStyle;
+
+    // Update the button icon to indicate active state.
+    const btn = document.getElementById('notes-fullsize-btn');
+    if (btn) btn.style.color = 'var(--accent)';
+
+    requestTerminalResizeAfterLayout();
+}
+
+function exitNotesFullsize() {
+    if (!notesFullsizeActive || !notesFullsizeOverlay || !notesPane) return;
+
+    const overlay = notesFullsizeOverlay;
+
+    const { _savedParent: savedParent, _savedSibling: savedSibling, _savedStyle: savedStyle } = overlay;
+
+    if (savedParent) {
+        if (savedSibling && savedSibling.parentElement === savedParent) {
+            savedParent.insertBefore(notesPane, savedSibling);
+        } else {
+            savedParent.appendChild(notesPane);
+        }
+    } else if (contentWrapper && splitHandle) {
+        contentWrapper.insertBefore(notesPane, splitHandle);
+    }
+
+    if (savedStyle) {
+        notesPane.style.width        = savedStyle.width;
+        notesPane.style.height       = savedStyle.height;
+        notesPane.style.position     = savedStyle.position;
+        notesPane.style.overflow     = savedStyle.overflow;
+        notesPane.style.flexShrink   = savedStyle.flexShrink;
+        notesPane.style.borderRight  = savedStyle.borderRight;
+        notesPane.style.borderRadius = savedStyle.borderRadius;
+    }
+
+    overlay.remove();
+    notesFullsizeOverlay = null;
+    notesFullsizeActive = false;
+
+    const btn = document.getElementById('notes-fullsize-btn');
+    if (btn) btn.style.color = '';
+
+    requestTerminalResizeAfterLayout();
+}
+
+window.addEventListener('ttyphoon-notes-fullsize-toggle', () => {
+    if (notesFullsizeActive) exitNotesFullsize();
+    else enterNotesFullsize();
 });
 
 window.addEventListener('ttyphoon-focus-terminal', () => {

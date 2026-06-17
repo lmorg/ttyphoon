@@ -2157,6 +2157,7 @@ func startWails() {
 				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
 				Icon:    appIcon,
 			},
+			//Preferences: &mac.Preferences{TextInteractionEnabled: mac.Disabled},
 		},
 		Linux: &linux.Options{
 			Icon:        appIcon,
@@ -2165,8 +2166,6 @@ func startWails() {
 		Windows: &windows.Options{
 			WindowClassName: app.Name(),
 		},
-
-		//BindingsAllowedOrigins: "*",
 	})
 
 	if err != nil {
