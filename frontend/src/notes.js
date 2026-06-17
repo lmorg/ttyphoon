@@ -13882,7 +13882,13 @@ document.addEventListener('keydown', (event) => {
 
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        openFindBar();
+        const findTabActive = elements.toolsTabFind?.getAttribute('aria-selected') === 'true';
+        const panelVisible = elements.toolsPanel?.dataset.collapsed !== 'true';
+        if (findTabActive && panelVisible) {
+            setToolsPanelCollapsed(true);
+        } else {
+            openFindBar();
+        }
         return;
     }
 
