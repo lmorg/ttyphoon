@@ -150,6 +150,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryCurrent: notesHistoryCurrentMock,
     NotesGrep: notesGrepMock,
     NotesGrepWithOptions: notesGrepWithOptionsMock,
+    NotesGrepStream: vi.fn(() => Promise.resolve()),
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -163,6 +164,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
 
 vi.mock('../wailsjs/runtime/runtime', () => ({
     EventsOn: eventsOnMock,
+    EventsOff: vi.fn(),
     ClipboardSetText: clipboardSetTextMock,
 }));
 
@@ -588,7 +590,7 @@ describe('notes rendering', () => {
         tabEditor.click();
         await flushPromises();
 
-        document.getElementById('notes-find').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         findInput.value = 'foo';
@@ -626,7 +628,7 @@ describe('notes rendering', () => {
         tabEditor.click();
         await flushPromises();
 
-        document.getElementById('notes-find').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         regexBtn.click();
@@ -1103,6 +1105,7 @@ describe('notes rendering', () => {
         editor.selectionEnd = editor.value.length;
 
         const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        await flushPromises();
 
         expect(tabHandled).toBe(false);
         expect(editor.value).toBe('# Todo\n\n        ');
@@ -1401,7 +1404,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspFormatRangeMock).toHaveBeenCalledWith('$NOTES/main.go', 1, 0, 1, 26);
-        expect(notesLspFormatMock).not.toHaveBeenCalled();
+        expect(notesLspFormatRangeMock).toHaveBeenCalledTimes(1);
         expect(editor.value).toContain('func main() {');
     });
 
@@ -2585,13 +2588,11 @@ describe('notes rendering', () => {
         const tabAI = document.getElementById('notes-tools-tab-ai');
         const paneFind = document.getElementById('notes-tools-find-pane');
         const paneAI = document.getElementById('notes-tools-ai-pane');
-        const findButton = document.getElementById('notes-find');
-
         expect(tabFind).not.toBeNull();
         expect(tabAI).not.toBeNull();
 
         toolsPanel.dataset.collapsed = 'true';
-        findButton.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         expect(toolsPanel.dataset.collapsed).toBe('false');
@@ -2629,8 +2630,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const findButton = document.getElementById('notes-find');
-        findButton.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         const replaceControls = document.getElementById('notes-replace-controls');
@@ -2668,7 +2668,7 @@ describe('notes rendering', () => {
         document.getElementById('notes-tab-editor').click();
         await flushPromises();
 
-        document.getElementById('notes-find').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         const findInput = document.getElementById('notes-find-input');
@@ -2769,7 +2769,10 @@ describe('notes rendering', () => {
             },
         });
         vi.mocked(swaggerUtils.hasSwaggerKey).mockReturnValue(true);
-        vi.mocked(swaggerUtils.extractPaths).mockReturnValue(['/ping']);
+        vi.mocked(swaggerUtils.extractPaths).mockReturnValue([{
+            path: '/ping',
+            methods: [{ method: 'GET', name: 'GET /ping', operation: { responses: { 200: { description: 'ok' } } } }],
+        }]);
         getFileMock.mockResolvedValue({
             contents: JSON.stringify({
                 swagger: '2.0',

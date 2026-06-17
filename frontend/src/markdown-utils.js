@@ -407,7 +407,7 @@ export async function autoHyperlink(container) {
                 a.textContent = matchedText;
                 a.addEventListener('click', (e) => {
                     e.preventDefault();
-                    BrowserOpenURL(a.href);
+                    HyperlinkOpenWithDefault(a.href);
                 });
                 parts.push(a);
 
