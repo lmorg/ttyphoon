@@ -672,10 +672,10 @@ func (a *WApp) CompleteSyntax(docPath, language, source string, cursor, selectio
 		a.syntaxEngine = engine
 	}
 
-	resolvedLanguage := jupyter.ResolveLanguageAlias(language)
+	resolvedLanguage := jupyter.ResolveLanguageAlias(language, docPath)
 	if resolvedLanguage == "" && docPath != "" {
 		ext := strings.TrimPrefix(filepath.Ext(a.filePath(docPath)), ".")
-		resolvedLanguage = jupyter.ResolveLanguageAlias(ext)
+		resolvedLanguage = jupyter.ResolveLanguageAlias(ext, docPath)
 	}
 	if resolvedLanguage == "" {
 		resolvedLanguage = strings.TrimSpace(strings.ToLower(language))
@@ -1056,9 +1056,11 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 
 	selectedLanguageID := ""
 	var argv []string
+	var initOptions map[string]any
 	for _, id := range candidateIDs {
-		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP) > 0 {
-			argv = settings.LSP
+		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP.Command) > 0 {
+			argv = settings.LSP.Command
+			initOptions = settings.LSP.InitOptions
 			selectedLanguageID = id
 			break
 		}
@@ -1070,7 +1072,7 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 
 	alreadyRunning := a.lspManager.Has(a.projRoot, selectedLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv, initOptions)
 	if err != nil {
 		a.notifyLspStartError(selectedLanguageID, argv, err)
 		return nil

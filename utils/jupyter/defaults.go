@@ -3,6 +3,7 @@ package jupyter
 import (
 	"bytes"
 	_ "embed"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,5 +19,11 @@ func init() {
 	err := yml.Decode(&Languages)
 	if err != nil {
 		panic(err)
+	}
+
+	for _, binding := range Languages {
+		if binding.PathRegexp != "" {
+			binding.pathRegexp = regexp.MustCompile(binding.PathRegexp)
+		}
 	}
 }

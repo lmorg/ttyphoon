@@ -72,12 +72,12 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 			return nil
 		}
 		if d.IsDir() {
-			if len(d.Name()) == 0 || d.Name()[0] == '.' || d.Name() == "node_modules" {
+			if len(d.Name()) == 0 || d.Name() == ".git" || d.Name() == "node_modules" {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if len(d.Name()) == 0 || d.Name()[0] == '.' {
+		if len(d.Name()) == 0 /*|| d.Name()[0] == '.'*/ {
 			return nil
 		}
 

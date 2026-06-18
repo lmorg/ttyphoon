@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"text/template"
@@ -15,6 +16,8 @@ import (
 
 type LanguageBindingT struct {
 	Aliases           []string `yaml:"Aliases"`
+	PathRegexp        string   `yaml:"PathRegexp"` // If an alias is ambiguous, you can also match based on a regex pattern
+	pathRegexp        *regexp.Regexp
 	Description       string   `yaml:"Description"`
 	Template          string   `yaml:"Template"`
 	FileExtension     string   `yaml:"FileExtension"`     // Must exclude `.` prefix
@@ -150,6 +153,9 @@ func getBindingByExtension(ext string) *LanguageBindingT {
 	}
 
 	for _, binding := range Languages {
+		if binding.pathRegexp != nil {
+			continue
+		}
 		if strings.EqualFold(strings.TrimPrefix(binding.FileExtension, "."), ext) {
 			return binding
 		}
@@ -160,12 +166,19 @@ func getBindingByExtension(ext string) *LanguageBindingT {
 
 // ResolveLanguageAlias returns a canonical language alias for a runtime name,
 // alias, or file extension. Returns an empty string when no mapping exists.
-func ResolveLanguageAlias(language string) string {
+func ResolveLanguageAlias(language, filePath string) string {
 	if binding := getBindingByAlias(language); binding != nil {
 		return canonicalAlias(binding)
 	}
 
 	for _, binding := range Languages {
+		if binding.pathRegexp != nil {
+			if binding.pathRegexp.MatchString(filePath) {
+				return canonicalAlias(binding)
+			} else {
+				continue
+			}
+		}
 		if strings.EqualFold(binding.Description, strings.TrimSpace(language)) {
 			return canonicalAlias(binding)
 		}

@@ -2,18 +2,26 @@ package lsp
 
 import (
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 )
 
-// Resolver provides deterministic language-id resolution for extensions and aliases.
+type pathRegexpEntry struct {
+	re         *regexp.Regexp
+	canonical  string
+	candidates []string
+}
+
+// Resolver provides deterministic language-id resolution for extensions, aliases, and path regexps.
 type Resolver struct {
-	byExtension map[string]string
-	byExtAll    map[string][]string
-	byAlias     map[string]string
-	warnings    []string
+	byExtension  map[string]string
+	byExtAll     map[string][]string
+	byAlias      map[string]string
+	byPathRegexp []pathRegexpEntry
+	warnings     []string
 }
 
 func NewResolverFromJupyter(bindings []*jupyter.LanguageBindingT) *Resolver {
@@ -30,6 +38,20 @@ func NewResolverFromJupyter(bindings []*jupyter.LanguageBindingT) *Resolver {
 
 		canonical := canonicalLanguageID(binding)
 		if canonical == "" {
+			continue
+		}
+
+		if binding.PathRegexp != "" {
+			re, err := regexp.Compile(binding.PathRegexp)
+			if err != nil {
+				res.warnings = append(res.warnings, "invalid path regexp for "+canonical+": "+err.Error())
+			} else {
+				res.byPathRegexp = append(res.byPathRegexp, pathRegexpEntry{
+					re:         re,
+					canonical:  canonical,
+					candidates: languageCandidates(binding),
+				})
+			}
 			continue
 		}
 
@@ -73,6 +95,12 @@ func (r *Resolver) LanguageIDForFile(path string) string {
 		return ""
 	}
 
+	for _, entry := range r.byPathRegexp {
+		if entry.re.MatchString(path) {
+			return entry.canonical
+		}
+	}
+
 	ext := normalizeExtension(strings.TrimPrefix(filepath.Ext(path), "."))
 	if ext == "" {
 		return ""
@@ -84,6 +112,12 @@ func (r *Resolver) LanguageIDForFile(path string) string {
 func (r *Resolver) LanguageIDsForFile(path string) []string {
 	if r == nil {
 		return nil
+	}
+
+	for _, entry := range r.byPathRegexp {
+		if entry.re.MatchString(path) {
+			return slices.Clone(entry.candidates)
+		}
 	}
 
 	ext := normalizeExtension(strings.TrimPrefix(filepath.Ext(path), "."))

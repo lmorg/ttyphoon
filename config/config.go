@@ -158,8 +158,13 @@ type configT struct {
 }
 
 type LanguagesT map[string]struct {
-	TabSpaceIndent int      `yaml:"TabSpaceIndent"`
-	LSP            []string `yaml:"LSP"`
+	TabSpaceIndent int  `yaml:"TabSpaceIndent"`
+	LSP            LspT `yaml:"LSP"`
+}
+
+type LspT struct {
+	Command     []string       `yaml:"command"`
+	InitOptions map[string]any `yaml:"initializationOptions"`
 }
 
 // GetTabIndent returns the number of spaces to use for indentation for a given language.
