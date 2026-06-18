@@ -117,7 +117,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("lsp[%s] stderr: %s", sp.argv[0], scanner.Text())
+			log.Printf("lsp %s stderr: %s", sp.argv[0], scanner.Text())
 		}
 	}()
 

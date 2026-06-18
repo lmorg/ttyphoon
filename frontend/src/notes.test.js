@@ -207,6 +207,10 @@ vi.mock('./json-viewer.js', () => ({
     renderJsonViewer: vi.fn(),
 }));
 
+vi.mock('./vim-mode', () => ({
+    attachVimMode: vi.fn(() => ({ detach: vi.fn(), getMode: vi.fn(() => 'insert') })),
+}));
+
 const theme = {
     colors: {
         fg: { Red: 230, Green: 237, Blue: 243 },

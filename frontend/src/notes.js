@@ -27,6 +27,7 @@ import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtim
 import { showLocalMenu } from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
+import { attachVimMode } from './vim-mode';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -5459,6 +5460,8 @@ function convertToJupyterCodeBlocks() {
         codeEditor.appendChild(codeArea);
         wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
+
+        attachVimMode(editableCode);
     });
 }
 
@@ -13122,6 +13125,8 @@ if (elements.editor) {
         event.preventDefault();
         await pasteFromGoClipboard(elements.editor, true);
     });
+
+    attachVimMode(elements.editor);
 }
 
 let _editorSelectionBeforeContextMenu = null;
