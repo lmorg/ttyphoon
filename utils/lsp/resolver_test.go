@@ -58,3 +58,66 @@ func TestResolverLanguageIDsForFileIncludesAllAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestResolverPathRegexpOverridesExtension(t *testing.T) {
+	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{
+		{Aliases: []string{"yaml"}, FileExtension: "yaml"},
+		{Aliases: []string{"kubernetes"}, FileExtension: "yaml", PathRegexp: `k8s/.*\.yaml$`},
+	})
+
+	if got := resolver.LanguageIDForFile("manifests/deployment.yaml"); got != "yaml" {
+		t.Fatalf("LanguageIDForFile(manifests/deployment.yaml) = %q, want yaml", got)
+	}
+
+	if got := resolver.LanguageIDForFile("k8s/deployment.yaml"); got != "kubernetes" {
+		t.Fatalf("LanguageIDForFile(k8s/deployment.yaml) = %q, want kubernetes", got)
+	}
+}
+
+func TestResolverPathRegexpLanguageIDsForFile(t *testing.T) {
+	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{
+		{Aliases: []string{"yaml"}, FileExtension: "yaml"},
+		{Aliases: []string{"kubernetes", "k8s"}, FileExtension: "yaml", PathRegexp: `k8s/.*\.yaml$`},
+	})
+
+	got := resolver.LanguageIDsForFile("k8s/service.yaml")
+	want := []string{"kubernetes", "k8s"}
+	if len(got) != len(want) {
+		t.Fatalf("LanguageIDsForFile(k8s/service.yaml) = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("LanguageIDsForFile(k8s/service.yaml)[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestResolverInvalidPathRegexpWarning(t *testing.T) {
+	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{
+		{Aliases: []string{"go"}, FileExtension: "go", PathRegexp: `[invalid`},
+	})
+
+	if len(resolver.Warnings()) == 0 {
+		t.Fatal("expected warning for invalid path regexp, got none")
+	}
+}
+
+func TestResolverPathRegexpSkipsAliasAndExtension(t *testing.T) {
+	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{
+		{Aliases: []string{"yaml"}, FileExtension: "yaml"},
+		{Aliases: []string{"kubernetes", "k8s"}, FileExtension: "yaml", PathRegexp: `k8s/.*\.yaml$`},
+	})
+
+	// alias "kubernetes" must not resolve — it belongs to a regexp-only binding
+	if got := resolver.LanguageIDForName("kubernetes"); got != "" {
+		t.Fatalf("LanguageIDForName(kubernetes) = %q, want empty (regexp-only binding)", got)
+	}
+
+	// extension ".yaml" must not pull in "kubernetes" candidates
+	ids := resolver.LanguageIDsForFile("other/deployment.yaml")
+	for _, id := range ids {
+		if id == "kubernetes" || id == "k8s" {
+			t.Fatalf("LanguageIDsForFile(other/deployment.yaml) contains %q, but regexp binding should be excluded from extension lookup", id)
+		}
+	}
+}

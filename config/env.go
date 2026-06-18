@@ -11,6 +11,10 @@ var UnsetEnv = []string{
 	"TMUX",
 	"TERM",
 	"TERM_PROGRAM",
+	"GITHUB_TOKEN",
+	"ANTHROPIC_API_KEY",
+	"OPENAI_API_KEY",
+	"OLLAMA_HOST",
 }
 
 var export = map[string]string{

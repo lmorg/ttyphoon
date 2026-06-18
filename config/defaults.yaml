@@ -127,6 +127,8 @@ Notes:
   Languages:
     yaml:
       TabSpaceIndent: 2
+    markdown:
+      TabSpaceIndent: 2
     default:
       TabSpaceIndent: 4
 
