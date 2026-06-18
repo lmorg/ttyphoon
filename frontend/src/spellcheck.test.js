@@ -8,19 +8,23 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesSpellCheck: notesSpellCheckMock,
 }));
 
+vi.mock('./popup_menu', () => ({
+    showLocalMenu: vi.fn(),
+}));
+
 // Canvas context mock — jsdom does not implement canvas drawing.
 let ctxMock;
 function makeCtxMock() {
     return {
-        clearRect:  vi.fn(),
-        save:       vi.fn(),
-        restore:    vi.fn(),
-        beginPath:  vi.fn(),
-        rect:       vi.fn(),
-        clip:       vi.fn(),
-        moveTo:     vi.fn(),
-        lineTo:     vi.fn(),
-        stroke:     vi.fn(),
+        clearRect:   vi.fn(),
+        save:        vi.fn(),
+        restore:     vi.fn(),
+        beginPath:   vi.fn(),
+        rect:        vi.fn(),
+        clip:        vi.fn(),
+        moveTo:      vi.fn(),
+        lineTo:      vi.fn(),
+        stroke:      vi.fn(),
         strokeStyle: '',
         lineWidth:   0,
         lineJoin:    '',
@@ -30,11 +34,10 @@ function makeCtxMock() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-/** Create a fresh textarea with a stubbed bounding rect, appended to body. */
+/** Create a fresh textarea appended to body. */
 function makeTextarea(value = '') {
     const ta = document.createElement('textarea');
     ta.value = value;
-    ta.getBoundingClientRect = vi.fn(() => ({ top: 50, left: 100, width: 400, height: 200 }));
     document.body.appendChild(ta);
     return ta;
 }
@@ -57,7 +60,6 @@ beforeEach(async () => {
     notesSpellCheckMock.mockResolvedValue([]);
     document.body.innerHTML = '';
 
-    // Reset and re-apply canvas mock so each test gets a fresh ctxMock.
     ctxMock = makeCtxMock();
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctxMock);
 
@@ -66,7 +68,6 @@ beforeEach(async () => {
         left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 16,
     }));
 
-    // Re-import after resetModules so module-level state is fresh.
     ({ attachSpellCheck } = await import('./spellcheck.js'));
 });
 
@@ -185,7 +186,6 @@ describe('spellcheck — canvas drawing', () => {
         ]);
         attachSpellCheck(ta);
         await flush(900);
-        // stroke is called once per wavy underline segment
         expect(ctxMock.stroke).toHaveBeenCalled();
     });
 
@@ -202,7 +202,6 @@ describe('spellcheck — canvas drawing', () => {
         attachSpellCheck(ta);
         await flush(900);
         const canvas = document.body.querySelector('canvas[aria-hidden="true"]');
-        // jsdom returns 0 for offsetTop/offsetLeft; verify the values are set.
         expect(canvas.style.top).toBe(`${ta.offsetTop}px`);
         expect(canvas.style.left).toBe(`${ta.offsetLeft}px`);
     });
@@ -215,10 +214,9 @@ describe('spellcheck — exclusions', () => {
             { misspeltWord: 'tset',  wordStart: 0, wordLength: 4, suggestions: ['test'] },
             { misspeltWord: 'async', wordStart: 5, wordLength: 5, suggestions: [] },
         ]);
-        // Only 'async' excluded
         attachSpellCheck(ta, { exclusions: ['async'] });
         await flush(900);
-        // stroke called once (for 'tset' only) not twice
+        // stroke called once (for 'tset' only), not twice
         expect(ctxMock.stroke).toHaveBeenCalledTimes(1);
     });
 
@@ -296,8 +294,6 @@ describe('spellcheck — scroll and redraw', () => {
     it('canvas is a sibling of textarea so it inherits parent visibility', () => {
         const ta = makeTextarea('helo');
         attachSpellCheck(ta);
-        // The canvas must be inside the same parent as the textarea so that
-        // display:none on any ancestor hides both without any JS bookkeeping.
         expect(ta.nextSibling.tagName).toBe('CANVAS');
         expect(ta.parentNode).toBe(ta.nextSibling.parentNode);
     });
@@ -309,25 +305,7 @@ describe('spellcheck — aspell unavailable', () => {
         notesSpellCheckMock.mockRejectedValue(new Error('aspell not found'));
         attachSpellCheck(ta);
         await flush(900);
-
-        // No crash, no strokes.
         expect(ctxMock.stroke).not.toHaveBeenCalled();
     });
 });
 
-describe('spellcheck — no context-menu handling', () => {
-    it('does not intercept contextmenu events on the textarea', async () => {
-        const ta = makeTextarea('helo');
-        notesSpellCheckMock.mockResolvedValue([
-            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
-        ]);
-        attachSpellCheck(ta);
-        await flush(900);
-
-        const bubbled = vi.fn();
-        document.addEventListener('contextmenu', bubbled);
-        ta.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-        expect(bubbled).toHaveBeenCalled(); // event was NOT consumed
-        document.removeEventListener('contextmenu', bubbled);
-    });
-});

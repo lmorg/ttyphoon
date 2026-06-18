@@ -23,8 +23,8 @@ function menuHighlight(id, index) {
         _localCallbacks.get(id)?.highlight?.(index);
         return;
     }
-    TerminalMenuHighlight(id, index).catch(() => {});
-    TerminalRequestRedraw().catch(() => {});
+    TerminalMenuHighlight(id, index).catch(() => { });
+    TerminalRequestRedraw().catch(() => { });
 }
 
 function menuSelect(id, index) {
@@ -36,7 +36,7 @@ function menuSelect(id, index) {
         if (returnTo) returnTo.focus();
         return;
     }
-    TerminalMenuSelect(id, index).catch(() => {});
+    TerminalMenuSelect(id, index).catch(() => { });
 }
 
 function menuCancel(id, index) {
@@ -48,7 +48,7 @@ function menuCancel(id, index) {
         if (returnTo) returnTo.focus();
         return;
     }
-    TerminalMenuCancel(id, index).catch(() => {});
+    TerminalMenuCancel(id, index).catch(() => { });
 }
 
 function normalizeMenuPayload(payload) {
@@ -312,10 +312,10 @@ export function initTerminalPopupMenu(canvas) {
         syncMouseHighlightState();
         listSearchInput.value = '';
         listSearchWrap.style.display = 'none';
-        
+
         listRoot.classList.remove('show');
         listRoot.classList.add('hide');
-        
+
         const onAnimationEnd = () => {
             if (transitionSeq !== _listMenuTransitionSeq) {
                 return;
@@ -326,7 +326,7 @@ export function initTerminalPopupMenu(canvas) {
             listRoot.style.display = 'none';
             listBody.replaceChildren();
         };
-        
+
         listRoot.addEventListener('animationend', onAnimationEnd, { once: true });
     }
 
@@ -700,7 +700,7 @@ export function initTerminalPopupMenu(canvas) {
             showSearch: true,
             hideItemsUntilQuery: true,
             onSelect: (index) => {
-                CommandPaletteSelect(index).catch(() => {});
+                CommandPaletteSelect(index).catch(() => { });
             },
         });
     });

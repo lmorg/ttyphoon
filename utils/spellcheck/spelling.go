@@ -40,8 +40,14 @@ func ExecAspell(text string) (string, error) {
 		return "", fmt.Errorf("failed to start aspell: %w", err)
 	}
 
+	// Sanitize lines that start with aspell pipe-mode command characters
+	// (#, -, !, %, ~, +, *, &, @, ^, $). We replace the first character with a
+	// space — a 1-for-1 byte substitution — so every column offset in aspell's
+	// output remains correct relative to the original text.
+	sanitized := sanitizeForAspell(text)
+
 	// Write text to stdin and close it
-	if _, err := io.WriteString(stdin, text); err != nil {
+	if _, err := io.WriteString(stdin, sanitized); err != nil {
 		stdin.Close()
 		return "", fmt.Errorf("failed to write to stdin: %w", err)
 	}
@@ -61,6 +67,23 @@ func ExecAspell(text string) (string, error) {
 	}
 
 	return stdout.String(), nil
+}
+
+// sanitizeForAspell replaces the first character of any line that begins with
+// an aspell pipe-mode command character with a space. This prevents aspell
+// from interpreting the line as a command. Because the replacement is exactly
+// one byte for one byte, all column offsets reported by aspell remain correct
+// relative to the original text.
+func sanitizeForAspell(text string) string {
+	// aspell treats these characters as commands when at the start of a line.
+	const cmdChars = "*&@#!%~+-^$"
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if len(line) > 0 && strings.ContainsRune(cmdChars, rune(line[0])) {
+			lines[i] = " " + line[1:]
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ParseAspellOutput parses the raw output from aspell -a and returns suggestions for misspelled words
@@ -180,37 +203,37 @@ func parseMisspelledLineNoSuggestions(line string) (SuggestionT, error) {
 // ParseAspellMultilineOutput parses aspell -a output for multi-line input and
 // returns suggestions with absolute character offsets into text.
 //
-// aspell's pipe mode emits one blank line after all results for each input line.
-// We count those blank lines to track which input line we're currently on, then
-// add that line's absolute start offset to each word's per-line offset.
+// aspell pipe mode does NOT reliably emit one blank line per input line — it
+// silently swallows lines starting with '#' (save-dict command), empty lines,
+// and lines that contain no dictionary words.  Counting blank lines to infer
+// the current input line is therefore unreliable.
+//
+// Instead we use the word text and aspell's per-line column offset to search
+// forward through the input lines until we find the line where the word
+// actually sits at that column.  Because aspell reports results in text order
+// (top-to-bottom, left-to-right) we only ever scan forward, so the algorithm
+// is O(lines + results).
 func ParseAspellMultilineOutput(text, output string) ([]SuggestionT, error) {
 	// Compute absolute start offset of each line.
 	lines := strings.Split(text, "\n")
 	lineStarts := make([]int, len(lines))
-	offset := 0
+	off := 0
 	for i, l := range lines {
-		lineStarts[i] = offset
-		offset += len(l) + 1 // +1 for the '\n'
+		lineStarts[i] = off
+		off += len(l) + 1 // +1 for '\n'
 	}
 
-	var results []SuggestionT
-	lineIdx := 0
-
+	// Collect raw aspell results (WordStart is still the per-line column here).
+	var raw []SuggestionT
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-
-		if line == "" {
-			// Blank line: end of results for one input line.
-			lineIdx++
-			continue
-		}
-		if strings.HasPrefix(line, "@(#)") ||
+		if line == "" ||
+			strings.HasPrefix(line, "@(#)") ||
 			strings.HasPrefix(line, "*") ||
 			strings.HasPrefix(line, "-") {
 			continue
 		}
-
 		var (
 			s   SuggestionT
 			err error
@@ -225,17 +248,42 @@ func ParseAspellMultilineOutput(text, output string) ([]SuggestionT, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		if lineIdx < len(lineStarts) {
-			s.WordStart = lineStarts[lineIdx] + s.WordStart
-		}
-		results = append(results, s)
+		raw = append(raw, s)
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scanner error: %w", err)
 	}
 
+	// Match each raw result to the correct input line by searching forward.
+	// prevLine/prevCol track the end of the last match so we never go backwards
+	// (which correctly handles duplicate words at the same column on different
+	// lines, or multiple misspellings on the same line).
+	var results []SuggestionT
+	prevLine, prevCol := 0, 0
+	for _, s := range raw {
+		col := s.WordStart // aspell per-line column offset
+		word := s.MisspeltWord
+		found := false
+		for i := prevLine; i < len(lines); i++ {
+			l := lines[i]
+			// On the same line as the previous match, only accept columns
+			// that come after the previous match's end position.
+			if i == prevLine && col < prevCol {
+				continue
+			}
+			if col+len(word) <= len(l) && l[col:col+len(word)] == word {
+				s.WordStart = lineStarts[i] + col
+				prevLine = i
+				prevCol = col + len(word)
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		results = append(results, s)
+	}
 	return results, nil
 }
 

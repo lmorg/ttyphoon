@@ -2,9 +2,8 @@
  * spellcheck.js — textarea spell-check overlay using aspell via the Go backend.
  *
  * Renders terminal-style red wavy underlines on a <canvas> positioned over the
- * textarea. Word positions are measured with the mirror-div technique (the same
- * approach used by vim-mode for caret tracking) so alignment is accurate for
- * both word-wrapped and non-word-wrapped editors.
+ * textarea. Word positions are measured with the mirror-div + Range API technique
+ * so alignment is accurate for both word-wrapped and non-word-wrapped editors.
  *
  * Right-click context menus are handled entirely by the existing editor handlers.
  *
@@ -16,12 +15,13 @@
  */
 
 import { NotesSpellCheck } from '../wailsjs/go/main/WApp';
+import { showLocalMenu } from './popup_menu';
 
 const DEBOUNCE_MS = 800;
 
-// Wavy underline parameters — matched to the terminal renderer style.
-const WAVE_AMPLITUDE = 2.5;
-const WAVE_FREQUENCY = 0.35;
+// Wavy underline parameters.
+const WAVE_AMPLITUDE = 1.5;
+const WAVE_FREQUENCY = 0.4;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ export function attachSpellCheck(textarea, options = {}) {
     let currentMisspellings = [];
     /**
      * Cached word position data from the last measureWordRects call.
-     * Contains { wordStart, wordLength, misspeltWord, startRect, endRect, mirrorRect }.
+     * Each entry: { wordRect, mirrorRect }.
      */
     let cachedWordData = [];
     let lastCheckedText = null;
@@ -58,7 +58,6 @@ export function attachSpellCheck(textarea, options = {}) {
     // (e.g. a tab panel becomes inactive) the canvas disappears with it, with
     // no JS bookkeeping required.
     const canvasParent = textarea.parentNode;
-    // Ensure the parent forms a positioning context for position:absolute.
     let savedParentPosition = null;
     if (getComputedStyle(canvasParent).position === 'static') {
         savedParentPosition = canvasParent.style.position;
@@ -74,7 +73,7 @@ export function attachSpellCheck(textarea, options = {}) {
      * is applied so long lines don't wrap, mirroring the textarea exactly.
      */
     function buildMirrorCss(cs, isWrapping) {
-        const base = [
+        const parts = [
             // position:absolute inside canvasParent keeps the mirror in the
             // same coordinate space as the canvas — avoids any position:fixed
             // viewport quirks in Chromium-based WebViews (e.g. Wails).
@@ -118,20 +117,19 @@ export function attachSpellCheck(textarea, options = {}) {
             `font-variant-ligatures:${cs.fontVariantLigatures}`,
         ];
         if (isWrapping) {
-            base.push(`width:${textarea.clientWidth}px`);
+            parts.push(`width:${textarea.clientWidth}px`);
         }
-        return base.join(';');
+        return parts.join(';');
     }
 
     /**
      * Measure the bounding rect of each misspelled word using the Range API on
      * a clean text node inside a mirror div. Returns an array of objects each
-     * containing: { wordStart, wordLength, misspeltWord, suggestions, wordRect, mirrorRect }
-     * where the rects are in *viewport* coordinates.
+     * containing { wordRect, mirrorRect } in viewport coordinates.
      *
      * Using Range.getBoundingClientRect() on a plain text node (rather than
-     * inserting <span> elements between text nodes) avoids any inline-element
-     * side-effects on kerning, ligatures, and line-break decisions.
+     * inserting <span> elements) avoids side-effects on kerning, ligatures,
+     * and line-break decisions.
      */
     function measureWordRects(misspellings, text) {
         if (!misspellings.length) return [];
@@ -145,8 +143,7 @@ export function attachSpellCheck(textarea, options = {}) {
         const textNode = document.createTextNode(text);
         mirror.appendChild(textNode);
         // Insert into canvasParent so the mirror shares the same coordinate
-        // space as the canvas — delta (wordRect - mirrorRect) is then purely
-        // layout-relative and unaffected by any WebView viewport quirks.
+        // space as the canvas.
         canvasParent.insertBefore(mirror, canvas);
 
         const mirrorRect = mirror.getBoundingClientRect();
@@ -156,12 +153,9 @@ export function attachSpellCheck(textarea, options = {}) {
             range.setStart(textNode, m.wordStart);
             range.setEnd(textNode, m.wordStart + m.wordLength);
             return {
-                wordStart:    m.wordStart,
-                wordLength:   m.wordLength,
-                misspeltWord: m.misspeltWord,
-                suggestions:  m.suggestions,
-                wordRect:     range.getBoundingClientRect(),
+                wordRect:    range.getBoundingClientRect(),
                 mirrorRect,
+                misspelling: m,
             };
         });
 
@@ -178,14 +172,15 @@ export function attachSpellCheck(textarea, options = {}) {
         for (let x = x1; x <= x2; x++) {
             const y = baseY + Math.sin((x - x1) * WAVE_FREQUENCY) * WAVE_AMPLITUDE;
             if (x === x1) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+            else          ctx.lineTo(x, y);
         }
         ctx.stroke();
     }
 
     /**
-     * Position the canvas and paint wavy underlines for all cached word positions.
-     * Uses textarea.scrollLeft/scrollTop at call time so scroll is always current.
+     * Position the canvas and paint wavy underlines for all cached word
+     * positions. Uses textarea.scrollLeft/scrollTop at call time so scroll
+     * is always current.
      */
     function drawCanvas() {
         if (destroyed) return;
@@ -198,7 +193,8 @@ export function attachSpellCheck(textarea, options = {}) {
 
         const w = Math.max(1, Math.round(textarea.offsetWidth));
         const h = Math.max(1, Math.round(textarea.offsetHeight));
-        // Resizing the canvas clears it, so only resize when dimensions change.
+        // Resizing the canvas clears it automatically, so only resize when
+        // dimensions actually change.
         if (canvas.width !== w || canvas.height !== h) {
             canvas.width  = w;
             canvas.height = h;
@@ -212,7 +208,7 @@ export function attachSpellCheck(textarea, options = {}) {
 
         // Resolve red colour from the terminal theme CSS variable.
         const docStyle  = getComputedStyle(document.documentElement);
-        const redColour = docStyle.getPropertyValue('--terminal-red').trim() || '#e05555';
+        const redColour = docStyle.getPropertyValue('--red').trim() || '#e05555';
 
         ctx.save();
         // Clip to textarea viewport bounds.
@@ -228,26 +224,66 @@ export function attachSpellCheck(textarea, options = {}) {
         const sl = textarea.scrollLeft;
         const st = textarea.scrollTop;
 
-        for (const wd of cachedWordData) {
-            const { wordRect, mirrorRect } = wd;
-
+        for (const { wordRect, mirrorRect } of cachedWordData) {
             // Mirror-relative positions: (rect.left - mirror.left) gives the
             // horizontal offset within the mirror's text layout. Subtracting
             // scrollLeft/scrollTop converts to canvas coords (canvas origin =
             // textarea top-left in the viewport).
-            const wordCanvasX = Math.round((wordRect.left  - mirrorRect.left) - sl);
-            const wordCanvasY = Math.round((wordRect.top   - mirrorRect.top)  - st);
-            const wordWidth   = Math.round(wordRect.right  - wordRect.left);
-
-            // Use the range's measured height as line height.
+            const x1    = Math.round((wordRect.left  - mirrorRect.left) - sl);
+            const x2    = Math.round((wordRect.right - mirrorRect.left) - sl);
+            const top   = Math.round((wordRect.top   - mirrorRect.top)  - st);
             const lineH = wordRect.height || 16;
-            // Place underline 2 px above the bottom of the line box.
-            const baseY = wordCanvasY + lineH - 2;
+            // Place underline just above the bottom of the line box.
+            const baseY = top + lineH - 1;
 
-            drawWavy(ctx, wordCanvasX, wordCanvasX + wordWidth, baseY);
+            drawWavy(ctx, x1, x2, baseY);
         }
 
         ctx.restore();
+    }
+
+    // ── Suggestions popup ─────────────────────────────────────────────────
+
+    /**
+     * Apply a spelling suggestion: replace the misspelled word in the textarea,
+     * restore cursor position to just after the replacement, and re-trigger the
+     * input event so the spell-checker schedules a fresh check.
+     */
+    function applySuggestion(misspelling, suggestion) {
+        const text = textarea.value;
+        const { wordStart, wordLength } = misspelling;
+        textarea.value =
+            text.slice(0, wordStart) + suggestion + text.slice(wordStart + wordLength);
+        textarea.selectionStart = textarea.selectionEnd = wordStart + suggestion.length;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /**
+     * Show the shared popup menu near the clicked word.
+     * Uses showLocalMenu so the suggestions list matches the rest of the UI.
+     */
+    function showSuggestionsPopup(anchorX, anchorY, misspelling) {
+        if (!misspelling.suggestions || !misspelling.suggestions.length) {
+            showLocalMenu({
+                title: misspelling.misspeltWord,
+                options: ['No spelling suggestions'],
+                icons: [],
+                x: anchorX,
+                y: anchorY,
+                showNextToMouseCursor: true,
+            });
+            return;
+        }
+
+        showLocalMenu({
+            title: misspelling.misspeltWord,
+            options: misspelling.suggestions,
+            icons:   misspelling.suggestions.map(() => 0xf040),
+            x: anchorX,
+            y: anchorY,
+            showNextToMouseCursor: true,
+            onSelect: (index) => applySuggestion(misspelling, misspelling.suggestions[index]),
+        });
     }
 
     // ── Spell-check runner ────────────────────────────────────────────────
@@ -289,6 +325,37 @@ export function attachSpellCheck(textarea, options = {}) {
         drawCanvas();
     }
 
+    /**
+     * On click: if the click lands inside a wavy-underlined word, show the
+     * suggestions popup. Uses the same coordinate transform as drawCanvas so
+     * hit-testing is always consistent with what is rendered.
+     */
+    function onTextareaClick(event) {
+        if (!cachedWordData.length) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const canvasX = event.clientX - canvasRect.left;
+        const canvasY = event.clientY - canvasRect.top;
+
+        const sl = textarea.scrollLeft;
+        const st = textarea.scrollTop;
+
+        for (const { wordRect, mirrorRect, misspelling } of cachedWordData) {
+            const x1    = Math.round((wordRect.left  - mirrorRect.left) - sl);
+            const x2    = Math.round((wordRect.right - mirrorRect.left) - sl);
+            const top   = Math.round((wordRect.top   - mirrorRect.top)  - st);
+            const lineH = wordRect.height || 16;
+
+            if (canvasX >= x1 && canvasX <= x2 && canvasY >= top && canvasY <= top + lineH) {
+                // Position popup just below the word in viewport coords.
+                const popupX = canvasRect.left + x1;
+                const popupY = canvasRect.top  + top + lineH + 2;
+                showSuggestionsPopup(popupX, popupY, misspelling);
+                return;
+            }
+        }
+    }
+
     let rafId = null;
     /**
      * On geometry changes (window resize / ancestor scroll) re-measure word
@@ -307,6 +374,7 @@ export function attachSpellCheck(textarea, options = {}) {
 
     textarea.addEventListener('input',  onInput);
     textarea.addEventListener('scroll', onScroll);
+    textarea.addEventListener('click',  onTextareaClick);
     window.addEventListener('resize',   onGeometryChange);
     window.addEventListener('scroll',   onGeometryChange, true);
 
@@ -324,6 +392,7 @@ export function attachSpellCheck(textarea, options = {}) {
             if (rafId !== null) cancelAnimationFrame(rafId);
             textarea.removeEventListener('input',  onInput);
             textarea.removeEventListener('scroll', onScroll);
+            textarea.removeEventListener('click',  onTextareaClick);
             window.removeEventListener('resize',   onGeometryChange);
             window.removeEventListener('scroll',   onGeometryChange, true);
             if (canvas.parentNode) canvas.parentNode.removeChild(canvas);

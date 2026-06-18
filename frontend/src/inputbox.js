@@ -3,6 +3,7 @@ import { EventsOn } from '../wailsjs/runtime/runtime';
 import { showLocalMenu } from './popup_menu';
 import { initLineNavigationKeys } from './line-navigation.js';
 import { attachVimMode } from './vim-mode';
+import { attachSpellCheck } from './spellcheck';
 import './inputbox.css';
 
 initLineNavigationKeys(document);
@@ -63,6 +64,7 @@ export function initInputBox(canvas) {
     let inputboxPreviousTerminalFocusedState = true;
     let backdropPointerDown = false;
     let inputboxVimHandle = null;
+    let inputboxSpellCheckHandle = null;
 
     function setSharedTerminalFocusState(focused, options = {}) {
         if (typeof window.ttyphoonSetTerminalFocusState === 'function') {
@@ -423,6 +425,8 @@ export function initInputBox(canvas) {
 
         inputboxVimHandle?.detach();
         inputboxVimHandle = null;
+        inputboxSpellCheckHandle?.detach();
+        inputboxSpellCheckHandle = null;
 
         inputboxOverlay.style.display = 'none';
         window.ttyphoonInputboxOpen = false;
@@ -576,6 +580,9 @@ export function initInputBox(canvas) {
         inputboxHistoryBtn.style.display = inputboxHistoryItems.length > 0 ? 'inline-flex' : 'none';
 
         inputboxInputContainer.appendChild(inputboxInput);
+        if (p.multiline) {
+            inputboxSpellCheckHandle = attachSpellCheck(inputboxInput);
+        }
 
         const variables = Array.isArray(p.variables) ? p.variables : [];
         for (const variable of variables) {

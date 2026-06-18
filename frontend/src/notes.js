@@ -4711,8 +4711,63 @@ async function openCurrentLspDocument(content) {
         state.lspOpenFile = state.currentFile;
         await requestLspSemanticTokens();
         await requestLspInlayHints();
+        void updateSpellCheckExclusionsFromDocSymbols();
     } catch (err) {
         console.error('notes lsp open failed:', err);
+    }
+}
+
+/**
+ * Fetch document symbols from the LSP server and use their names as
+ * spell-check exclusions. Document symbols are available immediately after
+ * didOpen (unlike semantic tokens, which require full analysis), making them
+ * a reliable exclusion source on file open.
+ */
+async function updateSpellCheckExclusionsFromDocSymbols() {
+    const fileAtCall = state.currentFile;
+    if (!notesSpellCheckHandle || !fileAtCall || state.lspOpenFile !== fileAtCall || !isCurrentFileLspEligible()) {
+        return;
+    }
+
+    function extractNames(symbols) {
+        const names = [];
+        function walk(syms) {
+            if (!Array.isArray(syms)) return;
+            for (const s of syms) {
+                if (s && s.name) names.push(String(s.name));
+                if (s && s.children) walk(s.children);
+            }
+        }
+        walk(symbols);
+        return names;
+    }
+
+    // First attempt — may return empty if gopls hasn't analysed the file yet.
+    try {
+        const symbols = await NotesLspDocumentSymbols(fileAtCall);
+        if (state.currentFile !== fileAtCall) return;
+        const names = extractNames(symbols);
+        if (names.length > 0) {
+            notesSpellCheckHandle.setExclusions(names);
+            return;
+        }
+    } catch {
+        // fall through to retry
+    }
+
+    // Retry after a short delay to give gopls time to finish analysing.
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (state.currentFile !== fileAtCall || state.lspOpenFile !== fileAtCall) return;
+
+    try {
+        const symbols = await NotesLspDocumentSymbols(fileAtCall);
+        if (state.currentFile !== fileAtCall) return;
+        const names = extractNames(symbols);
+        if (names.length > 0) {
+            notesSpellCheckHandle.setExclusions(names);
+        }
+    } catch {
+        // LSP not available or request failed — degrade silently.
     }
 }
 
@@ -6899,6 +6954,7 @@ async function loadFile(file, options = {}) {
 
     if (state.currentFile && state.currentFile !== file) {
         await closeOpenLspDocument();
+        notesSpellCheckHandle?.setExclusions([]);
         // Clear rendered diagnostics immediately while the new file loads.
         state.currentFileUri = '';
         clearVisibleLspDiagnostics();
@@ -7151,6 +7207,7 @@ async function loadFile(file, options = {}) {
             await restoreDocumentCache(file);
         }
 
+        notesSpellCheckHandle?.check();
         state.suspendDocumentCacheSave = false;
         saveDocumentCache();
 
@@ -12569,6 +12626,7 @@ function renderLspSemanticTokens() {
         offset += line.length + 1;
     }
 
+    const symbolWords = [];
     tokens
         .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
         .forEach((token) => {
@@ -12580,6 +12638,8 @@ function renderLspSemanticTokens() {
             if (endChar <= startChar) {
                 return;
             }
+
+            symbolWords.push(lineContent.slice(startChar, endChar));
 
             const tokenEl = document.createElement('span');
             tokenEl.className = 'notes-lsp-semantic-token';
@@ -12595,6 +12655,8 @@ function renderLspSemanticTokens() {
             const endOffset = lineOffsets[line] + endChar;
             wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
         });
+
+    notesSpellCheckHandle?.setExclusions(symbolWords);
 }
 
 function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
@@ -12904,6 +12966,8 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
     }
 }
 
+let notesSpellCheckHandle = null;
+
 if (elements.editor) {
     let editorInputSequence = 0;
 
@@ -13129,7 +13193,7 @@ if (elements.editor) {
     });
 
     attachVimMode(elements.editor);
-    attachSpellCheck(elements.editor);
+    notesSpellCheckHandle = attachSpellCheck(elements.editor);
 }
 
 let _editorSelectionBeforeContextMenu = null;
