@@ -495,6 +495,24 @@ export namespace main {
 	        this.CellId = source["CellId"];
 	    }
 	}
+	export class SpellCheckSuggestionT {
+	    misspeltWord: string;
+	    wordStart: number;
+	    wordLength: number;
+	    suggestions: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SpellCheckSuggestionT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.misspeltWord = source["misspeltWord"];
+	        this.wordStart = source["wordStart"];
+	        this.wordLength = source["wordLength"];
+	        this.suggestions = source["suggestions"];
+	    }
+	}
 	export class WindowStyleT {
 	    colors?: ColoursT;
 	    statusBar: boolean;

@@ -126,6 +126,8 @@ export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<
 
 export function NotesRecentFiles():Promise<Array<string>>;
 
+export function NotesSpellCheck(arg1:string):Promise<Array<main.SpellCheckSuggestionT>>;
+
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveFilePath(arg1:string):Promise<string>;

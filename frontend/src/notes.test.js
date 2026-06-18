@@ -160,6 +160,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
     NotesKeyPress: notesKeyPressMock,
+    NotesSpellCheck: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../wailsjs/runtime/runtime', () => ({
@@ -209,6 +210,10 @@ vi.mock('./json-viewer.js', () => ({
 
 vi.mock('./vim-mode', () => ({
     attachVimMode: vi.fn(() => ({ detach: vi.fn(), getMode: vi.fn(() => 'insert') })),
+}));
+
+vi.mock('./spellcheck', () => ({
+    attachSpellCheck: vi.fn(() => ({ detach: vi.fn(), setExclusions: vi.fn(), check: vi.fn() })),
 }));
 
 const theme = {

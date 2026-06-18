@@ -28,6 +28,7 @@ import { showLocalMenu } from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { attachVimMode } from './vim-mode';
+import { attachSpellCheck } from './spellcheck';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -5462,6 +5463,7 @@ function convertToJupyterCodeBlocks() {
         wrapper.appendChild(outputWrapper);
 
         attachVimMode(editableCode);
+        attachSpellCheck(editableCode);
     });
 }
 
@@ -13127,6 +13129,7 @@ if (elements.editor) {
     });
 
     attachVimMode(elements.editor);
+    attachSpellCheck(elements.editor);
 }
 
 let _editorSelectionBeforeContextMenu = null;

@@ -177,6 +177,68 @@ func parseMisspelledLineNoSuggestions(line string) (SuggestionT, error) {
 	}, nil
 }
 
+// ParseAspellMultilineOutput parses aspell -a output for multi-line input and
+// returns suggestions with absolute character offsets into text.
+//
+// aspell's pipe mode emits one blank line after all results for each input line.
+// We count those blank lines to track which input line we're currently on, then
+// add that line's absolute start offset to each word's per-line offset.
+func ParseAspellMultilineOutput(text, output string) ([]SuggestionT, error) {
+	// Compute absolute start offset of each line.
+	lines := strings.Split(text, "\n")
+	lineStarts := make([]int, len(lines))
+	offset := 0
+	for i, l := range lines {
+		lineStarts[i] = offset
+		offset += len(l) + 1 // +1 for the '\n'
+	}
+
+	var results []SuggestionT
+	lineIdx := 0
+
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if line == "" {
+			// Blank line: end of results for one input line.
+			lineIdx++
+			continue
+		}
+		if strings.HasPrefix(line, "@(#)") ||
+			strings.HasPrefix(line, "*") ||
+			strings.HasPrefix(line, "-") {
+			continue
+		}
+
+		var (
+			s   SuggestionT
+			err error
+		)
+		if strings.HasPrefix(line, "& ") {
+			s, err = parseMisspelledLine(line)
+		} else if strings.HasPrefix(line, "# ") {
+			s, err = parseMisspelledLineNoSuggestions(line)
+		} else {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if lineIdx < len(lineStarts) {
+			s.WordStart = lineStarts[lineIdx] + s.WordStart
+		}
+		results = append(results, s)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scanner error: %w", err)
+	}
+
+	return results, nil
+}
+
 // FilterExclusions removes suggestions for words in the exclusion list.
 // The exclusion map should use lowercase keys for case-insensitive matching.
 func FilterExclusions(suggestions []SuggestionT, exclusions map[string]bool) []SuggestionT {

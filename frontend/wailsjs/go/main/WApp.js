@@ -238,6 +238,10 @@ export function NotesRecentFiles() {
   return window['go']['main']['WApp']['NotesRecentFiles']();
 }
 
+export function NotesSpellCheck(arg1) {
+  return window['go']['main']['WApp']['NotesSpellCheck'](arg1);
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
