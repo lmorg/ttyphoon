@@ -18,7 +18,7 @@ import {
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
     NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
-    GetNotesLanguageTabIndent,
+    GetNotesLanguageTabIndent, GetNotesLanguageReservedWords,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
 } from '../wailsjs/go/main/WApp';
@@ -4709,6 +4709,8 @@ async function openCurrentLspDocument(content) {
 
         await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
         state.lspOpenFile = state.currentFile;
+        lspSpellCheckExclusions.keywords = (await GetNotesLanguageReservedWords(languageID)) || [];
+        applyLspSpellCheckExclusions();
         await requestLspSemanticTokens();
         await requestLspInlayHints();
         void updateSpellCheckExclusionsFromDocSymbols();
@@ -4748,7 +4750,8 @@ async function updateSpellCheckExclusionsFromDocSymbols() {
         if (state.currentFile !== fileAtCall) return;
         const names = extractNames(symbols);
         if (names.length > 0) {
-            notesSpellCheckHandle.setExclusions(names);
+            lspSpellCheckExclusions.symbols = names;
+            applyLspSpellCheckExclusions();
             return;
         }
     } catch {
@@ -4764,7 +4767,8 @@ async function updateSpellCheckExclusionsFromDocSymbols() {
         if (state.currentFile !== fileAtCall) return;
         const names = extractNames(symbols);
         if (names.length > 0) {
-            notesSpellCheckHandle.setExclusions(names);
+            lspSpellCheckExclusions.symbols = names;
+            applyLspSpellCheckExclusions();
         }
     } catch {
         // LSP not available or request failed — degrade silently.
@@ -6954,6 +6958,9 @@ async function loadFile(file, options = {}) {
 
     if (state.currentFile && state.currentFile !== file) {
         await closeOpenLspDocument();
+        lspSpellCheckExclusions.symbols = [];
+        lspSpellCheckExclusions.tokens = [];
+        lspSpellCheckExclusions.keywords = [];
         notesSpellCheckHandle?.setExclusions([]);
         // Clear rendered diagnostics immediately while the new file loads.
         state.currentFileUri = '';
@@ -12656,7 +12663,8 @@ function renderLspSemanticTokens() {
             wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
         });
 
-    notesSpellCheckHandle?.setExclusions(symbolWords);
+    lspSpellCheckExclusions.tokens = symbolWords;
+    applyLspSpellCheckExclusions();
 }
 
 function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
@@ -12967,6 +12975,20 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
 }
 
 let notesSpellCheckHandle = null;
+
+// Three independent exclusion sources — always merged before being applied.
+// Separating them prevents one source from clobbering another when they
+// arrive at different times.
+const lspSpellCheckExclusions = { symbols: [], tokens: [], keywords: [] };
+
+function applyLspSpellCheckExclusions() {
+    const merged = [
+        ...lspSpellCheckExclusions.symbols,
+        ...lspSpellCheckExclusions.tokens,
+        ...lspSpellCheckExclusions.keywords,
+    ];
+    notesSpellCheckHandle?.setExclusions(merged);
+}
 
 if (elements.editor) {
     let editorInputSequence = 0;

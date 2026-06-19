@@ -234,6 +234,14 @@ func (a *WApp) GetNotesLanguageTabIndent(language string) int {
 	return config.Config.Notes.Languages.GetTabIndent(language)
 }
 
+// GetNotesLanguageReservedWords returns the reserved words / built-in identifiers for a given language.
+func (a *WApp) GetNotesLanguageReservedWords(language string) []string {
+	if settings, ok := config.Config.Notes.Languages[strings.ToLower(language)]; ok {
+		return settings.ReservedWords
+	}
+	return nil
+}
+
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if ok {

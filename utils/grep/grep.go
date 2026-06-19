@@ -49,6 +49,7 @@ func readContextWithCache(path string, lineNo int, cache map[string][]string) []
 	for i := start; i <= end; i++ {
 		result = append(result, strings.TrimSpace(lines[i]))
 	}
+
 	return result
 }
 

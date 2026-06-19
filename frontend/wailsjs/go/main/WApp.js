@@ -98,6 +98,10 @@ export function GetNotesColumnWidths(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['GetNotesColumnWidths'](arg1, arg2, arg3, arg4);
 }
 
+export function GetNotesLanguageReservedWords(arg1) {
+  return window['go']['main']['WApp']['GetNotesLanguageReservedWords'](arg1);
+}
+
 export function GetNotesLanguageTabIndent(arg1) {
   return window['go']['main']['WApp']['GetNotesLanguageTabIndent'](arg1);
 }

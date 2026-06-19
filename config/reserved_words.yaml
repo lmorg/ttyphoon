@@ -1,0 +1,476 @@
+Notes:
+  Languages:
+    go:
+      ReservedWords: [
+        # Keywords
+        'break', 'case', 'chan', 'const', 'continue', 'default', 'defer',
+        'else', 'fallthrough', 'for', 'func', 'goto', 'if', 'import',
+        'interface', 'map', 'package', 'range', 'return', 'select', 'struct',
+        'switch', 'type', 'var',
+        # Built-in types
+        'bool', 'byte', 'complex64', 'complex128', 'error',
+        'float32', 'float64',
+        'int', 'int8', 'int16', 'int32', 'int64',
+        'rune', 'string',
+        'uint', 'uint8', 'uint16', 'uint32', 'uint64', 'uintptr',
+        # Built-in functions
+        'append', 'cap', 'close', 'complex', 'copy', 'delete', 'imag',
+        'len', 'make', 'new', 'panic', 'print', 'println', 'real', 'recover',
+        # Built-in constants
+        'false', 'iota', 'nil', 'true',
+      ]
+
+    python:
+      ReservedWords: [
+        'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await',
+        'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except',
+        'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is',
+        'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return',
+        'try', 'while', 'with', 'yield',
+        # Common built-ins
+        'bool', 'bytes', 'callable', 'classmethod', 'dict', 'enumerate',
+        'filter', 'float', 'frozenset', 'getattr', 'hasattr', 'isinstance',
+        'issubclass', 'iter', 'len', 'list', 'map', 'next', 'object',
+        'print', 'property', 'range', 'repr', 'reversed', 'set', 'setattr',
+        'slice', 'sorted', 'staticmethod', 'str', 'super', 'tuple', 'type',
+        'vars', 'zip',
+      ]
+    
+    javascript:
+      ReservedWords: [
+        'async', 'await', 'break', 'case', 'catch', 'class', 'const',
+        'continue', 'debugger', 'default', 'delete', 'do', 'else', 'export',
+        'extends', 'false', 'finally', 'for', 'from', 'function', 'if',
+        'import', 'in', 'instanceof', 'let', 'new', 'null', 'of', 'return',
+        'static', 'super', 'switch', 'this', 'throw', 'true', 'try',
+        'typeof', 'undefined', 'var', 'void', 'while', 'with', 'yield',
+      ]
+    
+    typescript:
+      ReservedWords: [
+        'abstract', 'as', 'async', 'await', 'break', 'case', 'catch', 'class',
+        'const', 'constructor', 'continue', 'declare', 'default', 'delete',
+        'do', 'else', 'enum', 'export', 'extends', 'false', 'finally', 'for',
+        'from', 'function', 'get', 'if', 'implements', 'import', 'in',
+        'instanceof', 'interface', 'keyof', 'let', 'namespace', 'new', 'null',
+        'of', 'override', 'package', 'private', 'protected', 'public',
+        'readonly', 'return', 'set', 'static', 'super', 'switch', 'this',
+        'throw', 'true', 'try', 'type', 'typeof', 'undefined', 'var', 'void',
+        'while', 'with', 'yield',
+        # Built-in types
+        'any', 'boolean', 'never', 'number', 'object', 'string', 'symbol',
+        'unknown',
+      ]
+
+    rust:
+      ReservedWords: [
+        'as', 'async', 'await', 'break', 'const', 'continue', 'crate', 'dyn',
+        'else', 'enum', 'extern', 'false', 'fn', 'for', 'if', 'impl', 'in',
+        'let', 'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return',
+        'self', 'Self', 'static', 'struct', 'super', 'trait', 'true', 'type',
+        'union', 'unsafe', 'use', 'where', 'while',
+        # Primitive types
+        'bool', 'char', 'str',
+        'f32', 'f64',
+        'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
+        'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
+      ]
+
+    terraform:
+      ReservedWords: [
+        # Keywords
+        'for', 'in', 'if', 'else', 'null', 'true', 'false',
+        # Block types
+        'resource', 'data', 'variable', 'output', 'locals', 'module',
+        'provider', 'terraform', 'required_providers', 'required_version',
+        'backend', 'moved', 'import', 'check',
+        # Meta-arguments
+        'count', 'for_each', 'depends_on', 'lifecycle', 'provider',
+        'connection', 'provisioner',
+        # Lifecycle block arguments
+        'create_before_destroy', 'prevent_destroy', 'ignore_changes',
+        'replace_triggered_by', 'precondition', 'postcondition',
+        # Built-in functions (common)
+        'abs', 'ceil', 'floor', 'max', 'min', 'pow', 'signum',
+        'chomp', 'format', 'formatlist', 'indent', 'join', 'lower',
+        'regex', 'replace', 'split', 'strrev', 'substr', 'title',
+        'trim', 'trimprefix', 'trimsuffix', 'trimspace', 'upper',
+        'coalesce', 'coalescelist', 'compact', 'concat', 'contains',
+        'distinct', 'element', 'flatten', 'index', 'keys', 'length',
+        'list', 'lookup', 'map', 'matchkeys', 'merge', 'range',
+        'reverse', 'setintersection', 'setproduct', 'setsubtract',
+        'setunion', 'slice', 'sort', 'transpose', 'values', 'zipmap',
+        'base64decode', 'base64encode', 'base64gzip', 'csvdecode',
+        'jsondecode', 'jsonencode', 'urlencode', 'yamldecode', 'yamlencode',
+        'abspath', 'dirname', 'pathexpand', 'basename', 'file',
+        'fileexists', 'fileset', 'filebase64', 'templatefile',
+        'cidrhost', 'cidrnetmask', 'cidrsubnet', 'cidrsubnets',
+        'tobool', 'tolist', 'tomap', 'tonumber', 'toset', 'tostring',
+        'try', 'can', 'issensitive', 'nonsensitive', 'sensitive',
+        'uuid', 'uuidv5', 'timestamp', 'timeadd', 'timecmp',
+        'formatdate', 'plantimestamp',
+      ]
+
+    bash:
+      ReservedWords: [
+        # Keywords
+        'if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'select',
+        'while', 'until', 'do', 'done', 'in', 'function', 'time', 'coproc',
+        '!', '[[', ']]', '{', '}',
+        # Built-in commands
+        'alias', 'bg', 'bind', 'break', 'builtin', 'caller', 'cd', 'command',
+        'compgen', 'complete', 'compopt', 'continue', 'declare', 'dirs',
+        'disown', 'echo', 'enable', 'eval', 'exec', 'exit', 'export',
+        'false', 'fc', 'fg', 'getopts', 'hash', 'help', 'history',
+        'jobs', 'kill', 'let', 'local', 'logout', 'mapfile', 'popd',
+        'printf', 'pushd', 'pwd', 'read', 'readarray', 'readonly',
+        'return', 'set', 'shift', 'shopt', 'source', 'suspend', 'test',
+        'times', 'trap', 'true', 'type', 'typeset', 'ulimit', 'umask',
+        'unalias', 'unset', 'wait',
+        # Special variables (names only)
+        'IFS', 'PATH', 'HOME', 'OLDPWD', 'BASH', 'BASH_VERSION',
+        'BASHPID', 'FUNCNAME', 'LINENO', 'RANDOM', 'SECONDS',
+        'PIPESTATUS', 'REPLY', 'OPTARG', 'OPTIND', 'EUID', 'UID',
+        'HOSTNAME', 'HISTFILE', 'HISTSIZE', 'PS1', 'PS2', 'PS4',
+      ]
+
+    zsh:
+      ReservedWords: [
+        # Keywords (same as bash)
+        'if', 'then', 'else', 'elif', 'fi', 'case', 'esac', 'for', 'select',
+        'while', 'until', 'do', 'done', 'in', 'function', 'time', 'coproc',
+        # Built-in commands
+        'alias', 'bg', 'bind', 'break', 'builtin', 'cd', 'command',
+        'continue', 'declare', 'dirs', 'disown', 'echo', 'enable', 'eval',
+        'exec', 'exit', 'export', 'false', 'fc', 'fg', 'getopts', 'hash',
+        'jobs', 'kill', 'let', 'local', 'logout', 'popd', 'printf', 'pushd',
+        'pwd', 'read', 'readonly', 'return', 'set', 'shift', 'source',
+        'test', 'times', 'trap', 'true', 'type', 'typeset', 'ulimit',
+        'umask', 'unalias', 'unset', 'wait',
+        # zsh-specific built-ins
+        'autoload', 'bindkey', 'compdef', 'compinit', 'compgen', 'complete',
+        'emulate', 'limit', 'noglob', 'nocorrect', 'setopt', 'unsetopt',
+        'vared', 'zcompile', 'zformat', 'zftp', 'zle', 'zmodload',
+        'zparseopts', 'zprof', 'zpty', 'zregexparse', 'zsocket', 'zstyle',
+        # Special variables
+        'IFS', 'PATH', 'HOME', 'OLDPWD', 'ZSH', 'ZSH_VERSION', 'ZPID',
+        'FUNCNAME', 'LINENO', 'RANDOM', 'SECONDS', 'REPLY', 'OPTARG',
+        'OPTIND', 'EUID', 'UID', 'HOSTNAME', 'HISTFILE', 'HISTSIZE',
+        'PS1', 'PS2', 'PS3', 'PS4', 'RPROMPT', 'FPATH',
+      ]
+
+    powershell:
+      ReservedWords: [
+        # Language keywords
+        'Begin', 'Break', 'Catch', 'Class', 'Continue', 'Data', 'Define',
+        'Do', 'DynamicParam', 'Else', 'ElseIf', 'End', 'Enum', 'Exit',
+        'Filter', 'Finally', 'For', 'ForEach', 'From', 'Function', 'Hidden',
+        'If', 'In', 'InlineScript', 'Param', 'Process', 'Return', 'Sequence',
+        'Static', 'Switch', 'Throw', 'Trap', 'Try', 'Until', 'Using',
+        'Var', 'While', 'Workflow',
+        # Built-in variables
+        'true', 'false', 'null',
+        # Common approved verbs (used in cmdlet names)
+        'Add', 'Clear', 'Close', 'Compare', 'Convert', 'Copy', 'Debug',
+        'Disable', 'Disconnect', 'Enable', 'Enter', 'Export', 'Find',
+        'Format', 'Get', 'Grant', 'Group', 'Import', 'Initialize', 'Install',
+        'Invoke', 'Join', 'Limit', 'Lock', 'Merge', 'Move', 'New', 'Open',
+        'Optimize', 'Out', 'Publish', 'Push', 'Read', 'Register', 'Remove',
+        'Rename', 'Reset', 'Restart', 'Resume', 'Revoke', 'Save', 'Search',
+        'Select', 'Send', 'Set', 'Show', 'Skip', 'Sort', 'Split', 'Start',
+        'Stop', 'Suspend', 'Sync', 'Test', 'Trace', 'Undo', 'Uninstall',
+        'Unlock', 'Unregister', 'Update', 'Wait', 'Watch', 'Write',
+      ]
+
+    kotlin:
+      ReservedWords: [
+        # Hard keywords
+        'as', 'break', 'class', 'continue', 'do', 'else', 'false', 'for',
+        'fun', 'if', 'in', 'interface', 'is', 'null', 'object', 'package',
+        'return', 'super', 'this', 'throw', 'true', 'try', 'typealias',
+        'val', 'var', 'when', 'while',
+        # Soft keywords / modifiers
+        'abstract', 'actual', 'annotation', 'companion', 'const',
+        'crossinline', 'data', 'enum', 'expect', 'external', 'final',
+        'infix', 'inline', 'inner', 'internal', 'lateinit', 'noinline',
+        'open', 'operator', 'out', 'override', 'private', 'protected',
+        'public', 'reified', 'sealed', 'suspend', 'tailrec', 'vararg',
+        # Built-in types
+        'Any', 'Boolean', 'Byte', 'Char', 'Double', 'Float', 'Int',
+        'Long', 'Nothing', 'Number', 'Short', 'String', 'Unit',
+        'Array', 'List', 'Map', 'Set', 'Pair', 'Triple', 'Sequence',
+        'MutableList', 'MutableMap', 'MutableSet',
+        # Common functions
+        'also', 'apply', 'by', 'check', 'checkNotNull', 'error', 'it',
+        'lazy', 'let', 'listOf', 'mapOf', 'println', 'require',
+        'requireNotNull', 'run', 'setOf', 'takeIf', 'takeUnless', 'to',
+        'with',
+      ]
+
+    swift:
+      ReservedWords: [
+        # Declarations
+        'associatedtype', 'class', 'deinit', 'enum', 'extension',
+        'fileprivate', 'func', 'import', 'init', 'inout', 'internal',
+        'let', 'open', 'operator', 'private', 'protocol', 'public',
+        'rethrows', 'static', 'struct', 'subscript', 'typealias', 'var',
+        # Statements
+        'break', 'case', 'catch', 'continue', 'default', 'defer', 'do',
+        'else', 'fallthrough', 'for', 'guard', 'if', 'in', 'repeat',
+        'return', 'throw', 'switch', 'where', 'while',
+        # Expressions and types
+        'Any', 'as', 'await', 'false', 'is', 'nil', 'self', 'Self',
+        'super', 'throws', 'true', 'try',
+        # Built-in types
+        'Bool', 'Character', 'Double', 'Float', 'Int', 'Int8', 'Int16',
+        'Int32', 'Int64', 'Never', 'Optional', 'String', 'UInt', 'UInt8',
+        'UInt16', 'UInt32', 'UInt64', 'Void', 'Array', 'Dictionary',
+        'Set', 'Result', 'Error',
+        # Common attributes
+        'async', 'convenience', 'discardableResult', 'dynamic', 'final',
+        'lazy', 'mutating', 'nonmutating', 'optional', 'override',
+        'required', 'some', 'unowned', 'weak',
+      ]
+
+    c:
+      ReservedWords: [
+        # Keywords
+        'auto', 'break', 'case', 'char', 'const', 'continue', 'default',
+        'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto',
+        'if', 'inline', 'int', 'long', 'register', 'restrict', 'return',
+        'short', 'signed', 'sizeof', 'static', 'struct', 'switch',
+        'typedef', 'union', 'unsigned', 'void', 'volatile', 'while',
+        # C11 keywords
+        '_Alignas', '_Alignof', '_Atomic', '_Bool', '_Complex',
+        '_Generic', '_Imaginary', '_Noreturn', '_Static_assert',
+        '_Thread_local',
+        # Common types and macros
+        'bool', 'true', 'false', 'NULL', 'size_t', 'ptrdiff_t',
+        'intptr_t', 'uintptr_t', 'ssize_t',
+        'int8_t', 'int16_t', 'int32_t', 'int64_t',
+        'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+        'INT8_MAX', 'INT16_MAX', 'INT32_MAX', 'INT64_MAX',
+        'UINT8_MAX', 'UINT16_MAX', 'UINT32_MAX', 'UINT64_MAX',
+        # Preprocessor directives (token only)
+        'define', 'include', 'ifdef', 'ifndef', 'endif', 'elif',
+        'undef', 'pragma', 'error',
+        # stdio
+        'printf', 'fprintf', 'sprintf', 'snprintf', 'scanf', 'sscanf',
+        'fopen', 'fclose', 'fread', 'fwrite', 'fgets', 'fputs',
+        'malloc', 'calloc', 'realloc', 'free', 'memcpy', 'memmove',
+        'memset', 'strlen', 'strcpy', 'strncpy', 'strcmp', 'strncmp',
+        'strcat', 'strncat', 'strtol', 'strtod', 'atoi', 'atof',
+        'exit', 'abort',
+      ]
+
+    cpp:
+      ReservedWords: [
+        # C keywords (all apply)
+        'auto', 'break', 'case', 'char', 'const', 'continue', 'default',
+        'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto',
+        'if', 'inline', 'int', 'long', 'register', 'return', 'short',
+        'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef',
+        'union', 'unsigned', 'void', 'volatile', 'while',
+        # C++ specific
+        'alignas', 'alignof', 'and', 'and_eq', 'asm', 'bitand', 'bitor',
+        'bool', 'catch', 'char8_t', 'char16_t', 'char32_t', 'class',
+        'co_await', 'co_return', 'co_yield', 'compl', 'concept',
+        'const_cast', 'consteval', 'constexpr', 'constinit', 'decltype',
+        'delete', 'dynamic_cast', 'explicit', 'export', 'false', 'friend',
+        'mutable', 'namespace', 'new', 'noexcept', 'not', 'not_eq',
+        'nullptr', 'operator', 'or', 'or_eq', 'override', 'private',
+        'protected', 'public', 'reinterpret_cast', 'requires',
+        'static_assert', 'static_cast', 'template', 'this', 'thread_local',
+        'throw', 'true', 'try', 'typeid', 'typename', 'using', 'virtual',
+        'wchar_t', 'xor', 'xor_eq',
+        # Common types
+        'string', 'vector', 'map', 'unordered_map', 'set', 'unordered_set',
+        'list', 'deque', 'queue', 'stack', 'array', 'tuple', 'pair',
+        'optional', 'variant', 'any', 'function', 'unique_ptr', 'shared_ptr',
+        'weak_ptr', 'make_unique', 'make_shared', 'move', 'forward',
+        'nullptr_t', 'size_t', 'ptrdiff_t',
+        'int8_t', 'int16_t', 'int32_t', 'int64_t',
+        'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+        'cout', 'cin', 'cerr', 'endl', 'printf', 'malloc', 'free',
+      ]
+
+    csharp:
+      ReservedWords: [
+        # Keywords
+        'abstract', 'as', 'base', 'bool', 'break', 'byte', 'case', 'catch',
+        'char', 'checked', 'class', 'const', 'continue', 'decimal', 'default',
+        'delegate', 'do', 'double', 'else', 'enum', 'event', 'explicit',
+        'extern', 'false', 'finally', 'fixed', 'float', 'for', 'foreach',
+        'goto', 'if', 'implicit', 'in', 'int', 'interface', 'internal', 'is',
+        'lock', 'long', 'namespace', 'new', 'null', 'object', 'operator',
+        'out', 'override', 'params', 'private', 'protected', 'public',
+        'readonly', 'ref', 'return', 'sbyte', 'sealed', 'short', 'sizeof',
+        'stackalloc', 'static', 'string', 'struct', 'switch', 'this', 'throw',
+        'true', 'try', 'typeof', 'uint', 'ulong', 'unchecked', 'unsafe',
+        'ushort', 'using', 'virtual', 'void', 'volatile', 'while',
+        # Contextual keywords
+        'add', 'alias', 'ascending', 'async', 'await', 'by', 'descending',
+        'dynamic', 'equals', 'from', 'get', 'global', 'group', 'into',
+        'join', 'let', 'nameof', 'notnull', 'on', 'orderby', 'partial',
+        'record', 'remove', 'required', 'scoped', 'select', 'set',
+        'unmanaged', 'value', 'var', 'when', 'where', 'with', 'yield',
+        # Common types
+        'Console', 'DateTime', 'Dictionary', 'Enumerable', 'Exception',
+        'IDisposable', 'IEnumerable', 'IEnumerator', 'IList', 'IReadOnlyList',
+        'List', 'Math', 'StringBuilder', 'String', 'Task', 'Thread', 'Tuple',
+      ]
+
+    java:
+      ReservedWords: [
+        # Keywords
+        'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch',
+        'char', 'class', 'const', 'continue', 'default', 'do', 'double',
+        'else', 'enum', 'extends', 'final', 'finally', 'float', 'for',
+        'goto', 'if', 'implements', 'import', 'instanceof', 'int',
+        'interface', 'long', 'native', 'new', 'null', 'package', 'private',
+        'protected', 'public', 'return', 'short', 'static', 'strictfp',
+        'super', 'switch', 'synchronized', 'this', 'throw', 'throws',
+        'transient', 'try', 'var', 'void', 'volatile', 'while',
+        # Literals
+        'false', 'true',
+        # Common classes
+        'ArrayList', 'Boolean', 'Byte', 'Character', 'Class', 'Collections',
+        'Double', 'Exception', 'Float', 'HashMap', 'HashSet', 'Integer',
+        'Iterator', 'LinkedList', 'List', 'Long', 'Map', 'Math', 'Number',
+        'Object', 'Optional', 'RuntimeException', 'Set', 'Short', 'Stream',
+        'String', 'StringBuilder', 'System', 'Thread', 'Throwable',
+        # Common annotations
+        'Override', 'Deprecated', 'FunctionalInterface', 'SuppressWarnings',
+        'SafeVarargs',
+      ]
+
+    scala:
+      ReservedWords: [
+        # Keywords
+        'abstract', 'case', 'class', 'catch', 'def', 'do', 'else',
+        'extends', 'false', 'final', 'finally', 'for', 'forSome', 'if',
+        'implicit', 'import', 'lazy', 'match', 'new', 'null', 'object',
+        'override', 'package', 'private', 'protected', 'return', 'sealed',
+        'super', 'this', 'throw', 'trait', 'true', 'try', 'type',
+        'val', 'var', 'while', 'with', 'yield',
+        # Scala 3 keywords
+        'enum', 'export', 'extension', 'given', 'inline', 'opaque',
+        'open', 'transparent', 'using',
+        # Built-in types
+        'Any', 'AnyRef', 'AnyVal', 'Boolean', 'Byte', 'Char', 'Double',
+        'Float', 'Int', 'Long', 'Nothing', 'Null', 'Short', 'String', 'Unit',
+        # Common collections
+        'Array', 'Either', 'Future', 'Iterator', 'List', 'Map', 'Option',
+        'Seq', 'Set', 'Some', 'None', 'Left', 'Right', 'Tuple', 'Vector',
+      ]
+
+    php:
+      ReservedWords: [
+        # Keywords
+        'abstract', 'and', 'array', 'as', 'break', 'callable', 'case',
+        'catch', 'class', 'clone', 'const', 'continue', 'declare', 'default',
+        'do', 'echo', 'else', 'elseif', 'empty', 'enum', 'eval', 'exit',
+        'extends', 'final', 'finally', 'fn', 'for', 'foreach', 'function',
+        'global', 'goto', 'if', 'implements', 'include', 'include_once',
+        'instanceof', 'insteadof', 'interface', 'isset', 'list', 'match',
+        'namespace', 'new', 'null', 'or', 'print', 'private', 'protected',
+        'public', 'readonly', 'require', 'require_once', 'return', 'static',
+        'switch', 'throw', 'trait', 'try', 'unset', 'use', 'var', 'while',
+        'xor', 'yield',
+        # Types
+        'bool', 'false', 'float', 'int', 'mixed', 'never', 'object',
+        'string', 'true', 'void',
+        # Superglobals
+        'GLOBALS', 'SERVER', 'GET', 'POST', 'FILES', 'COOKIE', 'SESSION',
+        'REQUEST', 'ENV',
+        # Common functions
+        'array_filter', 'array_keys', 'array_map', 'array_merge',
+        'array_push', 'array_slice', 'array_values', 'count', 'explode',
+        'implode', 'in_array', 'is_array', 'is_null', 'is_string',
+        'json_decode', 'json_encode', 'preg_match', 'preg_replace',
+        'sprintf', 'str_contains', 'str_replace', 'strlen', 'strtolower',
+        'strtoupper', 'substr', 'trim', 'var_dump',
+      ]
+
+    ruby:
+      ReservedWords: [
+        # Keywords
+        '__ENCODING__', '__LINE__', '__FILE__', 'BEGIN', 'END',
+        'alias', 'and', 'begin', 'break', 'case', 'class', 'def',
+        'do', 'else', 'elsif', 'end', 'ensure', 'false', 'for',
+        'if', 'in', 'module', 'next', 'nil', 'not', 'or',
+        'redo', 'rescue', 'retry', 'return', 'self', 'super', 'then',
+        'true', 'undef', 'unless', 'until', 'when', 'while', 'yield',
+        # Built-in classes
+        'Array', 'BasicObject', 'Binding', 'Class', 'Comparable',
+        'Complex', 'Dir', 'Enumerable', 'Enumerator', 'Exception',
+        'FalseClass', 'File', 'Float', 'Hash', 'IO', 'Integer',
+        'Kernel', 'Method', 'Module', 'NilClass', 'Numeric', 'Object',
+        'Proc', 'Range', 'Rational', 'Regexp', 'String', 'Symbol',
+        'Thread', 'Time', 'TrueClass',
+        # Common methods / DSL
+        'attr_accessor', 'attr_reader', 'attr_writer', 'extend', 'include',
+        'initialize', 'new', 'prepend', 'private', 'protected', 'public',
+        'puts', 'print', 'p', 'pp', 'raise', 'require', 'require_relative',
+        'send', 'freeze', 'frozen?', 'dup', 'clone',
+      ]
+
+#    ruby:
+#      ReservedWords: [
+#        # Keywords
+#        '__ENCODING__', '__LINE__', '__FILE__', 'BEGIN', 'END',
+#        'alias', 'and', 'begin', 'break', 'case', 'class', 'def',
+#        'defined?', 'do', 'else', 'elsif', 'end', 'ensure', 'false',
+#        'for', 'if', 'in', 'module', 'next', 'nil', 'not', 'or',
+#        'redo', 'rescue', 'retry', 'return', 'self', 'super', 'then',
+#        'true', 'undef', 'unless', 'until', 'when', 'while', 'yield',
+#        # Built-in classes
+#        'Array', 'BasicObject', 'Binding', 'Class', 'Comparable',
+#        'Complex', 'Dir', 'Encoding', 'Enumerable', 'Enumerator',
+#        'Exception', 'FalseClass', 'File', 'Float', 'Hash', 'IO',
+#        'Integer', 'Kernel', 'Method', 'Module', 'NilClass', 'Numeric',
+#        'Object', 'Proc', 'Range', 'Rational', 'Regexp', 'String',
+#        'Symbol', 'Thread', 'Time', 'TrueClass',
+#        # Common methods
+#        'attr_accessor', 'attr_reader', 'attr_writer', 'extend', 'include',
+#        'initialize', 'new', 'prepend', 'private', 'protected', 'public',
+#        'puts', 'print', 'p', 'pp', 'raise', 'require', 'require_relative',
+#        'send', 'respond_to?', 'is_a?', 'kind_of?', 'nil?',
+#      ]
+
+    lua:
+      ReservedWords: [
+        # Keywords
+        'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
+        'function', 'goto', 'if', 'in', 'local', 'nil', 'not', 'or',
+        'repeat', 'return', 'then', 'true', 'until', 'while',
+        # Built-in functions
+        'assert', 'collectgarbage', 'dofile', 'error', 'getmetatable',
+        'ipairs', 'load', 'loadfile', 'next', 'pairs', 'pcall', 'print',
+        'rawequal', 'rawget', 'rawlen', 'rawset', 'require', 'select',
+        'setmetatable', 'tonumber', 'tostring', 'type', 'xpcall',
+        # Standard libraries (table names)
+        'coroutine', 'debug', 'io', 'math', 'os', 'package', 'string',
+        'table', 'utf8',
+      ]
+
+    perl:
+      ReservedWords: [
+        # Keywords / named unary operators
+        'BEGIN', 'END', 'CHECK', 'INIT', 'UNITCHECK', 'DESTROY',
+        'and', 'or', 'not', 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'cmp',
+        'my', 'our', 'local', 'use', 'no', 'package', 'sub', 'do',
+        'if', 'else', 'elsif', 'unless', 'while', 'until', 'for', 'foreach',
+        'last', 'next', 'redo', 'return', 'bless', 'ref', 'undef',
+        'wantarray', 'caller', 'die', 'warn', 'exit',
+        # Built-in functions
+        'chomp', 'chop', 'defined', 'delete', 'each', 'exists', 'keys',
+        'values', 'push', 'pop', 'shift', 'unshift', 'splice', 'reverse',
+        'sort', 'grep', 'map', 'join', 'split', 'sprintf', 'printf',
+        'print', 'say', 'open', 'close', 'read', 'write', 'seek', 'tell',
+        'eof', 'chdir', 'mkdir', 'opendir', 'readdir', 'closedir',
+        'length', 'substr', 'index', 'rindex', 'uc', 'lc', 'ucfirst',
+        'lcfirst', 'pos', 'quotemeta', 'chr', 'ord', 'hex', 'oct',
+        'abs', 'int', 'sqrt', 'rand', 'srand', 'time', 'localtime',
+        'scalar', 'wantarray', 'prototype',
+      ]

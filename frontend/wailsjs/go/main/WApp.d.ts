@@ -56,6 +56,8 @@ export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
 
 export function GetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<Array<number>>;
 
+export function GetNotesLanguageReservedWords(arg1:string):Promise<Array<string>>;
+
 export function GetNotesLanguageTabIndent(arg1:string):Promise<number>;
 
 export function GetNotesMaxLogLines():Promise<number>;

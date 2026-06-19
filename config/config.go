@@ -20,6 +20,11 @@ import (
 //go:embed defaults.yaml
 var defaults []byte
 
+//go:embed reserved_words.yaml
+var reservedWords []byte
+
+var langCache = LanguagesT{}
+
 func init() {
 	if err := LoadConfig(); err != nil {
 		panic(err)
@@ -28,6 +33,11 @@ func init() {
 
 func LoadConfig() error {
 	err := readConfigFile(bytes.NewReader(defaults))
+	if err != nil {
+		return err
+	}
+
+	err = readConfigFile(bytes.NewReader(reservedWords))
 	if err != nil {
 		return err
 	}
@@ -80,6 +90,22 @@ func readConfigFile(r io.Reader) error {
 		lowercasedLanguages[strings.ToLower(k)] = v
 	}
 	Config.Notes.Languages = lowercasedLanguages
+
+	// merge reserved words
+	for k, v := range langCache {
+		if Config.Notes.Languages[k] == nil {
+			Config.Notes.Languages[k] = &LanguageOptionsT{}
+		}
+		for _, word := range v.ReservedWords {
+			Config.Notes.Languages[k].ReservedWords = append(Config.Notes.Languages[k].ReservedWords, word)
+		}
+	}
+	for k, v := range Config.Notes.Languages {
+		if langCache[k] == nil {
+			langCache[k] = &LanguageOptionsT{}
+		}
+		langCache[k].ReservedWords = v.ReservedWords
+	}
 
 	return nil
 }
@@ -157,9 +183,12 @@ type configT struct {
 	} `yaml:"AI"`
 }
 
-type LanguagesT map[string]struct {
-	TabSpaceIndent int  `yaml:"TabSpaceIndent"`
-	LSP            LspT `yaml:"LSP"`
+type LanguagesT map[string]*LanguageOptionsT
+
+type LanguageOptionsT struct {
+	TabSpaceIndent int      `yaml:"TabSpaceIndent"`
+	LSP            LspT     `yaml:"LSP"`
+	ReservedWords  []string `yaml:"ReservedWords"`
 }
 
 type LspT struct {

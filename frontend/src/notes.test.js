@@ -95,6 +95,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesMaxLogLines: getNotesMaxLogLinesMock,
     GetNotesLanguageTabIndent: getNotesLanguageTabIndentMock,
+    GetNotesLanguageReservedWords: vi.fn(() => Promise.resolve([])),
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,

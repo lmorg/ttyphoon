@@ -148,7 +148,9 @@ export function attachSpellCheck(textarea, options = {}) {
 
         const mirrorRect = mirror.getBoundingClientRect();
 
-        const result = misspellings.map(m => {
+        const result = misspellings
+            .filter(m => m.wordStart >= 0 && m.wordStart + m.wordLength <= text.length)
+            .map(m => {
             const range = document.createRange();
             range.setStart(textNode, m.wordStart);
             range.setEnd(textNode, m.wordStart + m.wordLength);
