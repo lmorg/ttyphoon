@@ -28,6 +28,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file/meta"
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
+	"github.com/lmorg/ttyphoon/utils/find"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/grep"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
@@ -858,6 +859,20 @@ func imageMime(ext string) string {
 		return "image/svg+xml"
 	}
 	return "image/" + ext[1:]
+}
+
+// FilterStrings uses the find package to filter a list of strings by query.
+// Supports: plain words (AND), "or word1 word2" (OR), "! word" (NOT), "rx regexp", "g glob".
+// Returns the original list unchanged when query is empty or malformed.
+func (a *WApp) FilterStrings(query string, items []string) []string {
+	if strings.TrimSpace(query) == "" {
+		return items
+	}
+	f, err := find.New(query)
+	if err != nil {
+		return items
+	}
+	return f.Filter(items)
 }
 
 func (a *WApp) ListFiles() []string {

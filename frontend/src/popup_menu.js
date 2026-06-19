@@ -1,6 +1,7 @@
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import {
     CommandPaletteSelect,
+    FilterStrings,
     TerminalMenuHighlight,
     TerminalMenuSelect,
     TerminalMenuCancel,
@@ -17,6 +18,7 @@ let _setAnchorFn = null;
 let _menuOperationInProgress = false;
 let _localMenuReturnFocus = null;
 let _listMenuTransitionSeq = 0;
+let _goFilterSeq = 0;
 
 function menuHighlight(id, index) {
     if (id < 0) {
@@ -116,12 +118,16 @@ function tokenizeQuery(q) {
     return (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
 }
 
-export function buildFilteredItems(items, query) {
-    const tokens = tokenizeQuery(query);
+export function buildFilteredItems(items, query, visibleSet = null) {
+    const tokens = visibleSet === null ? tokenizeQuery(query) : null;
 
     const raw = items.map((item) => {
         if (item.separator) {
             return { ...item, visible: true };
+        }
+
+        if (visibleSet !== null) {
+            return { ...item, visible: visibleSet.has(item.title) };
         }
 
         if (tokens.length === 0) {
@@ -294,6 +300,7 @@ export function initTerminalPopupMenu(canvas) {
 
     function hideListMenu(cancel = true) {
         const transitionSeq = ++_listMenuTransitionSeq;
+        _goFilterSeq++; // cancel any pending async filter render
 
         if (activeListMenuId !== null && cancel) {
             menuCancel(activeListMenuId, -1);
@@ -387,7 +394,7 @@ export function initTerminalPopupMenu(canvas) {
         }
 
         setHighlightByVisibleIndex(visibleIndex);
-        renderListbox();
+        renderDOM();
     }
 
     function selectMenuItem(item) {
@@ -418,12 +425,7 @@ export function initTerminalPopupMenu(canvas) {
         setHighlightByVisibleIndex(selectable[next]);
     }
 
-    function renderListbox() {
-        if (hideItemsUntilQuery && query.length === 0) {
-            filteredItems = [];
-        } else {
-            filteredItems = buildFilteredItems(listItems, query);
-        }
+    function renderDOM() {
         ensureValidHighlight();
 
         if (highlightVisibleIndex >= 0 && activeListMenuId !== null) {
@@ -504,6 +506,34 @@ export function initTerminalPopupMenu(canvas) {
         positionMenu(listRoot);
     }
 
+    async function renderListbox() {
+        const seq = ++_goFilterSeq;
+
+        if (hideItemsUntilQuery && query.length === 0) {
+            filteredItems = [];
+        } else if (query.trim()) {
+            try {
+                const titles = listItems
+                    .filter((item) => !item.separator)
+                    .map((item) => item.title);
+                const matched = await FilterStrings(query, titles);
+                if (seq !== _goFilterSeq) {
+                    return;
+                }
+                filteredItems = buildFilteredItems(listItems, query, new Set(matched));
+            } catch {
+                filteredItems = buildFilteredItems(listItems, query);
+            }
+        } else {
+            filteredItems = buildFilteredItems(listItems, query);
+        }
+
+        if (seq !== _goFilterSeq) {
+            return;
+        }
+        renderDOM();
+    }
+
     function showListMenu(menu) {
         // Invalidate any pending hide callback from a previous menu instance.
         _listMenuTransitionSeq++;
@@ -568,9 +598,21 @@ export function initTerminalPopupMenu(canvas) {
         }
 
         if (!listRoot.contains(event.target)) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
             hideMenus(true);
+
+            // Swallow the mouseup and click that will follow this mousedown so
+            // they don't activate whatever is underneath the menu.
+            const swallow = (e) => {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            };
+            window.addEventListener('mouseup', swallow, { capture: true, once: true });
+            window.addEventListener('click', swallow, { capture: true, once: true });
         }
-    });
+    }, true);
 
     window.addEventListener('keydown', (event) => {
         if (listRoot.isConnected && listRoot.style.display !== 'none') {
@@ -598,7 +640,7 @@ export function initTerminalPopupMenu(canvas) {
                 mouseHighlightEnabled = false;
                 syncMouseHighlightState();
                 cycleHighlight(1);
-                renderListbox();
+                renderDOM();
                 return;
             }
 
@@ -606,7 +648,7 @@ export function initTerminalPopupMenu(canvas) {
                 mouseHighlightEnabled = false;
                 syncMouseHighlightState();
                 cycleHighlight(-1);
-                renderListbox();
+                renderDOM();
                 return;
             }
 

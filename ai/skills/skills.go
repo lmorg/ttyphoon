@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/adrg/frontmatter"
@@ -42,9 +43,7 @@ func (skills Skills) FromFunctionName(fn string) *SkillT {
 	return nil
 }
 
-func ReadSkills() Skills {
-	var skills []*SkillT
-
+func ReadSkills() (skills Skills) {
 	files := file.GetConfigGlob("agent-skills/*/SKILL.md")
 	files = append(files, file.GetConfigGlob("skills/*/SKILL.md")...)
 
@@ -69,7 +68,11 @@ func ReadSkills() Skills {
 		skills = append(skills, skill)
 	}
 
-	return skills
+	sort.Slice(skills, func(i, j int) bool {
+		return skills[i].FunctionName < skills[j].FunctionName
+	})
+
+	return
 }
 
 var rxSkillToolParams = regexp.MustCompile(`(([-a-zA-Z0-9]+)|([-a-zA-Z0-9]+)\((.*?)\))`)

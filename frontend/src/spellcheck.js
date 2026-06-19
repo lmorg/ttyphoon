@@ -219,6 +219,7 @@ export function attachSpellCheck(textarea, options = {}) {
         ctx.clip();
 
         ctx.strokeStyle = redColour;
+        ctx.globalAlpha = 0.4;
         ctx.lineWidth   = 1.5;
         ctx.lineJoin    = 'round';
         ctx.lineCap     = 'round';

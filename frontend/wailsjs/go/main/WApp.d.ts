@@ -24,6 +24,8 @@ export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
 
+export function FilterStrings(arg1:string,arg2:Array<string>):Promise<Array<string>>;
+
 export function FocusTerminalPane():Promise<void>;
 
 export function FormatCodeBlock(arg1:string,arg2:string,arg3:string,arg4:string):Promise<jupyter.FormatCodeReturnT>;

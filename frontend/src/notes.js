@@ -21,6 +21,7 @@ import {
     GetNotesLanguageTabIndent, GetNotesLanguageReservedWords,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
+    FilterStrings,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -791,6 +792,7 @@ const state = {
         wholeWord: false,
     },
     fileFilterQuery: '',
+    filteredFiles: null,
     expandedCategories: {
         '$GLOBAL': true,
         '$NOTES': true,
@@ -5745,7 +5747,7 @@ async function refreshFiles() {
         state.currentProjectRoot = await GetCurrentProject();
         elements.title.innerText = await GetCurrentGroupName();
         await loadProjectCache();
-        renderFileList();
+        await applyFileFilter();
     } catch (err) {
         notifyTerminal('Failed to load file list', 'error');
         console.error(err);
@@ -5816,16 +5818,22 @@ function saveProjectCache() {
 }
 
 function getFilteredFiles() {
-    const query = state.fileFilterQuery.trim().toLowerCase();
-    if (!query) {
-        return state.files;
-    }
+    return state.filteredFiles !== null ? state.filteredFiles : state.files;
+}
 
-    return state.files.filter((file) => {
-        const normalizedFile = String(file || '').toLowerCase();
-        const fileName = getPathFileName(file).toLowerCase();
-        return normalizedFile.includes(query) || fileName.includes(query);
-    });
+async function applyFileFilter() {
+    const query = state.fileFilterQuery.trim();
+    if (!query) {
+        state.filteredFiles = null;
+        renderFileList();
+        return;
+    }
+    try {
+        state.filteredFiles = await FilterStrings(query, state.files);
+    } catch {
+        state.filteredFiles = null;
+    }
+    renderFileList();
 }
 
 function isProjectFindListModeActive() {
@@ -10960,6 +10968,10 @@ function applyWindowStyle(result) {
             background-color: transparent;
         }
 
+        #notes-pane[data-fullsize="true"] #notes-panel:has(#notes-tools-panel[data-collapsed="true"]) #notes-editor-shell:focus-within {
+            border-bottom-right-radius: 8px;
+        }
+
         #notes-editor-shell[data-code-view="true"] {
             grid-template-columns: max-content 1fr;
         }
@@ -13774,7 +13786,7 @@ if (elements.listFilter) {
             scheduleProjectFindSearch();
             return;
         }
-        renderFileList();
+        applyFileFilter();
     });
 
     elements.listFilter.addEventListener('keydown', (event) => {
@@ -13786,7 +13798,7 @@ if (elements.listFilter) {
                 scheduleProjectFindSearch();
                 return;
             }
-            renderFileList();
+            applyFileFilter();
             return;
         }
 
@@ -13853,7 +13865,7 @@ if (elements.listFilterClear && elements.listFilter) {
             scheduleProjectFindSearch();
             return;
         }
-        renderFileList();
+        applyFileFilter();
         elements.listFilter.focus();
     });
 }

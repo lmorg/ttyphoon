@@ -872,6 +872,7 @@ function enterNotesFullsize() {
     notesPane.style.flexShrink   = '0';
     notesPane.style.borderRight  = '0';
     notesPane.style.borderRadius = '8px';
+    notesPane.dataset.fullsize   = 'true';
 
     // Store restore info on the overlay element for use in exitNotesFullsize.
     overlay._savedParent  = savedParent;
@@ -911,6 +912,7 @@ function exitNotesFullsize() {
         notesPane.style.borderRight  = savedStyle.borderRight;
         notesPane.style.borderRadius = savedStyle.borderRadius;
     }
+    delete notesPane.dataset.fullsize;
 
     overlay.remove();
     notesFullsizeOverlay = null;
