@@ -515,6 +515,9 @@ app.innerHTML = `
                 <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-preview"></div>
                 </div>
+                <div id="notes-html-view-wrap" role="tabpanel">
+                    <iframe id="notes-html-view-frame" title="HTML preview" sandbox=""></iframe>
+                </div>
                 <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
                     <div id="notes-jupyter"></div>
                 </div>
@@ -662,6 +665,8 @@ const elements = {
     editorHighlight: document.getElementById('notes-editor-highlight'),
     editorHighlightCode: document.getElementById('notes-editor-highlight-code'),
     preview: document.getElementById('notes-preview'),
+    htmlViewWrap: document.getElementById('notes-html-view-wrap'),
+    htmlViewFrame: document.getElementById('notes-html-view-frame'),
     jupyter: document.getElementById('notes-jupyter'),
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
@@ -757,7 +762,7 @@ const state = {
     currentFile: '',
     currentFileUri: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
-    currentFileType: 'markdown',  // 'markdown' | 'json' | 'code' | 'image' | 'csv' | 'binary'
+    currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
     suspendDocumentCacheSave: false,
     dirty: false,
     renderTimer: null,
@@ -1051,6 +1056,10 @@ function inferEditorLanguage(file, content) {
         md: 'markdown',
         markdown: 'markdown',
         html: 'xml',
+        htm: 'xml',
+        xhtml: 'xml',
+        xht: 'xml',
+        shtml: 'xml',
         xml: 'xml',
         plist: 'xml',
         manifest: 'xml',
@@ -1164,7 +1173,7 @@ async function getIndentationString() {
 }
 
 function usesCodeEditorDecorations() {
-    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
+    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown' || state.currentFileType === 'html';
 }
 
 const SYNTAX_COMPLETION_TRIGGER_KEYS = new Set(['(', '[', '{', '"', "'", '`', '<', '>']);
@@ -1265,6 +1274,10 @@ function maybeHandleSyntaxCompletionKey(event, textarea, options = {}) {
 
 function isMarkdownNotesFile(fileName) {
     return /\.(md|markdown)$/i.test(String(fileName || ''));
+}
+
+function isHtmlViewFile(fileName) {
+    return /\.(html?|xhtml|xht|shtml)$/i.test(String(fileName || ''));
 }
 
 function isImageFile(fileName) {
@@ -1931,6 +1944,15 @@ async function renderMarkdown() {
             performFind();
         }, 0);
     }
+}
+
+function renderHtmlView() {
+    if (!elements.htmlViewFrame) {
+        return;
+    }
+
+    // Sandboxed iframe without allow-scripts keeps inline/external JS disabled.
+    elements.htmlViewFrame.srcdoc = String(elements.editor?.value || '');
 }
 
 function getToCHeadingKey(level, text) {
@@ -3437,6 +3459,10 @@ function scheduleRender() {
     }
     state.renderTimer = setTimeout(() => {
         state.renderTimer = null;
+        if (state.currentFileType === 'html') {
+            renderHtmlView();
+            return;
+        }
         renderMarkdown();
     }, 120);
 }
@@ -3452,7 +3478,7 @@ function scheduleAutoSave() {
 }
 
 function isCurrentFileLspEligible() {
-    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown';
+    return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown' || state.currentFileType === 'html';
 }
 
 // Returns the active Jupyter code block LSP context, or null when the main editor is active.
@@ -4928,6 +4954,8 @@ function setViewMode(mode) {
         } else {
             state.viewMode = 'swagger-view';
         }
+    } else if (state.currentFileType === 'html') {
+        state.viewMode = mode === 'viewer' ? 'html-view' : 'editor';
     } else if (state.currentFileType === 'code') {
         state.viewMode = 'editor';
     } else if (state.currentFileType === 'binary') {
@@ -4952,11 +4980,12 @@ function setViewMode(mode) {
     const isHex = state.viewMode === 'hex';
     const isJupyter = state.viewMode === 'jupyter';
     const isViewer = state.viewMode === 'viewer';
+    const isHtmlView = state.viewMode === 'html-view';
     const isMeta = state.viewMode === 'meta';
     
     elements.tabEditor.setAttribute('aria-selected', isEditor ? 'true' : 'false');
     elements.tabHex.setAttribute('aria-selected', isHex ? 'true' : 'false');
-    elements.tabViewer.setAttribute('aria-selected', isViewer ? 'true' : 'false');
+    elements.tabViewer.setAttribute('aria-selected', (isViewer || isHtmlView) ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
     elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
     
@@ -4964,6 +4993,7 @@ function setViewMode(mode) {
     elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
     elements.hexWrap.dataset.active = isHex ? 'true' : 'false';
     elements.previewWrap.dataset.active = isViewer ? 'true' : 'false';
+    elements.htmlViewWrap.dataset.active = isHtmlView ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
     
@@ -5008,6 +5038,10 @@ function setViewMode(mode) {
         renderMetaView();
     }
 
+    if (isHtmlView) {
+        renderHtmlView();
+    }
+
     updateFindAvailability();
     syncToolsToCHighlightForMode();
 
@@ -5031,7 +5065,7 @@ function setEditorWrapMode(enabled) {
 }
 
 function toggleMarkdownWrapMode() {
-    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json' || state.currentFileType === 'html';
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     if (!isCodeLike || (state.viewMode !== 'editor' && !isStructuredEdit)) {
         return;
@@ -6244,6 +6278,7 @@ function updateTabVisibility(fileType) {
     }
 
     const isJson  = fileType === 'json';
+    const isHtml  = fileType === 'html';
     const isCode  = fileType === 'code';
     const isBinary = fileType === 'binary';
     const isImage = fileType === 'image';
@@ -6295,6 +6330,19 @@ function updateTabVisibility(fileType) {
         elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
+        elements.tabJupyter.style.display = 'none';
+        elements.tabSwaggerView.style.display = 'none';
+        elements.tabSwaggerEdit.style.display = 'none';
+        elements.tabSwaggerRun.style.display = 'none';
+        return;
+    }
+
+    if (isHtml) {
+        // HTML files use View + Edit tabs plus Hex + Meta.
+        elements.tabViewer.style.display = '';
+        elements.tabEditor.style.display = '';
+        elements.tabHex.style.display = '';
+        elements.tabMeta.style.display = '';
         elements.tabJupyter.style.display = 'none';
         elements.tabSwaggerView.style.display = 'none';
         elements.tabSwaggerEdit.style.display = 'none';
@@ -6986,6 +7034,7 @@ async function loadFile(file, options = {}) {
 
         const loadingJson     = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
+        const loadingHtml     = isHtmlViewFile(file);
         const loadingImage    = isImageFile(file);
         const loadingCsv      = isCsvFile(file);
         stickyId = loadingJson ? Date.now() : null;
@@ -7163,6 +7212,23 @@ async function loadFile(file, options = {}) {
             await renderJupyterView();
 
             // Set default view mode to viewer
+            setViewMode('viewer');
+        } else if (loadingHtml) {
+            state.currentFileType = 'html';
+            setCodeEditorMode(true);
+            elements.editorShell.dataset.fileType = 'html';
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+
+            // Update UI for HTML
+            updateTabVisibility('html');
+
+            // Set editor content
+            elements.editor.value = doc || '';
+            refreshEditorLanguage(file, doc || '');
+
+            // Render sandboxed preview and default to View first.
+            renderHtmlView();
             setViewMode('viewer');
         } else if (loadingCsv) {
             state.currentFileType = 'csv';
@@ -7727,6 +7793,7 @@ async function openProjectFindResult(item) {
 function isFindAvailableInCurrentMode() {
     return state.viewMode !== 'swagger-run'
         && state.viewMode !== 'image-view'
+    && state.viewMode !== 'html-view'
         && state.viewMode !== 'hex'
         && state.viewMode !== 'meta';
 }
@@ -8913,6 +8980,54 @@ async function processAIMarkdownContainer(container) {
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
+    if (container && container.dataset.notesLinkHoverBound !== 'true') {
+        container.dataset.notesLinkHoverBound = 'true';
+
+        container.addEventListener('mouseover', (e) => {
+            const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (anchor && container.contains(anchor)) {
+                showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
+            }
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (anchor && container.contains(anchor)) {
+                const href = String(anchor.href || anchor.getAttribute('href') || '').trim();
+                const displayHref = formatHyperlinkHoverHref(href);
+                if (displayHref && hyperlinkHoverTooltipEl.dataset.href !== displayHref) {
+                    showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
+                } else {
+                    positionHyperlinkHoverTooltip(e.clientX, e.clientY);
+                }
+                return;
+            }
+
+            hideHyperlinkHoverTooltip();
+        });
+
+        container.addEventListener('mouseout', (e) => {
+            const leavingAnchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (!leavingAnchor || !container.contains(leavingAnchor)) {
+                return;
+            }
+
+            const related = e.relatedTarget;
+            if (related instanceof Element) {
+                const nextAnchor = related.closest('a[href]');
+                if (nextAnchor && container.contains(nextAnchor)) {
+                    return;
+                }
+            }
+
+            hideHyperlinkHoverTooltip();
+        });
+
+        container.addEventListener('mousedown', () => {
+            hideHyperlinkHoverTooltip();
+        });
+    }
+
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
         if (anchor && container.contains(anchor)) {
@@ -10200,6 +10315,22 @@ function applyWindowStyle(result) {
             overflow: auto;
         }
 
+        #notes-html-view-wrap {
+            flex: 1;
+            display: none;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        #notes-html-view-frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: #fff;
+        }
+
         #notes-swagger-view-wrap,
         #notes-swagger-run-wrap,
         #notes-hex-wrap {
@@ -10211,6 +10342,7 @@ function applyWindowStyle(result) {
         }
 
         #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
+        #notes-pane[data-terminal-focused="true"] #notes-html-view-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
         #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
@@ -10223,6 +10355,7 @@ function applyWindowStyle(result) {
         #notes-editor-wrap[data-active="true"],
         #notes-hex-wrap[data-active="true"],
         #notes-preview-wrap[data-active="true"],
+        #notes-html-view-wrap[data-active="true"],
         #notes-jupyter-wrap[data-active="true"],
         #notes-meta-wrap[data-active="true"] {
             display: block;
@@ -12149,6 +12282,26 @@ function applyWindowStyle(result) {
         #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
         #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
 
+        #notes-hyperlink-hover-tooltip {
+            position: fixed;
+            z-index: 9003;
+            pointer-events: none;
+            max-width: 60vw;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
+            background: var(--terminal-menu-bg, var(--bg));
+            color: var(--terminal-menu-fg, var(--fg));
+            font-family: var(--terminal-menu-font, var(--font-family));
+            font-size: var(--terminal-menu-font-size);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            opacity: 0.92;
+            animation: tty-menu-appear 0.12s ease-out;
+            display: none;
+        }
+
         #notes-lsp-completion {
             --notes-lsp-completion-visible-rows: 12;
             --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
@@ -12344,6 +12497,80 @@ const lspCompletionEl = (() => {
     document.body.appendChild(el);
     return el;
 })();
+
+const hyperlinkHoverTooltipEl = (() => {
+    const el = document.createElement('div');
+    el.id = 'notes-hyperlink-hover-tooltip';
+    document.body.appendChild(el);
+    return el;
+})();
+
+function hideHyperlinkHoverTooltip() {
+    if (!hyperlinkHoverTooltipEl) {
+        return;
+    }
+
+    hyperlinkHoverTooltipEl.style.display = 'none';
+    delete hyperlinkHoverTooltipEl.dataset.href;
+}
+
+function positionHyperlinkHoverTooltip(x, y) {
+    if (!hyperlinkHoverTooltipEl || hyperlinkHoverTooltipEl.style.display !== 'block') {
+        return;
+    }
+
+    const nextX = Math.min((Number(x) || 0) + 14, window.innerWidth - hyperlinkHoverTooltipEl.offsetWidth - 8);
+    const nextY = Math.min((Number(y) || 0) + 14, window.innerHeight - hyperlinkHoverTooltipEl.offsetHeight - 8);
+    hyperlinkHoverTooltipEl.style.left = `${Math.max(8, nextX)}px`;
+    hyperlinkHoverTooltipEl.style.top = `${Math.max(8, nextY)}px`;
+}
+
+function formatHyperlinkHoverHref(href) {
+    const value = String(href || '').trim();
+    if (!value) {
+        return '';
+    }
+
+    if (/^ttyphoon:\/\/ai(?:[/?#]|$)/i.test(value)) {
+        try {
+            const parsed = new URL(value);
+            const lines = ['New AI query'];
+
+            for (const [key, queryValue] of parsed.searchParams.entries()) {
+                const safeKey = String(key || '').trim();
+                if (!safeKey) {
+                    continue;
+                }
+
+                lines.push(`- ${safeKey}: ${String(queryValue || '')}`);
+            }
+
+            return lines.join('\n');
+        } catch {
+            return 'New AI query';
+        }
+    }
+
+    return value.startsWith('wails://wails/') ? value.slice('wails://wails/'.length) : value;
+}
+
+function showHyperlinkHoverTooltip(anchor, x, y) {
+    if (!(anchor instanceof HTMLAnchorElement) || !hyperlinkHoverTooltipEl) {
+        return;
+    }
+
+    const href = String(anchor.href || anchor.getAttribute('href') || '').trim();
+    const displayHref = formatHyperlinkHoverHref(href);
+    if (!displayHref) {
+        hideHyperlinkHoverTooltip();
+        return;
+    }
+
+    hyperlinkHoverTooltipEl.textContent = displayHref;
+    hyperlinkHoverTooltipEl.dataset.href = displayHref;
+    hyperlinkHoverTooltipEl.style.display = 'block';
+    positionHyperlinkHoverTooltip(x, y);
+}
 
 const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];
 
@@ -12857,6 +13084,10 @@ document.addEventListener('mouseout', (e) => {
     }
 });
 
+document.addEventListener('scroll', () => {
+    hideHyperlinkHoverTooltip();
+}, true);
+
 EventsOn('notesLspDiagnostics', payload => {
     const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
     if (!data || typeof data.uri !== 'string') return;
@@ -13158,7 +13389,7 @@ if (elements.editor) {
 
         if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
-            if (state.currentFileType === 'markdown') {
+            if (state.currentFileType === 'markdown' || state.currentFileType === 'html') {
                 scheduleRender();
             }
         } else if (state.currentFileType === 'csv') {
@@ -13261,7 +13492,7 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         },
     ];
 
-    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json';
+    const isCodeLike = state.currentFileType === 'code' || state.currentFileType === 'markdown' || state.currentFileType === 'json' || state.currentFileType === 'html';
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     
 
