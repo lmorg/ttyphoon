@@ -114,6 +114,10 @@ export function GetNotesMaxLogLines() {
   return window['go']['main']['WApp']['GetNotesMaxLogLines']();
 }
 
+export function GetNotesStructViewMaxSizeKB() {
+  return window['go']['main']['WApp']['GetNotesStructViewMaxSizeKB']();
+}
+
 export function GetProjectCache() {
   return window['go']['main']['WApp']['GetProjectCache']();
 }

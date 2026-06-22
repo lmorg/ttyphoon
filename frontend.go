@@ -230,6 +230,13 @@ func (a *WApp) GetNotesMaxLogLines() int {
 	return config.Config.Notes.MaxLogLines
 }
 
+// GetNotesStructViewMaxSizeKB returns the maximum file size (in kilobytes) for
+// which the JSON/YAML structured "View" mode is rendered. Larger files display
+// a "file too large" message instead.
+func (a *WApp) GetNotesStructViewMaxSizeKB() int64 {
+	return config.Config.Notes.StructViewMaxSize
+}
+
 // GetNotesLanguageTabIndent returns the number of spaces to use for tab indentation for a given language
 func (a *WApp) GetNotesLanguageTabIndent(language string) int {
 	return config.Config.Notes.Languages.GetTabIndent(language)

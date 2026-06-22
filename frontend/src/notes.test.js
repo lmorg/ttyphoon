@@ -94,6 +94,7 @@ const showLocalMenuMock = vi.fn();
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesMaxLogLines: getNotesMaxLogLinesMock,
+    GetNotesStructViewMaxSizeKB: vi.fn(() => Promise.resolve(1024)),
     GetNotesLanguageTabIndent: getNotesLanguageTabIndentMock,
     GetNotesLanguageReservedWords: vi.fn(() => Promise.resolve([])),
     GetNotesColumnWidths: getNotesColumnWidthsMock,

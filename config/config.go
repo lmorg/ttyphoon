@@ -160,9 +160,10 @@ type configT struct {
 	} `yaml:"Window"`
 
 	Notes struct {
-		MaxFileSize    int64 `yaml:"MaxFileSize"`
-		MaxRecentFiles int   `yaml:"MaxRecentFiles"`
-		MaxLogLines    int   `yaml:"MaxLogLines"`
+		MaxFileSize       int64 `yaml:"MaxFileSizeMB"`
+		StructViewMaxSize int64 `yaml:"StructViewMaxSizeKB"`
+		MaxRecentFiles    int   `yaml:"MaxRecentFiles"`
+		MaxLogLines       int   `yaml:"MaxLogLines"`
 
 		Languages LanguagesT `yaml:"Languages"`
 	} `yaml:"Notes"`

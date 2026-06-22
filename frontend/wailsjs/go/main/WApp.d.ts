@@ -64,6 +64,8 @@ export function GetNotesLanguageTabIndent(arg1:string):Promise<number>;
 
 export function GetNotesMaxLogLines():Promise<number>;
 
+export function GetNotesStructViewMaxSizeKB():Promise<number>;
+
 export function GetProjectCache():Promise<notes.ProjectCacheT>;
 
 export function GetTerminalGlyphSize():Promise<types.XY>;

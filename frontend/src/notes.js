@@ -1,5 +1,6 @@
 import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile, GetImage,
+    GetNotesStructViewMaxSizeKB,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     CancelNotesListFiles,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
@@ -38,6 +39,11 @@ import YAML from 'yaml';
 const FIND_FILES_SEARCH_DEBOUNCE_MS = 320;
 const FIND_FILES_RENDER_PAGE_SIZE = 50;
 const FIND_FILES_VIRTUAL_ROW_HEIGHT = 74;
+
+// Maximum file size (in KB) for the JSON/YAML structured View mode. Files above
+// this are shown a "file too large" message instead of the rendered tree.
+// Overwritten on startup by GetNotesStructViewMaxSizeKB().
+let notesStructViewMaxSizeKB = 1024;
 
 // Import additional syntax highlighting languages (not in common bundle)
 import lang1c from "highlight.js/lib/languages/1c";
@@ -365,7 +371,7 @@ import {
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
-import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
+import { attachJsonViewerEditHandler, collapseJsonViewerSubtree, expandJsonViewerSubtree, renderJsonViewer } from './json-viewer.js';
 import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
 import { updateMarkdownTableOfContentsText } from './markdown_toc.js';
 import {
@@ -391,6 +397,8 @@ const CONTEXT_ICON_TABLE = 0xf0ce;
 const CONTEXT_ICON_EDIT = 0xf044;
 const CONTEXT_ICON_DELETE = 0xf2ed;
 const CONTEXT_ICON_ASK_AI = 0xf544;
+const CONTEXT_ICON_EXPAND_ALL = 0xf0fe;
+const CONTEXT_ICON_COLLAPSE_ALL = 0xf146;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -813,6 +821,7 @@ const state = {
     lspActiveBlockEditor: null,
     swaggerSpec: null,
     swaggerRunAvailable: false,
+    swaggerViewTooLarge: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
     editorLanguage: '',
@@ -6376,8 +6385,38 @@ function updateTabVisibility(fileType) {
     elements.tabSwaggerRun.style.display = isJson && state.swaggerRunAvailable ? '' : 'none';
 }
 
+function getStructuredDocByteLength(text) {
+    if (!text) {
+        return 0;
+    }
+    return new TextEncoder().encode(String(text)).length;
+}
+
+function isStructViewTooLarge(text) {
+    if (!(notesStructViewMaxSizeKB > 0)) {
+        return false;
+    }
+    return getStructuredDocByteLength(text) > notesStructViewMaxSizeKB * 1024;
+}
+
+function renderStructViewTooLargeMessage() {
+    const fileName = getPathFileName(state.currentFile) || 'this file';
+    const markdown = [
+        '# File too large',
+        '',
+        `Cannot display a structured view because \`${fileName}\` is greater than ${notesStructViewMaxSizeKB} KB (\`$.Notes.StructViewMaxSizeKB\`)`,
+    ].join('\n');
+
+    elements.swaggerView.innerHTML = `<div class="markdown-body notes-struct-too-large">${marked.parse(markdown)}</div>`;
+}
+
 function renderSwaggerJsonView() {
     if (!elements.swaggerView || !elements.editor) {
+        return;
+    }
+
+    if (state.swaggerViewTooLarge) {
+        renderStructViewTooLargeMessage();
         return;
     }
 
@@ -7153,6 +7192,7 @@ async function loadFile(file, options = {}) {
             state.currentFileType = 'json';
             setCodeEditorMode(true);
             elements.editorShell.dataset.fileType = 'json';
+            state.swaggerViewTooLarge = isStructViewTooLarge(doc);
             updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
             state.swaggerSpec = parseSwaggerSpec(doc);
@@ -9128,36 +9168,75 @@ function initStructuredDataTreeContextMenu(container) {
             return;
         }
 
-        const target = e.target instanceof Element ? e.target.closest('.json-editable') : null;
-        if (!target || !container.contains(target)) {
+        const targetEl = e.target instanceof Element ? e.target : null;
+        if (!targetEl || !container.contains(targetEl)) {
+            return;
+        }
+
+        const editable = targetEl.closest('.json-editable');
+        const node = targetEl.closest('.json-node');
+        if (!editable && !node) {
             return;
         }
 
         e.preventDefault();
         e.stopPropagation();
 
-        showNotesLocalMenu([
-            {
-                title: 'Copy',
-                icon: CONTEXT_ICON_COPY,
-                onSelect: () => {
-                    copyTextToClipboard(getJsonEditableCopyText(target));
+        const menuItems = [];
+
+        if (editable) {
+            menuItems.push(
+                {
+                    title: 'Copy',
+                    icon: CONTEXT_ICON_COPY,
+                    onSelect: () => {
+                        copyTextToClipboard(getJsonEditableCopyText(editable));
+                    },
                 },
-            },
-            {
-                title: 'Edit',
-                icon: CONTEXT_ICON_EDIT,
-                onSelect: () => {
-                    target.dispatchEvent(new MouseEvent('dblclick', {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window,
-                    }));
+                {
+                    title: 'Edit',
+                    icon: CONTEXT_ICON_EDIT,
+                    onSelect: () => {
+                        editable.dispatchEvent(new MouseEvent('dblclick', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window,
+                        }));
+                    },
                 },
-            },
-            { title: '-' },
-            createAskAIDocumentMenuItem(),
-        ], e.clientX, e.clientY, 'JSON/YAML field');
+            );
+        }
+
+        const containerNode = node
+            && (node.getAttribute('data-node-type') === 'object' || node.getAttribute('data-node-type') === 'array')
+            ? node
+            : null;
+
+        if (containerNode) {
+            if (menuItems.length > 0) {
+                menuItems.push({ title: '-' });
+            }
+            menuItems.push(
+                {
+                    title: 'Expand all',
+                    icon: CONTEXT_ICON_EXPAND_ALL,
+                    onSelect: () => {
+                        expandJsonViewerSubtree(container, containerNode);
+                    },
+                },
+                {
+                    title: 'Collapse all',
+                    icon: CONTEXT_ICON_COLLAPSE_ALL,
+                    onSelect: () => {
+                        collapseJsonViewerSubtree(containerNode);
+                    },
+                },
+            );
+        }
+
+        menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
+
+        showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'JSON/YAML field');
     });
 }
 
@@ -9598,6 +9677,14 @@ GetNotesMaxLogLines().then((maxLogLines) => {
     notesLogPanel?.setMaxLogLines?.(maxLogLines);
 }).catch((err) => {
     console.error('Failed to load notes log line limit:', err);
+});
+
+GetNotesStructViewMaxSizeKB().then((maxSizeKb) => {
+    if (typeof maxSizeKb === 'number' && Number.isFinite(maxSizeKb) && maxSizeKb >= 0) {
+        notesStructViewMaxSizeKB = maxSizeKb;
+    }
+}).catch((err) => {
+    console.error('Failed to load notes structured view size limit:', err);
 });
 
 initNotesAIPanel(elements);
@@ -12048,6 +12135,11 @@ function applyWindowStyle(result) {
             white-space: pre-wrap;
         }
 
+        .notes-struct-too-large {
+            padding: 24px;
+            max-width: 720px;
+        }
+
         .json-node {
             color: var(--fg);
         }
@@ -12176,6 +12268,28 @@ function applyWindowStyle(result) {
 
         .json-value-null {
             color: var(--magenta);
+        }
+
+        .json-show-more {
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+
+        .json-show-more-btn {
+            background: transparent;
+            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
+            border-radius: 4px;
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
+            cursor: pointer;
+            font: inherit;
+            font-size: ${Math.max(result.fontSize - 2, 10)}px;
+            font-style: italic;
+            padding: 1px 8px;
+        }
+
+        .json-show-more-btn:hover {
+            background: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
+            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.95);
         }
 
         #notes-swagger-run-wrap {

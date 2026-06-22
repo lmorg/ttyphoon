@@ -269,6 +269,26 @@ export function enableFullscreenMermaidDiagrams(container) {
 }
 
 /**
+ * Attach the shared "open hyperlink" behaviour to an anchor. Both left-click
+ * and middle-click (auxclick, button 1) open the link via the default handler.
+ * Used by regular markdown links and custom-regex auto-hyperlinks alike so the
+ * click logic stays consolidated in one place.
+ * @param {HTMLAnchorElement} a - The anchor to wire up
+ */
+export function attachHyperlinkOpenHandlers(a) {
+    a.addEventListener('click', (e) => {
+        e.preventDefault();
+        HyperlinkOpenWithDefault(a.href);
+    });
+    a.addEventListener('auxclick', (e) => {
+        if (e.button === 1) {
+            e.preventDefault();
+            HyperlinkOpenWithDefault(a.href);
+        }
+    });
+}
+
+/**
  * Process all links in a container, handling external links and bookmarks
  * @param {HTMLElement} container - The container element to search for links
  * @param {Object} options - Link handling options
@@ -324,16 +344,7 @@ export function processLinks(container, options = {}) {
         }
 
         if (!a.href.match(rxWailsUrl)) {
-            a.addEventListener('click', (e) => {
-                e.preventDefault();
-                HyperlinkOpenWithDefault(a.href);
-            });
-            a.addEventListener('auxclick', (e) => {
-                if (e.button === 1) {
-                    e.preventDefault();
-                    HyperlinkOpenWithDefault(a.href);
-                }
-            });
+            attachHyperlinkOpenHandlers(a);
         }
     });
 }
@@ -405,10 +416,7 @@ export async function autoHyperlink(container) {
                 const a = document.createElement('a');
                 a.href = link;
                 a.textContent = matchedText;
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    HyperlinkOpenWithDefault(a.href);
-                });
+                attachHyperlinkOpenHandlers(a);
                 parts.push(a);
 
                 lastIndex = regex.lastIndex;
