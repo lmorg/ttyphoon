@@ -7,8 +7,10 @@ const terminalRequestRedrawMock = vi.fn(() => Promise.resolve());
 const commandPaletteSelectMock = vi.fn(() => Promise.resolve());
 const filterStringsMock = vi.fn((query, items) => {
     const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return Promise.resolve(items);
-    return Promise.resolve(items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t))));
+    const list = tokens.length === 0
+        ? items
+        : items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t)));
+    return Promise.resolve({ List: list, Error: list.length === 0 ? {} : null });
 });
 const eventsOnMock = vi.fn();
 
@@ -46,8 +48,10 @@ describe('popup menu hide/show transitions', () => {
         filterStringsMock.mockReset();
         filterStringsMock.mockImplementation((query, items) => {
             const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-            if (tokens.length === 0) return Promise.resolve(items);
-            return Promise.resolve(items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t))));
+            const list = tokens.length === 0
+                ? items
+                : items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t)));
+            return Promise.resolve({ List: list, Error: list.length === 0 ? {} : null });
         });
         terminalMenuHighlightMock.mockImplementation(() => Promise.resolve());
         terminalMenuSelectMock.mockImplementation(() => Promise.resolve());

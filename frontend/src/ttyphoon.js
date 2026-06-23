@@ -881,7 +881,11 @@ function enterNotesFullsize() {
 
     // Update the button icon to indicate active state.
     const btn = document.getElementById('notes-fullsize-btn');
-    if (btn) btn.style.color = 'var(--accent)';
+    if (btn) {
+        btn.style.color = 'var(--bg)';
+        btn.style.backgroundColor = 'var(--accent)';
+        btn.style.borderRadius = `5px`;
+    }
 
     requestTerminalResizeAfterLayout();
 }
@@ -919,7 +923,10 @@ function exitNotesFullsize() {
     notesFullsizeActive = false;
 
     const btn = document.getElementById('notes-fullsize-btn');
-    if (btn) btn.style.color = '';
+    if (btn) {
+        btn.style.color = '';
+        btn.style.backgroundColor = '';
+    }
 
     requestTerminalResizeAfterLayout();
 }

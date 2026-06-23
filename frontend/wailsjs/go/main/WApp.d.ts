@@ -24,7 +24,7 @@ export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
 
-export function FilterStrings(arg1:string,arg2:Array<string>):Promise<Array<string>>;
+export function FilterStrings(arg1:string,arg2:Array<string>):Promise<main.FilterResultsT>;
 
 export function FocusTerminalPane():Promise<void>;
 

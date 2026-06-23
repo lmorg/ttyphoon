@@ -555,6 +555,7 @@ app.innerHTML = `
                     <div class="notes-tools-header">
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
+                            <button id="notes-tools-tab-frontmatter" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-frontmatter-pane" data-tab="frontmatter" style="display: none;">Frontmatter</button>
                             <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
                             <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                             <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
@@ -572,6 +573,9 @@ app.innerHTML = `
                         </div>
                         <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
                             <div id="notes-tools-toc" class="notes-tools-toc"></div>
+                        </div>
+                        <div id="notes-tools-frontmatter-pane" class="notes-tools-pane" data-tab="frontmatter" data-active="false">
+                            <div id="notes-tools-frontmatter" class="notes-tools-frontmatter"></div>
                         </div>
                         <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="false">
                             <div class="notes-tools-find-wrap markdown-body">
@@ -743,12 +747,15 @@ const elements = {
     toolsTabFind: document.getElementById('notes-tools-tab-find'),
     toolsTabAI: document.getElementById('notes-tools-tab-ai'),
     toolsTabToC: document.getElementById('notes-tools-tab-toc'),
+    toolsTabFrontmatter: document.getElementById('notes-tools-tab-frontmatter'),
     toolsTabLog: document.getElementById('notes-tools-tab-log'),
     toolsFindPane: document.getElementById('notes-tools-find-pane'),
     toolsAIPane: document.getElementById('notes-tools-ai-pane'),
     toolsToCPane: document.getElementById('notes-tools-toc-pane'),
+    toolsFrontmatterPane: document.getElementById('notes-tools-frontmatter-pane'),
     toolsLogPane: document.getElementById('notes-tools-log-pane'),
     toolsToC: document.getElementById('notes-tools-toc'),
+    toolsFrontmatter: document.getElementById('notes-tools-frontmatter'),
     toolsPanel: document.getElementById('notes-tools-panel'),
     toolsMinimize: document.getElementById('notes-tools-minimize'),
     toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
@@ -824,6 +831,7 @@ const state = {
     swaggerViewTooLarge: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
+    frontmatter: null,  // parsed markdown frontmatter object (null when absent)
     editorLanguage: '',
     fileMetaMarkdown: '',
     hexSourceType: '',
@@ -833,7 +841,7 @@ const state = {
     hexRenderedFile: '',
     hexLoadingPromise: null,
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
-    markdownTableWordWrapMode: false,  // track table word wrap mode for View/Run modes
+    markdownTableWordWrapMode: true,  // track table word wrap mode for View/Run modes
     lspChangeTimer: null,
     lspEditorFormatTimer: null,
     lspOpenFile: '',
@@ -1920,8 +1928,104 @@ function yieldToUI() {
     });
 }
 
+// Matches a leading YAML frontmatter block: the document must begin with a line
+// containing only "---", followed by the YAML body, terminated by another line
+// containing only "---". An optional BOM at the very start is tolerated.
+const FRONTMATTER_RX = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+
+function parseFrontmatter(markdown) {
+    const text = String(markdown ?? '');
+    const match = text.match(FRONTMATTER_RX);
+    if (!match) {
+        return { present: false, data: null, body: text };
+    }
+
+    let data;
+    try {
+        data = YAML.parse(match[1]);
+    } catch {
+        // Malformed YAML frontmatter is left in the document body untouched.
+        return { present: false, data: null, body: text };
+    }
+
+    // Only object/array frontmatter is meaningful to render in the tree viewer.
+    if (data === null || typeof data !== 'object') {
+        return { present: false, data: null, body: text };
+    }
+
+    return { present: true, data, body: text.slice(match[0].length) };
+}
+
+// Parses the current document's frontmatter, updates state, refreshes the
+// Frontmatter tab, and returns the markdown body with the frontmatter stripped.
+function applyDocumentFrontmatter() {
+    const raw = elements.editor?.value || '';
+    if (state.currentFileType !== 'markdown') {
+        state.frontmatter = null;
+        syncFrontmatterTab();
+        return raw;
+    }
+
+    const fm = parseFrontmatter(raw);
+    state.frontmatter = fm.present ? fm.data : null;
+    syncFrontmatterTab();
+    return fm.body;
+}
+
+// Shows or hides the Frontmatter tab based on the current document and renders
+// the parsed frontmatter into its pane using the JSON/YAML tree viewer.
+function syncFrontmatterTab() {
+    const present = state.currentFileType === 'markdown' && state.frontmatter != null;
+
+    if (elements.toolsTabFrontmatter) {
+        elements.toolsTabFrontmatter.style.display = present ? '' : 'none';
+    }
+
+    if (present) {
+        renderJsonViewer(elements.toolsFrontmatter, state.frontmatter);
+        return;
+    }
+
+    if (elements.toolsFrontmatter) {
+        elements.toolsFrontmatter.innerHTML = '';
+    }
+
+    // If the Frontmatter tab was the active tab but is no longer available,
+    // close the Tools panel rather than silently switching tabs.
+    if (elements.toolsTabFrontmatter?.getAttribute('aria-selected') === 'true') {
+        setToolsPanelCollapsed(true);
+    }
+}
+
+// Prepends a caption to a rendered markdown container indicating that the
+// document contains frontmatter, with a button to reveal it in the Tools panel.
+function insertFrontmatterCaption(container) {
+    if (!container || state.currentFileType !== 'markdown' || state.frontmatter == null) {
+        return;
+    }
+
+    const caption = document.createElement('div');
+    caption.className = 'notes-frontmatter-caption';
+
+    const label = document.createElement('span');
+    label.className = 'notes-frontmatter-caption-text';
+    label.textContent = 'This document contains Frontmatter. ';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'notes-frontmatter-caption-view';
+    button.textContent = 'View';
+    button.addEventListener('click', () => {
+        setToolsPanelCollapsed(false);
+        setToolsTab('frontmatter');
+    });
+
+    caption.append(label, button);
+    container.prepend(caption);
+}
+
 async function renderMarkdown() {
-    const markdown = elements.editor.value || '';
+    const markdown = applyDocumentFrontmatter();
     elements.preview.innerHTML = marked.parse(markdown);
 
     // Apply common markdown processing
@@ -1942,8 +2046,12 @@ async function renderMarkdown() {
     // Enable column sorting on all tables
     setupTableSorting(elements.preview);
 
-    // Enable resizable table columns with persisted widths.
+    // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
+    elements.preview.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
     await setupTableColumnResizing(elements.preview, state.markdownTableWordWrapMode, state.currentFile);
+
+    // Surface a caption when the document carries frontmatter.
+    insertFrontmatterCaption(elements.preview);
 
     refreshToolsToC();
 
@@ -2161,10 +2269,23 @@ function updateToolsTabVisibility(fileType) {
         elements.toolsTabToC.style.display = showToC ? '' : 'none';
     }
 
-    if (showToC) {
-        setToolsTab('toc');
-    } else if (elements.toolsTabToC?.getAttribute('aria-selected') === 'true') {
-        setToolsTab('ai');
+    // Frontmatter is markdown-only. Whether it is actually present depends on the
+    // document content and is finalised by syncFrontmatterTab() during render;
+    // here we only force the tab hidden for non-markdown files.
+    if (!showToC) {
+        state.frontmatter = null;
+        if (elements.toolsTabFrontmatter) {
+            elements.toolsTabFrontmatter.style.display = 'none';
+        }
+    }
+
+    // If the previously-selected tab is no longer available for this document
+    // type, close the Tools panel rather than silently switching tabs. The ToC
+    // and Frontmatter tabs are the only document-type-specific tabs.
+    const tocActive = elements.toolsTabToC?.getAttribute('aria-selected') === 'true';
+    const frontmatterActive = elements.toolsTabFrontmatter?.getAttribute('aria-selected') === 'true';
+    if (!showToC && (tocActive || frontmatterActive)) {
+        setToolsPanelCollapsed(true);
     }
 
     if (showToC) {
@@ -5091,7 +5212,7 @@ async function renderJupyterView() {
     state.jupyterCodeBlocks = {};
     state.jupyterBlockCounter = 0;
     
-    const markdown = elements.editor.value || '';
+    const markdown = applyDocumentFrontmatter();
     elements.jupyter.innerHTML = marked.parse(markdown);
     
     // Apply common markdown processing
@@ -5105,6 +5226,9 @@ async function renderJupyterView() {
 
     // Enable collapsible H1-H6 sections
     setupCollapsibleHeadings(elements.jupyter);
+
+    // Surface a caption when the document carries frontmatter.
+    insertFrontmatterCaption(elements.jupyter);
 
     // Render code blocks immediately so they are not blocked by table evaluation.
     convertToJupyterCodeBlocks();
@@ -5122,6 +5246,7 @@ async function renderJupyterView() {
             // Enable column sorting on all tables
             setupTableSorting(elements.jupyter);
 
+            elements.jupyter.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
             void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, state.currentFile);
 
             // Re-apply find highlights when Find tab is active in jupyter mode.
@@ -5836,12 +5961,10 @@ async function restoreDocumentCache(file) {
         }
     }
 
-    if (typeof documentCache.ToolsOpen === 'boolean') {
-        setToolsPanelCollapsed(!documentCache.ToolsOpen);
-    }
-    if (documentCache.ToolsTab) {
-        setToolsTab(documentCache.ToolsTab);
-    }
+    // The Tools panel open/closed state and selected tab are intentionally not
+    // restored from cache. The panel keeps whatever state it already had; if the
+    // active tab isn't available for the newly loaded document, the panel is
+    // closed (handled by updateToolsTabVisibility).
 }
 
 function saveProjectCache() {
@@ -5872,7 +5995,15 @@ async function applyFileFilter() {
         return;
     }
     try {
-        state.filteredFiles = await FilterStrings(query, state.files);
+        // FilterStrings now returns { List, Error }. A non-null Error means the
+        // query was malformed or matched nothing, so show the empty (no-match)
+        // state rather than falling back to the unfiltered list.
+        const result = await FilterStrings(query, state.files);
+        if (result && result.Error) {
+            state.filteredFiles = [];
+        } else {
+            state.filteredFiles = Array.isArray(result?.List) ? result.List : [];
+        }
     } catch {
         state.filteredFiles = null;
     }
@@ -9483,8 +9614,6 @@ function setToolsPanelCollapsed(collapsed) {
     if (elements.toolsRestore) {
         elements.toolsRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
     }
-    localStorage.setItem('notes-tools-panel-collapsed', String(isCollapsed));
-    saveDocumentCache();
 }
 
 function toggleToolsPanel() {
@@ -9509,24 +9638,19 @@ function setToolsTab(tabName) {
         const isActive = pane.dataset.tab === nextTab;
         pane.dataset.active = isActive ? 'true' : 'false';
     }
-
-    saveDocumentCache();
 }
 
 function saveDocumentCache() {
     if (!state.currentFile || state.suspendDocumentCacheSave) {
         return;
     }
-    const toolsCollapsed = elements.toolsPanel?.dataset?.collapsed === 'true';
-    const selectedToolsTab = elements.toolsTabs
-        ? Array.from(elements.toolsTabs.querySelectorAll('[role="tab"]'))
-            .find((tab) => tab.getAttribute('aria-selected') === 'true')?.dataset?.tab || ''
-        : '';
 
+    // Only the document view mode is persisted. The Tools panel open/closed
+    // state and selected tab are deliberately not cached.
     SetDocumentCache(state.currentFile, {
         DocumentTab: state.viewMode || '',
-        ToolsOpen: !toolsCollapsed,
-        ToolsTab: selectedToolsTab,
+        ToolsOpen: false,
+        ToolsTab: '',
     }).catch((err) => {
         console.error('Failed to save document cache:', err);
     });
@@ -9661,6 +9785,9 @@ if (elements.toolsTabAI) {
 }
 if (elements.toolsTabToC) {
     elements.toolsTabToC.addEventListener('click', () => setToolsTab('toc'));
+}
+if (elements.toolsTabFrontmatter) {
+    elements.toolsTabFrontmatter.addEventListener('click', () => setToolsTab('frontmatter'));
 }
 if (elements.toolsTabFind) {
     elements.toolsTabFind.addEventListener('click', () => {
@@ -10004,11 +10131,6 @@ function applyWindowStyle(result) {
             border-width: 1px !important;
         }
 
-        /*.notes-toolbar-btn:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
-            color: var(--fg);
-        }*/
-
         #notes-new:hover {
             color: var(--green) !important;
         }
@@ -10017,7 +10139,7 @@ function applyWindowStyle(result) {
             color: var(--accent) !important;
             border-radius: 5px;
             border-color: var(--accent) !important;
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3) !important;
         }
 
         #notes-history-prev:hover,
@@ -10549,6 +10671,7 @@ function applyWindowStyle(result) {
             border-radius: 999px;
             border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.4);
             background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.9);
+            color: var(--accent);
             color: var(--fg);
             padding: 6px 12px;
             cursor: pointer;
@@ -10559,7 +10682,8 @@ function applyWindowStyle(result) {
 
         .notes-tools-restore:hover {
             border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
+            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.9);
+            color: var(--accent);
         }
 
         .notes-tools-header {
@@ -10680,6 +10804,48 @@ function applyWindowStyle(result) {
             padding: 12px;
             opacity: 0.6;
             font-style: italic;
+        }
+
+        .notes-tools-frontmatter {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            padding: 10px 12px;
+            background-color: ${DARKEN_BACKGROUND_OVERLAY};
+            font-family: var(--font-family);
+            font-size: ${result.fontSize}px;
+            line-height: 1.45;
+        }
+
+        .notes-frontmatter-caption {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 16px 0;
+            padding: 8px 12px;
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            background: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.10);
+            font-size: ${result.fontSize - 1}px;
+        }
+
+        .notes-frontmatter-caption-text {
+            color: var(--fg);
+            opacity: 0.85;
+        }
+
+        .notes-frontmatter-caption-view {
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: var(--bg);
+            border-radius: 4px;
+            padding: 2px 12px;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .notes-frontmatter-caption-view:hover {
+            background: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.8);
         }
 
         .notes-tools-content {
@@ -10916,7 +11082,6 @@ function applyWindowStyle(result) {
             margin: 1px 0;
             padding: 0px 8px 0px 18px;
             border: 2px solid transparent;
-            /*border-radius: 4px;*/
             cursor: pointer;
         }
 
@@ -10971,8 +11136,6 @@ function applyWindowStyle(result) {
             bottom: 0;
             width: 10px;
             background-color: var(--accent);
-            /*border-top-left-radius: 3px;
-            border-bottom-left-radius: 3px;*/
         }
 
         .notes-log-timestamp {
@@ -11662,24 +11825,13 @@ function applyWindowStyle(result) {
         }
 
         .notes-find-files-item[aria-selected="true"] {
-            background-color: var(--accent);
-            color: var(--bg);
-        }
-
-        .notes-find-files-item[aria-selected="true"]:hover,
-        .notes-find-files-item[aria-selected="true"]:focus-visible {
-            background-color: var(--accent);
-            color: var(--bg);
+            box-shadow: inset 4px 0 0 0 var(--accent);
         }
 
         .notes-find-files-item-title {
             font-size: ${result.fontSize}px;
             font-weight: 600;
             color: var(--accent);
-        }
-
-        .notes-find-files-item[aria-selected="true"] .notes-find-files-item-title {
-            color: var(--fg);
         }
 
         .notes-find-files-item-detail {
@@ -12188,8 +12340,6 @@ function applyWindowStyle(result) {
         }
 
         .json-toggle::before {
-            /*content: "\\f146";*/
-            /*font-family: "Font Awesome Solid", "Font Awesome", sans-serif;*/
             content: "▼";
             font-weight: 900;
             font-size: 12px;
@@ -12198,7 +12348,6 @@ function applyWindowStyle(result) {
         }
 
         .json-node[data-expanded="false"] > .json-row > .json-toggle::before {
-            /*content: "\\f0fe";*/
             content: "▶";
         }
 
@@ -12303,7 +12452,7 @@ function applyWindowStyle(result) {
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
 
         /* ------------------------------------------------------------------ */
-        /* LSP diagnostics                                                      */
+        /* LSP diagnostics                                                    */
         /* ------------------------------------------------------------------ */
 
         /* Squiggle underlines on the highlight overlay */

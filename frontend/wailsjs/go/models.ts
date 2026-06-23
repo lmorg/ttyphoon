@@ -463,6 +463,20 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class FilterResultsT {
+	    List: string[];
+	    Error: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new FilterResultsT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.List = source["List"];
+	        this.Error = source["Error"];
+	    }
+	}
 	export class GetFileReturnT {
 	    contents: string;
 	    binary: boolean;

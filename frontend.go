@@ -868,18 +868,27 @@ func imageMime(ext string) string {
 	return "image/" + ext[1:]
 }
 
+type FilterResultsT struct {
+	List  []string
+	Error error
+}
+
 // FilterStrings uses the find package to filter a list of strings by query.
 // Supports: plain words (AND), "or word1 word2" (OR), "! word" (NOT), "rx regexp", "g glob".
 // Returns the original list unchanged when query is empty or malformed.
-func (a *WApp) FilterStrings(query string, items []string) []string {
+func (a *WApp) FilterStrings(query string, items []string) *FilterResultsT {
 	if strings.TrimSpace(query) == "" {
-		return items
+		return &FilterResultsT{List: items}
 	}
 	f, err := find.New(query)
 	if err != nil {
-		return items
+		return &FilterResultsT{Error: err}
 	}
-	return f.Filter(items)
+	items = f.Filter(items)
+	if len(items) == 0 {
+		return &FilterResultsT{Error: fmt.Errorf("nothing matched the filter pattern: '%s'", query)}
+	}
+	return &FilterResultsT{List: items}
 }
 
 func (a *WApp) ListFiles() []string {

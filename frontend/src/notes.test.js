@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as swaggerUtils from './swagger-utils.js';
+import { renderJsonViewer } from './json-viewer.js';
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
@@ -8,6 +9,16 @@ const getNotesColumnWidthsMock = vi.fn();
 const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
+const filterStringsMock = vi.fn((query, items) => {
+    const tokens = String(query).toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const list = tokens.length === 0
+        ? items
+        : items.filter((item) => String(item).toLowerCase().includes(tokens.join(' ')) || tokens.every((t) => String(item).toLowerCase().includes(t)));
+    if (list.length === 0) {
+        return Promise.resolve({ List: null, Error: { message: `nothing matched the filter pattern: '${query}'` } });
+    }
+    return Promise.resolve({ List: list, Error: null });
+});
 const saveFileMock = vi.fn(() => Promise.resolve());
 const saveBinaryFileMock = vi.fn(() => Promise.resolve());
 const deleteFileMock = vi.fn(() => Promise.resolve());
@@ -100,6 +111,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,
+    FilterStrings: filterStringsMock,
     SaveFile: saveFileMock,
     SaveBinaryFile: saveBinaryFileMock,
     DeleteFile: deleteFileMock,
@@ -510,6 +522,56 @@ describe('notes rendering', () => {
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/todo.md');
         expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
+    });
+
+    it('reveals the Frontmatter tab and caption for documents with YAML frontmatter', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/post.md']);
+        getFileMock.mockResolvedValue({
+            contents: '---\ntitle: My Post\ndraft: true\n---\n# Body Heading',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/post.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
+        expect(frontmatterTab?.style.display).not.toBe('none');
+
+        const preview = document.getElementById('notes-preview');
+        // Frontmatter is stripped from the rendered body.
+        expect(preview?.textContent).toContain('Body Heading');
+        expect(preview?.textContent).not.toContain('draft: true');
+
+        // Caption with a View button is surfaced.
+        const caption = preview?.querySelector('.notes-frontmatter-caption');
+        expect(caption).not.toBeNull();
+        expect(caption?.textContent).toContain('This document contains Frontmatter.');
+        expect(caption?.querySelector('.notes-frontmatter-caption-view')?.textContent).toBe('View');
+
+        // Parsed frontmatter is rendered in the tab pane via the JSON/YAML viewer.
+        const pane = document.getElementById('notes-tools-frontmatter');
+        expect(renderJsonViewer).toHaveBeenCalledWith(pane, { title: 'My Post', draft: true });
+    });
+
+    it('hides the Frontmatter tab for documents without frontmatter', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/plain.md']);
+        getFileMock.mockResolvedValue({ contents: '# Just a heading', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/plain.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
+        expect(frontmatterTab?.style.display).toBe('none');
+        expect(document.querySelector('#notes-preview .notes-frontmatter-caption')).toBeNull();
     });
 
     it('maps Home and End to current line boundaries in editor fields', async () => {

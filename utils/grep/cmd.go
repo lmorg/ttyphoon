@@ -2,6 +2,7 @@ package grep
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -10,10 +11,12 @@ import (
 
 func buildSearchCommand(query string, opts Options) (*exec.Cmd, string, error) {
 	if _, err := exec.LookPath("rg"); err == nil {
+		log.Println(`[debug] grep: cmd="rg"`)
 		return exec.Command("rg", buildRgArgs(query, opts)...), "rg", nil
 	}
 
 	if _, err := exec.LookPath("grep"); err == nil {
+		log.Println(`[debug] grep: cmd="grep"`)
 		return exec.Command("grep", buildGrepArgs(query, opts)...), "grep", nil
 	}
 
@@ -22,7 +25,15 @@ func buildSearchCommand(query string, opts Options) (*exec.Cmd, string, error) {
 
 // buildRgArgs builds ripgrep command arguments based on options.
 func buildRgArgs(query string, opts Options) []string {
-	args := []string{"-uu", "-n", "--no-heading", "--color", "never"}
+	// -uu makes ripgrep search hidden and .gitignore'd files, mirroring grep's
+	// "search everything" recursion. The glob excludes then restore the same
+	// directory exclusions that buildGrepArgs applies via --exclude-dir, so both
+	// backends skip .git and node_modules consistently. --follow follows
+	// symlinks to match grep's -R behaviour.
+	args := []string{
+		"-uu", "-n", "--no-heading", "--color", "never", "--follow",
+		"-g", "!.git", "-g", "!node_modules",
+	}
 
 	if opts.Regex {
 		// Regex mode (default for rg without -F)
@@ -46,7 +57,7 @@ func buildRgArgs(query string, opts Options) []string {
 
 // buildGrepArgs builds grep command arguments based on options.
 func buildGrepArgs(query string, opts Options) []string {
-	args := []string{"-R", "-n", "--binary-files=without-match"}
+	args := []string{"-R", "-n", "--binary-files=without-match", "--exclude-dir=.git", "--exclude-dir=node_modules"}
 
 	if opts.Regex {
 		args = append(args, "-E")

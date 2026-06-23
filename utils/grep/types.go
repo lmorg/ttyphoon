@@ -19,5 +19,5 @@ type Options struct {
 	CaseSensitive bool
 	Regex         bool
 	WholeWord     bool
-	FileFilter    string // Optional: filter results by file path/name (case-insensitive substring match)
+	FileFilter    string // Optional: filter results by file path/name using the find package syntax (plain words=AND, "or", "!", "rx" regexp, "g" glob)
 }

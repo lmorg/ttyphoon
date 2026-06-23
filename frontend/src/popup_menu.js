@@ -516,10 +516,13 @@ export function initTerminalPopupMenu(canvas) {
                 const titles = listItems
                     .filter((item) => !item.separator)
                     .map((item) => item.title);
-                const matched = await FilterStrings(query, titles);
+                // FilterStrings now returns { List, Error }. An Error (malformed
+                // query or zero matches) yields an empty match set.
+                const result = await FilterStrings(query, titles);
                 if (seq !== _goFilterSeq) {
                     return;
                 }
+                const matched = result && Array.isArray(result.List) ? result.List : [];
                 filteredItems = buildFilteredItems(listItems, query, new Set(matched));
             } catch {
                 filteredItems = buildFilteredItems(listItems, query);
