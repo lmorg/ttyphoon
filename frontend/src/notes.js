@@ -371,7 +371,8 @@ import {
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
     extractPaths, generateEndpointListHTML, buildRequestUrl, generateLiveResponseHTML, escapeInfoText
 } from './swagger-utils.js';
-import { attachJsonViewerEditHandler, collapseJsonViewerSubtree, expandJsonViewerSubtree, renderJsonViewer } from './json-viewer.js';
+import { attachJsonViewerEditHandler, collapseJsonViewerSubtree, expandJsonViewerSubtree, renderJsonViewer, startJsonViewerKeyEdit } from './json-viewer.js';
+import { getStructuredEditor, yamlEditor } from './structured-editors.js';
 import { getHexDumpStyles, renderHexDump } from './hex-viewer.js';
 import { updateMarkdownTableOfContentsText } from './markdown_toc.js';
 import {
@@ -399,6 +400,7 @@ const CONTEXT_ICON_DELETE = 0xf2ed;
 const CONTEXT_ICON_ASK_AI = 0xf544;
 const CONTEXT_ICON_EXPAND_ALL = 0xf0fe;
 const CONTEXT_ICON_COLLAPSE_ALL = 0xf146;
+const CONTEXT_ICON_ADD = 0xf067;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -720,6 +722,7 @@ const elements = {
     modalCancel: document.getElementById('notes-modal-cancel'),
     modalCreate: document.getElementById('notes-modal-create'),
     deleteModal: document.getElementById('notes-delete-modal'),
+    deleteModalTitle: document.getElementById('notes-delete-modal-title'),
     deleteModalBody: document.getElementById('notes-delete-modal-body'),
     deleteCancel: document.getElementById('notes-delete-cancel'),
     deleteConfirm: document.getElementById('notes-delete-confirm'),
@@ -785,6 +788,7 @@ const state = {
     viewMode: 'viewer',
     renamingFile: null,
     deletingFile: null,
+    deleteConfirmAction: null,
     findMatches: [],
     findCurrentIndex: -1,
     findQuery: '',
@@ -1982,6 +1986,7 @@ function syncFrontmatterTab() {
     }
 
     if (present) {
+        attachJsonViewerEditHandler(elements.toolsFrontmatter, commitFrontmatterEdit);
         renderJsonViewer(elements.toolsFrontmatter, state.frontmatter);
         return;
     }
@@ -6624,6 +6629,39 @@ function setValueAtPath(root, path, value) {
     return root;
 }
 
+function appendArrayItem(root, path, value) {
+    const target = getValueAtPath(root, path);
+    if (!Array.isArray(target)) {
+        throw new Error('Unable to locate array for insert.');
+    }
+    target.push(value);
+    return root;
+}
+
+function deleteAtPath(root, path) {
+    if (path.length === 0) {
+        return root;
+    }
+
+    const parentPath = path.slice(0, -1);
+    const parent = getValueAtPath(root, parentPath);
+    if (parent === null || parent === undefined) {
+        return root;
+    }
+
+    const key = path[path.length - 1];
+    if (Array.isArray(parent)) {
+        const index = Number(key);
+        if (Number.isInteger(index) && index >= 0 && index < parent.length) {
+            parent.splice(index, 1);
+        }
+    } else if (typeof parent === 'object') {
+        delete parent[key];
+    }
+
+    return root;
+}
+
 function renameObjectKey(root, path, nextKey) {
     if (path.length === 0) {
         throw new Error('Root key cannot be renamed.');
@@ -6666,6 +6704,36 @@ function renameObjectKey(root, path, nextKey) {
     return root;
 }
 
+// validateKeyRename checks a key rename against the parsed document. It throws
+// when the rename is invalid and returns false when it is a no-op (the key is
+// unchanged); callers use this before performing a surgical text edit.
+function validateKeyRename(root, path, nextKey) {
+    if (path.length === 0) {
+        throw new Error('Root key cannot be renamed.');
+    }
+
+    const parentPath = path.slice(0, -1);
+    const currentKey = path[path.length - 1];
+    const parent = getValueAtPath(root, parentPath);
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent)) {
+        throw new Error('Only object properties can be renamed.');
+    }
+
+    if (String(nextKey) === String(currentKey)) {
+        return false;
+    }
+
+    if (!nextKey) {
+        throw new Error('Property name cannot be empty.');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(parent, nextKey)) {
+        throw new Error(`Property "${nextKey}" already exists.`);
+    }
+
+    return true;
+}
+
 async function commitStructuredViewerEdit({ editType, path, text }) {
     try {
         const source = state.swaggerSpec ?? parseSwaggerSpec(elements.editor.value);
@@ -6673,25 +6741,54 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
             return;
         }
 
-        let nextDocument = source;
+        // Prefer a format-specific surgical editor so only the edited key/value
+        // is rewritten, preserving comments and formatting (and therefore git
+        // diffs). Fall back to a whole-document re-serialise for any format
+        // without a registered editor.
+        const editor = getStructuredEditor(state.currentFile);
+        const originalText = elements.editor.value;
+        let nextText;
 
         if (editType === 'key') {
-            nextDocument = renameObjectKey(nextDocument, path, String(text));
+            const nextKey = String(text);
+            if (!validateKeyRename(source, path, nextKey)) {
+                return;
+            }
+
+            nextText = editor
+                ? editor.renameKey(originalText, path, nextKey)
+                : stringifyStructuredDocument(renameObjectKey(source, path, nextKey));
         } else if (editType === 'value') {
-            const currentValue = getValueAtPath(nextDocument, path);
+            const currentValue = getValueAtPath(source, path);
             const nextValue = parseStructuredScalar(String(text));
 
             if (Object.is(currentValue, nextValue)) {
                 return;
             }
 
-            nextDocument = setValueAtPath(nextDocument, path, nextValue);
+            nextText = editor
+                ? editor.setValue(originalText, path, nextValue)
+                : stringifyStructuredDocument(setValueAtPath(source, path, nextValue));
+        } else if (editType === 'addKey') {
+            const key = String(text);
+            nextText = editor
+                ? editor.addKey(originalText, path, key, '')
+                : stringifyStructuredDocument(setValueAtPath(source, [...path, key], ''));
+        } else if (editType === 'addItem') {
+            nextText = editor
+                ? editor.addItem(originalText, path, '')
+                : stringifyStructuredDocument(appendArrayItem(source, path, ''));
+        } else if (editType === 'delete') {
+            nextText = editor
+                ? editor.deleteNode(originalText, path)
+                : stringifyStructuredDocument(deleteAtPath(source, path));
         } else {
             return;
         }
 
-        elements.editor.value = stringifyStructuredDocument(nextDocument);
+        elements.editor.value = nextText;
         state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
+
         state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
         updateTabVisibility('json');
 
@@ -6709,6 +6806,88 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
         await saveFile();
     } catch (err) {
         notifyTerminal(err?.message || 'Failed to apply structured document edit', 'error');
+        console.error(err);
+    }
+}
+
+// Replaces only the inner YAML body of the document's frontmatter block,
+// preserving the surrounding "---" fences (and any BOM/trailing spaces) exactly.
+// Returns null if the document has no frontmatter block.
+function replaceFrontmatterBlock(raw, newInnerYaml) {
+    const text = String(raw ?? '');
+    const match = text.match(FRONTMATTER_RX);
+    if (!match) {
+        return null;
+    }
+
+    const fullBlock = match[0];
+    const inner = match[1];
+    const openingEnd = fullBlock.indexOf('\n') + 1;
+    const opening = fullBlock.slice(0, openingEnd);
+    const closing = fullBlock.slice(openingEnd + inner.length);
+    // YAML.toString() always emits a trailing newline; the captured inner body
+    // never includes it, so strip one to avoid inserting a blank line before
+    // the closing fence.
+    const normalizedInner = String(newInnerYaml).replace(/\r?\n$/, '');
+
+    return opening + normalizedInner + closing + text.slice(fullBlock.length);
+}
+
+// Commit handler for the Frontmatter tab's tree viewer. Frontmatter is always
+// YAML, so edits are applied surgically to the frontmatter block via the YAML
+// editor (preserving comments/formatting) and spliced back into the markdown
+// document without touching the body.
+async function commitFrontmatterEdit({ editType, path, text }) {
+    try {
+        if (!Array.isArray(path) || state.frontmatter == null) {
+            return;
+        }
+
+        const raw = elements.editor?.value || '';
+        const match = raw.match(FRONTMATTER_RX);
+        if (!match) {
+            return;
+        }
+
+        const innerYaml = match[1];
+        let newInner;
+
+        if (editType === 'key') {
+            const nextKey = String(text);
+            if (!validateKeyRename(state.frontmatter, path, nextKey)) {
+                return;
+            }
+            newInner = yamlEditor.renameKey(innerYaml, path, nextKey);
+        } else if (editType === 'value') {
+            const currentValue = getValueAtPath(state.frontmatter, path);
+            const nextValue = parseStructuredScalar(String(text));
+            if (Object.is(currentValue, nextValue)) {
+                return;
+            }
+            newInner = yamlEditor.setValue(innerYaml, path, nextValue);
+        } else if (editType === 'addKey') {
+            newInner = yamlEditor.addKey(innerYaml, path, String(text), '');
+        } else if (editType === 'addItem') {
+            newInner = yamlEditor.addItem(innerYaml, path, '');
+        } else if (editType === 'delete') {
+            newInner = yamlEditor.deleteNode(innerYaml, path);
+        } else {
+            return;
+        }
+
+        const nextRaw = replaceFrontmatterBlock(raw, newInner);
+        if (nextRaw == null) {
+            return;
+        }
+
+        elements.editor.value = nextRaw;
+        // Re-parse the frontmatter and re-render the panel (this also clears the
+        // inline editor that the viewer left in place after commit).
+        applyDocumentFrontmatter();
+        setDirty(true);
+        await saveFile();
+    } catch (err) {
+        notifyTerminal(err?.message || 'Failed to apply frontmatter edit', 'error');
         console.error(err);
     }
 }
@@ -7499,8 +7678,30 @@ async function saveFile() {
 
 function openDeletePrompt(file) {
     state.deletingFile = file;
+    state.deleteConfirmAction = null;
     const fileName = getPathFileName(file);
+    if (elements.deleteModalTitle) {
+        elements.deleteModalTitle.textContent = 'Delete note';
+    }
+    elements.deleteConfirm.textContent = 'Delete';
     elements.deleteModalBody.textContent = `Are you sure you want to delete "${fileName}"?`;
+    elements.deleteModal.dataset.open = 'true';
+    elements.deleteModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        elements.deleteConfirm.focus();
+    }, 0);
+}
+
+// Opens the shared delete-confirmation modal for an arbitrary destructive
+// action (not just file deletion). `onConfirm` runs when the user confirms.
+function openConfirmPrompt({ title = 'Confirm', body = 'Are you sure?', confirmLabel = 'Delete', onConfirm = null }) {
+    state.deletingFile = null;
+    state.deleteConfirmAction = typeof onConfirm === 'function' ? onConfirm : null;
+    if (elements.deleteModalTitle) {
+        elements.deleteModalTitle.textContent = title;
+    }
+    elements.deleteConfirm.textContent = confirmLabel;
+    elements.deleteModalBody.textContent = body;
     elements.deleteModal.dataset.open = 'true';
     elements.deleteModal.setAttribute('aria-hidden', 'false');
     setTimeout(() => {
@@ -7512,9 +7713,25 @@ function closeDeletePrompt() {
     elements.deleteModal.dataset.open = 'false';
     elements.deleteModal.setAttribute('aria-hidden', 'true');
     state.deletingFile = null;
+    state.deleteConfirmAction = null;
 }
 
 async function confirmDelete() {
+    // A generic confirm action takes precedence over file deletion (e.g. the
+    // JSON/YAML tree's "Delete key/item" reuses this same modal).
+    if (state.deleteConfirmAction) {
+        const action = state.deleteConfirmAction;
+        state.deleteConfirmAction = null;
+        closeDeletePrompt();
+        try {
+            await action();
+        } catch (err) {
+            notifyTerminal(err?.message || 'Action failed', 'error');
+            console.error(err);
+        }
+        return;
+    }
+
     if (!state.deletingFile) {
         setStatus('Select a note to delete', true);
         return;
@@ -9287,15 +9504,62 @@ function initRenderedNotesContextMenu(container, viewMode) {
     });
 }
 
-function initStructuredDataTreeContextMenu(container) {
+function parseJsonNodePath(attr) {
+    if (!attr) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(attr);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function makeUniqueChildKey(parentObject) {
+    const base = 'newKey';
+    if (!parentObject || typeof parentObject !== 'object' || Array.isArray(parentObject)) {
+        return base;
+    }
+    if (!Object.prototype.hasOwnProperty.call(parentObject, base)) {
+        return base;
+    }
+    let suffix = 2;
+    while (Object.prototype.hasOwnProperty.call(parentObject, `${base}${suffix}`)) {
+        suffix += 1;
+    }
+    return `${base}${suffix}`;
+}
+
+async function addStructuredTreeKey(container, getRoot, parentPath) {
+    const root = typeof getRoot === 'function' ? getRoot() : null;
+    const parentObject = parentPath.length === 0 ? root : getValueAtPath(root, parentPath);
+    const key = makeUniqueChildKey(parentObject);
+
+    if (typeof container.__jsonViewerOnEditCommit === 'function') {
+        await container.__jsonViewerOnEditCommit({ editType: 'addKey', path: parentPath, text: key });
+    }
+
+    // The viewer re-renders during commit; immediately start editing the new
+    // key so the user can type its name.
+    startJsonViewerKeyEdit(container, [...parentPath, key]);
+}
+
+function initStructuredDataTreeContextMenu(container, options = {}) {
     if (!container || container.dataset.jsonTreeContextMenuBound === 'true') {
         return;
     }
 
     container.dataset.jsonTreeContextMenuBound = 'true';
 
+    const isActive = typeof options.isActive === 'function'
+        ? options.isActive
+        : () => state.viewMode === 'swagger-view';
+    const getRoot = typeof options.getRoot === 'function' ? options.getRoot : () => null;
+    const menuTitle = options.menuTitle || 'JSON/YAML field';
+
     container.addEventListener('contextmenu', (e) => {
-        if (state.viewMode !== 'swagger-view') {
+        if (!isActive()) {
             return;
         }
 
@@ -9338,15 +9602,38 @@ function initStructuredDataTreeContextMenu(container) {
             );
         }
 
-        const containerNode = node
-            && (node.getAttribute('data-node-type') === 'object' || node.getAttribute('data-node-type') === 'array')
-            ? node
-            : null;
+        const nodeType = node ? node.getAttribute('data-node-type') : null;
+        const containerNode = nodeType === 'object' || nodeType === 'array' ? node : null;
+        const nodePath = node ? parseJsonNodePath(node.getAttribute('data-json-path')) : null;
 
+        // Add key/item into the targeted container.
         if (containerNode) {
+            const containerPath = parseJsonNodePath(containerNode.getAttribute('data-json-path')) || [];
+
             if (menuItems.length > 0) {
                 menuItems.push({ title: '-' });
             }
+
+            if (nodeType === 'object') {
+                menuItems.push({
+                    title: 'Add key',
+                    icon: CONTEXT_ICON_ADD,
+                    onSelect: async () => {
+                        await addStructuredTreeKey(container, getRoot, containerPath);
+                    },
+                });
+            } else {
+                menuItems.push({
+                    title: 'Add item',
+                    icon: CONTEXT_ICON_ADD,
+                    onSelect: async () => {
+                        if (typeof container.__jsonViewerOnEditCommit === 'function') {
+                            await container.__jsonViewerOnEditCommit({ editType: 'addItem', path: containerPath });
+                        }
+                    },
+                });
+            }
+
             menuItems.push(
                 {
                     title: 'Expand all',
@@ -9365,9 +9652,36 @@ function initStructuredDataTreeContextMenu(container) {
             );
         }
 
+        // Delete the targeted node (anything but the document root).
+        if (node && nodePath && nodePath.length > 0) {
+            const lastSegment = nodePath[nodePath.length - 1];
+            const deleteLabel = typeof lastSegment === 'number'
+                ? `item ${lastSegment}`
+                : `"${lastSegment}"`;
+            menuItems.push(
+                { title: '-' },
+                {
+                    title: 'Delete',
+                    icon: CONTEXT_ICON_DELETE,
+                    onSelect: () => {
+                        openConfirmPrompt({
+                            title: 'Delete field',
+                            body: `Are you sure you want to delete ${deleteLabel}?`,
+                            confirmLabel: 'Delete',
+                            onConfirm: async () => {
+                                if (typeof container.__jsonViewerOnEditCommit === 'function') {
+                                    await container.__jsonViewerOnEditCommit({ editType: 'delete', path: nodePath });
+                                }
+                            },
+                        });
+                    },
+                },
+            );
+        }
+
         menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
 
-        showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'JSON/YAML field');
+        showNotesLocalMenu(menuItems, e.clientX, e.clientY, menuTitle);
     });
 }
 
@@ -11134,7 +11448,7 @@ function applyWindowStyle(result) {
             left: 0;
             top: 0;
             bottom: 0;
-            width: 10px;
+            width: 4px;
             background-color: var(--accent);
         }
 
@@ -13943,7 +14257,16 @@ elements.csvView.addEventListener('contextmenu', (e) => {
 
     showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
 });
-initStructuredDataTreeContextMenu(elements.swaggerView);
+initStructuredDataTreeContextMenu(elements.swaggerView, {
+    isActive: () => state.viewMode === 'swagger-view',
+    getRoot: () => state.swaggerSpec ?? parseSwaggerSpec(elements.editor.value),
+    menuTitle: 'JSON/YAML field',
+});
+initStructuredDataTreeContextMenu(elements.toolsFrontmatter, {
+    isActive: () => state.currentFileType === 'markdown' && state.frontmatter != null,
+    getRoot: () => state.frontmatter,
+    menuTitle: 'Frontmatter field',
+});
 
 elements.tabEditor.addEventListener('click', () => {
     setViewMode('editor');

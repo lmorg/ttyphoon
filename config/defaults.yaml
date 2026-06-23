@@ -9,8 +9,8 @@ Tmux:
 
 # If tmux is not available, then default to the following $SHELLs instead
 Shell:
-  Default: [murex]
-  Fallback: [$SHELL]
+  Default: [ murex ]
+  Fallback: [ $SHELL ]
 
 Hotkeys:
   # How many milliseconds to wait before ignoring the prefix key
@@ -18,29 +18,28 @@ Hotkeys:
   # How many milliseconds to wait before ignoring any chained key presses
   RepeatTTL: 1000
   Functions:
-    "M-p":    CommandPalette
-    "F2::p":  CommandPalette
-    "F2::s":  Settings
+    "M-p": CommandPalette
+    "F2::p": CommandPalette
+    "F2::s": Settings
     "F2::C-r": ReloadSettings
-    "M-v":    Paste
-    "C-S-v":  Paste
-    "F2::v":  VisualEditor
-    "F2::a":  AskAI
-    "F2::/":  AgentSkills
+    "M-v": Paste
+    "C-S-v": Paste
+    "F2::v": VisualEditor
+    "F2::a": AskAI
+    "F2::/": AgentSkills
     #"F2::h": OpenHistory
-    "F2::n":  ShowHideNotes
-    "F2::f":  OpenFile
-    "F2::r":  ReopenRecentFile
-    "M-f":    SearchRegex
+    "F2::n": ShowHideNotes
+    "F2::f": OpenFile
+    "F2::r": ReopenRecentFile
+    "M-f": SearchRegex
     "F3::F3": SearchRegex
-    "F3::d":  SearchResults
-    "F3::c":  SearchClear
+    "F3::d": SearchResults
+    "F3::c": SearchClear
     #"F3::a": SearchAIPrompts
-    "F3::h":  SearchCommandLines
+    "F3::h": SearchCommandLines
     "F4::F4": LspOptionsMenu
-    "F4::f":  LspFormatDocument
-    "F4::j":  LspJumpToSymbol
-
+    "F4::f": LspFormatDocument
+    "F4::j": LspJumpToSymbol
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
@@ -108,7 +107,7 @@ TypeFace:
 
   # Cell padding. Some people prefer high density while others find that harder
   # to read
-  AdjustCellWidth:  0
+  AdjustCellWidth: 0
   AdjustCellHeight: 2
 
   # Ligatures are characters can be combined to make prettier versions of

@@ -198,7 +198,7 @@ function buildContainerNode(value, key, depth, path, parentType, ctx, type) {
 
     const expandedAttr = expanded ? 'true' : 'false';
     return `
-        <div class="json-node" data-node-type="${type}" data-expanded="${expandedAttr}"${lazyAttr}>
+        <div class="json-node" data-node-type="${type}" data-json-path="${encodePath(path)}" data-expanded="${expandedAttr}"${lazyAttr}>
             <div class="json-row" style="padding-left: ${indent}px;">
                 <button type="button" class="json-toggle" aria-label="${expanded ? 'Collapse node' : 'Expand node'}" aria-expanded="${expandedAttr}"></button>
                 ${keyPrefix}<span class="json-brace">${openBrace}</span><span class="json-meta">${meta}</span><span class="json-brace">${closeBrace}</span>
@@ -220,7 +220,7 @@ function buildNode(value, key, depth, path = [], parentType = null, ctx) {
     const indent = depth * 18;
     const keyPrefix = buildKeyPrefix(key, path, parentType);
     return `
-        <div class="json-node json-node-leaf" data-node-type="leaf">
+        <div class="json-node json-node-leaf" data-node-type="leaf" data-json-path="${encodePath(path)}">
             <div class="json-row" style="padding-left: ${indent}px;">
                 <span class="json-toggle-placeholder"></span>
                 ${keyPrefix}${formatPrimitive(value, path)}
@@ -531,4 +531,25 @@ export function attachJsonViewerEditHandler(container, onEditCommit) {
     }
 
     container.__jsonViewerOnEditCommit = onEditCommit;
+}
+
+/**
+ * Begin inline editing of the key whose path matches `path`. Used after a new
+ * key is inserted via the context menu so the user can immediately type its
+ * name. Returns true when a matching key node was found and focused.
+ */
+export function startJsonViewerKeyEdit(container, path) {
+    if (!container) {
+        return false;
+    }
+
+    const target = JSON.stringify(path);
+    const editables = container.querySelectorAll('.json-editable[data-json-edit="key"]');
+    for (const editable of editables) {
+        if (editable.getAttribute('data-json-path') === target) {
+            startInlineEdit(container, editable);
+            return true;
+        }
+    }
+    return false;
 }
