@@ -45,7 +45,6 @@ func (ata *allTheAgentsT) Get(key string) (*Agent, bool) {
 	ata._mutex.Lock()
 	defer ata._mutex.Unlock()
 	agent, ok := ata._map[key]
-
 	return agent, ok
 }
 

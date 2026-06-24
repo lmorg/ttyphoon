@@ -128,6 +128,23 @@ func getBindingByAlias(lang string) *LanguageBindingT {
 	return nil
 }
 
+// resolveFormatBinding resolves a language binding for formatting. The language
+// may be a runtime description (e.g. "Go (Golang)"), an alias (e.g. "go"), or a
+// file extension (e.g. "go"). Returns nil when nothing matches.
+func resolveFormatBinding(language string) *LanguageBindingT {
+	language = strings.TrimSpace(language)
+	if language == "" {
+		return nil
+	}
+	if binding := getBindingByDescription(language); binding != nil {
+		return binding
+	}
+	if binding := getBindingByAlias(language); binding != nil {
+		return binding
+	}
+	return getBindingByExtension(language)
+}
+
 func normalizeLanguage(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }

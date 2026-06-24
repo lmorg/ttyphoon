@@ -71,6 +71,9 @@ type WApp struct {
 	lspStartErrs    map[string]string
 	lspManager      *lsp.Manager
 	lspDocs         *lsp.DocumentStore
+	typosDocs       *lsp.DocumentStore
+	typosUnavail    map[string]bool
+	typosMu         sync.Mutex
 	syntaxEngine    *syntaxcompletion.Engine
 }
 
@@ -86,6 +89,8 @@ func NewWailsApp() *WApp {
 		globalNotes:   notes.DirGlobal(),
 		lspManager:    lsp.NewManager(),
 		lspDocs:       lsp.NewDocumentStore(),
+		typosDocs:     lsp.NewDocumentStore(),
+		typosUnavail:  map[string]bool{},
 	}
 
 	engine, err := syntaxcompletion.NewDefaultEngine()
@@ -743,6 +748,15 @@ func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.
 	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.projRoot, code, language)
 }
 
+// FormatNotesContent formats a whole document's content (no snippet template
+// wrapping) using the configured FormatCommand for the language. When no
+// FormatCommand is configured, HasFormatter is false and the frontend falls
+// back to LSP formatting.
+func (a *WApp) FormatNotesContent(docPath, content, language string) *jupyter.FormatCodeReturnT {
+	bookId := jupyter.BookId(a.projRoot, a.filePath(docPath))
+	return jupyter.FormatNotesContent(context.Background(), bookId, "editor", a.projRoot, content, language)
+}
+
 func (a *WApp) FormatCodeFile(docPath, language string) {
 	filePath := a.filePathWithProject(docPath, a.projRoot)
 	log.Printf(`[debug] FormatCodeFile: pwd="%s" docPath="%s" language="%s"`, a.projRoot, filePath, language)
@@ -1230,6 +1244,145 @@ func (a *WApp) NotesLspCloseDocument(filePath string) {
 	t := sp.Transport()
 	if err := a.lspDocs.DidClose(a.ctx, t, absPath); err != nil {
 		log.Printf("lsp: DidClose %q: %v", absPath, err)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// typos-lsp spellcheck bridge (called from JS)
+//
+// typos-lsp is a single, language-agnostic spellcheck server managed per
+// workspace under a synthetic language id, running in parallel with the
+// per-language servers. Its diagnostics are emitted on a dedicated event so the
+// frontend can render them with the aspell canvas wavy-underline chrome.
+// ----------------------------------------------------------------------------
+
+const typosLspLanguageID = "__typos_lsp__"
+
+// notesTyposServer resolves (starting if necessary) the workspace-wide
+// typos-lsp spellcheck server. Returns nil when typos-lsp is not configured or
+// failed to start, in which case callers fall back to aspell.
+func (a *WApp) notesTyposServer() *lsp.ServerProcess {
+	argv := config.Config.Notes.SpellCheck.TyposLsp.Command
+	if len(argv) == 0 {
+		return nil
+	}
+
+	a.typosMu.Lock()
+	unavailable := a.typosUnavail[a.projRoot]
+	a.typosMu.Unlock()
+	if unavailable {
+		return nil
+	}
+
+	initOptions := config.Config.Notes.SpellCheck.TyposLsp.InitOptions
+	alreadyRunning := a.lspManager.Has(a.projRoot, typosLspLanguageID)
+
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, typosLspLanguageID, argv, initOptions)
+	if err != nil {
+		// typos-lsp is optional; do not surface a user-facing error. Record the
+		// failure so a missing binary isn't repeatedly respawned.
+		log.Printf("lsp: typos-lsp unavailable (%v); falling back to aspell", err)
+		a.markTyposUnavailable()
+		return nil
+	}
+
+	if !alreadyRunning {
+		go lsp.ListenForNotifications(a.ctx, sp, func(uri string) (string, bool) {
+			if doc := a.typosDocs.GetByURI(uri); doc != nil {
+				return doc.Content(), true
+			}
+			return "", false
+		}, func(payload lsp.DiagnosticsPayload) {
+			runtime.EventsEmit(a.ctx, "notesTyposDiagnostics", payload)
+		}, nil, nil)
+	}
+
+	if err := sp.EnsureInitialized(a.ctx, a.projRoot); err != nil {
+		log.Printf("lsp: typos-lsp init failed (%v); falling back to aspell", err)
+		a.markTyposUnavailable()
+		return nil
+	}
+
+	return sp
+}
+
+func (a *WApp) markTyposUnavailable() {
+	a.typosMu.Lock()
+	a.typosUnavail[a.projRoot] = true
+	a.typosMu.Unlock()
+}
+
+// NotesTyposAvailable reports whether typos-lsp is configured for spellchecking.
+func (a *WApp) NotesTyposAvailable() bool {
+	return len(config.Config.Notes.SpellCheck.TyposLsp.Command) > 0
+}
+
+// NotesTyposOpenDocument opens a document with the typos-lsp spellcheck server.
+// Returns true when the server is running and the document was opened (the
+// frontend then renders typos diagnostics and suppresses aspell for that
+// editor); false means the caller should keep using aspell.
+func (a *WApp) NotesTyposOpenDocument(filePath, languageID, content string) bool {
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return false
+	}
+	t := sp.Transport()
+	if t == nil {
+		return false
+	}
+
+	absPath := a.filePath(filePath)
+	if languageID == "" {
+		languageID = "plaintext"
+	}
+
+	// Re-open cleanly if it was already tracked as open (e.g. on reload).
+	if a.typosDocs.IsOpen(absPath) {
+		a.typosDocs.DidClose(a.ctx, t, absPath) //nolint:errcheck // best-effort reset
+	}
+
+	if err := a.typosDocs.DidOpen(a.ctx, t, absPath, languageID, content); err != nil {
+		log.Printf("lsp: typos DidOpen %q: %v", absPath, err)
+		return false
+	}
+	return true
+}
+
+// NotesTyposChangeDocument notifies typos-lsp of content changes.
+func (a *WApp) NotesTyposChangeDocument(filePath, content string) {
+	absPath := a.filePath(filePath)
+	if !a.typosDocs.IsOpen(absPath) {
+		return
+	}
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.typosDocs.DidChange(a.ctx, t, absPath, content); err != nil {
+		log.Printf("lsp: typos DidChange %q: %v", absPath, err)
+	}
+}
+
+// NotesTyposCloseDocument notifies typos-lsp that a document was closed.
+func (a *WApp) NotesTyposCloseDocument(filePath string) {
+	absPath := a.filePath(filePath)
+	if !a.typosDocs.IsOpen(absPath) {
+		return
+	}
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.typosDocs.DidClose(a.ctx, t, absPath); err != nil {
+		log.Printf("lsp: typos DidClose %q: %v", absPath, err)
 	}
 }
 

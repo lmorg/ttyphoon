@@ -134,6 +134,18 @@ Notes:
     default:
       TabSpaceIndent: 4
 
+  # Spellchecking for Notes.
+  #
+  # `aspell` is always used for form fields (e.g. the input box) and as a
+  # fallback. When `typos-lsp` is available it is used for spellchecking project
+  # files and Jupyter code blocks while LSP mode is enabled, rendering with the
+  # same red wavy underline as aspell.
+  SpellCheck:
+    TyposLsp:
+      # Command/argv used to launch the typos-lsp server. Leave empty to disable
+      # typos-lsp and always use aspell.
+      command: [ typos-lsp ]
+
 Window:
   StatusBar: true
 

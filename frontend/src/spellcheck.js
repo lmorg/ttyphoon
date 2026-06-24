@@ -12,6 +12,12 @@
  *   const sc = attachSpellCheck(textarea);
  *   sc.setExclusions(['async', 'typeof']); // e.g. LSP keywords
  *   sc.detach();
+ *
+ * Two data sources are supported:
+ *   - 'aspell'   (default): the overlay calls the aspell backend itself.
+ *   - 'external'          : the overlay renders misspellings pushed in via
+ *                           setMisspellings() — used for typos-lsp diagnostics,
+ *                           which reuse this same red wavy-underline chrome.
  */
 
 import { NotesSpellCheck } from '../wailsjs/go/main/WApp';
@@ -34,6 +40,9 @@ const WAVE_FREQUENCY = 0.4;
  */
 export function attachSpellCheck(textarea, options = {}) {
     let exclusionSet = new Set((options.exclusions || []).map(w => String(w).toLowerCase()));
+    // Data source: 'aspell' fetches from the backend; 'external' renders
+    // misspellings pushed in via setMisspellings() (e.g. typos-lsp diagnostics).
+    let mode = options.mode === 'external' ? 'external' : 'aspell';
     /** Raw results from the backend, unfiltered. */
     let rawMisspellings = [];
     /** Filtered misspellings after exclusions applied. */
@@ -219,7 +228,7 @@ export function attachSpellCheck(textarea, options = {}) {
         ctx.clip();
 
         ctx.strokeStyle = redColour;
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 1;
         ctx.lineWidth   = 1.5;
         ctx.lineJoin    = 'round';
         ctx.lineCap     = 'round';
@@ -291,8 +300,23 @@ export function attachSpellCheck(textarea, options = {}) {
 
     // ── Spell-check runner ────────────────────────────────────────────────
 
+    /**
+     * Apply a raw misspelling list (from aspell or pushed externally): filter by
+     * exclusions, measure word rects, and repaint the overlay.
+     */
+    function applyMisspellings(raw, text) {
+        rawMisspellings     = Array.isArray(raw) ? raw : [];
+        currentMisspellings = rawMisspellings.filter(
+            m => m && m.misspeltWord && !exclusionSet.has(String(m.misspeltWord).toLowerCase()),
+        );
+        cachedWordData      = measureWordRects(currentMisspellings, text);
+        drawCanvas();
+    }
+
     async function runCheck() {
         if (destroyed) return;
+        // In external mode the overlay is fed by setMisspellings(); never call aspell.
+        if (mode === 'external') return;
         const text = textarea.value;
         if (text === lastCheckedText) return;
         lastCheckedText = text;
@@ -306,10 +330,7 @@ export function attachSpellCheck(textarea, options = {}) {
 
         if (destroyed) return;
 
-        rawMisspellings     = raw;
-        currentMisspellings = raw.filter(m => !exclusionSet.has(m.misspeltWord.toLowerCase()));
-        cachedWordData      = measureWordRects(currentMisspellings, text);
-        drawCanvas();
+        applyMisspellings(raw, text);
     }
 
     function scheduleCheck() {
@@ -422,6 +443,41 @@ export function attachSpellCheck(textarea, options = {}) {
         check() {
             lastCheckedText = null;
             runCheck();
+        },
+
+        /**
+         * Switch the data source. 'external' suppresses aspell so the overlay is
+         * driven solely by setMisspellings() (typos-lsp); 'aspell' restores the
+         * built-in aspell checker. Switching always clears the current underlines.
+         * @param {'aspell'|'external'} nextMode
+         */
+        setMode(nextMode) {
+            const next = nextMode === 'external' ? 'external' : 'aspell';
+            if (next === mode) return;
+            mode = next;
+            applyMisspellings([], textarea.value);
+            if (mode === 'external') {
+                clearTimeout(checkTimer);
+            } else {
+                lastCheckedText = null;
+                scheduleCheck();
+            }
+        },
+
+        /** Current data source mode. */
+        getMode() {
+            return mode;
+        },
+
+        /**
+         * Replace the rendered misspellings (external mode). Each item must be
+         * { misspeltWord, wordStart, wordLength, suggestions? } with absolute
+         * character offsets into the textarea value.
+         * @param {Array<{misspeltWord:string,wordStart:number,wordLength:number,suggestions?:string[]}>} list
+         */
+        setMisspellings(list) {
+            if (mode !== 'external') return;
+            applyMisspellings(list, textarea.value);
         },
     };
 }

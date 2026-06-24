@@ -166,6 +166,14 @@ type configT struct {
 		MaxLogLines       int   `yaml:"MaxLogLines"`
 
 		Languages LanguagesT `yaml:"Languages"`
+
+		SpellCheck struct {
+			// TyposLsp configures the language-agnostic `typos-lsp` server used
+			// for spellchecking project files and Jupyter code blocks when LSP
+			// mode is enabled. When the command is empty or the server cannot
+			// start, Notes falls back to the aspell spellchecker.
+			TyposLsp LspT `yaml:"TyposLsp"`
+		} `yaml:"SpellCheck"`
 	} `yaml:"Notes"`
 
 	TypeFace struct {

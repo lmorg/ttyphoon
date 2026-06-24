@@ -50,6 +50,10 @@ export function FormatCodeFile(arg1, arg2) {
   return window['go']['main']['WApp']['FormatCodeFile'](arg1, arg2);
 }
 
+export function FormatNotesContent(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
@@ -252,6 +256,22 @@ export function NotesRecentFiles() {
 
 export function NotesSpellCheck(arg1) {
   return window['go']['main']['WApp']['NotesSpellCheck'](arg1);
+}
+
+export function NotesTyposAvailable() {
+  return window['go']['main']['WApp']['NotesTyposAvailable']();
+}
+
+export function NotesTyposChangeDocument(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTyposChangeDocument'](arg1, arg2);
+}
+
+export function NotesTyposCloseDocument(arg1) {
+  return window['go']['main']['WApp']['NotesTyposCloseDocument'](arg1);
+}
+
+export function NotesTyposOpenDocument(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesTyposOpenDocument'](arg1, arg2, arg3);
 }
 
 export function RenameFile(arg1, arg2) {

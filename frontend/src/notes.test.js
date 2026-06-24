@@ -70,6 +70,9 @@ const notesLspOpenDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspChangeDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspSaveDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspCloseDocumentMock = vi.fn(() => Promise.resolve());
+const notesTyposOpenDocumentMock = vi.fn(() => Promise.resolve(false));
+const notesTyposChangeDocumentMock = vi.fn(() => Promise.resolve());
+const notesTyposCloseDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspStopAllMock = vi.fn(() => Promise.resolve());
 const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
 const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve([]));
@@ -140,6 +143,9 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspChangeDocument: notesLspChangeDocumentMock,
     NotesLspSaveDocument: notesLspSaveDocumentMock,
     NotesLspCloseDocument: notesLspCloseDocumentMock,
+    NotesTyposOpenDocument: notesTyposOpenDocumentMock,
+    NotesTyposChangeDocument: notesTyposChangeDocumentMock,
+    NotesTyposCloseDocument: notesTyposCloseDocumentMock,
     NotesLspStopAll: notesLspStopAllMock,
     NotesLspHover: notesLspHoverMock,
     NotesLspSemanticTokens: notesLspSemanticTokensMock,
@@ -169,6 +175,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
     SetDocumentCache: setDocumentCacheMock,
+    FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
+    FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
@@ -227,7 +235,14 @@ vi.mock('./vim-mode', () => ({
 }));
 
 vi.mock('./spellcheck', () => ({
-    attachSpellCheck: vi.fn(() => ({ detach: vi.fn(), setExclusions: vi.fn(), check: vi.fn() })),
+    attachSpellCheck: vi.fn(() => ({
+        detach: vi.fn(),
+        setExclusions: vi.fn(),
+        check: vi.fn(),
+        setMode: vi.fn(),
+        getMode: vi.fn(() => 'aspell'),
+        setMisspellings: vi.fn(),
+    })),
 }));
 
 const theme = {
@@ -318,6 +333,10 @@ describe('notes rendering', () => {
         notesLspChangeDocumentMock.mockReset();
         notesLspSaveDocumentMock.mockReset();
         notesLspCloseDocumentMock.mockReset();
+        notesTyposOpenDocumentMock.mockReset();
+        notesTyposOpenDocumentMock.mockResolvedValue(false);
+        notesTyposChangeDocumentMock.mockReset();
+        notesTyposCloseDocumentMock.mockReset();
         notesLspStopAllMock.mockReset();
         notesLspHoverMock.mockReset();
         notesLspSemanticTokensMock.mockReset();

@@ -309,3 +309,74 @@ describe('spellcheck — aspell unavailable', () => {
     });
 });
 
+describe('spellcheck — external (typos-lsp) mode', () => {
+    it('does not call the aspell backend when started in external mode', async () => {
+        const ta = makeTextarea('helo world');
+        attachSpellCheck(ta, { mode: 'external' });
+        await flush(900);
+        expect(notesSpellCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('renders pushed misspellings in external mode', async () => {
+        const ta = makeTextarea('helo world');
+        const sc = attachSpellCheck(ta, { mode: 'external' });
+        await flush(900);
+
+        ctxMock.stroke.mockClear();
+        sc.setMisspellings([
+            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
+        ]);
+        expect(ctxMock.stroke).toHaveBeenCalled();
+    });
+
+    it('ignores setMisspellings while in aspell mode', async () => {
+        const ta = makeTextarea('helo world');
+        const sc = attachSpellCheck(ta);
+        await flush(900);
+
+        ctxMock.stroke.mockClear();
+        sc.setMisspellings([
+            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
+        ]);
+        expect(ctxMock.stroke).not.toHaveBeenCalled();
+    });
+
+    it('setMode switches sources: external suppresses aspell, aspell restores it', async () => {
+        const ta = makeTextarea('helo world');
+        const sc = attachSpellCheck(ta);
+        await flush(900);
+        expect(sc.getMode()).toBe('aspell');
+
+        sc.setMode('external');
+        expect(sc.getMode()).toBe('external');
+        notesSpellCheckMock.mockClear();
+        ta.value = 'changed text';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        await flush(900);
+        expect(notesSpellCheckMock).not.toHaveBeenCalled();
+
+        sc.setMode('aspell');
+        await flush(900);
+        expect(notesSpellCheckMock).toHaveBeenCalledWith('changed text');
+    });
+
+    it('switching back to aspell clears externally pushed misspellings', async () => {
+        const ta = makeTextarea('helo world');
+        const sc = attachSpellCheck(ta, { mode: 'external' });
+        await flush(900);
+        sc.setMisspellings([
+            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
+        ]);
+
+        ctxMock.clearRect.mockClear();
+        ctxMock.stroke.mockClear();
+        notesSpellCheckMock.mockResolvedValue([]);
+        sc.setMode('aspell');
+        // Underlines cleared immediately on mode switch.
+        expect(ctxMock.clearRect).toHaveBeenCalled();
+        await flush(900);
+        expect(ctxMock.stroke).not.toHaveBeenCalled();
+    });
+});
+
+

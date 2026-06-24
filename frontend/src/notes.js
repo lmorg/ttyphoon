@@ -12,9 +12,10 @@ import {
     ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
-    GetDocumentCache, SetDocumentCache, FormatCodeBlock, CompleteSyntax,
+    GetDocumentCache, SetDocumentCache, FormatCodeBlock, FormatNotesContent, CompleteSyntax,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
+    NotesTyposOpenDocument, NotesTyposChangeDocument, NotesTyposCloseDocument,
     NotesLspSemanticTokens,
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
@@ -849,6 +850,8 @@ const state = {
     lspChangeTimer: null,
     lspEditorFormatTimer: null,
     lspOpenFile: '',
+    typosOpenFile: '',
+    typosChangeTimer: null,
     lspHoverTimer: null,
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
@@ -865,8 +868,7 @@ const state = {
 };
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
-const LSP_BLOCK_SAVE_DEBOUNCE_MS = 1000;
-const LSP_EDITOR_FORMAT_DEBOUNCE_MS = 1300;
+const LSP_EDITOR_FORMAT_DEBOUNCE_MS = 60000;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
@@ -3954,6 +3956,83 @@ function lspPositionToEditorOffset(content, line, character) {
     return offset + safeCharacter;
 }
 
+// typos-lsp encodes the misspelt word and its correction(s) in the diagnostic
+// message using backticks, e.g. "`teh` should be `the`" or, for multiple
+// corrections, "`recieve` should be `receive`, `relieve`". The first quoted
+// token is the misspelt word; the remainder are suggestions.
+function parseTyposDiagnosticMessage(message) {
+    const matches = String(message || '').match(/`([^`]+)`/g);
+    if (!matches || matches.length === 0) {
+        return { word: '', suggestions: [] };
+    }
+    const unquote = (s) => s.slice(1, -1);
+    return {
+        word: unquote(matches[0]),
+        suggestions: matches.slice(1).map(unquote),
+    };
+}
+
+// Convert typos-lsp diagnostics into the misspelling shape consumed by the
+// spellcheck canvas overlay (absolute character offsets into `text`).
+function typosDiagnosticsToMisspellings(diagnostics, text) {
+    const source = String(text || '');
+    const list = [];
+    for (const diag of Array.isArray(diagnostics) ? diagnostics : []) {
+        if (!diag || !diag.range || !diag.range.start || !diag.range.end) {
+            continue;
+        }
+        const start = lspPositionToEditorOffset(source, diag.range.start.line, diag.range.start.character);
+        const end = lspPositionToEditorOffset(source, diag.range.end.line, diag.range.end.character);
+        if (end <= start) {
+            continue;
+        }
+        const parsed = parseTyposDiagnosticMessage(diag.message);
+        list.push({
+            misspeltWord: parsed.word || source.slice(start, end),
+            wordStart: start,
+            wordLength: end - start,
+            suggestions: parsed.suggestions,
+        });
+    }
+    return list;
+}
+
+// Route an incoming typos-lsp diagnostics payload to the spellcheck overlay of
+// whichever editor owns the document (the main editor or a Jupyter code block).
+function routeTyposDiagnostics(uri, diagnostics) {
+    const targetPath = normalizePathForMatch(fileUriToPath(uri));
+    if (!targetPath) {
+        return;
+    }
+
+    // Main editor.
+    if (state.typosOpenFile && notesSpellCheckHandle
+        && normalizePathForMatch(fileUriToPath(state.currentFileUri)) === targetPath) {
+        notesSpellCheckHandle.setMisspellings(
+            typosDiagnosticsToMisspellings(diagnostics, elements.editor.value || ''));
+        return;
+    }
+
+    // Jupyter code blocks.
+    for (const blockId of Object.keys(state.jupyterCodeBlocks || {})) {
+        const block = state.jupyterCodeBlocks[blockId];
+        if (!block || !block.typosFilePath) {
+            continue;
+        }
+        if (normalizePathForMatch(block.typosFilePath) !== targetPath) {
+            continue;
+        }
+        const handle = jupyterSpellCheckHandles[blockId];
+        if (!handle) {
+            return;
+        }
+        const editable = elements.jupyter?.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable`);
+        const text = editable ? (editable.value || '') : (block.currentContent || '');
+        handle.setMisspellings(typosDiagnosticsToMisspellings(diagnostics, text));
+        return;
+    }
+}
+
 async function resolveNotesFileFromAbsolutePath(absPath) {
     const normalizedTarget = normalizePathForMatch(absPath);
     if (!normalizedTarget) {
@@ -4956,6 +5035,74 @@ function scheduleLspDidChange() {
     }, LSP_CHANGE_DEBOUNCE_MS);
 }
 
+// ── typos-lsp spellchecking (main editor) ──────────────────────────────────
+//
+// When typos-lsp is available, eligible project files are spellchecked by it
+// instead of aspell, rendering with the same red wavy-underline chrome. aspell
+// remains the fallback (and is always used for form fields like the input box).
+
+async function openCurrentTyposDocument(content) {
+    if (!notesSpellCheckHandle) {
+        return;
+    }
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        // Non-eligible files keep aspell.
+        notesSpellCheckHandle.setMode('aspell');
+        return;
+    }
+
+    try {
+        const languageID = await ResolveNotesLspLanguage(state.currentFile);
+        const ok = await NotesTyposOpenDocument(state.currentFile, languageID || '', String(content || ''));
+        if (ok) {
+            state.typosOpenFile = state.currentFile;
+            notesSpellCheckHandle.setMode('external');
+        } else {
+            state.typosOpenFile = '';
+            notesSpellCheckHandle.setMode('aspell');
+        }
+    } catch (err) {
+        state.typosOpenFile = '';
+        notesSpellCheckHandle.setMode('aspell');
+        console.error('notes typos open failed:', err);
+    }
+}
+
+async function closeCurrentTyposDocument() {
+    if (state.typosChangeTimer) {
+        clearTimeout(state.typosChangeTimer);
+        state.typosChangeTimer = null;
+    }
+    const openFile = state.typosOpenFile;
+    state.typosOpenFile = '';
+    notesSpellCheckHandle?.setMode('aspell');
+    if (!openFile) {
+        return;
+    }
+    try {
+        await NotesTyposCloseDocument(openFile);
+    } catch (err) {
+        console.error('notes typos close failed:', err);
+    }
+}
+
+function scheduleTyposDidChange() {
+    if (!state.typosOpenFile || state.typosOpenFile !== state.currentFile) {
+        return;
+    }
+    if (state.typosChangeTimer) {
+        clearTimeout(state.typosChangeTimer);
+    }
+    state.typosChangeTimer = setTimeout(async () => {
+        state.typosChangeTimer = null;
+        try {
+            await NotesTyposChangeDocument(state.currentFile, elements.editor.value || '');
+        } catch (err) {
+            console.error('notes typos change failed:', err);
+        }
+    }, LSP_CHANGE_DEBOUNCE_MS);
+}
+
 function clearLspEditorFormatTimer() {
     if (state.lspEditorFormatTimer) {
         clearTimeout(state.lspEditorFormatTimer);
@@ -4963,8 +5110,77 @@ function clearLspEditorFormatTimer() {
     }
 }
 
+// Replace a textarea's value with formatted text, preserving the caret/selection
+// proportionally. Returns false when nothing changed.
+function applyFormattedText(textarea, formatted) {
+    if (!textarea || typeof formatted !== 'string' || formatted.length === 0) {
+        return false;
+    }
+    if (formatted === textarea.value) {
+        return false;
+    }
+    const prevStart = textarea.selectionStart || 0;
+    const prevEnd = textarea.selectionEnd || 0;
+    const prevLen = textarea.value.length;
+    const newLen = formatted.length;
+    const ratio = prevLen > 0 ? newLen / prevLen : 1;
+    const newStart = Math.min(Math.round(prevStart * ratio), newLen);
+    const newEnd = Math.min(Math.round(prevEnd * ratio), newLen);
+    textarea.value = formatted;
+    try {
+        textarea.setSelectionRange(newStart, newEnd);
+    } catch {
+        // jsdom / detached nodes may not support selection ranges.
+    }
+    return true;
+}
+
+// Unified formatter for the main editor: try the configured format command
+// (e.g. goimports) first, then fall back to LSP formatting. Shared by the 10s
+// idle debounce, editor blur, and the cmd/ctrl+s "save and format" action.
+async function formatMainEditor({ notifyOnError = false } = {}) {
+    if (!state.currentFile) {
+        return;
+    }
+    if (state.viewMode !== 'editor' && state.viewMode !== 'swagger-edit') {
+        return;
+    }
+    if (!isCurrentFileLspEligible()) {
+        return;
+    }
+
+    const content = elements.editor.value || '';
+
+    // 1. Configured format command (e.g. goimports / ruff).
+    try {
+        const result = await FormatNotesContent(state.currentFile, content, state.editorLanguage || '');
+        if (result && result.HasFormatter) {
+            const err = typeof result.Err === 'string' ? result.Err : '';
+            if (err) {
+                if (notifyOnError) {
+                    notifyTerminal(err, 'error');
+                }
+                return;
+            }
+            const formatted = typeof result.Code === 'string' ? result.Code : '';
+            if (applyFormattedText(elements.editor, formatted)) {
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            return;
+        }
+    } catch (err) {
+        console.error('notes format command failed:', err);
+        // fall through to LSP formatting
+    }
+
+    // 2. Fall back to LSP formatting when no format command is configured.
+    if (state.lspOpenFile === state.currentFile) {
+        await formatCurrentLspDocument({ preferSelection: false, notifyOnError });
+    }
+}
+
 function scheduleLspEditorAutoFormat() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
 
@@ -4973,10 +5189,85 @@ function scheduleLspEditorAutoFormat() {
     }
 
     clearLspEditorFormatTimer();
-    state.lspEditorFormatTimer = setTimeout(async () => {
+    state.lspEditorFormatTimer = setTimeout(() => {
         state.lspEditorFormatTimer = null;
-        await formatCurrentLspDocument({ preferSelection: false, notifyOnError: false });
+        void formatMainEditor({ notifyOnError: false });
     }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
+}
+
+// Run any pending editor auto-format immediately (e.g. when the editor loses
+// focus) rather than waiting for the debounce timer to elapse.
+function flushLspEditorAutoFormat() {
+    if (!state.lspEditorFormatTimer) {
+        return;
+    }
+    clearLspEditorFormatTimer();
+    void formatMainEditor({ notifyOnError: false });
+}
+
+// Unified formatter for a Jupyter code block: try the configured format command
+// (e.g. goimports) first, then fall back to LSP formatting. Shared by the idle
+// debounce, block blur, and the cmd/ctrl+s "save and format" action.
+async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) {
+        return;
+    }
+    const editableCode = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-code-editable`);
+    if (!editableCode) {
+        return;
+    }
+
+    const content = editableCode.value;
+
+    // 1. Configured format command (snippet-aware, e.g. goimports / ruff).
+    try {
+        const result = await FormatCodeBlock(state.currentFile, blockId, content, block.runtime);
+        if (result && result.HasFormatter) {
+            const goErr = typeof result.Err === 'string' ? result.Err : '';
+            if (goErr) {
+                if (notifyOnError) {
+                    notifyTerminal(goErr, 'error');
+                }
+                return;
+            }
+            const formattedCode = typeof result.Code === 'string' ? result.Code : '';
+            if (applyFormattedText(editableCode, formattedCode)) {
+                block.currentContent = editableCode.value;
+                editableCode.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            return;
+        }
+    } catch (err) {
+        console.error('jupyter block format command failed:', err);
+        // fall through to LSP formatting
+    }
+
+    // 2. Fall back to LSP formatting when no format command is configured.
+    if (block.lspMode && block.lspFilePath) {
+        try {
+            const result = await NotesLspFormat(block.lspFilePath);
+            if (result && result.changed) {
+                const nextContent = String(result.content || '');
+                if (applyFormattedText(editableCode, nextContent)) {
+                    block.currentContent = editableCode.value;
+                    editableCode.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        } catch (err) {
+            if (notifyOnError) {
+                notifyTerminal('Failed to format block', 'error');
+            }
+            console.error('jupyter block LSP format failed:', err);
+        }
+    }
+}
+
+function clearLspBlockFormatTimer(block) {
+    if (block && block.lspSaveTimer) {
+        clearTimeout(block.lspSaveTimer);
+        block.lspSaveTimer = null;
+    }
 }
 
 function scheduleLspBlockSave(blockId, editableCode) {
@@ -4985,45 +5276,41 @@ function scheduleLspBlockSave(blockId, editableCode) {
         return;
     }
 
-    if (block.lspSaveTimer) {
-        clearTimeout(block.lspSaveTimer);
+    clearLspBlockFormatTimer(block);
+    block.lspSaveTimer = setTimeout(() => {
         block.lspSaveTimer = null;
+        void formatJupyterBlock(blockId, { notifyOnError: false });
+    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
+}
+
+// Run any pending block auto-format immediately (e.g. when the block loses focus).
+function flushLspBlockFormat(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block || !block.lspSaveTimer) {
+        return;
     }
+    clearLspBlockFormatTimer(block);
+    void formatJupyterBlock(blockId, { notifyOnError: false });
+}
 
-    block.lspSaveTimer = setTimeout(async () => {
-        block.lspSaveTimer = null;
-        const currentContent = editableCode.value;
-
+// Debounced sync of a Jupyter code block's content to the typos-lsp server so
+// its spellcheck diagnostics stay current.
+function scheduleTyposBlockChange(blockId, editableCode) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block || !block.typosFilePath) {
+        return;
+    }
+    if (block.typosChangeTimer) {
+        clearTimeout(block.typosChangeTimer);
+    }
+    block.typosChangeTimer = setTimeout(async () => {
+        block.typosChangeTimer = null;
         try {
-            const result = await FormatCodeBlock(state.currentFile, blockId, currentContent, block.runtime);
-            const goErr = typeof result?.Err === 'string' ? result.Err : '';
-            if (goErr) {
-                notifyTerminal(goErr, 'error');
-                return;
-            }
-
-            const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
-            if (formattedCode.length > 0 && formattedCode !== editableCode.value) {
-                // Preserve caret position: find the best offset in the formatted text.
-                const prevSelStart = editableCode.selectionStart || 0;
-                const prevSelEnd = editableCode.selectionEnd || 0;
-                const prevLen = editableCode.value.length;
-                const newLen = formattedCode.length;
-
-                // Map offset proportionally, then clamp to new length.
-                const ratio = prevLen > 0 ? newLen / prevLen : 1;
-                const newStart = Math.min(Math.round(prevSelStart * ratio), newLen);
-                const newEnd = Math.min(Math.round(prevSelEnd * ratio), newLen);
-
-                editableCode.value = formattedCode;
-                block.currentContent = formattedCode;
-                editableCode.setSelectionRange(newStart, newEnd);
-                editableCode.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            await NotesTyposChangeDocument(block.typosFilePath, editableCode.value || '');
         } catch (err) {
-            console.error('LSP block autosave failed:', err);
+            console.error('block typos change failed:', err);
         }
-    }, LSP_BLOCK_SAVE_DEBOUNCE_MS);
+    }, LSP_CHANGE_DEBOUNCE_MS);
 }
 
 function setDirty(isDirty) {
@@ -5504,6 +5791,10 @@ function convertToJupyterCodeBlocks() {
             }
             blockState.currentContent = editableCode.value;
 
+            if (blockState.typosFilePath) {
+                scheduleTyposBlockChange(blockId, editableCode);
+            }
+
             if (blockState.lspMode && blockState.lspFilePath) {
                 scheduleLspBlockSave(blockId, editableCode);
 
@@ -5547,6 +5838,7 @@ function convertToJupyterCodeBlocks() {
         });
 
         editableCode.addEventListener('blur', () => {
+            flushLspBlockFormat(blockId);
             if (state.lspActiveBlockId === blockId) {
                 state.lspActiveBlockId = null;
                 state.lspActiveBlockEditor = null;
@@ -5697,7 +5989,18 @@ function convertToJupyterCodeBlocks() {
         wrapper.appendChild(outputWrapper);
 
         attachVimMode(editableCode);
-        attachSpellCheck(editableCode);
+        // Detach any stale spellcheck overlay from a previous render of this
+        // block before attaching a fresh one, then restore typos mode if the
+        // block currently has LSP-mode spellchecking active.
+        if (jupyterSpellCheckHandles[blockId]) {
+            try { jupyterSpellCheckHandles[blockId].detach(); } catch { /* already gone */ }
+        }
+        const blockSpellCheck = attachSpellCheck(editableCode);
+        jupyterSpellCheckHandles[blockId] = blockSpellCheck;
+        const blockForSpell = state.jupyterCodeBlocks[blockId];
+        if (blockForSpell && blockForSpell.typosFilePath) {
+            blockSpellCheck.setMode('external');
+        }
     });
 }
 
@@ -5825,6 +6128,24 @@ async function toggleLspModeForBlock(blockId) {
                 block.lspFilePath = formattedFilePath;
                 await NotesLspOpenDocument(formattedFilePath, '', block.currentContent);
 
+                // Enable typos-lsp spellchecking for this block, rendering with
+                // the same red wavy underline as aspell. Falls back to aspell.
+                try {
+                    const typosOk = await NotesTyposOpenDocument(formattedFilePath, '', block.currentContent);
+                    const handle = jupyterSpellCheckHandles[blockId];
+                    if (typosOk) {
+                        block.typosFilePath = formattedFilePath;
+                        handle?.setMode('external');
+                    } else {
+                        block.typosFilePath = '';
+                        handle?.setMode('aspell');
+                    }
+                } catch (err) {
+                    block.typosFilePath = '';
+                    jupyterSpellCheckHandles[blockId]?.setMode('aspell');
+                    console.error('block typos open failed:', err);
+                }
+
                 // If this block's textarea is currently focused, activate it as the LSP target.
                 if (document.activeElement === editableElement) {
                     state.lspActiveBlockId = blockId;
@@ -5843,6 +6164,15 @@ async function toggleLspModeForBlock(blockId) {
             await NotesLspCloseDocument(block.lspFilePath);
         } catch (err) {
             console.error('Error closing LSP document for code block:', err);
+        }
+        if (block.typosFilePath) {
+            try {
+                await NotesTyposCloseDocument(block.typosFilePath);
+            } catch (err) {
+                console.error('Error closing typos document for code block:', err);
+            }
+            block.typosFilePath = '';
+            jupyterSpellCheckHandles[blockId]?.setMode('aspell');
         }
         block.lspFilePath = '';
         // Clear active LSP target if this block was active.
@@ -7363,6 +7693,7 @@ async function loadFile(file, options = {}) {
 
     if (state.currentFile && state.currentFile !== file) {
         await closeOpenLspDocument();
+        await closeCurrentTyposDocument();
         lspSpellCheckExclusions.symbols = [];
         lspSpellCheckExclusions.tokens = [];
         lspSpellCheckExclusions.keywords = [];
@@ -7634,6 +7965,9 @@ async function loadFile(file, options = {}) {
             await openCurrentLspDocument(elements.editor.value || '');
         }
 
+        // Spellcheck via typos-lsp for eligible files (falls back to aspell).
+        await openCurrentTyposDocument(elements.editor.value || '');
+
         if (!skipDocumentCacheRestore) {
             await restoreDocumentCache(file);
         }
@@ -7674,6 +8008,25 @@ async function saveFile() {
         notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
         console.error(err);
     }
+}
+
+// cmd/ctrl+s: format the active editor (main editor or focused Jupyter code
+// block) through the shared format routine, then save the document to disk.
+async function saveAndFormat() {
+    if (!state.currentFile) {
+        setStatus('Select a note before saving', true);
+        return;
+    }
+    try {
+        if (state.lspActiveBlockId && state.jupyterCodeBlocks[state.lspActiveBlockId]) {
+            await formatJupyterBlock(state.lspActiveBlockId, { notifyOnError: true });
+        } else {
+            await formatMainEditor({ notifyOnError: true });
+        }
+    } catch (err) {
+        console.error('format on save failed:', err);
+    }
+    await saveFile();
 }
 
 function openDeletePrompt(file) {
@@ -7746,6 +8099,7 @@ async function confirmDelete() {
     try {
         if (state.currentFile === fileToDelete) {
             await closeOpenLspDocument();
+            await closeCurrentTyposDocument();
         }
         await DeleteFile(fileToDelete);
         if (fileUri) {
@@ -13680,6 +14034,12 @@ EventsOn('notesLspDiagnostics', payload => {
     }
 });
 
+EventsOn('notesTyposDiagnostics', payload => {
+    const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
+    if (!data || typeof data.uri !== 'string') return;
+    routeTyposDiagnostics(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
+});
+
 function insertEditorText(text, target = elements.editor) {
     if (!text) {
         return;
@@ -13795,6 +14155,9 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
 }
 
 let notesSpellCheckHandle = null;
+
+// Per-block spellcheck overlay handles for Jupyter code blocks, keyed by blockId.
+const jupyterSpellCheckHandles = {};
 
 // Three independent exclusion sources — always merged before being applied.
 // Separating them prevents one source from clobbering another when they
@@ -13989,6 +14352,7 @@ if (elements.editor) {
             }
         }
         scheduleLspDidChange();
+        scheduleTyposDidChange();
         scheduleLspEditorAutoFormat();
         scheduleAutoSave();
     });
@@ -14018,6 +14382,7 @@ if (elements.editor) {
     elements.editor.addEventListener('blur', () => {
         hideLspHoverTooltip();
         hideLspCompletion();
+        flushLspEditorAutoFormat();
     });
 
     elements.editor.addEventListener('paste', (event) => {
@@ -14799,7 +15164,7 @@ document.addEventListener('keydown', (event) => {
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        saveFile();
+        saveAndFormat();
         return;
     }
 
@@ -14880,6 +15245,7 @@ document.addEventListener('mouseup', (event) => {
 
 window.addEventListener('beforeunload', () => {
     closeOpenLspDocument();
+    closeCurrentTyposDocument();
     NotesLspStopAll();
 });
 

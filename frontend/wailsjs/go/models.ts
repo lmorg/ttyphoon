@@ -27,6 +27,7 @@ export namespace jupyter {
 	    Code: string;
 	    FilePath: string;
 	    Err: string;
+	    HasFormatter: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FormatCodeReturnT(source);
@@ -37,6 +38,7 @@ export namespace jupyter {
 	        this.Code = source["Code"];
 	        this.FilePath = source["FilePath"];
 	        this.Err = source["Err"];
+	        this.HasFormatter = source["HasFormatter"];
 	    }
 	}
 

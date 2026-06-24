@@ -32,6 +32,8 @@ export function FormatCodeBlock(arg1:string,arg2:string,arg3:string,arg4:string)
 
 export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
+export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
+
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
 export function GetAppTitle():Promise<string>;
@@ -133,6 +135,14 @@ export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<
 export function NotesRecentFiles():Promise<Array<string>>;
 
 export function NotesSpellCheck(arg1:string):Promise<Array<main.SpellCheckSuggestionT>>;
+
+export function NotesTyposAvailable():Promise<boolean>;
+
+export function NotesTyposChangeDocument(arg1:string,arg2:string):Promise<void>;
+
+export function NotesTyposCloseDocument(arg1:string):Promise<void>;
+
+export function NotesTyposOpenDocument(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
