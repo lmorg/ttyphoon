@@ -1,8 +1,6 @@
 package globalhotkeys
 
 import (
-	"os"
-
 	"golang.design/x/hotkey"
 )
 
@@ -36,21 +34,4 @@ func Register(callbackFunc func(string)) {
 			hk.Func()
 		}
 	}()
-}
-
-func registerHotkey(hks ...*hotkeyFuncT) {
-	for _, hk := range hks {
-		hk.hk = hotkey.New(hk.Mod, hk.Key)
-		err := hk.hk.Register()
-		if err != nil {
-			os.Stderr.WriteString(err.Error())
-			continue
-		}
-
-		go func() {
-			for range hk.hk.Keydown() {
-				event <- hk
-			}
-		}()
-	}
 }

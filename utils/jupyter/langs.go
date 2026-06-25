@@ -145,6 +145,17 @@ func resolveFormatBinding(language string) *LanguageBindingT {
 	return getBindingByExtension(language)
 }
 
+// FileExtensionForLanguage resolves the file extension (without leading dot)
+// for a language runtime description, alias, or extension. Returns an empty
+// string when nothing matches.
+func FileExtensionForLanguage(language string) string {
+	binding := resolveFormatBinding(language)
+	if binding == nil {
+		return ""
+	}
+	return strings.TrimPrefix(binding.FileExtension, ".")
+}
+
 func normalizeLanguage(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }

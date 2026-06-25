@@ -3,6 +3,7 @@ package notes
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/ttyphoon/utils/cache"
@@ -42,6 +43,8 @@ func HistoryListAdd(projectRoot, filename string) error {
 		return errors.New("no filename to add to recent list")
 	}
 
+	filename = filepath.Clean(filename)
+
 	h := getHistoryList(projectRoot)
 	truncateTo := h.Index + 1
 	if truncateTo < 0 {
@@ -68,10 +71,13 @@ func HistoryListRename(projectRoot, oldFile, newFile string) error {
 		return fmt.Errorf("cannot update recent list: from '%s' to '%s'", oldFile, newFile)
 	}
 
+	oldFile = filepath.Clean(oldFile)
+	newFile = filepath.Clean(newFile)
+
 	h := getHistoryList(projectRoot)
 
 	for i := range h.History {
-		if h.History[i] == oldFile {
+		if filepath.Clean(h.History[i]) == oldFile {
 			h.History[i] = newFile
 		}
 	}
@@ -85,17 +91,33 @@ func HistoryListDelete(projectRoot, filename string) error {
 		return errors.New("no filename to delete from recent list")
 	}
 
+	filename = filepath.Clean(filename)
+
 	h := getHistoryList(projectRoot)
 
 	var err error
 	for {
-		i := lists.MatchIndexString(h.History, filename)
+		i := -1
+		for idx := range h.History {
+			if filepath.Clean(h.History[idx]) == filename {
+				i = idx
+				break
+			}
+		}
 		if i == -1 {
-			if i < h.Index {
-				h.Index--
+			if len(h.History) == 0 {
+				h.Index = 0
+			} else if h.Index >= len(h.History) {
+				h.Index = len(h.History) - 1
+			} else if h.Index < 0 {
+				h.Index = 0
 			}
 			setHistoryList(projectRoot, h)
 			return nil
+		}
+
+		if i < h.Index {
+			h.Index--
 		}
 
 		h.History, err = lists.RemoveOrdered(h.History, i)
