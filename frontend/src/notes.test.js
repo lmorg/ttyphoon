@@ -139,6 +139,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     ComposeNoteLocationPath: composeNoteLocationPathMock,
     ResolveNoteLocation: resolveNoteLocationMock,
     ResolveNotesLspLanguage: resolveNotesLspLanguageMock,
+    NotesLspAvailableForRuntime: vi.fn(() => Promise.resolve(false)),
     NotesLspOpenDocument: notesLspOpenDocumentMock,
     NotesLspChangeDocument: notesLspChangeDocumentMock,
     NotesLspSaveDocument: notesLspSaveDocumentMock,

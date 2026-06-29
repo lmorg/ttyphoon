@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -34,6 +36,12 @@ func (s *filePersistingTokenSource) Token() (*oauth2.Token, error) {
 	t, err := s.base.Token()
 	if err != nil {
 		return nil, err
+	}
+
+	if scope, _ := t.Extra("scope").(string); scope != "" {
+		log.Printf("MCP OAuth: token obtained granted_scope=%q token_type=%q expiry=%q", scope, t.TokenType, t.Expiry.Format(time.RFC3339))
+	} else {
+		log.Printf("MCP OAuth: token obtained granted_scope=<none in response> token_type=%q expiry=%q", t.TokenType, t.Expiry.Format(time.RFC3339))
 	}
 
 	// best-effort persist

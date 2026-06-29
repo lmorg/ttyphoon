@@ -170,6 +170,10 @@ export function NotesLspApplyCodeAction(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesLspApplyCodeAction'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function NotesLspAvailableForRuntime(arg1) {
+  return window['go']['main']['WApp']['NotesLspAvailableForRuntime'](arg1);
+}
+
 export function NotesLspChangeDocument(arg1, arg2) {
   return window['go']['main']['WApp']['NotesLspChangeDocument'](arg1, arg2);
 }

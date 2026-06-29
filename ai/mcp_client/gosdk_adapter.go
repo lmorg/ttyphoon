@@ -2,7 +2,9 @@ package mcp_client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os/exec"
 
@@ -91,6 +93,9 @@ func (c *GoSDKClient) Call(ctx context.Context, name string, args map[string]any
 		return "", err
 	}
 
+	log.Printf("MCP tool result %q: content_items=%d structured_content=%t is_error=%t",
+		name, len(res.Content), res.StructuredContent != nil, res.IsError)
+
 	return printGoSDKToolResult(res), nil
 }
 
@@ -105,6 +110,22 @@ func printGoSDKToolResult(result *mcp_sdk.CallToolResult) string {
 			out += fmt.Sprintf("%T: %+v\n", v, v)
 		}
 	}
+
+	// Many MCP servers (e.g. Atlassian's Jira/Confluence tools) return their
+	// payload in StructuredContent rather than as text Content. Without this,
+	// a fully successful call renders as empty output.
+	if result.StructuredContent != nil {
+		if b, err := json.Marshal(result.StructuredContent); err == nil {
+			out += string(b) + "\n"
+		} else {
+			out += fmt.Sprintf("%+v\n", result.StructuredContent)
+		}
+	}
+
+	if result.IsError {
+		out = "tool reported an error:\n" + out
+	}
+
 	return out
 }
 

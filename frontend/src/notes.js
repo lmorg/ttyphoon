@@ -9,7 +9,7 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
-    ResolveNotesLspLanguage, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
+    ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
     GetDocumentCache, SetDocumentCache, FormatCodeBlock, FormatNotesContent, CompleteSyntax,
@@ -5592,6 +5592,27 @@ function convertToJupyterCodeBlocks() {
         stopNotesBtn.style.display = 'none'; // Initially hidden
         stopNotesBtn.addEventListener('click', () => stopCodeBlockInNotes(blockId));
         
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'jupyter-btn jupyter-copy-notes';
+        copyBtn.textContent = 'Copy';
+        copyBtn.title = 'Copy code to clipboard';
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await ClipboardSetText(editableCode.value || '');
+                copyBtn.dataset.copied = 'true';
+                //notifyTerminal('Code copied to clipboard', 'info');
+                
+                // Remove animation state after animation completes (0.48s)
+                setTimeout(() => {
+                    copyBtn.dataset.copied = 'false';
+                }, 480);
+            } catch (err) {
+                console.error('Error copying to clipboard:', err);
+                notifyTerminal('Failed to copy to clipboard', 'error');
+            }
+        });
+        
         const runTerminalBtn = document.createElement('button');
         runTerminalBtn.type = 'button';
         runTerminalBtn.className = 'jupyter-btn jupyter-run-terminal';
@@ -5704,6 +5725,7 @@ function convertToJupyterCodeBlocks() {
         toolbar.appendChild(runNotesBtn);
         toolbar.appendChild(stopNotesBtn);
         toolbar.appendChild(lspBtn);
+        toolbar.appendChild(copyBtn);
         toolbar.appendChild(runTerminalBtn);
         toolbar.appendChild(runtimeLink);
         
@@ -6116,9 +6138,8 @@ async function toggleLspModeForBlock(blockId) {
             const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
             const formattedFilePath = typeof result?.FilePath === 'string' ? result.FilePath : '';
 
-            if (formattedCode.length > 0) {
-                editableElement.value = formattedCode;
-                block.currentContent = formattedCode;
+            if (applyFormattedText(editableElement, formattedCode)) {
+                block.currentContent = editableElement.value;
 
                 // Trigger input event to update syntax highlighting and markdown source.
                 editableElement.dispatchEvent(new Event('input', { bubbles: true }));
@@ -6212,24 +6233,22 @@ async function persistJupyterBlockState(blockId) {
 }
 
 async function restoreJupyterBlockState(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    if (!block) return;
+
+    const lspBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-lsp-notes`);
+
+    // Restore saved runtime + LSP preference from the document cache. A saved
+    // lspMode of `false` represents an explicit user opt-out; the absence of any
+    // saved state means we fall back to the LSP-availability default below.
+    let savedLspMode = null;
     try {
         const docCache = await GetDocumentCache(state.currentFile);
-        if (!docCache || !docCache.jupyterBlockState || !docCache.jupyterBlockState[blockId]) {
-            return;
-        }
-
-        const savedState = docCache.jupyterBlockState[blockId];
-        const block = state.jupyterCodeBlocks[blockId];
-
-        if (block && savedState) {
-            if (savedState.lspMode) {
-                block.lspMode = true;
-                const lspBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-lsp-notes`);
-                if (lspBtn) {
-                    lspBtn.dataset.lspEnabled = 'true';
-                }
+        const savedState = docCache?.jupyterBlockState?.[blockId];
+        if (savedState) {
+            if (typeof savedState.lspMode === 'boolean') {
+                savedLspMode = savedState.lspMode;
             }
-
             if (savedState.runtime) {
                 block.runtime = savedState.runtime;
                 const runtimeLink = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-runtime-dropdown`);
@@ -6241,15 +6260,39 @@ async function restoreJupyterBlockState(blockId) {
     } catch (err) {
         console.error('Error restoring code block state:', err);
     }
+
+    // Determine whether an LSP server is available for this runtime. When none
+    // is available, hide the LSP button entirely. When one is available, enable
+    // LSP mode by default unless the user explicitly disabled it previously.
+    let lspAvailable = false;
+    try {
+        lspAvailable = await NotesLspAvailableForRuntime(block.runtime);
+    } catch (err) {
+        console.error('LSP availability check failed:', err);
+    }
+
+    if (!lspBtn) return;
+
+    if (!lspAvailable) {
+        lspBtn.style.display = 'none';
+        return;
+    }
+    lspBtn.style.display = '';
+
+    const shouldEnable = savedLspMode === null ? true : savedLspMode;
+    if (shouldEnable && !block.lspMode) {
+        await toggleLspModeForBlock(blockId);
+    }
 }
 
-async function refreshFiles() {
+async function refreshFiles(options = {}) {
     try {
+        const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
         elements.title.innerText = await GetCurrentGroupName();
-        await loadProjectCache();
+        await loadProjectCache({ skipHistoryRestore });
         await applyFileFilter();
     } catch (err) {
         notifyTerminal('Failed to load file list', 'error');
@@ -6257,19 +6300,24 @@ async function refreshFiles() {
     }
 }
 
-async function loadProjectCache() {
+async function loadProjectCache(options = {}) {
     try {
+        const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
         const cache = await GetProjectCache();
         const collapsed = cache?.FileListCollapsed?.[state.currentProjectRoot] || [];
         state.expandedFolders = {};
         for (const key of collapsed) {
             state.expandedFolders[key] = false;
         }
+        if (skipHistoryRestore) {
+            return;
+        }
         const historyDoc = await NotesHistoryCurrent();
-        if (historyDoc && historyDoc !== state.lastRestoredDocument) {
+        const hasHistoryDoc = historyDoc && state.files.includes(historyDoc);
+        if (hasHistoryDoc && historyDoc !== state.lastRestoredDocument) {
             state.lastRestoredDocument = historyDoc;
             await loadFile(historyDoc);
-        } else if (!historyDoc) {
+        } else if (!hasHistoryDoc) {
             state.lastRestoredDocument = '';
         }
     } catch (err) {
@@ -8119,7 +8167,7 @@ async function confirmDelete() {
             setDirty(false);
         }
         closeDeletePrompt();
-        await refreshFiles();
+        await refreshFiles({ skipHistoryRestore: true });
         setStatus(`Deleted ${fileName}`, false);
     } catch (err) {
         notifyTerminal(`Failed to delete ${fileName}`, 'error');
@@ -8492,10 +8540,7 @@ function scheduleProjectFindSearch() {
 }
 
 function triggerImmediateProjectFindSearch() {
-    const query = String(elements.findFilesInput?.value || '').trim();
-    if (!query) {
-        return;
-    }
+    const query = String(elements.findFilesInput?.value || '');
 
     if (state.findFilesTimer) {
         clearTimeout(state.findFilesTimer);
@@ -8503,6 +8548,16 @@ function triggerImmediateProjectFindSearch() {
     }
 
     runProjectFindSearch(query);
+}
+
+function editViewModeForCurrentFileType() {
+    if (state.currentFileType === 'json') {
+        return 'swagger-edit';
+    }
+    if (state.currentFileType === 'csv') {
+        return 'csv-edit';
+    }
+    return 'editor';
 }
 
 async function openProjectFindResult(item) {
@@ -8520,7 +8575,7 @@ async function openProjectFindResult(item) {
             skipDocumentCacheRestore: true,
             keepFindTabOpen: true,
         });
-        setViewMode('editor');
+        setViewMode(editViewModeForCurrentFileType());
         setToolsPanelCollapsed(false);
         setToolsTab('find');
         renderProjectFindResults();
@@ -10055,7 +10110,7 @@ async function createNewFile() {
 
         try {
             await RenameFile(state.renamingFile, fileName);
-            await refreshFiles();
+            await refreshFiles({ skipHistoryRestore: true });
             if (state.currentFile === state.renamingFile) {
                 await loadFile(fileName);
             }
@@ -10078,8 +10133,6 @@ async function createNewFile() {
         (elements.modalLocation.textContent || '$NOTES').trim(),
         name,
     );
-
-    // Handle new file creation
 
     const exists = state.files.some((file) => file === fileName);
     if (exists) {
@@ -11545,14 +11598,14 @@ function applyWindowStyle(result) {
             background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
         }
 
+        #notes-tools-log-deselect:hover {
+            border-color: var(--accent);
+        }
+
         #notes-tools-log-copy:hover {
             color: var(--green);
             border-color: var(--green);
             background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-        }
-
-        #notes-tools-log-deselect:hover {
-            border-color: var(--accent);
         }
 
         #notes-tools-log-copy {
@@ -12726,6 +12779,48 @@ function applyWindowStyle(result) {
         .jupyter-stop-notes:active {
             background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
         }
+        .jupyter-copy-notes {
+            background-image:
+                linear-gradient(
+                    to right,
+                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.05),
+                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.05)
+                ),
+                linear-gradient(
+                    to right,
+                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.35),
+                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.35)
+                );
+            background-repeat: no-repeat;
+            background-position: center center, center center;
+            background-size: 0 100%, 0 100%;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+
+        #notes-tools-log-copy:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
+        }
+
+        .jupyter-copy-notes[data-copied="true"] {
+            border-color: var(--accent);
+            animation: notes-tools-log-copy-feedback 0.48s ease-out;
+        }
+
+        @keyframes jupyter-copy-feedback {
+            0% {
+                background-size: 0 100%, 0 100%;
+            }
+
+            52% {
+                background-size: 0 100%, 100% 100%;
+            }
+
+            100% {
+                background-size: 100% 100%, 100% 100%;
+            }
+        }
 
         .jupyter-lsp-notes {
             border-color: var(--fg);
@@ -12733,9 +12828,9 @@ function applyWindowStyle(result) {
         }
 
         .jupyter-lsp-notes[data-lsp-enabled="true"] {
-            border-color: var(--red);
-            color: var(--red);
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.2);
+            border-color: var(--green);
+            color: var(--green);
+            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
         }
 
         .jupyter-lsp-notes[data-lsp-enabled="true"]:hover {
@@ -12750,7 +12845,7 @@ function applyWindowStyle(result) {
 
         .jupyter-runtime-dropdown {
             margin: 8px;
-            padding: 5px 24px 5px 12px;
+            padding: 5px 4px 5px 4px;
             background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0);
             border: none;
             color: var(--accent);
@@ -12758,8 +12853,8 @@ function applyWindowStyle(result) {
             opacity: 0.8;
             cursor: pointer;
             outline: none;
-            text-align: right;
-            align-items: right;
+            text-align: center;
+            align-items: cemter;
             vertical-align: middle;
             background: none;
             font-family: var(--font-family);

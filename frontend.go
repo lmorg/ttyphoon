@@ -1082,6 +1082,26 @@ func (a *WApp) ResolveNotesLspLanguage(filename string) string {
 	return lsp.ResolveLanguageIDForFile(filename)
 }
 
+// NotesLspAvailableForRuntime reports whether an LSP server is configured for a
+// Jupyter code block's language runtime (description, alias, or extension). The
+// runtime is mapped to a file extension via the jupyter language bindings, then
+// resolved to candidate language ids whose configured LSP commands are checked.
+func (a *WApp) NotesLspAvailableForRuntime(runtime string) bool {
+	ext := jupyter.FileExtensionForLanguage(runtime)
+	if ext == "" {
+		return false
+	}
+
+	syntheticPath := "block." + ext
+	for _, id := range lsp.ResolveLanguageIDsForFile(syntheticPath) {
+		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP.Command) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ----------------------------------------------------------------------------
 // LSP document lifecycle bridge (called from JS)
 // ----------------------------------------------------------------------------

@@ -92,6 +92,8 @@ export function NotesKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean
 
 export function NotesLspApplyCodeAction(arg1:string,arg2:number,arg3:number,arg4:number,arg5:Array<lsp.Diagnostic>):Promise<lsp.ApplyCodeActionResult>;
 
+export function NotesLspAvailableForRuntime(arg1:string):Promise<boolean>;
+
 export function NotesLspChangeDocument(arg1:string,arg2:string):Promise<void>;
 
 export function NotesLspCloseDocument(arg1:string):Promise<void>;
