@@ -7,7 +7,6 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/tmc/langchaingo/callbacks"
 )
 
 const _HISTORY_DETAILED = `
@@ -22,9 +21,8 @@ const _HISTORY_DETAILED = `
 `
 
 type ChatHistoryDetail struct {
-	CallbacksHandler callbacks.Handler
-	agent            *agent.Agent
-	enabled          bool
+	agent   *agent.Agent
+	enabled bool
 }
 
 func init() {
@@ -47,10 +45,6 @@ func (t *ChatHistoryDetail) Name() string { return "Chat History" }
 func (t *ChatHistoryDetail) Path() string { return "internal" }
 
 func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, error) {
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolStart(ctx, input)
-	}
-
 	var result string
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("%s is remembering question %s", t.agent.ServiceName(), input))
@@ -75,10 +69,5 @@ func (t *ChatHistoryDetail) Call(ctx context.Context, input string) (string, err
 	)
 
 fin:
-
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolEnd(ctx, result)
-	}
-
 	return result, nil
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strings"
 
 	authsdk "github.com/modelcontextprotocol/go-sdk/auth"
 	mcp_sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -95,6 +96,13 @@ func (c *GoSDKClient) Call(ctx context.Context, name string, args map[string]any
 
 	log.Printf("MCP tool result %q: content_items=%d structured_content=%t is_error=%t",
 		name, len(res.Content), res.StructuredContent != nil, res.IsError)
+	if res.IsError {
+		msg := strings.TrimSpace(printGoSDKToolResult(res))
+		if len(msg) > 2000 {
+			msg = msg[:2000] + "..."
+		}
+		log.Printf("MCP tool error %q payload: %s", name, msg)
+	}
 
 	return printGoSDKToolResult(res), nil
 }

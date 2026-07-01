@@ -9,14 +9,12 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/tmc/langchaingo/callbacks"
 	"golang.org/x/tools/txtar"
 )
 
 type Write struct {
-	CallbacksHandler callbacks.Handler
-	agent            *agent.Agent
-	enabled          bool
+	agent   *agent.Agent
+	enabled bool
 }
 
 func init() {
@@ -42,10 +40,6 @@ The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
 }
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolStart(ctx, input)
-	}
-
 	debug.Log(input)
 
 	var result string
@@ -82,10 +76,6 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 		}
 
 		result += fmt.Sprintf("INFO '%s': file written successfully\n", filename)
-	}
-
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolEnd(ctx, result)
 	}
 
 	debug.Log(result)

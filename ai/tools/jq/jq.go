@@ -10,16 +10,14 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/tmc/langchaingo/callbacks"
 )
 
 //go:embed jq_description.md
 var description string
 
 type Jq struct {
-	CallbacksHandler callbacks.Handler
-	agent            *agent.Agent
-	enabled          bool
+	agent   *agent.Agent
+	enabled bool
 }
 
 func init() {
@@ -51,10 +49,6 @@ func (t *Jq) Call(ctx context.Context, input string) (response string, err error
 		}()
 	}
 
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolStart(ctx, input)
-	}
-
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" is running `jq` query")
 
 	v, err := parseJqXMLInput(input)
@@ -63,10 +57,6 @@ func (t *Jq) Call(ctx context.Context, input string) (response string, err error
 	}
 
 	response, err = execJq(v.JSON, v.Query)
-
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolEnd(ctx, response)
-	}
 
 	return response, err
 }

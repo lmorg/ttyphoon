@@ -109,7 +109,7 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 
 func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthConfig {
 	redirectURI := DefaultRedirectURI()
-	clientURI := DefaultClientURI()
+	clientURI := ""
 	pkceEnabled := true
 	var clientID, clientSecret, authServerMetadataURL string
 	var scopes []string
@@ -129,6 +129,9 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 		scopes = oauth.Scopes
 		authServerMetadataURL = oauth.AuthServerMetadataURL
 	}
+	/*if len(scopes) == 0 {
+		scopes = defaultOAuthScopes(server, serverURL)
+	}*/
 
 	tokenFile := DefaultTokenFile(server, serverURL)
 	if oauth != nil && oauth.TokenFile != "" {
@@ -153,12 +156,53 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 	if cfg.ClientURI != "" {
 		log.Printf("MCP OAuth: BuildOAuthConfig client_uri=%q", sanitizeURLForLog(cfg.ClientURI))
 	}
+	if len(cfg.Scopes) > 0 {
+		log.Printf("MCP OAuth: BuildOAuthConfig default/requested scopes=%v", cfg.Scopes)
+	}
 	if mcpHost != "" && authHost != "" && mcpHost != authHost {
 		log.Printf("MCP OAuth: info MCP host differs from Auth host (often valid): mcp=%q auth=%q", mcpHost, authHost)
 	}
 
 	return cfg
 }
+
+/*func defaultOAuthScopes(server, serverURL string) []string {
+	server = strings.ToLower(strings.TrimSpace(server))
+	raw := strings.TrimSpace(serverURL)
+	host := hostFromURL(raw)
+	path := ""
+	if u, err := url.Parse(raw); err == nil {
+		host = strings.ToLower(u.Hostname())
+		path = strings.ToLower(u.EscapedPath())
+	}
+
+	isAtlassian := server == "atlassian" || strings.HasSuffix(host, "atlassian.com")
+	if !isAtlassian {
+		return nil
+	}
+
+	// Atlassian MCP authv2 often returns an empty-scope authorization request unless
+	// we provide defaults. Include both agent-interface scopes and Jira read scopes
+	// needed by account lookup/JQL tools.
+	if strings.Contains(path, "/mcp/authv2") || host == "mcp.atlassian.com" {
+		return []string{
+			"offline_access",
+			"read:account",
+			"read:me",
+			//"read:jira-user",
+			"read:jira-work",
+			"read:jira:agent-interface",
+			"search:jira:agent-interface",
+			"write:jira:agent-interface",
+			"read:confluence:agent-interface",
+			"search:confluence:agent-interface",
+			"write:confluence:agent-interface",
+			"search:rovo:agent-interface",
+		}
+	}
+
+	return nil
+}*/
 
 // AuthenticateOAuthInteractive is deprecated and kept for reference only.
 // OAuth authentication now uses go-sdk AuthorizationCodeHandler via buildGoSDKAuthHandler.
@@ -200,7 +244,8 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	log.Printf("MCP OAuth: buildGoSDKAuthHandler redirect_host=%q auth_metadata_host=%q", hostFromURL(oauthCfg.RedirectURI), hostFromURL(oauthCfg.AuthServerMetadataURL))
 
 	fetcher := func(ctx context.Context, args *authsdk.AuthorizationArgs) (*authsdk.AuthorizationResult, error) {
-		logOAuthAuthorizeRequest(args.URL)
+		authURL := ensureAuthorizationRequestScopes(args.URL, oauthCfg.Scopes)
+		logOAuthAuthorizeRequest(authURL)
 
 		// Try automatic callback server first
 		callback, err := StartOAuthCallbackServer(oauthCfg.RedirectURI)
@@ -209,7 +254,7 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 			defer callback.Close()
 			if hooks.OpenBrowser != nil {
 				log.Printf("MCP OAuth: opening browser for authorization")
-				hooks.OpenBrowser(args.URL)
+				hooks.OpenBrowser(authURL)
 			}
 			log.Printf("MCP OAuth: waiting for automatic callback")
 			res, waitErr := callback.Wait(2 * time.Minute)
@@ -233,7 +278,7 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 		}
 		if hooks.OpenBrowser != nil {
 			log.Printf("MCP OAuth: opening browser for authorization (manual callback mode)")
-			hooks.OpenBrowser(args.URL)
+			hooks.OpenBrowser(authURL)
 		}
 		raw, pErr := hooks.PromptCallbackURL()
 		if pErr != nil {
@@ -281,10 +326,7 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	if cfg.PreregisteredClient == nil {
 		log.Printf("MCP OAuth: using dynamic client registration")
 		cfg.DynamicClientRegistrationConfig = &authsdk.DynamicClientRegistrationConfig{
-			Metadata: &oauthex.ClientRegistrationMetadata{
-				RedirectURIs: []string{oauthCfg.RedirectURI},
-				ClientName:   app.Name(),
-			},
+			Metadata: buildDynamicClientRegistrationMetadata(oauthCfg),
 		}
 	} else if cfg.DynamicClientRegistrationConfig == nil {
 		log.Printf("MCP OAuth: dynamic client registration disabled due to explicit client credentials")
@@ -313,6 +355,39 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 
 	// Wrap the handler to persist tokens to file
 	return &gosdkOAuthHandler{inner: h, preferredAuthIssuer: preferredIssuer, tokenFile: oauthCfg.TokenFile}, nil
+}
+
+func ensureAuthorizationRequestScopes(rawURL string, scopes []string) string {
+	if strings.TrimSpace(rawURL) == "" || len(scopes) == 0 {
+		return rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil || u == nil {
+		return rawURL
+	}
+
+	q := u.Query()
+	if strings.TrimSpace(q.Get("scope")) != "" {
+		return rawURL
+	}
+
+	q.Set("scope", strings.Join(scopes, " "))
+	u.RawQuery = q.Encode()
+	patched := u.String()
+	log.Printf("MCP OAuth: injected scopes into authorization request scope=%q", strings.Join(scopes, " "))
+	return patched
+}
+
+func buildDynamicClientRegistrationMetadata(oauthCfg OAuthConfig) *oauthex.ClientRegistrationMetadata {
+	metadata := &oauthex.ClientRegistrationMetadata{
+		RedirectURIs: []string{oauthCfg.RedirectURI},
+		ClientName:   app.Name(),
+	}
+	if len(oauthCfg.Scopes) > 0 {
+		metadata.Scope = strings.Join(oauthCfg.Scopes, " ")
+	}
+	return metadata
 }
 
 // gosdkOAuthHandler wraps an auth.AuthorizationCodeHandler and persists tokens

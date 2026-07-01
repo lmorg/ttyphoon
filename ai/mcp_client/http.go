@@ -53,7 +53,9 @@ func DefaultRedirectURI() string {
 }
 
 func DefaultClientURI() string {
-	return "https://ttyphoon.com/oauth/client-metadata.json"
+	// Disabled by default. Some providers can constrain granted capabilities
+	// when a fixed metadata document is always supplied.
+	return ""
 }
 
 func DefaultTokenFile(serverName, rawURL string) string {
