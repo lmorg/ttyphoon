@@ -127,10 +127,7 @@ func (el *ElementHyperlink) MouseClick(_ *types.XY, button types.MouseButtonT, c
 }
 
 func (el *ElementHyperlink) openWithDefault() {
-	_, cmd := config.Config.Terminal.Widgets.AutoHyperlink.OpenAgents.MenuItems(el.scheme)
-	if len(cmd) > 0 {
-		menuhyperlink.OpenWith(el.renderer, el.url, string(el.label), cmd[0])
-	}
+	menuhyperlink.OpenWithDefault(el.renderer, el.url, string(el.label))
 }
 
 func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {

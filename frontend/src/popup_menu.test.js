@@ -5,10 +5,18 @@ const terminalMenuSelectMock = vi.fn(() => Promise.resolve());
 const terminalMenuCancelMock = vi.fn(() => Promise.resolve());
 const terminalRequestRedrawMock = vi.fn(() => Promise.resolve());
 const commandPaletteSelectMock = vi.fn(() => Promise.resolve());
+const filterStringsMock = vi.fn((query, items) => {
+    const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const list = tokens.length === 0
+        ? items
+        : items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t)));
+    return Promise.resolve({ List: list, Error: list.length === 0 ? {} : null });
+});
 const eventsOnMock = vi.fn();
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     CommandPaletteSelect: commandPaletteSelectMock,
+    FilterStrings: filterStringsMock,
     TerminalMenuHighlight: terminalMenuHighlightMock,
     TerminalMenuSelect: terminalMenuSelectMock,
     TerminalMenuCancel: terminalMenuCancelMock,
@@ -37,6 +45,14 @@ describe('popup menu hide/show transitions', () => {
         terminalMenuCancelMock.mockReset();
         terminalRequestRedrawMock.mockReset();
         commandPaletteSelectMock.mockReset();
+        filterStringsMock.mockReset();
+        filterStringsMock.mockImplementation((query, items) => {
+            const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+            const list = tokens.length === 0
+                ? items
+                : items.filter((item) => tokens.every((t) => item.toLowerCase().includes(t)));
+            return Promise.resolve({ List: list, Error: list.length === 0 ? {} : null });
+        });
         terminalMenuHighlightMock.mockImplementation(() => Promise.resolve());
         terminalMenuSelectMock.mockImplementation(() => Promise.resolve());
         terminalMenuCancelMock.mockImplementation(() => Promise.resolve());
@@ -76,6 +92,9 @@ describe('popup menu hide/show transitions', () => {
 
         // Type to reveal matching rows.
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true }));
+        await vi.waitFor(() => {
+            expect(listRoot.querySelector('.tty-menu-row')).not.toBeNull();
+        });
         const row = listRoot.querySelector('.tty-menu-row');
         expect(row).not.toBeNull();
 
@@ -131,8 +150,9 @@ describe('popup menu hide/show transitions', () => {
 
         // Type 'b' — only 'Banana' (index 2) should remain visible
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', bubbles: true, cancelable: true }));
-
-        expect(terminalMenuHighlightMock).toHaveBeenCalledWith(5, 2);
+        await vi.waitFor(() => {
+            expect(terminalMenuHighlightMock).toHaveBeenCalledWith(5, 2);
+        });
     });
 
     it('calls TerminalMenuHighlight when filter is cleared and highlight resets', async () => {

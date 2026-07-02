@@ -106,6 +106,15 @@ func execute(ctx context.Context, codeId, pwd string, argv []string, ch chan *Ou
 	default:
 	}
 
+	if len(argv) == 0 {
+		ch <- &OutputT{
+			Id:     codeId,
+			Output: "I don't know how to execute this document type",
+			IsErr:  true,
+		}
+		return 1
+	}
+
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 
 	cmd.Dir = pwd

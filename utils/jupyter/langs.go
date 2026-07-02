@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"text/template"
@@ -15,6 +16,8 @@ import (
 
 type LanguageBindingT struct {
 	Aliases           []string `yaml:"Aliases"`
+	PathRegexp        string   `yaml:"PathRegexp"` // If an alias is ambiguous, you can also match based on a regex pattern
+	pathRegexp        *regexp.Regexp
 	Description       string   `yaml:"Description"`
 	Template          string   `yaml:"Template"`
 	FileExtension     string   `yaml:"FileExtension"`     // Must exclude `.` prefix
@@ -125,6 +128,34 @@ func getBindingByAlias(lang string) *LanguageBindingT {
 	return nil
 }
 
+// resolveFormatBinding resolves a language binding for formatting. The language
+// may be a runtime description (e.g. "Go (Golang)"), an alias (e.g. "go"), or a
+// file extension (e.g. "go"). Returns nil when nothing matches.
+func resolveFormatBinding(language string) *LanguageBindingT {
+	language = strings.TrimSpace(language)
+	if language == "" {
+		return nil
+	}
+	if binding := getBindingByDescription(language); binding != nil {
+		return binding
+	}
+	if binding := getBindingByAlias(language); binding != nil {
+		return binding
+	}
+	return getBindingByExtension(language)
+}
+
+// FileExtensionForLanguage resolves the file extension (without leading dot)
+// for a language runtime description, alias, or extension. Returns an empty
+// string when nothing matches.
+func FileExtensionForLanguage(language string) string {
+	binding := resolveFormatBinding(language)
+	if binding == nil {
+		return ""
+	}
+	return strings.TrimPrefix(binding.FileExtension, ".")
+}
+
 func normalizeLanguage(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }
@@ -150,6 +181,9 @@ func getBindingByExtension(ext string) *LanguageBindingT {
 	}
 
 	for _, binding := range Languages {
+		if binding.pathRegexp != nil {
+			continue
+		}
 		if strings.EqualFold(strings.TrimPrefix(binding.FileExtension, "."), ext) {
 			return binding
 		}
@@ -160,12 +194,19 @@ func getBindingByExtension(ext string) *LanguageBindingT {
 
 // ResolveLanguageAlias returns a canonical language alias for a runtime name,
 // alias, or file extension. Returns an empty string when no mapping exists.
-func ResolveLanguageAlias(language string) string {
+func ResolveLanguageAlias(language, filePath string) string {
 	if binding := getBindingByAlias(language); binding != nil {
 		return canonicalAlias(binding)
 	}
 
 	for _, binding := range Languages {
+		if binding.pathRegexp != nil {
+			if binding.pathRegexp.MatchString(filePath) {
+				return canonicalAlias(binding)
+			} else {
+				continue
+			}
+		}
 		if strings.EqualFold(binding.Description, strings.TrimSpace(language)) {
 			return canonicalAlias(binding)
 		}

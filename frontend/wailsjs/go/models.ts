@@ -1,9 +1,33 @@
+export namespace grep {
+	
+	export class Options {
+	    CaseSensitive: boolean;
+	    Regex: boolean;
+	    WholeWord: boolean;
+	    FileFilter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Options(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.CaseSensitive = source["CaseSensitive"];
+	        this.Regex = source["Regex"];
+	        this.WholeWord = source["WholeWord"];
+	        this.FileFilter = source["FileFilter"];
+	    }
+	}
+
+}
+
 export namespace jupyter {
 	
 	export class FormatCodeReturnT {
 	    Code: string;
 	    FilePath: string;
 	    Err: string;
+	    HasFormatter: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FormatCodeReturnT(source);
@@ -14,6 +38,7 @@ export namespace jupyter {
 	        this.Code = source["Code"];
 	        this.FilePath = source["FilePath"];
 	        this.Err = source["Err"];
+	        this.HasFormatter = source["HasFormatter"];
 	    }
 	}
 
@@ -440,6 +465,20 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class FilterResultsT {
+	    List: string[];
+	    Error: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new FilterResultsT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.List = source["List"];
+	        this.Error = source["Error"];
+	    }
+	}
 	export class GetFileReturnT {
 	    contents: string;
 	    binary: boolean;
@@ -456,56 +495,6 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
-	export class NotesGrepResultT {
-	    fileName: string;
-	    path: string;
-	    line: number;
-	    context: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new NotesGrepResultT(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.fileName = source["fileName"];
-	        this.path = source["path"];
-	        this.line = source["line"];
-	        this.context = source["context"];
-	    }
-	}
-	export class NotesGrepReturnT {
-	    results: NotesGrepResultT[];
-	    error: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new NotesGrepReturnT(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.results = this.convertValues(source["results"], NotesGrepResultT);
-	        this.error = source["error"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class RunFunctionReturnT {
 	    Output: string;
 	    IsError: boolean;
@@ -520,6 +509,24 @@ export namespace main {
 	        this.Output = source["Output"];
 	        this.IsError = source["IsError"];
 	        this.CellId = source["CellId"];
+	    }
+	}
+	export class SpellCheckSuggestionT {
+	    misspeltWord: string;
+	    wordStart: number;
+	    wordLength: number;
+	    suggestions: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SpellCheckSuggestionT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.misspeltWord = source["misspeltWord"];
+	        this.wordStart = source["wordStart"];
+	        this.wordLength = source["wordLength"];
+	        this.suggestions = source["suggestions"];
 	    }
 	}
 	export class WindowStyleT {

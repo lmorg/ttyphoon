@@ -7,11 +7,10 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/tmc/langchaingo/agents"
 )
 
 type Agent struct {
-	executor      *agents.Executor
+	runtime       agentRuntime
 	serviceName   string
 	modelName     string
 	maxIterations int
@@ -45,7 +44,6 @@ func (ata *allTheAgentsT) Get(key string) (*Agent, bool) {
 	ata._mutex.Lock()
 	defer ata._mutex.Unlock()
 	agent, ok := ata._map[key]
-
 	return agent, ok
 }
 
@@ -91,7 +89,10 @@ func (agent *Agent) MaxIterations() int {
 }
 
 func (agent *Agent) Reload() {
-	agent.executor = nil
+	if agent.runtime != nil {
+		agent.runtime.Reset()
+	}
+	agent.runtime = nil
 }
 
 func (agent *Agent) McpServerAdd(server string, client client) {

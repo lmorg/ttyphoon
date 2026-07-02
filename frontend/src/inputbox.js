@@ -2,6 +2,8 @@ import { TerminalInputBoxSubmit } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { showLocalMenu } from './popup_menu';
 import { initLineNavigationKeys } from './line-navigation.js';
+import { attachVimMode } from './vim-mode';
+import { attachSpellCheck } from './spellcheck';
 import './inputbox.css';
 
 initLineNavigationKeys(document);
@@ -24,7 +26,8 @@ function ensureInputBoxDom() {
                 <div id="inputbox-input-container"></div>
                 <div class="inputbox-hint" id="inputbox-hint">
                     <span id="inputbox-confirm-hint">Return to confirm</span>
-                    <span>Escape to cancel</span>
+                    <span>Escape for Vim keys</span>
+                    <span>Escape again to close</span>
                 </div>
                 <div class="inputbox-buttons">
                     <button class="inputbox-btn inputbox-ok" id="inputbox-ok">OK</button>
@@ -60,6 +63,8 @@ export function initInputBox(canvas) {
     let inputboxVariableGetters = [];
     let inputboxPreviousTerminalFocusedState = true;
     let backdropPointerDown = false;
+    let inputboxVimHandle = null;
+    let inputboxSpellCheckHandle = null;
 
     function setSharedTerminalFocusState(focused, options = {}) {
         if (typeof window.ttyphoonSetTerminalFocusState === 'function') {
@@ -418,6 +423,11 @@ export function initInputBox(canvas) {
         inputboxId = null;
         inputboxVariableGetters = [];
 
+        inputboxVimHandle?.detach();
+        inputboxVimHandle = null;
+        inputboxSpellCheckHandle?.detach();
+        inputboxSpellCheckHandle = null;
+
         inputboxOverlay.style.display = 'none';
         window.ttyphoonInputboxOpen = false;
         setSharedTerminalFocusState(inputboxPreviousTerminalFocusedState, {
@@ -528,11 +538,16 @@ export function initInputBox(canvas) {
                     inputboxSubmit(true);
                 }
                 if (e.key === 'Escape') {
-                    e.preventDefault();
-                    inputboxSubmit(false);
+                    // First Esc transitions vim INSERT→NORMAL; second Esc closes.
+                    if (!inputboxVimHandle || inputboxVimHandle.getMode() === 'normal') {
+                        e.preventDefault();
+                        inputboxSubmit(false);
+                    }
+                    // else: vim mode (registered later on same element) handles it
                 }
                 e.stopPropagation();
             });
+            inputboxVimHandle = attachVimMode(inputboxInput);
         } else {
             inputboxInput = document.createElement('input');
             inputboxInput.className = 'inputbox-input';
@@ -565,6 +580,9 @@ export function initInputBox(canvas) {
         inputboxHistoryBtn.style.display = inputboxHistoryItems.length > 0 ? 'inline-flex' : 'none';
 
         inputboxInputContainer.appendChild(inputboxInput);
+        if (p.multiline) {
+            inputboxSpellCheckHandle = attachSpellCheck(inputboxInput);
+        }
 
         const variables = Array.isArray(p.variables) ? p.variables : [];
         for (const variable of variables) {

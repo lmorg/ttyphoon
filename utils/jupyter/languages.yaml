@@ -1204,3 +1204,15 @@
   FormatCommand: [ opentofu, fmt, "${FILE}" ]
   ExecuteCommand: [ opentofu, validate, -no-color, "${FILE}" ]
 
+- Aliases: [ github-actions ]
+  PathRegexp: '\.github/workflows/.*\.(yaml|yml)$'
+  Description: Github Action Workflow
+  Template: |-
+    {{ .Code }}
+  FileExtension: yaml
+
+- Aliases: [ markdown, md ]
+  Description: Markdown
+  Template: |-
+    {{ .Code }}
+  FileExtension: md

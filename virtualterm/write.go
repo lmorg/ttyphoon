@@ -18,22 +18,24 @@ func (term *Term) writeCell(r rune, el types.Element) {
 		return
 	}
 
+	charWidth := 1
 	var wide bool
 
 	if r > 128 && el == nil {
 		// A bit of a hack, but runewidth would be slow for every character on
 		// on predominantly fast scrolling ASCII text.
-		// Another kludge is that we are treating zero width runes as one cell
-		// wide.
-		wide = runewidth.RuneWidth(r) == 2
+		charWidth = runewidth.RuneWidth(r)
+		wide = charWidth == 2
+
+		// Drop zero-width runes as standalone cells so they don't consume
+		// columns and trigger spurious line wrapping.
+		if charWidth == 0 {
+			return
+		}
 	}
 
 	if term._insertOrReplace == _STATE_IRM_INSERT {
-		if wide {
-			term.csiInsertCharacters(2)
-		} else {
-			term.csiInsertCharacters(1)
-		}
+		term.csiInsertCharacters(int32(charWidth))
 	}
 
 	if term._curPos.X >= term.size.X && !term._noAutoLineWrap {
@@ -56,7 +58,7 @@ func (term *Term) writeCell(r rune, el types.Element) {
 			cell.Sgr.Bitwise.Set(types.SGR_WIDE_CHAR)
 			term._curPos.X += 2
 		} else {
-			term._curPos.X++
+			term._curPos.X += int32(charWidth)
 		}
 	} else if wide {
 		// only run this on insert

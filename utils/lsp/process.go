@@ -22,8 +22,9 @@ const (
 // ServerProcess manages a single language-server OS process.
 // It launches the server, wires stdio to a Transport, and restarts on crash.
 type ServerProcess struct {
-	argv      []string
-	transport *Transport
+	argv        []string
+	initOptions map[string]any
+	transport   *Transport
 
 	mu          sync.Mutex
 	cmd         *exec.Cmd
@@ -39,16 +40,42 @@ type ServerProcess struct {
 }
 
 // NewServerProcess creates a ServerProcess but does not start it yet.
-func NewServerProcess(argv []string) (*ServerProcess, error) {
+// initOptions is optional; when non-empty it is sent as initializationOptions
+// during the LSP initialize handshake (env vars in string values are expanded).
+func NewServerProcess(argv []string, initOptions map[string]any) (*ServerProcess, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("lsp: argv must not be empty")
 	}
 
 	return &ServerProcess{
 		argv:        argv,
+		initOptions: initOptions,
 		notifyCh:    make(chan *Message, 64),
 		positionEnc: PositionEncodingUTF16,
 	}, nil
+}
+
+// expandEnvVarsInOptions recursively expands environment variables in string
+// values within a map[string]any tree, leaving non-string values untouched.
+func expandEnvVarsInOptions(v any) any {
+	switch val := v.(type) {
+	case string:
+		return os.ExpandEnv(val)
+	case map[string]any:
+		out := make(map[string]any, len(val))
+		for k, v2 := range val {
+			out[k] = expandEnvVarsInOptions(v2)
+		}
+		return out
+	case []any:
+		out := make([]any, len(val))
+		for i, v2 := range val {
+			out[i] = expandEnvVarsInOptions(v2)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // Start launches the language server and begins the read loop.
@@ -117,7 +144,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("lsp[%s] stderr: %s", sp.argv[0], scanner.Text())
+			log.Printf("lsp %s stderr: %s", sp.argv[0], scanner.Text())
 		}
 	}()
 
@@ -289,6 +316,10 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 		"clientInfo": map[string]any{
 			"name": "ttyphoon",
 		},
+	}
+
+	if len(sp.initOptions) > 0 {
+		params["initializationOptions"] = expandEnvVarsInOptions(sp.initOptions)
 	}
 
 	resp, err := t.Call(ctx, "initialize", params, 8*time.Second)

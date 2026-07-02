@@ -126,7 +126,7 @@ func normalizeSelection(start, end, cursor int) (int, int) {
 	return start, end
 }
 
-var mdListRe = regexp.MustCompile(`^(\s*)(?:([*+-])\s+(.*)|(\d+)([.)])\s+(.*))$`)
+var mdListRe = regexp.MustCompile(`^(\s*)(?:([*+-])\s+(\[(?: |x|X)\])?\s*(.*)|(\d+)([.)])\s+(.*))$`)
 
 func completeList(req Request, cfg ListContinuationRule) (Result, bool) {
 	lineStart := strings.LastIndex(req.Source[:req.Cursor], "\n") + 1
@@ -154,15 +154,26 @@ func completeList(req Request, cfg ListContinuationRule) (Result, bool) {
 	indent := m[1]
 	if m[2] != "" { // unordered list
 		marker := m[2]
-		if len(cfg.UnorderedMarkers) > 0 && !contains(cfg.UnorderedMarkers, marker) {
-			return Result{}, false
+		isChecklist := m[3] != ""
+		itemBody := strings.TrimSpace(m[4])
+
+		continuationMarker := marker
+		if isChecklist {
+			continuationMarker = marker + " [ ]"
 		}
-		itemBody := strings.TrimSpace(m[3])
+
+		if len(cfg.UnorderedMarkers) > 0 && !contains(cfg.UnorderedMarkers, continuationMarker) {
+			if !contains(cfg.UnorderedMarkers, marker) {
+				return Result{}, false
+			}
+		}
+
 		if cfg.ExitOnEmptyItem && itemBody == "" {
 			text := "\n" + indent
 			return Result{Applied: true, Start: req.Cursor, End: req.Cursor, Text: text, Cursor: req.Cursor + len(text)}, true
 		}
-		text := "\n" + indent + marker + " "
+
+		text := "\n" + indent + continuationMarker + " "
 		return Result{Applied: true, Start: req.Cursor, End: req.Cursor, Text: text, Cursor: req.Cursor + len(text)}, true
 	}
 
@@ -170,12 +181,12 @@ func completeList(req Request, cfg ListContinuationRule) (Result, bool) {
 		return Result{}, false
 	}
 
-	n, err := strconv.Atoi(m[4])
+	n, err := strconv.Atoi(m[5])
 	if err != nil {
 		return Result{}, false
 	}
-	delim := m[5]
-	itemBody := strings.TrimSpace(m[6])
+	delim := m[6]
+	itemBody := strings.TrimSpace(m[7])
 	if cfg.ExitOnEmptyItem && itemBody == "" {
 		text := "\n" + indent
 		return Result{Applied: true, Start: req.Cursor, End: req.Cursor, Text: text, Cursor: req.Cursor + len(text)}, true

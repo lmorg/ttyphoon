@@ -12,13 +12,13 @@
   },
   "info": {
     "companyName": "Laurence Morgan",
-    "productVersion": "0.29.1000",
+    "productVersion": "0.30.1000",
     "copyright": "2023-2026 Laurence Morgan",
     "comments": "The Next Generation Terminal Emulator",
     "protocols": [
       {
         "scheme": "ttyphoon",
-        "description": "Open with TTYphoon",
+        "description": "Open with Ttyphoon",
         "role": "Editor"
       }
     ]

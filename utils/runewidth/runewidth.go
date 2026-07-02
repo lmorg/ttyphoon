@@ -1,25 +1,17 @@
 package runewidth
 
 import (
-	"github.com/forPelevin/gomoji"
-	mattyn_runewidth "github.com/mattn/go-runewidth"
-	"github.com/rivo/uniseg"
+	rw "github.com/mattn/go-runewidth"
 )
 
 func RuneWidth(r rune) int {
-	if mattyn_runewidth.RuneWidth(r) == 2 ||
-		uniseg.StringWidth(string(r)) == 2 ||
-		gomoji.ContainsEmoji(string(r)) {
-		return 2
-	}
-
-	return 1
+	return rw.RuneWidth(r)
 }
 
 func StringWidth(s string) int {
-	return max(mattyn_runewidth.StringWidth(s), uniseg.StringWidth(s))
+	return rw.StringWidth(s)
 }
 
 func Truncate(s string, crop int, terminator string) string {
-	return mattyn_runewidth.Truncate(s, crop, terminator)
+	return rw.Truncate(s, crop, terminator)
 }

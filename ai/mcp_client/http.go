@@ -1,10 +1,8 @@
 package mcp_client
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"path"
 	"regexp"
@@ -13,7 +11,6 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/app"
-	"golang.org/x/oauth2"
 )
 
 type OAuthConfig struct {
@@ -24,6 +21,7 @@ type OAuthConfig struct {
 	Scopes                []string
 	AuthServerMetadataURL string
 	PKCEEnabled           bool
+	TokenFile             string
 }
 
 var rxUnsafeTokenPath = regexp.MustCompile(`[^-_a-zA-Z0-9.]+`)
@@ -36,36 +34,6 @@ func ConnectHttp(overrides *mcp_config.OverrideT, url string) (*Client, error) {
 	}
 
 	return initClientFromGoSDK(g, overrides)
-}
-
-func ConnectHttpOAuth(overrides *mcp_config.OverrideT, url string, oauthCfg OAuthConfig) (*Client, error) {
-	// Build OAuth config for go-sdk
-	var simple *simpleOAuthHandler
-	if oauthCfg.RedirectURI != "" || len(oauthCfg.Scopes) > 0 {
-		ts := NewFilePersistingTokenSource("", nil)
-		simple = &simpleOAuthHandler{ts: ts}
-	}
-
-	g, err := ConnectHttpGoSDK(overrides, url, simple)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OAuth MCP client: %w", err)
-	}
-
-	return initClientFromGoSDK(g, overrides)
-}
-
-// simpleOAuthHandler is a minimal OAuthHandler that exposes a TokenSource but
-// does not perform interactive authorization itself.
-type simpleOAuthHandler struct {
-	ts oauth2.TokenSource
-}
-
-func (h *simpleOAuthHandler) TokenSource(ctx context.Context) (oauth2.TokenSource, error) {
-	return h.ts, nil
-}
-
-func (h *simpleOAuthHandler) Authorize(ctx context.Context, req *http.Request, resp *http.Response) error {
-	return fmt.Errorf("authorization required")
 }
 
 func IsAuthorizationFailure(err error) bool {
@@ -85,7 +53,9 @@ func DefaultRedirectURI() string {
 }
 
 func DefaultClientURI() string {
-	return "https://ttyphoon.com/oauth/client-metadata.json"
+	// Disabled by default. Some providers can constrain granted capabilities
+	// when a fixed metadata document is always supplied.
+	return ""
 }
 
 func DefaultTokenFile(serverName, rawURL string) string {

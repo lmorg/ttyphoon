@@ -28,7 +28,7 @@ func NewManager() *Manager {
 // GetOrStart returns the running ServerProcess for the given key.
 // If none exists, it creates one from argv and starts it.
 // argv must be non-empty; argv[0] is the executable.
-func (m *Manager) GetOrStart(ctx context.Context, workspaceRoot, languageID string, argv []string) (*ServerProcess, error) {
+func (m *Manager) GetOrStart(ctx context.Context, workspaceRoot, languageID string, argv []string, initOptions map[string]any) (*ServerProcess, error) {
 	if m == nil {
 		return nil, fmt.Errorf("lsp: manager is nil")
 	}
@@ -46,7 +46,7 @@ func (m *Manager) GetOrStart(ctx context.Context, workspaceRoot, languageID stri
 		return sp, nil
 	}
 
-	sp, err := NewServerProcess(argv)
+	sp, err := NewServerProcess(argv, initOptions)
 	if err != nil {
 		return nil, err
 	}

@@ -34,6 +34,10 @@ export function DisplayHyperlinkMenu(arg1, arg2) {
   return window['go']['main']['WApp']['DisplayHyperlinkMenu'](arg1, arg2);
 }
 
+export function FilterStrings(arg1, arg2) {
+  return window['go']['main']['WApp']['FilterStrings'](arg1, arg2);
+}
+
 export function FocusTerminalPane() {
   return window['go']['main']['WApp']['FocusTerminalPane']();
 }
@@ -44,6 +48,10 @@ export function FormatCodeBlock(arg1, arg2, arg3, arg4) {
 
 export function FormatCodeFile(arg1, arg2) {
   return window['go']['main']['WApp']['FormatCodeFile'](arg1, arg2);
+}
+
+export function FormatNotesContent(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
 export function GetAllLanguageDescriptions() {
@@ -98,8 +106,20 @@ export function GetNotesColumnWidths(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['GetNotesColumnWidths'](arg1, arg2, arg3, arg4);
 }
 
+export function GetNotesLanguageReservedWords(arg1) {
+  return window['go']['main']['WApp']['GetNotesLanguageReservedWords'](arg1);
+}
+
+export function GetNotesLanguageTabIndent(arg1) {
+  return window['go']['main']['WApp']['GetNotesLanguageTabIndent'](arg1);
+}
+
 export function GetNotesMaxLogLines() {
   return window['go']['main']['WApp']['GetNotesMaxLogLines']();
+}
+
+export function GetNotesStructViewMaxSizeKB() {
+  return window['go']['main']['WApp']['GetNotesStructViewMaxSizeKB']();
 }
 
 export function GetProjectCache() {
@@ -114,12 +134,16 @@ export function GetWindowStyle() {
   return window['go']['main']['WApp']['GetWindowStyle']();
 }
 
+export function HyperlinkOpenWithDefault(arg1) {
+  return window['go']['main']['WApp']['HyperlinkOpenWithDefault'](arg1);
+}
+
 export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
 
-export function NotesGrep(arg1) {
-  return window['go']['main']['WApp']['NotesGrep'](arg1);
+export function NotesGrepStream(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesGrepStream'](arg1, arg2);
 }
 
 export function NotesHistoryAdd(arg1) {
@@ -144,6 +168,10 @@ export function NotesKeyPress(arg1, arg2, arg3, arg4, arg5) {
 
 export function NotesLspApplyCodeAction(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesLspApplyCodeAction'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function NotesLspAvailableForRuntime(arg1) {
+  return window['go']['main']['WApp']['NotesLspAvailableForRuntime'](arg1);
 }
 
 export function NotesLspChangeDocument(arg1, arg2) {
@@ -228,6 +256,26 @@ export function NotesLspWorkspaceSymbols(arg1, arg2) {
 
 export function NotesRecentFiles() {
   return window['go']['main']['WApp']['NotesRecentFiles']();
+}
+
+export function NotesSpellCheck(arg1) {
+  return window['go']['main']['WApp']['NotesSpellCheck'](arg1);
+}
+
+export function NotesTyposAvailable() {
+  return window['go']['main']['WApp']['NotesTyposAvailable']();
+}
+
+export function NotesTyposChangeDocument(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTyposChangeDocument'](arg1, arg2);
+}
+
+export function NotesTyposCloseDocument(arg1) {
+  return window['go']['main']['WApp']['NotesTyposCloseDocument'](arg1);
+}
+
+export function NotesTyposOpenDocument(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesTyposOpenDocument'](arg1, arg2, arg3);
 }
 
 export function RenameFile(arg1, arg2) {

@@ -49,6 +49,18 @@
     border-color: var(--terminal-accent);
 }
 
+/* Recolour the native number spinner controls so the up/down arrows use the
+   theme foreground over the theme background instead of the default black,
+   which is near-invisible against the dark dialog. */
+.inputbox-input[type="number"] {
+    color-scheme: dark;
+}
+
+.inputbox-input[type="number"]::-webkit-inner-spin-button,
+.inputbox-input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
 .inputbox-variable-row {
     display: flex;
     flex-direction: column;

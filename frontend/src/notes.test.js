@@ -1,12 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as swaggerUtils from './swagger-utils.js';
+import { renderJsonViewer } from './json-viewer.js';
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
+const getNotesLanguageTabIndentMock = vi.fn();
 const getNotesColumnWidthsMock = vi.fn();
 const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
+const filterStringsMock = vi.fn((query, items) => {
+    const tokens = String(query).toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const list = tokens.length === 0
+        ? items
+        : items.filter((item) => String(item).toLowerCase().includes(tokens.join(' ')) || tokens.every((t) => String(item).toLowerCase().includes(t)));
+    if (list.length === 0) {
+        return Promise.resolve({ List: null, Error: { message: `nothing matched the filter pattern: '${query}'` } });
+    }
+    return Promise.resolve({ List: list, Error: null });
+});
 const saveFileMock = vi.fn(() => Promise.resolve());
 const saveBinaryFileMock = vi.fn(() => Promise.resolve());
 const deleteFileMock = vi.fn(() => Promise.resolve());
@@ -58,6 +70,9 @@ const notesLspOpenDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspChangeDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspSaveDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspCloseDocumentMock = vi.fn(() => Promise.resolve());
+const notesTyposOpenDocumentMock = vi.fn(() => Promise.resolve(false));
+const notesTyposChangeDocumentMock = vi.fn(() => Promise.resolve());
+const notesTyposCloseDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspStopAllMock = vi.fn(() => Promise.resolve());
 const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
 const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve([]));
@@ -81,6 +96,7 @@ const notesHistoryNextMock = vi.fn(() => Promise.resolve(''));
 const notesHistoryAddMock = vi.fn(() => Promise.resolve());
 const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
 const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
+const notesGrepWithOptionsMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -92,9 +108,13 @@ const showLocalMenuMock = vi.fn();
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesMaxLogLines: getNotesMaxLogLinesMock,
+    GetNotesStructViewMaxSizeKB: vi.fn(() => Promise.resolve(1024)),
+    GetNotesLanguageTabIndent: getNotesLanguageTabIndentMock,
+    GetNotesLanguageReservedWords: vi.fn(() => Promise.resolve([])),
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
     ListFiles: listFilesMock,
+    FilterStrings: filterStringsMock,
     SaveFile: saveFileMock,
     SaveBinaryFile: saveBinaryFileMock,
     DeleteFile: deleteFileMock,
@@ -119,10 +139,14 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     ComposeNoteLocationPath: composeNoteLocationPathMock,
     ResolveNoteLocation: resolveNoteLocationMock,
     ResolveNotesLspLanguage: resolveNotesLspLanguageMock,
+    NotesLspAvailableForRuntime: vi.fn(() => Promise.resolve(false)),
     NotesLspOpenDocument: notesLspOpenDocumentMock,
     NotesLspChangeDocument: notesLspChangeDocumentMock,
     NotesLspSaveDocument: notesLspSaveDocumentMock,
     NotesLspCloseDocument: notesLspCloseDocumentMock,
+    NotesTyposOpenDocument: notesTyposOpenDocumentMock,
+    NotesTyposChangeDocument: notesTyposChangeDocumentMock,
+    NotesTyposCloseDocument: notesTyposCloseDocumentMock,
     NotesLspStopAll: notesLspStopAllMock,
     NotesLspHover: notesLspHoverMock,
     NotesLspSemanticTokens: notesLspSemanticTokensMock,
@@ -146,19 +170,25 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryAdd: notesHistoryAddMock,
     NotesHistoryCurrent: notesHistoryCurrentMock,
     NotesGrep: notesGrepMock,
+    NotesGrepWithOptions: notesGrepWithOptionsMock,
+    NotesGrepStream: vi.fn(() => Promise.resolve()),
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
     SetDocumentCache: setDocumentCacheMock,
+    FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
+    FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
     NotesKeyPress: notesKeyPressMock,
+    NotesSpellCheck: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../wailsjs/runtime/runtime', () => ({
     EventsOn: eventsOnMock,
+    EventsOff: vi.fn(),
     ClipboardSetText: clipboardSetTextMock,
 }));
 
@@ -199,6 +229,21 @@ vi.mock('./swagger-utils.js', () => ({
 vi.mock('./json-viewer.js', () => ({
     attachJsonViewerEditHandler: vi.fn(),
     renderJsonViewer: vi.fn(),
+}));
+
+vi.mock('./vim-mode', () => ({
+    attachVimMode: vi.fn(() => ({ detach: vi.fn(), getMode: vi.fn(() => 'insert') })),
+}));
+
+vi.mock('./spellcheck', () => ({
+    attachSpellCheck: vi.fn(() => ({
+        detach: vi.fn(),
+        setExclusions: vi.fn(),
+        check: vi.fn(),
+        setMode: vi.fn(),
+        getMode: vi.fn(() => 'aspell'),
+        setMisspellings: vi.fn(),
+    })),
 }));
 
 const theme = {
@@ -258,6 +303,7 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockReset();
         getNotesMaxLogLinesMock.mockReset();
+        getNotesLanguageTabIndentMock.mockReset();
         getNotesColumnWidthsMock.mockReset();
         setNotesColumnWidthsMock.mockReset();
         getFileMock.mockReset();
@@ -288,6 +334,10 @@ describe('notes rendering', () => {
         notesLspChangeDocumentMock.mockReset();
         notesLspSaveDocumentMock.mockReset();
         notesLspCloseDocumentMock.mockReset();
+        notesTyposOpenDocumentMock.mockReset();
+        notesTyposOpenDocumentMock.mockResolvedValue(false);
+        notesTyposChangeDocumentMock.mockReset();
+        notesTyposCloseDocumentMock.mockReset();
         notesLspStopAllMock.mockReset();
         notesLspHoverMock.mockReset();
         notesLspSemanticTokensMock.mockReset();
@@ -310,6 +360,7 @@ describe('notes rendering', () => {
         notesHistoryAddMock.mockReset();
         notesHistoryCurrentMock.mockReset();
         notesGrepMock.mockReset();
+        notesGrepWithOptionsMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -323,6 +374,7 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockResolvedValue(theme);
         getNotesMaxLogLinesMock.mockResolvedValue(1000);
+        getNotesLanguageTabIndentMock.mockResolvedValue(4);
         getNotesColumnWidthsMock.mockResolvedValue([]);
         setNotesColumnWidthsMock.mockResolvedValue();
         getFileMock.mockResolvedValue({ contents: '', text: '', error: '' });
@@ -369,6 +421,7 @@ describe('notes rendering', () => {
         notesHistoryAddMock.mockResolvedValue();
         notesHistoryCurrentMock.mockResolvedValue('');
         notesGrepMock.mockResolvedValue({ results: [], error: '' });
+        notesGrepWithOptionsMock.mockResolvedValue({ results: [], error: '' });
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -491,6 +544,56 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
 
+    it('reveals the Frontmatter tab and caption for documents with YAML frontmatter', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/post.md']);
+        getFileMock.mockResolvedValue({
+            contents: '---\ntitle: My Post\ndraft: true\n---\n# Body Heading',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/post.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
+        expect(frontmatterTab?.style.display).not.toBe('none');
+
+        const preview = document.getElementById('notes-preview');
+        // Frontmatter is stripped from the rendered body.
+        expect(preview?.textContent).toContain('Body Heading');
+        expect(preview?.textContent).not.toContain('draft: true');
+
+        // Caption with a View button is surfaced.
+        const caption = preview?.querySelector('.notes-frontmatter-caption');
+        expect(caption).not.toBeNull();
+        expect(caption?.textContent).toContain('This document contains Frontmatter.');
+        expect(caption?.querySelector('.notes-frontmatter-caption-view')?.textContent).toBe('View');
+
+        // Parsed frontmatter is rendered in the tab pane via the JSON/YAML viewer.
+        const pane = document.getElementById('notes-tools-frontmatter');
+        expect(renderJsonViewer).toHaveBeenCalledWith(pane, { title: 'My Post', draft: true });
+    });
+
+    it('hides the Frontmatter tab for documents without frontmatter', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/plain.md']);
+        getFileMock.mockResolvedValue({ contents: '# Just a heading', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/plain.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
+        expect(frontmatterTab?.style.display).toBe('none');
+        expect(document.querySelector('#notes-preview .notes-frontmatter-caption')).toBeNull();
+    });
+
     it('maps Home and End to current line boundaries in editor fields', async () => {
         listFilesMock.mockResolvedValue([]);
         getFileMock.mockResolvedValue({ contents: 'first line\nsecond line\nthird line', text: '', error: '' });
@@ -556,6 +659,81 @@ describe('notes rendering', () => {
         await new Promise((resolve) => setTimeout(resolve, 160));
 
         expect(preview?.textContent).toContain('Updated from undo');
+    });
+
+    it('applies replace all using case-sensitive + whole-word find options', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/find.md']);
+        getFileMock.mockResolvedValue({ contents: 'foo Foo food foo', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/find.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const findInput = document.getElementById('notes-find-input');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const caseBtn = document.getElementById('notes-find-doc-option-case');
+        const wholeWordBtn = document.getElementById('notes-find-doc-option-word');
+        const editor = document.getElementById('notes-editor');
+
+        tabEditor.click();
+        await flushPromises();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        findInput.value = 'foo';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+        caseBtn.click();
+        wholeWordBtn.click();
+        await flushPromises();
+
+        replaceInput.value = 'X';
+        replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('X Foo food X');
+    });
+
+    it('applies regex replace all for in-document find', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/find.md']);
+        getFileMock.mockResolvedValue({ contents: 'item1 item22 item333', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/find.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tabEditor = document.getElementById('notes-tab-editor');
+        const findInput = document.getElementById('notes-find-input');
+        const replaceInput = document.getElementById('notes-replace-input');
+        const replaceAll = document.getElementById('notes-replace-all');
+        const regexBtn = document.getElementById('notes-find-doc-option-regex');
+        const editor = document.getElementById('notes-editor');
+
+        tabEditor.click();
+        await flushPromises();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        regexBtn.click();
+        findInput.value = 'item\\d+';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        replaceInput.value = 'Y';
+        replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('Y Y Y');
     });
 
     it('handles diagnostics events without an active file', async () => {
@@ -1020,9 +1198,10 @@ describe('notes rendering', () => {
         editor.selectionEnd = editor.value.length;
 
         const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        await flushPromises();
 
         expect(tabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\n    \t');
+        expect(editor.value).toBe('# Todo\n\n        ');
         expect(notesLspCompletionMock).not.toHaveBeenCalled();
     });
 
@@ -1059,7 +1238,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(secondTabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\nPrin\t');
+        expect(editor.value).toBe('# Todo\n\nPrin    ');
         expect(document.getElementById('notes-lsp-completion')?.style.display).toBe('none');
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
@@ -1318,7 +1497,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspFormatRangeMock).toHaveBeenCalledWith('$NOTES/main.go', 1, 0, 1, 26);
-        expect(notesLspFormatMock).not.toHaveBeenCalled();
+        expect(notesLspFormatRangeMock).toHaveBeenCalledTimes(1);
         expect(editor.value).toContain('func main() {');
     });
 
@@ -2502,13 +2681,11 @@ describe('notes rendering', () => {
         const tabAI = document.getElementById('notes-tools-tab-ai');
         const paneFind = document.getElementById('notes-tools-find-pane');
         const paneAI = document.getElementById('notes-tools-ai-pane');
-        const findButton = document.getElementById('notes-find');
-
         expect(tabFind).not.toBeNull();
         expect(tabAI).not.toBeNull();
 
         toolsPanel.dataset.collapsed = 'true';
-        findButton.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         expect(toolsPanel.dataset.collapsed).toBe('false');
@@ -2546,8 +2723,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const findButton = document.getElementById('notes-find');
-        findButton.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         const replaceControls = document.getElementById('notes-replace-controls');
@@ -2585,7 +2761,7 @@ describe('notes rendering', () => {
         document.getElementById('notes-tab-editor').click();
         await flushPromises();
 
-        document.getElementById('notes-find').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
 
         const findInput = document.getElementById('notes-find-input');
@@ -2686,7 +2862,10 @@ describe('notes rendering', () => {
             },
         });
         vi.mocked(swaggerUtils.hasSwaggerKey).mockReturnValue(true);
-        vi.mocked(swaggerUtils.extractPaths).mockReturnValue(['/ping']);
+        vi.mocked(swaggerUtils.extractPaths).mockReturnValue([{
+            path: '/ping',
+            methods: [{ method: 'GET', name: 'GET /ping', operation: { responses: { 200: { description: 'ok' } } } }],
+        }]);
         getFileMock.mockResolvedValue({
             contents: JSON.stringify({
                 swagger: '2.0',

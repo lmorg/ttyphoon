@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -27,12 +28,14 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file/meta"
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
+	"github.com/lmorg/ttyphoon/utils/find"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
-	grepfiles "github.com/lmorg/ttyphoon/utils/grep"
+	"github.com/lmorg/ttyphoon/utils/grep"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/lsp"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/notes"
+	"github.com/lmorg/ttyphoon/utils/spellcheck"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
@@ -68,6 +71,9 @@ type WApp struct {
 	lspStartErrs    map[string]string
 	lspManager      *lsp.Manager
 	lspDocs         *lsp.DocumentStore
+	typosDocs       *lsp.DocumentStore
+	typosUnavail    map[string]bool
+	typosMu         sync.Mutex
 	syntaxEngine    *syntaxcompletion.Engine
 }
 
@@ -83,6 +89,8 @@ func NewWailsApp() *WApp {
 		globalNotes:   notes.DirGlobal(),
 		lspManager:    lsp.NewManager(),
 		lspDocs:       lsp.NewDocumentStore(),
+		typosDocs:     lsp.NewDocumentStore(),
+		typosUnavail:  map[string]bool{},
 	}
 
 	engine, err := syntaxcompletion.NewDefaultEngine()
@@ -225,6 +233,26 @@ func (a *WApp) GetWindowStyle() WindowStyleT {
 
 func (a *WApp) GetNotesMaxLogLines() int {
 	return config.Config.Notes.MaxLogLines
+}
+
+// GetNotesStructViewMaxSizeKB returns the maximum file size (in kilobytes) for
+// which the JSON/YAML structured "View" mode is rendered. Larger files display
+// a "file too large" message instead.
+func (a *WApp) GetNotesStructViewMaxSizeKB() int64 {
+	return config.Config.Notes.StructViewMaxSize
+}
+
+// GetNotesLanguageTabIndent returns the number of spaces to use for tab indentation for a given language
+func (a *WApp) GetNotesLanguageTabIndent(language string) int {
+	return config.Config.Notes.Languages.GetTabIndent(language)
+}
+
+// GetNotesLanguageReservedWords returns the reserved words / built-in identifiers for a given language.
+func (a *WApp) GetNotesLanguageReservedWords(language string) []string {
+	if settings, ok := config.Config.Notes.Languages[strings.ToLower(language)]; ok {
+		return settings.ReservedWords
+	}
+	return nil
 }
 
 func (a *WApp) GetTerminalGlyphSize() *types.XY {
@@ -666,10 +694,10 @@ func (a *WApp) CompleteSyntax(docPath, language, source string, cursor, selectio
 		a.syntaxEngine = engine
 	}
 
-	resolvedLanguage := jupyter.ResolveLanguageAlias(language)
+	resolvedLanguage := jupyter.ResolveLanguageAlias(language, docPath)
 	if resolvedLanguage == "" && docPath != "" {
 		ext := strings.TrimPrefix(filepath.Ext(a.filePath(docPath)), ".")
-		resolvedLanguage = jupyter.ResolveLanguageAlias(ext)
+		resolvedLanguage = jupyter.ResolveLanguageAlias(ext, docPath)
 	}
 	if resolvedLanguage == "" {
 		resolvedLanguage = strings.TrimSpace(strings.ToLower(language))
@@ -720,6 +748,15 @@ func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.
 	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.projRoot, code, language)
 }
 
+// FormatNotesContent formats a whole document's content (no snippet template
+// wrapping) using the configured FormatCommand for the language. When no
+// FormatCommand is configured, HasFormatter is false and the frontend falls
+// back to LSP formatting.
+func (a *WApp) FormatNotesContent(docPath, content, language string) *jupyter.FormatCodeReturnT {
+	bookId := jupyter.BookId(a.projRoot, a.filePath(docPath))
+	return jupyter.FormatNotesContent(context.Background(), bookId, "editor", a.projRoot, content, language)
+}
+
 func (a *WApp) FormatCodeFile(docPath, language string) {
 	filePath := a.filePathWithProject(docPath, a.projRoot)
 	log.Printf(`[debug] FormatCodeFile: pwd="%s" docPath="%s" language="%s"`, a.projRoot, filePath, language)
@@ -750,17 +787,9 @@ type GetFileReturnT struct {
 	Error    string `json:"error"`
 }
 
-type NotesGrepResultT struct {
-	FileName string   `json:"fileName"`
-	Path     string   `json:"path"`
-	Line     int      `json:"line"`
-	Context  []string `json:"context"`
-}
-
-type NotesGrepReturnT struct {
-	Results []NotesGrepResultT `json:"results"`
-	Error   string             `json:"error"`
-}
+type NotesGrepResultT = grep.Result
+type NotesGrepReturnT = grep.ReturnValue
+type NotesGrepOptionsT = grep.Options
 
 func (a *WApp) GetFile(filename string) GetFileReturnT {
 	requestedFilename := strings.TrimSpace(filename)
@@ -853,6 +882,29 @@ func imageMime(ext string) string {
 	return "image/" + ext[1:]
 }
 
+type FilterResultsT struct {
+	List  []string
+	Error error
+}
+
+// FilterStrings uses the find package to filter a list of strings by query.
+// Supports: plain words (AND), "or word1 word2" (OR), "! word" (NOT), "rx regexp", "g glob".
+// Returns the original list unchanged when query is empty or malformed.
+func (a *WApp) FilterStrings(query string, items []string) *FilterResultsT {
+	if strings.TrimSpace(query) == "" {
+		return &FilterResultsT{List: items}
+	}
+	f, err := find.New(query)
+	if err != nil {
+		return &FilterResultsT{Error: err}
+	}
+	items = f.Filter(items)
+	if len(items) == 0 {
+		return &FilterResultsT{Error: fmt.Errorf("nothing matched the filter pattern: '%s'", query)}
+	}
+	return &FilterResultsT{List: items}
+}
+
 func (a *WApp) ListFiles() []string {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
@@ -885,47 +937,51 @@ func (a *WApp) ListFiles() []string {
 	return ulf.Files
 }
 
-func (a *WApp) NotesGrep(query string) NotesGrepReturnT {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return NotesGrepReturnT{Results: []NotesGrepResultT{}}
-	}
+// NotesGrepStream performs a streaming grep search, sending results via EventsEmit in batches.
+// This is non-blocking and suitable for large result sets.
+// The frontend should listen for "notesGrepBatch" events containing batched Results,
+// "notesGrepError" for errors, and "notesGrepDone" when finished.
+func (a *WApp) NotesGrepStream(query string, opts NotesGrepOptionsT) {
+	go a.notesGrepStream(query, opts)
+}
 
+func (a *WApp) notesGrepStream(query string, opts NotesGrepOptionsT) {
 	searchRoot := strings.TrimSpace(a.projRoot)
 	if searchRoot == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return NotesGrepReturnT{Error: err.Error()}
-		}
-		searchRoot = wd
+		runtime.EventsEmit(a.ctx, "notesGrepError", "search root is empty")
+		return
 	}
 
-	matches, err := grepfiles.Search(searchRoot, query)
-	if err != nil {
-		return NotesGrepReturnT{Error: err.Error()}
+	pathMapper := func(absPath string) string {
+		mapped := a.notesPathForHistory(absPath)
+		if mapped != "" {
+			return mapped
+		}
+		return absPath
 	}
 
-	results := make([]NotesGrepResultT, 0, len(matches))
-	for i := range matches {
-		path := a.notesPathForHistory(matches[i].Path)
-		if path == "" {
-			path = matches[i].Path
-		}
+	resultsChan := make(chan []*grep.Result, 1)
 
-		fileName := matches[i].FileName
-		if fileName == "" {
-			fileName = filepath.Base(path)
-		}
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- grep.BatchedStreamResults(searchRoot, query, opts, pathMapper, resultsChan)
+	}()
 
-		results = append(results, NotesGrepResultT{
-			FileName: fileName,
-			Path:     path,
-			Line:     matches[i].Line,
-			Context:  matches[i].Context,
-		})
+	// Emit batches as they arrive
+	for batch := range resultsChan {
+		runtime.EventsEmit(a.ctx, "notesGrepBatch", batch)
 	}
 
-	return NotesGrepReturnT{Results: results}
+	// Check for error
+	if err := <-errChan; err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("[debug] NotesGrepStream canceled: %v", err)
+		} else {
+			runtime.EventsEmit(a.ctx, "notesGrepError", err.Error())
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "notesGrepDone", nil)
 }
 
 func (a *WApp) CancelNotesListFiles() {
@@ -995,7 +1051,7 @@ func (a *WApp) notesPathForHistory(filename string) string {
 	return cleanFile
 }
 
-func (a WApp) filePath(filename string) string {
+func (a *WApp) filePath(filename string) string {
 	filename = os.Expand(filename, func(s string) string {
 		return a.expandMappingFuncWithProject(s, "")
 	})
@@ -1007,7 +1063,7 @@ func (a WApp) filePath(filename string) string {
 
 // filePathWithProject returns the expanded file path using a specific project root.
 // This uses the same expansion logic as filePath but allows overriding $PROJECT.
-func (a WApp) filePathWithProject(filename string, projectPath string) string {
+func (a *WApp) filePathWithProject(filename string, projectPath string) string {
 	filename = os.Expand(filename, func(s string) string {
 		return a.expandMappingFuncWithProject(s, projectPath)
 	})
@@ -1024,6 +1080,26 @@ func (a *WApp) ResolveFilePath(filename string) string {
 // ResolveNotesLspLanguage returns the canonical language id for a filename.
 func (a *WApp) ResolveNotesLspLanguage(filename string) string {
 	return lsp.ResolveLanguageIDForFile(filename)
+}
+
+// NotesLspAvailableForRuntime reports whether an LSP server is configured for a
+// Jupyter code block's language runtime (description, alias, or extension). The
+// runtime is mapped to a file extension via the jupyter language bindings, then
+// resolved to candidate language ids whose configured LSP commands are checked.
+func (a *WApp) NotesLspAvailableForRuntime(runtime string) bool {
+	ext := jupyter.FileExtensionForLanguage(runtime)
+	if ext == "" {
+		return false
+	}
+
+	syntheticPath := "block." + ext
+	for _, id := range lsp.ResolveLanguageIDsForFile(syntheticPath) {
+		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP.Command) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ----------------------------------------------------------------------------
@@ -1054,9 +1130,11 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 
 	selectedLanguageID := ""
 	var argv []string
+	var initOptions map[string]any
 	for _, id := range candidateIDs {
-		argv = lsp.LookupArgv(config.Config.Notes.LSP, id)
-		if len(argv) > 0 {
+		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP.Command) > 0 {
+			argv = settings.LSP.Command
+			initOptions = settings.LSP.InitOptions
 			selectedLanguageID = id
 			break
 		}
@@ -1068,7 +1146,7 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 
 	alreadyRunning := a.lspManager.Has(a.projRoot, selectedLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv, initOptions)
 	if err != nil {
 		a.notifyLspStartError(selectedLanguageID, argv, err)
 		return nil
@@ -1186,6 +1264,145 @@ func (a *WApp) NotesLspCloseDocument(filePath string) {
 	t := sp.Transport()
 	if err := a.lspDocs.DidClose(a.ctx, t, absPath); err != nil {
 		log.Printf("lsp: DidClose %q: %v", absPath, err)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// typos-lsp spellcheck bridge (called from JS)
+//
+// typos-lsp is a single, language-agnostic spellcheck server managed per
+// workspace under a synthetic language id, running in parallel with the
+// per-language servers. Its diagnostics are emitted on a dedicated event so the
+// frontend can render them with the aspell canvas wavy-underline chrome.
+// ----------------------------------------------------------------------------
+
+const typosLspLanguageID = "__typos_lsp__"
+
+// notesTyposServer resolves (starting if necessary) the workspace-wide
+// typos-lsp spellcheck server. Returns nil when typos-lsp is not configured or
+// failed to start, in which case callers fall back to aspell.
+func (a *WApp) notesTyposServer() *lsp.ServerProcess {
+	argv := config.Config.Notes.SpellCheck.TyposLsp.Command
+	if len(argv) == 0 {
+		return nil
+	}
+
+	a.typosMu.Lock()
+	unavailable := a.typosUnavail[a.projRoot]
+	a.typosMu.Unlock()
+	if unavailable {
+		return nil
+	}
+
+	initOptions := config.Config.Notes.SpellCheck.TyposLsp.InitOptions
+	alreadyRunning := a.lspManager.Has(a.projRoot, typosLspLanguageID)
+
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, typosLspLanguageID, argv, initOptions)
+	if err != nil {
+		// typos-lsp is optional; do not surface a user-facing error. Record the
+		// failure so a missing binary isn't repeatedly respawned.
+		log.Printf("lsp: typos-lsp unavailable (%v); falling back to aspell", err)
+		a.markTyposUnavailable()
+		return nil
+	}
+
+	if !alreadyRunning {
+		go lsp.ListenForNotifications(a.ctx, sp, func(uri string) (string, bool) {
+			if doc := a.typosDocs.GetByURI(uri); doc != nil {
+				return doc.Content(), true
+			}
+			return "", false
+		}, func(payload lsp.DiagnosticsPayload) {
+			runtime.EventsEmit(a.ctx, "notesTyposDiagnostics", payload)
+		}, nil, nil)
+	}
+
+	if err := sp.EnsureInitialized(a.ctx, a.projRoot); err != nil {
+		log.Printf("lsp: typos-lsp init failed (%v); falling back to aspell", err)
+		a.markTyposUnavailable()
+		return nil
+	}
+
+	return sp
+}
+
+func (a *WApp) markTyposUnavailable() {
+	a.typosMu.Lock()
+	a.typosUnavail[a.projRoot] = true
+	a.typosMu.Unlock()
+}
+
+// NotesTyposAvailable reports whether typos-lsp is configured for spellchecking.
+func (a *WApp) NotesTyposAvailable() bool {
+	return len(config.Config.Notes.SpellCheck.TyposLsp.Command) > 0
+}
+
+// NotesTyposOpenDocument opens a document with the typos-lsp spellcheck server.
+// Returns true when the server is running and the document was opened (the
+// frontend then renders typos diagnostics and suppresses aspell for that
+// editor); false means the caller should keep using aspell.
+func (a *WApp) NotesTyposOpenDocument(filePath, languageID, content string) bool {
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return false
+	}
+	t := sp.Transport()
+	if t == nil {
+		return false
+	}
+
+	absPath := a.filePath(filePath)
+	if languageID == "" {
+		languageID = "plaintext"
+	}
+
+	// Re-open cleanly if it was already tracked as open (e.g. on reload).
+	if a.typosDocs.IsOpen(absPath) {
+		a.typosDocs.DidClose(a.ctx, t, absPath) //nolint:errcheck // best-effort reset
+	}
+
+	if err := a.typosDocs.DidOpen(a.ctx, t, absPath, languageID, content); err != nil {
+		log.Printf("lsp: typos DidOpen %q: %v", absPath, err)
+		return false
+	}
+	return true
+}
+
+// NotesTyposChangeDocument notifies typos-lsp of content changes.
+func (a *WApp) NotesTyposChangeDocument(filePath, content string) {
+	absPath := a.filePath(filePath)
+	if !a.typosDocs.IsOpen(absPath) {
+		return
+	}
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.typosDocs.DidChange(a.ctx, t, absPath, content); err != nil {
+		log.Printf("lsp: typos DidChange %q: %v", absPath, err)
+	}
+}
+
+// NotesTyposCloseDocument notifies typos-lsp that a document was closed.
+func (a *WApp) NotesTyposCloseDocument(filePath string) {
+	absPath := a.filePath(filePath)
+	if !a.typosDocs.IsOpen(absPath) {
+		return
+	}
+	sp := a.notesTyposServer()
+	if sp == nil {
+		return
+	}
+	t := sp.Transport()
+	if t == nil {
+		return
+	}
+	if err := a.typosDocs.DidClose(a.ctx, t, absPath); err != nil {
+		log.Printf("lsp: typos DidClose %q: %v", absPath, err)
 	}
 }
 
@@ -1670,6 +1887,45 @@ func (a *WApp) NotesLspStopAll() {
 	a.lspManager.StopAll()
 }
 
+// SpellCheckSuggestionT holds a misspelled word with correction suggestions.
+// WordStart is the absolute character offset within the checked text.
+type SpellCheckSuggestionT struct {
+	MisspeltWord string   `json:"misspeltWord"`
+	WordStart    int      `json:"wordStart"`
+	WordLength   int      `json:"wordLength"`
+	Suggestions  []string `json:"suggestions"`
+}
+
+// NotesSpellCheck runs the provided text through aspell and returns a list of
+// misspelled words with suggestions. Returns nil if aspell is not available or
+// an error occurs — callers should degrade gracefully.
+func (a *WApp) NotesSpellCheck(text string) []SpellCheckSuggestionT {
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+
+	raw, err := spellcheck.ExecAspell(text)
+	if err != nil {
+		return nil
+	}
+
+	results, err := spellcheck.ParseAspellMultilineOutput(text, raw)
+	if err != nil {
+		return nil
+	}
+
+	out := make([]SpellCheckSuggestionT, 0, len(results))
+	for _, s := range results {
+		out = append(out, SpellCheckSuggestionT{
+			MisspeltWord: s.MisspeltWord,
+			WordStart:    s.WordStart,
+			WordLength:   s.WordLength,
+			Suggestions:  s.Suggestions,
+		})
+	}
+	return out
+}
+
 // GetCurrentProject returns the absolute path of the current project root.
 // This is used by the frontend to track which project a file is associated with,
 // preventing issues where a file opened in one project could be overwritten
@@ -1789,6 +2045,15 @@ func (a *WApp) DisplayHyperlinkMenu(url, text string) {
 	menu := renderer.NewContextMenu()
 	menu.Append(a.hyperlinkMenuItems(url, text)...)
 	menu.DisplayMenu("Hyperlink action", true)
+}
+
+func (a *WApp) HyperlinkOpenWithDefault(url string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	menuhyperlink.OpenWithDefault(renderer, url, "")
 }
 
 // SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.
@@ -2146,6 +2411,7 @@ func startWails() {
 				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
 				Icon:    appIcon,
 			},
+			//Preferences: &mac.Preferences{TextInteractionEnabled: mac.Disabled},
 		},
 		Linux: &linux.Options{
 			Icon:        appIcon,
@@ -2154,8 +2420,6 @@ func startWails() {
 		Windows: &windows.Options{
 			WindowClassName: app.Name(),
 		},
-
-		//BindingsAllowedOrigins: "*",
 	})
 
 	if err != nil {

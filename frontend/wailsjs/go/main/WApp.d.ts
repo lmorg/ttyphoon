@@ -4,6 +4,7 @@ import {main} from '../models';
 import {jupyter} from '../models';
 import {notes} from '../models';
 import {types} from '../models';
+import {grep} from '../models';
 import {lsp} from '../models';
 import {swagger} from '../models';
 
@@ -23,11 +24,15 @@ export function DeleteFile(arg1:string):Promise<void>;
 
 export function DisplayHyperlinkMenu(arg1:string,arg2:string):Promise<void>;
 
+export function FilterStrings(arg1:string,arg2:Array<string>):Promise<main.FilterResultsT>;
+
 export function FocusTerminalPane():Promise<void>;
 
 export function FormatCodeBlock(arg1:string,arg2:string,arg3:string,arg4:string):Promise<jupyter.FormatCodeReturnT>;
 
 export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
+
+export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
@@ -55,7 +60,13 @@ export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
 
 export function GetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<Array<number>>;
 
+export function GetNotesLanguageReservedWords(arg1:string):Promise<Array<string>>;
+
+export function GetNotesLanguageTabIndent(arg1:string):Promise<number>;
+
 export function GetNotesMaxLogLines():Promise<number>;
+
+export function GetNotesStructViewMaxSizeKB():Promise<number>;
 
 export function GetProjectCache():Promise<notes.ProjectCacheT>;
 
@@ -63,9 +74,11 @@ export function GetTerminalGlyphSize():Promise<types.XY>;
 
 export function GetWindowStyle():Promise<main.WindowStyleT>;
 
+export function HyperlinkOpenWithDefault(arg1:string):Promise<void>;
+
 export function ListFiles():Promise<Array<string>>;
 
-export function NotesGrep(arg1:string):Promise<main.NotesGrepReturnT>;
+export function NotesGrepStream(arg1:string,arg2:grep.Options):Promise<void>;
 
 export function NotesHistoryAdd(arg1:string):Promise<void>;
 
@@ -78,6 +91,8 @@ export function NotesHistoryPrevious():Promise<string>;
 export function NotesKeyPress(arg1:string,arg2:boolean,arg3:boolean,arg4:boolean,arg5:boolean):Promise<Record<string, boolean>>;
 
 export function NotesLspApplyCodeAction(arg1:string,arg2:number,arg3:number,arg4:number,arg5:Array<lsp.Diagnostic>):Promise<lsp.ApplyCodeActionResult>;
+
+export function NotesLspAvailableForRuntime(arg1:string):Promise<boolean>;
 
 export function NotesLspChangeDocument(arg1:string,arg2:string):Promise<void>;
 
@@ -120,6 +135,16 @@ export function NotesLspStopAll():Promise<void>;
 export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<lsp.WorkspaceSymbolItem>>;
 
 export function NotesRecentFiles():Promise<Array<string>>;
+
+export function NotesSpellCheck(arg1:string):Promise<Array<main.SpellCheckSuggestionT>>;
+
+export function NotesTyposAvailable():Promise<boolean>;
+
+export function NotesTyposChangeDocument(arg1:string,arg2:string):Promise<void>;
+
+export function NotesTyposCloseDocument(arg1:string):Promise<void>;
+
+export function NotesTyposOpenDocument(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 

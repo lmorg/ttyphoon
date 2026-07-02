@@ -11,13 +11,11 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/tmc/langchaingo/callbacks"
 )
 
 type Directory struct {
-	CallbacksHandler callbacks.Handler
-	agent            *agent.Agent
-	enabled          bool
+	agent   *agent.Agent
+	enabled bool
 }
 
 func init() {
@@ -46,10 +44,6 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
 			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
 		}()
-	}
-
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolStart(ctx, input)
 	}
 
 	var pathname string
@@ -89,10 +83,6 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 	}
 
 	response = result.String()
-
-	if t.CallbacksHandler != nil {
-		t.CallbacksHandler.HandleToolEnd(ctx, response)
-	}
 
 	return response, nil
 }

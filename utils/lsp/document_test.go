@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -69,6 +70,7 @@ func TestDocument_closeMarksAsNotOpen(t *testing.T) {
 
 // notifySpy captures Notify calls sent through the transport.
 type notifySpy struct {
+	mu      sync.Mutex
 	methods []string
 	params  []json.RawMessage
 }
@@ -86,8 +88,10 @@ func newSpyTransport() (*Transport, *notifySpy, io.Closer) {
 			if err != nil {
 				return
 			}
+			spy.mu.Lock()
 			spy.methods = append(spy.methods, msg.Method)
 			spy.params = append(spy.params, msg.Params)
+			spy.mu.Unlock()
 		}
 	}()
 
@@ -108,7 +112,11 @@ func TestDocumentStore_didOpenSendsNotification(t *testing.T) {
 	// Allow goroutine to drain.
 	waitForSpy(t, spy, 1)
 
-	if len(spy.methods) == 0 || spy.methods[0] != "textDocument/didOpen" {
+	spy.mu.Lock()
+	gotMethods := spy.methods
+	spy.mu.Unlock()
+
+	if len(gotMethods) == 0 || gotMethods[0] != "textDocument/didOpen" {
 		t.Errorf("expected textDocument/didOpen, got %v", spy.methods)
 	}
 
@@ -134,8 +142,12 @@ func TestDocumentStore_didChangeSendsNotificationAndIncrementsVersion(t *testing
 
 	waitForSpy(t, spy, 2)
 
-	if spy.methods[1] != "textDocument/didChange" {
-		t.Errorf("expected textDocument/didChange, got %q", spy.methods[1])
+	spy.mu.Lock()
+	gotMethod1 := spy.methods[1]
+	spy.mu.Unlock()
+
+	if gotMethod1 != "textDocument/didChange" {
+		t.Errorf("expected textDocument/didChange, got %q", gotMethod1)
 	}
 
 	doc := ds.Get("/proj/main.go")
@@ -159,8 +171,12 @@ func TestDocumentStore_didCloseSendsNotificationAndRemovesDoc(t *testing.T) {
 	_ = ds.DidClose(ctx, tr, "/proj/main.go")
 	waitForSpy(t, spy, 2)
 
-	if spy.methods[1] != "textDocument/didClose" {
-		t.Errorf("expected textDocument/didClose, got %q", spy.methods[1])
+	spy.mu.Lock()
+	gotMethod1 := spy.methods[1]
+	spy.mu.Unlock()
+
+	if gotMethod1 != "textDocument/didClose" {
+		t.Errorf("expected textDocument/didClose, got %q", gotMethod1)
 	}
 	if ds.IsOpen("/proj/main.go") {
 		t.Error("document should not be open after DidClose")
@@ -232,12 +248,18 @@ func waitForSpy(t *testing.T, spy *notifySpy, wantCount int) {
 	t.Helper()
 	// Busy-poll up to 200 iterations of 1ms each — sufficient for in-process pipes.
 	for i := 0; i < 200; i++ {
-		if len(spy.methods) >= wantCount {
+		spy.mu.Lock()
+		n := len(spy.methods)
+		spy.mu.Unlock()
+		if n >= wantCount {
 			return
 		}
 		// Tiny yield; avoids importing time just for this.
 		for j := 0; j < 1e5; j++ {
 		}
 	}
-	t.Fatalf("spy: got %d notifications, want %d", len(spy.methods), wantCount)
+	spy.mu.Lock()
+	n := len(spy.methods)
+	spy.mu.Unlock()
+	t.Fatalf("spy: got %d notifications, want %d", n, wantCount)
 }

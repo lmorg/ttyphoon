@@ -13,12 +13,18 @@ import (
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/utils/file"
+	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
 
 //go:embed defaults.yaml
 var defaults []byte
+
+//go:embed reserved_words.yaml
+var reservedWords []byte
+
+var langCache = LanguagesT{}
 
 func init() {
 	if err := LoadConfig(); err != nil {
@@ -32,6 +38,11 @@ func LoadConfig() error {
 		return err
 	}
 
+	err = readConfigFile(bytes.NewReader(reservedWords))
+	if err != nil {
+		return err
+	}
+
 	files := file.GetConfigFiles(".", ".yaml")
 	for i := range files {
 		f, err := os.Open(files[i])
@@ -41,6 +52,12 @@ func LoadConfig() error {
 		err = readConfigFile(f)
 		if err != nil {
 			return err
+		}
+	}
+
+	for _, v := range Config.Notes.Languages {
+		if len(v.Jupyter) != 0 {
+			jupyter.Append(v.Jupyter)
 		}
 	}
 
@@ -72,6 +89,29 @@ func readConfigFile(r io.Reader) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Lowercase all language keys in the Languages map
+	lowercasedLanguages := make(LanguagesT)
+	for k, v := range Config.Notes.Languages {
+		lowercasedLanguages[strings.ToLower(k)] = v
+	}
+	Config.Notes.Languages = lowercasedLanguages
+
+	// merge reserved words
+	for k, v := range langCache {
+		if Config.Notes.Languages[k] == nil {
+			Config.Notes.Languages[k] = &LanguageOptionsT{}
+		}
+		for _, word := range v.ReservedWords {
+			Config.Notes.Languages[k].ReservedWords = append(Config.Notes.Languages[k].ReservedWords, word)
+		}
+	}
+	for k, v := range Config.Notes.Languages {
+		if langCache[k] == nil {
+			langCache[k] = &LanguageOptionsT{}
+		}
+		langCache[k].ReservedWords = v.ReservedWords
 	}
 
 	return nil
@@ -127,10 +167,20 @@ type configT struct {
 	} `yaml:"Window"`
 
 	Notes struct {
-		MaxFileSize    int64               `yaml:"MaxFileSize"`
-		MaxRecentFiles int                 `yaml:"MaxRecentFiles"`
-		MaxLogLines    int                 `yaml:"MaxLogLines"`
-		LSP            map[string][]string `yaml:"LSP"`
+		MaxFileSize       int64 `yaml:"MaxFileSizeMB"`
+		StructViewMaxSize int64 `yaml:"StructViewMaxSizeKB"`
+		MaxRecentFiles    int   `yaml:"MaxRecentFiles"`
+		MaxLogLines       int   `yaml:"MaxLogLines"`
+
+		Languages LanguagesT `yaml:"Languages"`
+
+		SpellCheck struct {
+			// TyposLsp configures the language-agnostic `typos-lsp` server used
+			// for spellchecking project files and Jupyter code blocks when LSP
+			// mode is enabled. When the command is empty or the server cannot
+			// start, Notes falls back to the aspell spellchecker.
+			TyposLsp LspT `yaml:"TyposLsp"`
+		} `yaml:"SpellCheck"`
 	} `yaml:"Notes"`
 
 	TypeFace struct {
@@ -147,6 +197,45 @@ type configT struct {
 		DefaultModels   map[string]string   `yaml:"DefaultModels"`
 		DefaultService  string              `yaml:"DefaultService"`
 	} `yaml:"AI"`
+}
+
+type LanguagesT map[string]*LanguageOptionsT
+
+type LanguageOptionsT struct {
+	TabSpaceIndent int                         `yaml:"TabSpaceIndent"`
+	LSP            LspT                        `yaml:"LSP"`
+	ReservedWords  []string                    `yaml:"ReservedWords"`
+	Jupyter        []*jupyter.LanguageBindingT `yaml:"Jupyter"`
+}
+
+type LspT struct {
+	Command     []string       `yaml:"command"`
+	InitOptions map[string]any `yaml:"initializationOptions"`
+}
+
+// GetTabIndent returns the number of spaces to use for indentation for a given language.
+// If the language is not found, it falls back to the "default" key.
+func (lt LanguagesT) GetTabIndent(language string) int {
+	lang := strings.ToLower(language)
+	if lang == "" {
+		lang = "default"
+	}
+
+	if settings, ok := lt[lang]; ok {
+		if settings.TabSpaceIndent > 0 {
+			return settings.TabSpaceIndent
+		}
+	}
+
+	// Fallback to default
+	if settings, ok := lt["default"]; ok {
+		if settings.TabSpaceIndent > 0 {
+			return settings.TabSpaceIndent
+		}
+	}
+
+	// Final fallback if nothing is configured
+	return 4
 }
 
 type HotkeyFunctionsT map[string]string

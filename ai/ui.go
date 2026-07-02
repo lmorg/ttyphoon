@@ -221,9 +221,10 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 				}
 			}
 
-			selectedTools := tools
-			if raw, ok := v.Variables["tools"]; ok {
-				selectedTools = strings.TrimSpace(fmt.Sprint(raw))
+			var selectedTools string
+			raw, ok := v.Variables["tools"]
+			if ok {
+				selectedTools, _ = raw.(string)
 			}
 
 			parsedTools, err := skills.ParseTools(selectedTools)

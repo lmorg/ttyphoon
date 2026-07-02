@@ -86,6 +86,12 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 
 	agent.McpServerAdd(server, c)
 
+	toolNames := make([]string, len(c.Tools.Tools))
+	for i := range c.Tools.Tools {
+		toolNames[i] = c.Tools.Tools[i].Name
+	}
+	log.Printf("MCP server %s: %d tools advertised: %s", server, len(toolNames), strings.Join(toolNames, ", "))
+
 	for i := range c.Tools.Tools {
 		tool := c.Tools.Tools[i]
 

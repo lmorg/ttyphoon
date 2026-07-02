@@ -16,6 +16,14 @@ vi.mock('./popup_menu', () => ({
     showLocalMenu: showLocalMenuMock,
 }));
 
+vi.mock('./vim-mode', () => ({
+    attachVimMode: vi.fn(() => ({ detach: vi.fn(), getMode: vi.fn(() => 'insert') })),
+}));
+
+vi.mock('./spellcheck', () => ({
+    attachSpellCheck: vi.fn(() => ({ detach: vi.fn(), setExclusions: vi.fn(), check: vi.fn() })),
+}));
+
 describe('inputbox', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div id="terminal-app"></div>';

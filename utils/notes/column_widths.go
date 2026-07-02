@@ -41,6 +41,6 @@ func SetColumnWidths(filename, view string, headings []string, wrapped bool, wid
 		cache.NS_NOTESW_COLUMN_WIDTH,
 		columnWidthCacheKey(filename, view, headings, wrapped),
 		widths,
-		cache.Days(365),
+		cache.Days(30),
 	)
 }
