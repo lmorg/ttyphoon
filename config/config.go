@@ -13,6 +13,7 @@ import (
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/utils/file"
+	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
 	"gopkg.in/yaml.v3"
 )
@@ -51,6 +52,12 @@ func LoadConfig() error {
 		err = readConfigFile(f)
 		if err != nil {
 			return err
+		}
+	}
+
+	for _, v := range Config.Notes.Languages {
+		if len(v.Jupyter) != 0 {
+			jupyter.Append(v.Jupyter)
 		}
 	}
 
@@ -195,9 +202,10 @@ type configT struct {
 type LanguagesT map[string]*LanguageOptionsT
 
 type LanguageOptionsT struct {
-	TabSpaceIndent int      `yaml:"TabSpaceIndent"`
-	LSP            LspT     `yaml:"LSP"`
-	ReservedWords  []string `yaml:"ReservedWords"`
+	TabSpaceIndent int                         `yaml:"TabSpaceIndent"`
+	LSP            LspT                        `yaml:"LSP"`
+	ReservedWords  []string                    `yaml:"ReservedWords"`
+	Jupyter        []*jupyter.LanguageBindingT `yaml:"Jupyter"`
 }
 
 type LspT struct {

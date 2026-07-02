@@ -129,9 +129,6 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 		scopes = oauth.Scopes
 		authServerMetadataURL = oauth.AuthServerMetadataURL
 	}
-	/*if len(scopes) == 0 {
-		scopes = defaultOAuthScopes(server, serverURL)
-	}*/
 
 	tokenFile := DefaultTokenFile(server, serverURL)
 	if oauth != nil && oauth.TokenFile != "" {
@@ -165,44 +162,6 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 
 	return cfg
 }
-
-/*func defaultOAuthScopes(server, serverURL string) []string {
-	server = strings.ToLower(strings.TrimSpace(server))
-	raw := strings.TrimSpace(serverURL)
-	host := hostFromURL(raw)
-	path := ""
-	if u, err := url.Parse(raw); err == nil {
-		host = strings.ToLower(u.Hostname())
-		path = strings.ToLower(u.EscapedPath())
-	}
-
-	isAtlassian := server == "atlassian" || strings.HasSuffix(host, "atlassian.com")
-	if !isAtlassian {
-		return nil
-	}
-
-	// Atlassian MCP authv2 often returns an empty-scope authorization request unless
-	// we provide defaults. Include both agent-interface scopes and Jira read scopes
-	// needed by account lookup/JQL tools.
-	if strings.Contains(path, "/mcp/authv2") || host == "mcp.atlassian.com" {
-		return []string{
-			"offline_access",
-			"read:account",
-			"read:me",
-			//"read:jira-user",
-			"read:jira-work",
-			"read:jira:agent-interface",
-			"search:jira:agent-interface",
-			"write:jira:agent-interface",
-			"read:confluence:agent-interface",
-			"search:confluence:agent-interface",
-			"write:confluence:agent-interface",
-			"search:rovo:agent-interface",
-		}
-	}
-
-	return nil
-}*/
 
 // AuthenticateOAuthInteractive is deprecated and kept for reference only.
 // OAuth authentication now uses go-sdk AuthorizationCodeHandler via buildGoSDKAuthHandler.

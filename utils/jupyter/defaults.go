@@ -21,7 +21,16 @@ func init() {
 		panic(err)
 	}
 
-	for _, binding := range Languages {
+	validate(Languages)
+}
+
+func Append(conf []*LanguageBindingT) {
+	validate(conf)
+	Languages = append(Languages, conf...)
+}
+
+func validate(conf []*LanguageBindingT) {
+	for _, binding := range conf {
 		if binding.PathRegexp != "" {
 			binding.pathRegexp = regexp.MustCompile(binding.PathRegexp)
 		}
