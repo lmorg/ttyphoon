@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/cache"
 )
@@ -72,8 +73,13 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 			return nil
 		}
 		if d.IsDir() {
-			if len(d.Name()) == 0 || d.Name() == ".git" || d.Name() == "node_modules" {
+			if len(d.Name()) == 0 {
 				return filepath.SkipDir
+			}
+			for dir, ignore := range config.Config.Notes.ExcludeDirectories {
+				if ignore && dir == d.Name() {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}

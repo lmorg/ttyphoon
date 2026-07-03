@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/lmorg/ttyphoon/config"
 )
 
 func buildSearchCommand(query string, opts Options) (*exec.Cmd, string, error) {
@@ -32,7 +34,13 @@ func buildRgArgs(query string, opts Options) []string {
 	// symlinks to match grep's -R behaviour.
 	args := []string{
 		"-uu", "-n", "--no-heading", "--color", "never", "--follow",
-		"-g", "!.git", "-g", "!node_modules",
+		//"-g", "!.git", "-g", "!node_modules",
+	}
+
+	for dir, ignore := range config.Config.Notes.ExcludeDirectories {
+		if ignore {
+			args = append(args, "-g", "!"+dir)
+		}
 	}
 
 	if opts.Regex {
@@ -57,7 +65,16 @@ func buildRgArgs(query string, opts Options) []string {
 
 // buildGrepArgs builds grep command arguments based on options.
 func buildGrepArgs(query string, opts Options) []string {
-	args := []string{"-R", "-n", "--binary-files=without-match", "--exclude-dir=.git", "--exclude-dir=node_modules"}
+	args := []string{
+		"-R", "-n", "--binary-files=without-match",
+		//"--exclude-dir=.git", "--exclude-dir=node_modules",
+	}
+
+	for dir, ignore := range config.Config.Notes.ExcludeDirectories {
+		if ignore {
+			args = append(args, "--exclude-dir="+dir)
+		}
+	}
 
 	if opts.Regex {
 		args = append(args, "-E")
