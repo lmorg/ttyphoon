@@ -1938,6 +1938,14 @@ func (a *WApp) NotesRecentFiles() []string {
 	return notes.GetRecentList(a.projRoot)
 }
 
+func (a *WApp) GetNotesFindFieldValues(fieldName string) []string {
+	return notes.GetFindFieldValues(fieldName)
+}
+
+func (a *WApp) AddNotesFindFieldValue(fieldName, value string) []string {
+	return notes.AddFindFieldValue(fieldName, value)
+}
+
 func (a *WApp) NotesHistoryAdd(filename string) {
 	expanded := a.filePath(filename)
 	if err := notes.HistoryListAdd(a.projRoot, expanded); err != nil {

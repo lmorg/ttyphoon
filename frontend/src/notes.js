@@ -12,6 +12,7 @@ import {
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
+    GetNotesFindFieldValues, AddNotesFindFieldValue,
     GetDocumentCache, SetDocumentCache, FormatCodeBlock, FormatNotesContent, CompleteSyntax,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
@@ -563,14 +564,14 @@ app.innerHTML = `
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
                             <button id="notes-tools-tab-frontmatter" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-frontmatter-pane" data-tab="frontmatter" style="display: none;">Frontmatter</button>
-                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
-                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
+                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                             <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
                         </div>
                         <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
                     </div>
                     <div id="notes-tools-content" class="notes-tools-content">
-                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="true">
+                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
@@ -584,7 +585,7 @@ app.innerHTML = `
                         <div id="notes-tools-frontmatter-pane" class="notes-tools-pane" data-tab="frontmatter" data-active="false">
                             <div id="notes-tools-frontmatter" class="notes-tools-frontmatter"></div>
                         </div>
-                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="false">
+                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="true">
                             <div class="notes-tools-find-wrap markdown-body">
                                 <h1 class="notes-find-heading">In open file</h1>
                                 <div id="notes-find-controls" data-disabled="false">
@@ -7776,6 +7777,7 @@ async function loadFile(file, options = {}) {
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
     const keepFindTabOpen = Boolean(options?.keepFindTabOpen);
+    const switchingDocument = Boolean(state.currentFile && state.currentFile !== file);
 
     state.suspendDocumentCacheSave = true;
 
@@ -7789,6 +7791,10 @@ async function loadFile(file, options = {}) {
         // Clear rendered diagnostics immediately while the new file loads.
         state.currentFileUri = '';
         clearVisibleLspDiagnostics();
+    }
+
+    if (switchingDocument && !keepFindTabOpen) {
+        setToolsTab('find');
     }
 
     const fileName = file ? getPathFileName(file) : 'json file';
@@ -8323,6 +8329,119 @@ function updateFindFilesClearButtonVisibility() {
     elements.findFilesClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
 }
 
+const findFieldHistory = new Map();
+
+function setFindFieldHistory(inputEl, values) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    const history = Array.isArray(values) ? values.filter((value) => String(value || '').trim() !== '') : [];
+    findFieldHistory.set(inputEl.id, history);
+}
+
+function getFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return [];
+    }
+
+    const history = findFieldHistory.get(inputEl.id);
+    return Array.isArray(history) ? history : [];
+}
+
+function applyFindHistoryValue(inputEl, value) {
+    if (!inputEl) {
+        return;
+    }
+
+    inputEl.value = String(value || '');
+    inputEl.focus();
+    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+
+    if (inputEl === elements.findInput) {
+        updateFindInputClearButtonVisibility();
+        performFind();
+        return;
+    }
+
+    if (inputEl === elements.findFilesInput) {
+        updateFindFilesClearButtonVisibility();
+        scheduleProjectFindSearch();
+        return;
+    }
+
+    if (inputEl === elements.replaceInput) {
+        updateReplaceInputClearButtonVisibility();
+    }
+}
+
+function openFindHistoryMenu(inputEl, x, y) {
+    if (!inputEl) {
+        return false;
+    }
+
+    const history = getFindFieldHistory(inputEl);
+    if (history.length === 0) {
+        return false;
+    }
+
+    showLocalMenu({
+        title: 'Past items',
+        options: history,
+        x,
+        y,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const selected = history[index];
+            if (selected === undefined) {
+                return;
+            }
+            applyFindHistoryValue(inputEl, selected);
+        },
+    });
+
+    return true;
+}
+
+function tryOpenFindHistoryMenuForInput(inputEl) {
+    if (!inputEl) {
+        return false;
+    }
+
+    const rect = inputEl.getBoundingClientRect();
+    return openFindHistoryMenu(inputEl, rect.left, rect.bottom);
+}
+
+async function hydrateFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    try {
+        const values = await GetNotesFindFieldValues(inputEl.id);
+        setFindFieldHistory(inputEl, values);
+    } catch (err) {
+        console.error('Failed to read notes find field history:', err);
+    }
+}
+
+function persistFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    const value = String(inputEl.value || '').trim();
+    if (!value) {
+        return;
+    }
+
+    AddNotesFindFieldValue(inputEl.id, value).then((values) => {
+        setFindFieldHistory(inputEl, values);
+    }).catch((err) => {
+        console.error('Failed to persist notes find field history:', err);
+    });
+}
+
 function updateFindInputClearButtonVisibility() {
     if (!elements.findInputClear || !elements.findInput) {
         return;
@@ -8423,6 +8542,9 @@ function renderProjectFindResults() {
 async function runProjectFindSearch(query) {
     const trimmed = String(query || '').trim();
     state.findFilesQuery = trimmed;
+    if (trimmed) {
+        persistFindFieldHistory(elements.findFilesInput);
+    }
     const fileFilter = String(state.fileFilterQuery || '').trim().toLowerCase();
     const searchSignature = `${trimmed}|${state.findOptions.caseSensitive ? 1 : 0}|${state.findOptions.regex ? 1 : 0}|${state.findOptions.wholeWord ? 1 : 0}|${fileFilter}`;
 
@@ -8728,6 +8850,10 @@ function replaceCurrentMatch() {
     const signature = getFindDocSearchSignature(query);
 
     const replacement = String(elements.replaceInput?.value || '');
+    persistFindFieldHistory(elements.findInput);
+    if (replacement) {
+        persistFindFieldHistory(elements.replaceInput);
+    }
 
     if (!state.findQuery || state.findQuery !== query || state.findDocLastExecutedSignature !== signature || state.findMatches.length === 0) {
         performFind();
@@ -8768,6 +8894,10 @@ function replaceAllMatches() {
     }
 
     const replacement = String(elements.replaceInput?.value || '');
+    persistFindFieldHistory(elements.findInput);
+    if (replacement) {
+        persistFindFieldHistory(elements.replaceInput);
+    }
     const pattern = buildFindPattern();
     if (!pattern) {
         return;
@@ -10601,7 +10731,7 @@ if (elements.jupyterWrap) {
     });
 }
 
-setToolsTab('ai');
+setToolsTab('find');
 
 // Always start minimized on application launch.
 setToolsPanelCollapsed(true);
@@ -12379,6 +12509,33 @@ function applyWindowStyle(result) {
             white-space: normal !important;
             overflow-wrap: anywhere !important;
             word-break: break-word;
+        }
+
+        /*
+         * When a table has explicit column widths (restored from cache into
+         * colgroup col[style]), opt out of full-width/wrap constraints that
+         * can compete with drag-resize calculations.
+         */
+        .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) {
+            width: max-content !important;
+            min-width: 0 !important;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) {
+            width: max-content !important;
+            min-width: 0 !important;
+            table-layout: fixed;
+        }
+
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
+        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
+        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
+        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td {
+            max-width: none;
         }
 
         #notes-tools-find-pane {
@@ -15040,6 +15197,13 @@ if (elements.findFilesInput) {
     });
 
     elements.findFilesInput.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            if (tryOpenFindHistoryMenuForInput(elements.findFilesInput)) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         if (event.key !== 'Enter') {
             return;
         }
@@ -15209,11 +15373,13 @@ if (elements.listFilterClear && elements.listFilter) {
 
 elements.findNext.addEventListener('mousedown', (event) => {
     event.preventDefault();
+    persistFindFieldHistory(elements.findInput);
     nextMatch();
 });
 
 elements.findPrev.addEventListener('mousedown', (event) => {
     event.preventDefault();
+    persistFindFieldHistory(elements.findInput);
     prevMatch();
 });
 
@@ -15400,8 +15566,16 @@ elements.modalInput.addEventListener('keydown', (event) => {
 });
 
 elements.findInput.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (tryOpenFindHistoryMenuForInput(elements.findInput)) {
+            event.preventDefault();
+            return;
+        }
+    }
+
     if (event.key === 'Enter') {
         event.preventDefault();
+        persistFindFieldHistory(elements.findInput);
         if (event.shiftKey) {
             prevMatch();
         } else {
@@ -15412,11 +15586,20 @@ elements.findInput.addEventListener('keydown', (event) => {
 
 if (elements.replaceInput) {
     elements.replaceInput.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            if (tryOpenFindHistoryMenuForInput(elements.replaceInput)) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         if (event.key !== 'Enter') {
             return;
         }
 
         event.preventDefault();
+        persistFindFieldHistory(elements.findInput);
+        persistFindFieldHistory(elements.replaceInput);
         if (event.shiftKey) {
             replaceAllMatches();
         } else {
@@ -15430,6 +15613,9 @@ renderProjectFindResults();
 updateFindFilesClearButtonVisibility();
 updateFindInputClearButtonVisibility();
 updateReplaceInputClearButtonVisibility();
+hydrateFindFieldHistory(elements.findInput);
+hydrateFindFieldHistory(elements.replaceInput);
+hydrateFindFieldHistory(elements.findFilesInput);
 
 // Load initial notes list on startup; later notesUpdate events will refresh it.
 refreshFiles();

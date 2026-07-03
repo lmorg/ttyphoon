@@ -8,6 +8,8 @@ import {grep} from '../models';
 import {lsp} from '../models';
 import {swagger} from '../models';
 
+export function AddNotesFindFieldValue(arg1:string,arg2:string):Promise<Array<string>>;
+
 export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CancelNotesListFiles():Promise<void>;
@@ -61,6 +63,8 @@ export function GetImage(arg1:string):Promise<string>;
 export function GetLanguageDescriptions(arg1:string):Promise<Array<string>>;
 
 export function GetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<Array<number>>;
+
+export function GetNotesFindFieldValues(arg1:string):Promise<Array<string>>;
 
 export function GetNotesLanguageReservedWords(arg1:string):Promise<Array<string>>;
 

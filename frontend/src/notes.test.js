@@ -103,6 +103,8 @@ const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', File
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
 const setDocumentCacheMock = vi.fn(() => Promise.resolve());
+const getNotesFindFieldValuesMock = vi.fn(() => Promise.resolve([]));
+const addNotesFindFieldValueMock = vi.fn(() => Promise.resolve([]));
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -178,6 +180,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
     SetDocumentCache: setDocumentCacheMock,
+    GetNotesFindFieldValues: getNotesFindFieldValuesMock,
+    AddNotesFindFieldValue: addNotesFindFieldValueMock,
     FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
