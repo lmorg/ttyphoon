@@ -196,6 +196,87 @@ export async function processWailsImages(container) {
     }
 }
 
+function parseImageSizeToken(token) {
+    const normalized = String(token || '').trim().toLowerCase();
+    if (!normalized) {
+        return null;
+    }
+
+    const percentMatch = normalized.match(/^(\d+(?:\.\d+)?)%$/);
+    if (percentMatch) {
+        return {
+            unit: '%',
+            value: Number(percentMatch[1]),
+        };
+    }
+
+    const pxMatch = normalized.match(/^(\d+(?:\.\d+)?)px$/);
+    if (pxMatch) {
+        return {
+            unit: 'px',
+            value: Number(pxMatch[1]),
+        };
+    }
+
+    return null;
+}
+
+export function parseMarkdownImageAltSizing(rawAlt) {
+    const alt = String(rawAlt || '');
+    const separatorIndex = alt.indexOf(':');
+    if (separatorIndex < 0) {
+        return {
+            altText: alt,
+            sizing: null,
+        };
+    }
+
+    const token = alt.slice(separatorIndex + 1);
+    const sizing = parseImageSizeToken(token);
+    if (!sizing) {
+        return {
+            altText: alt,
+            sizing: null,
+        };
+    }
+
+    return {
+        altText: alt.slice(0, separatorIndex),
+        sizing,
+    };
+}
+
+export function applyMarkdownImageAltSizing(container) {
+    if (!container) {
+        return;
+    }
+
+    const images = container.querySelectorAll('img');
+    images.forEach((img) => {
+        const { altText, sizing } = parseMarkdownImageAltSizing(img.alt);
+
+        // Preserve only the descriptive alt text before any optional sizing suffix.
+        img.alt = altText;
+        img.style.width = 'auto';
+        img.style.height = 'auto';
+
+        if (!sizing) {
+            img.style.maxWidth = 'none';
+            img.style.maxHeight = 'none';
+            return;
+        }
+
+        if (sizing.unit === '%') {
+            img.style.maxWidth = `${sizing.value}vw`;
+            img.style.maxHeight = `${sizing.value}vh`;
+            return;
+        }
+
+        img.style.maxWidth = `${sizing.value}px`;
+        img.style.maxHeight = `${sizing.value}px`;
+    });
+}
+
 export function enableFullscreenImages(container) {
     const images = container.querySelectorAll('img');
     images.forEach((img) => {
@@ -442,6 +523,7 @@ export async function processMarkdownContainer(container) {
     enableFullscreenMermaidDiagrams(container);
     await applySyntaxHighlighting(container);
     await processWailsImages(container);
+    applyMarkdownImageAltSizing(container);
     enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });
     await autoHyperlink(container);
