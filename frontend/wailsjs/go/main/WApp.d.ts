@@ -14,6 +14,8 @@ export function CancelNotesListFiles():Promise<void>;
 
 export function CloseNotification(arg1:number):Promise<void>;
 
+export function CloseTooltip():Promise<void>;
+
 export function CommandPaletteSelect(arg1:number):Promise<void>;
 
 export function CompleteSyntax(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number,arg6:number,arg7:string):Promise<main.CompleteSyntaxReturnT>;
@@ -179,6 +181,8 @@ export function SetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,
 export function SetProjectCache(arg1:notes.ProjectCacheT):Promise<void>;
 
 export function ShowCommandPalette():Promise<void>;
+
+export function ShowTooltip(arg1:string):Promise<void>;
 
 export function StopNote(arg1:string):Promise<void>;
 

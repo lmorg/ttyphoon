@@ -64,6 +64,8 @@ const composeNoteLocationPathMock = vi.fn((location, name) => `${location}/${Str
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const displayHyperlinkMenuMock = vi.fn(() => Promise.resolve());
+const showTooltipMock = vi.fn(() => Promise.resolve());
+const closeTooltipMock = vi.fn(() => Promise.resolve());
 const notesKeyPressMock = vi.fn(() => Promise.resolve({ consume: false, prefixActive: false }));
 const resolveNotesLspLanguageMock = vi.fn(() => Promise.resolve(''));
 const notesLspOpenDocumentMock = vi.fn(() => Promise.resolve());
@@ -182,6 +184,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
+    ShowTooltip: showTooltipMock,
+    CloseTooltip: closeTooltipMock,
     NotesKeyPress: notesKeyPressMock,
     NotesSpellCheck: vi.fn(() => Promise.resolve([])),
 }));

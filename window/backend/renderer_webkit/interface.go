@@ -341,3 +341,21 @@ func (wr *webkitRender) GetWindowContext() context.Context {
 func (wr *webkitRender) DisplayMarkdownModel(markdownContent string) {
 	runtime.EventsEmit(wr.wapp, "showMarkdownModal", markdownContent)
 }
+
+func (wr *webkitRender) ShowTooltip(text string) {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "tooltipShow", map[string]any{
+		"text": text,
+	})
+}
+
+func (wr *webkitRender) CloseTooltip() {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "tooltipClose")
+}

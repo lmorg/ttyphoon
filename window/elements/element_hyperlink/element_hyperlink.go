@@ -136,6 +136,7 @@ func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 
 func (el *ElementHyperlink) MouseMotion(pos *types.XY, size *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Hyperlink options: " + el.url)
+	el.renderer.ShowTooltip(el.Url())
 	cursor.Hand()
 
 	if !config.Config.Window.HoverEffectHighlight {
@@ -150,6 +151,7 @@ func (el *ElementHyperlink) MouseMotion(pos *types.XY, size *types.XY, callback 
 func (el *ElementHyperlink) MouseOut() {
 	//el.renderer.HidePreview()
 	el.renderer.StatusBarText("")
+	el.renderer.CloseTooltip()
 	cursor.Arrow()
 
 	if !config.Config.Window.HoverEffectHighlight {

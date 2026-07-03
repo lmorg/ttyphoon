@@ -2056,6 +2056,24 @@ func (a *WApp) HyperlinkOpenWithDefault(url string) {
 	menuhyperlink.OpenWithDefault(renderer, url, "")
 }
 
+func (a *WApp) ShowTooltip(text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.ShowTooltip(text)
+}
+
+func (a *WApp) CloseTooltip() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.CloseTooltip()
+}
+
 // SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.
 // If projectPath is set, $PROJECT in filename is expanded against projectPath,
 // which keeps autosave bound to the project where the file was opened.

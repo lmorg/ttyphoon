@@ -14,6 +14,10 @@ export function CloseNotification(arg1) {
   return window['go']['main']['WApp']['CloseNotification'](arg1);
 }
 
+export function CloseTooltip() {
+  return window['go']['main']['WApp']['CloseTooltip']();
+}
+
 export function CommandPaletteSelect(arg1) {
   return window['go']['main']['WApp']['CommandPaletteSelect'](arg1);
 }
@@ -344,6 +348,10 @@ export function SetProjectCache(arg1) {
 
 export function ShowCommandPalette() {
   return window['go']['main']['WApp']['ShowCommandPalette']();
+}
+
+export function ShowTooltip(arg1) {
+  return window['go']['main']['WApp']['ShowTooltip'](arg1);
 }
 
 export function StopNote(arg1) {

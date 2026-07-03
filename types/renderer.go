@@ -100,6 +100,8 @@ type Renderer interface {
 	NewContextMenu() ContextMenu
 	AddToContextMenu(...MenuItem)
 	DisplayMarkdownModel(string)
+	ShowTooltip(text string)
+	CloseTooltip()
 	ResizeWindow(*XY)
 	SetKeyboardFnMode(KeyboardMode)
 	GetKeyboardModifier() int

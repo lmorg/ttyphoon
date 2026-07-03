@@ -30,6 +30,7 @@ import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtim
 import { showLocalMenu } from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
+import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
 import { createEditorUndoManager } from './editor_undo_manager';
@@ -13347,26 +13348,6 @@ function applyWindowStyle(result) {
         #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
         #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
 
-        #notes-hyperlink-hover-tooltip {
-            position: fixed;
-            z-index: 9003;
-            pointer-events: none;
-            max-width: 60vw;
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
-            background: var(--terminal-menu-bg, var(--bg));
-            color: var(--terminal-menu-fg, var(--fg));
-            font-family: var(--terminal-menu-font, var(--font-family));
-            font-size: var(--terminal-menu-font-size);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-            opacity: 0.92;
-            animation: tty-menu-appear 0.12s ease-out;
-            display: none;
-        }
-
         #notes-lsp-completion {
             --notes-lsp-completion-visible-rows: 12;
             --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
@@ -13527,6 +13508,8 @@ EventsOn('terminalStyleUpdate', payload => {
     }
 });
 
+bindSharedTooltipMouseTracking();
+
 // ----------------------------------------------------------------------------
 // LSP Diagnostics
 // ----------------------------------------------------------------------------
@@ -13563,31 +13546,12 @@ const lspCompletionEl = (() => {
     return el;
 })();
 
-const hyperlinkHoverTooltipEl = (() => {
-    const el = document.createElement('div');
-    el.id = 'notes-hyperlink-hover-tooltip';
-    document.body.appendChild(el);
-    return el;
-})();
-
 function hideHyperlinkHoverTooltip() {
-    if (!hyperlinkHoverTooltipEl) {
-        return;
-    }
-
-    hyperlinkHoverTooltipEl.style.display = 'none';
-    delete hyperlinkHoverTooltipEl.dataset.href;
+    closeSharedTooltip();
 }
 
 function positionHyperlinkHoverTooltip(x, y) {
-    if (!hyperlinkHoverTooltipEl || hyperlinkHoverTooltipEl.style.display !== 'block') {
-        return;
-    }
-
-    const nextX = Math.min((Number(x) || 0) + 14, window.innerWidth - hyperlinkHoverTooltipEl.offsetWidth - 8);
-    const nextY = Math.min((Number(y) || 0) + 14, window.innerHeight - hyperlinkHoverTooltipEl.offsetHeight - 8);
-    hyperlinkHoverTooltipEl.style.left = `${Math.max(8, nextX)}px`;
-    hyperlinkHoverTooltipEl.style.top = `${Math.max(8, nextY)}px`;
+    updateSharedTooltipPointer(Number(x) || 0, Number(y) || 0);
 }
 
 function formatHyperlinkHoverHref(href) {
@@ -13620,7 +13584,7 @@ function formatHyperlinkHoverHref(href) {
 }
 
 function showHyperlinkHoverTooltip(anchor, x, y) {
-    if (!(anchor instanceof HTMLAnchorElement) || !hyperlinkHoverTooltipEl) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
         return;
     }
 
@@ -13631,10 +13595,8 @@ function showHyperlinkHoverTooltip(anchor, x, y) {
         return;
     }
 
-    hyperlinkHoverTooltipEl.textContent = displayHref;
-    hyperlinkHoverTooltipEl.dataset.href = displayHref;
-    hyperlinkHoverTooltipEl.style.display = 'block';
     positionHyperlinkHoverTooltip(x, y);
+    showSharedTooltip(displayHref);
 }
 
 const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];

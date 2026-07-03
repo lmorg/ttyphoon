@@ -8,6 +8,7 @@ import { initTerminalPopupMenu } from './popup_menu';
 import { initInputBox } from './inputbox';
 import { initMarkdownModal } from './markdown-modal';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
+import { bindSharedTooltipEvents, bindSharedTooltipMouseTracking, closeSharedTooltip } from './shared_tooltip';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 import dingSound from './assets/sound/ding.mp3';
 
@@ -461,6 +462,7 @@ function applyTerminalStyles(result) {
             height: 100%;
             outline: none;
         }
+
     `;
     document.head.appendChild(style);
 }
@@ -1044,6 +1046,14 @@ EventsOn("setCursor", css => {
     canvas.style.cursor = css;
 });
 
+canvas.addEventListener('mousemove', (event) => {
+    void event;
+});
+
+canvas.addEventListener('mouseleave', () => {
+    closeSharedTooltip();
+});
+
 EventsOn("terminalImageCachePut", payload => {
     const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
     const imageId = Number(data?.id);
@@ -1219,6 +1229,8 @@ GetWindowStyle().then((result) => {
     document.body.style.overflow = 'hidden';
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
     applyTerminalStyles(result);
+    bindSharedTooltipMouseTracking();
+    bindSharedTooltipEvents(EventsOn);
     font.applyConfiguredFontFromWindowStyle(windowStyle);
     
     // Defer canvas fitting to ensure browser has computed layout dimensions
