@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import * as swaggerUtils from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
+
+const notesCss = readFileSync('./src/notes.css', 'utf8');
+
+function getNotesRenderedStyles() {
+    const inline = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
+    return inline.join('\n') + '\n' + notesCss;
+}
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
@@ -855,8 +863,7 @@ describe('notes rendering', () => {
         expect(tooltip?.textContent).toContain('example diagnostic');
         expect(tooltip?.style.opacity || '').toBe('');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-tooltip {');
         expect(styles).toContain('#notes-lsp-tooltip:hover { opacity: 1; }');
     });
@@ -995,8 +1002,7 @@ describe('notes rendering', () => {
         expect(link).not.toBeNull();
         expect(link?.getAttribute('href')).toBe('https://example.com');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {');
         expect(styles).toContain('#notes-lsp-hover-tooltip > :first-child { margin-top: 0; }');
         expect(styles).toContain('#notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }');
@@ -1321,8 +1327,7 @@ describe('notes rendering', () => {
         expect(hints[1]?.textContent).toBe(': string');
         expect(hints[1]?.classList.contains('has-padding-left')).toBe(true);
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('.notes-lsp-inlay-hint {');
         expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
     });
@@ -1351,8 +1356,7 @@ describe('notes rendering', () => {
         expect(token?.getAttribute('data-token-type')).toBe('1');
         expect(token?.classList.contains('mod-declaration')).toBe(true);
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('.notes-lsp-semantic-token {');
         expect(styles).toContain('.notes-lsp-semantic-token[data-token-type="1"] {');
         expect(styles).toContain('.notes-lsp-semantic-token.mod-declaration,');
@@ -1454,8 +1458,7 @@ describe('notes rendering', () => {
         expect(hover?.style.display).toBe('block');
         expect(hover?.style.opacity || '').toBe('');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-completion {');
         expect(styles).toContain('--notes-lsp-completion-visible-rows: 12;');
         expect(styles).toContain('max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);');
