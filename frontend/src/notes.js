@@ -32,6 +32,8 @@ import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
+import { createEditorUndoManager } from './editor_undo_manager';
+import { createEditorMutationAdapter } from './editor_mutation_adapter';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -451,6 +453,7 @@ function ensureCellRefStyle() {
     thead th {
         cursor: pointer;
         user-select: none;
+        text-align: left;
     }
     `;
     document.head.appendChild(style);
@@ -848,7 +851,6 @@ const state = {
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
     markdownTableWordWrapMode: true,  // track table word wrap mode for View/Run modes
     lspChangeTimer: null,
-    lspEditorFormatTimer: null,
     lspOpenFile: '',
     typosOpenFile: '',
     typosChangeTimer: null,
@@ -868,61 +870,13 @@ const state = {
 };
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
-const LSP_EDITOR_FORMAT_DEBOUNCE_MS = 60000;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
 const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
 const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
 
-let lastAutoCopiedViewerSelection = '';
-
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
-
-function activeViewerWrap() {
-    return elements.previewWrap || null;
-}
-
-function getViewerSelectionText() {
-    const viewer = activeViewerWrap();
-    if (!viewer || typeof window.getSelection !== 'function') {
-        return '';
-    }
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-        return '';
-    }
-
-    const text = String(selection.toString() || '').trim();
-    if (!text) {
-        return '';
-    }
-
-    const anchorNode = selection.anchorNode;
-    const focusNode = selection.focusNode;
-    const anchorInViewer = anchorNode ? viewer.contains(anchorNode) : false;
-    const focusInViewer = focusNode ? viewer.contains(focusNode) : false;
-
-    return anchorInViewer || focusInViewer ? text : '';
-}
-
-function handleViewerSelectionAutoCopy() {
-    const text = getViewerSelectionText();
-    if (!text) {
-        lastAutoCopiedViewerSelection = '';
-        return;
-    }
-
-    if (text === lastAutoCopiedViewerSelection) {
-        return;
-    }
-
-    lastAutoCopiedViewerSelection = text;
-    ClipboardSetText(text).then(() => {
-        notifyTerminal('Selection copied to clipboard', 'info');
-    }).catch(() => {});
-}
 
 configureMarked();
 
@@ -1228,18 +1182,27 @@ function isSyntaxCompletionKeyEvent(event) {
     return SYNTAX_COMPLETION_TRIGGER_KEYS.has(String(event.key || ''));
 }
 
+// Phase 1 foundation: central undo manager + mutation adapter for editor range edits.
+const notesUndoManager = createEditorUndoManager();
+const notesMutationAdapter = createEditorMutationAdapter({
+    manager: notesUndoManager,
+    getFilePath: () => state.currentFile || '',
+});
+
 function applyTextareaEdit(textarea, start, end, text, cursor) {
     if (!textarea) {
         return;
     }
 
-    const safeStart = Math.max(0, Math.min(Number(start) || 0, textarea.value.length));
-    const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, textarea.value.length));
-    textarea.setRangeText(String(text || ''), safeStart, safeEnd, 'preserve');
-
-    const nextCursor = Math.max(0, Math.min(Number(cursor) || (safeStart + String(text || '').length), textarea.value.length));
-    textarea.setSelectionRange(nextCursor, nextCursor);
-    textarea.dispatchEvent(new Event('input'));
+    notesMutationAdapter.replaceRange(textarea, {
+        start,
+        end,
+        text,
+        cursor,
+        source: 'syntax-completion',
+        label: 'Apply textarea edit',
+        emit: true,
+    });
 }
 
 function maybeHandleSyntaxCompletionKey(event, textarea, options = {}) {
@@ -1401,7 +1364,14 @@ function updateCsvCell(rowIndex, columnIndex, value) {
 
     row[columnIndex] = String(value ?? '').trim();
 
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Update CSV cell',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1415,7 +1385,14 @@ function insertCsvRowAfter(rowIndex) {
     const colCount = rows.length > 0 ? Math.max(...rows.map(r => r.length)) : 1;
     const newRow = Array(colCount).fill('');
     rows.splice(rowIndex + 1, 0, newRow);
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Insert CSV row',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1428,7 +1405,14 @@ function insertCsvColumnAfter(columnIndex) {
         while (row.length <= columnIndex) row.push('');
         row.splice(columnIndex + 1, 0, '');
     });
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Insert CSV column',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1447,7 +1431,14 @@ function deleteCsvRow(rowIndex) {
     }
 
     rows.splice(rowIndex, 1);
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Delete CSV row',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1472,7 +1463,14 @@ function deleteCsvColumn(columnIndex) {
         row.splice(columnIndex, 1);
     });
 
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Delete CSV column',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1543,8 +1541,12 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                 if (selection && range) {
                     range.selectNodeContents(cell);
                     range.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
+                    if (typeof selection.removeAllRanges === 'function') {
+                        selection.removeAllRanges();
+                    }
+                    if (typeof selection.addRange === 'function') {
+                        selection.addRange(range);
+                    }
                 }
                 cell.focus();
 
@@ -2445,7 +2447,7 @@ function setupCollapsibleHeadings(container, exclusive = false) {
             heading.style.textDecoration = '';
         });
 
-        heading.addEventListener('click', () => {
+        heading.addEventListener('dblclick', () => {
             if (exclusive) {
                 headingList.forEach((otherHeading) => {
                     setCollapsibleHeadingState(otherHeading, otherHeading !== heading);
@@ -3508,7 +3510,14 @@ function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     }
 
     if (modified) {
-        elements.editor.value = lines.join('\n');
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: lines.join('\n'),
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'markdown-checkbox',
+            label: 'Toggle markdown checkbox',
+            emit: true,
+        });
         saveFile();
         // Keep viewer in sync when changes are made from jupyter mode
         if (state.viewMode === 'jupyter') {
@@ -3530,7 +3539,14 @@ function updateMarkdownTableOfContents() {
         return;
     }
 
-    elements.editor.value = result.text;
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: result.text,
+        selectionStart: 0,
+        selectionEnd: 0,
+        source: 'markdown-toc',
+        label: 'Update markdown table of contents',
+        emit: true,
+    });
     if (usesCodeEditorDecorations()) {
         refreshEditorLanguage(state.currentFile, elements.editor.value);
     }
@@ -3586,7 +3602,14 @@ function updateMarkdownCodeBlock(blockIndex, newContent) {
     }
 
     result += markdown.slice(lastIndex);
-    elements.editor.value = result;
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: result,
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'markdown-code-block',
+        label: 'Update markdown code block',
+        emit: true,
+    });
     return true;
 }
 
@@ -3752,11 +3775,16 @@ function replaceCurrentIdentifierWithCompletion(text) {
     const left = source.slice(0, cursor);
     const match = left.match(/[A-Za-z0-9_]+$/);
     const start = match ? cursor - match[0].length : cursor;
-    editor.setSelectionRange(start, cursor);
-    editor.setRangeText(String(text || ''), start, cursor, 'end');
     // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
     hideLspCompletion();
-    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    notesMutationAdapter.replaceRange(editor, {
+        start,
+        end: cursor,
+        text,
+        source: 'lsp-completion',
+        label: 'Apply completion item',
+        emit: true,
+    });
 }
 
 function commitActiveLspCompletion() {
@@ -4243,9 +4271,14 @@ async function formatCurrentLspDocument(options = {}) {
         const nextSelectionStart = Math.min(Math.round(selectionStart * ratio), nextLen);
         const nextSelectionEnd = Math.min(Math.round(selectionEnd * ratio), nextLen);
 
-        elements.editor.value = nextContent;
-        elements.editor.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextContent,
+            selectionStart: nextSelectionStart,
+            selectionEnd: nextSelectionEnd,
+            source: preferSelection && selectionEnd > selectionStart ? 'lsp-format-range' : 'lsp-format',
+            label: preferSelection && selectionEnd > selectionStart ? 'Format selected range' : 'Format document',
+            emit: true,
+        });
     } catch {
         if (notifyOnError) {
             notifyTerminal('Failed to format document', 'error');
@@ -4666,8 +4699,17 @@ async function applyLspCodeActionFromCursor(index, line, character, diagnostics)
             return;
         }
 
-        elements.editor.value = nextContent;
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const selectionStart = Number(elements.editor.selectionStart) || 0;
+        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+        const nextLen = nextContent.length;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextContent,
+            selectionStart: Math.min(selectionStart, nextLen),
+            selectionEnd: Math.min(selectionEnd, nextLen),
+            source: 'lsp-code-action',
+            label: 'Apply code action',
+            emit: true,
+        });
     } catch {
         notifyTerminal('Failed to apply code action', 'error');
     }
@@ -4723,8 +4765,15 @@ async function renameCurrentLspSymbol() {
             return;
         }
 
-        elements.editor.value = nextContent;
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const nextLen = nextContent.length;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextContent,
+            selectionStart: Math.min(selectionStart, nextLen),
+            selectionEnd: Math.min(selectionEnd, nextLen),
+            source: 'lsp-rename',
+            label: 'Rename symbol',
+            emit: true,
+        });
     } catch {
         notifyTerminal('Failed to rename symbol', 'error');
     }
@@ -4914,7 +4963,6 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
 
 async function closeOpenLspDocument() {
     clearLspChangeTimer();
-    clearLspEditorFormatTimer();
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
@@ -5103,16 +5151,9 @@ function scheduleTyposDidChange() {
     }, LSP_CHANGE_DEBOUNCE_MS);
 }
 
-function clearLspEditorFormatTimer() {
-    if (state.lspEditorFormatTimer) {
-        clearTimeout(state.lspEditorFormatTimer);
-        state.lspEditorFormatTimer = null;
-    }
-}
-
 // Replace a textarea's value with formatted text, preserving the caret/selection
 // proportionally. Returns false when nothing changed.
-function applyFormattedText(textarea, formatted) {
+function applyFormattedText(textarea, formatted, options = {}) {
     if (!textarea || typeof formatted !== 'string' || formatted.length === 0) {
         return false;
     }
@@ -5126,18 +5167,22 @@ function applyFormattedText(textarea, formatted) {
     const ratio = prevLen > 0 ? newLen / prevLen : 1;
     const newStart = Math.min(Math.round(prevStart * ratio), newLen);
     const newEnd = Math.min(Math.round(prevEnd * ratio), newLen);
-    textarea.value = formatted;
-    try {
-        textarea.setSelectionRange(newStart, newEnd);
-    } catch {
-        // jsdom / detached nodes may not support selection ranges.
-    }
+
+    notesMutationAdapter.replaceDocumentText(textarea, {
+        text: formatted,
+        selectionStart: newStart,
+        selectionEnd: newEnd,
+        source: options.source || 'format',
+        label: options.label || 'Apply formatted text',
+        filePath: options.filePath,
+        emit: false,
+    });
     return true;
 }
 
 // Unified formatter for the main editor: try the configured format command
-// (e.g. goimports) first, then fall back to LSP formatting. Shared by the 10s
-// idle debounce, editor blur, and the cmd/ctrl+s "save and format" action.
+// (e.g. goimports) first, then fall back to LSP formatting. Invoked explicitly
+// by cmd/ctrl+s "save and format" and editor context menu actions.
 async function formatMainEditor({ notifyOnError = false } = {}) {
     if (!state.currentFile) {
         return;
@@ -5163,7 +5208,10 @@ async function formatMainEditor({ notifyOnError = false } = {}) {
                 return;
             }
             const formatted = typeof result.Code === 'string' ? result.Code : '';
-            if (applyFormattedText(elements.editor, formatted)) {
+            if (applyFormattedText(elements.editor, formatted, {
+                source: 'format-command',
+                label: 'Format main editor (command)',
+            })) {
                 elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
             }
             return;
@@ -5179,35 +5227,9 @@ async function formatMainEditor({ notifyOnError = false } = {}) {
     }
 }
 
-function scheduleLspEditorAutoFormat() {
-    if (!state.currentFile || !isCurrentFileLspEligible()) {
-        return;
-    }
-
-    if (state.viewMode !== 'editor' && state.viewMode !== 'swagger-edit') {
-        return;
-    }
-
-    clearLspEditorFormatTimer();
-    state.lspEditorFormatTimer = setTimeout(() => {
-        state.lspEditorFormatTimer = null;
-        void formatMainEditor({ notifyOnError: false });
-    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
-}
-
-// Run any pending editor auto-format immediately (e.g. when the editor loses
-// focus) rather than waiting for the debounce timer to elapse.
-function flushLspEditorAutoFormat() {
-    if (!state.lspEditorFormatTimer) {
-        return;
-    }
-    clearLspEditorFormatTimer();
-    void formatMainEditor({ notifyOnError: false });
-}
-
 // Unified formatter for a Jupyter code block: try the configured format command
-// (e.g. goimports) first, then fall back to LSP formatting. Shared by the idle
-// debounce, block blur, and the cmd/ctrl+s "save and format" action.
+// (e.g. goimports) first, then fall back to LSP formatting. Invoked explicitly
+// by cmd/ctrl+s "save and format" and LSP-mode toggle flows.
 async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) {
@@ -5232,7 +5254,11 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
                 return;
             }
             const formattedCode = typeof result.Code === 'string' ? result.Code : '';
-            if (applyFormattedText(editableCode, formattedCode)) {
+            if (applyFormattedText(editableCode, formattedCode, {
+                source: 'jupyter-format-command',
+                label: 'Format Jupyter block (command)',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+            })) {
                 block.currentContent = editableCode.value;
                 editableCode.dispatchEvent(new Event('input', { bubbles: true }));
             }
@@ -5249,7 +5275,11 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
             const result = await NotesLspFormat(block.lspFilePath);
             if (result && result.changed) {
                 const nextContent = String(result.content || '');
-                if (applyFormattedText(editableCode, nextContent)) {
+                if (applyFormattedText(editableCode, nextContent, {
+                    source: 'jupyter-format-lsp',
+                    label: 'Format Jupyter block (LSP)',
+                    filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                })) {
                     block.currentContent = editableCode.value;
                     editableCode.dispatchEvent(new Event('input', { bubbles: true }));
                 }
@@ -5261,36 +5291,6 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
             console.error('jupyter block LSP format failed:', err);
         }
     }
-}
-
-function clearLspBlockFormatTimer(block) {
-    if (block && block.lspSaveTimer) {
-        clearTimeout(block.lspSaveTimer);
-        block.lspSaveTimer = null;
-    }
-}
-
-function scheduleLspBlockSave(blockId, editableCode) {
-    const block = state.jupyterCodeBlocks[blockId];
-    if (!block || !block.lspMode || !block.lspFilePath) {
-        return;
-    }
-
-    clearLspBlockFormatTimer(block);
-    block.lspSaveTimer = setTimeout(() => {
-        block.lspSaveTimer = null;
-        void formatJupyterBlock(blockId, { notifyOnError: false });
-    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
-}
-
-// Run any pending block auto-format immediately (e.g. when the block loses focus).
-function flushLspBlockFormat(blockId) {
-    const block = state.jupyterCodeBlocks[blockId];
-    if (!block || !block.lspSaveTimer) {
-        return;
-    }
-    clearLspBlockFormatTimer(block);
-    void formatJupyterBlock(blockId, { notifyOnError: false });
 }
 
 // Debounced sync of a Jupyter code block's content to the typos-lsp server so
@@ -5568,8 +5568,7 @@ function convertToJupyterCodeBlocks() {
             originalContent: content,
             currentContent: content,
             lspMode: false,
-            lspFilePath: '',
-            lspSaveTimer: null
+            lspFilePath: ''
         };
         
         const wrapper = document.createElement('div');
@@ -5818,8 +5817,6 @@ function convertToJupyterCodeBlocks() {
             }
 
             if (blockState.lspMode && blockState.lspFilePath) {
-                scheduleLspBlockSave(blockId, editableCode);
-
                 // Trigger completion on LSP trigger characters.
                 if (state.lspActiveBlockId === blockId) {
                     const cursor = editableCode.selectionStart || 0;
@@ -5860,7 +5857,6 @@ function convertToJupyterCodeBlocks() {
         });
 
         editableCode.addEventListener('blur', () => {
-            flushLspBlockFormat(blockId);
             if (state.lspActiveBlockId === blockId) {
                 state.lspActiveBlockId = null;
                 state.lspActiveBlockEditor = null;
@@ -5931,8 +5927,15 @@ function convertToJupyterCodeBlocks() {
                 const start = editableCode.selectionStart;
                 const end = editableCode.selectionEnd;
                 const indentation = await getIndentationString();
-                editableCode.setRangeText(indentation, start, end, 'end');
-                editableCode.dispatchEvent(new Event('input'));
+                notesMutationAdapter.replaceRange(editableCode, {
+                    start,
+                    end,
+                    text: indentation,
+                    source: 'jupyter-tab-indent',
+                    label: 'Jupyter tab indentation (completion open)',
+                    filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                    emit: true,
+                });
                 return;
             }
 
@@ -5958,8 +5961,15 @@ function convertToJupyterCodeBlocks() {
             const start = editableCode.selectionStart;
             const end = editableCode.selectionEnd;
             const indentation = await getIndentationString();
-            editableCode.setRangeText(indentation, start, end, 'end');
-            editableCode.dispatchEvent(new Event('input'));
+            notesMutationAdapter.replaceRange(editableCode, {
+                start,
+                end,
+                text: indentation,
+                source: 'jupyter-tab-indent',
+                label: 'Jupyter tab indentation',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                emit: true,
+            });
         });
         editableCode.addEventListener('scroll', () => {
             syncHighlightViewport();
@@ -6010,7 +6020,11 @@ function convertToJupyterCodeBlocks() {
         wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
 
-        attachVimMode(editableCode);
+        attachVimMode(editableCode, {
+            mutationAdapter: notesMutationAdapter,
+            undoManager: notesUndoManager,
+            filePathResolver: () => (state.currentFile ? `${state.currentFile}#${blockId}` : blockId),
+        });
         // Detach any stale spellcheck overlay from a previous render of this
         // block before attaching a fresh one, then restore typos mode if the
         // block currently has LSP-mode spellchecking active.
@@ -6138,7 +6152,11 @@ async function toggleLspModeForBlock(blockId) {
             const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
             const formattedFilePath = typeof result?.FilePath === 'string' ? result.FilePath : '';
 
-            if (applyFormattedText(editableElement, formattedCode)) {
+            if (applyFormattedText(editableElement, formattedCode, {
+                source: 'jupyter-lsp-toggle-format',
+                label: 'Format Jupyter block (toggle LSP)',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+            })) {
                 block.currentContent = editableElement.value;
 
                 // Trigger input event to update syntax highlighting and markdown source.
@@ -6951,11 +6969,18 @@ function formatStructuredEditorJson(pretty) {
 
     try {
         const parsed = JSON.parse(source);
-        elements.editor.value = pretty
+        const nextText = pretty
             ? JSON.stringify(parsed, null, 2)
             : JSON.stringify(parsed);
 
-        elements.editor.dispatchEvent(new Event('input'));
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextText,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'structured-json-format',
+            label: pretty ? 'Format JSON (expand)' : 'Format JSON (minify)',
+            emit: true,
+        });
     } catch {
         notifyTerminal('Cannot format invalid JSON content', 'warn');
     }
@@ -7164,7 +7189,14 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
             return;
         }
 
-        elements.editor.value = nextText;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextText,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'structured-edit',
+            label: 'Apply structured edit',
+            emit: true,
+        });
         state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
 
         state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
@@ -7258,7 +7290,14 @@ async function commitFrontmatterEdit({ editType, path, text }) {
             return;
         }
 
-        elements.editor.value = nextRaw;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextRaw,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'frontmatter-edit',
+            label: 'Apply frontmatter edit',
+            emit: true,
+        });
         // Re-parse the frontmatter and re-render the panel (this also clears the
         // inline editor that the viewer left in place after commit).
         applyDocumentFrontmatter();
@@ -14271,6 +14310,57 @@ function applyLspSpellCheckExclusions() {
 if (elements.editor) {
     let editorInputSequence = 0;
 
+    function resolveUndoRedoDirection(event) {
+        const key = String(event?.key || '').toLowerCase();
+        const hasPrimaryModifier = Boolean(event?.metaKey || event?.ctrlKey);
+        if (!hasPrimaryModifier || event?.altKey) {
+            return '';
+        }
+
+        if (key === 'z') {
+            return event.shiftKey ? 'redo' : 'undo';
+        }
+
+        if (key === 'y') {
+            return 'redo';
+        }
+
+        return '';
+    }
+
+    function maybeHandleManagedUndoRedoShortcut(event) {
+        if (!event || document.activeElement !== elements.editor) {
+            return false;
+        }
+
+        const direction = resolveUndoRedoDirection(event);
+        if (!direction) {
+            return false;
+        }
+
+        const canApply = direction === 'undo'
+            ? notesUndoManager.canUndo()
+            : notesUndoManager.canRedo();
+        if (!canApply) {
+            return false;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const applySnapshot = (tx, txDirection) => {
+            notesMutationAdapter.applySnapshot(elements.editor, tx, txDirection, true);
+        };
+
+        if (direction === 'undo') {
+            notesUndoManager.undo(applySnapshot);
+            return true;
+        }
+
+        notesUndoManager.redo(applySnapshot);
+        return true;
+    }
+
     function maybeDispatchInputFallbackAfterShortcut(event) {
         const isModifierShortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
         if (!isModifierShortcut) {
@@ -14303,6 +14393,10 @@ if (elements.editor) {
     }
 
     elements.editor.addEventListener('keydown', async (event) => {
+        if (maybeHandleManagedUndoRedoShortcut(event)) {
+            return;
+        }
+
         maybeDispatchInputFallbackAfterShortcut(event);
 
         if (event.key === 'Escape' && closeOpenLspTooltips()) {
@@ -14351,8 +14445,14 @@ if (elements.editor) {
             const start = elements.editor.selectionStart;
             const end = elements.editor.selectionEnd;
             const indentation = await getIndentationString();
-            elements.editor.setRangeText(indentation, start, end, 'end');
-            elements.editor.dispatchEvent(new Event('input'));
+            notesMutationAdapter.replaceRange(elements.editor, {
+                start,
+                end,
+                text: indentation,
+                source: 'editor-tab-indent',
+                label: 'Tab indentation (completion open)',
+                emit: true,
+            });
             return;
         }
 
@@ -14383,8 +14483,14 @@ if (elements.editor) {
         const start = elements.editor.selectionStart;
         const end = elements.editor.selectionEnd;
         const indentation = await getIndentationString();
-        elements.editor.setRangeText(indentation, start, end, 'end');
-        elements.editor.dispatchEvent(new Event('input'));
+        notesMutationAdapter.replaceRange(elements.editor, {
+            start,
+            end,
+            text: indentation,
+            source: 'editor-tab-indent',
+            label: 'Tab indentation',
+            emit: true,
+        });
     });
 
     elements.editor.addEventListener('input', () => {
@@ -14448,7 +14554,6 @@ if (elements.editor) {
         }
         scheduleLspDidChange();
         scheduleTyposDidChange();
-        scheduleLspEditorAutoFormat();
         scheduleAutoSave();
     });
 
@@ -14477,24 +14582,17 @@ if (elements.editor) {
     elements.editor.addEventListener('blur', () => {
         hideLspHoverTooltip();
         hideLspCompletion();
-        flushLspEditorAutoFormat();
     });
 
     elements.editor.addEventListener('paste', (event) => {
         handleEditorImagePaste(event);
     });
 
-    elements.editor.addEventListener('mouseup', async (event) => {
-        // Middle-click should paste via the same text/image-aware clipboard logic.
-        if (event.button !== 1 || state.viewMode !== 'editor') {
-            return;
-        }
-
-        event.preventDefault();
-        await pasteFromGoClipboard(elements.editor, true);
+    attachVimMode(elements.editor, {
+        mutationAdapter: notesMutationAdapter,
+        undoManager: notesUndoManager,
+        filePathResolver: () => state.currentFile || '',
     });
-
-    attachVimMode(elements.editor);
     notesSpellCheckHandle = attachSpellCheck(elements.editor);
 }
 
@@ -15325,18 +15423,6 @@ document.addEventListener('keydown', (event) => {
         notesHotkeyPrefixActive = false;
     });
 }, true);
-
-document.addEventListener('mouseup', (event) => {
-    if (document.getElementById('fullscreen-image-overlay')) {
-        return;
-    }
-
-    if (event.button !== 0) {
-        return;
-    }
-
-    handleViewerSelectionAutoCopy();
-});
 
 window.addEventListener('beforeunload', () => {
     closeOpenLspDocument();

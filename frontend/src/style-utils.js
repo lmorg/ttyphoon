@@ -167,6 +167,7 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
             border: 1px solid var(--bg);
             color: var(--bg);
             background: var(--fg);
+            text-align: left;
         }
     `;
 }

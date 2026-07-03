@@ -467,7 +467,9 @@ describe('notes rendering', () => {
 
         filterInput.value = 'guide';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(clearButton?.dataset.visible).toBe('true');
+        await vi.waitFor(() => {
+            expect(clearButton?.dataset.visible).toBe('true');
+        });
 
         const visibleFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
         expect(visibleFiles).toEqual(['$GLOBAL/docs/guide.md']);
@@ -476,27 +478,35 @@ describe('notes rendering', () => {
         filterInput.value = 'missing';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-        expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+        await vi.waitFor(() => {
+            expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+        });
 
         clearButton.click();
         expect(filterInput.value).toBe('');
-        expect(clearButton?.dataset.visible).toBe('false');
+        await vi.waitFor(() => {
+            expect(clearButton?.dataset.visible).toBe('false');
+        });
 
-        const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
-        expect(restoredAfterClear).toEqual(expect.arrayContaining([
-            '$GLOBAL/docs/guide.md',
-            '$GLOBAL/images/logo.png',
-            '$NOTES/todo.md',
-        ]));
+        await vi.waitFor(() => {
+            const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+            expect(restoredAfterClear).toEqual(expect.arrayContaining([
+                '$GLOBAL/docs/guide.md',
+                '$GLOBAL/images/logo.png',
+                '$NOTES/todo.md',
+            ]));
+        });
 
         filterInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-        const restoredFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
-        expect(restoredFiles).toEqual(expect.arrayContaining([
-            '$GLOBAL/docs/guide.md',
-            '$GLOBAL/images/logo.png',
-            '$NOTES/todo.md',
-        ]));
+        await vi.waitFor(() => {
+            const restoredFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+            expect(restoredFiles).toEqual(expect.arrayContaining([
+                '$GLOBAL/docs/guide.md',
+                '$GLOBAL/images/logo.png',
+                '$NOTES/todo.md',
+            ]));
+        });
     });
 
     it('keeps folders collapsible while the sidebar file filter is active', async () => {
@@ -631,6 +641,40 @@ describe('notes rendering', () => {
         editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', shiftKey: true, bubbles: true, cancelable: true }));
         expect(editor.selectionStart).toBe(secondLineStart + 3);
         expect(editor.selectionEnd).toBe(secondLineEnd);
+    });
+
+    it('undoes and redoes adapter-backed editor edits with keyboard shortcuts', async () => {
+        listFilesMock.mockResolvedValue([]);
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/sample.md', contents: 'abc' });
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+        editor.value = 'abc';
+        editor.selectionStart = 3;
+        editor.selectionEnd = 3;
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(editor.value).toBe('abc    ');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('abc');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('abc    ');
     });
 
     it('refreshes markdown preview after ctrl+z style edits when input is not emitted', async () => {
@@ -1452,6 +1496,14 @@ describe('notes rendering', () => {
 
         expect(notesLspFormatMock).toHaveBeenCalledWith('$NOTES/main.go');
         expect(editor.value).toContain('func main() {');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\nfunc main(){println("ok")}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\n\nfunc main() {\n\tprintln("ok")\n}\n');
     });
 
     it('formats selected range via editor context menu action', async () => {
@@ -1765,6 +1817,14 @@ describe('notes rendering', () => {
 
         expect(notesLspApplyCodeActionMock).toHaveBeenCalled();
         expect(editor.value).toContain('import "fmt"');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\nfunc main(){_ = fmt.Errorf("x")}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\n\nimport "fmt"\n\nfunc main() { _ = fmt.Errorf("x") }\n');
     });
 
     it('groups LSP code actions by kind in the editor context menu', async () => {
@@ -1864,6 +1924,14 @@ describe('notes rendering', () => {
         expect(notesLspPrepareRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1);
         expect(promptSpy).toHaveBeenCalledWith('Rename symbol to:', 'println');
         expect(notesLspRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1, 'Println');
+        expect(editor.value).toContain('Println("ok")');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toContain('println("ok")');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
         expect(editor.value).toContain('Println("ok")');
 
         promptSpy.mockRestore();
@@ -2918,7 +2986,7 @@ describe('notes rendering', () => {
         expect(findNext.disabled).toBe(false);
     });
 
-    it('auto-copies markdown viewer selection when highlighted', async () => {
+    it('does not auto-copy markdown viewer selection when highlighted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2943,17 +3011,11 @@ describe('notes rendering', () => {
 
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         await flushPromises();
-        expect(clipboardSetTextMock).toHaveBeenCalledWith('Selected markdown text');
-        expect(sendIpcMock).toHaveBeenCalledWith('terminal-notify', {
+        expect(clipboardSetTextMock).not.toHaveBeenCalled();
+        expect(sendIpcMock).not.toHaveBeenCalledWith('terminal-notify', {
             level: 'info',
             message: 'Selection copied to clipboard',
         });
-
-        // Repeat with the same selection should not re-copy.
-        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
-        await flushPromises();
-        expect(clipboardSetTextMock).toHaveBeenCalledTimes(1);
-        expect(sendIpcMock).toHaveBeenCalledTimes(1);
 
         window.getSelection = originalGetSelection;
     });
@@ -3167,6 +3229,46 @@ describe('notes rendering', () => {
 
         expect(editorHighlight.style.minWidth).toBe('640px');
         expect(editorHighlight.style.minHeight).toBe('240px');
+    });
+
+    it('undoes and redoes structured JSON format actions from editor context menu', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/config.json']);
+        getFileMock.mockResolvedValue({
+            contents: '{\n  "name": "ttyphoon",\n  "ok": true\n}',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/config.json"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        const minifyIndex = menuConfig.options.findIndex((title) => title === 'Format: Minify');
+        expect(minifyIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(minifyIndex);
+        await flushPromises();
+
+        const minified = '{"name":"ttyphoon","ok":true}';
+        expect(editor.value).toBe(minified);
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('{' + '\n  "name": "ttyphoon",\n  "ok": true\n}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe(minified);
     });
 
     it('cycles visible notes tabs with ctrl+tab', async () => {
@@ -3619,6 +3721,56 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(runNoteMock).not.toHaveBeenCalled();
+    });
+
+    it('undoes and redoes CSV table row insertion from Run mode context menu', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/table.csv']);
+        getFileMock.mockResolvedValue({
+            contents: 'Name,Value\nAlpha,1',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/table.csv"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const runTab = document.getElementById('notes-tab-csv-run');
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tableCell = document.querySelector('#notes-csv-view tbody tr td');
+        expect(tableCell).toBeTruthy();
+
+        tableCell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[showLocalMenuMock.mock.calls.length - 1][0];
+        const insertRowIndex = menuConfig.options.findIndex((title) => title === 'Insert row (after)');
+        expect(insertRowIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(insertRowIndex);
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
+
+        const editTab = document.getElementById('notes-tab-csv-edit');
+        editTab.click();
+        await flushPromises();
+        editor.focus();
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('Name,Value\nAlpha,1');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
     });
 
     it('clears table highlight styles when context menu is cancelled', async () => {

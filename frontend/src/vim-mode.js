@@ -428,7 +428,32 @@ function multiLineRange(text, from, n) {
 
 // ─── textarea mutation helpers ────────────────────────────────────────────────
 
-function applyDelete(textarea, start, end) {
+function resolveMutationFilePath(filePathResolver, textarea) {
+    if (typeof filePathResolver !== 'function') {
+        return '';
+    }
+    try {
+        return String(filePathResolver(textarea) || '');
+    } catch {
+        return '';
+    }
+}
+
+function applyDelete(textarea, start, end, options = {}) {
+    const adapter = options.mutationAdapter;
+    if (adapter?.deleteRange) {
+        adapter.deleteRange(textarea, {
+            start,
+            end,
+            cursor: start,
+            source: 'vim',
+            label: 'Vim delete',
+            emit: true,
+            filePath: resolveMutationFilePath(options.filePathResolver, textarea),
+        });
+        return textarea.value;
+    }
+
     const v = textarea.value;
     const newValue = v.slice(0, start) + v.slice(end);
     textarea.value = newValue;
@@ -437,7 +462,22 @@ function applyDelete(textarea, start, end) {
     return newValue;
 }
 
-function applyInsert(textarea, pos, text) {
+function applyInsert(textarea, pos, text, options = {}) {
+    const adapter = options.mutationAdapter;
+    if (adapter?.replaceRange) {
+        adapter.replaceRange(textarea, {
+            start: pos,
+            end: pos,
+            text,
+            cursor: pos + String(text || '').length,
+            source: 'vim',
+            label: 'Vim insert',
+            emit: true,
+            filePath: resolveMutationFilePath(options.filePathResolver, textarea),
+        });
+        return textarea.value;
+    }
+
     const v = textarea.value;
     const newValue = v.slice(0, pos) + text + v.slice(pos);
     textarea.value = newValue;
@@ -447,9 +487,25 @@ function applyInsert(textarea, pos, text) {
     return newValue;
 }
 
-function applyReplace(textarea, pos, ch) {
+function applyReplace(textarea, pos, ch, options = {}) {
     const v = textarea.value;
     if (pos >= v.length) return;
+
+    const adapter = options.mutationAdapter;
+    if (adapter?.replaceRange) {
+        adapter.replaceRange(textarea, {
+            start: pos,
+            end: pos + 1,
+            text: ch,
+            cursor: pos,
+            source: 'vim',
+            label: 'Vim replace',
+            emit: true,
+            filePath: resolveMutationFilePath(options.filePathResolver, textarea),
+        });
+        return;
+    }
+
     const newValue = v.slice(0, pos) + ch + v.slice(pos + 1);
     textarea.value = newValue;
     textarea.selectionStart = textarea.selectionEnd = pos;
@@ -473,6 +529,13 @@ function setPos(textarea, pos) {
  * @returns {{ detach: () => void }}
  */
 export function attachVimMode(textarea) {
+    const options = arguments.length > 1 ? (arguments[1] || {}) : {};
+    const vimMutationOptions = {
+        mutationAdapter: options.mutationAdapter || null,
+        filePathResolver: options.filePathResolver || null,
+    };
+    const undoManager = options.undoManager || null;
+
     let mode    = MODE_INSERT;
     let countBuf = '';       // digits typed before a key (e.g. "3" before "w")
     let operator = null;     // pending operator: 'd' | 'c' | 'y' | null
@@ -486,6 +549,18 @@ export function attachVimMode(textarea) {
         operator = null;
         countBuf = '';
         updateIndicator(indicator, textarea, m);
+    }
+
+    function applyVimDelete(start, end) {
+        return applyDelete(textarea, start, end, vimMutationOptions);
+    }
+
+    function applyVimInsert(pos, text) {
+        return applyInsert(textarea, pos, text, vimMutationOptions);
+    }
+
+    function applyVimReplace(pos, ch) {
+        return applyReplace(textarea, pos, ch, vimMutationOptions);
     }
 
     function getCount() {
@@ -502,7 +577,7 @@ export function attachVimMode(textarea) {
             return;
         }
         yankBuf = textarea.value.slice(start, end);
-        applyDelete(textarea, start, end);
+        applyVimDelete(start, end);
 
         if (op === 'd') {
             // clamp to valid NORMAL position
@@ -599,7 +674,8 @@ export function attachVimMode(textarea) {
             const { line } = offsetToLineCol(text, from);
             const lines = getLines(text);
             const lineEnd = lineColToOffset(text, line, (lines[line] || '').length);
-            applyInsert(textarea, lineEnd, '\n');
+            applyVimInsert(lineEnd, '\n');
+
             setMode(MODE_INSERT);
             event.preventDefault();
             event.stopPropagation();
@@ -608,7 +684,7 @@ export function attachVimMode(textarea) {
         if (key === 'O') {
             const { line } = offsetToLineCol(text, from);
             const lineStart = lineColToOffset(text, line, 0);
-            applyInsert(textarea, lineStart, '\n');
+            applyVimInsert(lineStart, '\n');
             setPos(textarea, lineStart);
             setMode(MODE_INSERT);
             event.preventDefault();
@@ -680,7 +756,7 @@ export function attachVimMode(textarea) {
                 // Don't delete the newline
                 if (col < lineLen) {
                     yankBuf = v[pos];
-                    applyDelete(textarea, pos, pos + 1);
+                    applyVimDelete(pos, pos + 1);
                 }
             }
             // Clamp cursor to valid NORMAL position
@@ -699,7 +775,7 @@ export function attachVimMode(textarea) {
                 const pos = getCurrentPos(textarea);
                 if (pos > 0 && textarea.value[pos - 1] !== '\n') {
                     yankBuf = textarea.value[pos - 1];
-                    applyDelete(textarea, pos - 1, pos);
+                    applyVimDelete(pos - 1, pos);
                 }
             }
             setMode(MODE_NORMAL);
@@ -725,7 +801,7 @@ export function attachVimMode(textarea) {
                     // paste after cursor
                     insertPos = from + 1 <= text.length ? from + 1 : from;
                 }
-                applyInsert(textarea, insertPos, yankBuf);
+                applyVimInsert(insertPos, yankBuf);
                 setPos(textarea, insertPos);
             }
             setMode(MODE_NORMAL);
@@ -741,7 +817,7 @@ export function attachVimMode(textarea) {
                     const { line } = offsetToLineCol(text, from);
                     insertPos = lineColToOffset(text, line, 0);
                 }
-                applyInsert(textarea, insertPos, yankBuf);
+                applyVimInsert(insertPos, yankBuf);
                 setPos(textarea, insertPos);
             }
             setMode(MODE_NORMAL);
@@ -886,7 +962,13 @@ export function attachVimMode(textarea) {
 
         // ── Undo (u) — delegate to browser/host (Ctrl+Z equivalent) ─────
         if (key === 'u') {
-            document.execCommand('undo');
+            if (undoManager?.canUndo?.() && vimMutationOptions.mutationAdapter?.applySnapshot) {
+                undoManager.undo((tx, direction) => {
+                    vimMutationOptions.mutationAdapter.applySnapshot(textarea, tx, direction, true);
+                });
+            } else {
+                document.execCommand('undo');
+            }
             setMode(MODE_NORMAL);
             event.preventDefault();
             event.stopPropagation();
@@ -931,7 +1013,7 @@ export function attachVimMode(textarea) {
                 return;
             }
             if (event.key.length === 1) {
-                applyReplace(textarea, getCurrentPos(textarea), event.key);
+                applyVimReplace(getCurrentPos(textarea), event.key);
                 setMode(MODE_NORMAL);
                 event.preventDefault();
                 event.stopPropagation();
@@ -957,11 +1039,11 @@ export function attachVimMode(textarea) {
             if (event.key.length === 1) {
                 const p = getCurrentPos(textarea);
                 if (p < textarea.value.length && textarea.value[p] !== '\n') {
-                    applyReplace(textarea, p, event.key);
+                    applyVimReplace(p, event.key);
                     setPos(textarea, p + 1);
                 } else {
                     // At EOL: insert instead of replace
-                    applyInsert(textarea, p, event.key);
+                    applyVimInsert(p, event.key);
                 }
                 event.preventDefault();
                 event.stopPropagation();

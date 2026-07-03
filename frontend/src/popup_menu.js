@@ -583,6 +583,10 @@ export function initTerminalPopupMenu(canvas) {
     }
 
     window.addEventListener('mousemove', (event) => {
+        if (!listRoot.isConnected) {
+            return;
+        }
+
         mouseX = event.clientX;
         mouseY = event.clientY;
 
@@ -593,6 +597,10 @@ export function initTerminalPopupMenu(canvas) {
     });
 
     window.addEventListener('mousedown', (event) => {
+        if (!listRoot.isConnected) {
+            return;
+        }
+
         mouseX = event.clientX;
         mouseY = event.clientY;
 
@@ -704,6 +712,10 @@ export function initTerminalPopupMenu(canvas) {
     }, true);
 
     window.addEventListener('blur', () => {
+        if (!listRoot.isConnected) {
+            return;
+        }
+
         if (listRoot.style.display !== 'none') {
             hideMenus(true);
         }
