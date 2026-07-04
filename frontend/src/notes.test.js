@@ -85,7 +85,6 @@ const notesTyposChangeDocumentMock = vi.fn(() => Promise.resolve());
 const notesTyposCloseDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspStopAllMock = vi.fn(() => Promise.resolve());
 const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
-const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve([]));
 const notesLspCodeLensMock = vi.fn(() => Promise.resolve([]));
 const notesLspExecuteCodeLensMock = vi.fn(() => Promise.resolve(false));
 const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
@@ -161,7 +160,6 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesTyposCloseDocument: notesTyposCloseDocumentMock,
     NotesLspStopAll: notesLspStopAllMock,
     NotesLspHover: notesLspHoverMock,
-    NotesLspSemanticTokens: notesLspSemanticTokensMock,
     NotesLspCodeLens: notesLspCodeLensMock,
     NotesLspExecuteCodeLens: notesLspExecuteCodeLensMock,
     NotesLspInlayHints: notesLspInlayHintsMock,
@@ -356,7 +354,6 @@ describe('notes rendering', () => {
         notesTyposCloseDocumentMock.mockReset();
         notesLspStopAllMock.mockReset();
         notesLspHoverMock.mockReset();
-        notesLspSemanticTokensMock.mockReset();
         notesLspCodeLensMock.mockReset();
         notesLspExecuteCodeLensMock.mockReset();
         notesLspInlayHintsMock.mockReset();
@@ -419,7 +416,6 @@ describe('notes rendering', () => {
         resolveFilePathMock.mockResolvedValue('');
         resolveNotesLspLanguageMock.mockResolvedValue('');
         notesLspHoverMock.mockResolvedValue('');
-        notesLspSemanticTokensMock.mockResolvedValue([]);
         notesLspCodeLensMock.mockResolvedValue([]);
         notesLspExecuteCodeLensMock.mockResolvedValue(false);
         notesLspInlayHintsMock.mockResolvedValue([]);
@@ -1330,36 +1326,6 @@ describe('notes rendering', () => {
         const styles = getNotesRenderedStyles();
         expect(styles).toContain('.notes-lsp-inlay-hint {');
         expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
-    });
-
-    it('requests and renders LSP semantic tokens in the editor overlay', async () => {
-        listFilesMock.mockResolvedValue([]);
-        resolveNotesLspLanguageMock.mockResolvedValue('go');
-        notesLspSemanticTokensMock.mockResolvedValue([
-            { line: 0, character: 0, length: 4, tokenType: 1, tokenModifiers: 1 },
-        ]);
-        getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
-
-        await importNotesModule();
-
-        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
-        expect(typeof createAndOpenHandler).toBe('function');
-        await createAndOpenHandler({ filename: '$NOTES/main.go', contents: 'name := value\n' });
-        await flushPromises();
-        await flushPromises();
-
-        expect(notesLspSemanticTokensMock).toHaveBeenCalledWith('$NOTES/main.go');
-
-        const token = document.querySelector('.notes-lsp-semantic-token');
-        expect(token).not.toBeNull();
-        expect(token?.textContent).toBe('name');
-        expect(token?.getAttribute('data-token-type')).toBe('1');
-        expect(token?.classList.contains('mod-declaration')).toBe(true);
-
-        const styles = getNotesRenderedStyles();
-        expect(styles).toContain('.notes-lsp-semantic-token {');
-        expect(styles).toContain('.notes-lsp-semantic-token[data-token-type="1"] {');
-        expect(styles).toContain('.notes-lsp-semantic-token.mod-declaration,');
     });
 
     it('lists and executes code lens actions from editor context menu', async () => {

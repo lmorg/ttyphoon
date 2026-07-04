@@ -17,7 +17,6 @@ import {
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesTyposOpenDocument, NotesTyposChangeDocument, NotesTyposCloseDocument,
-    NotesLspSemanticTokens,
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
     NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
@@ -812,9 +811,6 @@ const state = {
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
     lspHoverMouseY: 0,
-    lspSemanticTokens: [],
-    lspSemanticRequestId: 0,
-    lspSemanticSuppressedKey: '',
     lspInlayHints: [],
     lspInlayRequestId: 0,
     lspCompletionItems: [],
@@ -827,8 +823,6 @@ const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const LSP_COMPLETION_MAX_ITEMS = 10;
-const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
-const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
 
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
@@ -3662,7 +3656,6 @@ function closeOpenLspTooltips() {
 function stripLspOverlayMarkup(html) {
     return String(html || '')
         .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
-    .replace(/<span class="notes-lsp-semantic-token[^"]*"[^>]*>([\s\S]*?)<\/span>/g, '$1')
     .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
 }
 
@@ -4073,64 +4066,6 @@ async function requestLspInlayHints() {
         }
 
         state.lspInlayHints = [];
-        renderLspEditorDecorations();
-    }
-}
-
-async function requestLspSemanticTokens() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
-        state.lspSemanticSuppressedKey = '';
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const contentLength = String(elements.editor?.value || '').length;
-    if (contentLength > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS) {
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
-        const suppressKey = `${state.currentFile}::size`;
-        if (state.lspSemanticSuppressedKey !== suppressKey) {
-            state.lspSemanticSuppressedKey = suppressKey;
-            notifyTerminal('Semantic token overlays disabled for very large files to keep Notes responsive.', 'info');
-        }
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const requestId = state.lspSemanticRequestId + 1;
-    state.lspSemanticRequestId = requestId;
-
-    try {
-        const tokens = await NotesLspSemanticTokens(state.currentFile);
-        if (requestId !== state.lspSemanticRequestId || state.lspOpenFile !== state.currentFile) {
-            return;
-        }
-
-        const filteredTokens = Array.isArray(tokens)
-            ? tokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
-            : [];
-
-        if (filteredTokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
-            state.lspSemanticTokens = [];
-            const suppressKey = `${state.currentFile}::tokens`;
-            if (state.lspSemanticSuppressedKey !== suppressKey) {
-                state.lspSemanticSuppressedKey = suppressKey;
-                notifyTerminal('Semantic token overlays disabled for dense token streams to keep Notes responsive.', 'info');
-            }
-        } else {
-            state.lspSemanticSuppressedKey = '';
-            state.lspSemanticTokens = filteredTokens;
-        }
-        renderLspEditorDecorations();
-    } catch {
-        if (requestId !== state.lspSemanticRequestId) {
-            return;
-        }
-
-        state.lspSemanticSuppressedKey = '';
-        state.lspSemanticTokens = [];
         renderLspEditorDecorations();
     }
 }
@@ -4920,8 +4855,6 @@ async function closeOpenLspDocument() {
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
-    state.lspSemanticRequestId += 1;
-    state.lspSemanticTokens = [];
     state.lspInlayRequestId += 1;
     state.lspInlayHints = [];
 
@@ -4954,8 +4887,8 @@ async function openCurrentLspDocument(content) {
         await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
         state.lspOpenFile = state.currentFile;
         lspSpellCheckExclusions.keywords = (await GetNotesLanguageReservedWords(languageID)) || [];
+        lspSpellCheckExclusions.tokens = [];
         applyLspSpellCheckExclusions();
-        await requestLspSemanticTokens();
         await requestLspInlayHints();
         void updateSpellCheckExclusionsFromDocSymbols();
     } catch (err) {
@@ -4966,7 +4899,7 @@ async function openCurrentLspDocument(content) {
 /**
  * Fetch document symbols from the LSP server and use their names as
  * spell-check exclusions. Document symbols are available immediately after
- * didOpen (unlike semantic tokens, which require full analysis), making them
+ * didOpen, making them
  * a reliable exclusion source on file open.
  */
 async function updateSpellCheckExclusionsFromDocSymbols() {
@@ -5029,7 +4962,6 @@ function scheduleLspDidChange() {
         state.lspChangeTimer = null;
         try {
             await NotesLspChangeDocument(state.currentFile, elements.editor.value || '');
-            await requestLspSemanticTokens();
             await requestLspInlayHints();
         } catch (err) {
             console.error('notes lsp change failed:', err);
@@ -11110,98 +11042,7 @@ function clearLspSquiggles() {
 
 function renderLspEditorDecorations() {
     renderLspDiagnostics();
-    renderLspSemanticTokens();
     renderLspInlayHints();
-}
-
-const LSP_SEMANTIC_TOKEN_MODIFIER_NAMES = [
-    'declaration',
-    'definition',
-    'readonly',
-    'static',
-    'deprecated',
-    'abstract',
-    'async',
-    'modification',
-    'documentation',
-    'defaultlibrary',
-];
-
-function semanticTokenModifierClassNames(mask) {
-    const bitset = Math.max(0, Number(mask) || 0);
-    if (bitset <= 0) {
-        return [];
-    }
-
-    const classes = [];
-    for (let index = 0; index < LSP_SEMANTIC_TOKEN_MODIFIER_NAMES.length; index += 1) {
-        if (((bitset >> index) & 1) === 1) {
-            classes.push(`mod-${LSP_SEMANTIC_TOKEN_MODIFIER_NAMES[index]}`);
-        }
-    }
-
-    return classes;
-}
-
-function renderLspSemanticTokens() {
-    if (!elements.editorHighlightCode) {
-        return;
-    }
-
-    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
-
-    const tokens = Array.isArray(state.lspSemanticTokens)
-        ? state.lspSemanticTokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
-        : [];
-    if (tokens.length === 0) {
-        return;
-    }
-
-    const content = elements.editor.value || '';
-    if (content.length > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS || tokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
-        return;
-    }
-
-    const lines = content.split('\n');
-    const lineOffsets = [];
-    let offset = 0;
-    for (const line of lines) {
-        lineOffsets.push(offset);
-        offset += line.length + 1;
-    }
-
-    const symbolWords = [];
-    tokens
-        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
-        .forEach((token) => {
-            const line = Math.max(0, Math.min(Number(token.line) || 0, Math.max(lines.length - 1, 0)));
-            const lineContent = lines[line] || '';
-            const startChar = Math.max(0, Math.min(Number(token.character) || 0, lineContent.length));
-            const tokenLength = Math.max(1, Number(token.length) || 1);
-            const endChar = Math.max(startChar + 1, Math.min(startChar + tokenLength, lineContent.length));
-            if (endChar <= startChar) {
-                return;
-            }
-
-            symbolWords.push(lineContent.slice(startChar, endChar));
-
-            const tokenEl = document.createElement('span');
-            tokenEl.className = 'notes-lsp-semantic-token';
-            tokenEl.dataset.tokenType = String(Math.max(0, Number(token.tokenType) || 0));
-            const tokenModifiers = Math.max(0, Number(token.tokenModifiers) || 0);
-            tokenEl.dataset.tokenModifiers = String(tokenModifiers);
-            const modifierClasses = semanticTokenModifierClassNames(tokenModifiers);
-            if (modifierClasses.length > 0) {
-                tokenEl.classList.add(...modifierClasses);
-            }
-
-            const startOffset = lineOffsets[line] + startChar;
-            const endOffset = lineOffsets[line] + endChar;
-            wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
-        });
-
-    lspSpellCheckExclusions.tokens = symbolWords;
-    applyLspSpellCheckExclusions();
 }
 
 function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
@@ -11732,8 +11573,6 @@ if (elements.editor) {
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
         state.lspInlayRequestId += 1;
         state.lspInlayHints = [];
         clearCurrentFileLspDiagnosticsCache();
