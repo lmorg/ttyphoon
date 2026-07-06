@@ -970,7 +970,7 @@ describe('notes rendering', () => {
     it('requests and shows LSP hover tooltip at cursor', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
-        notesLspHoverMock.mockResolvedValue('**Hover docs**\n\n[Docs](https://example.com)');
+        notesLspHoverMock.mockResolvedValue('**Hover docs**\n\n[Docs](https://example.com)\n\n<TypeHint<T>>');
         getFileMock.mockResolvedValue({ contents: '# Todo\n\nInitial content', text: '', error: '' });
 
         await importNotesModule();
@@ -994,6 +994,8 @@ describe('notes rendering', () => {
         const hoverTooltip = document.getElementById('notes-lsp-hover-tooltip');
         expect(hoverTooltip?.classList.contains('markdown-body')).toBe(true);
         expect(hoverTooltip?.innerHTML).toContain('<strong>Hover docs</strong>');
+        expect(hoverTooltip?.innerHTML).toContain('&lt;TypeHint&lt;T&gt;&gt;');
+        expect(hoverTooltip?.textContent || '').toContain('<TypeHint<T>>');
         const link = hoverTooltip?.querySelector('a');
         expect(link).not.toBeNull();
         expect(link?.getAttribute('href')).toBe('https://example.com');

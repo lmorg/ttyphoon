@@ -4803,7 +4803,7 @@ function scheduleLspHover() {
                 return;
             }
 
-            lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+            lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
             await processMarkdownContainer(lspHoverTooltipEl);
             lspHoverTooltipEl.style.display = 'block';
 
@@ -4834,7 +4834,7 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
             return;
         }
 
-        lspHoverTooltipEl.innerHTML = marked.parse(String(text));
+        lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
         await processMarkdownContainer(lspHoverTooltipEl);
         lspHoverTooltipEl.style.display = 'block';
 
