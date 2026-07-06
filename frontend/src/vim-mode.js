@@ -57,11 +57,11 @@ const MODE_NORMAL       = 'normal';
 const MODE_REPLACE      = 'replace';
 const MODE_REPLACE_ONCE = 'replace-once';
 
-const MODE_LABELS = {
+export const MODE_LABELS = {
     [MODE_INSERT]:       '',
     [MODE_NORMAL]:       '-- VIM KEYS --',
     [MODE_REPLACE]:      '-- REPLACE --',
-    [MODE_REPLACE_ONCE]: '-- REPLACE (r) --',
+    [MODE_REPLACE_ONCE]: '-- REPLACE (once) --',
 };
 
 // ─── indicator DOM ───────────────────────────────────────────────────────────
@@ -92,9 +92,33 @@ function createIndicator() {
     return el;
 }
 
+function createBlockCursor() {
+    const el = document.createElement('div');
+    el.className = 'vim-mode-block-cursor';
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = [
+        'position:fixed',
+        'pointer-events:none',
+        'z-index:9999',
+        'display:none',
+        'opacity:0',
+        'background:var(--fg,#ffffff)',
+        'mix-blend-mode:difference',
+        'border-radius:1px',
+        'transition:opacity 0.06s',
+    ].join(';');
+    document.body.appendChild(el);
+    return el;
+}
+
+function pulseAlpha(now = performance.now()) {
+    const phase = (now % 1000) / 1000;
+    return 0.1 + (0.7 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2)));
+}
+
 /**
  * Measure the pixel position of the caret inside a textarea.
- * Returns { x, y, lineHeight } in viewport coordinates.
+ * Returns { x, y, lineHeight, fontSize } in viewport coordinates.
  */
 function getCaretCoords(textarea) {
     const cs = getComputedStyle(textarea);
@@ -149,16 +173,39 @@ function getCaretCoords(textarea) {
     const x = taRect.left + (spanRect.left - mirror.getBoundingClientRect().left) - textarea.scrollLeft;
     const y = taRect.top  + (spanRect.top  - mirror.getBoundingClientRect().top)  - textarea.scrollTop;
 
-    const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+    const fontSize = parseFloat(cs.fontSize) || 14;
+    const lineHeight = parseFloat(cs.lineHeight) || fontSize * 1.2;
 
     document.body.removeChild(mirror);
 
-    return { x, y, lineHeight };
+    return { x, y, lineHeight, fontSize };
+}
+
+function measureFontCellWidth(textarea, lineHeight) {
+    const cs = getComputedStyle(textarea);
+    const fontSize = parseFloat(cs.fontSize) || 14;
+    let width = lineHeight * 0.62;
+
+    try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.font = `${cs.fontStyle || 'normal'} ${cs.fontVariant || 'normal'} ${cs.fontWeight || 'normal'} ${cs.fontSize || `${fontSize}px`} ${cs.fontFamily || 'monospace'}`;
+            const measured = ctx.measureText('M').width;
+            if (Number.isFinite(measured) && measured > 0) {
+                width = measured;
+            }
+        }
+    } catch {
+        // Keep heuristic width fallback.
+    }
+
+    return Math.max(6, Math.round(width));
 }
 
 function positionIndicator(el, textarea) {
     if (el.style.opacity === '0') return; // hidden — no need to measure
-    const { x, y, lineHeight } = getCaretCoords(textarea);
+    const { x, y, lineHeight, fontSize } = getCaretCoords(textarea);
     const taRect = textarea.getBoundingClientRect();
 
     // Clamp so the badge stays within the textarea bounds
@@ -166,7 +213,7 @@ function positionIndicator(el, textarea) {
     const badgeH = el.offsetHeight || 20;
 
     const rawLeft = x;
-    const rawTop  = y + lineHeight + 2; // just below the current line
+    const rawTop  = y + fontSize + 2; // just below the glyph line
 
     const left = Math.min(Math.max(rawLeft, taRect.left), taRect.right  - badgeW);
     const top  = rawTop + badgeH > taRect.bottom
@@ -182,6 +229,34 @@ function updateIndicator(el, textarea, mode) {
     el.textContent = label;
     el.style.opacity = label ? '1' : '0';
     if (label) positionIndicator(el, textarea);
+}
+
+function updateBlockCursor(cursorEl, textarea, mode) {
+    if (!cursorEl) {
+        return;
+    }
+
+    const isInsert = mode === MODE_INSERT;
+    const hasFocus = document.activeElement === textarea;
+    textarea.style.caretColor = isInsert ? '' : 'transparent';
+
+    if (isInsert || !hasFocus) {
+        cursorEl.style.display = 'none';
+        cursorEl.style.opacity = '0';
+        return;
+    }
+
+    const { x, y, lineHeight, fontSize } = getCaretCoords(textarea);
+    const width = measureFontCellWidth(textarea, lineHeight);
+    const height = Math.max(4, Math.round(fontSize));
+
+    cursorEl.style.display = 'block';
+
+    cursorEl.style.left = `${Math.round(x)}px`;
+    cursorEl.style.top = `${Math.round(y)}px`;
+    cursorEl.style.width = `${width}px`;
+    cursorEl.style.height = `${height}px`;
+    cursorEl.style.opacity = String(pulseAlpha());
 }
 
 // ─── text helpers ─────────────────────────────────────────────────────────────
@@ -541,14 +616,51 @@ export function attachVimMode(textarea) {
     let operator = null;     // pending operator: 'd' | 'c' | 'y' | null
     let wantCol  = null;     // remembered column for j/k
     let yankBuf  = '';       // internal yank register
+    let blockCursorPulseRaf = 0;
 
     const indicator = createIndicator();
+    const blockCursor = createBlockCursor();
+
+    function stopBlockCursorPulse() {
+        if (blockCursorPulseRaf !== 0) {
+            cancelAnimationFrame(blockCursorPulseRaf);
+            blockCursorPulseRaf = 0;
+        }
+    }
+
+    function startBlockCursorPulse() {
+        if (blockCursorPulseRaf !== 0) {
+            return;
+        }
+
+        const tick = () => {
+            if (!blockCursor || blockCursor.style.display === 'none') {
+                blockCursorPulseRaf = 0;
+                return;
+            }
+
+            blockCursor.style.opacity = String(pulseAlpha());
+            blockCursorPulseRaf = requestAnimationFrame(tick);
+        };
+
+        blockCursorPulseRaf = requestAnimationFrame(tick);
+    }
+
+    function syncBlockCursorPulseState() {
+        if (blockCursor.style.display === 'none') {
+            stopBlockCursorPulse();
+            return;
+        }
+        startBlockCursorPulse();
+    }
 
     function setMode(m) {
         mode     = m;
         operator = null;
         countBuf = '';
         updateIndicator(indicator, textarea, m);
+        updateBlockCursor(blockCursor, textarea, m);
+        syncBlockCursorPulseState();
     }
 
     function applyVimDelete(start, end) {
@@ -1065,14 +1177,39 @@ export function attachVimMode(textarea) {
     }
 
     // Reposition the badge whenever the cursor moves or the editor scrolls.
-    function onScroll() { positionIndicator(indicator, textarea); }
-    function onKeyUp()  { positionIndicator(indicator, textarea); }
-    function onMouseUp(){ positionIndicator(indicator, textarea); }
+    function onScroll() {
+        positionIndicator(indicator, textarea);
+        updateBlockCursor(blockCursor, textarea, mode);
+        syncBlockCursorPulseState();
+    }
+    function onKeyUp() {
+        positionIndicator(indicator, textarea);
+        updateBlockCursor(blockCursor, textarea, mode);
+        syncBlockCursorPulseState();
+    }
+    function onMouseUp() {
+        positionIndicator(indicator, textarea);
+        updateBlockCursor(blockCursor, textarea, mode);
+        syncBlockCursorPulseState();
+    }
+    function onFocus() {
+        updateBlockCursor(blockCursor, textarea, mode);
+        syncBlockCursorPulseState();
+    }
+    function onBlur() {
+        updateBlockCursor(blockCursor, textarea, MODE_INSERT);
+        syncBlockCursorPulseState();
+    }
 
     textarea.addEventListener('keydown', onKeyDown);
     textarea.addEventListener('keyup',   onKeyUp);
     textarea.addEventListener('mouseup', onMouseUp);
     textarea.addEventListener('scroll',  onScroll);
+    textarea.addEventListener('focus',   onFocus);
+    textarea.addEventListener('blur',    onBlur);
+
+    updateBlockCursor(blockCursor, textarea, mode);
+    syncBlockCursorPulseState();
 
     return {
         detach() {
@@ -1080,7 +1217,12 @@ export function attachVimMode(textarea) {
             textarea.removeEventListener('keyup',   onKeyUp);
             textarea.removeEventListener('mouseup', onMouseUp);
             textarea.removeEventListener('scroll',  onScroll);
+            textarea.removeEventListener('focus',   onFocus);
+            textarea.removeEventListener('blur',    onBlur);
+            textarea.style.caretColor = '';
+            stopBlockCursorPulse();
             indicator.remove();
+            blockCursor.remove();
         },
         getMode() {
             return mode;

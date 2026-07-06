@@ -666,6 +666,8 @@ body {
     min-width: 0;
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
 }
 
 #notes-editor-wrap,
@@ -676,6 +678,10 @@ body {
     display: none;
     min-height: 0;
     border-bottom: 0;
+}
+
+#notes-editor-wrap {
+    min-width: 0;
 }
 
 #notes-preview-wrap,
@@ -730,6 +736,17 @@ body {
 #notes-jupyter-wrap[data-active="true"],
 #notes-meta-wrap[data-active="true"] {
     display: block;
+}
+
+#notes-editor-wrap[data-active="true"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    order: 0;
+}
+
+.notes-tools-panel {
+    order: 1;
 }
 
 #notes-swagger-view-wrap[data-active="true"],
@@ -1486,10 +1503,7 @@ body {
 .jupyter-highlight,
 .jupyter-highlight code,
 .jupyter-highlight .hljs,
-.swagger-body-editor,
-#notes-editor-highlight,
-#notes-editor-highlight code,
-#notes-editor-highlight .hljs {
+.swagger-body-editor {
     tab-size: 4;
     -moz-tab-size: 4;
     letter-spacing: normal;
@@ -1501,8 +1515,12 @@ body {
     position: relative;
     display: grid;
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
     height: 100%;
     width: 100%;
+    min-height: 0;
+    min-width: 0;
+    align-content: stretch;
     border: 1px solid rgba(var(--fg-rgb), 0);
     background-color: rgba(0, 0, 0, 0.22);
     transition: border-color 120ms ease;
@@ -1518,19 +1536,15 @@ body {
 }
 
 #notes-editor-shell[data-code-view="true"] {
-    grid-template-columns: max-content 1fr;
+    grid-template-columns: 1fr;
 }
 
 #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] {
     grid-template-columns: 1fr;
 }
 
-#notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-gutter-wrap {
-    display: none;
-}
-
 #notes-editor-shell[data-code-view="true"] #notes-editor {
-    color: transparent;
+    color: var(--fg);
     white-space: pre;
     overflow-wrap: normal;
     word-break: normal;
@@ -1548,87 +1562,98 @@ body {
     color: var(--fg);
 }
 
-#notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight {
-    inset: auto;
-    top: 0;
-    left: 0;
-    right: 0;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    overflow: hidden;
-    box-sizing: border-box;
-    text-rendering: auto;
-    -webkit-font-smoothing: auto;
-    -moz-osx-font-smoothing: auto;
-    display: none;
-}
-
-#notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight code {
-    display: inline;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
-#notes-editor-shell[data-code-view="false"] #notes-editor-highlight,
-#notes-editor-shell[data-code-view="false"] #notes-editor-gutter-wrap {
-    display: none;
-}
-
-#notes-editor-gutter-wrap {
-    position: relative;
-    overflow: hidden;
-    border-right: 1px solid rgba(var(--fg-rgb), 0.2);
-    background: rgba(var(--bg-rgb), 1);
-    min-width: 48px;
-}
-
-#notes-editor-gutter {
-    padding: 10px 10px 10px 12px;
-    font-size: var(--notes-font-size);
-    line-height: 1.4;
-    white-space: pre;
-    text-align: right;
-    color: rgba(var(--fg-rgb), 0.6);
-    user-select: none;
-    font-family: var(--font-family);
-}
-
 #notes-editor-scroll {
     position: relative;
+    display: block;
     min-width: 0;
+    min-height: 0;
     height: 100%;
     overflow: hidden;
 }
 
-#notes-editor-highlight {
+#notes-monaco-editor {
     position: absolute;
     inset: 0;
-    margin: 0;
-    padding: 10px 14px;
-    overflow: hidden;
-    pointer-events: none;
-    white-space: pre;
-    line-height: 1.4;
-    font-size: var(--notes-font-size);
-    font-family: var(--font-family);
+    min-width: 0;
+    min-height: 0;
+    display: none;
 }
 
-#notes-editor-highlight code {
+#notes-editor-shell[data-monaco-enabled="true"] {
+    grid-template-columns: 1fr !important;
+}
+
+#notes-editor-shell[data-monaco-enabled="true"] #notes-editor,
+#notes-editor-shell[data-monaco-enabled="false"] #notes-monaco-editor,
+#notes-editor-shell[data-code-view="false"] #notes-editor,
+#notes-editor-shell[data-code-view="false"] #notes-monaco-editor {
+    display: none;
+}
+
+#notes-editor-shell[data-monaco-enabled="false"] #notes-editor {
     display: block;
-    padding: 0;
-    background: transparent;
-    white-space: pre;
 }
 
-#notes-editor-highlight .hljs {
-    overflow: visible !important;
-    padding: 0 !important;
-    background: transparent !important;
+#notes-editor-shell[data-monaco-enabled="true"] #notes-editor {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#notes-editor-shell[data-monaco-enabled="true"] #notes-monaco-editor {
+    display: block;
+}
+
+#notes-editor-shell[data-monaco-enabled="true"] #notes-editor-scroll > :not(#notes-monaco-editor) {
+    display: none !important;
+}
+
+@keyframes notes-vim-cursor-pulse {
+    0% {
+        opacity: 0.1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+    100% {
+        opacity: 0.1;
+    }
+}
+
+#notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor {
+    background-color: var(--fg, #ffffff) !important;
+    border-color: var(--fg, #ffffff) !important;
+    border-left-color: var(--fg, #ffffff) !important;
+    mix-blend-mode: difference;
+    color: var(--bg, #000000) !important;
+}
+
+#notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor-secondary {
+    background-color: var(--fg, #ffffff) !important;
+    border-color: var(--fg, #ffffff) !important;
+    border-left-color: var(--fg, #ffffff) !important;
+    mix-blend-mode: difference;
+    color: var(--bg, #000000) !important;
+}
+
+#notes-monaco-editor .notes-monaco-typo-squiggle {
+    text-decoration: none;
+    background-color: transparent;
+    background-image: linear-gradient(var(--red), var(--red));
+    background-position: 0 100%;
+    background-repeat: repeat-x;
+    background-size: 100% 6px;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 6'%3E%3Cpath d='M0 4 C1 2.5, 3 2.5, 4 4 S7 5.5, 8 4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 6'%3E%3Cpath d='M0 4 C1 2.5, 3 2.5, 4 4 S7 5.5, 8 4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    -webkit-mask-position: 0 100%;
+    mask-position: 0 100%;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+    -webkit-mask-size: 8px 6px;
+    mask-size: 8px 6px;
+    padding-bottom: 3px;
 }
 
 #notes-preview-wrap,

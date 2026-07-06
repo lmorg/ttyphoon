@@ -35,6 +35,7 @@ import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
 import { createEditorUndoManager } from './editor_undo_manager';
 import { createEditorMutationAdapter } from './editor_mutation_adapter';
+import { createMonacoAdapter } from './monaco_adapter';
 import './notes.css';
 
 import { marked } from "marked";
@@ -467,12 +468,9 @@ app.innerHTML = `
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
                     <div id="notes-editor-shell" data-code-view="false">
-                        <div id="notes-editor-gutter-wrap" aria-hidden="true">
-                            <div id="notes-editor-gutter"></div>
-                        </div>
                         <div id="notes-editor-scroll">
-                            <pre id="notes-editor-highlight" aria-hidden="true"><code id="notes-editor-highlight-code" class="hljs"></code></pre>
                             <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                            <div id="notes-monaco-editor" aria-hidden="true"></div>
                         </div>
                     </div>
                 </div>
@@ -632,9 +630,7 @@ const elements = {
     listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
     editorShell: document.getElementById('notes-editor-shell'),
-    editorGutter: document.getElementById('notes-editor-gutter'),
-    editorHighlight: document.getElementById('notes-editor-highlight'),
-    editorHighlightCode: document.getElementById('notes-editor-highlight-code'),
+    monacoEditor: document.getElementById('notes-monaco-editor'),
     preview: document.getElementById('notes-preview'),
     htmlViewWrap: document.getElementById('notes-html-view-wrap'),
     htmlViewFrame: document.getElementById('notes-html-view-frame'),
@@ -740,6 +736,7 @@ const state = {
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
     suspendDocumentCacheSave: false,
     dirty: false,
+    useMonacoEditor: false,
     renderTimer: null,
     autosaveTimer: null,
     viewMode: 'viewer',
@@ -826,7 +823,277 @@ const LSP_COMPLETION_MAX_ITEMS = 10;
 
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
+let monacoMainEditor = null;
+let suppressMonacoChange = false;
+let latestWindowStyle = null;
+
+function isMonacoPhase0Enabled() {
+    try {
+        const userAgent = String(globalThis?.navigator?.userAgent || '');
+        if (/jsdom/i.test(userAgent)) {
+            return false;
+        }
+
+        const value = window.localStorage.getItem('notes-editor-monaco');
+        return value !== '0';
+    } catch {
+        return true;
+    }
+}
+
+function isMonacoActive() {
+    return state.useMonacoEditor && monacoMainEditor !== null;
+}
+
+function getMainEditorValue() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getValue();
+    }
+    return String(elements.editor?.value || '');
+}
+
+function setMainEditorValue(value) {
+    const text = String(value || '');
+    if (elements.editor) {
+        elements.editor.value = text;
+    }
+
+    if (isMonacoActive()) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(text);
+        suppressMonacoChange = false;
+    }
+}
+
+function getMainEditorSelectionRange() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getSelectionOffsets();
+    }
+
+    const start = Number(elements.editor?.selectionStart) || 0;
+    const end = Number(elements.editor?.selectionEnd) || start;
+    return { start, end };
+}
+
+function setMainEditorSelectionRange(start, end) {
+    if (isMonacoActive()) {
+        monacoMainEditor.setSelectionOffsets(start, end);
+        return;
+    }
+
+    elements.editor.setSelectionRange(start, end);
+}
+
+function getMainEditorSelectionText() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getSelectionText();
+    }
+
+    const range = getMainEditorSelectionRange();
+    return getMainEditorValue().slice(range.start, range.end);
+}
+
+function replaceMainEditorRange(start, end, text) {
+    if (isMonacoActive()) {
+        monacoMainEditor.replaceRange(start, end, text, 'notes-main-editor-replace');
+        const nextCursor = Number(start) + String(text || '').length;
+        monacoMainEditor.setSelectionOffsets(nextCursor, nextCursor);
+        return;
+    }
+
+    elements.editor.focus();
+    elements.editor.setSelectionRange(start, end);
+    document.execCommand('insertText', false, String(text || ''));
+}
+
+function insertTextInMainEditor(text) {
+    const { start, end } = getMainEditorSelectionRange();
+    replaceMainEditorRange(start, end, text);
+}
+
+function insertTextAtMainEditorLineStart(text) {
+    const { start } = getMainEditorSelectionRange();
+    const value = getMainEditorValue();
+    const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    replaceMainEditorRange(lineStart, lineStart, text);
+}
+
+function getMonacoTypographyOptions() {
+    const computed = elements.editor ? getComputedStyle(elements.editor) : null;
+    const parsedFontSize = Number.parseFloat(computed?.fontSize || '');
+    const parsedLineHeight = Number.parseFloat(computed?.lineHeight || '');
+    const fallbackFontSize = Number(latestWindowStyle?.fontSize) || 13;
+    const safeFontSize = Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : fallbackFontSize;
+
+    return {
+        fontFamily: String(computed?.fontFamily || latestWindowStyle?.fontFamily || '').trim(),
+        fontSize: safeFontSize,
+        lineHeight: Number.isFinite(parsedLineHeight) && parsedLineHeight > 0
+            ? parsedLineHeight
+            : Math.round(safeFontSize * 1.4),
+    };
+}
+
+async function ensureMonacoMainEditor() {
+    if (!state.useMonacoEditor || !elements.monacoEditor || monacoMainEditor) {
+        return;
+    }
+
+    const typography = getMonacoTypographyOptions();
+
+    monacoMainEditor = await createMonacoAdapter(elements.monacoEditor, {
+        value: String(elements.editor?.value || ''),
+        language: state.editorLanguage || 'plaintext',
+        highlightJs: hljs,
+        fontSize: typography.fontSize,
+        fontFamily: typography.fontFamily,
+        lineHeight: typography.lineHeight,
+        themeColors: latestWindowStyle?.colors || null,
+        onChange: (nextValue) => {
+            if (suppressMonacoChange) {
+                return;
+            }
+
+            if (elements.editor) {
+                elements.editor.value = String(nextValue || '');
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        },
+        onSelectionChange: (start, end) => {
+            if (!elements.editor) {
+                return;
+            }
+            elements.editor.selectionStart = Number(start) || 0;
+            elements.editor.selectionEnd = Number(end) || Number(start) || 0;
+            if (isCurrentFileLspEligible() && state.lspOpenFile === state.currentFile) {
+                state.lspHoverLastKey = '';
+                scheduleLspHover();
+            }
+        },
+        onPointerMove: (x, y) => {
+            state.lspHoverMouseX = Number(x) || 0;
+            state.lspHoverMouseY = Number(y) || 0;
+        },
+        onBlur: () => {
+            hideLspHoverTooltip();
+        },
+        onPaste: (event) => {
+            handleEditorImagePaste(event);
+        },
+        onContextMenu: (event) => {
+            openMainEditorContextMenu(event);
+        },
+    });
+
+    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
+    if (latestWindowStyle?.colors) {
+        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+    }
+
+    // Monaco boot can race against file loading. Always re-sync from the hidden
+    // textarea source-of-truth immediately after adapter creation.
+    const latestText = String(elements.editor?.value || '');
+    if (monacoMainEditor.getValue() !== latestText) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(latestText);
+        suppressMonacoChange = false;
+    }
+
+    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
+    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
+    if (Array.isArray(spellcheckMisspellings)) {
+        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+    }
+    monacoMainEditor.layout();
+
+    requestAnimationFrame(() => {
+        if (!isMonacoActive()) {
+            return;
+        }
+        monacoMainEditor.layout();
+    });
+}
+
+// Force Monaco to re-measure against its real, visible box across the next two
+// animation frames. A display:none -> visible transition (tab switch, pane
+// maximize/restore) doesn't give Monaco a correct size in the same frame, so a
+// single synchronous layout() can latch a stale/zero viewport (blank editor or
+// content offset with a top shadow). Two deferred measured layouts fix that.
+function scheduleMonacoRelayout() {
+    if (!isMonacoActive()) {
+        return;
+    }
+    requestAnimationFrame(() => {
+        if (!isMonacoActive()) {
+            return;
+        }
+        monacoMainEditor.layout();
+        requestAnimationFrame(() => {
+            if (isMonacoActive()) {
+                monacoMainEditor.layout();
+            }
+        });
+    });
+}
+
+// Lazily create Monaco (only ever while its container is visible/sized) and push
+// the current document, language, wrap mode and theme before laying it out. This
+// is the single entry point used whenever the editor tab becomes visible.
+async function ensureMonacoVisibleAndLaidOut() {
+    if (!state.useMonacoEditor) {
+        return;
+    }
+
+    await ensureMonacoMainEditor();
+    if (!isMonacoActive()) {
+        return;
+    }
+
+    const latestText = String(elements.editor?.value || '');
+    if (monacoMainEditor.getValue() !== latestText) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(latestText);
+        suppressMonacoChange = false;
+    }
+
+    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
+    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
+    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
+    if (Array.isArray(spellcheckMisspellings)) {
+        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+    }
+    if (latestWindowStyle?.colors) {
+        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+    }
+
+    monacoMainEditor.layout();
+    scheduleMonacoRelayout();
+}
+
+function syncEditorEngineMode() {
+    if (!elements.editorShell) {
+        return;
+    }
+
+    elements.editorShell.dataset.monacoEnabled = state.useMonacoEditor ? 'true' : 'false';
+}
+
 configureMarked();
+state.useMonacoEditor = isMonacoPhase0Enabled();
+syncEditorEngineMode();
+
+// Belt-and-suspenders relayout: any size change to the editor box (pane
+// maximize/restore, splitter drag, window resize) triggers a measured Monaco
+// relayout. This complements Monaco's own automaticLayout, which can latch a
+// stale viewport across display:none -> visible transitions.
+if (typeof ResizeObserver !== 'undefined' && elements.monacoEditor?.parentElement) {
+    const monacoResizeObserver = new ResizeObserver(() => {
+        scheduleMonacoRelayout();
+    });
+    monacoResizeObserver.observe(elements.monacoEditor.parentElement);
+}
 
 function escapeEditorHtml(text) {
     return String(text || '')
@@ -958,15 +1225,37 @@ function inferEditorLanguage(file, content) {
         cpp: 'cpp',
         hpp: 'cpp',
         cs: 'csharp',
+        fs: 'fsharp',
+        fsx: 'fsharp',
+        vb: 'vb',
+        vbs: 'vb',
         java: 'java',
+        jsh: 'java',
         kt: 'kotlin',
+        kts: 'kotlin',
         swift: 'swift',
         php: 'php',
         rb: 'ruby',
+        pl: 'perl',
+        raku: 'perl',
+        clj: 'clojure',
+        exs: 'elixir',
+        escript: 'elixir',
+        jl: 'julia',
+        scala: 'scala',
+        sc: 'scala',
+        lua: 'lua',
+        r: 'r',
+        st: 'st',
+        dart: 'dart',
+        tcl: 'tcl',
+        pas: 'pascal',
         sh: 'bash',
         bash: 'bash',
         zsh: 'bash',
         fish: 'bash',
+        nu: 'bash',
+        awk: 'bash',
         ps1: 'powershell',
         json: 'json',
         yaml: 'yaml',
@@ -980,18 +1269,24 @@ function inferEditorLanguage(file, content) {
         mx: 'murex',
         md: 'markdown',
         markdown: 'markdown',
-        html: 'xml',
-        htm: 'xml',
-        xhtml: 'xml',
-        xht: 'xml',
-        shtml: 'xml',
+        html: 'html',
+        htm: 'html',
+        xhtml: 'html',
+        xht: 'html',
+        shtml: 'html',
         xml: 'xml',
         plist: 'xml',
         manifest: 'xml',
+        m: 'objective-c',
         css: 'css',
         scss: 'scss',
+        sass: 'scss',
+        less: 'less',
         dockerfile: 'dockerfile',
         makefile: 'makefile',
+        scm: 'scheme',
+        rkt: 'scheme',
+        lisp: 'scheme',
     };
 
     if (extension && extensionMap[extension]) {
@@ -1015,77 +1310,23 @@ function inferEditorLanguage(file, content) {
 }
 
 function syncEditorScrollDecorations() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlight) {
-        return;
-    }
-
-    const scrollTop = elements.editor.scrollTop;
-    const scrollLeft = elements.editor.scrollLeft;
-    elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
-
-    // Wrapped mode has no horizontal scroll, so only sync vertical.
-    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-    if (isWrapModeEnabled) {
-        elements.editorHighlight.style.transform = `translate(0px, ${-scrollTop}px)`;
-    } else {
-        elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+    if (isMonacoActive()) {
+        monacoMainEditor.layout();
     }
 }
 
 function renderEditorDecorations() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+    if (!isMonacoActive()) {
         return;
     }
-
-    const content = elements.editor.value || '';
-    const lineCount = Math.max(1, content.split('\n').length);
-    elements.editorGutter.textContent = Array.from({ length: lineCount }, (_, index) => String(index + 1)).join('\n');
-
-    // Match highlight layer height to the full scrollable editor content.
-    if (elements.editorHighlight) {
-        const contentHeight = Math.max(elements.editor.scrollHeight, elements.editor.clientHeight);
-        const contentWidth = Math.max(elements.editor.scrollWidth, elements.editor.clientWidth);
-        elements.editorHighlight.style.minHeight = `${contentHeight}px`;
-        
-        // Don't set minWidth for wrapped mode - it wraps, so width should match container
-        const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-        if (!isWrapModeEnabled) {
-            elements.editorHighlight.style.minWidth = `${contentWidth}px`;
-        }
-    }
-
-    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-    if (isWrapModeEnabled) {
-        // Wrap mode intentionally hides syntax highlighting and renders plain wrapped text.
-        elements.editorHighlightCode.textContent = '';
-        syncEditorScrollDecorations();
-        return;
-    }
-
-    const language = state.editorLanguage || 'plaintext';
-    try {
-        if (hljs.getLanguage(language)) {
-            elements.editorHighlightCode.innerHTML = hljs.highlight(content, { language, ignoreIllegals: true }).value;
-        } else if (language === 'markdown') {
-            // Avoid auto-detect for markdown; mis-detection often paints headings as comments.
-            elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
-        } else {
-            elements.editorHighlightCode.innerHTML = hljs.highlightAuto(content).value;
-        }
-    } catch {
-        elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
-    }
-
-    // Overlay LSP diagnostics and inlay hints on top of the freshly rendered syntax.
     renderLspEditorDecorations();
-
-    syncEditorScrollDecorations();
+    monacoMainEditor.layout();
 }
 
 function refreshEditorLanguage(file, content) {
     state.editorLanguage = inferEditorLanguage(file, content);
-    if (elements.editorHighlightCode) {
-        elements.editorHighlightCode.className = `hljs language-${state.editorLanguage || 'plaintext'}`;
+    if (isMonacoActive()) {
+        monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
     }
     renderEditorDecorations();
 }
@@ -1155,6 +1396,11 @@ function applyTextareaEdit(textarea, start, end, text, cursor) {
 
 function maybeHandleSyntaxCompletionKey(event, textarea, options = {}) {
     if (!isSyntaxCompletionKeyEvent(event) || !textarea) {
+        return false;
+    }
+
+    // Monaco mode owns completion for the main Edit surface.
+    if (isMonacoActive() && textarea === elements.editor) {
         return false;
     }
 
@@ -1643,18 +1889,6 @@ function setCodeEditorMode(enabled) {
 
     if (!enabled) {
         delete elements.editorShell.dataset.fileType;
-        if (elements.editorGutter) {
-            elements.editorGutter.textContent = '';
-            elements.editorGutter.style.transform = '';
-        }
-        if (elements.editorHighlight) {
-            elements.editorHighlight.style.transform = '';
-            elements.editorHighlight.style.minHeight = '';
-            elements.editorHighlight.style.minWidth = '';
-        }
-        if (elements.editorHighlightCode) {
-            elements.editorHighlightCode.innerHTML = '';
-        }
     }
 }
 
@@ -3653,12 +3887,6 @@ function closeOpenLspTooltips() {
     return closedAny;
 }
 
-function stripLspOverlayMarkup(html) {
-    return String(html || '')
-        .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
-    .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
-}
-
 function lspCompletionKindMeta(kind) {
     switch (Number(kind || 0)) {
     case 2:
@@ -3844,6 +4072,10 @@ function moveLspCompletionSelection(delta) {
 }
 
 async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
+    if (isMonacoActive() && !state.lspActiveBlockId) {
+        return;
+    }
+
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspCompletion();
@@ -3871,6 +4103,10 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
 }
 
 async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
+    if (isMonacoActive() && !state.lspActiveBlockId) {
+        return;
+    }
+
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         return;
@@ -3972,6 +4208,14 @@ function typosDiagnosticsToMisspellings(diagnostics, text) {
     return list;
 }
 
+function getLspSpellCheckExclusionSet() {
+    return new Set([
+        ...lspSpellCheckExclusions.symbols,
+        ...lspSpellCheckExclusions.tokens,
+        ...lspSpellCheckExclusions.keywords,
+    ].map((entry) => String(entry || '').toLowerCase()));
+}
+
 // Route an incoming typos-lsp diagnostics payload to the spellcheck overlay of
 // whichever editor owns the document (the main editor or a Jupyter code block).
 function routeTyposDiagnostics(uri, diagnostics) {
@@ -3984,7 +4228,7 @@ function routeTyposDiagnostics(uri, diagnostics) {
     if (state.typosOpenFile && notesSpellCheckHandle
         && normalizePathForMatch(fileUriToPath(state.currentFileUri)) === targetPath) {
         notesSpellCheckHandle.setMisspellings(
-            typosDiagnosticsToMisspellings(diagnostics, elements.editor.value || ''));
+            typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
         return;
     }
 
@@ -4075,7 +4319,8 @@ async function requestLspDefinition() {
         return;
     }
 
-    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const selection = getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
 
     try {
         const locations = await NotesLspDefinition(state.currentFile, pos.line, pos.character);
@@ -4101,13 +4346,17 @@ async function requestLspDefinition() {
 
         const targetLine = Math.max(0, Number(target.line) || 0);
         const targetChar = Math.max(0, Number(target.character) || 0);
-        const offset = lspPositionToEditorOffset(elements.editor.value || '', targetLine, targetChar);
-        elements.editor.focus();
-        elements.editor.setSelectionRange(offset, offset);
-
-        const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-        elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
-        syncEditorScrollDecorations();
+        const offset = lspPositionToEditorOffset(getMainEditorValue(), targetLine, targetChar);
+        setMainEditorSelectionRange(offset, offset);
+        if (isMonacoActive()) {
+            monacoMainEditor.focus();
+            monacoMainEditor.revealOffset(offset);
+        } else {
+            elements.editor.focus();
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
+            syncEditorScrollDecorations();
+        }
 
         state.lspHoverLastKey = '';
         scheduleLspHover();
@@ -4125,13 +4374,15 @@ async function formatCurrentLspDocument(options = {}) {
     const notifyOnError = options.notifyOnError !== false;
 
     try {
-        const selectionStart = Number(elements.editor.selectionStart) || 0;
-        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+        const selection = getMainEditorSelectionRange();
+        const selectionStart = Number(selection.start) || 0;
+        const selectionEnd = Number(selection.end) || selectionStart;
+        const currentText = getMainEditorValue();
 
         let result;
         if (preferSelection && selectionEnd > selectionStart) {
-            const startPos = offsetToLspPosition(elements.editor.value || '', selectionStart);
-            const endPos = offsetToLspPosition(elements.editor.value || '', selectionEnd);
+            const startPos = offsetToLspPosition(currentText, selectionStart);
+            const endPos = offsetToLspPosition(currentText, selectionEnd);
 
             result = await NotesLspFormatRange(
                 state.currentFile,
@@ -4149,25 +4400,30 @@ async function formatCurrentLspDocument(options = {}) {
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        if (nextContent === String(currentText || '')) {
             return;
         }
 
-        const prevContent = String(elements.editor.value || '');
+        const prevContent = String(currentText || '');
         const prevLen = prevContent.length;
         const nextLen = nextContent.length;
         const ratio = prevLen > 0 ? nextLen / prevLen : 1;
         const nextSelectionStart = Math.min(Math.round(selectionStart * ratio), nextLen);
         const nextSelectionEnd = Math.min(Math.round(selectionEnd * ratio), nextLen);
 
-        notesMutationAdapter.replaceDocumentText(elements.editor, {
-            text: nextContent,
-            selectionStart: nextSelectionStart,
-            selectionEnd: nextSelectionEnd,
-            source: preferSelection && selectionEnd > selectionStart ? 'lsp-format-range' : 'lsp-format',
-            label: preferSelection && selectionEnd > selectionStart ? 'Format selected range' : 'Format document',
-            emit: true,
-        });
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(nextSelectionStart, nextSelectionEnd);
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: nextSelectionStart,
+                selectionEnd: nextSelectionEnd,
+                source: preferSelection && selectionEnd > selectionStart ? 'lsp-format-range' : 'lsp-format',
+                label: preferSelection && selectionEnd > selectionStart ? 'Format selected range' : 'Format document',
+                emit: true,
+            });
+        }
     } catch {
         if (notifyOnError) {
             notifyTerminal('Failed to format document', 'error');
@@ -4430,7 +4686,8 @@ async function getLspCodeActionsForCursor() {
         return { line: 0, character: 0, diagnostics: [], actions: [] };
     }
 
-    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const selection = getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
     const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
 
     try {
@@ -4584,21 +4841,28 @@ async function applyLspCodeActionFromCursor(index, line, character, diagnostics)
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        const currentText = getMainEditorValue();
+        if (nextContent === String(currentText || '')) {
             return;
         }
 
-        const selectionStart = Number(elements.editor.selectionStart) || 0;
-        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+        const selection = getMainEditorSelectionRange();
+        const selectionStart = Number(selection.start) || 0;
+        const selectionEnd = Number(selection.end) || selectionStart;
         const nextLen = nextContent.length;
-        notesMutationAdapter.replaceDocumentText(elements.editor, {
-            text: nextContent,
-            selectionStart: Math.min(selectionStart, nextLen),
-            selectionEnd: Math.min(selectionEnd, nextLen),
-            source: 'lsp-code-action',
-            label: 'Apply code action',
-            emit: true,
-        });
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(Math.min(selectionStart, nextLen), Math.min(selectionEnd, nextLen));
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: Math.min(selectionStart, nextLen),
+                selectionEnd: Math.min(selectionEnd, nextLen),
+                source: 'lsp-code-action',
+                label: 'Apply code action',
+                emit: true,
+            });
+        }
     } catch {
         notifyTerminal('Failed to apply code action', 'error');
     }
@@ -4609,13 +4873,14 @@ async function renameCurrentLspSymbol() {
         return;
     }
 
-    const selectionStart = Number(elements.editor.selectionStart) || 0;
-    const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+    const selection = getMainEditorSelectionRange();
+    const selectionStart = Number(selection.start) || 0;
+    const selectionEnd = Number(selection.end) || selectionStart;
     const currentSelection = selectionEnd > selectionStart
-        ? String(elements.editor.value || '').slice(selectionStart, selectionEnd)
+        ? String(getMainEditorValue() || '').slice(selectionStart, selectionEnd)
         : '';
 
-    const pos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+    const pos = offsetToLspPosition(getMainEditorValue(), selectionStart);
 
     let prepare;
     try {
@@ -4650,19 +4915,24 @@ async function renameCurrentLspSymbol() {
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        if (nextContent === String(getMainEditorValue() || '')) {
             return;
         }
 
         const nextLen = nextContent.length;
-        notesMutationAdapter.replaceDocumentText(elements.editor, {
-            text: nextContent,
-            selectionStart: Math.min(selectionStart, nextLen),
-            selectionEnd: Math.min(selectionEnd, nextLen),
-            source: 'lsp-rename',
-            label: 'Rename symbol',
-            emit: true,
-        });
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(Math.min(selectionStart, nextLen), Math.min(selectionEnd, nextLen));
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: Math.min(selectionStart, nextLen),
+                selectionEnd: Math.min(selectionEnd, nextLen),
+                source: 'lsp-rename',
+                label: 'Rename symbol',
+                emit: true,
+            });
+        }
     } catch {
         notifyTerminal('Failed to rename symbol', 'error');
     }
@@ -4889,6 +5159,96 @@ async function openCurrentLspDocument(content) {
         lspSpellCheckExclusions.keywords = (await GetNotesLanguageReservedWords(languageID)) || [];
         lspSpellCheckExclusions.tokens = [];
         applyLspSpellCheckExclusions();
+
+        if (isMonacoActive()) {
+            monacoMainEditor.configureLsp({
+                completion: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    try {
+                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
+                    } catch {
+                        // Completion can still work with last synced state.
+                    }
+                    const items = await NotesLspCompletion(state.currentFile, line, character, 1, '');
+                    return Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+                },
+                signature: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return '';
+                    }
+                    return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
+                },
+                formatDocument: async () => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspFormat(state.currentFile);
+                },
+                formatRange: async ({ start, end }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspFormatRange(
+                        state.currentFile,
+                        Number(start?.line) || 0,
+                        Number(start?.character) || 0,
+                        Number(end?.line) || 0,
+                        Number(end?.character) || 0,
+                    );
+                },
+                definition: async ({ line, character }) => {
+                    if (!state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+
+                    const locations = await NotesLspDefinition(state.currentFile, line, character);
+                    return Array.isArray(locations) ? locations : [];
+                },
+                prepareRename: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return { canRename: false };
+                    }
+                    return await NotesLspPrepareRename(state.currentFile, line, character);
+                },
+                rename: async ({ line, character, newName }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspRename(state.currentFile, line, character, String(newName || ''));
+                },
+                codeActions: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    const diagnostics = lspDiagnosticsAtPosition(line, character);
+                    const actions = await NotesLspCodeActions(state.currentFile, line, character, diagnostics);
+                    return Array.isArray(actions) ? actions : [];
+                },
+                applyCodeAction: async (action) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+
+                    const selection = getMainEditorSelectionRange();
+                    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
+                    const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
+                    const actionIndex = Number(action?.index);
+                    if (!Number.isFinite(actionIndex)) {
+                        return null;
+                    }
+                    return await NotesLspApplyCodeAction(
+                        state.currentFile,
+                        pos.line,
+                        pos.character,
+                        actionIndex,
+                        diagnostics,
+                    );
+                },
+            });
+        }
+
         await requestLspInlayHints();
         void updateSpellCheckExclusionsFromDocSymbols();
     } catch (err) {
@@ -4982,6 +5342,9 @@ async function openCurrentTyposDocument(content) {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         // Non-eligible files keep aspell.
         notesSpellCheckHandle.setMode('aspell');
+        if (isMonacoActive()) {
+            monacoMainEditor.setTyposMisspellings([]);
+        }
         return;
     }
 
@@ -4991,13 +5354,21 @@ async function openCurrentTyposDocument(content) {
         if (ok) {
             state.typosOpenFile = state.currentFile;
             notesSpellCheckHandle.setMode('external');
+            const diagnostics = state.currentFileUri ? (typosDiagnosticsStore.get(state.currentFileUri) || []) : [];
+            notesSpellCheckHandle.setMisspellings(typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
         } else {
             state.typosOpenFile = '';
             notesSpellCheckHandle.setMode('aspell');
+            if (isMonacoActive()) {
+                monacoMainEditor.setTyposMisspellings([]);
+            }
         }
     } catch (err) {
         state.typosOpenFile = '';
         notesSpellCheckHandle.setMode('aspell');
+        if (isMonacoActive()) {
+            monacoMainEditor.setTyposMisspellings([]);
+        }
         console.error('notes typos open failed:', err);
     }
 }
@@ -5010,6 +5381,9 @@ async function closeCurrentTyposDocument() {
     const openFile = state.typosOpenFile;
     state.typosOpenFile = '';
     notesSpellCheckHandle?.setMode('aspell');
+    if (isMonacoActive()) {
+        monacoMainEditor.setTyposMisspellings([]);
+    }
     if (!openFile) {
         return;
     }
@@ -5206,7 +5580,7 @@ function setDirty(isDirty) {
 }
 
 function focusActiveEditorForViewMode() {
-    if (!elements.editor) {
+    if (!elements.editor && !isMonacoActive()) {
         return;
     }
 
@@ -5234,7 +5608,16 @@ function focusActiveEditorForViewMode() {
             state.viewMode === 'swagger-edit' ||
             state.viewMode === 'csv-edit';
 
-        if (!stillShouldFocus || !elements.editor) {
+        if (!stillShouldFocus) {
+            return;
+        }
+
+        if (isMonacoActive()) {
+            monacoMainEditor.focus();
+            return;
+        }
+
+        if (!elements.editor) {
             return;
         }
 
@@ -5338,7 +5721,14 @@ function setViewMode(mode) {
         }
     }
 
-    if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
+    // The main editor wrap is shared by code/markdown/json edit and csv edit.
+    // Whenever it becomes visible, (lazily) create Monaco and lay it out against
+    // its now-visible box. Fall back to legacy decorations only when Monaco is
+    // disabled.
+    const editorWrapActive = elements.editorWrap.dataset.active === 'true';
+    if (state.useMonacoEditor && editorWrapActive) {
+        void ensureMonacoVisibleAndLaidOut();
+    } else if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
         renderEditorDecorations();
     }
 
@@ -5370,6 +5760,9 @@ function setEditorWrapMode(enabled) {
     const wrapEnabled = enabled === true;
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
+    if (isMonacoActive()) {
+        monacoMainEditor.setWordWrap(wrapEnabled);
+    }
 }
 
 function toggleMarkdownWrapMode() {
@@ -7828,7 +8221,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('json');
             
             // Set editor content (use regular editor with line numbers for JSON/YAML)
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render JSON tree view
@@ -7863,7 +8256,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('markdown');
 
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render markdown views
@@ -7883,7 +8276,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('html');
 
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render sandboxed preview and default to View first.
@@ -7900,7 +8293,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('csv');
 
             // Set editor content (raw text for Edit tab)
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
 
             // Render table view
             renderCsvView(doc || '');
@@ -7918,7 +8311,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('code');
             
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
             
             // Set default view mode to editor
@@ -7972,9 +8365,7 @@ async function saveFile() {
     }
 
     try {
-        const content = state.currentFileType === 'json' 
-            ? elements.editor.value 
-            : elements.editor.value;
+        const content = getMainEditorValue();
         
         // Use the saved project context to prevent overwrites if user switched projects
         await SaveFile(state.currentFile, content, state.currentFileProject || '');
@@ -8089,7 +8480,7 @@ async function confirmDelete() {
             state.currentFileProject = '';
             state.lspHoverLastKey = '';
             emitCurrentFileName();
-            elements.editor.value = '';
+            setMainEditorValue('');
             elements.swaggerView.innerHTML = '';
             clearVisibleLspDiagnostics();
             hideLspHoverTooltip();
@@ -8371,18 +8762,48 @@ function editorOffsetForLine(lineNumber) {
 }
 
 function jumpEditorToLine(lineNumber) {
-    const editor = elements.editor;
-    if (!editor) {
+    if (!elements.editor) {
         return;
     }
 
     const start = editorOffsetForLine(lineNumber);
-    const text = String(editor.value || '');
+    const text = getMainEditorValue();
     const nextBreak = text.indexOf('\n', start);
     const end = nextBreak === -1 ? text.length : nextBreak;
 
+    setMainEditorSelectionRange(start, end);
+
+    if (isMonacoActive()) {
+        monacoMainEditor.revealOffset(start);
+        monacoMainEditor.focus();
+        return;
+    }
+
+    if (state.useMonacoEditor) {
+        const schedule = typeof requestAnimationFrame === 'function'
+            ? requestAnimationFrame
+            : (cb) => setTimeout(cb, 16);
+
+        const tryRevealWhenReady = (remainingFrames) => {
+            if (isMonacoActive()) {
+                monacoMainEditor.setSelectionOffsets(start, end);
+                monacoMainEditor.revealOffset(start);
+                monacoMainEditor.focus();
+                return;
+            }
+
+            if (remainingFrames > 0) {
+                schedule(() => tryRevealWhenReady(remainingFrames - 1));
+            }
+        };
+
+        // Monaco can be created/layouted asynchronously when editor view opens.
+        // Retry briefly so grep-navigation still lands on the requested line.
+        tryRevealWhenReady(2);
+    }
+
+    const editor = elements.editor;
     editor.focus();
-    editor.setSelectionRange(start, end);
     scrollEditorToSelection(editor, start);
 }
 
@@ -8716,6 +9137,32 @@ function buildFindPattern() {
     }
 }
 
+function isMonacoFindProxyActive() {
+    return isMonacoActive() && state.viewMode === 'editor';
+}
+
+function buildMonacoFindRequest() {
+    const query = String(state.findQuery || '');
+    if (!query) {
+        return null;
+    }
+
+    let search = query;
+    let isRegex = state.findDocOptions.regex;
+
+    if (state.findDocOptions.wholeWord) {
+        const core = state.findDocOptions.regex ? query : escapeRegExp(query);
+        search = `\\b(?:${core})\\b`;
+        isRegex = true;
+    }
+
+    return {
+        query: search,
+        isRegex,
+        matchCase: state.findDocOptions.caseSensitive,
+    };
+}
+
 function getFindDocSearchSignature(query) {
     const q = String(query || '');
     return `${q}|${state.findDocOptions.caseSensitive ? 1 : 0}|${state.findDocOptions.regex ? 1 : 0}|${state.findDocOptions.wholeWord ? 1 : 0}`;
@@ -8723,7 +9170,7 @@ function getFindDocSearchSignature(query) {
 
 function replaceCurrentMatch() {
     const editorEl = getActiveFindEditor();
-    if (!editorEl) {
+    if (!editorEl && !isMonacoFindProxyActive()) {
         return;
     }
 
@@ -8753,17 +9200,21 @@ function replaceCurrentMatch() {
         return;
     }
 
-    editorEl.focus();
-    editorEl.setSelectionRange(match.start, match.end);
-    editorEl.setRangeText(replacement, match.start, match.end, 'end');
-    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (isMonacoFindProxyActive()) {
+        replaceMainEditorRange(match.start, match.end, replacement);
+    } else {
+        editorEl.focus();
+        editorEl.setSelectionRange(match.start, match.end);
+        editorEl.setRangeText(replacement, match.start, match.end, 'end');
+        editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
     performFind();
 }
 
 function replaceAllMatches() {
     const editorEl = getActiveFindEditor();
-    if (!editorEl) {
+    if (!editorEl && !isMonacoFindProxyActive()) {
         return;
     }
 
@@ -8772,7 +9223,9 @@ function replaceAllMatches() {
         return;
     }
 
-    const source = String(editorEl.value || '');
+    const source = isMonacoFindProxyActive()
+        ? getMainEditorValue()
+        : String(editorEl.value || '');
     if (!source) {
         return;
     }
@@ -8796,8 +9249,13 @@ function replaceAllMatches() {
         return;
     }
 
-    editorEl.value = next;
-    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (isMonacoFindProxyActive()) {
+        setMainEditorValue(next);
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+        editorEl.value = next;
+        editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     performFind();
 }
 
@@ -8890,6 +9348,24 @@ function performFind() {
 }
 
 function findInEditor(findPattern) {
+    if (isMonacoFindProxyActive()) {
+        const request = buildMonacoFindRequest();
+        if (!request) {
+            return;
+        }
+
+        const matches = monacoMainEditor.findMatches(request.query, {
+            isRegex: request.isRegex,
+            matchCase: request.matchCase,
+            limit: 10000,
+        });
+
+        for (const match of matches) {
+            state.findMatches.push({ start: match.start, end: match.end });
+        }
+        return;
+    }
+
     const editorEl = getActiveFindEditor();
     if (!editorEl || !findPattern) {
         return;
@@ -8977,6 +9453,20 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
     }
 
     const editorEl = getActiveFindEditor();
+    if (isMonacoFindProxyActive()) {
+        const match = state.findMatches[state.findCurrentIndex];
+        if (!match) {
+            return;
+        }
+
+        if (focusEditor) {
+            monacoMainEditor.focus();
+        }
+        monacoMainEditor.setSelectionOffsets(match.start, match.end);
+        monacoMainEditor.revealOffset(match.start);
+        return;
+    }
+
     if (editorEl) {
         const match = state.findMatches[state.findCurrentIndex];
 
@@ -10621,6 +11111,8 @@ setToolsTab('find');
 setToolsPanelCollapsed(true);
 
 function applyWindowStyle(result) {
+    latestWindowStyle = result;
+
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
 
@@ -10698,6 +11190,11 @@ function applyWindowStyle(result) {
         ${getHexDumpStyles(result.fontSize, result.adjustCellHeight)}
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
     `;
+
+    if (isMonacoActive()) {
+        monacoMainEditor.setTypography(getMonacoTypographyOptions());
+        monacoMainEditor.applyTheme(result.colors);
+    }
 }
 
 GetWindowStyle().then((result) => {
@@ -10719,6 +11216,7 @@ bindSharedTooltipMouseTracking();
 
 // Keyed by file URI → array of Diagnostic objects from the server.
 const lspDiagnosticsStore = new Map();
+const typosDiagnosticsStore = new Map();
 
 // Tooltip element — created once and re-positioned on hover.
 const lspTooltipEl = (() => {
@@ -10833,22 +11331,11 @@ async function resolveNotesFileUri(filePath) {
     }
 }
 
-function lspSeveritySquiggleClass(severity) {
-    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
-    return `lsp-squiggle-${name}`;
-}
-
-function lspSeverityGutterClass(severity) {
-    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
-    return `lsp-gutter-${name}`;
-}
-
 function clearVisibleLspDiagnostics(options = {}) {
     const preserveCompletion = options && options.preserveCompletion === true;
-    if (elements.editorGutter) {
-        elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+    if (isMonacoActive()) {
+        monacoMainEditor.setDiagnostics([]);
     }
-    clearLspSquiggles();
     if (lspTooltipEl) {
         lspTooltipEl.style.display = 'none';
     }
@@ -10865,179 +11352,16 @@ function clearCurrentFileLspDiagnosticsCache() {
     lspDiagnosticsStore.delete(state.currentFileUri);
 }
 
-/**
- * Apply diagnostic decorations to the editor gutter and highlight overlay.
- * Squiggles are rendered by wrapping the affected character range in a
- * <span> inside the highlight overlay. Gutter markers are small dots appended
- * to the matching line number span.
- */
 function renderLspDiagnostics() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+    if (!isMonacoActive()) {
         return;
     }
 
     // Collect diagnostics for the currently open file.
     const currentUri = state.currentFileUri || null;
 
-    // Clear previous gutter marks.
-    elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
-
     const diags = currentUri ? (lspDiagnosticsStore.get(currentUri) || []) : [];
-    if (diags.length === 0) {
-        // Remove any squiggle spans left in the highlight code.
-        clearLspSquiggles();
-        return;
-    }
-
-    // Build a map of line → highest-severity diagnostic for gutter markers.
-    const lineMap = new Map(); // line (0-based) → {severity, messages[]}
-    for (const d of diags) {
-        const line = d.range.start.line;
-        if (!lineMap.has(line)) {
-            lineMap.set(line, { severity: d.severity, messages: [d.message] });
-        } else {
-            const entry = lineMap.get(line);
-            if (d.severity < entry.severity) entry.severity = d.severity;
-            entry.messages.push(d.message);
-        }
-    }
-
-    // Apply gutter dots — gutter is a pre/text node; we replace it with spans.
-    applyGutterDiagnosticMarkers(lineMap);
-
-    // Apply squiggle spans to the highlight overlay.
-    applySquiggles(diags);
-}
-
-function applyGutterDiagnosticMarkers(lineMap) {
-    if (!elements.editorGutter) return;
-
-    const content = elements.editor.value || '';
-    const lineCount = Math.max(1, content.split('\n').length);
-
-    // Rebuild the gutter as individual line spans so we can attach markers.
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < lineCount; i++) {
-        const span = document.createElement('span');
-        span.className = 'lsp-gutter-line';
-        span.textContent = String(i + 1);
-
-        if (lineMap.has(i)) {
-            const { severity, messages } = lineMap.get(i);
-            const dot = document.createElement('span');
-            dot.className = `lsp-gutter-mark ${lspSeverityGutterClass(severity)}`;
-            dot.title = messages.join('\n');
-            span.appendChild(dot);
-        }
-
-        fragment.appendChild(span);
-        if (i < lineCount - 1) fragment.appendChild(document.createTextNode('\n'));
-    }
-
-    elements.editorGutter.textContent = '';
-    elements.editorGutter.appendChild(fragment);
-}
-
-function applySquiggles(diags) {
-    if (!elements.editorHighlightCode) return;
-
-    // Start from whatever highlight.js already rendered.
-    const html = elements.editorHighlightCode.innerHTML;
-    // Strip any existing lsp spans first.
-    const stripped = stripLspOverlayMarkup(html);
-
-    const content = elements.editor.value || '';
-    // Sort diagnostics so outermost (longest) ranges are processed first, which
-    // avoids nested span conflicts. For now we only annotate single-line ranges.
-    const singleLine = diags.filter(d => d.range.start.line === d.range.end.line);
-
-    // Build a list of (charOffset, endCharOffset, class) sorted by start.
-    const ranges = singleLine.map(d => ({
-        line: d.range.start.line,
-        startChar: d.range.start.character,
-        endChar: d.range.end.character,
-        cls: lspSeveritySquiggleClass(d.severity),
-        msg: d.message,
-    })).sort((a, b) => a.line - b.line || a.startChar - b.startChar);
-
-    if (ranges.length === 0) {
-        elements.editorHighlightCode.innerHTML = stripped;
-        return;
-    }
-
-    // Map line/char ranges to byte offsets in raw content.
-    const lines = content.split('\n');
-    let lineOffsets = [];
-    let off = 0;
-    for (const l of lines) {
-        lineOffsets.push(off);
-        off += l.length + 1; // +1 for \n
-    }
-
-    // We need to annotate the HTML, not the raw text, to preserve hljs spans.
-    // Strategy: rebuild innerHTML by tracking text position and inserting wrappers.
-    // This is a best-effort approach that works well for non-overlapping ranges.
-    elements.editorHighlightCode.innerHTML = stripped;
-
-    // Walk text nodes and wrap the target char ranges.
-    wrapDiagnosticRanges(elements.editorHighlightCode, lines, lineOffsets, ranges, content);
-}
-
-function wrapDiagnosticRanges(container, lines, lineOffsets, ranges, content) {
-    // Collect all text nodes with their absolute byte offsets.
-    const textNodes = [];
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    let node;
-    // Recompute offsets by walking the content matching text nodes.
-    let cursor = 0;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        textNodes.push({ node, start: cursor, end: cursor + text.length });
-        cursor += text.length;
-    }
-
-    // For each diagnostic range, find overlapping text nodes and wrap.
-    for (const r of ranges) {
-        if (r.line >= lines.length) continue;
-        const lineStart = lineOffsets[r.line];
-        const byteStart = lineStart + r.startChar;
-        const byteEnd = lineStart + Math.max(r.endChar, r.startChar + 1);
-
-        for (const tn of textNodes) {
-            if (tn.end <= byteStart || tn.start >= byteEnd) continue;
-
-            const localStart = Math.max(byteStart - tn.start, 0);
-            const localEnd = Math.min(byteEnd - tn.start, tn.node.nodeValue.length);
-            if (localStart >= localEnd) continue;
-
-            const text = tn.node.nodeValue;
-            const before = text.slice(0, localStart);
-            const middle = text.slice(localStart, localEnd);
-            const after = text.slice(localEnd);
-
-            const span = document.createElement('span');
-            span.className = r.cls;
-            span.title = r.msg;
-            span.textContent = middle;
-
-            const parent = tn.node.parentNode;
-            if (!parent) continue;
-
-            if (before) parent.insertBefore(document.createTextNode(before), tn.node);
-            parent.insertBefore(span, tn.node);
-            if (after) tn.node.nodeValue = after;
-            else parent.removeChild(tn.node);
-
-            // Update the text node record so subsequent ranges still work.
-            tn.node = after ? tn.node : null;
-            break; // one text node per range is enough for single-line squiggles
-        }
-    }
-}
-
-function clearLspSquiggles() {
-    if (!elements.editorHighlightCode) return;
-    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+    monacoMainEditor.setDiagnostics(diags);
 }
 
 function renderLspEditorDecorations() {
@@ -11045,183 +11369,9 @@ function renderLspEditorDecorations() {
     renderLspInlayHints();
 }
 
-function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            const parent = node.parentElement;
-            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        },
-    });
-
-    let cursor = 0;
-    let node;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        const nextCursor = cursor + text.length;
-        if (nextCursor <= startOffset || cursor >= endOffset) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        const localStart = Math.max(startOffset - cursor, 0);
-        const localEnd = Math.min(endOffset - cursor, text.length);
-        if (localStart >= localEnd) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        const before = text.slice(0, localStart);
-        const middle = text.slice(localStart, localEnd);
-        const after = text.slice(localEnd);
-        if (!middle) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        markerEl.textContent = middle;
-
-        const parent = node.parentNode;
-        if (!parent) {
-            return;
-        }
-
-        if (before) {
-            parent.insertBefore(document.createTextNode(before), node);
-        }
-        parent.insertBefore(markerEl, node);
-        if (after) {
-            node.nodeValue = after;
-        } else {
-            parent.removeChild(node);
-        }
-        return;
-    }
-}
-
 function renderLspInlayHints() {
-    if (!elements.editorHighlightCode) {
-        return;
-    }
-
-    elements.editorHighlightCode.innerHTML = String(elements.editorHighlightCode.innerHTML || '')
-        .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
-
-    const hints = Array.isArray(state.lspInlayHints)
-        ? state.lspInlayHints.filter((item) => item && String(item.label || '') !== '')
-        : [];
-    if (hints.length === 0) {
-        return;
-    }
-
-    const content = elements.editor.value || '';
-    const lines = content.split('\n');
-    const lineOffsets = [];
-    let offset = 0;
-    for (const line of lines) {
-        lineOffsets.push(offset);
-        offset += line.length + 1;
-    }
-
-    hints
-        .filter((item) => Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)))
-        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
-        .forEach((hint) => {
-            const line = Math.max(0, Math.min(Number(hint.line) || 0, Math.max(lines.length - 1, 0)));
-            const lineContent = lines[line] || '';
-            const character = Math.max(0, Math.min(Number(hint.character) || 0, lineContent.length));
-            const hintEl = document.createElement('span');
-            hintEl.className = 'notes-lsp-inlay-hint';
-            hintEl.dataset.kind = String(Number(hint.kind) || 0);
-            if (hint.paddingLeft === true) {
-                hintEl.classList.add('has-padding-left');
-            }
-            if (hint.paddingRight === true) {
-                hintEl.classList.add('has-padding-right');
-            }
-            if (hint.tooltip) {
-                hintEl.title = String(hint.tooltip);
-            }
-            hintEl.textContent = String(hint.label || '');
-
-            insertLspInlayHintAtOffset(elements.editorHighlightCode, lineOffsets[line] + character, hintEl);
-        });
+    // Inlay hints are rendered by Monaco providers in Monaco-only mode.
 }
-
-function insertLspInlayHintAtOffset(container, targetOffset, hintEl) {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            const parent = node.parentElement;
-            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        },
-    });
-
-    let cursor = 0;
-    let node;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        const nextCursor = cursor + text.length;
-        if (targetOffset <= nextCursor) {
-            const localOffset = Math.max(0, Math.min(targetOffset - cursor, text.length));
-            const parent = node.parentNode;
-            if (!parent) {
-                return;
-            }
-
-            if (localOffset === 0) {
-                parent.insertBefore(hintEl, node);
-                return;
-            }
-
-            if (localOffset === text.length) {
-                if (node.nextSibling) {
-                    parent.insertBefore(hintEl, node.nextSibling);
-                } else {
-                    parent.appendChild(hintEl);
-                }
-                return;
-            }
-
-            const afterNode = node.splitText(localOffset);
-            parent.insertBefore(hintEl, afterNode);
-            return;
-        }
-
-        cursor = nextCursor;
-    }
-
-    container.appendChild(hintEl);
-}
-
-// Hover tooltip on the gutter dots.
-document.addEventListener('mouseover', (e) => {
-    const dot = e.target.closest?.('.lsp-gutter-mark');
-    if (!dot) {
-        lspTooltipEl.style.display = 'none';
-        return;
-    }
-    lspTooltipEl.textContent = dot.title || '';
-    lspTooltipEl.style.display = 'block';
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (lspTooltipEl.style.display !== 'block') return;
-    const x = Math.min(e.clientX + 14, window.innerWidth - lspTooltipEl.offsetWidth - 8);
-    const y = Math.min(e.clientY + 14, window.innerHeight - lspTooltipEl.offsetHeight - 8);
-    lspTooltipEl.style.left = `${x}px`;
-    lspTooltipEl.style.top = `${y}px`;
-});
-
-document.addEventListener('mouseout', (e) => {
-    if (e.target.closest?.('.lsp-gutter-mark')) {
-        lspTooltipEl.style.display = 'none';
-    }
-});
 
 document.addEventListener('scroll', () => {
     hideHyperlinkHoverTooltip();
@@ -11245,6 +11395,7 @@ EventsOn('notesLspDiagnostics', payload => {
 EventsOn('notesTyposDiagnostics', payload => {
     const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
     if (!data || typeof data.uri !== 'string') return;
+    typosDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
     routeTyposDiagnostics(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
 });
 
@@ -11354,7 +11505,11 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
         }
 
         if (text !== '') {
-            insertEditorText(text, targetEditor);
+            if (isMonacoActive() && targetEditor === elements.editor) {
+                insertTextInMainEditor(text);
+            } else {
+                insertEditorText(text, targetEditor);
+            }
         }
     } catch (err) {
         notifyTerminal('Failed to paste from clipboard.', 'error');
@@ -11373,11 +11528,7 @@ const jupyterSpellCheckHandles = {};
 const lspSpellCheckExclusions = { symbols: [], tokens: [], keywords: [] };
 
 function applyLspSpellCheckExclusions() {
-    const merged = [
-        ...lspSpellCheckExclusions.symbols,
-        ...lspSpellCheckExclusions.tokens,
-        ...lspSpellCheckExclusions.keywords,
-    ];
+    const merged = Array.from(getLspSpellCheckExclusionSet());
     notesSpellCheckHandle?.setExclusions(merged);
 }
 
@@ -11568,6 +11719,15 @@ if (elements.editor) {
     });
 
     elements.editor.addEventListener('input', () => {
+        if (isMonacoActive() && !suppressMonacoChange) {
+            const textareaValue = String(elements.editor.value || '');
+            if (monacoMainEditor.getValue() !== textareaValue) {
+                suppressMonacoChange = true;
+                monacoMainEditor.setValue(textareaValue);
+                suppressMonacoChange = false;
+            }
+        }
+
         editorInputSequence += 1;
         state.lastEditorInputAt = Date.now();
         setDirty(true);
@@ -11578,26 +11738,31 @@ if (elements.editor) {
         clearCurrentFileLspDiagnosticsCache();
         clearVisibleLspDiagnostics({ preserveCompletion: true });
 
-        const cursor = elements.editor.selectionStart || 0;
-        const value = elements.editor.value || '';
-        const prevChar = cursor > 0 ? value[cursor - 1] : '';
+        if (!isMonacoActive()) {
+            const cursor = elements.editor.selectionStart || 0;
+            const value = elements.editor.value || '';
+            const prevChar = cursor > 0 ? value[cursor - 1] : '';
 
-        // If LSP completion menu is visible, keep it open and re-filter based on current position.
-        // Otherwise, check for trigger characters to open it.
-        if (state.lspCompletionVisible) {
-            // Menu is open - sync first, then re-request completion to filter by current text.
-            void requestLspCompletionAfterSync(value, '', 1);
-        } else {
-            // Menu is closed - check for trigger characters
-            if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
-                void requestLspCompletionAfterSync(value, prevChar);
+            // If LSP completion menu is visible, keep it open and re-filter based on current position.
+            // Otherwise, check for trigger characters to open it.
+            if (state.lspCompletionVisible) {
+                // Menu is open - sync first, then re-request completion to filter by current text.
+                void requestLspCompletionAfterSync(value, '', 1);
             } else {
-                // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
-                const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
-                if (!isIdentifierChar) {
-                    hideLspCompletion();
+                // Menu is closed - check for trigger characters
+                if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+                    void requestLspCompletionAfterSync(value, prevChar);
+                } else {
+                    // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
+                    const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
+                    if (!isIdentifierChar) {
+                        hideLspCompletion();
+                    }
                 }
             }
+        } else {
+            // Monaco mode uses Monaco suggest + LSP providers instead of the legacy popup.
+            hideLspCompletion();
         }
 
         if (usesCodeEditorDecorations()) {
@@ -11665,7 +11830,14 @@ if (elements.editor) {
         undoManager: notesUndoManager,
         filePathResolver: () => state.currentFile || '',
     });
-    notesSpellCheckHandle = attachSpellCheck(elements.editor);
+    notesSpellCheckHandle = attachSpellCheck(elements.editor, {
+        onMisspellingsChange: (misspellings) => {
+            if (!isMonacoActive()) {
+                return;
+            }
+            monacoMainEditor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
+        },
+    });
 }
 
 let _editorSelectionBeforeContextMenu = null;
@@ -11679,7 +11851,7 @@ elements.editor.addEventListener('mousedown', (e) => {
     }
 });
 
-elements.editor.addEventListener('contextmenu', async (e) => {
+function openMainEditorContextMenu(e) {
     // Restore selection that WebKit changed on right-click
     if (_editorSelectionBeforeContextMenu !== null) {
         elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
@@ -11689,7 +11861,7 @@ elements.editor.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
 
     const menuItems = [
-        createCopyMenuItem(() => getEditorSelectionText(), 'Copy'),
+        createCopyMenuItem(() => getMainEditorSelectionText(), 'Copy'),
         {
             title: 'Paste',
             icon: CONTEXT_ICON_PASTE,
@@ -11734,6 +11906,8 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                 },
             },
         );
+
+
     }
 
     if (state.currentFileType === 'markdown') {
@@ -11743,31 +11917,24 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                 title: 'Insert checkbox',
                 icon: CONTEXT_ICON_CHECKBOX,
                 onSelect: () => {
-                    const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
-                    elements.editor.focus();
-                    elements.editor.selectionStart = lineStart;
-                    elements.editor.selectionEnd = lineStart;
-                    document.execCommand('insertText', false, '- [ ] ');
+                    insertTextAtMainEditorLineStart('- [ ] ');
                 },
             },
             {
                 title: 'Insert code block',
                 icon: CONTEXT_ICON_CODE,
                 onSelect: () => {
-                    const selStart = elements.editor.selectionStart;
-                    const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
-                    elements.editor.focus();
-                    document.execCommand('insertText', false, '```\n' + selected + '\n```');
-                    elements.editor.selectionStart = selStart + 3;
-                    elements.editor.selectionEnd = selStart + 3;
+                    const range = getMainEditorSelectionRange();
+                    const selected = getMainEditorSelectionText();
+                    replaceMainEditorRange(range.start, range.end, '```\n' + selected + '\n```');
+                    setMainEditorSelectionRange(range.start + 3, range.start + 3);
                 },
             },
             {
                 title: 'Insert table 3x1',
                 icon: CONTEXT_ICON_TABLE,
                 onSelect: () => {
-                    elements.editor.focus();
-                    document.execCommand('insertText', false, '| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
+                    insertTextInMainEditor('| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
                 },
             },
             {
@@ -11779,7 +11946,8 @@ elements.editor.addEventListener('contextmenu', async (e) => {
             },
         );
 
-        const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
+        const cursor = getMainEditorSelectionRange().start;
+        const imageAtCursor = getMarkdownImageAtCursor(getMainEditorValue(), cursor);
         if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
             menuItems.push(
             { title: '-' },
@@ -11792,10 +11960,7 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                     try {
                         await DeleteFile(imageDiskPath);
 
-                        elements.editor.focus();
-                        elements.editor.selectionStart = imageAtCursor.markdownStart;
-                        elements.editor.selectionEnd = imageAtCursor.markdownEnd;
-                        document.execCommand('insertText', false, '');
+                        replaceMainEditorRange(imageAtCursor.markdownStart, imageAtCursor.markdownEnd, '');
                         notifyTerminal(`Deleted image ${imageAtCursor.imagePath}.`, 'info');
                     } catch (err) {
                         notifyTerminal(`Failed to delete image ${imageAtCursor.imagePath}.`, 'error');
@@ -11826,7 +11991,25 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         createPrintMenuItem('Print...'),
     );
 
+    if (isMonacoActive()) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Editor options',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    setTimeout(() => {
+                        monacoMainEditor?.openCommandPalette?.();
+                    }, 0);
+                },
+        });
+    }
+
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
+}
+
+elements.editor.addEventListener('contextmenu', (e) => {
+    openMainEditorContextMenu(e);
 });
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');

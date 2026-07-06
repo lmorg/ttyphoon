@@ -813,7 +813,7 @@ describe('notes rendering', () => {
         })).not.toThrow();
     });
 
-    it('renders diagnostics markers and uses CSS-driven opacity for diagnostics tooltip', async () => {
+    it('accepts diagnostics without legacy gutter marker rendering', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
         resolveFilePathMock.mockImplementation(async (file) => {
@@ -849,14 +849,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const gutterDot = document.querySelector('.lsp-gutter-mark');
-        expect(gutterDot).not.toBeNull();
-
-        gutterDot.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        await flushPromises();
+        expect(gutterDot).toBeNull();
 
         const tooltip = document.getElementById('notes-lsp-tooltip');
-        expect(tooltip?.style.display).toBe('block');
-        expect(tooltip?.textContent).toContain('example diagnostic');
+        expect(tooltip?.style.display || '').not.toBe('block');
         expect(tooltip?.style.opacity || '').toBe('');
 
         const styles = getNotesRenderedStyles();
@@ -1299,7 +1295,7 @@ describe('notes rendering', () => {
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
 
-    it('requests and renders LSP inlay hints in the editor overlay', async () => {
+    it('requests LSP inlay hints without legacy overlay rendering', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('go');
         notesLspInlayHintsMock.mockResolvedValue([
@@ -1319,11 +1315,7 @@ describe('notes rendering', () => {
         expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
 
         const hints = Array.from(document.querySelectorAll('.notes-lsp-inlay-hint'));
-        expect(hints).toHaveLength(2);
-        expect(hints[0]?.textContent).toBe('name:');
-        expect(hints[0]?.classList.contains('has-padding-right')).toBe(true);
-        expect(hints[1]?.textContent).toBe(': string');
-        expect(hints[1]?.classList.contains('has-padding-left')).toBe(true);
+        expect(hints).toHaveLength(0);
 
         const styles = getNotesRenderedStyles();
         expect(styles).toContain('.notes-lsp-inlay-hint {');
@@ -3184,7 +3176,7 @@ describe('notes rendering', () => {
         expect(metaRoot.querySelectorAll('code').length).toBeGreaterThan(0);
     });
 
-    it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
+    it('uses Monaco-only editor surface without legacy highlight overlay', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/config.json']);
         getFileMock.mockResolvedValue({ contents: '{"longPropertyName": "value"}', text: '', error: '' });
 
@@ -3195,19 +3187,15 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
+        const monacoEditor = document.getElementById('notes-monaco-editor');
         const notesEditor = document.getElementById('notes-editor');
         const editorHighlight = document.getElementById('notes-editor-highlight');
-
-        Object.defineProperty(notesEditor, 'scrollWidth', { configurable: true, value: 640 });
-        Object.defineProperty(notesEditor, 'clientWidth', { configurable: true, value: 320 });
-        Object.defineProperty(notesEditor, 'scrollHeight', { configurable: true, value: 240 });
-        Object.defineProperty(notesEditor, 'clientHeight', { configurable: true, value: 180 });
 
         notesEditor.value = '{"veryLongPropertyNameThatForcesHorizontalScrolling": "value"}';
         notesEditor.dispatchEvent(new Event('input', { bubbles: true }));
 
-        expect(editorHighlight.style.minWidth).toBe('640px');
-        expect(editorHighlight.style.minHeight).toBe('240px');
+        expect(monacoEditor).toBeTruthy();
+        expect(editorHighlight).toBeNull();
     });
 
     it('undoes and redoes structured JSON format actions from editor context menu', async () => {

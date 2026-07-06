@@ -29,6 +29,49 @@ const DEBOUNCE_MS = 800;
 const WAVE_AMPLITUDE = 1.5;
 const WAVE_FREQUENCY = 0.4;
 
+function applySuggestionToTextarea(textarea, misspelling, suggestion) {
+    const text = textarea.value;
+    const { wordStart, wordLength } = misspelling;
+    textarea.value =
+        text.slice(0, wordStart) + suggestion + text.slice(wordStart + wordLength);
+    textarea.selectionStart = textarea.selectionEnd = wordStart + suggestion.length;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+export function showSpellcheckSuggestionsPopup(anchorX, anchorY, misspelling, onSelectSuggestion) {
+    const selectSuggestion = typeof onSelectSuggestion === 'function'
+        ? onSelectSuggestion
+        : null;
+
+    if (!misspelling?.suggestions || !misspelling.suggestions.length) {
+        showLocalMenu({
+            title: misspelling?.misspeltWord || 'Misspelling',
+            options: ['No spelling suggestions'],
+            icons: [],
+            x: anchorX,
+            y: anchorY,
+            showNextToMouseCursor: true,
+        });
+        return;
+    }
+
+    showLocalMenu({
+        title: misspelling.misspeltWord,
+        options: misspelling.suggestions,
+        icons: misspelling.suggestions.map(() => 0xf040),
+        x: anchorX,
+        y: anchorY,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const suggestion = misspelling.suggestions[index];
+            if (typeof suggestion !== 'string') {
+                return;
+            }
+            selectSuggestion?.(suggestion);
+        },
+    });
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -39,6 +82,9 @@ const WAVE_FREQUENCY = 0.4;
  * @returns {{ detach(): void, setExclusions(words: string[]): void, check(): void }}
  */
 export function attachSpellCheck(textarea, options = {}) {
+    const onMisspellingsChange = typeof options.onMisspellingsChange === 'function'
+        ? options.onMisspellingsChange
+        : null;
     let exclusionSet = new Set((options.exclusions || []).map(w => String(w).toLowerCase()));
     // Data source: 'aspell' fetches from the backend; 'external' renders
     // misspellings pushed in via setMisspellings() (e.g. typos-lsp diagnostics).
@@ -262,12 +308,7 @@ export function attachSpellCheck(textarea, options = {}) {
      * input event so the spell-checker schedules a fresh check.
      */
     function applySuggestion(misspelling, suggestion) {
-        const text = textarea.value;
-        const { wordStart, wordLength } = misspelling;
-        textarea.value =
-            text.slice(0, wordStart) + suggestion + text.slice(wordStart + wordLength);
-        textarea.selectionStart = textarea.selectionEnd = wordStart + suggestion.length;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        applySuggestionToTextarea(textarea, misspelling, suggestion);
     }
 
     /**
@@ -275,26 +316,8 @@ export function attachSpellCheck(textarea, options = {}) {
      * Uses showLocalMenu so the suggestions list matches the rest of the UI.
      */
     function showSuggestionsPopup(anchorX, anchorY, misspelling) {
-        if (!misspelling.suggestions || !misspelling.suggestions.length) {
-            showLocalMenu({
-                title: misspelling.misspeltWord,
-                options: ['No spelling suggestions'],
-                icons: [],
-                x: anchorX,
-                y: anchorY,
-                showNextToMouseCursor: true,
-            });
-            return;
-        }
-
-        showLocalMenu({
-            title: misspelling.misspeltWord,
-            options: misspelling.suggestions,
-            icons:   misspelling.suggestions.map(() => 0xf040),
-            x: anchorX,
-            y: anchorY,
-            showNextToMouseCursor: true,
-            onSelect: (index) => applySuggestion(misspelling, misspelling.suggestions[index]),
+        showSpellcheckSuggestionsPopup(anchorX, anchorY, misspelling, (suggestion) => {
+            applySuggestion(misspelling, suggestion);
         });
     }
 
@@ -311,6 +334,9 @@ export function attachSpellCheck(textarea, options = {}) {
         );
         cachedWordData      = measureWordRects(currentMisspellings, text);
         drawCanvas();
+        if (onMisspellingsChange) {
+            onMisspellingsChange(currentMisspellings.slice());
+        }
     }
 
     async function runCheck() {
@@ -432,11 +458,7 @@ export function attachSpellCheck(textarea, options = {}) {
          */
         setExclusions(words) {
             exclusionSet        = new Set((words || []).map(w => String(w).toLowerCase()));
-            currentMisspellings = rawMisspellings.filter(
-                m => !exclusionSet.has(m.misspeltWord.toLowerCase()),
-            );
-            cachedWordData = measureWordRects(currentMisspellings, textarea.value);
-            drawCanvas();
+            applyMisspellings(rawMisspellings, textarea.value);
         },
 
         /** Trigger an immediate spell-check, bypassing the debounce. */
@@ -467,6 +489,11 @@ export function attachSpellCheck(textarea, options = {}) {
         /** Current data source mode. */
         getMode() {
             return mode;
+        },
+
+        /** Current filtered misspellings rendered by the shared pipeline. */
+        getMisspellings() {
+            return currentMisspellings.slice();
         },
 
         /**
