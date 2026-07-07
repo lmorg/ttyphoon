@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/config"
@@ -25,6 +26,10 @@ type Agent struct {
 
 	_mcpServers map[string]client
 	_tools      []Tool
+}
+
+func bob() {
+	ioutil.ReadAll(nil)
 }
 
 type Meta struct {

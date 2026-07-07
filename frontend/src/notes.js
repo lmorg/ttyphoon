@@ -4681,6 +4681,37 @@ function lspDiagnosticsAtPosition(line, character) {
     return diagnostics.filter((diag) => isPositionWithinRange(line, character, diag.range));
 }
 
+function formatLspDiagnosticsForHover(diagnostics) {
+    const list = Array.isArray(diagnostics) ? diagnostics : [];
+    if (list.length === 0) {
+        return '';
+    }
+
+    const severityLabel = (value) => {
+        switch (Number(value) || 0) {
+        case 1: return 'Error';
+        case 2: return 'Warning';
+        case 3: return 'Info';
+        case 4: return 'Hint';
+        default: return 'Info';
+        }
+    };
+
+    const lines = ['Diagnostics:'];
+    for (const diag of list) {
+        const message = String(diag?.message || '').trim();
+        if (!message) {
+            continue;
+        }
+        const severity = severityLabel(diag?.severity);
+        const source = String(diag?.source || '').trim();
+        const prefix = source ? `${severity} (${source})` : severity;
+        lines.push(`- ${prefix}: ${message}`);
+    }
+
+    return lines.length > 1 ? lines.join('\n') : '';
+}
+
 async function getLspCodeActionsForCursor() {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return { line: 0, character: 0, diagnostics: [], actions: [] };
@@ -5067,14 +5098,25 @@ function scheduleLspHover() {
         state.lspHoverLastKey = key;
 
         try {
-            const text = await NotesLspHover(hoverFilePath, pos.line, pos.character);
-            if (!text) {
+            const hoverText = await NotesLspHover(hoverFilePath, pos.line, pos.character);
+            const diagnosticsText = (!blockTarget && hoverFilePath === state.currentFile)
+                ? formatLspDiagnosticsForHover(lspDiagnosticsAtPosition(pos.line, pos.character))
+                : '';
+
+            const sections = [];
+            if (hoverText) {
+                sections.push(String(hoverText));
+            }
+            if (diagnosticsText) {
+                sections.push(diagnosticsText);
+            }
+
+            if (sections.length === 0) {
                 hideLspHoverTooltip();
                 return;
             }
 
-            lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
-            await processMarkdownContainer(lspHoverTooltipEl);
+            await renderLspHoverTooltipText(sections.join('\n\n'));
             lspHoverTooltipEl.style.display = 'block';
 
             const anchor = getLspAnchorViewportPoint();
@@ -5088,6 +5130,11 @@ function scheduleLspHover() {
             hideLspHoverTooltip();
         }
     }, LSP_HOVER_DEBOUNCE_MS);
+}
+
+async function renderLspHoverTooltipText(text) {
+    lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
+    await processMarkdownContainer(lspHoverTooltipEl);
 }
 
 async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = '') {
@@ -5104,8 +5151,7 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
             return;
         }
 
-        lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
-        await processMarkdownContainer(lspHoverTooltipEl);
+        await renderLspHoverTooltipText(text);
         lspHoverTooltipEl.style.display = 'block';
 
         const anchor = getLspAnchorViewportPoint();
@@ -8327,7 +8373,7 @@ async function loadFile(file, options = {}) {
             renderSwaggerJsonView();
         }
         
-        // Close active Find tab state when loading a new file.
+        // Clear active Find state when loading a new file.
         if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
         }
@@ -8560,10 +8606,6 @@ function closeFindBar() {
     renderProjectFindResults();
     renderFileList();
 
-    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-        const nextTab = elements.toolsTabToC?.style.display !== 'none' ? 'toc' : 'ai';
-        setToolsTab(nextTab);
-    }
 }
 
 function clearProjectFindResults({ keepInputFocus = true } = {}) {

@@ -1610,6 +1610,17 @@ body {
     display: none !important;
 }
 
+#notes-monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
+    background-color: var(--fg) !important;
+    border-radius: 999px;
+    opacity: 0.5;
+}
+
+#notes-monaco-editor .monaco-scrollable-element > .scrollbar:hover > .slider,
+#notes-monaco-editor .monaco-scrollable-element > .scrollbar > .slider:hover {
+    background-color: var(--accent) !important;
+}
+
 @keyframes notes-vim-cursor-pulse {
     0% {
         opacity: 0.1;
@@ -2584,9 +2595,13 @@ body {
 }
 
 .json-key {
-    color: var(--yellow);
+    color: var(--blue);
     word-break: break-all;
     overflow-wrap: anywhere;
+}
+
+.json-key-index {
+    color: var(--cyan);
 }
 
 .json-editable {
@@ -2648,7 +2663,7 @@ body {
 }
 
 .json-value-null {
-    color: var(--magenta);
+    color: var(--accent);
 }
 
 .json-show-more {
@@ -2768,6 +2783,9 @@ body {
 #notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {
     margin-top: 0.4em;
     margin-bottom: 0.4em;
+}
+#notes-lsp-hover-tooltip :where(p, li, blockquote) {
+    white-space: pre-wrap;
 }
 #notes-lsp-hover-tooltip :where(code, pre) {
     font-family: var(--terminal-menu-font, var(--font-family));

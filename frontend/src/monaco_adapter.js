@@ -551,6 +551,7 @@ export async function createMonacoAdapter(container, options = {}) {
         model,
         automaticLayout: true,
         contextmenu: false,
+        lightbulb: { enabled: false },
         wordWrap: 'off',
         cursorBlinking: 'blink',
         hover: { enabled: false },
@@ -561,6 +562,8 @@ export async function createMonacoAdapter(container, options = {}) {
             vertical: 'visible',
             horizontal: 'auto',
             alwaysConsumeMouseWheel: false,
+            verticalScrollbarSize: 5,
+            horizontalScrollbarSize: 5,
         },
         fontFamily: fontMetrics.fontFamily,
         fontSize: fontMetrics.fontSize,
@@ -808,6 +811,7 @@ export async function createMonacoAdapter(container, options = {}) {
     const mouseDownDisposable = editor.onMouseDown((event) => {
         const browserEvent = event?.event?.browserEvent;
         const position = event?.target?.position;
+
         if (!browserEvent || Number(browserEvent.button) !== 0 || !position) {
             return;
         }
