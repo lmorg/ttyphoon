@@ -262,6 +262,42 @@ body {
     text-overflow: ellipsis;
 }
 
+.tty-passive-menu {
+    opacity: 0.8;
+    transition: opacity 0.15s ease;
+}
+
+.tty-passive-menu:hover {
+    opacity: 1;
+}
+
+.tty-menu-rich-row {
+    gap: 10px;
+    min-height: var(--terminal-menu-font-size);
+    align-items: center;
+}
+
+.tty-menu-rich-col {
+    min-width: 0;
+    overflow: hidden;
+    white-space: pre;
+    text-overflow: ellipsis;
+    text-align: left;
+}
+
+.tty-menu-rich-col.is-grow {
+    flex: 1 1 auto;
+}
+
+.tty-menu-rich-col.align-center {
+    text-align: center;
+}
+
+.tty-menu-rich-col.align-right {
+    text-align: right;
+    margin-left: auto;
+}
+
 .tty-menu-separator {
     flex: 0 0 1px;
     height: 1px;

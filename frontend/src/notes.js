@@ -27,7 +27,9 @@ import {
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
-import { showLocalMenu } from './popup_menu';
+import {
+    showLocalMenu,
+} from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
@@ -819,8 +821,6 @@ const state = {
 const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
-const LSP_COMPLETION_MAX_ITEMS = 10;
-
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
@@ -982,6 +982,9 @@ async function ensureMonacoMainEditor() {
         },
         onContextMenu: (event) => {
             openMainEditorContextMenu(event);
+        },
+        onCompletionRequest: (payload) => {
+            return handleMonacoCompletionRequest(payload);
         },
     });
 
@@ -3890,56 +3893,74 @@ function closeOpenLspTooltips() {
 function lspCompletionKindMeta(kind) {
     switch (Number(kind || 0)) {
     case 2:
-        return { icon: 'Md', badge: 'method', title: 'Method' };
+        return { iconClass: 'codicon codicon-symbol-method', badge: 'method', title: 'Method' };
     case 3:
-        return { icon: 'Fn', badge: 'function', title: 'Function' };
+        return { iconClass: 'codicon codicon-symbol-function', badge: 'function', title: 'Function' };
     case 4:
-        return { icon: 'Ct', badge: 'constructor', title: 'Constructor' };
+        return { iconClass: 'codicon codicon-symbol-constructor', badge: 'constructor', title: 'Constructor' };
     case 5:
-        return { icon: 'Fld', badge: 'field', title: 'Field' };
+        return { iconClass: 'codicon codicon-symbol-field', badge: 'field', title: 'Field' };
     case 6:
-        return { icon: 'Var', badge: 'variable', title: 'Variable' };
+        return { iconClass: 'codicon codicon-symbol-variable', badge: 'variable', title: 'Variable' };
     case 7:
-        return { icon: 'Cls', badge: 'class', title: 'Class' };
+        return { iconClass: 'codicon codicon-symbol-class', badge: 'class', title: 'Class' };
     case 8:
-        return { icon: 'Ifc', badge: 'interface', title: 'Interface' };
+        return { iconClass: 'codicon codicon-symbol-interface', badge: 'interface', title: 'Interface' };
     case 9:
-        return { icon: 'Mod', badge: 'module', title: 'Module' };
+        return { iconClass: 'codicon codicon-symbol-module', badge: 'module', title: 'Module' };
     case 10:
-        return { icon: 'Prop', badge: 'property', title: 'Property' };
+        return { iconClass: 'codicon codicon-symbol-property', badge: 'property', title: 'Property' };
     case 11:
-        return { icon: 'Unit', badge: 'unit', title: 'Unit' };
+        return { iconClass: 'codicon codicon-symbol-unit', badge: 'unit', title: 'Unit' };
     case 12:
-        return { icon: 'Val', badge: 'value', title: 'Value' };
+        return { iconClass: 'codicon codicon-symbol-value', badge: 'value', title: 'Value' };
     case 13:
-        return { icon: 'Enum', badge: 'enum', title: 'Enum' };
+        return { iconClass: 'codicon codicon-symbol-enum', badge: 'enum', title: 'Enum' };
     case 14:
-        return { icon: 'Kw', badge: 'keyword', title: 'Keyword' };
+        return { iconClass: 'codicon codicon-symbol-keyword', badge: 'keyword', title: 'Keyword' };
     case 15:
-        return { icon: 'Snip', badge: 'snippet', title: 'Snippet' };
+        return { iconClass: 'codicon codicon-symbol-snippet', badge: 'snippet', title: 'Snippet' };
     case 17:
-        return { icon: 'File', badge: 'file', title: 'File' };
+        return { iconClass: 'codicon codicon-symbol-file', badge: 'file', title: 'File' };
     case 18:
-        return { icon: 'Ref', badge: 'reference', title: 'Reference' };
+        return { iconClass: 'codicon codicon-symbol-reference', badge: 'reference', title: 'Reference' };
     case 19:
-        return { icon: 'Dir', badge: 'folder', title: 'Folder' };
+        return { iconClass: 'codicon codicon-folder', badge: 'folder', title: 'Folder' };
     case 21:
-        return { icon: 'Const', badge: 'constant', title: 'Constant' };
+        return { iconClass: 'codicon codicon-symbol-constant', badge: 'constant', title: 'Constant' };
     case 22:
-        return { icon: 'Struct', badge: 'struct', title: 'Struct' };
+        return { iconClass: 'codicon codicon-symbol-struct', badge: 'struct', title: 'Struct' };
     case 24:
-        return { icon: 'Evt', badge: 'event', title: 'Event' };
+        return { iconClass: 'codicon codicon-symbol-event', badge: 'event', title: 'Event' };
     case 25:
-        return { icon: 'Op', badge: 'operator', title: 'Operator' };
+        return { iconClass: 'codicon codicon-symbol-operator', badge: 'operator', title: 'Operator' };
     case 26:
-        return { icon: 'Tp', badge: 'type', title: 'Type parameter' };
+        return { iconClass: 'codicon codicon-symbol-type-parameter', badge: 'type', title: 'Type parameter' };
     default:
-        return { icon: 'Sym', badge: '', title: 'Symbol' };
+        return { iconClass: 'codicon codicon-symbol-misc', badge: '', title: 'Symbol' };
     }
 }
 
 function replaceCurrentIdentifierWithCompletion(text) {
     const target = getActiveLspTarget();
+
+    if (!target && isMonacoActive()) {
+        const source = monacoMainEditor.getValue() || '';
+        const selection = monacoMainEditor.getSelectionOffsets();
+        const cursor = selection.start || 0;
+        const left = source.slice(0, cursor);
+        const match = left.match(/[A-Za-z0-9_-]+$/);
+        const start = match ? cursor - match[0].length : cursor;
+        const insertText = String(text || '');
+
+        hideLspCompletion();
+        monacoMainEditor.replaceRange(start, cursor, insertText, 'lsp-completion');
+        const next = start + insertText.length;
+        monacoMainEditor.setSelectionOffsets(next, next);
+        monacoMainEditor.focus();
+        return;
+    }
+
     const editor = target ? target.editor : elements.editor;
     if (!editor) {
         return;
@@ -3948,7 +3969,7 @@ function replaceCurrentIdentifierWithCompletion(text) {
     const source = editor.value || '';
     const cursor = editor.selectionStart || 0;
     const left = source.slice(0, cursor);
-    const match = left.match(/[A-Za-z0-9_]+$/);
+    const match = left.match(/[A-Za-z0-9_-]+$/);
     const start = match ? cursor - match[0].length : cursor;
     // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
     hideLspCompletion();
@@ -4003,9 +4024,9 @@ function renderLspCompletionPopup() {
         const kind = lspCompletionKindMeta(item.kind);
 
         const icon = document.createElement('span');
-        icon.className = 'tty-menu-row-icon notes-lsp-completion-icon';
-        icon.textContent = kind.icon;
+        icon.className = `tty-menu-row-icon notes-lsp-completion-icon ${kind.iconClass}`;
         icon.title = kind.title;
+        icon.setAttribute('aria-label', kind.title);
         row.appendChild(icon);
 
         const label = document.createElement('span');
@@ -4041,7 +4062,9 @@ function renderLspCompletionPopup() {
     lspCompletionEl.appendChild(fragment);
     lspCompletionEl.style.display = 'block';
 
-    const anchor = getLspAnchorViewportPoint();
+    const anchor = (isMonacoActive() && !state.lspActiveBlockId)
+        ? getMonacoCompletionMenuAnchor()
+        : getLspAnchorViewportPoint();
     const rawX = anchor.x;
     const rawY = anchor.y;
     const x = Math.min(rawX + 14, window.innerWidth - lspCompletionEl.offsetWidth - 8);
@@ -4072,10 +4095,6 @@ function moveLspCompletionSelection(delta) {
 }
 
 async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
-    if (isMonacoActive() && !state.lspActiveBlockId) {
-        return;
-    }
-
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspCompletion();
@@ -4083,11 +4102,14 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
     }
 
     const completionFile = blockTarget ? blockTarget.filePath : state.currentFile;
-    const completionEditor = blockTarget ? blockTarget.editor : elements.editor;
-    const pos = offsetToLspPosition(completionEditor.value || '', completionEditor.selectionStart || 0);
+    const completionSource = blockTarget ? (blockTarget.editor.value || '') : getMainEditorValue();
+    const completionSelection = blockTarget
+        ? { start: blockTarget.editor.selectionStart || 0 }
+        : getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(completionSource, completionSelection.start || 0);
     try {
         const items = await NotesLspCompletion(completionFile, pos.line, pos.character, triggerKind, triggerChar);
-        const list = Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+        const list = Array.isArray(items) ? items : [];
         if (list.length === 0) {
             hideLspCompletion();
             return;
@@ -4102,11 +4124,125 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
     }
 }
 
-async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
-    if (isMonacoActive() && !state.lspActiveBlockId) {
+function getMonacoCompletionMenuAnchor() {
+    const caretPoint = monacoMainEditor?.getCursorViewportPoint?.();
+    if (caretPoint && Number.isFinite(caretPoint.x) && Number.isFinite(caretPoint.y)) {
+        return caretPoint;
+    }
+
+    const rect = elements.monacoEditor?.getBoundingClientRect?.();
+    if (rect) {
+        return {
+            x: rect.left + 24,
+            y: rect.top + 24,
+        };
+    }
+
+    return getLspAnchorViewportPoint();
+}
+
+function shouldMonacoTabIndent() {
+    const selection = monacoMainEditor?.getSelectionOffsets?.();
+    const cursor = Number(selection?.start) || 0;
+    const source = getMainEditorValue();
+    const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+    const leftOfCaret = source.slice(lineStart, cursor);
+    return /^\s*$/.test(leftOfCaret);
+}
+
+async function applyMonacoTabIndent() {
+    if (!isMonacoActive()) {
         return;
     }
 
+    const selection = monacoMainEditor.getSelectionOffsets();
+    const start = Number(selection?.start) || 0;
+    const end = Number(selection?.end) || start;
+    const indentation = await getIndentationString();
+
+    hideLspCompletion();
+    monacoMainEditor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
+    const next = start + indentation.length;
+    monacoMainEditor.setSelectionOffsets(next, next);
+    monacoMainEditor.focus();
+}
+
+function handleMonacoCompletionRequest(payload = {}) {
+    if (!isMonacoActive() || state.lspActiveBlockId) {
+        return false;
+    }
+
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return false;
+    }
+
+    const source = String(payload.source || '');
+    const key = String(payload.key || '');
+    const ctrlKey = payload.ctrlKey === true;
+    const metaKey = payload.metaKey === true;
+    const altKey = payload.altKey === true;
+
+    if (source === 'keydown' && state.lspCompletionVisible) {
+        if (key === 'Escape') {
+            hideLspCompletion();
+            return true;
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && key === 'ArrowDown') {
+            return moveLspCompletionSelection(1);
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && key === 'ArrowUp') {
+            return moveLspCompletionSelection(-1);
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && (key === 'Enter' || key === 'Tab')) {
+            return commitActiveLspCompletion();
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && (key === 'Backspace' || key === 'Delete')) {
+            requestAnimationFrame(() => {
+                void requestLspCompletionAfterSync(getMainEditorValue(), '', 1);
+            });
+        }
+    }
+
+    if (source === 'type' && (key === '.' || key === ':' || key === '>')) {
+        void requestLspCompletionAfterSync(getMainEditorValue(), key, 2);
+        return true;
+    }
+
+    if (source === 'type' && state.lspCompletionVisible) {
+        if (/^[-_A-Za-z0-9]$/.test(key)) {
+            return false;
+        }
+
+        if (!/^\s$/.test(key)) {
+            hideLspCompletion();
+        }
+    }
+
+    if (source === 'keydown') {
+        const isTab = key === 'Tab' && !ctrlKey && !metaKey && !altKey;
+        const isCtrlSpace = (key === ' ' || key === 'Space' || key === 'Spacebar')
+            && (ctrlKey || metaKey)
+            && !altKey;
+
+        if (isTab && shouldMonacoTabIndent()) {
+            void applyMonacoTabIndent();
+            return true;
+        }
+
+        if (isTab || isCtrlSpace) {
+            void requestLspCompletionAfterSync(getMainEditorValue(), '', 1);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         return;
@@ -5077,6 +5213,12 @@ function getLspAnchorViewportPoint() {
 }
 
 function scheduleLspHover() {
+    if (state.lspCompletionVisible) {
+        clearLspHoverTimer();
+        hideLspHoverTooltip();
+        return;
+    }
+
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspHoverTooltip();
@@ -5138,6 +5280,11 @@ async function renderLspHoverTooltipText(text) {
 }
 
 async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = '') {
+    if (state.lspCompletionVisible) {
+        hideLspHoverTooltip();
+        return;
+    }
+
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
@@ -5218,7 +5365,7 @@ async function openCurrentLspDocument(content) {
                         // Completion can still work with last synced state.
                     }
                     const items = await NotesLspCompletion(state.currentFile, line, character, 1, '');
-                    return Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+                    return Array.isArray(items) ? items : [];
                 },
                 signature: async ({ line, character }) => {
                     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
@@ -11803,8 +11950,20 @@ if (elements.editor) {
                 }
             }
         } else {
-            // Monaco mode uses Monaco suggest + LSP providers instead of the legacy popup.
-            hideLspCompletion();
+            const cursor = elements.editor.selectionStart || 0;
+            const value = elements.editor.value || '';
+            const prevChar = cursor > 0 ? value[cursor - 1] : '';
+
+            if (state.lspCompletionVisible) {
+                void requestLspCompletionAfterSync(value, '', 1);
+            } else if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+                void requestLspCompletionAfterSync(value, prevChar);
+            } else {
+                const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
+                if (!isIdentifierChar) {
+                    hideLspCompletion();
+                }
+            }
         }
 
         if (usesCodeEditorDecorations()) {

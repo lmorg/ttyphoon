@@ -9,6 +9,7 @@ import {
 } from '../wailsjs/go/main/WApp';
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
+const PASSIVE_MENU_ROOT_ID = 'ttyphoon-passive-menu';
 
 // Registry for pure-JS context menus with negative IDs (never forwarded to Go).
 const _localCallbacks = new Map();
@@ -19,6 +20,20 @@ let _menuOperationInProgress = false;
 let _localMenuReturnFocus = null;
 let _listMenuTransitionSeq = 0;
 let _goFilterSeq = 0;
+let _passiveMenuRoot = null;
+let _passiveMenuTitle = null;
+let _passiveMenuBody = null;
+let _passiveMenuVisible = false;
+let _passiveMenuRows = [];
+let _passiveMenuHighlightIndex = -1;
+let _passiveMenuOnSelect = null;
+let _passiveMenuOnHighlight = null;
+let _passiveMenuOnCancel = null;
+let _passiveMenuShowNextToMouse = true;
+let _passiveMenuAnchorX = 8;
+let _passiveMenuAnchorY = 8;
+let _passiveMenuVisibleRows = 12;
+let _passiveMenuRootClassName = '';
 
 function menuHighlight(id, index) {
     if (id < 0) {
@@ -77,6 +92,242 @@ function toIconText(icon) {
 
 function isSeparatorTitle(title) {
     return title === '-';
+}
+
+function normalizeColumnAlign(value) {
+    const align = String(value || '').toLowerCase();
+    if (align === 'center' || align === 'right') {
+        return align;
+    }
+    return 'left';
+}
+
+function normalizePassiveRows(rows = []) {
+    return rows.map((row, rowIndex) => {
+        if (row === '-' || row?.separator === true) {
+            return {
+                id: rowIndex,
+                separator: true,
+                selectable: false,
+                columns: [],
+            };
+        }
+
+        if (typeof row === 'string') {
+            return {
+                id: rowIndex,
+                separator: false,
+                selectable: true,
+                deprecated: false,
+                columns: [{
+                    text: row,
+                    align: 'left',
+                    color: '',
+                    className: '',
+                    grow: true,
+                }],
+            };
+        }
+
+        const columns = Array.isArray(row?.columns) && row.columns.length > 0
+            ? row.columns
+            : [{ text: String(row?.title || ''), grow: true }];
+
+        return {
+            id: rowIndex,
+            separator: false,
+            selectable: row?.selectable !== false,
+            deprecated: row?.deprecated === true,
+            rowClassName: String(row?.rowClassName || ''),
+            columns: columns.map((column) => ({
+                text: String(column?.text || ''),
+                align: normalizeColumnAlign(column?.align),
+                color: String(column?.color || ''),
+                className: String(column?.className || ''),
+                grow: column?.grow !== false,
+                title: String(column?.title || ''),
+            })),
+        };
+    });
+}
+
+function firstSelectablePassiveRowIndex() {
+    for (let i = 0; i < _passiveMenuRows.length; i += 1) {
+        const row = _passiveMenuRows[i];
+        if (!row.separator && row.selectable) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function clampPassiveMenuPosition() {
+    if (!_passiveMenuRoot) {
+        return;
+    }
+
+    const rect = _passiveMenuRoot.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let x = _passiveMenuAnchorX;
+    let y = _passiveMenuAnchorY;
+
+    if (!_passiveMenuShowNextToMouse) {
+        x = Math.round((vw - rect.width) / 2);
+        y = 14;
+    }
+
+    if (x + rect.width > vw - 8) {
+        x = Math.max(8, vw - rect.width - 8);
+    }
+    if (y + rect.height > vh - 8) {
+        y = Math.max(8, vh - rect.height - 8);
+    }
+
+    _passiveMenuRoot.style.left = `${x}px`;
+    _passiveMenuRoot.style.top = `${y}px`;
+}
+
+function ensurePassiveMenuDom() {
+    if (_passiveMenuRoot && _passiveMenuRoot.isConnected) {
+        return;
+    }
+
+    _passiveMenuRoot = document.createElement('div');
+    _passiveMenuRoot.id = PASSIVE_MENU_ROOT_ID;
+    _passiveMenuRoot.className = 'tty-menu tty-passive-menu';
+    _passiveMenuRoot.style.display = 'none';
+
+    _passiveMenuTitle = document.createElement('div');
+    _passiveMenuTitle.className = 'tty-menu-title';
+
+    _passiveMenuBody = document.createElement('div');
+    _passiveMenuBody.className = 'tty-menu-list';
+
+    _passiveMenuRoot.appendChild(_passiveMenuTitle);
+    _passiveMenuRoot.appendChild(_passiveMenuBody);
+    document.body.appendChild(_passiveMenuRoot);
+
+    _passiveMenuRoot.addEventListener('mousedown', (event) => {
+        const rowElement = event.target instanceof Element
+            ? event.target.closest('[data-passive-menu-index]')
+            : null;
+        if (!rowElement) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const rowIndex = Number.parseInt(rowElement.dataset.passiveMenuIndex || '-1', 10);
+        if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= _passiveMenuRows.length) {
+            return;
+        }
+
+        const row = _passiveMenuRows[rowIndex];
+        if (!row || row.separator || !row.selectable) {
+            return;
+        }
+
+        _passiveMenuHighlightIndex = rowIndex;
+        _passiveMenuOnSelect?.(rowIndex);
+        hidePassiveLocalMenu(false);
+    });
+
+    _passiveMenuRoot.addEventListener('mousemove', (event) => {
+        const rowElement = event.target instanceof Element
+            ? event.target.closest('[data-passive-menu-index]')
+            : null;
+        if (!rowElement) {
+            return;
+        }
+
+        const rowIndex = Number.parseInt(rowElement.dataset.passiveMenuIndex || '-1', 10);
+        if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= _passiveMenuRows.length) {
+            return;
+        }
+
+        const row = _passiveMenuRows[rowIndex];
+        if (!row || row.separator || !row.selectable || rowIndex === _passiveMenuHighlightIndex) {
+            return;
+        }
+
+        _passiveMenuHighlightIndex = rowIndex;
+        _passiveMenuOnHighlight?.(rowIndex);
+        renderPassiveLocalMenu();
+    });
+}
+
+function renderPassiveLocalMenu() {
+    if (!_passiveMenuRoot || !_passiveMenuBody || !_passiveMenuTitle) {
+        return;
+    }
+
+    _passiveMenuBody.replaceChildren();
+
+    _passiveMenuRows.forEach((row, rowIndex) => {
+        if (row.separator) {
+            const hr = document.createElement('div');
+            hr.className = 'tty-menu-separator';
+            _passiveMenuBody.appendChild(hr);
+            return;
+        }
+
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'tty-menu-row tty-menu-rich-row';
+        item.dataset.passiveMenuIndex = String(rowIndex);
+        item.classList.toggle('is-active', rowIndex === _passiveMenuHighlightIndex);
+        item.classList.toggle('is-deprecated', row.deprecated === true);
+        if (row.rowClassName) {
+            item.classList.add(...row.rowClassName.split(/\s+/).filter(Boolean));
+        }
+
+        if (!row.selectable) {
+            item.disabled = true;
+        }
+
+        row.columns.forEach((column) => {
+            const col = document.createElement('span');
+            col.className = `tty-menu-rich-col align-${column.align}`;
+            if (column.className) {
+                col.classList.add(...column.className.split(/\s+/).filter(Boolean));
+            }
+
+            if (column.grow) {
+                col.classList.add('is-grow');
+            }
+
+            if (column.color) {
+                col.style.color = column.color;
+            }
+
+            if (column.title) {
+                col.title = column.title;
+            }
+
+            col.textContent = column.text;
+            item.appendChild(col);
+        });
+
+        _passiveMenuBody.appendChild(item);
+    });
+
+    _passiveMenuBody.style.maxHeight = `calc(${Math.max(4, _passiveMenuVisibleRows)} * var(--terminal-menu-font-size) + 16px)`;
+
+    const hasTitle = _passiveMenuTitle.textContent.trim().length > 0;
+    _passiveMenuTitle.style.display = hasTitle ? 'block' : 'none';
+
+    _passiveMenuRoot.classList.remove('hide');
+    _passiveMenuRoot.classList.add('show');
+    _passiveMenuRoot.style.display = 'block';
+    clampPassiveMenuPosition();
+
+    const activeRow = _passiveMenuBody.querySelector(`[data-passive-menu-index="${_passiveMenuHighlightIndex}"]`);
+    if (activeRow && typeof activeRow.scrollIntoView === 'function') {
+        activeRow.scrollIntoView({ block: 'nearest' });
+    }
 }
 
 function measureIdealWidth(items, title, withIcons) {
@@ -825,5 +1076,185 @@ export function showLocalMenu({
         showNextToMouseCursor,
     });
 }
+
+function isSelectablePassiveMenuIndex(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= _passiveMenuRows.length) {
+        return false;
+    }
+
+    const row = _passiveMenuRows[index];
+    return Boolean(row && !row.separator && row.selectable);
+}
+
+function ensurePassiveHighlightIndex(index = -1) {
+    if (isSelectablePassiveMenuIndex(index)) {
+        _passiveMenuHighlightIndex = index;
+        return;
+    }
+
+    _passiveMenuHighlightIndex = firstSelectablePassiveRowIndex();
+}
+
+export function isPassiveLocalMenuVisible() {
+    return _passiveMenuVisible === true;
+}
+
+export function hidePassiveLocalMenu(cancel = true) {
+    if (!_passiveMenuVisible) {
+        return;
+    }
+
+    _passiveMenuVisible = false;
+
+    if (_passiveMenuRoot) {
+        _passiveMenuRoot.classList.remove('show');
+        _passiveMenuRoot.classList.add('hide');
+        _passiveMenuRoot.style.display = 'none';
+    }
+
+    _passiveMenuRootClassName = '';
+
+    if (cancel) {
+        _passiveMenuOnCancel?.(_passiveMenuHighlightIndex);
+    }
+}
+
+export function setPassiveLocalMenuHighlight(index) {
+    if (!_passiveMenuVisible) {
+        return false;
+    }
+
+    if (!isSelectablePassiveMenuIndex(index)) {
+        return false;
+    }
+
+    _passiveMenuHighlightIndex = index;
+    _passiveMenuOnHighlight?.(index);
+    renderPassiveLocalMenu();
+    return true;
+}
+
+export function selectPassiveLocalMenu(index = _passiveMenuHighlightIndex) {
+    if (!_passiveMenuVisible || !isSelectablePassiveMenuIndex(index)) {
+        return false;
+    }
+
+    _passiveMenuHighlightIndex = index;
+    _passiveMenuOnSelect?.(index);
+    hidePassiveLocalMenu(false);
+    return true;
+}
+
+export function showPassiveLocalMenu({
+    title = null,
+    rows = [],
+    x = 8,
+    y = 8,
+    onSelect,
+    onHighlight,
+    onCancel,
+    highlightIndex = -1,
+    visibleRows = 12,
+    showNextToMouseCursor = true,
+    rootClassName = '',
+} = {}) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+        hidePassiveLocalMenu(true);
+        return;
+    }
+
+    ensurePassiveMenuDom();
+
+    _passiveMenuRows = normalizePassiveRows(rows);
+    _passiveMenuOnSelect = typeof onSelect === 'function' ? onSelect : null;
+    _passiveMenuOnHighlight = typeof onHighlight === 'function' ? onHighlight : null;
+    _passiveMenuOnCancel = typeof onCancel === 'function' ? onCancel : null;
+    _passiveMenuShowNextToMouse = showNextToMouseCursor === true;
+    _passiveMenuAnchorX = Number.isFinite(x) ? x : 8;
+    _passiveMenuAnchorY = Number.isFinite(y) ? y : 8;
+    _passiveMenuVisibleRows = Number.isFinite(visibleRows) ? Math.max(4, Math.floor(visibleRows)) : 12;
+    _passiveMenuRootClassName = String(rootClassName || '').trim();
+    _passiveMenuTitle.textContent = title ? String(title) : '';
+    _passiveMenuVisible = true;
+
+    if (_passiveMenuRoot) {
+        _passiveMenuRoot.className = ['tty-menu', 'tty-passive-menu', _passiveMenuRootClassName]
+            .filter(Boolean)
+            .join(' ');
+    }
+
+    ensurePassiveHighlightIndex(Number.isFinite(highlightIndex) ? Math.floor(highlightIndex) : -1);
+    if (_passiveMenuHighlightIndex >= 0) {
+        _passiveMenuOnHighlight?.(_passiveMenuHighlightIndex);
+    }
+    renderPassiveLocalMenu();
+}
+
+export function updatePassiveLocalMenu({
+    title,
+    rows,
+    x,
+    y,
+    highlightIndex,
+    visibleRows,
+} = {}) {
+    if (!_passiveMenuVisible) {
+        return false;
+    }
+
+    if (typeof title !== 'undefined' && _passiveMenuTitle) {
+        _passiveMenuTitle.textContent = title ? String(title) : '';
+    }
+
+    if (Array.isArray(rows)) {
+        _passiveMenuRows = normalizePassiveRows(rows);
+    }
+
+    if (Number.isFinite(x)) {
+        _passiveMenuAnchorX = x;
+    }
+
+    if (Number.isFinite(y)) {
+        _passiveMenuAnchorY = y;
+    }
+
+    if (Number.isFinite(visibleRows)) {
+        _passiveMenuVisibleRows = Math.max(4, Math.floor(visibleRows));
+    }
+
+    if (Number.isFinite(highlightIndex)) {
+        ensurePassiveHighlightIndex(Math.floor(highlightIndex));
+    } else if (!isSelectablePassiveMenuIndex(_passiveMenuHighlightIndex)) {
+        ensurePassiveHighlightIndex(-1);
+    }
+
+    renderPassiveLocalMenu();
+    return true;
+}
+
+window.addEventListener('mousedown', (event) => {
+    if (!_passiveMenuVisible || !_passiveMenuRoot) {
+        return;
+    }
+
+    if (_passiveMenuRoot.contains(event.target)) {
+        return;
+    }
+
+    hidePassiveLocalMenu(true);
+}, true);
+
+window.addEventListener('resize', () => {
+    if (!_passiveMenuVisible) {
+        return;
+    }
+    clampPassiveMenuPosition();
+});
+
+window.addEventListener('blur', () => {
+    if (_passiveMenuVisible) {
+        hidePassiveLocalMenu(true);
+    }
+});
 
 

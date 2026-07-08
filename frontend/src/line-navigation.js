@@ -26,6 +26,14 @@ function isEligibleTarget(target) {
         return false;
     }
 
+    // Monaco manages its own Home/End navigation via its hidden internal
+    // <textarea class="inputarea">. Intercepting it here steals the first
+    // keypress (moving the caret inside the hidden textarea) and forces a
+    // double-tap, so let Monaco handle these keys natively.
+    if (target.closest('.monaco-editor')) {
+        return false;
+    }
+
     if (target instanceof HTMLTextAreaElement || isEligibleTextInput(target)) {
         return !target.disabled && !target.readOnly;
     }

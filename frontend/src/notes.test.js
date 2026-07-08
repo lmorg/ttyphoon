@@ -1037,7 +1037,7 @@ describe('notes rendering', () => {
         expect(firstItem).not.toBeNull();
         expect(firstItem?.classList.contains('tty-menu-row')).toBe(true);
         expect(firstItem?.classList.contains('is-deprecated')).toBe(true);
-        expect(firstItem?.querySelector('.notes-lsp-completion-icon')?.textContent).toBe('Fn');
+        expect(firstItem?.querySelector('.notes-lsp-completion-icon')?.classList.contains('codicon-symbol-function')).toBe(true);
         expect(firstItem?.querySelector('.notes-lsp-completion-kind')?.textContent).toBe('function');
         firstItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
@@ -1415,7 +1415,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const hover = document.getElementById('notes-lsp-hover-tooltip');
-        expect(hover?.style.display).toBe('block');
+        expect(hover?.style.display).toBe('none');
         expect(hover?.style.opacity || '').toBe('');
 
         const styles = getNotesRenderedStyles();

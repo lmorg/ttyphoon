@@ -491,10 +491,8 @@ export async function createMonacoAdapter(container, options = {}) {
         const accent = parseRgb(colors.accent, fg);
         const selection = parseRgb(colors.selection, mix(bg, fg, 0.28));
         const lineNo = mix(fg, bg, 0.3);
-        const cursorSource = (colors && typeof colors.cursor === 'object')
-            ? colors.cursor
-            : mix(accent, fg, 0.25);
-        const cursor = parseRgb(cursorSource, mix(accent, fg, 0.25));
+        // Caret uses the editor foreground colour (--fg) for maximum contrast.
+        const cursor = fg;
         const darkBase = luminance(bg) < 128;
 
         const bgHex = rgbToHex(bg);
@@ -552,6 +550,14 @@ export async function createMonacoAdapter(container, options = {}) {
         automaticLayout: true,
         contextmenu: false,
         lightbulb: { enabled: false },
+        quickSuggestions: false,
+        suggestOnTriggerCharacters: false,
+        wordBasedSuggestions: 'off',
+        snippetSuggestions: 'none',
+        acceptSuggestionOnEnter: 'off',
+        tabCompletion: 'off',
+        parameterHints: { enabled: false },
+        inlineSuggest: { enabled: false },
         wordWrap: 'off',
         cursorBlinking: 'blink',
         hover: { enabled: false },
@@ -572,6 +578,21 @@ export async function createMonacoAdapter(container, options = {}) {
         tabSize: 4,
         insertSpaces: true,
     });
+
+    // Alias Home/End to Monaco's built-in line navigation commands so they
+    // behave the same as Cmd+Left/Cmd+Right (and Shift selection variants).
+    /*editor.addCommand(monaco.KeyCode.Home, () => {
+        triggerCursorCommand('cursorHome');
+    });
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Home, () => {
+        triggerCursorCommand('cursorHomeSelect');
+    });
+    editor.addCommand(monaco.KeyCode.End, () => {
+        triggerCursorCommand('cursorEnd');
+    });
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.End, () => {
+        triggerCursorCommand('cursorEndSelect');
+    });*/
 
     function setMonacoVimActiveClass(enabled) {
         const root = editor.getDomNode();
@@ -770,9 +791,41 @@ export async function createMonacoAdapter(container, options = {}) {
         }
     });
 
+    const triggerCursorCommand = (command) => {
+        editor.trigger('keyboard', command, null);
+        positionVimIndicator();
+    };
+
+
+
     const keyDownDisposable = editor.onKeyDown((event) => {
         const browserEvent = event?.browserEvent;
+        const position = editor.getPosition();
+
+        if (browserEvent && position && typeof options.onCompletionRequest === 'function') {
+            const completionRequested = options.onCompletionRequest({
+                source: 'keydown',
+                key: String(browserEvent.key || ''),
+                ctrlKey: browserEvent.ctrlKey === true,
+                metaKey: browserEvent.metaKey === true,
+                altKey: browserEvent.altKey === true,
+                shiftKey: browserEvent.shiftKey === true,
+                triggerKind: 1,
+                triggerChar: '',
+                line: Math.max(0, position.lineNumber - 1),
+                character: Math.max(0, position.column - 1),
+            }) === true;
+            if (completionRequested) {
+                browserEvent.preventDefault?.();
+                browserEvent.stopPropagation?.();
+                return;
+            }
+        }
+
         if (!browserEvent || String(browserEvent.key || '') !== 'Escape') {
+            if (typeof options.onKeyDown === 'function' && browserEvent) {
+                options.onKeyDown(browserEvent, event);
+            }
             return;
         }
 
@@ -783,10 +836,41 @@ export async function createMonacoAdapter(container, options = {}) {
         browserEvent.preventDefault?.();
         browserEvent.stopPropagation?.();
         void enableVimMode();
+
+        if (typeof options.onKeyDown === 'function' && browserEvent) {
+            options.onKeyDown(browserEvent, event);
+        }
     });
 
     const scrollDisposable = editor.onDidScrollChange(() => {
         positionVimIndicator();
+    });
+
+    const typeDisposable = editor.onDidType((text) => {
+        if (typeof options.onCompletionRequest !== 'function') {
+            return;
+        }
+
+        const triggerChar = String(text || '').slice(-1);
+        const position = editor.getPosition();
+        if (!position) {
+            return;
+        }
+
+        const isTrigger = triggerChar === '.' || triggerChar === ':' || triggerChar === '>';
+
+        options.onCompletionRequest({
+            source: 'type',
+            key: triggerChar,
+            ctrlKey: false,
+            metaKey: false,
+            altKey: false,
+            shiftKey: false,
+            triggerKind: isTrigger ? 2 : 1,
+            triggerChar: isTrigger ? triggerChar : '',
+            line: Math.max(0, position.lineNumber - 1),
+            character: Math.max(0, position.column - 1),
+        });
     });
 
     const blurDisposable = editor.onDidBlurEditorWidget(() => {
@@ -1029,24 +1113,6 @@ export async function createMonacoAdapter(container, options = {}) {
                 }
             });
 
-            lspDisposables.push(monaco.languages.registerCompletionItemProvider(languageId, {
-                triggerCharacters: ['.', ':', '>'],
-                provideCompletionItems: async (_model, position, _context) => {
-                    if (typeof callbacks.completion !== 'function') {
-                        return { suggestions: [] };
-                    }
-                    const items = await callbacks.completion({ line: position.lineNumber - 1, character: position.column - 1 });
-                    const suggestions = (Array.isArray(items) ? items : []).map((item) => ({
-                        label: String(item?.label || ''),
-                        insertText: String(item?.insertText || item?.label || ''),
-                        kind: Number(item?.kind) || monaco.languages.CompletionItemKind.Text,
-                        detail: item?.detail ? String(item.detail) : undefined,
-                        documentation: item?.documentation ? String(item.documentation) : undefined,
-                    }));
-                    return { suggestions };
-                },
-            }));
-
             lspDisposables.push(monaco.languages.registerSignatureHelpProvider(languageId, {
                 signatureHelpTriggerCharacters: ['(', ','],
                 provideSignatureHelp: async (_model, position) => {
@@ -1266,6 +1332,25 @@ export async function createMonacoAdapter(container, options = {}) {
             editor.revealPositionInCenter(pos);
         },
 
+        getCursorViewportPoint() {
+            const position = editor.getPosition();
+            const domNode = editor.getDomNode();
+            if (!position || !domNode) {
+                return null;
+            }
+
+            const visible = editor.getScrolledVisiblePosition(position);
+            if (!visible) {
+                return null;
+            }
+
+            const rect = domNode.getBoundingClientRect();
+            return {
+                x: rect.left + visible.left,
+                y: rect.top + visible.top + visible.height,
+            };
+        },
+
         focus() {
             editor.focus();
         },
@@ -1343,6 +1428,7 @@ export async function createMonacoAdapter(container, options = {}) {
             mouseDownDisposable.dispose();
             keyDownDisposable.dispose();
             scrollDisposable.dispose();
+            typeDisposable.dispose();
             disposeLsp();
             while (fallbackProviderDisposables.length > 0) {
                 const disposable = fallbackProviderDisposables.pop();
