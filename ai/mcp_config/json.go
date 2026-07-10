@@ -55,12 +55,18 @@ type OAuthT struct {
 	ClientSecret string `json:"clientSecret"`
 	// RedirectURI customizes the OAuth redirect URL (default: http://127.0.0.1:7700/)
 	RedirectURI string `json:"redirectUri"`
-	// Scopes are the OAuth scopes to request (default: as determined by server or empty for defaults)
+	// Scopes are OAuth scopes used only as a FALLBACK. The MCP SDK derives scopes
+	// from the server (the WWW-Authenticate challenge, or Protected Resource
+	// Metadata scopes_supported). These configured scopes are injected into the
+	// authorization request ONLY when the server advertises none; they never
+	// override server-advertised scopes.
 	Scopes []string `json:"scopes"`
 	// AuthServerMetadataURL is the authorization server metadata endpoint for OIDC discovery
 	// (default: auto-discovered from server's .well-known/openid-configuration or oauth-authorization-server)
 	AuthServerMetadataURL string `json:"authServerMetadataUrl"`
-	// PKCEEnabled toggles PKCE support (default: true, recommended)
+	// PKCEEnabled is deprecated and ignored. PKCE (S256) is always enforced by the
+	// underlying MCP SDK per the MCP authorization spec and cannot be disabled;
+	// this field is retained only so existing configs continue to parse.
 	PKCEEnabled bool `json:"pkceEnabled"`
 	// TokenFile is the path to store and retrieve OAuth tokens
 	// (default: $XDG_CACHE_HOME/ttyphoon/mcp-tokens/{server}.json)
@@ -93,7 +99,6 @@ func (o *OAuthT) IsOAuthConfigured() bool {
 		o.RedirectURI != "" ||
 		len(o.Scopes) > 0 ||
 		o.AuthServerMetadataURL != "" ||
-		o.PKCEEnabled ||
 		o.TokenFile != ""
 }
 

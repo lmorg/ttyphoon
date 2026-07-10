@@ -35,9 +35,9 @@ The `oauth` block inside each server entry is fully optional. If omitted entirel
 | `clientSecret` | auto | Client secret for confidential clients |
 | `clientUri` | — | Provider-issued client metadata document URL; enables Client ID Metadata Document registration flow |
 | `redirectUri` | `http://127.0.0.1:7700/` | OAuth redirect URL — must match what you registered with the provider |
-| `scopes` | server default | Array of OAuth scopes to request |
+| `scopes` | server-derived | Fallback OAuth scopes. Used only when the server advertises none (via the WWW-Authenticate challenge or Protected Resource Metadata `scopes_supported`); they never override server-advertised scopes |
 | `authServerMetadataUrl` | auto-discovered | Authorization server OIDC/OAuth metadata endpoint, e.g. `https://auth.example.com/.well-known/openid-configuration` |
-| `pkceEnabled` | `true` | Enables PKCE (Proof Key for Code Exchange). Strongly recommended; disable only if the provider explicitly rejects it |
+| `pkceEnabled` | `true` (forced) | Deprecated and ignored. PKCE (S256) is always enforced per the MCP authorization spec and cannot be disabled |
 | `tokenFile` | `$XDG_CACHE_HOME/ttyphoon/mcp-tokens/{server}.json` | Path to persist OAuth tokens across sessions |
 
 ## Client Registration Methods
