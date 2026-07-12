@@ -1,23 +1,13 @@
 package agent
 
 import (
-	"context"
 	"fmt"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/types"
 )
 
-type Tool interface {
-	New(*Agent) (Tool, error)
-	Enabled() bool
-	Toggle()
-	Name() string
-	Path() string
-	Description() string
-	Call(context.Context, string) (string, error)
-}
-
-var _tools []Tool
+var _tools []aitypes.Tool
 
 func (agent *Agent) toolsInit() {
 	for i := range _tools {
@@ -30,11 +20,11 @@ func (agent *Agent) toolsInit() {
 	}
 }
 
-func ToolsAdd(t Tool) {
+func ToolsAdd(t aitypes.Tool) {
 	_tools = append(_tools, t)
 }
 
-func (agent *Agent) ToolsAdd(t Tool) error {
+func (agent *Agent) ToolsAdd(t aitypes.Tool) error {
 	tool, err := t.New(agent)
 	if err != nil {
 		return err

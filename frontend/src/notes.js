@@ -12,11 +12,11 @@ import {
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
+    GetNotesFindFieldValues, AddNotesFindFieldValue,
     GetDocumentCache, SetDocumentCache, FormatCodeBlock, FormatNotesContent, CompleteSyntax,
     NotesLspOpenDocument, NotesLspChangeDocument, NotesLspSaveDocument,
     NotesLspCloseDocument, NotesLspStopAll, NotesLspHover, NotesLspCompletion,
     NotesTyposOpenDocument, NotesTyposChangeDocument, NotesTyposCloseDocument,
-    NotesLspSemanticTokens,
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
     NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
@@ -27,11 +27,18 @@ import {
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
-import { showLocalMenu } from './popup_menu';
+import {
+    showLocalMenu,
+} from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
 import { initNotesAIPanel } from './notes-ai-panel';
+import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
+import { createEditorUndoManager } from './editor_undo_manager';
+import { createEditorMutationAdapter } from './editor_mutation_adapter';
+import { createMonacoAdapter } from './monaco_adapter';
+import './notes.css';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -405,55 +412,7 @@ const CONTEXT_ICON_ADD = 0xf067;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
-    if (document.getElementById('notes-cellref-style')) return;
-    const style = document.createElement('style');
-    style.id = 'notes-cellref-style';
-    style.textContent = `
-    .notes-cellref {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        opacity: 0.2;
-        font-size: calc(var(--notes-table-font-size, 1em) - 2px);
-        color: currentColor;
-        pointer-events: none;
-        z-index: 1;
-        line-height: 1;
-        user-select: none;
-        text-align: right;
-    }
-    .notes-table-cell-wrap {
-        position: relative;
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-    .notes-table-cell-wrap > span:first-child {
-        font-family: "Lato", var(--font-family), sans-serif !important;
-        font-size: inherit !important;
-        font-weight: inherit !important;
-        letter-spacing: 1px !important;
-    }
-    td .notes-cellref, th .notes-cellref {
-        /* ensure always visible */
-    }
-    .notes-sort-icon {
-        display: inline-block;
-        font-family: "Font Awesome Solid";
-        font-weight: 900;
-        margin-right: 6px;
-        color: var(--red);
-        vertical-align: middle;
-        font-style: normal;
-        pointer-events: none;
-        user-select: none;
-    }
-    thead th {
-        cursor: pointer;
-        user-select: none;
-    }
-    `;
-    document.head.appendChild(style);
+    return;
 }
 
 const IS_WINDOWS = typeof navigator !== 'undefined' && (
@@ -511,12 +470,9 @@ app.innerHTML = `
             <div id="notes-panel">
                 <div id="notes-editor-wrap" role="tabpanel">
                     <div id="notes-editor-shell" data-code-view="false">
-                        <div id="notes-editor-gutter-wrap" aria-hidden="true">
-                            <div id="notes-editor-gutter"></div>
-                        </div>
                         <div id="notes-editor-scroll">
-                            <pre id="notes-editor-highlight" aria-hidden="true"><code id="notes-editor-highlight-code" class="hljs"></code></pre>
                             <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                            <div id="notes-monaco-editor" aria-hidden="true"></div>
                         </div>
                     </div>
                 </div>
@@ -559,14 +515,14 @@ app.innerHTML = `
                         <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
                             <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
                             <button id="notes-tools-tab-frontmatter" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-frontmatter-pane" data-tab="frontmatter" style="display: none;">Frontmatter</button>
-                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
-                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
+                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
                             <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
                         </div>
                         <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
                     </div>
                     <div id="notes-tools-content" class="notes-tools-content">
-                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="true">
+                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
@@ -580,7 +536,7 @@ app.innerHTML = `
                         <div id="notes-tools-frontmatter-pane" class="notes-tools-pane" data-tab="frontmatter" data-active="false">
                             <div id="notes-tools-frontmatter" class="notes-tools-frontmatter"></div>
                         </div>
-                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="false">
+                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="true">
                             <div class="notes-tools-find-wrap markdown-body">
                                 <h1 class="notes-find-heading">In open file</h1>
                                 <div id="notes-find-controls" data-disabled="false">
@@ -676,9 +632,7 @@ const elements = {
     listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
     editorShell: document.getElementById('notes-editor-shell'),
-    editorGutter: document.getElementById('notes-editor-gutter'),
-    editorHighlight: document.getElementById('notes-editor-highlight'),
-    editorHighlightCode: document.getElementById('notes-editor-highlight-code'),
+    monacoEditor: document.getElementById('notes-monaco-editor'),
     preview: document.getElementById('notes-preview'),
     htmlViewWrap: document.getElementById('notes-html-view-wrap'),
     htmlViewFrame: document.getElementById('notes-html-view-frame'),
@@ -784,6 +738,7 @@ const state = {
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
     suspendDocumentCacheSave: false,
     dirty: false,
+    useMonacoEditor: false,
     renderTimer: null,
     autosaveTimer: null,
     viewMode: 'viewer',
@@ -848,7 +803,6 @@ const state = {
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
     markdownTableWordWrapMode: true,  // track table word wrap mode for View/Run modes
     lspChangeTimer: null,
-    lspEditorFormatTimer: null,
     lspOpenFile: '',
     typosOpenFile: '',
     typosChangeTimer: null,
@@ -856,9 +810,6 @@ const state = {
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
     lspHoverMouseY: 0,
-    lspSemanticTokens: [],
-    lspSemanticRequestId: 0,
-    lspSemanticSuppressedKey: '',
     lspInlayHints: [],
     lspInlayRequestId: 0,
     lspCompletionItems: [],
@@ -868,63 +819,284 @@ const state = {
 };
 
 const LSP_CHANGE_DEBOUNCE_MS = 200;
-const LSP_EDITOR_FORMAT_DEBOUNCE_MS = 60000;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
-const LSP_COMPLETION_MAX_ITEMS = 10;
-const LSP_SEMANTIC_MAX_RENDER_FILE_CHARS = 100000;
-const LSP_SEMANTIC_MAX_RENDER_TOKENS = 1200;
-
-let lastAutoCopiedViewerSelection = '';
-
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
-function activeViewerWrap() {
-    return elements.previewWrap || null;
+let monacoMainEditor = null;
+let suppressMonacoChange = false;
+let latestWindowStyle = null;
+
+function isMonacoPhase0Enabled() {
+    try {
+        const userAgent = String(globalThis?.navigator?.userAgent || '');
+        if (/jsdom/i.test(userAgent)) {
+            return false;
+        }
+
+        const value = window.localStorage.getItem('notes-editor-monaco');
+        return value !== '0';
+    } catch {
+        return true;
+    }
 }
 
-function getViewerSelectionText() {
-    const viewer = activeViewerWrap();
-    if (!viewer || typeof window.getSelection !== 'function') {
-        return '';
-    }
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-        return '';
-    }
-
-    const text = String(selection.toString() || '').trim();
-    if (!text) {
-        return '';
-    }
-
-    const anchorNode = selection.anchorNode;
-    const focusNode = selection.focusNode;
-    const anchorInViewer = anchorNode ? viewer.contains(anchorNode) : false;
-    const focusInViewer = focusNode ? viewer.contains(focusNode) : false;
-
-    return anchorInViewer || focusInViewer ? text : '';
+function isMonacoActive() {
+    return state.useMonacoEditor && monacoMainEditor !== null;
 }
 
-function handleViewerSelectionAutoCopy() {
-    const text = getViewerSelectionText();
-    if (!text) {
-        lastAutoCopiedViewerSelection = '';
+function getMainEditorValue() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getValue();
+    }
+    return String(elements.editor?.value || '');
+}
+
+function setMainEditorValue(value) {
+    const text = String(value || '');
+    if (elements.editor) {
+        elements.editor.value = text;
+    }
+
+    if (isMonacoActive()) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(text);
+        suppressMonacoChange = false;
+    }
+}
+
+function getMainEditorSelectionRange() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getSelectionOffsets();
+    }
+
+    const start = Number(elements.editor?.selectionStart) || 0;
+    const end = Number(elements.editor?.selectionEnd) || start;
+    return { start, end };
+}
+
+function setMainEditorSelectionRange(start, end) {
+    if (isMonacoActive()) {
+        monacoMainEditor.setSelectionOffsets(start, end);
         return;
     }
 
-    if (text === lastAutoCopiedViewerSelection) {
+    elements.editor.setSelectionRange(start, end);
+}
+
+function getMainEditorSelectionText() {
+    if (isMonacoActive()) {
+        return monacoMainEditor.getSelectionText();
+    }
+
+    const range = getMainEditorSelectionRange();
+    return getMainEditorValue().slice(range.start, range.end);
+}
+
+function replaceMainEditorRange(start, end, text) {
+    if (isMonacoActive()) {
+        monacoMainEditor.replaceRange(start, end, text, 'notes-main-editor-replace');
+        const nextCursor = Number(start) + String(text || '').length;
+        monacoMainEditor.setSelectionOffsets(nextCursor, nextCursor);
         return;
     }
 
-    lastAutoCopiedViewerSelection = text;
-    ClipboardSetText(text).then(() => {
-        notifyTerminal('Selection copied to clipboard', 'info');
-    }).catch(() => {});
+    elements.editor.focus();
+    elements.editor.setSelectionRange(start, end);
+    document.execCommand('insertText', false, String(text || ''));
+}
+
+function insertTextInMainEditor(text) {
+    const { start, end } = getMainEditorSelectionRange();
+    replaceMainEditorRange(start, end, text);
+}
+
+function insertTextAtMainEditorLineStart(text) {
+    const { start } = getMainEditorSelectionRange();
+    const value = getMainEditorValue();
+    const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    replaceMainEditorRange(lineStart, lineStart, text);
+}
+
+function getMonacoTypographyOptions() {
+    const computed = elements.editor ? getComputedStyle(elements.editor) : null;
+    const parsedFontSize = Number.parseFloat(computed?.fontSize || '');
+    const parsedLineHeight = Number.parseFloat(computed?.lineHeight || '');
+    const fallbackFontSize = Number(latestWindowStyle?.fontSize) || 13;
+    const safeFontSize = Number.isFinite(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : fallbackFontSize;
+
+    return {
+        fontFamily: String(computed?.fontFamily || latestWindowStyle?.fontFamily || '').trim(),
+        fontSize: safeFontSize,
+        lineHeight: Number.isFinite(parsedLineHeight) && parsedLineHeight > 0
+            ? parsedLineHeight
+            : Math.round(safeFontSize * 1.4),
+    };
+}
+
+async function ensureMonacoMainEditor() {
+    if (!state.useMonacoEditor || !elements.monacoEditor || monacoMainEditor) {
+        return;
+    }
+
+    const typography = getMonacoTypographyOptions();
+
+    monacoMainEditor = await createMonacoAdapter(elements.monacoEditor, {
+        value: String(elements.editor?.value || ''),
+        language: state.editorLanguage || 'plaintext',
+        highlightJs: hljs,
+        fontSize: typography.fontSize,
+        fontFamily: typography.fontFamily,
+        lineHeight: typography.lineHeight,
+        themeColors: latestWindowStyle?.colors || null,
+        onChange: (nextValue) => {
+            if (suppressMonacoChange) {
+                return;
+            }
+
+            if (elements.editor) {
+                elements.editor.value = String(nextValue || '');
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        },
+        onSelectionChange: (start, end) => {
+            if (!elements.editor) {
+                return;
+            }
+            elements.editor.selectionStart = Number(start) || 0;
+            elements.editor.selectionEnd = Number(end) || Number(start) || 0;
+            if (isCurrentFileLspEligible() && state.lspOpenFile === state.currentFile) {
+                state.lspHoverLastKey = '';
+                scheduleLspHover();
+            }
+        },
+        onPointerMove: (x, y) => {
+            state.lspHoverMouseX = Number(x) || 0;
+            state.lspHoverMouseY = Number(y) || 0;
+        },
+        onBlur: () => {
+            hideLspHoverTooltip();
+        },
+        onPaste: (event) => {
+            handleEditorImagePaste(event);
+        },
+        onContextMenu: (event) => {
+            openMainEditorContextMenu(event);
+        },
+        onCompletionRequest: (payload) => {
+            return handleMonacoCompletionRequest(payload);
+        },
+    });
+
+    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
+    if (latestWindowStyle?.colors) {
+        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+    }
+
+    // Monaco boot can race against file loading. Always re-sync from the hidden
+    // textarea source-of-truth immediately after adapter creation.
+    const latestText = String(elements.editor?.value || '');
+    if (monacoMainEditor.getValue() !== latestText) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(latestText);
+        suppressMonacoChange = false;
+    }
+
+    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
+    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
+    if (Array.isArray(spellcheckMisspellings)) {
+        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+    }
+    monacoMainEditor.layout();
+
+    requestAnimationFrame(() => {
+        if (!isMonacoActive()) {
+            return;
+        }
+        monacoMainEditor.layout();
+    });
+}
+
+// Force Monaco to re-measure against its real, visible box across the next two
+// animation frames. A display:none -> visible transition (tab switch, pane
+// maximize/restore) doesn't give Monaco a correct size in the same frame, so a
+// single synchronous layout() can latch a stale/zero viewport (blank editor or
+// content offset with a top shadow). Two deferred measured layouts fix that.
+function scheduleMonacoRelayout() {
+    if (!isMonacoActive()) {
+        return;
+    }
+    requestAnimationFrame(() => {
+        if (!isMonacoActive()) {
+            return;
+        }
+        monacoMainEditor.layout();
+        requestAnimationFrame(() => {
+            if (isMonacoActive()) {
+                monacoMainEditor.layout();
+            }
+        });
+    });
+}
+
+// Lazily create Monaco (only ever while its container is visible/sized) and push
+// the current document, language, wrap mode and theme before laying it out. This
+// is the single entry point used whenever the editor tab becomes visible.
+async function ensureMonacoVisibleAndLaidOut() {
+    if (!state.useMonacoEditor) {
+        return;
+    }
+
+    await ensureMonacoMainEditor();
+    if (!isMonacoActive()) {
+        return;
+    }
+
+    const latestText = String(elements.editor?.value || '');
+    if (monacoMainEditor.getValue() !== latestText) {
+        suppressMonacoChange = true;
+        monacoMainEditor.setValue(latestText);
+        suppressMonacoChange = false;
+    }
+
+    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
+    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
+    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
+    if (Array.isArray(spellcheckMisspellings)) {
+        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+    }
+    if (latestWindowStyle?.colors) {
+        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+    }
+
+    monacoMainEditor.layout();
+    scheduleMonacoRelayout();
+}
+
+function syncEditorEngineMode() {
+    if (!elements.editorShell) {
+        return;
+    }
+
+    elements.editorShell.dataset.monacoEnabled = state.useMonacoEditor ? 'true' : 'false';
 }
 
 configureMarked();
+state.useMonacoEditor = isMonacoPhase0Enabled();
+syncEditorEngineMode();
+
+// Belt-and-suspenders relayout: any size change to the editor box (pane
+// maximize/restore, splitter drag, window resize) triggers a measured Monaco
+// relayout. This complements Monaco's own automaticLayout, which can latch a
+// stale viewport across display:none -> visible transitions.
+if (typeof ResizeObserver !== 'undefined' && elements.monacoEditor?.parentElement) {
+    const monacoResizeObserver = new ResizeObserver(() => {
+        scheduleMonacoRelayout();
+    });
+    monacoResizeObserver.observe(elements.monacoEditor.parentElement);
+}
 
 function escapeEditorHtml(text) {
     return String(text || '')
@@ -1056,15 +1228,37 @@ function inferEditorLanguage(file, content) {
         cpp: 'cpp',
         hpp: 'cpp',
         cs: 'csharp',
+        fs: 'fsharp',
+        fsx: 'fsharp',
+        vb: 'vb',
+        vbs: 'vb',
         java: 'java',
+        jsh: 'java',
         kt: 'kotlin',
+        kts: 'kotlin',
         swift: 'swift',
         php: 'php',
         rb: 'ruby',
+        pl: 'perl',
+        raku: 'perl',
+        clj: 'clojure',
+        exs: 'elixir',
+        escript: 'elixir',
+        jl: 'julia',
+        scala: 'scala',
+        sc: 'scala',
+        lua: 'lua',
+        r: 'r',
+        st: 'st',
+        dart: 'dart',
+        tcl: 'tcl',
+        pas: 'pascal',
         sh: 'bash',
         bash: 'bash',
         zsh: 'bash',
         fish: 'bash',
+        nu: 'bash',
+        awk: 'bash',
         ps1: 'powershell',
         json: 'json',
         yaml: 'yaml',
@@ -1078,18 +1272,24 @@ function inferEditorLanguage(file, content) {
         mx: 'murex',
         md: 'markdown',
         markdown: 'markdown',
-        html: 'xml',
-        htm: 'xml',
-        xhtml: 'xml',
-        xht: 'xml',
-        shtml: 'xml',
+        html: 'html',
+        htm: 'html',
+        xhtml: 'html',
+        xht: 'html',
+        shtml: 'html',
         xml: 'xml',
         plist: 'xml',
         manifest: 'xml',
+        m: 'objective-c',
         css: 'css',
         scss: 'scss',
+        sass: 'scss',
+        less: 'less',
         dockerfile: 'dockerfile',
         makefile: 'makefile',
+        scm: 'scheme',
+        rkt: 'scheme',
+        lisp: 'scheme',
     };
 
     if (extension && extensionMap[extension]) {
@@ -1113,77 +1313,23 @@ function inferEditorLanguage(file, content) {
 }
 
 function syncEditorScrollDecorations() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlight) {
-        return;
-    }
-
-    const scrollTop = elements.editor.scrollTop;
-    const scrollLeft = elements.editor.scrollLeft;
-    elements.editorGutter.style.transform = `translateY(${-scrollTop}px)`;
-
-    // Wrapped mode has no horizontal scroll, so only sync vertical.
-    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-    if (isWrapModeEnabled) {
-        elements.editorHighlight.style.transform = `translate(0px, ${-scrollTop}px)`;
-    } else {
-        elements.editorHighlight.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+    if (isMonacoActive()) {
+        monacoMainEditor.layout();
     }
 }
 
 function renderEditorDecorations() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+    if (!isMonacoActive()) {
         return;
     }
-
-    const content = elements.editor.value || '';
-    const lineCount = Math.max(1, content.split('\n').length);
-    elements.editorGutter.textContent = Array.from({ length: lineCount }, (_, index) => String(index + 1)).join('\n');
-
-    // Match highlight layer height to the full scrollable editor content.
-    if (elements.editorHighlight) {
-        const contentHeight = Math.max(elements.editor.scrollHeight, elements.editor.clientHeight);
-        const contentWidth = Math.max(elements.editor.scrollWidth, elements.editor.clientWidth);
-        elements.editorHighlight.style.minHeight = `${contentHeight}px`;
-        
-        // Don't set minWidth for wrapped mode - it wraps, so width should match container
-        const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-        if (!isWrapModeEnabled) {
-            elements.editorHighlight.style.minWidth = `${contentWidth}px`;
-        }
-    }
-
-    const isWrapModeEnabled = elements.editorShell?.dataset?.wrapMode === 'true';
-    if (isWrapModeEnabled) {
-        // Wrap mode intentionally hides syntax highlighting and renders plain wrapped text.
-        elements.editorHighlightCode.textContent = '';
-        syncEditorScrollDecorations();
-        return;
-    }
-
-    const language = state.editorLanguage || 'plaintext';
-    try {
-        if (hljs.getLanguage(language)) {
-            elements.editorHighlightCode.innerHTML = hljs.highlight(content, { language, ignoreIllegals: true }).value;
-        } else if (language === 'markdown') {
-            // Avoid auto-detect for markdown; mis-detection often paints headings as comments.
-            elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
-        } else {
-            elements.editorHighlightCode.innerHTML = hljs.highlightAuto(content).value;
-        }
-    } catch {
-        elements.editorHighlightCode.innerHTML = escapeEditorHtml(content);
-    }
-
-    // Overlay LSP diagnostics and inlay hints on top of the freshly rendered syntax.
     renderLspEditorDecorations();
-
-    syncEditorScrollDecorations();
+    monacoMainEditor.layout();
 }
 
 function refreshEditorLanguage(file, content) {
     state.editorLanguage = inferEditorLanguage(file, content);
-    if (elements.editorHighlightCode) {
-        elements.editorHighlightCode.className = `hljs language-${state.editorLanguage || 'plaintext'}`;
+    if (isMonacoActive()) {
+        monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
     }
     renderEditorDecorations();
 }
@@ -1228,22 +1374,36 @@ function isSyntaxCompletionKeyEvent(event) {
     return SYNTAX_COMPLETION_TRIGGER_KEYS.has(String(event.key || ''));
 }
 
+// Phase 1 foundation: central undo manager + mutation adapter for editor range edits.
+const notesUndoManager = createEditorUndoManager();
+const notesMutationAdapter = createEditorMutationAdapter({
+    manager: notesUndoManager,
+    getFilePath: () => state.currentFile || '',
+});
+
 function applyTextareaEdit(textarea, start, end, text, cursor) {
     if (!textarea) {
         return;
     }
 
-    const safeStart = Math.max(0, Math.min(Number(start) || 0, textarea.value.length));
-    const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, textarea.value.length));
-    textarea.setRangeText(String(text || ''), safeStart, safeEnd, 'preserve');
-
-    const nextCursor = Math.max(0, Math.min(Number(cursor) || (safeStart + String(text || '').length), textarea.value.length));
-    textarea.setSelectionRange(nextCursor, nextCursor);
-    textarea.dispatchEvent(new Event('input'));
+    notesMutationAdapter.replaceRange(textarea, {
+        start,
+        end,
+        text,
+        cursor,
+        source: 'syntax-completion',
+        label: 'Apply textarea edit',
+        emit: true,
+    });
 }
 
 function maybeHandleSyntaxCompletionKey(event, textarea, options = {}) {
     if (!isSyntaxCompletionKeyEvent(event) || !textarea) {
+        return false;
+    }
+
+    // Monaco mode owns completion for the main Edit surface.
+    if (isMonacoActive() && textarea === elements.editor) {
         return false;
     }
 
@@ -1401,7 +1561,14 @@ function updateCsvCell(rowIndex, columnIndex, value) {
 
     row[columnIndex] = String(value ?? '').trim();
 
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Update CSV cell',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1415,7 +1582,14 @@ function insertCsvRowAfter(rowIndex) {
     const colCount = rows.length > 0 ? Math.max(...rows.map(r => r.length)) : 1;
     const newRow = Array(colCount).fill('');
     rows.splice(rowIndex + 1, 0, newRow);
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Insert CSV row',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1428,7 +1602,14 @@ function insertCsvColumnAfter(columnIndex) {
         while (row.length <= columnIndex) row.push('');
         row.splice(columnIndex + 1, 0, '');
     });
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Insert CSV column',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1447,7 +1628,14 @@ function deleteCsvRow(rowIndex) {
     }
 
     rows.splice(rowIndex, 1);
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Delete CSV row',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1472,7 +1660,14 @@ function deleteCsvColumn(columnIndex) {
         row.splice(columnIndex, 1);
     });
 
-    elements.editor.value = serializeCsvRows(rows);
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: serializeCsvRows(rows),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'csv-table-edit',
+        label: 'Delete CSV column',
+        emit: true,
+    });
     setDirty(true);
     renderCsvView(elements.editor.value, { interactive: state.viewMode === 'csv-run' });
     scheduleAutoSave();
@@ -1543,8 +1738,12 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
                 if (selection && range) {
                     range.selectNodeContents(cell);
                     range.collapse(false);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
+                    if (typeof selection.removeAllRanges === 'function') {
+                        selection.removeAllRanges();
+                    }
+                    if (typeof selection.addRange === 'function') {
+                        selection.addRange(range);
+                    }
                 }
                 cell.focus();
 
@@ -1693,18 +1892,6 @@ function setCodeEditorMode(enabled) {
 
     if (!enabled) {
         delete elements.editorShell.dataset.fileType;
-        if (elements.editorGutter) {
-            elements.editorGutter.textContent = '';
-            elements.editorGutter.style.transform = '';
-        }
-        if (elements.editorHighlight) {
-            elements.editorHighlight.style.transform = '';
-            elements.editorHighlight.style.minHeight = '';
-            elements.editorHighlight.style.minWidth = '';
-        }
-        if (elements.editorHighlightCode) {
-            elements.editorHighlightCode.innerHTML = '';
-        }
     }
 }
 
@@ -2445,7 +2632,7 @@ function setupCollapsibleHeadings(container, exclusive = false) {
             heading.style.textDecoration = '';
         });
 
-        heading.addEventListener('click', () => {
+        heading.addEventListener('dblclick', () => {
             if (exclusive) {
                 headingList.forEach((otherHeading) => {
                     setCollapsibleHeadingState(otherHeading, otherHeading !== heading);
@@ -3508,7 +3695,14 @@ function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
     }
 
     if (modified) {
-        elements.editor.value = lines.join('\n');
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: lines.join('\n'),
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'markdown-checkbox',
+            label: 'Toggle markdown checkbox',
+            emit: true,
+        });
         saveFile();
         // Keep viewer in sync when changes are made from jupyter mode
         if (state.viewMode === 'jupyter') {
@@ -3530,7 +3724,14 @@ function updateMarkdownTableOfContents() {
         return;
     }
 
-    elements.editor.value = result.text;
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: result.text,
+        selectionStart: 0,
+        selectionEnd: 0,
+        source: 'markdown-toc',
+        label: 'Update markdown table of contents',
+        emit: true,
+    });
     if (usesCodeEditorDecorations()) {
         refreshEditorLanguage(state.currentFile, elements.editor.value);
     }
@@ -3586,7 +3787,14 @@ function updateMarkdownCodeBlock(blockIndex, newContent) {
     }
 
     result += markdown.slice(lastIndex);
-    elements.editor.value = result;
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: result,
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'markdown-code-block',
+        label: 'Update markdown code block',
+        emit: true,
+    });
     return true;
 }
 
@@ -3682,66 +3890,77 @@ function closeOpenLspTooltips() {
     return closedAny;
 }
 
-function stripLspOverlayMarkup(html) {
-    return String(html || '')
-        .replace(/<span class="lsp-squiggle-[^"]*">([\s\S]*?)<\/span>/g, '$1')
-    .replace(/<span class="notes-lsp-semantic-token[^"]*"[^>]*>([\s\S]*?)<\/span>/g, '$1')
-    .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
-}
-
 function lspCompletionKindMeta(kind) {
     switch (Number(kind || 0)) {
     case 2:
-        return { icon: 'Md', badge: 'method', title: 'Method' };
+        return { iconClass: 'codicon codicon-symbol-method', badge: 'method', title: 'Method' };
     case 3:
-        return { icon: 'Fn', badge: 'function', title: 'Function' };
+        return { iconClass: 'codicon codicon-symbol-function', badge: 'function', title: 'Function' };
     case 4:
-        return { icon: 'Ct', badge: 'constructor', title: 'Constructor' };
+        return { iconClass: 'codicon codicon-symbol-constructor', badge: 'constructor', title: 'Constructor' };
     case 5:
-        return { icon: 'Fld', badge: 'field', title: 'Field' };
+        return { iconClass: 'codicon codicon-symbol-field', badge: 'field', title: 'Field' };
     case 6:
-        return { icon: 'Var', badge: 'variable', title: 'Variable' };
+        return { iconClass: 'codicon codicon-symbol-variable', badge: 'variable', title: 'Variable' };
     case 7:
-        return { icon: 'Cls', badge: 'class', title: 'Class' };
+        return { iconClass: 'codicon codicon-symbol-class', badge: 'class', title: 'Class' };
     case 8:
-        return { icon: 'Ifc', badge: 'interface', title: 'Interface' };
+        return { iconClass: 'codicon codicon-symbol-interface', badge: 'interface', title: 'Interface' };
     case 9:
-        return { icon: 'Mod', badge: 'module', title: 'Module' };
+        return { iconClass: 'codicon codicon-symbol-module', badge: 'module', title: 'Module' };
     case 10:
-        return { icon: 'Prop', badge: 'property', title: 'Property' };
+        return { iconClass: 'codicon codicon-symbol-property', badge: 'property', title: 'Property' };
     case 11:
-        return { icon: 'Unit', badge: 'unit', title: 'Unit' };
+        return { iconClass: 'codicon codicon-symbol-unit', badge: 'unit', title: 'Unit' };
     case 12:
-        return { icon: 'Val', badge: 'value', title: 'Value' };
+        return { iconClass: 'codicon codicon-symbol-value', badge: 'value', title: 'Value' };
     case 13:
-        return { icon: 'Enum', badge: 'enum', title: 'Enum' };
+        return { iconClass: 'codicon codicon-symbol-enum', badge: 'enum', title: 'Enum' };
     case 14:
-        return { icon: 'Kw', badge: 'keyword', title: 'Keyword' };
+        return { iconClass: 'codicon codicon-symbol-keyword', badge: 'keyword', title: 'Keyword' };
     case 15:
-        return { icon: 'Snip', badge: 'snippet', title: 'Snippet' };
+        return { iconClass: 'codicon codicon-symbol-snippet', badge: 'snippet', title: 'Snippet' };
     case 17:
-        return { icon: 'File', badge: 'file', title: 'File' };
+        return { iconClass: 'codicon codicon-symbol-file', badge: 'file', title: 'File' };
     case 18:
-        return { icon: 'Ref', badge: 'reference', title: 'Reference' };
+        return { iconClass: 'codicon codicon-symbol-reference', badge: 'reference', title: 'Reference' };
     case 19:
-        return { icon: 'Dir', badge: 'folder', title: 'Folder' };
+        return { iconClass: 'codicon codicon-folder', badge: 'folder', title: 'Folder' };
     case 21:
-        return { icon: 'Const', badge: 'constant', title: 'Constant' };
+        return { iconClass: 'codicon codicon-symbol-constant', badge: 'constant', title: 'Constant' };
     case 22:
-        return { icon: 'Struct', badge: 'struct', title: 'Struct' };
+        return { iconClass: 'codicon codicon-symbol-struct', badge: 'struct', title: 'Struct' };
     case 24:
-        return { icon: 'Evt', badge: 'event', title: 'Event' };
+        return { iconClass: 'codicon codicon-symbol-event', badge: 'event', title: 'Event' };
     case 25:
-        return { icon: 'Op', badge: 'operator', title: 'Operator' };
+        return { iconClass: 'codicon codicon-symbol-operator', badge: 'operator', title: 'Operator' };
     case 26:
-        return { icon: 'Tp', badge: 'type', title: 'Type parameter' };
+        return { iconClass: 'codicon codicon-symbol-type-parameter', badge: 'type', title: 'Type parameter' };
     default:
-        return { icon: 'Sym', badge: '', title: 'Symbol' };
+        return { iconClass: 'codicon codicon-symbol-misc', badge: '', title: 'Symbol' };
     }
 }
 
 function replaceCurrentIdentifierWithCompletion(text) {
     const target = getActiveLspTarget();
+
+    if (!target && isMonacoActive()) {
+        const source = monacoMainEditor.getValue() || '';
+        const selection = monacoMainEditor.getSelectionOffsets();
+        const cursor = selection.start || 0;
+        const left = source.slice(0, cursor);
+        const match = left.match(/[A-Za-z0-9_-]+$/);
+        const start = match ? cursor - match[0].length : cursor;
+        const insertText = String(text || '');
+
+        hideLspCompletion();
+        monacoMainEditor.replaceRange(start, cursor, insertText, 'lsp-completion');
+        const next = start + insertText.length;
+        monacoMainEditor.setSelectionOffsets(next, next);
+        monacoMainEditor.focus();
+        return;
+    }
+
     const editor = target ? target.editor : elements.editor;
     if (!editor) {
         return;
@@ -3750,13 +3969,18 @@ function replaceCurrentIdentifierWithCompletion(text) {
     const source = editor.value || '';
     const cursor = editor.selectionStart || 0;
     const left = source.slice(0, cursor);
-    const match = left.match(/[A-Za-z0-9_]+$/);
+    const match = left.match(/[A-Za-z0-9_-]+$/);
     const start = match ? cursor - match[0].length : cursor;
-    editor.setSelectionRange(start, cursor);
-    editor.setRangeText(String(text || ''), start, cursor, 'end');
     // Hide completion BEFORE dispatching input event so the input handler doesn't try to filter.
     hideLspCompletion();
-    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    notesMutationAdapter.replaceRange(editor, {
+        start,
+        end: cursor,
+        text,
+        source: 'lsp-completion',
+        label: 'Apply completion item',
+        emit: true,
+    });
 }
 
 function commitActiveLspCompletion() {
@@ -3800,9 +4024,9 @@ function renderLspCompletionPopup() {
         const kind = lspCompletionKindMeta(item.kind);
 
         const icon = document.createElement('span');
-        icon.className = 'tty-menu-row-icon notes-lsp-completion-icon';
-        icon.textContent = kind.icon;
+        icon.className = `tty-menu-row-icon notes-lsp-completion-icon ${kind.iconClass}`;
         icon.title = kind.title;
+        icon.setAttribute('aria-label', kind.title);
         row.appendChild(icon);
 
         const label = document.createElement('span');
@@ -3838,7 +4062,9 @@ function renderLspCompletionPopup() {
     lspCompletionEl.appendChild(fragment);
     lspCompletionEl.style.display = 'block';
 
-    const anchor = getLspAnchorViewportPoint();
+    const anchor = (isMonacoActive() && !state.lspActiveBlockId)
+        ? getMonacoCompletionMenuAnchor()
+        : getLspAnchorViewportPoint();
     const rawX = anchor.x;
     const rawY = anchor.y;
     const x = Math.min(rawX + 14, window.innerWidth - lspCompletionEl.offsetWidth - 8);
@@ -3876,11 +4102,14 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
     }
 
     const completionFile = blockTarget ? blockTarget.filePath : state.currentFile;
-    const completionEditor = blockTarget ? blockTarget.editor : elements.editor;
-    const pos = offsetToLspPosition(completionEditor.value || '', completionEditor.selectionStart || 0);
+    const completionSource = blockTarget ? (blockTarget.editor.value || '') : getMainEditorValue();
+    const completionSelection = blockTarget
+        ? { start: blockTarget.editor.selectionStart || 0 }
+        : getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(completionSource, completionSelection.start || 0);
     try {
         const items = await NotesLspCompletion(completionFile, pos.line, pos.character, triggerKind, triggerChar);
-        const list = Array.isArray(items) ? items.slice(0, LSP_COMPLETION_MAX_ITEMS) : [];
+        const list = Array.isArray(items) ? items : [];
         if (list.length === 0) {
             hideLspCompletion();
             return;
@@ -3893,6 +4122,124 @@ async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
     } catch {
         hideLspCompletion();
     }
+}
+
+function getMonacoCompletionMenuAnchor() {
+    const caretPoint = monacoMainEditor?.getCursorViewportPoint?.();
+    if (caretPoint && Number.isFinite(caretPoint.x) && Number.isFinite(caretPoint.y)) {
+        return caretPoint;
+    }
+
+    const rect = elements.monacoEditor?.getBoundingClientRect?.();
+    if (rect) {
+        return {
+            x: rect.left + 24,
+            y: rect.top + 24,
+        };
+    }
+
+    return getLspAnchorViewportPoint();
+}
+
+function shouldMonacoTabIndent() {
+    const selection = monacoMainEditor?.getSelectionOffsets?.();
+    const cursor = Number(selection?.start) || 0;
+    const source = getMainEditorValue();
+    const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+    const leftOfCaret = source.slice(lineStart, cursor);
+    return /^\s*$/.test(leftOfCaret);
+}
+
+async function applyMonacoTabIndent() {
+    if (!isMonacoActive()) {
+        return;
+    }
+
+    const selection = monacoMainEditor.getSelectionOffsets();
+    const start = Number(selection?.start) || 0;
+    const end = Number(selection?.end) || start;
+    const indentation = await getIndentationString();
+
+    hideLspCompletion();
+    monacoMainEditor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
+    const next = start + indentation.length;
+    monacoMainEditor.setSelectionOffsets(next, next);
+    monacoMainEditor.focus();
+}
+
+function handleMonacoCompletionRequest(payload = {}) {
+    if (!isMonacoActive() || state.lspActiveBlockId) {
+        return false;
+    }
+
+    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+        return false;
+    }
+
+    const source = String(payload.source || '');
+    const key = String(payload.key || '');
+    const ctrlKey = payload.ctrlKey === true;
+    const metaKey = payload.metaKey === true;
+    const altKey = payload.altKey === true;
+
+    if (source === 'keydown' && state.lspCompletionVisible) {
+        if (key === 'Escape') {
+            hideLspCompletion();
+            return true;
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && key === 'ArrowDown') {
+            return moveLspCompletionSelection(1);
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && key === 'ArrowUp') {
+            return moveLspCompletionSelection(-1);
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && (key === 'Enter' || key === 'Tab')) {
+            return commitActiveLspCompletion();
+        }
+
+        if (!ctrlKey && !metaKey && !altKey && (key === 'Backspace' || key === 'Delete')) {
+            requestAnimationFrame(() => {
+                void requestLspCompletionAfterSync(getMainEditorValue(), '', 1);
+            });
+        }
+    }
+
+    if (source === 'type' && (key === '.' || key === ':' || key === '>')) {
+        void requestLspCompletionAfterSync(getMainEditorValue(), key, 2);
+        return true;
+    }
+
+    if (source === 'type' && state.lspCompletionVisible) {
+        if (/^[-_A-Za-z0-9]$/.test(key)) {
+            return false;
+        }
+
+        if (!/^\s$/.test(key)) {
+            hideLspCompletion();
+        }
+    }
+
+    if (source === 'keydown') {
+        const isTab = key === 'Tab' && !ctrlKey && !metaKey && !altKey;
+        const isCtrlSpace = (key === ' ' || key === 'Space' || key === 'Spacebar')
+            && (ctrlKey || metaKey)
+            && !altKey;
+
+        if (isTab && shouldMonacoTabIndent()) {
+            void applyMonacoTabIndent();
+            return true;
+        }
+
+        if (isTab || isCtrlSpace) {
+            void requestLspCompletionAfterSync(getMainEditorValue(), '', 1);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 async function requestLspCompletionAfterSync(content, triggerChar = '', triggerKind = 2) {
@@ -3997,6 +4344,14 @@ function typosDiagnosticsToMisspellings(diagnostics, text) {
     return list;
 }
 
+function getLspSpellCheckExclusionSet() {
+    return new Set([
+        ...lspSpellCheckExclusions.symbols,
+        ...lspSpellCheckExclusions.tokens,
+        ...lspSpellCheckExclusions.keywords,
+    ].map((entry) => String(entry || '').toLowerCase()));
+}
+
 // Route an incoming typos-lsp diagnostics payload to the spellcheck overlay of
 // whichever editor owns the document (the main editor or a Jupyter code block).
 function routeTyposDiagnostics(uri, diagnostics) {
@@ -4009,7 +4364,7 @@ function routeTyposDiagnostics(uri, diagnostics) {
     if (state.typosOpenFile && notesSpellCheckHandle
         && normalizePathForMatch(fileUriToPath(state.currentFileUri)) === targetPath) {
         notesSpellCheckHandle.setMisspellings(
-            typosDiagnosticsToMisspellings(diagnostics, elements.editor.value || ''));
+            typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
         return;
     }
 
@@ -4095,70 +4450,13 @@ async function requestLspInlayHints() {
     }
 }
 
-async function requestLspSemanticTokens() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
-        state.lspSemanticSuppressedKey = '';
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const contentLength = String(elements.editor?.value || '').length;
-    if (contentLength > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS) {
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
-        const suppressKey = `${state.currentFile}::size`;
-        if (state.lspSemanticSuppressedKey !== suppressKey) {
-            state.lspSemanticSuppressedKey = suppressKey;
-            notifyTerminal('Semantic token overlays disabled for very large files to keep Notes responsive.', 'info');
-        }
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const requestId = state.lspSemanticRequestId + 1;
-    state.lspSemanticRequestId = requestId;
-
-    try {
-        const tokens = await NotesLspSemanticTokens(state.currentFile);
-        if (requestId !== state.lspSemanticRequestId || state.lspOpenFile !== state.currentFile) {
-            return;
-        }
-
-        const filteredTokens = Array.isArray(tokens)
-            ? tokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
-            : [];
-
-        if (filteredTokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
-            state.lspSemanticTokens = [];
-            const suppressKey = `${state.currentFile}::tokens`;
-            if (state.lspSemanticSuppressedKey !== suppressKey) {
-                state.lspSemanticSuppressedKey = suppressKey;
-                notifyTerminal('Semantic token overlays disabled for dense token streams to keep Notes responsive.', 'info');
-            }
-        } else {
-            state.lspSemanticSuppressedKey = '';
-            state.lspSemanticTokens = filteredTokens;
-        }
-        renderLspEditorDecorations();
-    } catch {
-        if (requestId !== state.lspSemanticRequestId) {
-            return;
-        }
-
-        state.lspSemanticSuppressedKey = '';
-        state.lspSemanticTokens = [];
-        renderLspEditorDecorations();
-    }
-}
-
 async function requestLspDefinition() {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
 
-    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const selection = getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
 
     try {
         const locations = await NotesLspDefinition(state.currentFile, pos.line, pos.character);
@@ -4184,13 +4482,17 @@ async function requestLspDefinition() {
 
         const targetLine = Math.max(0, Number(target.line) || 0);
         const targetChar = Math.max(0, Number(target.character) || 0);
-        const offset = lspPositionToEditorOffset(elements.editor.value || '', targetLine, targetChar);
-        elements.editor.focus();
-        elements.editor.setSelectionRange(offset, offset);
-
-        const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-        elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
-        syncEditorScrollDecorations();
+        const offset = lspPositionToEditorOffset(getMainEditorValue(), targetLine, targetChar);
+        setMainEditorSelectionRange(offset, offset);
+        if (isMonacoActive()) {
+            monacoMainEditor.focus();
+            monacoMainEditor.revealOffset(offset);
+        } else {
+            elements.editor.focus();
+            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
+            elements.editor.scrollTop = Math.max(0, (targetLine - 2) * lineHeight);
+            syncEditorScrollDecorations();
+        }
 
         state.lspHoverLastKey = '';
         scheduleLspHover();
@@ -4208,13 +4510,15 @@ async function formatCurrentLspDocument(options = {}) {
     const notifyOnError = options.notifyOnError !== false;
 
     try {
-        const selectionStart = Number(elements.editor.selectionStart) || 0;
-        const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+        const selection = getMainEditorSelectionRange();
+        const selectionStart = Number(selection.start) || 0;
+        const selectionEnd = Number(selection.end) || selectionStart;
+        const currentText = getMainEditorValue();
 
         let result;
         if (preferSelection && selectionEnd > selectionStart) {
-            const startPos = offsetToLspPosition(elements.editor.value || '', selectionStart);
-            const endPos = offsetToLspPosition(elements.editor.value || '', selectionEnd);
+            const startPos = offsetToLspPosition(currentText, selectionStart);
+            const endPos = offsetToLspPosition(currentText, selectionEnd);
 
             result = await NotesLspFormatRange(
                 state.currentFile,
@@ -4232,20 +4536,30 @@ async function formatCurrentLspDocument(options = {}) {
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        if (nextContent === String(currentText || '')) {
             return;
         }
 
-        const prevContent = String(elements.editor.value || '');
+        const prevContent = String(currentText || '');
         const prevLen = prevContent.length;
         const nextLen = nextContent.length;
         const ratio = prevLen > 0 ? nextLen / prevLen : 1;
         const nextSelectionStart = Math.min(Math.round(selectionStart * ratio), nextLen);
         const nextSelectionEnd = Math.min(Math.round(selectionEnd * ratio), nextLen);
 
-        elements.editor.value = nextContent;
-        elements.editor.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(nextSelectionStart, nextSelectionEnd);
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: nextSelectionStart,
+                selectionEnd: nextSelectionEnd,
+                source: preferSelection && selectionEnd > selectionStart ? 'lsp-format-range' : 'lsp-format',
+                label: preferSelection && selectionEnd > selectionStart ? 'Format selected range' : 'Format document',
+                emit: true,
+            });
+        }
     } catch {
         if (notifyOnError) {
             notifyTerminal('Failed to format document', 'error');
@@ -4503,12 +4817,44 @@ function lspDiagnosticsAtPosition(line, character) {
     return diagnostics.filter((diag) => isPositionWithinRange(line, character, diag.range));
 }
 
+function formatLspDiagnosticsForHover(diagnostics) {
+    const list = Array.isArray(diagnostics) ? diagnostics : [];
+    if (list.length === 0) {
+        return '';
+    }
+
+    const severityLabel = (value) => {
+        switch (Number(value) || 0) {
+        case 1: return 'Error';
+        case 2: return 'Warning';
+        case 3: return 'Info';
+        case 4: return 'Hint';
+        default: return 'Info';
+        }
+    };
+
+    const lines = ['Diagnostics:'];
+    for (const diag of list) {
+        const message = String(diag?.message || '').trim();
+        if (!message) {
+            continue;
+        }
+        const severity = severityLabel(diag?.severity);
+        const source = String(diag?.source || '').trim();
+        const prefix = source ? `${severity} (${source})` : severity;
+        lines.push(`- ${prefix}: ${message}`);
+    }
+
+    return lines.length > 1 ? lines.join('\n') : '';
+}
+
 async function getLspCodeActionsForCursor() {
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return { line: 0, character: 0, diagnostics: [], actions: [] };
     }
 
-    const pos = offsetToLspPosition(elements.editor.value || '', elements.editor.selectionStart || 0);
+    const selection = getMainEditorSelectionRange();
+    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
     const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
 
     try {
@@ -4662,12 +5008,28 @@ async function applyLspCodeActionFromCursor(index, line, character, diagnostics)
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        const currentText = getMainEditorValue();
+        if (nextContent === String(currentText || '')) {
             return;
         }
 
-        elements.editor.value = nextContent;
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const selection = getMainEditorSelectionRange();
+        const selectionStart = Number(selection.start) || 0;
+        const selectionEnd = Number(selection.end) || selectionStart;
+        const nextLen = nextContent.length;
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(Math.min(selectionStart, nextLen), Math.min(selectionEnd, nextLen));
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: Math.min(selectionStart, nextLen),
+                selectionEnd: Math.min(selectionEnd, nextLen),
+                source: 'lsp-code-action',
+                label: 'Apply code action',
+                emit: true,
+            });
+        }
     } catch {
         notifyTerminal('Failed to apply code action', 'error');
     }
@@ -4678,13 +5040,14 @@ async function renameCurrentLspSymbol() {
         return;
     }
 
-    const selectionStart = Number(elements.editor.selectionStart) || 0;
-    const selectionEnd = Number(elements.editor.selectionEnd) || selectionStart;
+    const selection = getMainEditorSelectionRange();
+    const selectionStart = Number(selection.start) || 0;
+    const selectionEnd = Number(selection.end) || selectionStart;
     const currentSelection = selectionEnd > selectionStart
-        ? String(elements.editor.value || '').slice(selectionStart, selectionEnd)
+        ? String(getMainEditorValue() || '').slice(selectionStart, selectionEnd)
         : '';
 
-    const pos = offsetToLspPosition(elements.editor.value || '', selectionStart);
+    const pos = offsetToLspPosition(getMainEditorValue(), selectionStart);
 
     let prepare;
     try {
@@ -4719,12 +5082,24 @@ async function renameCurrentLspSymbol() {
         }
 
         const nextContent = String(result.content || '');
-        if (nextContent === String(elements.editor.value || '')) {
+        if (nextContent === String(getMainEditorValue() || '')) {
             return;
         }
 
-        elements.editor.value = nextContent;
-        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const nextLen = nextContent.length;
+        if (isMonacoActive()) {
+            setMainEditorValue(nextContent);
+            setMainEditorSelectionRange(Math.min(selectionStart, nextLen), Math.min(selectionEnd, nextLen));
+        } else {
+            notesMutationAdapter.replaceDocumentText(elements.editor, {
+                text: nextContent,
+                selectionStart: Math.min(selectionStart, nextLen),
+                selectionEnd: Math.min(selectionEnd, nextLen),
+                source: 'lsp-rename',
+                label: 'Rename symbol',
+                emit: true,
+            });
+        }
     } catch {
         notifyTerminal('Failed to rename symbol', 'error');
     }
@@ -4838,6 +5213,12 @@ function getLspAnchorViewportPoint() {
 }
 
 function scheduleLspHover() {
+    if (state.lspCompletionVisible) {
+        clearLspHoverTimer();
+        hideLspHoverTooltip();
+        return;
+    }
+
     const blockTarget = getActiveLspTarget();
     if (!blockTarget && (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible())) {
         hideLspHoverTooltip();
@@ -4859,14 +5240,25 @@ function scheduleLspHover() {
         state.lspHoverLastKey = key;
 
         try {
-            const text = await NotesLspHover(hoverFilePath, pos.line, pos.character);
-            if (!text) {
+            const hoverText = await NotesLspHover(hoverFilePath, pos.line, pos.character);
+            const diagnosticsText = (!blockTarget && hoverFilePath === state.currentFile)
+                ? formatLspDiagnosticsForHover(lspDiagnosticsAtPosition(pos.line, pos.character))
+                : '';
+
+            const sections = [];
+            if (hoverText) {
+                sections.push(String(hoverText));
+            }
+            if (diagnosticsText) {
+                sections.push(diagnosticsText);
+            }
+
+            if (sections.length === 0) {
                 hideLspHoverTooltip();
                 return;
             }
 
-            lspHoverTooltipEl.innerHTML = marked.parse(String(text));
-            await processMarkdownContainer(lspHoverTooltipEl);
+            await renderLspHoverTooltipText(sections.join('\n\n'));
             lspHoverTooltipEl.style.display = 'block';
 
             const anchor = getLspAnchorViewportPoint();
@@ -4882,7 +5274,17 @@ function scheduleLspHover() {
     }, LSP_HOVER_DEBOUNCE_MS);
 }
 
+async function renderLspHoverTooltipText(text) {
+    lspHoverTooltipEl.innerHTML = marked.parse(escapeHtml(text));
+    await processMarkdownContainer(lspHoverTooltipEl);
+}
+
 async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = '') {
+    if (state.lspCompletionVisible) {
+        hideLspHoverTooltip();
+        return;
+    }
+
     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
@@ -4896,8 +5298,7 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
             return;
         }
 
-        lspHoverTooltipEl.innerHTML = marked.parse(String(text));
-        await processMarkdownContainer(lspHoverTooltipEl);
+        await renderLspHoverTooltipText(text);
         lspHoverTooltipEl.style.display = 'block';
 
         const anchor = getLspAnchorViewportPoint();
@@ -4914,12 +5315,9 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
 
 async function closeOpenLspDocument() {
     clearLspChangeTimer();
-    clearLspEditorFormatTimer();
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
-    state.lspSemanticRequestId += 1;
-    state.lspSemanticTokens = [];
     state.lspInlayRequestId += 1;
     state.lspInlayHints = [];
 
@@ -4952,8 +5350,98 @@ async function openCurrentLspDocument(content) {
         await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
         state.lspOpenFile = state.currentFile;
         lspSpellCheckExclusions.keywords = (await GetNotesLanguageReservedWords(languageID)) || [];
+        lspSpellCheckExclusions.tokens = [];
         applyLspSpellCheckExclusions();
-        await requestLspSemanticTokens();
+
+        if (isMonacoActive()) {
+            monacoMainEditor.configureLsp({
+                completion: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    try {
+                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
+                    } catch {
+                        // Completion can still work with last synced state.
+                    }
+                    const items = await NotesLspCompletion(state.currentFile, line, character, 1, '');
+                    return Array.isArray(items) ? items : [];
+                },
+                signature: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return '';
+                    }
+                    return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
+                },
+                formatDocument: async () => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspFormat(state.currentFile);
+                },
+                formatRange: async ({ start, end }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspFormatRange(
+                        state.currentFile,
+                        Number(start?.line) || 0,
+                        Number(start?.character) || 0,
+                        Number(end?.line) || 0,
+                        Number(end?.character) || 0,
+                    );
+                },
+                definition: async ({ line, character }) => {
+                    if (!state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+
+                    const locations = await NotesLspDefinition(state.currentFile, line, character);
+                    return Array.isArray(locations) ? locations : [];
+                },
+                prepareRename: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return { canRename: false };
+                    }
+                    return await NotesLspPrepareRename(state.currentFile, line, character);
+                },
+                rename: async ({ line, character, newName }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspRename(state.currentFile, line, character, String(newName || ''));
+                },
+                codeActions: async ({ line, character }) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    const diagnostics = lspDiagnosticsAtPosition(line, character);
+                    const actions = await NotesLspCodeActions(state.currentFile, line, character, diagnostics);
+                    return Array.isArray(actions) ? actions : [];
+                },
+                applyCodeAction: async (action) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+
+                    const selection = getMainEditorSelectionRange();
+                    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
+                    const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
+                    const actionIndex = Number(action?.index);
+                    if (!Number.isFinite(actionIndex)) {
+                        return null;
+                    }
+                    return await NotesLspApplyCodeAction(
+                        state.currentFile,
+                        pos.line,
+                        pos.character,
+                        actionIndex,
+                        diagnostics,
+                    );
+                },
+            });
+        }
+
         await requestLspInlayHints();
         void updateSpellCheckExclusionsFromDocSymbols();
     } catch (err) {
@@ -4964,7 +5452,7 @@ async function openCurrentLspDocument(content) {
 /**
  * Fetch document symbols from the LSP server and use their names as
  * spell-check exclusions. Document symbols are available immediately after
- * didOpen (unlike semantic tokens, which require full analysis), making them
+ * didOpen, making them
  * a reliable exclusion source on file open.
  */
 async function updateSpellCheckExclusionsFromDocSymbols() {
@@ -5027,7 +5515,6 @@ function scheduleLspDidChange() {
         state.lspChangeTimer = null;
         try {
             await NotesLspChangeDocument(state.currentFile, elements.editor.value || '');
-            await requestLspSemanticTokens();
             await requestLspInlayHints();
         } catch (err) {
             console.error('notes lsp change failed:', err);
@@ -5048,6 +5535,9 @@ async function openCurrentTyposDocument(content) {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         // Non-eligible files keep aspell.
         notesSpellCheckHandle.setMode('aspell');
+        if (isMonacoActive()) {
+            monacoMainEditor.setTyposMisspellings([]);
+        }
         return;
     }
 
@@ -5057,13 +5547,21 @@ async function openCurrentTyposDocument(content) {
         if (ok) {
             state.typosOpenFile = state.currentFile;
             notesSpellCheckHandle.setMode('external');
+            const diagnostics = state.currentFileUri ? (typosDiagnosticsStore.get(state.currentFileUri) || []) : [];
+            notesSpellCheckHandle.setMisspellings(typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
         } else {
             state.typosOpenFile = '';
             notesSpellCheckHandle.setMode('aspell');
+            if (isMonacoActive()) {
+                monacoMainEditor.setTyposMisspellings([]);
+            }
         }
     } catch (err) {
         state.typosOpenFile = '';
         notesSpellCheckHandle.setMode('aspell');
+        if (isMonacoActive()) {
+            monacoMainEditor.setTyposMisspellings([]);
+        }
         console.error('notes typos open failed:', err);
     }
 }
@@ -5076,6 +5574,9 @@ async function closeCurrentTyposDocument() {
     const openFile = state.typosOpenFile;
     state.typosOpenFile = '';
     notesSpellCheckHandle?.setMode('aspell');
+    if (isMonacoActive()) {
+        monacoMainEditor.setTyposMisspellings([]);
+    }
     if (!openFile) {
         return;
     }
@@ -5103,16 +5604,9 @@ function scheduleTyposDidChange() {
     }, LSP_CHANGE_DEBOUNCE_MS);
 }
 
-function clearLspEditorFormatTimer() {
-    if (state.lspEditorFormatTimer) {
-        clearTimeout(state.lspEditorFormatTimer);
-        state.lspEditorFormatTimer = null;
-    }
-}
-
 // Replace a textarea's value with formatted text, preserving the caret/selection
 // proportionally. Returns false when nothing changed.
-function applyFormattedText(textarea, formatted) {
+function applyFormattedText(textarea, formatted, options = {}) {
     if (!textarea || typeof formatted !== 'string' || formatted.length === 0) {
         return false;
     }
@@ -5126,18 +5620,22 @@ function applyFormattedText(textarea, formatted) {
     const ratio = prevLen > 0 ? newLen / prevLen : 1;
     const newStart = Math.min(Math.round(prevStart * ratio), newLen);
     const newEnd = Math.min(Math.round(prevEnd * ratio), newLen);
-    textarea.value = formatted;
-    try {
-        textarea.setSelectionRange(newStart, newEnd);
-    } catch {
-        // jsdom / detached nodes may not support selection ranges.
-    }
+
+    notesMutationAdapter.replaceDocumentText(textarea, {
+        text: formatted,
+        selectionStart: newStart,
+        selectionEnd: newEnd,
+        source: options.source || 'format',
+        label: options.label || 'Apply formatted text',
+        filePath: options.filePath,
+        emit: false,
+    });
     return true;
 }
 
 // Unified formatter for the main editor: try the configured format command
-// (e.g. goimports) first, then fall back to LSP formatting. Shared by the 10s
-// idle debounce, editor blur, and the cmd/ctrl+s "save and format" action.
+// (e.g. goimports) first, then fall back to LSP formatting. Invoked explicitly
+// by cmd/ctrl+s "save and format" and editor context menu actions.
 async function formatMainEditor({ notifyOnError = false } = {}) {
     if (!state.currentFile) {
         return;
@@ -5163,7 +5661,10 @@ async function formatMainEditor({ notifyOnError = false } = {}) {
                 return;
             }
             const formatted = typeof result.Code === 'string' ? result.Code : '';
-            if (applyFormattedText(elements.editor, formatted)) {
+            if (applyFormattedText(elements.editor, formatted, {
+                source: 'format-command',
+                label: 'Format main editor (command)',
+            })) {
                 elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
             }
             return;
@@ -5179,35 +5680,9 @@ async function formatMainEditor({ notifyOnError = false } = {}) {
     }
 }
 
-function scheduleLspEditorAutoFormat() {
-    if (!state.currentFile || !isCurrentFileLspEligible()) {
-        return;
-    }
-
-    if (state.viewMode !== 'editor' && state.viewMode !== 'swagger-edit') {
-        return;
-    }
-
-    clearLspEditorFormatTimer();
-    state.lspEditorFormatTimer = setTimeout(() => {
-        state.lspEditorFormatTimer = null;
-        void formatMainEditor({ notifyOnError: false });
-    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
-}
-
-// Run any pending editor auto-format immediately (e.g. when the editor loses
-// focus) rather than waiting for the debounce timer to elapse.
-function flushLspEditorAutoFormat() {
-    if (!state.lspEditorFormatTimer) {
-        return;
-    }
-    clearLspEditorFormatTimer();
-    void formatMainEditor({ notifyOnError: false });
-}
-
 // Unified formatter for a Jupyter code block: try the configured format command
-// (e.g. goimports) first, then fall back to LSP formatting. Shared by the idle
-// debounce, block blur, and the cmd/ctrl+s "save and format" action.
+// (e.g. goimports) first, then fall back to LSP formatting. Invoked explicitly
+// by cmd/ctrl+s "save and format" and LSP-mode toggle flows.
 async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
     const block = state.jupyterCodeBlocks[blockId];
     if (!block) {
@@ -5232,7 +5707,11 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
                 return;
             }
             const formattedCode = typeof result.Code === 'string' ? result.Code : '';
-            if (applyFormattedText(editableCode, formattedCode)) {
+            if (applyFormattedText(editableCode, formattedCode, {
+                source: 'jupyter-format-command',
+                label: 'Format Jupyter block (command)',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+            })) {
                 block.currentContent = editableCode.value;
                 editableCode.dispatchEvent(new Event('input', { bubbles: true }));
             }
@@ -5249,7 +5728,11 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
             const result = await NotesLspFormat(block.lspFilePath);
             if (result && result.changed) {
                 const nextContent = String(result.content || '');
-                if (applyFormattedText(editableCode, nextContent)) {
+                if (applyFormattedText(editableCode, nextContent, {
+                    source: 'jupyter-format-lsp',
+                    label: 'Format Jupyter block (LSP)',
+                    filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                })) {
                     block.currentContent = editableCode.value;
                     editableCode.dispatchEvent(new Event('input', { bubbles: true }));
                 }
@@ -5261,36 +5744,6 @@ async function formatJupyterBlock(blockId, { notifyOnError = false } = {}) {
             console.error('jupyter block LSP format failed:', err);
         }
     }
-}
-
-function clearLspBlockFormatTimer(block) {
-    if (block && block.lspSaveTimer) {
-        clearTimeout(block.lspSaveTimer);
-        block.lspSaveTimer = null;
-    }
-}
-
-function scheduleLspBlockSave(blockId, editableCode) {
-    const block = state.jupyterCodeBlocks[blockId];
-    if (!block || !block.lspMode || !block.lspFilePath) {
-        return;
-    }
-
-    clearLspBlockFormatTimer(block);
-    block.lspSaveTimer = setTimeout(() => {
-        block.lspSaveTimer = null;
-        void formatJupyterBlock(blockId, { notifyOnError: false });
-    }, LSP_EDITOR_FORMAT_DEBOUNCE_MS);
-}
-
-// Run any pending block auto-format immediately (e.g. when the block loses focus).
-function flushLspBlockFormat(blockId) {
-    const block = state.jupyterCodeBlocks[blockId];
-    if (!block || !block.lspSaveTimer) {
-        return;
-    }
-    clearLspBlockFormatTimer(block);
-    void formatJupyterBlock(blockId, { notifyOnError: false });
 }
 
 // Debounced sync of a Jupyter code block's content to the typos-lsp server so
@@ -5320,7 +5773,7 @@ function setDirty(isDirty) {
 }
 
 function focusActiveEditorForViewMode() {
-    if (!elements.editor) {
+    if (!elements.editor && !isMonacoActive()) {
         return;
     }
 
@@ -5348,7 +5801,16 @@ function focusActiveEditorForViewMode() {
             state.viewMode === 'swagger-edit' ||
             state.viewMode === 'csv-edit';
 
-        if (!stillShouldFocus || !elements.editor) {
+        if (!stillShouldFocus) {
+            return;
+        }
+
+        if (isMonacoActive()) {
+            monacoMainEditor.focus();
+            return;
+        }
+
+        if (!elements.editor) {
             return;
         }
 
@@ -5452,7 +5914,14 @@ function setViewMode(mode) {
         }
     }
 
-    if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
+    // The main editor wrap is shared by code/markdown/json edit and csv edit.
+    // Whenever it becomes visible, (lazily) create Monaco and lay it out against
+    // its now-visible box. Fall back to legacy decorations only when Monaco is
+    // disabled.
+    const editorWrapActive = elements.editorWrap.dataset.active === 'true';
+    if (state.useMonacoEditor && editorWrapActive) {
+        void ensureMonacoVisibleAndLaidOut();
+    } else if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
         renderEditorDecorations();
     }
 
@@ -5484,6 +5953,9 @@ function setEditorWrapMode(enabled) {
     const wrapEnabled = enabled === true;
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
+    if (isMonacoActive()) {
+        monacoMainEditor.setWordWrap(wrapEnabled);
+    }
 }
 
 function toggleMarkdownWrapMode() {
@@ -5568,8 +6040,7 @@ function convertToJupyterCodeBlocks() {
             originalContent: content,
             currentContent: content,
             lspMode: false,
-            lspFilePath: '',
-            lspSaveTimer: null
+            lspFilePath: ''
         };
         
         const wrapper = document.createElement('div');
@@ -5818,8 +6289,6 @@ function convertToJupyterCodeBlocks() {
             }
 
             if (blockState.lspMode && blockState.lspFilePath) {
-                scheduleLspBlockSave(blockId, editableCode);
-
                 // Trigger completion on LSP trigger characters.
                 if (state.lspActiveBlockId === blockId) {
                     const cursor = editableCode.selectionStart || 0;
@@ -5860,7 +6329,6 @@ function convertToJupyterCodeBlocks() {
         });
 
         editableCode.addEventListener('blur', () => {
-            flushLspBlockFormat(blockId);
             if (state.lspActiveBlockId === blockId) {
                 state.lspActiveBlockId = null;
                 state.lspActiveBlockEditor = null;
@@ -5931,8 +6399,15 @@ function convertToJupyterCodeBlocks() {
                 const start = editableCode.selectionStart;
                 const end = editableCode.selectionEnd;
                 const indentation = await getIndentationString();
-                editableCode.setRangeText(indentation, start, end, 'end');
-                editableCode.dispatchEvent(new Event('input'));
+                notesMutationAdapter.replaceRange(editableCode, {
+                    start,
+                    end,
+                    text: indentation,
+                    source: 'jupyter-tab-indent',
+                    label: 'Jupyter tab indentation (completion open)',
+                    filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                    emit: true,
+                });
                 return;
             }
 
@@ -5958,8 +6433,15 @@ function convertToJupyterCodeBlocks() {
             const start = editableCode.selectionStart;
             const end = editableCode.selectionEnd;
             const indentation = await getIndentationString();
-            editableCode.setRangeText(indentation, start, end, 'end');
-            editableCode.dispatchEvent(new Event('input'));
+            notesMutationAdapter.replaceRange(editableCode, {
+                start,
+                end,
+                text: indentation,
+                source: 'jupyter-tab-indent',
+                label: 'Jupyter tab indentation',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                emit: true,
+            });
         });
         editableCode.addEventListener('scroll', () => {
             syncHighlightViewport();
@@ -6010,7 +6492,11 @@ function convertToJupyterCodeBlocks() {
         wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
 
-        attachVimMode(editableCode);
+        attachVimMode(editableCode, {
+            mutationAdapter: notesMutationAdapter,
+            undoManager: notesUndoManager,
+            filePathResolver: () => (state.currentFile ? `${state.currentFile}#${blockId}` : blockId),
+        });
         // Detach any stale spellcheck overlay from a previous render of this
         // block before attaching a fresh one, then restore typos mode if the
         // block currently has LSP-mode spellchecking active.
@@ -6138,7 +6624,11 @@ async function toggleLspModeForBlock(blockId) {
             const formattedCode = typeof result?.Code === 'string' ? result.Code : '';
             const formattedFilePath = typeof result?.FilePath === 'string' ? result.FilePath : '';
 
-            if (applyFormattedText(editableElement, formattedCode)) {
+            if (applyFormattedText(editableElement, formattedCode, {
+                source: 'jupyter-lsp-toggle-format',
+                label: 'Format Jupyter block (toggle LSP)',
+                filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+            })) {
                 block.currentContent = editableElement.value;
 
                 // Trigger input event to update syntax highlighting and markdown source.
@@ -6951,11 +7441,18 @@ function formatStructuredEditorJson(pretty) {
 
     try {
         const parsed = JSON.parse(source);
-        elements.editor.value = pretty
+        const nextText = pretty
             ? JSON.stringify(parsed, null, 2)
             : JSON.stringify(parsed);
 
-        elements.editor.dispatchEvent(new Event('input'));
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextText,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'structured-json-format',
+            label: pretty ? 'Format JSON (expand)' : 'Format JSON (minify)',
+            emit: true,
+        });
     } catch {
         notifyTerminal('Cannot format invalid JSON content', 'warn');
     }
@@ -7164,7 +7661,14 @@ async function commitStructuredViewerEdit({ editType, path, text }) {
             return;
         }
 
-        elements.editor.value = nextText;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextText,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'structured-edit',
+            label: 'Apply structured edit',
+            emit: true,
+        });
         state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
 
         state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
@@ -7258,7 +7762,14 @@ async function commitFrontmatterEdit({ editType, path, text }) {
             return;
         }
 
-        elements.editor.value = nextRaw;
+        notesMutationAdapter.replaceDocumentText(elements.editor, {
+            text: nextRaw,
+            selectionStart: Number(elements.editor.selectionStart) || 0,
+            selectionEnd: Number(elements.editor.selectionEnd) || 0,
+            source: 'frontmatter-edit',
+            label: 'Apply frontmatter edit',
+            emit: true,
+        });
         // Re-parse the frontmatter and re-render the panel (this also clears the
         // inline editor that the viewer left in place after commit).
         applyDocumentFrontmatter();
@@ -7736,6 +8247,7 @@ async function loadFile(file, options = {}) {
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
     const keepFindTabOpen = Boolean(options?.keepFindTabOpen);
+    const switchingDocument = Boolean(state.currentFile && state.currentFile !== file);
 
     state.suspendDocumentCacheSave = true;
 
@@ -7749,6 +8261,10 @@ async function loadFile(file, options = {}) {
         // Clear rendered diagnostics immediately while the new file loads.
         state.currentFileUri = '';
         clearVisibleLspDiagnostics();
+    }
+
+    if (switchingDocument && !keepFindTabOpen) {
+        setToolsTab('find');
     }
 
     const fileName = file ? getPathFileName(file) : 'json file';
@@ -7898,7 +8414,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('json');
             
             // Set editor content (use regular editor with line numbers for JSON/YAML)
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render JSON tree view
@@ -7933,7 +8449,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('markdown');
 
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render markdown views
@@ -7953,7 +8469,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('html');
 
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
 
             // Render sandboxed preview and default to View first.
@@ -7970,7 +8486,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('csv');
 
             // Set editor content (raw text for Edit tab)
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
 
             // Render table view
             renderCsvView(doc || '');
@@ -7988,7 +8504,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('code');
             
             // Set editor content
-            elements.editor.value = doc || '';
+            setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
             
             // Set default view mode to editor
@@ -8004,7 +8520,7 @@ async function loadFile(file, options = {}) {
             renderSwaggerJsonView();
         }
         
-        // Close active Find tab state when loading a new file.
+        // Clear active Find state when loading a new file.
         if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
         }
@@ -8042,9 +8558,7 @@ async function saveFile() {
     }
 
     try {
-        const content = state.currentFileType === 'json' 
-            ? elements.editor.value 
-            : elements.editor.value;
+        const content = getMainEditorValue();
         
         // Use the saved project context to prevent overwrites if user switched projects
         await SaveFile(state.currentFile, content, state.currentFileProject || '');
@@ -8159,7 +8673,7 @@ async function confirmDelete() {
             state.currentFileProject = '';
             state.lspHoverLastKey = '';
             emitCurrentFileName();
-            elements.editor.value = '';
+            setMainEditorValue('');
             elements.swaggerView.innerHTML = '';
             clearVisibleLspDiagnostics();
             hideLspHoverTooltip();
@@ -8239,10 +8753,6 @@ function closeFindBar() {
     renderProjectFindResults();
     renderFileList();
 
-    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-        const nextTab = elements.toolsTabToC?.style.display !== 'none' ? 'toc' : 'ai';
-        setToolsTab(nextTab);
-    }
 }
 
 function clearProjectFindResults({ keepInputFocus = true } = {}) {
@@ -8281,6 +8791,119 @@ function updateFindFilesClearButtonVisibility() {
     const hasValue = (elements.findFilesInput.value || '').trim().length > 0;
     elements.findFilesClear.dataset.visible = hasValue ? 'true' : 'false';
     elements.findFilesClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+}
+
+const findFieldHistory = new Map();
+
+function setFindFieldHistory(inputEl, values) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    const history = Array.isArray(values) ? values.filter((value) => String(value || '').trim() !== '') : [];
+    findFieldHistory.set(inputEl.id, history);
+}
+
+function getFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return [];
+    }
+
+    const history = findFieldHistory.get(inputEl.id);
+    return Array.isArray(history) ? history : [];
+}
+
+function applyFindHistoryValue(inputEl, value) {
+    if (!inputEl) {
+        return;
+    }
+
+    inputEl.value = String(value || '');
+    inputEl.focus();
+    inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+
+    if (inputEl === elements.findInput) {
+        updateFindInputClearButtonVisibility();
+        performFind();
+        return;
+    }
+
+    if (inputEl === elements.findFilesInput) {
+        updateFindFilesClearButtonVisibility();
+        scheduleProjectFindSearch();
+        return;
+    }
+
+    if (inputEl === elements.replaceInput) {
+        updateReplaceInputClearButtonVisibility();
+    }
+}
+
+function openFindHistoryMenu(inputEl, x, y) {
+    if (!inputEl) {
+        return false;
+    }
+
+    const history = getFindFieldHistory(inputEl);
+    if (history.length === 0) {
+        return false;
+    }
+
+    showLocalMenu({
+        title: 'Past items',
+        options: history,
+        x,
+        y,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const selected = history[index];
+            if (selected === undefined) {
+                return;
+            }
+            applyFindHistoryValue(inputEl, selected);
+        },
+    });
+
+    return true;
+}
+
+function tryOpenFindHistoryMenuForInput(inputEl) {
+    if (!inputEl) {
+        return false;
+    }
+
+    const rect = inputEl.getBoundingClientRect();
+    return openFindHistoryMenu(inputEl, rect.left, rect.bottom);
+}
+
+async function hydrateFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    try {
+        const values = await GetNotesFindFieldValues(inputEl.id);
+        setFindFieldHistory(inputEl, values);
+    } catch (err) {
+        console.error('Failed to read notes find field history:', err);
+    }
+}
+
+function persistFindFieldHistory(inputEl) {
+    if (!inputEl || !inputEl.id) {
+        return;
+    }
+
+    const value = String(inputEl.value || '').trim();
+    if (!value) {
+        return;
+    }
+
+    AddNotesFindFieldValue(inputEl.id, value).then((values) => {
+        setFindFieldHistory(inputEl, values);
+    }).catch((err) => {
+        console.error('Failed to persist notes find field history:', err);
+    });
 }
 
 function updateFindInputClearButtonVisibility() {
@@ -8328,18 +8951,48 @@ function editorOffsetForLine(lineNumber) {
 }
 
 function jumpEditorToLine(lineNumber) {
-    const editor = elements.editor;
-    if (!editor) {
+    if (!elements.editor) {
         return;
     }
 
     const start = editorOffsetForLine(lineNumber);
-    const text = String(editor.value || '');
+    const text = getMainEditorValue();
     const nextBreak = text.indexOf('\n', start);
     const end = nextBreak === -1 ? text.length : nextBreak;
 
+    setMainEditorSelectionRange(start, end);
+
+    if (isMonacoActive()) {
+        monacoMainEditor.revealOffset(start);
+        monacoMainEditor.focus();
+        return;
+    }
+
+    if (state.useMonacoEditor) {
+        const schedule = typeof requestAnimationFrame === 'function'
+            ? requestAnimationFrame
+            : (cb) => setTimeout(cb, 16);
+
+        const tryRevealWhenReady = (remainingFrames) => {
+            if (isMonacoActive()) {
+                monacoMainEditor.setSelectionOffsets(start, end);
+                monacoMainEditor.revealOffset(start);
+                monacoMainEditor.focus();
+                return;
+            }
+
+            if (remainingFrames > 0) {
+                schedule(() => tryRevealWhenReady(remainingFrames - 1));
+            }
+        };
+
+        // Monaco can be created/layouted asynchronously when editor view opens.
+        // Retry briefly so grep-navigation still lands on the requested line.
+        tryRevealWhenReady(2);
+    }
+
+    const editor = elements.editor;
     editor.focus();
-    editor.setSelectionRange(start, end);
     scrollEditorToSelection(editor, start);
 }
 
@@ -8383,6 +9036,9 @@ function renderProjectFindResults() {
 async function runProjectFindSearch(query) {
     const trimmed = String(query || '').trim();
     state.findFilesQuery = trimmed;
+    if (trimmed) {
+        persistFindFieldHistory(elements.findFilesInput);
+    }
     const fileFilter = String(state.fileFilterQuery || '').trim().toLowerCase();
     const searchSignature = `${trimmed}|${state.findOptions.caseSensitive ? 1 : 0}|${state.findOptions.regex ? 1 : 0}|${state.findOptions.wholeWord ? 1 : 0}|${fileFilter}`;
 
@@ -8670,6 +9326,32 @@ function buildFindPattern() {
     }
 }
 
+function isMonacoFindProxyActive() {
+    return isMonacoActive() && state.viewMode === 'editor';
+}
+
+function buildMonacoFindRequest() {
+    const query = String(state.findQuery || '');
+    if (!query) {
+        return null;
+    }
+
+    let search = query;
+    let isRegex = state.findDocOptions.regex;
+
+    if (state.findDocOptions.wholeWord) {
+        const core = state.findDocOptions.regex ? query : escapeRegExp(query);
+        search = `\\b(?:${core})\\b`;
+        isRegex = true;
+    }
+
+    return {
+        query: search,
+        isRegex,
+        matchCase: state.findDocOptions.caseSensitive,
+    };
+}
+
 function getFindDocSearchSignature(query) {
     const q = String(query || '');
     return `${q}|${state.findDocOptions.caseSensitive ? 1 : 0}|${state.findDocOptions.regex ? 1 : 0}|${state.findDocOptions.wholeWord ? 1 : 0}`;
@@ -8677,7 +9359,7 @@ function getFindDocSearchSignature(query) {
 
 function replaceCurrentMatch() {
     const editorEl = getActiveFindEditor();
-    if (!editorEl) {
+    if (!editorEl && !isMonacoFindProxyActive()) {
         return;
     }
 
@@ -8688,6 +9370,10 @@ function replaceCurrentMatch() {
     const signature = getFindDocSearchSignature(query);
 
     const replacement = String(elements.replaceInput?.value || '');
+    persistFindFieldHistory(elements.findInput);
+    if (replacement) {
+        persistFindFieldHistory(elements.replaceInput);
+    }
 
     if (!state.findQuery || state.findQuery !== query || state.findDocLastExecutedSignature !== signature || state.findMatches.length === 0) {
         performFind();
@@ -8703,17 +9389,21 @@ function replaceCurrentMatch() {
         return;
     }
 
-    editorEl.focus();
-    editorEl.setSelectionRange(match.start, match.end);
-    editorEl.setRangeText(replacement, match.start, match.end, 'end');
-    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (isMonacoFindProxyActive()) {
+        replaceMainEditorRange(match.start, match.end, replacement);
+    } else {
+        editorEl.focus();
+        editorEl.setSelectionRange(match.start, match.end);
+        editorEl.setRangeText(replacement, match.start, match.end, 'end');
+        editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
     performFind();
 }
 
 function replaceAllMatches() {
     const editorEl = getActiveFindEditor();
-    if (!editorEl) {
+    if (!editorEl && !isMonacoFindProxyActive()) {
         return;
     }
 
@@ -8722,12 +9412,18 @@ function replaceAllMatches() {
         return;
     }
 
-    const source = String(editorEl.value || '');
+    const source = isMonacoFindProxyActive()
+        ? getMainEditorValue()
+        : String(editorEl.value || '');
     if (!source) {
         return;
     }
 
     const replacement = String(elements.replaceInput?.value || '');
+    persistFindFieldHistory(elements.findInput);
+    if (replacement) {
+        persistFindFieldHistory(elements.replaceInput);
+    }
     const pattern = buildFindPattern();
     if (!pattern) {
         return;
@@ -8742,8 +9438,13 @@ function replaceAllMatches() {
         return;
     }
 
-    editorEl.value = next;
-    editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    if (isMonacoFindProxyActive()) {
+        setMainEditorValue(next);
+        elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+        editorEl.value = next;
+        editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     performFind();
 }
 
@@ -8836,6 +9537,24 @@ function performFind() {
 }
 
 function findInEditor(findPattern) {
+    if (isMonacoFindProxyActive()) {
+        const request = buildMonacoFindRequest();
+        if (!request) {
+            return;
+        }
+
+        const matches = monacoMainEditor.findMatches(request.query, {
+            isRegex: request.isRegex,
+            matchCase: request.matchCase,
+            limit: 10000,
+        });
+
+        for (const match of matches) {
+            state.findMatches.push({ start: match.start, end: match.end });
+        }
+        return;
+    }
+
     const editorEl = getActiveFindEditor();
     if (!editorEl || !findPattern) {
         return;
@@ -8923,6 +9642,20 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
     }
 
     const editorEl = getActiveFindEditor();
+    if (isMonacoFindProxyActive()) {
+        const match = state.findMatches[state.findCurrentIndex];
+        if (!match) {
+            return;
+        }
+
+        if (focusEditor) {
+            monacoMainEditor.focus();
+        }
+        monacoMainEditor.setSelectionOffsets(match.start, match.end);
+        monacoMainEditor.revealOffset(match.start);
+        return;
+    }
+
     if (editorEl) {
         const match = state.findMatches[state.findCurrentIndex];
 
@@ -10561,2920 +11294,96 @@ if (elements.jupyterWrap) {
     });
 }
 
-setToolsTab('ai');
+setToolsTab('find');
 
 // Always start minimized on application launch.
 setToolsPanelCollapsed(true);
 
 function applyWindowStyle(result) {
+    latestWindowStyle = result;
+
     document.body.style.color = `rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue})`;
     document.body.style.backgroundColor = `rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue})`;
 
-    //const notesFileSize = result.fontSize * 2;
     const notesStatusFontSize = result.fontSize - 2;
     const notesTitleFontSize = result.fontSize + 4;
 
-    const style = document.createElement('style');
+    let style = document.getElementById('notes-theme-style');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'notes-theme-style';
+        document.head.appendChild(style);
+    }
+
     style.textContent = `
         :root {
             --bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
+            --bg-rgb: ${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue};
             --fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
+            --fg-rgb: ${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue};
             --accent: rgb(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue});
+            --accent-rgb: ${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue};
             --link: rgb(${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue});
+            --link-rgb: ${result.colors.link.Red}, ${result.colors.link.Green}, ${result.colors.link.Blue};
             --red: rgb(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue});
+            --red-rgb: ${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue};
             --green: rgb(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue});
+            --green-rgb: ${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue};
             --yellow: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue});
+            --yellow-rgb: ${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue};
             --blue: rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue});
+            --blue-rgb: ${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue};
             --magenta: rgb(${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue});
+            --magenta-rgb: ${result.colors.magenta.Red}, ${result.colors.magenta.Green}, ${result.colors.magenta.Blue};
             --cyan: rgb(${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue});
+            --cyan-rgb: ${result.colors.cyan.Red}, ${result.colors.cyan.Green}, ${result.colors.cyan.Blue};
             --red-bright: rgb(${result.colors.redBright.Red}, ${result.colors.redBright.Green}, ${result.colors.redBright.Blue});
+            --red-bright-rgb: ${result.colors.redBright.Red}, ${result.colors.redBright.Green}, ${result.colors.redBright.Blue};
             --green-bright: rgb(${result.colors.greenBright.Red}, ${result.colors.greenBright.Green}, ${result.colors.greenBright.Blue});
+            --green-bright-rgb: ${result.colors.greenBright.Red}, ${result.colors.greenBright.Green}, ${result.colors.greenBright.Blue};
             --yellow-bright: rgb(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue});
+            --yellow-bright-rgb: ${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue};
             --blue-bright: rgb(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue});
+            --blue-bright-rgb: ${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue};
             --magenta-bright: rgb(${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue});
+            --magenta-bright-rgb: ${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue};
             --cyan-bright: rgb(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue});
+            --cyan-bright-rgb: ${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue};
             --selection: rgb(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue});
+            --selection-rgb: ${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue};
             --error: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue});
+            --error-rgb: ${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue};
             --font-family: ${result.fontFamily};
-        }
-
-        * {
-            box-sizing: border-box;
-            font-family: var(--font-family);
-        }
-
-        body {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        ::selection {
-            background-color: var(--selection);
+            --notes-font-size: ${result.fontSize}px;
+            --notes-font-size-minus-1: ${result.fontSize - 1}px;
+            --notes-font-size-minus-2: ${result.fontSize - 2}px;
+            --notes-font-size-plus-4: ${result.fontSize + 4}px;
+            --notes-font-size-plus-7: ${result.fontSize + 7}px;
+            --notes-status-font-size: ${notesStatusFontSize}px;
+            --notes-title-font-size: ${notesTitleFontSize}px;
+            --darken-background-overlay: ${DARKEN_BACKGROUND_OVERLAY};
         }
 
         ${getScrollbarStyles(result.colors)}
-
-        #notes-app {
-            display: grid;
-            grid-template-columns: 1fr 2px 2fr;
-            height: 100%;
-            overflow: hidden;
-            color: var(--fg);
-            background: var(--bg);
-        }
-
-        #notes-sidebar {
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            gap: 12px;
-            min-height: 0;
-            overflow: hidden;
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-sidebar-header {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        #notes-title {
-            font-size: ${notesTitleFontSize}px;
-            color: var(--accent);
-            padding: 10px 10px 0 10px;
-        }
-
-        #notes-list-filter-wrap {
-            position: relative;
-            padding: 0 10px;
-        }
-
-        #notes-list-filter {
-            width: 100%;
-            border-radius: 5px;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45);
-            background: ${DARKEN_BACKGROUND_OVERLAY};
-            color: var(--fg);
-            padding: 6px 28px 6px 8px;
-            font-size: ${result.fontSize - 1}px;
-            outline: none;
-        }
-
-        #notes-list-filter-clear {
-            position: absolute;
-            top: 50%;
-            right: 16px;
-            transform: translateY(-50%);
-            border: 0;
-            background: transparent;
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 1);
-            cursor: pointer;
-            padding: 0;
-            line-height: 1;
-            display: none;
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
-            font-weight: 900;
-            font-size: ${result.fontSize + 7}px;
-        }
-
-        #notes-list-filter-clear[data-visible="true"] {
-            display: block;
-        }
-
-        #notes-list-filter-clear:hover {
-            color: var(--accent);
-        }
-
-        #notes-list-filter::placeholder {
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.55);
-        }
-
-        #notes-list-filter:focus {
-            border-color: var(--accent);
-            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 1);
-        }
-
-        #notes-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        #notes-actions button {
-            border-radius: 0;
-            border: 2px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 10px;
-            cursor: pointer;
-        }
-
-        #notes-actions button:hover {
-            border-color: var(--selection);
-            color: var(--selection);
-        }
-
-        #notes-modal {
-            position: fixed;
-            inset: 0;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.45);
-            z-index: 999;
-        }
-
-        #notes-modal[data-open="true"] {
-            display: flex;
-        }
-
-        #notes-delete-modal {
-            position: fixed;
-            inset: 0;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.45);
-            z-index: 999;
-        }
-
-        #notes-delete-modal[data-open="true"] {
-            display: flex;
-        }
-
-        #notes-modal-card {
-            min-width: 600px;
-            max-width: 80vw;
-            border: 2px solid var(--fg);
-            background: var(--bg);
-            color: var(--fg);
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            border-radius: 5px;
-        }
-
-        #notes-delete-modal-card {
-            min-width: 360px;
-            max-width: 80vw;
-            border: 2px solid var(--fg);
-            background: var(--bg);
-            color: var(--fg);
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            border-radius: 5px;
-        }
-
-        #notes-modal-title {
-            color: var(--accent);
-            font-size: ${result.fontSize}px;
-        }
-
-        #notes-modal-location-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-        }
-
-        #notes-modal-location {
-            border-radius: 5px;
-            border: 2px solid var(--bg);
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 10px;
-            font-size: ${result.fontSize}px;
-            text-align: center;
-            cursor: pointer;
-            white-space: nowrap;
-            min-width: 96px;
-        }
-
-        #notes-modal-location:hover,
-        #notes-modal-location:focus {
-            border-color: var(--accent);
-            color: var(--accent);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
-            outline: none;
-        }
-
-        #notes-delete-modal-title {
-            color: var(--accent);
-            font-size: ${result.fontSize}px;
-        }
-
-        #notes-delete-modal-body {
-            opacity: 0.9;
-        }
-
-        #notes-modal-input {
-            border-radius: 0;
-            border: 1px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 8px;
-            font-size: ${result.fontSize}px;
-            outline: none;
-            flex: 1;
-            width: 100%;
-            min-width: 0;
-        }
-
-        #notes-modal-input:focus {
-            border-color: var(--accent);
-        }
-
-        .notes-toolbar {
-            display: flex;
-            gap: 4px;
-            margin-left: auto;
-            align-items: center;
-            height: 20px;
-        }
-
-        .notes-toolbar-btn {
-            border: none;
-            background: transparent;
-            color: var(--fg);
-            font-size: 16px;
-            cursor: pointer;
-            padding: 6px 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
-            font-weight: 900;
-            transition: color 0.2s, background-color 0.2s;
-            border-width: 1px !important;
-        }
-
-        #notes-new:hover {
-            color: var(--green) !important;
-        }
-
-        #notes-fullsize-btn:hover {
-            color: var(--accent) !important;
-            border-radius: 5px;
-            border-color: var(--accent) !important;
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3) !important;
-        }
-
-        #notes-history-prev:hover,
-        #notes-history-next:hover {
-            color: var(--accent) !important;
-            border-radius: 5px;
-            border-color: var(--accent) !important;
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
-        }
-
-        #notes-modal-create:hover {
-            border-color: var(--green) !important;
-            color: var(--green) !important;
-            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2) !important;
-        }
-
-        #notes-modal-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        #notes-delete-modal-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        #notes-modal-actions button {
-            border-radius: 5px;
-            border: 2px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 10px;
-            cursor: pointer;
-        }
-
-        #notes-delete-modal-actions button {
-            border-radius: 5px;
-            border: 2px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 10px;
-            cursor: pointer;
-        }
-
-        #notes-modal-actions button:hover {
-            border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
-            transition: all 0.2s ease;
-        }
-
-        #notes-delete-modal-actions button:hover {
-            border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
-            transition: all 0.2s ease;
-        }
-
-        #notes-delete-confirm {
-            border-color: var(--error) !important;
-            color: var(--error) !important;
-        }
-
-        #notes-delete-confirm:hover {
-            border-color: var(--error) !important;
-            color: var(--error) !important;
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2) !important;
-            transition: all 0.2s ease;
-        }
-
-        #notes-list {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            flex: 1;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.25;
-            padding-right: 5px;
-        }
-
-        .notes-category-header {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 3px 6px;
-            cursor: pointer;
-            color: var(--accent);
-            /*font-weight: bold;*/
-            border: 2px solid transparent;
-            user-select: none;
-            border-radius: 5px;
-        }
-
-        .notes-category-header:hover {
-            /*border-color: var(--selection);*/
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
-        }
-
-        .notes-category-arrow {
-            font-size: ${result.fontSize - 2}px;
-            width: 12px;
-            display: inline-block;
-        }
-
-        .notes-category-content {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-            padding-left: 6px;
-        }
-
-        .notes-category-content[data-expanded="false"] {
-            display: none;
-        }
-
-        .notes-file {
-            min-height: 0;
-            text-align: left;
-            border-radius: 5px;
-            border: none;
-            background: transparent;
-            color: var(--fg);
-            padding: 1px 6px;
-            cursor: pointer;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.25;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-
-        .notes-tree-folder,
-        .notes-tree-file {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            width: 100%;
-            min-width: 0;
-        }
-
-        .notes-tree-folder {
-            min-height: 0;
-            text-align: left;
-            border-radius: 5px;
-            border: none;
-            background: transparent;
-            color: var(--accent);
-            padding: 1px 6px;
-            cursor: pointer;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.25;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-
-        .notes-tree-folder:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
-        }
-
-        .notes-tree-folder[data-expanded="false"] .notes-tree-label {
-            font-style: italic;
-        }
-
-        .notes-tree-indent {
-            flex: 0 0 auto;
-        }
-
-        .notes-tree-indent {
-            display: inline-flex;
-            align-self: stretch;
-        }
-
-        .notes-tree-branch {
-            position: relative;
-            display: block;
-            align-self: stretch;
-            width: 2ch;
-            height: auto;
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.65);
-        }
-
-        .notes-tree-branch-continue::before,
-        .notes-tree-branch-elbow::before {
-            content: '';
-            position: absolute;
-            left: 0.8ch;
-            top: -1px;
-            bottom: -1px;
-            border-left: 1px solid currentColor;
-        }
-
-        .notes-tree-branch-end::before {
-            content: '';
-            position: absolute;
-            left: 0.8ch;
-            top: -1px;
-            bottom: 50%;
-            border-left: 1px solid currentColor;
-        }
-
-        .notes-tree-branch-elbow::after,
-        .notes-tree-branch-end::after {
-            content: '';
-            position: absolute;
-            left: 0.8ch;
-            top: calc(50% - 0.5px);
-            width: 1.1ch;
-            border-top: 1px solid currentColor;
-        }
-
-        .notes-tree-branch-end::after {
-            top: 50%;
-        }
-
-        .notes-tree-label {
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.25;
-        }
-
-        .notes-file[data-active="true"] {
-            background-color: var(--accent);
-            color: var(--bg);
-        }
-
-        .notes-file[data-active="true"]:hover {
-            color: var(--accent);
-        }
-
-        .notes-file:hover,
-        .notes-file:focus {
-            outline: none;
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.25);
-        }
-
-        #notes-empty {
-            opacity: 0.7;
-        }
-
-        #notes-status {
-            font-size: ${notesStatusFontSize}px;
-            opacity: 0.8;
-            color: var(--fg);
-        }
-
-        #notes-status:hover {
-            cursor: pointer;
-            color: var(--accent);
-        }
-
-        #notes-status[data-state="error"] {
-            color: var(--error);
-        }
-
-        #notes-splitter {
-            padding: 0;
-            margin: 0;
-            position: relative;
-            width: 2px;
-            cursor: col-resize;
-            user-select: none;
-            touch-action: none;
-            flex-shrink: 0;
-            background: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-splitter::after {
-            content: '';
-            position: absolute;
-            /*left: 50%;*/
-            top: 0;
-            /*transform: translateX(-50%);*/
-            width: 2px;
-            height: 100%;
-            background: color-mix(in srgb, var(--fg) 20%, transparent);
-        }
-
-        #notes-splitter:hover::after {
-            background: var(--accent);
-        }
-
-        #notes-main {
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            height: 100%;
-            min-height: 0;
-            min-width: 0;
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-panel {
-            background-color: var(--bg);
-        }
-
-        #notes-tabs {
-            display: flex;
-            gap: 8px;
-            padding: 6px 8px 0px 8px;
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            /*align-items: center;*/
-
-            box-sizing: border-box;
-        }
-
-        #notes-tabs button {
-            border-radius: 0;
-            border: 1px solid transparent;
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 12px;
-            cursor: pointer;
-        }
-
-        #notes-tabs button[aria-selected="true"] {
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            border-bottom: 5px;
-            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
-        }
-
-        .tab {
-            border-top-left-radius: 5px !important;
-            border-top-right-radius: 5px !important;
-            border: 1px solid !important;
-            border-bottom: 0 !important;
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
-        }
-
-        .tab:hover {
-            border: 1px solid !important;
-            border-bottom: 0 !important;
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
-        }
-
-        #notes-tabs button:hover {
-            border-color: var(--selection);
-        }
-
-        #notes-new:hover {
-            border-color: var(--green) !important;
-            color: var(--green) !important;
-            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-            border-radius: 5px;
-        }
-
-        #notes-panel {
-            position: relative;
-            flex: 1;
-            min-height: 0;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        #notes-editor-wrap,
-        #notes-preview-wrap,
-        #notes-jupyter-wrap,
-        #notes-meta-wrap {
-            flex: 1;
-            display: none;
-            min-height: 0;
-            border-bottom: 0;
-        }
-
-        #notes-preview-wrap,
-        #notes-jupyter-wrap,
-        #notes-meta-wrap {
-            padding-right: 10px;
-            padding-bottom: 10px;
-            overflow: auto;
-        }
-
-        #notes-html-view-wrap {
-            flex: 1;
-            display: none;
-            min-width: 0;
-            min-height: 0;
-            overflow: hidden;
-            padding: 0;
-        }
-
-        #notes-html-view-frame {
-            width: 100%;
-            height: 100%;
-            border: 0;
-            background: #fff;
-        }
-
-        #notes-swagger-view-wrap,
-        #notes-swagger-run-wrap,
-        #notes-hex-wrap {
-            flex: 1;
-            display: none;
-            min-width: 0;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        #notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-html-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap,
-        #notes-pane[data-terminal-focused="true"] #notes-hex-wrap {
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-editor-wrap[data-active="true"],
-        #notes-hex-wrap[data-active="true"],
-        #notes-preview-wrap[data-active="true"],
-        #notes-html-view-wrap[data-active="true"],
-        #notes-jupyter-wrap[data-active="true"],
-        #notes-meta-wrap[data-active="true"] {
-            display: block;
-        }
-
-        #notes-swagger-view-wrap[data-active="true"],
-        #notes-swagger-run-wrap[data-active="true"] {
-            display: flex !important;
-        }
-
-        #notes-image-view-wrap {
-            flex: 1;
-            display: none;
-            min-height: 0;
-            overflow: auto;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            box-sizing: border-box;
-        }
-
-        #notes-image-view-wrap[data-active="true"] {
-            display: flex;
-        }
-
-        #notes-image-view-img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            cursor: zoom-in;
-            user-select: none;
-            border-radius: 4px;
-        }
-
-        #notes-csv-view-wrap {
-            flex: 1;
-            display: none;
-            min-height: 0;
-            min-width: 0;
-            overflow-x: auto;
-            overflow-y: auto;
-        }
-
-        #notes-csv-view-wrap[data-active="true"] {
-            display: block;
-        }
-
-        #notes-csv-view {
-            padding: 8px 16px;
-            min-width: 0;
-        }
-
-        #notes-csv-view table {
-            width: max-content;
-            min-width: 100%;
-            border-collapse: collapse;
-        }
-
-        #notes-csv-view th,
-        #notes-csv-view td {
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.18);
-            padding: 4px 8px;
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        #notes-csv-view thead th {
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.28);
-        }
-
-        .notes-csv-empty {
-            opacity: 0.5;
-            font-style: italic;
-            padding: 8px;
-        }
-
-        .notes-tools-panel {
-            display: flex;
-            flex-direction: column;
-            border-top: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.5);
-            transition: all 0.3s ease;
-            overflow: hidden;
-        }
-
-        .notes-tools-panel[data-collapsed="false"] {
-            flex: 0 1 35%;
-            overflow-y: auto;
-        }
-
-        .notes-tools-panel[data-collapsed="true"] {
-            flex: 0 0 0;
-            min-height: 0;
-            border-top: 0;
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .notes-tools-restore {
-            display: none;
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            z-index: 2;
-            border-radius: 999px;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.4);
-            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.9);
-            color: var(--accent);
-            color: var(--fg);
-            padding: 6px 12px;
-            cursor: pointer;
-            font-size: ${result.fontSize - 2}px;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .notes-tools-restore:hover {
-            border-color: var(--accent);
-            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.9);
-            color: var(--accent);
-        }
-
-        .notes-tools-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 8px;
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.1);
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            flex-shrink: 0;
-        }
-
-        .tools-tabs-container {
-            display: flex;
-            gap: 8px;
-            padding-top: 6px;
-        }
-
-        .tools-tab {
-            border-radius: 0;
-            border: 1px solid transparent;
-            background: transparent;
-            color: var(--fg);
-            padding: 6px 12px;
-            cursor: pointer;
-            border-top-left-radius: 5px;
-            border-top-right-radius: 5px;
-            border: 1px solid;
-            border-bottom: 0;
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-        }
-
-        .tools-tab[aria-selected="true"] {
-            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
-        }
-
-        .tools-tab[aria-selected="false"] {
-            opacity: 0.85;
-        }
-
-        .tools-tab:hover {
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
-        }
-
-        .notes-tools-minimize,
-        .notes-tools-clear {
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
-            background: transparent;
-            color: var(--fg);
-            padding: 4px 10px;
-            cursor: pointer;
-            font-size: ${result.fontSize - 2}px;
-            transition: all 0.2s ease;
-            border-radius: 3px;
-        }
-
-        .notes-tools-minimize {
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
-            font-weight: 900;
-        }
-
-        .notes-tools-minimize:hover,
-        .notes-tools-clear:hover {
-            border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
-        }
-
-        .notes-tools-pane {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            flex: 1;
-        }
-
-        .notes-tools-pane[data-active="false"] {
-            display: none;
-        }
-
-        .notes-tools-toc {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            padding: 8px 0;
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        .notes-tools-toc-list {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .notes-tools-toc-item {
-            border: 0;
-            border-left: 2px solid transparent;
-            background: transparent;
-            color: var(--fg);
-            text-align: left;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: ${result.fontSize - 1}px;
-            line-height: 1.35;
-        }
-
-        .notes-tools-toc-item:hover {
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
-            border-left-color: var(--accent);
-        }
-
-        .notes-tools-toc-item[data-active="true"] {
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.24);
-            border-left-color: var(--accent);
-            color: var(--accent);
-            font-weight: 600;
-        }
-
-        .notes-tools-toc-empty {
-            padding: 12px;
-            opacity: 0.6;
-            font-style: italic;
-        }
-
-        .notes-tools-frontmatter {
-            flex: 1;
-            min-height: 0;
-            overflow: auto;
-            padding: 10px 12px;
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.45;
-        }
-
-        .notes-frontmatter-caption {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 16px 0;
-            padding: 8px 12px;
-            border: 1px solid var(--accent);
-            border-radius: 6px;
-            background: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.10);
-            font-size: ${result.fontSize - 1}px;
-        }
-
-        .notes-frontmatter-caption-text {
-            color: var(--fg);
-            opacity: 0.85;
-        }
-
-        .notes-frontmatter-caption-view {
-            border: 1px solid var(--accent);
-            background: var(--accent);
-            color: var(--bg);
-            border-radius: 4px;
-            padding: 2px 12px;
-            cursor: pointer;
-            font: inherit;
-        }
-
-        .notes-frontmatter-caption-view:hover {
-            background: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.8);
-        }
-
-        .notes-tools-content {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            flex: 1;
-        }
-
-        .notes-tools-pane-header {
-            display: flex;
-            justify-content: flex-end;
-            padding: 8px 12px;
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.05);
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            flex-shrink: 0;
-            gap: 8px;
-        }
-
-        #notes-tools-clear:hover {
-            color: var(--error);
-            border-color: var(--error);
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
-        }
-
-        #notes-tools-log-clear:hover {
-            color: var(--error);
-            border-color: var(--error);
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.2);
-        }
-
-        #notes-tools-log-deselect:hover {
-            border-color: var(--accent);
-        }
-
-        #notes-tools-log-copy:hover {
-            color: var(--green);
-            border-color: var(--green);
-            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-        }
-
-        #notes-tools-log-copy {
-            background-image:
-                linear-gradient(
-                    to right,
-                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.05),
-                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.05)
-                ),
-                linear-gradient(
-                    to right,
-                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.35),
-                    rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.35)
-                );
-            background-repeat: no-repeat;
-            background-position: center center, center center;
-            background-size: 0 100%, 0 100%;
-            transition: color 0.2s ease, border-color 0.2s ease;
-        }
-
-        #notes-tools-log-copy[data-copied="true"] {
-            border-color: var(--green);
-            animation: notes-tools-log-copy-feedback 0.48s ease-out;
-        }
-
-        @keyframes notes-tools-log-copy-feedback {
-            0% {
-                background-size: 0 100%, 0 100%;
-            }
-
-            52% {
-                background-size: 0 100%, 100% 100%;
-            }
-
-            100% {
-                background-size: 100% 100%, 100% 100%;
-            }
-        }
-
-        #notes-tools-log-wordwrap:hover {
-            border-color: var(--accent);
-        }
-
-        #notes-tools-log-maximize:hover {
-            border-color: var(--accent);
-        }
-
-        #notes-tools-ai-maximize:hover {
-            border-color: var(--accent);
-        }
-
-        #notes-tools-log-timestamp:hover {
-            border-color: var(--accent);
-        }
-
-        #notes-tools-log-maximize[data-enabled="true"] {
-            background-color: var(--accent);
-            border-color: var(--accent);
-            color: var(--bg);
-        }
-
-        #notes-tools-ai-maximize[data-enabled="true"] {
-            background-color: var(--accent);
-            border-color: var(--accent);
-            color: var(--bg);
-        }
-
-        #notes-tools-log-wordwrap[data-wrapped="true"] {
-            background-color: var(--accent);
-            border-color: var(--accent);
-            color: var(--bg);
-        }
-
-        #notes-tools-log-timestamp[data-enabled="true"] {
-            background-color: var(--accent);
-            border-color: var(--accent);
-            color: var(--bg);
-        }
-
-        #notes-ai-output {
-            flex: 1;
-            padding: 12px;
-            font-size: ${result.fontSize}px;
-            line-height: 1.5;
-            overflow-x: hidden;
-            overflow-y: auto;
-            white-space: normal;
-            word-wrap: break-word;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-            font-family: var(--font-family);
-            color: var(--fg);
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-ai-output .notes-ai-section {
-            margin-bottom: 14px;
-        }
-
-        #notes-ai-output .notes-ai-heading {
-            margin: 0 0 8px;
-            font-size: 1.05em;
-            line-height: 1.3;
-            color: var(--accent);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-            padding-bottom: 4px;
-        }
-
-        #notes-ai-output .notes-ai-markdown {
-            margin: 0;
-            font-size: inherit;
-        }
-
-        #notes-ai-output .notes-ai-code {
-            margin: 0;
-            padding: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 4px;
-            background: rgba(0, 0, 0, 0.24);
-            white-space: pre-wrap;
-            overflow-x: hidden;
-            overflow-y: auto;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-            max-height: calc(1.5em * 10 + 16px);
-        }
-
-        #notes-ai-output .notes-ai-code code {
-            white-space: inherit;
-            overflow-wrap: inherit;
-            word-break: inherit;
-        }
-
-        #notes-ai-output:empty::before {
-            content: "No AI response yet";
-            opacity: 0.5;
-            font-style: italic;
-        }
-
-        #notes-ai-output .notes-ai-separator {
-            border: none;
-            border-top: 1px solid var(--accent);
-            margin: 18px 0 14px;
-        }
-
-        #notes-ai-output .notes-ai-timestamp {
-            margin: 0 0 4px;
-            font-size: 0.8em;
-            opacity: 0.55;
-            font-style: italic;
-            color: var(--accent);
-        }
-
-        #notes-ai-output .notes-ai-title {
-            margin: 0 0 10px;
-            padding: 4px 8px 4px 10px;
-            border-left: 2px solid var(--accent);
-            opacity: 0.8;
-            font-size: 0.9em;
-            overflow-wrap: anywhere;
-        }
-
-        #notes-ai-output .notes-ai-title p:first-child {
-            margin-top: 0;
-        }
-
-        #notes-ai-output .notes-ai-title p:last-child {
-            margin-bottom: 0;
-        }
-
-        #notes-log-output {
-            flex: 1;
-            padding: 2px;
-            font-size: ${result.fontSize}px;
-            line-height: 1.5;
-            overflow-x: auto;
-            overflow-y: auto;
-            white-space: pre;
-            overflow-wrap: normal;
-            font-family: var(--font-family);
-            color: var(--fg);
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        #notes-log-output:empty::before {
-            content: "No log output yet";
-            opacity: 0.5;
-            font-style: italic;
-        }
-
-        .notes-log-line {
-            position: relative;
-            white-space: inherit;
-            display: block;
-            margin: 1px 0;
-            padding: 0px 8px 0px 18px;
-            border: 2px solid transparent;
-            cursor: pointer;
-        }
-
-        #notes-log-output[data-wordwrap="false"] .notes-log-line {
-            width: max-content;
-            min-width: 100%;
-            box-sizing: border-box;
-        }
-
-        #notes-log-output[data-wordwrap="true"] .notes-log-line {
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .notes-log-line::after {
-            content: "";
-            position: absolute;
-            left: 7px;
-            top: 50%;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
-            transform: translateY(-50%);
-        }
-
-        #notes-log-output[data-wordwrap="true"] .notes-log-line::after {
-            top: 0.75em;
-            transform: translateY(-50%);
-        }
-
-        .notes-log-line:hover {
-            border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1);
-        }
-
-        .notes-log-line[data-selected="true"] {
-            border-color: var(--accent);
-            padding-left: 18px;
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.3);
-        }
-
-        .notes-log-line[data-selected="true"]::after {
-            display: none;
-        }
-
-        .notes-log-line[data-selected="true"]::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background-color: var(--accent);
-        }
-
-        .notes-log-timestamp {
-            display: none;
-        }
-
-        .notes-log-ts-text {
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
-        }
-
-        .notes-log-ts-punct {
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.3);
-        }
-
-        #notes-log-output[data-show-timestamp="true"] .notes-log-timestamp {
-            display: inline;
-        }
-
-        [data-log-maximized="true"] #notes-sidebar,
-        [data-log-maximized="true"] #notes-splitter,
-        [data-log-maximized="true"] #notes-tabs,
-        [data-log-maximized="true"] #notes-editor-wrap,
-        [data-log-maximized="true"] #notes-hex-wrap,
-        [data-log-maximized="true"] #notes-preview-wrap,
-        [data-log-maximized="true"] #notes-jupyter-wrap,
-        [data-log-maximized="true"] #notes-csv-view-wrap,
-        [data-log-maximized="true"] #notes-image-view-wrap,
-        [data-log-maximized="true"] #notes-meta-wrap,
-        [data-log-maximized="true"] #notes-swagger-view-wrap,
-        [data-log-maximized="true"] #notes-swagger-run-wrap,
-        [data-log-maximized="true"] .notes-tools-restore,
-        [data-log-maximized="true"] #notes-tools-ai-pane,
-        [data-log-maximized="true"] #notes-tools-toc-pane,
-        [data-log-maximized="true"] #notes-tools-find-pane,
-        [data-log-maximized="true"] #notes-tools-tab-ai,
-        [data-log-maximized="true"] #notes-tools-tab-toc,
-        [data-log-maximized="true"] #notes-tools-tab-find,
-        [data-log-maximized="true"] #notes-tools-tab-log,
-        [data-log-maximized="true"] #notes-tools-minimize {
-            display: none !important;
-        }
-
-        [data-log-maximized="true"] #notes-main,
-        [data-log-maximized="true"] #notes-panel,
-        [data-log-maximized="true"] #notes-app {
-            width: 100%;
-            height: 100%;
-        }
-
-        [data-log-maximized="true"] .notes-tools-panel {
-            position: fixed;
-            top: 32px;
-            right: 0;
-            bottom: 0;
-            left: 0;
-            z-index: 50;
-            border-top: 0;
-            opacity: 1;
-            pointer-events: auto;
-            flex: 1 1 auto;
-            background-color: var(--bg);
-        }
-
-        [data-ai-maximized="true"] #notes-sidebar,
-        [data-ai-maximized="true"] #notes-splitter,
-        [data-ai-maximized="true"] #notes-tabs,
-        [data-ai-maximized="true"] #notes-editor-wrap,
-        [data-ai-maximized="true"] #notes-hex-wrap,
-        [data-ai-maximized="true"] #notes-preview-wrap,
-        [data-ai-maximized="true"] #notes-jupyter-wrap,
-        [data-ai-maximized="true"] #notes-csv-view-wrap,
-        [data-ai-maximized="true"] #notes-image-view-wrap,
-        [data-ai-maximized="true"] #notes-meta-wrap,
-        [data-ai-maximized="true"] #notes-swagger-view-wrap,
-        [data-ai-maximized="true"] #notes-swagger-run-wrap,
-        [data-ai-maximized="true"] .notes-tools-restore,
-        [data-ai-maximized="true"] #notes-tools-log-pane,
-        [data-ai-maximized="true"] #notes-tools-toc-pane,
-        [data-ai-maximized="true"] #notes-tools-find-pane,
-        [data-ai-maximized="true"] #notes-tools-tab-ai,
-        [data-ai-maximized="true"] #notes-tools-tab-toc,
-        [data-ai-maximized="true"] #notes-tools-tab-find,
-        [data-ai-maximized="true"] #notes-tools-tab-log,
-        [data-ai-maximized="true"] #notes-tools-minimize {
-            display: none !important;
-        }
-
-        [data-ai-maximized="true"] #notes-main,
-        [data-ai-maximized="true"] #notes-panel,
-        [data-ai-maximized="true"] #notes-app {
-            width: 100%;
-            height: 100%;
-        }
-
-        [data-ai-maximized="true"] .notes-tools-panel {
-            position: fixed;
-            top: 32px;
-            right: 0;
-            bottom: 0;
-            left: 0;
-            z-index: 50;
-            border-top: 0;
-            opacity: 1;
-            pointer-events: auto;
-            flex: 1 1 auto;
-            background-color: var(--bg);
-        }
-
-        [data-ai-maximized="true"] .notes-tools-content {
-            padding: 0;
-        }
-
-        [data-ai-maximized="true"] #notes-tools-ai-pane {
-            display: flex !important;
-            flex-direction: column;
-            height: 100%;
-            border: none;
-            border-radius: 0;
-            padding: 0;
-        }
-
-        [data-ai-maximized="true"] #notes-ai-output {
-            flex: 1 1 auto;
-            min-height: 0;
-            padding: 12px;
-            border: none;
-            border-radius: 0;
-            background-color: var(--bg);
-        }
-
-        [data-log-maximized="true"] .notes-tools-content {
-            height: 100%;
-            background-color: var(--bg);
-        }
-
-        [data-log-maximized="true"] #notes-tools-log-pane {
-            display: flex !important;
-            flex-direction: column;
-            flex: 1;
-            min-height: 0;
-            background-color: var(--bg);
-        }
-
-        [data-log-maximized="true"] #notes-log-output {
-            flex: 1;
-            min-height: 0;
-            overflow-x: auto;
-            overflow-y: auto;
-        }
-
-        #notes-editor {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            resize: none;
-            border-radius: 0;
-            border: 0;
-            background: transparent;
-            color: var(--fg);
-            caret-color: var(--fg);
-            padding: 10px 14px;
-            font-size: ${result.fontSize}px;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            word-break: break-word;
-            overflow-y: auto;
-            overflow-x: hidden;
-            font-family: var(--font-family);
-            -webkit-user-modify: read-write-plaintext-only;
-        }
-
-        #notes-editor:focus {
-            outline: none;
-            box-shadow: none;
-            border: 0;
-        }
-
-        #notes-editor:not(:focus) {
-            background-color: transparent;
-        }
-
-        #notes-editor,
-        .jupyter-code-editable,
-        .jupyter-highlight,
-        .jupyter-highlight code,
-        .jupyter-highlight .hljs,
-        .swagger-body-editor,
-        #notes-editor-highlight,
-        #notes-editor-highlight code,
-        #notes-editor-highlight .hljs {
-            tab-size: 4;
-            -moz-tab-size: 4;
-            letter-spacing: normal;
-            font-variant-ligatures: none;
-            font-feature-settings: "liga" 0, "calt" 0;
-        }
-
-        #notes-editor-shell {
-            position: relative;
-            display: grid;
-            grid-template-columns: 1fr;
-            height: 100%;
-            width: 100%;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0);
-            background-color: rgba(0, 0, 0, 0.22);
-            transition: border-color 120ms ease;
-        }
-
-        #notes-editor-shell:focus-within {
-            border-color: var(--accent);
-            background-color: transparent;
-        }
-
-        #notes-pane[data-fullsize="true"] #notes-panel:has(#notes-tools-panel[data-collapsed="true"]) #notes-editor-shell:focus-within {
-            border-bottom-right-radius: 8px;
-        }
-
-        #notes-editor-shell[data-code-view="true"] {
-            grid-template-columns: max-content 1fr;
-        }
-
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] {
-            grid-template-columns: 1fr;
-        }
-
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-gutter-wrap {
-            display: none;
-        }
-
-        #notes-editor-shell[data-code-view="true"] #notes-editor {
-            color: transparent;
-            white-space: pre;
-            overflow-wrap: normal;
-            word-break: normal;
-            overflow: auto;
-        }
-
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor {
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            word-break: break-word;
-            overflow-y: auto;
-            overflow-x: hidden;
-            box-sizing: border-box;
-            text-rendering: auto;
-            color: var(--fg);
-        }
-
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight {
-            inset: auto;
-            top: 0;
-            left: 0;
-            right: 0;
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            word-break: break-word;
-            overflow: hidden;
-            box-sizing: border-box;
-            text-rendering: auto;
-            -webkit-font-smoothing: auto;
-            -moz-osx-font-smoothing: auto;
-            display: none;
-        }
-
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor-highlight code {
-            display: inline;
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            word-break: break-word;
-            margin: 0;
-            padding: 0;
-            border: 0;
-        }
-
-        #notes-editor-shell[data-code-view="false"] #notes-editor-highlight,
-        #notes-editor-shell[data-code-view="false"] #notes-editor-gutter-wrap {
-            display: none;
-        }
-
-        #notes-editor-gutter-wrap {
-            position: relative;
-            overflow: hidden;
-            border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 1);
-            min-width: 48px;
-        }
-
-        #notes-editor-gutter {
-            padding: 10px 10px 10px 12px;
-            font-size: ${result.fontSize}px;
-            line-height: 1.4;
-            white-space: pre;
-            text-align: right;
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.6);
-            user-select: none;
-            font-family: var(--font-family);
-        }
-
-        #notes-editor-scroll {
-            position: relative;
-            min-width: 0;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        #notes-editor-highlight {
-            position: absolute;
-            inset: 0;
-            margin: 0;
-            padding: 10px 14px;
-            overflow: hidden;
-            pointer-events: none;
-            white-space: pre;
-            line-height: 1.4;
-            font-size: ${result.fontSize}px;
-            font-family: var(--font-family);
-        }
-
-        #notes-editor-highlight code {
-            display: block;
-            padding: 0;
-            background: transparent;
-            white-space: pre;
-        }
-
-        #notes-editor-highlight .hljs {
-            overflow: visible !important;
-            padding: 0 !important;
-            background: transparent !important;
-        }
-
-        #notes-preview-wrap,
-        #notes-jupyter-wrap,
-        #notes-meta-wrap {
-            overflow-y: auto;
-            padding-left: 16px;
-        }
-
         ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-meta', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-run-wrap', result.fontSize)}
-
         ${getMarkdownBaseTextSizeStyles('#notes-swagger-request-builder .swagger-param-description', result.fontSize)}
-
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
-
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'swagger-ui')}
-
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
-
         ${getHighlightJsTheme(result.colors, true)}
-
         ${getHexDumpStyles(result.fontSize, result.adjustCellHeight)}
-
-        #notes-preview,
-        #notes-jupyter,
-        #notes-meta,
-        #notes-csv-view {
-            min-width: 0;
-        }
-
-        #notes-preview img,
-        #notes-jupyter img {
-            max-width: 100%;
-            height: auto;
-        }
-
-        .notes-table-scroll-wrap {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: auto;
-            overflow-y: hidden;
-        }
-
-        .notes-table-scroll-wrap th,
-        .notes-table-scroll-wrap td {
-            position: relative;
-        }
-
-        .notes-table-col-resize-handle {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 10px;
-            height: 100%;
-            cursor: col-resize;
-            user-select: none;
-            z-index: 2;
-        }
-
-        .notes-table-col-resize-handle::before {
-            content: '';
-            position: absolute;
-            top: 3px;
-            bottom: 3px;
-            left: 50%;
-            width: 1px;
-            transform: translateX(-50%);
-            background: var(--bg);
-            transition: background-color 120ms ease;
-        }
-
-        .notes-table-scroll-wrap th .notes-table-col-resize-handle::before {
-            background: var(--fg);
-        }
-
-        .notes-table-col-resize-handle:hover::before,
-        .notes-table-col-resize-handle.is-dragging::before {
-            background: var(--accent);
-        }
-
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table {
-            width: 100%;
-            min-width: 100%;
-            table-layout: fixed;
-        }
-
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table {
-            width: 100%;
-            min-width: 100%;
-            table-layout: fixed;
-        }
-
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th,
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td {
-            white-space: normal !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word;
-            max-width: 0;
-        }
-
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th,
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td {
-            white-space: normal !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word;
-            max-width: 0;
-        }
-
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td > *,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td > * {
-            white-space: inherit;
-            overflow-wrap: inherit;
-            word-break: inherit;
-        }
-
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th > *,
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td > * {
-            white-space: inherit;
-            overflow-wrap: inherit;
-            word-break: inherit;
-        }
-
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
-        #notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td code,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
-        #notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
-            white-space: normal !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word;
-        }
-
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
-        #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
-            white-space: normal !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word;
-        }
-
-        #notes-tools-find-pane {
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-            transition: background-color 120ms ease;
-            overflow: hidden;
-        }
-
-        #notes-tools-find-pane:focus-within {
-            background-color: var(--bg);
-        }
-
-        .notes-tools-find-wrap {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 10px 12px;
-            height: 100%;
-            min-height: 0;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        #notes-tools-find-pane input,
-        #notes-tools-find-pane textarea {
-            user-select: text;
-        }
-
-        .notes-find-heading {
-            margin: 0;
-            font-size: 1em;
-        }
-
-        #notes-find-row {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            min-width: 0;
-        }
-
-        #notes-find-input-wrap,
-        #notes-replace-input-wrap,
-        #notes-find-files-input-wrap {
-            position: relative;
-            width: auto;
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-
-        #notes-find-input {
-            border-radius: 2px;
-            border: 1px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 4px 8px;
-            font-size: ${result.fontSize}px;
-            outline: none;
-            width: 100%;
-            min-width: 0;
-        }
-
-        #notes-find-input:focus {
-            border-color: var(--accent);
-        }
-
-        #notes-find-files-row {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 2px 0;
-            min-width: 0;
-        }
-
-        #notes-find-files-input {
-            border-radius: 2px;
-            border: 1px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 4px 28px 4px 8px;
-            font-size: ${result.fontSize}px;
-            outline: none;
-            width: 100%;
-            min-width: 0;
-        }
-
-        #notes-find-files-input:focus {
-            border-color: var(--accent);
-        }
-
-        #notes-find-files-results {
-            min-height: 0;
-            max-height: none;
-            flex: 0 0 auto;
-            overflow: visible;
-            border: 0;
-            background: transparent;
-        }
-
-        .notes-find-files-empty {
-            font-size: ${result.fontSize - 2}px;
-            opacity: 0.8;
-            padding: 2px 0;
-            white-space: nowrap;
-            margin-right: auto;
-        }
-
-        .notes-find-files-virtual-spacer {
-            width: 100%;
-            pointer-events: none;
-        }
-
-        #notes-find-input-clear,
-        #notes-replace-input-clear,
-        #notes-find-files-clear {
-            position: absolute;
-            top: 50%;
-            right: 8px;
-            transform: translateY(-50%);
-            border: 0;
-            background: transparent;
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 1);
-            cursor: pointer;
-            padding: 0;
-            line-height: 1;
-            display: none;
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
-            font-weight: 900;
-            font-size: ${result.fontSize + 7}px;
-        }
-
-        #notes-find-input-clear[data-visible="true"],
-        #notes-replace-input-clear[data-visible="true"],
-        #notes-find-files-clear[data-visible="true"] {
-            display: block;
-        }
-
-        #notes-find-input-clear:hover,
-        #notes-replace-input-clear:hover,
-        #notes-find-files-clear:hover {
-            color: var(--accent);
-        }
-
-        .notes-find-options {
-            display: flex;
-            gap: 2px;
-            flex: 0 0 auto;
-            user-select: none;
-            white-space: nowrap;
-        }
-
-        .notes-find-option-btn {
-            padding: 5px 10px;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.5);
-            background: transparent;
-            color: var(--fg);
-            cursor: pointer;
-            border-radius: 3px;
-            font-size: ${result.fontSize - 1}px;
-            transition: all 0.2s ease;
-            outline: none;
-        }
-
-        .notes-find-option-btn:hover {
-            border-color: var(--accent);
-            background: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1);
-        }
-
-        .notes-find-option-btn[data-active="true"] {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: var(--bg);
-        }
-
-        .notes-find-option-btn:focus {
-            border-color: var(--accent);
-        }
-
-        .notes-find-files-list {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .notes-find-files-item {
-            border: 0;
-            border-bottom: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            background: transparent;
-            color: var(--fg);
-            text-align: left;
-            padding: 6px 8px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-
-        .notes-find-files-item:last-child {
-            border-bottom: 0;
-        }
-
-        .notes-find-files-item:hover,
-        .notes-find-files-item:focus-visible {
-            outline: none;
-            color: var(--accent);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.22);
-        }
-
-        .notes-find-files-item[aria-selected="true"] {
-            box-shadow: inset 4px 0 0 0 var(--accent);
-        }
-
-        .notes-find-files-item-title {
-            font-size: ${result.fontSize}px;
-            font-weight: 600;
-            color: var(--accent);
-        }
-
-        .notes-find-files-item-detail {
-            font-size: ${result.fontSize - 2}px;
-            opacity: 0.85;
-            font-family: monospace;
-        }
-
-        .notes-find-files-item-context {
-            margin: 2px 0 0;
-            padding: 4px 6px;
-            font-size: ${result.fontSize - 2}px;
-            font-family: monospace;
-            background: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.5);
-            border-left: 2px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
-            line-height: 1.5;
-        }
-
-        .notes-find-files-context-match,
-        .notes-find-files-context-other {
-            display: block;
-            white-space: pre;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .notes-find-files-context-match {
-            background: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.35);
-            border-left: 2px solid var(--accent);
-            margin-left: -8px;
-            padding-left: 6px;
-        }
-
-        .notes-find-files-context-other {
-            opacity: 0.65;
-        }
-
-        .notes-find-files-item:hover .notes-find-files-item-context,
-        .notes-find-files-item:focus-visible .notes-find-files-item-context {
-            border-left-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.5);
-        }
-
-        #notes-find-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            opacity: 1;
-            transition: opacity 0.2s ease;
-        }
-
-        #notes-find-controls[data-disabled="true"] {
-            opacity: 0.45;
-        }
-
-        #notes-replace-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            opacity: 1;
-            transition: opacity 0.2s ease;
-        }
-
-        #notes-replace-controls[data-disabled="true"] {
-            opacity: 0.45;
-        }
-
-        #notes-replace-input {
-            border-radius: 2px;
-            border: 1px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 4px 8px;
-            font-size: ${result.fontSize}px;
-            outline: none;
-            width: 100%;
-            min-width: 0;
-        }
-
-        #notes-replace-input:focus {
-            border-color: var(--accent);
-        }
-
-        #notes-replace-input:disabled {
-            opacity: 0.75;
-            cursor: not-allowed;
-        }
-
-        #notes-replace-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-
-        #notes-find-counter {
-            font-size: ${result.fontSize - 2}px;
-            opacity: 0.8;
-            white-space: nowrap;
-            margin-right: auto;
-        }
-
-        #notes-find-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            justify-content: flex-end;
-            width: 100%;
-        }
-
-        #notes-find-actions button,
-        #notes-replace-actions button {
-            border-radius: 5px;
-            border: 1px solid var(--fg);
-            background: transparent;
-            color: var(--fg);
-            padding: 4px 8px;
-            cursor: pointer;
-            font-size: ${result.fontSize}px;
-        }
-
-        #notes-find-actions button:hover,
-        #notes-replace-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            transition: all 0.2s ease;
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.3);
-        }
-
-        #notes-find-actions button:disabled {
-            opacity: 0.65;
-            cursor: not-allowed;
-        }
-
-        #notes-find-actions button:disabled:hover {
-            border-color: var(--fg);
-            color: var(--fg);
-            background: transparent;
-        }
-
-        #notes-replace-actions button:disabled {
-            opacity: 0.65;
-            cursor: not-allowed;
-        }
-
-        #notes-replace-actions button:disabled:hover {
-            border-color: var(--fg);
-            color: var(--fg);
-            background: transparent;
-        }
-
-        .find-highlight {
-            background-color: var(--accent);
-            color: var(--bg);
-        }
-
-        .find-highlight-active {
-            background-color: var(--blue);
-            color: var(--bg);
-        }
-
-        /* Jupyter UI Styles */
-
-        #notes-jupyter-wrap pre:not(.jupyter-highlight) {
-            border-left: 0;
-            padding-left: 10px;
-        }
-
-        .jupyter-code-block {
-            margin: 16px 0;
-            border: 2px solid var(--fg);
-            border-radius: 5px;
-        }
-
-        .jupyter-code-block:focus-within {
-            border-color: var(--accent);
-        }
-
-        .jupyter-toolbar {
-            display: flex;
-            gap: 8px;
-            padding: 0px;
-            padding-left: 8px;
-            background-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.05);
-            border-bottom: 2px solid var(--fg);
-            align-items: center;
-        }
-
-        .jupyter-btn {
-            padding: 5px 12px;
-            margin-top: 8px;
-            margin-bottom: 8px;
-            background-color: transparent;
-            border: 1px solid var(--fg);
-            color: var(--fg);
-            cursor: pointer;
-            font-size: ${result.fontSize - 2}px;
-            border-radius: 5px;
-            transition: all 0.2s ease;
-            align-items: center;
-            vertical-align: middle;
-        }
-     
-        .jupyter-btn:hover {
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.1) !important;
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        .jupyter-btn:active {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5);
-        }
-
-        .jupyter-stop-notes {
-            border-color: var(--red);
-            color: var(--red);
-        }
-
-        .jupyter-stop-notes:hover {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.2) !important;
-            border-color: var(--red);
-            color: var(--red);
-        }
-
-        .jupyter-stop-notes:active {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
-        }
-        .jupyter-copy-notes {
-            background-image:
-                linear-gradient(
-                    to right,
-                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.05),
-                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.05)
-                ),
-                linear-gradient(
-                    to right,
-                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.35),
-                    rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.35)
-                );
-            background-repeat: no-repeat;
-            background-position: center center, center center;
-            background-size: 0 100%, 0 100%;
-            transition: color 0.2s ease, border-color 0.2s ease;
-        }
-
-        #notes-tools-log-copy:hover {
-            color: var(--accent);
-            border-color: var(--accent);
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
-        }
-
-        .jupyter-copy-notes[data-copied="true"] {
-            border-color: var(--accent);
-            animation: notes-tools-log-copy-feedback 0.48s ease-out;
-        }
-
-        @keyframes jupyter-copy-feedback {
-            0% {
-                background-size: 0 100%, 0 100%;
-            }
-
-            52% {
-                background-size: 0 100%, 100% 100%;
-            }
-
-            100% {
-                background-size: 100% 100%, 100% 100%;
-            }
-        }
-
-        .jupyter-lsp-notes {
-            border-color: var(--fg);
-            color: var(--fg);
-        }
-
-        .jupyter-lsp-notes[data-lsp-enabled="true"] {
-            border-color: var(--green);
-            color: var(--green);
-            background-color: rgba(${result.colors.green.Red}, ${result.colors.green.Green}, ${result.colors.green.Blue}, 0.2);
-        }
-
-        .jupyter-lsp-notes[data-lsp-enabled="true"]:hover {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.3) !important;
-            border-color: var(--red);
-            color: var(--red);
-        }
-
-        .jupyter-lsp-notes[data-lsp-enabled="true"]:active {
-            background-color: rgba(${result.colors.red.Red}, ${result.colors.red.Green}, ${result.colors.red.Blue}, 0.5) !important;
-        }
-
-        .jupyter-runtime-dropdown {
-            margin: 8px;
-            padding: 5px 4px 5px 4px;
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0);
-            border: none;
-            color: var(--accent);
-            font-size: ${result.fontSize - 2}px;
-            opacity: 0.8;
-            cursor: pointer;
-            outline: none;
-            text-align: center;
-            align-items: cemter;
-            vertical-align: middle;
-            background: none;
-            font-family: var(--font-family);
-        }
-
-        .jupyter-runtime-dropdown:hover {
-            opacity: 1;
-            color: var(--fg);
-        }
-
-        .jupyter-runtime-dropdown:focus {
-            opacity: 1;
-            color: var(--fg);
-        }
-
-        .jupyter-code-editor {
-            display: flex;
-            align-items: stretch;
-            background-color: var(--bg);
-            max-height: calc((25 * 1.5em) + 24px);
-            overflow: hidden;
-        }
-
-        .jupyter-code-area {
-            position: relative;
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-            max-height: calc((25 * 1.5em) + 24px);
-        }
-
-        #notes-jupyter .jupyter-highlight {
-            position: absolute;
-            inset: 0;
-            margin: 0 !important;
-            padding: 12px !important;
-            border: 0 !important;
-            border-left: 0 !important;
-            pointer-events: none;
-            overflow: hidden !important;
-            white-space: pre !important;
-            word-wrap: normal !important;
-            overflow-wrap: normal !important;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.5;
-            background: transparent;
-        }
-
-        .jupyter-highlight code {
-            display: block;
-            padding: 0;
-            background: transparent;
-            white-space: pre;
-        }
-
-        .jupyter-highlight .hljs {
-            overflow: visible !important;
-            padding: 0 !important;
-            background: transparent !important;
-        }
-
-        .jupyter-line-numbers {
-            min-width: 42px;
-            margin: 0;
-            padding: 0;
-            border-right: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2);
-            color: var(--fg);
-            opacity: 0.45;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.5;
-            text-align: right;
-            white-space: pre;
-            user-select: none;
-            pointer-events: none;
-            overflow: hidden;
-            max-height: calc((25 * 1.5em) + 24px);
-        }
-
-        .jupyter-line-numbers-inner {
-            padding: 12px 8px 12px 10px;
-            white-space: pre;
-            line-height: 1.5;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            text-align: right;
-            transform: translateY(0);
-            will-change: transform;
-        }
-
-        .jupyter-code-editable {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            margin: 0;
-            padding: 12px;
-            background-color: transparent;
-            border: 1px solid transparent;
-            color: transparent;
-            caret-color: var(--fg);
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.5;
-            overflow-x: auto;
-            overflow-y: auto;
-            max-height: calc((25 * 1.5em) + 24px);
-            outline: none;
-            resize: none;
-            box-sizing: border-box;
-            white-space: pre;
-        }
-
-        .jupyter-code-editable:focus {
-            outline: none;
-            border-color: transparent;
-        }
-
-        .jupyter-code-block:not(:focus-within) .jupyter-code-area {
-            background-color: ${DARKEN_BACKGROUND_OVERLAY};
-        }
-
-        .jupyter-output-wrapper {
-            border-top: 2px solid var(--fg);
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.1);
-        }
-
-        .jupyter-output-toggle {
-            width: 100%;
-            padding: 8px 12px;
-            background-color: transparent;
-            border: none;
-            border-bottom: 1px solid var(--fg);
-            color: var(--fg);
-            cursor: pointer;
-            font-size: ${result.fontSize - 2}px;
-            text-align: left;
-            transition: all 0.2s ease;
-        }
-
-        .jupyter-output-toggle:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.2);
-            color: var(--accent);
-        }
-
-        .jupyter-output {
-            margin: 0;
-            padding: 12px;
-            background-color: var(--bg);
-            color: var(--fg);
-            font-family: var(--font-family);
-            font-size: ${result.fontSize - 2}px;
-            line-height: 1.4;
-            overflow-x: auto;
-            overflow-y: auto;
-            max-height: calc((25 * 1.4em) + 24px);
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            border: none;
-        }
-
-        .jupyter-output-line {
-            color: var(--green);
-        }
-
-        .jupyter-output-line-error {
-            color: var(--error);
-        }
-
-        #notes-swagger-view-wrap {
-            display: flex;
-            flex-direction: column;
-            padding: 0px;
-        }
-
-        #notes-swagger-view {
-            overflow-y: auto;
-            overflow-x: hidden;
-            width: 100%;
-            height: 100%;
-            padding-right: 8px;
-            font-family: var(--font-family);
-            font-size: ${result.fontSize}px;
-            line-height: 1.45;
-        }
-
-        .json-viewer-error {
-            color: var(--error);
-            border: 1px solid rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.4);
-            background-color: rgba(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}, 0.12);
-            border-radius: 4px;
-            padding: 10px;
-            white-space: pre-wrap;
-        }
-
-        .notes-struct-too-large {
-            padding: 24px;
-            max-width: 720px;
-        }
-
-        .json-node {
-            color: var(--fg);
-        }
-
-        .json-node[data-expanded="false"] > .json-children {
-            display: none;
-        }
-
-        .json-row {
-            display: flex;
-            align-items: baseline;
-            flex-wrap: wrap;
-            gap: 6px;
-            min-height: 22px;
-        }
-
-        .json-toggle,
-        .json-toggle-placeholder {
-            width: 16px;
-            min-width: 16px;
-            height: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .json-toggle {
-            border: none;
-            background: transparent;
-            color: var(--green);
-            padding: 0;
-            margin: 0;
-            cursor: pointer;
-        }
-
-        .json-node[data-expanded="false"] > .json-row > .json-toggle {
-            color: var(--red);
-        }
-
-        .json-toggle:hover {
-            filter: brightness(1.15);
-        }
-
-        .json-toggle:hover::before {
-            opacity: 1;
-        }
-
-        .json-toggle::before {
-            content: "▼";
-            font-weight: 900;
-            font-size: 12px;
-            line-height: 1;
-            opacity: 0.3;
-        }
-
-        .json-node[data-expanded="false"] > .json-row > .json-toggle::before {
-            content: "▶";
-        }
-
-        .json-key {
-            color: var(--yellow);
-            word-break: break-all;
-            overflow-wrap: anywhere;
-        }
-
-        .json-editable {
-            border-radius: 3px;
-            cursor: text;
-        }
-
-        .json-editable:hover {
-            background-color: rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
-        }
-
-        .json-editing,
-        .json-editing:hover {
-            background-color: transparent;
-        }
-
-        .json-inline-editor {
-            border: 1px solid rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.55);
-            background-color: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.98);
-            color: var(--fg);
-            border-radius: 3px;
-            padding: 1px 6px;
-            font: inherit;
-            line-height: inherit;
-            min-width: 72px;
-            box-sizing: border-box;
-            outline: none;
-            box-shadow: 0 0 0 1px rgba(${result.colors.selection.Red}, ${result.colors.selection.Green}, ${result.colors.selection.Blue}, 0.18);
-        }
-
-        .json-inline-editor:focus {
-            border-color: var(--accent);
-        }
-
-        .json-colon,
-        .json-brace {
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.85);
-        }
-
-        .json-meta {
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.55);
-            margin-left: 6px;
-            font-style: italic;
-            font-size: ${Math.max(result.fontSize - 2, 10)}px;
-        }
-
-        .json-value-string {
-            color: var(--green);
-            word-break: break-all;
-            overflow-wrap: anywhere;
-        }
-
-        .json-value-number {
-            color: var(--cyan);
-        }
-
-        .json-value-boolean {
-            color: var(--accent);
-        }
-
-        .json-value-null {
-            color: var(--magenta);
-        }
-
-        .json-show-more {
-            padding-top: 2px;
-            padding-bottom: 2px;
-        }
-
-        .json-show-more-btn {
-            background: transparent;
-            border: 1px solid rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.25);
-            border-radius: 4px;
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.7);
-            cursor: pointer;
-            font: inherit;
-            font-size: ${Math.max(result.fontSize - 2, 10)}px;
-            font-style: italic;
-            padding: 1px 8px;
-        }
-
-        .json-show-more-btn:hover {
-            background: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.1);
-            color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.95);
-        }
-
-        #notes-swagger-run-wrap {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            overflow: hidden;
-            padding: 0;
-        }
-
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
-
-        /* ------------------------------------------------------------------ */
-        /* LSP diagnostics                                                    */
-        /* ------------------------------------------------------------------ */
-
-        /* Squiggle underlines on the highlight overlay */
-        .lsp-squiggle-error {
-            text-decoration: underline wavy rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}) 1.5px;
-            text-underline-offset: 3px;
-        }
-        .lsp-squiggle-warning {
-            text-decoration: underline wavy rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}) 1.5px;
-            text-underline-offset: 3px;
-        }
-        .lsp-squiggle-info {
-            text-decoration: underline wavy rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}) 1.5px;
-            text-underline-offset: 3px;
-        }
-        .lsp-squiggle-hint {
-            text-decoration: underline dotted rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.45) 1px;
-            text-underline-offset: 3px;
-        }
-
-        /* Gutter severity markers — appended to gutter line spans */
-        .lsp-gutter-mark {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-left: 4px;
-            vertical-align: middle;
-            flex-shrink: 0;
-        }
-        .lsp-gutter-error  { background: rgb(${result.colors.error.Red}, ${result.colors.error.Green}, ${result.colors.error.Blue}); }
-        .lsp-gutter-warning{ background: rgb(${result.colors.yellow.Red}, ${result.colors.yellow.Green}, ${result.colors.yellow.Blue}); }
-        .lsp-gutter-info   { background: rgb(${result.colors.blue.Red}, ${result.colors.blue.Green}, ${result.colors.blue.Blue}); }
-        .lsp-gutter-hint   { background: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.35); }
-
-        /* Diagnostic tooltip popup */
-        #notes-lsp-tooltip {
-            position: fixed;
-            z-index: 9000;
-            pointer-events: auto;
-            max-width: 480px;
-            max-height: 50vh;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
-            background: var(--terminal-menu-bg, var(--bg));
-            color: var(--terminal-menu-fg, var(--fg));
-            font-family: var(--terminal-menu-font, var(--font-family));
-            font-size: var(--terminal-menu-font-size);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-            white-space: pre-wrap;
-            word-break: break-word;
-            overflow-y: auto;
-            opacity: 0.8;
-            transition: opacity 0.15s ease;
-            animation: tty-menu-appear 0.15s ease-out;
-            display: none;
-        }
-        #notes-lsp-tooltip:hover { opacity: 1; }
-
-        #notes-lsp-hover-tooltip {
-            position: fixed;
-            z-index: 9001;
-            pointer-events: auto;
-            max-width: 520px;
-            max-height: 50vh;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
-            background: var(--terminal-menu-bg, var(--bg));
-            color: var(--terminal-menu-fg, var(--fg));
-            font-family: var(--terminal-menu-font, var(--font-family));
-            font-size: var(--terminal-menu-font-size);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-            overflow-y: auto;
-            overflow-wrap: anywhere;
-            opacity: 0.8;
-            transition: opacity 0.15s ease;
-            animation: tty-menu-appear 0.15s ease-out;
-            display: none;
-        }
-        #notes-lsp-hover-tooltip:hover { opacity: 1; }
-        #notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {
-            margin-top: 0.4em;
-            margin-bottom: 0.4em;
-        }
-        #notes-lsp-hover-tooltip :where(code, pre) {
-            font-family: var(--terminal-menu-font, var(--font-family));
-        }
-        #notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
-        #notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
-
-        #notes-hyperlink-hover-tooltip {
-            position: fixed;
-            z-index: 9003;
-            pointer-events: none;
-            max-width: 60vw;
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
-            background: var(--terminal-menu-bg, var(--bg));
-            color: var(--terminal-menu-fg, var(--fg));
-            font-family: var(--terminal-menu-font, var(--font-family));
-            font-size: var(--terminal-menu-font-size);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-            opacity: 0.92;
-            animation: tty-menu-appear 0.12s ease-out;
-            display: none;
-        }
-
-        #notes-lsp-completion {
-            --notes-lsp-completion-visible-rows: 12;
-            --notes-lsp-completion-row-height: var(--terminal-menu-font-size);
-            position: fixed;
-            z-index: 9002;
-            min-width: 320px;
-            max-width: 700px;
-            max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);
-            overflow: auto;
-            padding: 6px;
-            border-radius: 8px;
-            border: 1px solid var(--terminal-menu-border, rgba(127,127,127,0.35));
-            background: var(--terminal-menu-bg, var(--bg));
-            color: var(--terminal-menu-fg, var(--fg));
-            font-family: var(--terminal-menu-font, var(--font-family));
-            font-size: var(--terminal-menu-font-size);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-            opacity: 0.8;
-            transition: opacity 0.15s ease;
-            animation: tty-menu-appear 0.15s ease-out;
-            display: none;
-        }
-        #notes-lsp-completion:hover { opacity: 1; }
-        .notes-lsp-completion-item {
-            align-items: center;
-            min-height: var(--notes-lsp-completion-row-height);
-            white-space: nowrap;
-        }
-        .notes-lsp-completion-item.is-deprecated {
-            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 60%, transparent);
-        }
-        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-label,
-        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-detail {
-            text-decoration: line-through;
-            text-decoration-thickness: 1px;
-            text-decoration-color: color-mix(in srgb, currentColor 70%, transparent);
-        }
-        .notes-lsp-completion-label {
-            flex: 1;
-            min-width: 0;
-        }
-        .notes-lsp-completion-detail {
-            flex: 0 1 auto;
-            min-width: 0;
-            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 72%, transparent);
-            overflow: hidden;
-            white-space: pre;
-            text-overflow: ellipsis;
-        }
-        .notes-lsp-completion-icon {
-            width: 28px;
-            min-width: 28px;
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
-            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 76%, transparent);
-        }
-        .notes-lsp-completion-kind {
-            flex: 0 0 auto;
-            max-width: 110px;
-            padding: 1px 6px;
-            border: 1px solid var(--terminal-menu-separator, rgba(127, 127, 127, 0.35));
-            border-radius: 999px;
-            color: color-mix(in srgb, var(--terminal-menu-fg, var(--fg)) 78%, transparent);
-            font-size: 10px;
-            line-height: 1.3;
-            text-transform: lowercase;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-kind,
-        .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-icon {
-            opacity: 0.65;
-        }
-        .notes-lsp-inlay-hint {
-            display: inline;
-            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.78);
-            opacity: 0.82;
-            font-size: 0.92em;
-            font-style: normal;
-            pointer-events: none;
-            user-select: none;
-            white-space: pre;
-        }
-        .notes-lsp-inlay-hint[data-kind="1"] {
-            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.78);
-        }
-        .notes-lsp-inlay-hint[data-kind="2"] {
-            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.78);
-        }
-        .notes-lsp-inlay-hint.has-padding-left {
-            margin-left: 0.5ch;
-        }
-        .notes-lsp-inlay-hint.has-padding-right {
-            margin-right: 0.5ch;
-        }
-        .notes-lsp-semantic-token {
-            display: inline;
-            font-weight: 560;
-            text-decoration: underline;
-            text-decoration-thickness: 2px;
-            text-underline-offset: 2px;
-            text-decoration-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.5);
-        }
-        #notes-editor-shell[data-code-view="true"][data-wrap-mode="false"] .notes-lsp-semantic-token {
-            background-color: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.12);
-            border-radius: 2px;
-        }
-        .notes-lsp-semantic-token[data-token-type="0"] {
-            color: rgba(${result.colors.blueBright.Red}, ${result.colors.blueBright.Green}, ${result.colors.blueBright.Blue}, 0.96);
-        }
-        .notes-lsp-semantic-token[data-token-type="1"] {
-            color: rgba(${result.colors.yellowBright.Red}, ${result.colors.yellowBright.Green}, ${result.colors.yellowBright.Blue}, 0.95);
-        }
-        .notes-lsp-semantic-token[data-token-type="2"] {
-            color: rgba(${result.colors.cyanBright.Red}, ${result.colors.cyanBright.Green}, ${result.colors.cyanBright.Blue}, 0.95);
-        }
-        .notes-lsp-semantic-token[data-token-type="3"] {
-            color: rgba(${result.colors.magentaBright.Red}, ${result.colors.magentaBright.Green}, ${result.colors.magentaBright.Blue}, 0.95);
-        }
-        .notes-lsp-semantic-token.mod-declaration,
-        .notes-lsp-semantic-token.mod-definition {
-            font-weight: 700;
-        }
-        .notes-lsp-semantic-token.mod-readonly {
-            text-decoration-style: dotted;
-        }
-        .notes-lsp-semantic-token.mod-static,
-        .notes-lsp-semantic-token.mod-defaultlibrary {
-            opacity: 0.82;
-        }
-        .notes-lsp-semantic-token.mod-deprecated {
-            text-decoration-line: underline line-through;
-            opacity: 0.68;
-        }
-        .notes-lsp-semantic-token.mod-documentation,
-        .notes-lsp-semantic-token.mod-abstract {
-            font-style: italic;
-        }
-        .notes-lsp-semantic-token.mod-async {
-            text-decoration-style: wavy;
-        }
-
     `;
 
-    document.head.appendChild(style);
+    if (isMonacoActive()) {
+        monacoMainEditor.setTypography(getMonacoTypographyOptions());
+        monacoMainEditor.applyTheme(result.colors);
+    }
 }
 
 GetWindowStyle().then((result) => {
@@ -13488,12 +11397,15 @@ EventsOn('terminalStyleUpdate', payload => {
     }
 });
 
+bindSharedTooltipMouseTracking();
+
 // ----------------------------------------------------------------------------
 // LSP Diagnostics
 // ----------------------------------------------------------------------------
 
 // Keyed by file URI → array of Diagnostic objects from the server.
 const lspDiagnosticsStore = new Map();
+const typosDiagnosticsStore = new Map();
 
 // Tooltip element — created once and re-positioned on hover.
 const lspTooltipEl = (() => {
@@ -13524,31 +11436,12 @@ const lspCompletionEl = (() => {
     return el;
 })();
 
-const hyperlinkHoverTooltipEl = (() => {
-    const el = document.createElement('div');
-    el.id = 'notes-hyperlink-hover-tooltip';
-    document.body.appendChild(el);
-    return el;
-})();
-
 function hideHyperlinkHoverTooltip() {
-    if (!hyperlinkHoverTooltipEl) {
-        return;
-    }
-
-    hyperlinkHoverTooltipEl.style.display = 'none';
-    delete hyperlinkHoverTooltipEl.dataset.href;
+    closeSharedTooltip();
 }
 
 function positionHyperlinkHoverTooltip(x, y) {
-    if (!hyperlinkHoverTooltipEl || hyperlinkHoverTooltipEl.style.display !== 'block') {
-        return;
-    }
-
-    const nextX = Math.min((Number(x) || 0) + 14, window.innerWidth - hyperlinkHoverTooltipEl.offsetWidth - 8);
-    const nextY = Math.min((Number(y) || 0) + 14, window.innerHeight - hyperlinkHoverTooltipEl.offsetHeight - 8);
-    hyperlinkHoverTooltipEl.style.left = `${Math.max(8, nextX)}px`;
-    hyperlinkHoverTooltipEl.style.top = `${Math.max(8, nextY)}px`;
+    updateSharedTooltipPointer(Number(x) || 0, Number(y) || 0);
 }
 
 function formatHyperlinkHoverHref(href) {
@@ -13581,7 +11474,7 @@ function formatHyperlinkHoverHref(href) {
 }
 
 function showHyperlinkHoverTooltip(anchor, x, y) {
-    if (!(anchor instanceof HTMLAnchorElement) || !hyperlinkHoverTooltipEl) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
         return;
     }
 
@@ -13592,10 +11485,8 @@ function showHyperlinkHoverTooltip(anchor, x, y) {
         return;
     }
 
-    hyperlinkHoverTooltipEl.textContent = displayHref;
-    hyperlinkHoverTooltipEl.dataset.href = displayHref;
-    hyperlinkHoverTooltipEl.style.display = 'block';
     positionHyperlinkHoverTooltip(x, y);
+    showSharedTooltip(displayHref);
 }
 
 const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];
@@ -13629,22 +11520,11 @@ async function resolveNotesFileUri(filePath) {
     }
 }
 
-function lspSeveritySquiggleClass(severity) {
-    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
-    return `lsp-squiggle-${name}`;
-}
-
-function lspSeverityGutterClass(severity) {
-    const name = LSP_SEVERITY_CLASS[severity] || 'hint';
-    return `lsp-gutter-${name}`;
-}
-
 function clearVisibleLspDiagnostics(options = {}) {
     const preserveCompletion = options && options.preserveCompletion === true;
-    if (elements.editorGutter) {
-        elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
+    if (isMonacoActive()) {
+        monacoMainEditor.setDiagnostics([]);
     }
-    clearLspSquiggles();
     if (lspTooltipEl) {
         lspTooltipEl.style.display = 'none';
     }
@@ -13661,454 +11541,26 @@ function clearCurrentFileLspDiagnosticsCache() {
     lspDiagnosticsStore.delete(state.currentFileUri);
 }
 
-/**
- * Apply diagnostic decorations to the editor gutter and highlight overlay.
- * Squiggles are rendered by wrapping the affected character range in a
- * <span> inside the highlight overlay. Gutter markers are small dots appended
- * to the matching line number span.
- */
 function renderLspDiagnostics() {
-    if (!elements.editor || !elements.editorGutter || !elements.editorHighlightCode) {
+    if (!isMonacoActive()) {
         return;
     }
 
     // Collect diagnostics for the currently open file.
     const currentUri = state.currentFileUri || null;
 
-    // Clear previous gutter marks.
-    elements.editorGutter.querySelectorAll('.lsp-gutter-mark').forEach(el => el.remove());
-
     const diags = currentUri ? (lspDiagnosticsStore.get(currentUri) || []) : [];
-    if (diags.length === 0) {
-        // Remove any squiggle spans left in the highlight code.
-        clearLspSquiggles();
-        return;
-    }
-
-    // Build a map of line → highest-severity diagnostic for gutter markers.
-    const lineMap = new Map(); // line (0-based) → {severity, messages[]}
-    for (const d of diags) {
-        const line = d.range.start.line;
-        if (!lineMap.has(line)) {
-            lineMap.set(line, { severity: d.severity, messages: [d.message] });
-        } else {
-            const entry = lineMap.get(line);
-            if (d.severity < entry.severity) entry.severity = d.severity;
-            entry.messages.push(d.message);
-        }
-    }
-
-    // Apply gutter dots — gutter is a pre/text node; we replace it with spans.
-    applyGutterDiagnosticMarkers(lineMap);
-
-    // Apply squiggle spans to the highlight overlay.
-    applySquiggles(diags);
-}
-
-function applyGutterDiagnosticMarkers(lineMap) {
-    if (!elements.editorGutter) return;
-
-    const content = elements.editor.value || '';
-    const lineCount = Math.max(1, content.split('\n').length);
-
-    // Rebuild the gutter as individual line spans so we can attach markers.
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < lineCount; i++) {
-        const span = document.createElement('span');
-        span.className = 'lsp-gutter-line';
-        span.textContent = String(i + 1);
-
-        if (lineMap.has(i)) {
-            const { severity, messages } = lineMap.get(i);
-            const dot = document.createElement('span');
-            dot.className = `lsp-gutter-mark ${lspSeverityGutterClass(severity)}`;
-            dot.title = messages.join('\n');
-            span.appendChild(dot);
-        }
-
-        fragment.appendChild(span);
-        if (i < lineCount - 1) fragment.appendChild(document.createTextNode('\n'));
-    }
-
-    elements.editorGutter.textContent = '';
-    elements.editorGutter.appendChild(fragment);
-}
-
-function applySquiggles(diags) {
-    if (!elements.editorHighlightCode) return;
-
-    // Start from whatever highlight.js already rendered.
-    const html = elements.editorHighlightCode.innerHTML;
-    // Strip any existing lsp spans first.
-    const stripped = stripLspOverlayMarkup(html);
-
-    const content = elements.editor.value || '';
-    // Sort diagnostics so outermost (longest) ranges are processed first, which
-    // avoids nested span conflicts. For now we only annotate single-line ranges.
-    const singleLine = diags.filter(d => d.range.start.line === d.range.end.line);
-
-    // Build a list of (charOffset, endCharOffset, class) sorted by start.
-    const ranges = singleLine.map(d => ({
-        line: d.range.start.line,
-        startChar: d.range.start.character,
-        endChar: d.range.end.character,
-        cls: lspSeveritySquiggleClass(d.severity),
-        msg: d.message,
-    })).sort((a, b) => a.line - b.line || a.startChar - b.startChar);
-
-    if (ranges.length === 0) {
-        elements.editorHighlightCode.innerHTML = stripped;
-        return;
-    }
-
-    // Map line/char ranges to byte offsets in raw content.
-    const lines = content.split('\n');
-    let lineOffsets = [];
-    let off = 0;
-    for (const l of lines) {
-        lineOffsets.push(off);
-        off += l.length + 1; // +1 for \n
-    }
-
-    // We need to annotate the HTML, not the raw text, to preserve hljs spans.
-    // Strategy: rebuild innerHTML by tracking text position and inserting wrappers.
-    // This is a best-effort approach that works well for non-overlapping ranges.
-    elements.editorHighlightCode.innerHTML = stripped;
-
-    // Walk text nodes and wrap the target char ranges.
-    wrapDiagnosticRanges(elements.editorHighlightCode, lines, lineOffsets, ranges, content);
-}
-
-function wrapDiagnosticRanges(container, lines, lineOffsets, ranges, content) {
-    // Collect all text nodes with their absolute byte offsets.
-    const textNodes = [];
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    let node;
-    // Recompute offsets by walking the content matching text nodes.
-    let cursor = 0;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        textNodes.push({ node, start: cursor, end: cursor + text.length });
-        cursor += text.length;
-    }
-
-    // For each diagnostic range, find overlapping text nodes and wrap.
-    for (const r of ranges) {
-        if (r.line >= lines.length) continue;
-        const lineStart = lineOffsets[r.line];
-        const byteStart = lineStart + r.startChar;
-        const byteEnd = lineStart + Math.max(r.endChar, r.startChar + 1);
-
-        for (const tn of textNodes) {
-            if (tn.end <= byteStart || tn.start >= byteEnd) continue;
-
-            const localStart = Math.max(byteStart - tn.start, 0);
-            const localEnd = Math.min(byteEnd - tn.start, tn.node.nodeValue.length);
-            if (localStart >= localEnd) continue;
-
-            const text = tn.node.nodeValue;
-            const before = text.slice(0, localStart);
-            const middle = text.slice(localStart, localEnd);
-            const after = text.slice(localEnd);
-
-            const span = document.createElement('span');
-            span.className = r.cls;
-            span.title = r.msg;
-            span.textContent = middle;
-
-            const parent = tn.node.parentNode;
-            if (!parent) continue;
-
-            if (before) parent.insertBefore(document.createTextNode(before), tn.node);
-            parent.insertBefore(span, tn.node);
-            if (after) tn.node.nodeValue = after;
-            else parent.removeChild(tn.node);
-
-            // Update the text node record so subsequent ranges still work.
-            tn.node = after ? tn.node : null;
-            break; // one text node per range is enough for single-line squiggles
-        }
-    }
-}
-
-function clearLspSquiggles() {
-    if (!elements.editorHighlightCode) return;
-    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
+    monacoMainEditor.setDiagnostics(diags);
 }
 
 function renderLspEditorDecorations() {
     renderLspDiagnostics();
-    renderLspSemanticTokens();
     renderLspInlayHints();
 }
 
-const LSP_SEMANTIC_TOKEN_MODIFIER_NAMES = [
-    'declaration',
-    'definition',
-    'readonly',
-    'static',
-    'deprecated',
-    'abstract',
-    'async',
-    'modification',
-    'documentation',
-    'defaultlibrary',
-];
-
-function semanticTokenModifierClassNames(mask) {
-    const bitset = Math.max(0, Number(mask) || 0);
-    if (bitset <= 0) {
-        return [];
-    }
-
-    const classes = [];
-    for (let index = 0; index < LSP_SEMANTIC_TOKEN_MODIFIER_NAMES.length; index += 1) {
-        if (((bitset >> index) & 1) === 1) {
-            classes.push(`mod-${LSP_SEMANTIC_TOKEN_MODIFIER_NAMES[index]}`);
-        }
-    }
-
-    return classes;
-}
-
-function renderLspSemanticTokens() {
-    if (!elements.editorHighlightCode) {
-        return;
-    }
-
-    elements.editorHighlightCode.innerHTML = stripLspOverlayMarkup(elements.editorHighlightCode.innerHTML);
-
-    const tokens = Array.isArray(state.lspSemanticTokens)
-        ? state.lspSemanticTokens.filter((item) => item && Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)) && Number.isFinite(Number(item.length)))
-        : [];
-    if (tokens.length === 0) {
-        return;
-    }
-
-    const content = elements.editor.value || '';
-    if (content.length > LSP_SEMANTIC_MAX_RENDER_FILE_CHARS || tokens.length > LSP_SEMANTIC_MAX_RENDER_TOKENS) {
-        return;
-    }
-
-    const lines = content.split('\n');
-    const lineOffsets = [];
-    let offset = 0;
-    for (const line of lines) {
-        lineOffsets.push(offset);
-        offset += line.length + 1;
-    }
-
-    const symbolWords = [];
-    tokens
-        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
-        .forEach((token) => {
-            const line = Math.max(0, Math.min(Number(token.line) || 0, Math.max(lines.length - 1, 0)));
-            const lineContent = lines[line] || '';
-            const startChar = Math.max(0, Math.min(Number(token.character) || 0, lineContent.length));
-            const tokenLength = Math.max(1, Number(token.length) || 1);
-            const endChar = Math.max(startChar + 1, Math.min(startChar + tokenLength, lineContent.length));
-            if (endChar <= startChar) {
-                return;
-            }
-
-            symbolWords.push(lineContent.slice(startChar, endChar));
-
-            const tokenEl = document.createElement('span');
-            tokenEl.className = 'notes-lsp-semantic-token';
-            tokenEl.dataset.tokenType = String(Math.max(0, Number(token.tokenType) || 0));
-            const tokenModifiers = Math.max(0, Number(token.tokenModifiers) || 0);
-            tokenEl.dataset.tokenModifiers = String(tokenModifiers);
-            const modifierClasses = semanticTokenModifierClassNames(tokenModifiers);
-            if (modifierClasses.length > 0) {
-                tokenEl.classList.add(...modifierClasses);
-            }
-
-            const startOffset = lineOffsets[line] + startChar;
-            const endOffset = lineOffsets[line] + endChar;
-            wrapLspRangeAtOffsets(elements.editorHighlightCode, startOffset, endOffset, tokenEl);
-        });
-
-    lspSpellCheckExclusions.tokens = symbolWords;
-    applyLspSpellCheckExclusions();
-}
-
-function wrapLspRangeAtOffsets(container, startOffset, endOffset, markerEl) {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            const parent = node.parentElement;
-            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        },
-    });
-
-    let cursor = 0;
-    let node;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        const nextCursor = cursor + text.length;
-        if (nextCursor <= startOffset || cursor >= endOffset) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        const localStart = Math.max(startOffset - cursor, 0);
-        const localEnd = Math.min(endOffset - cursor, text.length);
-        if (localStart >= localEnd) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        const before = text.slice(0, localStart);
-        const middle = text.slice(localStart, localEnd);
-        const after = text.slice(localEnd);
-        if (!middle) {
-            cursor = nextCursor;
-            continue;
-        }
-
-        markerEl.textContent = middle;
-
-        const parent = node.parentNode;
-        if (!parent) {
-            return;
-        }
-
-        if (before) {
-            parent.insertBefore(document.createTextNode(before), node);
-        }
-        parent.insertBefore(markerEl, node);
-        if (after) {
-            node.nodeValue = after;
-        } else {
-            parent.removeChild(node);
-        }
-        return;
-    }
-}
-
 function renderLspInlayHints() {
-    if (!elements.editorHighlightCode) {
-        return;
-    }
-
-    elements.editorHighlightCode.innerHTML = String(elements.editorHighlightCode.innerHTML || '')
-        .replace(/<span class="notes-lsp-inlay-hint[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
-
-    const hints = Array.isArray(state.lspInlayHints)
-        ? state.lspInlayHints.filter((item) => item && String(item.label || '') !== '')
-        : [];
-    if (hints.length === 0) {
-        return;
-    }
-
-    const content = elements.editor.value || '';
-    const lines = content.split('\n');
-    const lineOffsets = [];
-    let offset = 0;
-    for (const line of lines) {
-        lineOffsets.push(offset);
-        offset += line.length + 1;
-    }
-
-    hints
-        .filter((item) => Number.isFinite(Number(item.line)) && Number.isFinite(Number(item.character)))
-        .sort((left, right) => (Number(left.line) - Number(right.line)) || (Number(left.character) - Number(right.character)))
-        .forEach((hint) => {
-            const line = Math.max(0, Math.min(Number(hint.line) || 0, Math.max(lines.length - 1, 0)));
-            const lineContent = lines[line] || '';
-            const character = Math.max(0, Math.min(Number(hint.character) || 0, lineContent.length));
-            const hintEl = document.createElement('span');
-            hintEl.className = 'notes-lsp-inlay-hint';
-            hintEl.dataset.kind = String(Number(hint.kind) || 0);
-            if (hint.paddingLeft === true) {
-                hintEl.classList.add('has-padding-left');
-            }
-            if (hint.paddingRight === true) {
-                hintEl.classList.add('has-padding-right');
-            }
-            if (hint.tooltip) {
-                hintEl.title = String(hint.tooltip);
-            }
-            hintEl.textContent = String(hint.label || '');
-
-            insertLspInlayHintAtOffset(elements.editorHighlightCode, lineOffsets[line] + character, hintEl);
-        });
+    // Inlay hints are rendered by Monaco providers in Monaco-only mode.
 }
-
-function insertLspInlayHintAtOffset(container, targetOffset, hintEl) {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            const parent = node.parentElement;
-            if (parent && parent.closest('.notes-lsp-inlay-hint')) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        },
-    });
-
-    let cursor = 0;
-    let node;
-    while ((node = walker.nextNode())) {
-        const text = node.nodeValue || '';
-        const nextCursor = cursor + text.length;
-        if (targetOffset <= nextCursor) {
-            const localOffset = Math.max(0, Math.min(targetOffset - cursor, text.length));
-            const parent = node.parentNode;
-            if (!parent) {
-                return;
-            }
-
-            if (localOffset === 0) {
-                parent.insertBefore(hintEl, node);
-                return;
-            }
-
-            if (localOffset === text.length) {
-                if (node.nextSibling) {
-                    parent.insertBefore(hintEl, node.nextSibling);
-                } else {
-                    parent.appendChild(hintEl);
-                }
-                return;
-            }
-
-            const afterNode = node.splitText(localOffset);
-            parent.insertBefore(hintEl, afterNode);
-            return;
-        }
-
-        cursor = nextCursor;
-    }
-
-    container.appendChild(hintEl);
-}
-
-// Hover tooltip on the gutter dots.
-document.addEventListener('mouseover', (e) => {
-    const dot = e.target.closest?.('.lsp-gutter-mark');
-    if (!dot) {
-        lspTooltipEl.style.display = 'none';
-        return;
-    }
-    lspTooltipEl.textContent = dot.title || '';
-    lspTooltipEl.style.display = 'block';
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (lspTooltipEl.style.display !== 'block') return;
-    const x = Math.min(e.clientX + 14, window.innerWidth - lspTooltipEl.offsetWidth - 8);
-    const y = Math.min(e.clientY + 14, window.innerHeight - lspTooltipEl.offsetHeight - 8);
-    lspTooltipEl.style.left = `${x}px`;
-    lspTooltipEl.style.top = `${y}px`;
-});
-
-document.addEventListener('mouseout', (e) => {
-    if (e.target.closest?.('.lsp-gutter-mark')) {
-        lspTooltipEl.style.display = 'none';
-    }
-});
 
 document.addEventListener('scroll', () => {
     hideHyperlinkHoverTooltip();
@@ -14132,6 +11584,7 @@ EventsOn('notesLspDiagnostics', payload => {
 EventsOn('notesTyposDiagnostics', payload => {
     const data = Array.isArray(payload?.[0]) ? payload[0] : payload;
     if (!data || typeof data.uri !== 'string') return;
+    typosDiagnosticsStore.set(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
     routeTyposDiagnostics(data.uri, Array.isArray(data.diagnostics) ? data.diagnostics : []);
 });
 
@@ -14241,7 +11694,11 @@ async function pasteFromGoClipboard(targetEditor = elements.editor, allowImagePa
         }
 
         if (text !== '') {
-            insertEditorText(text, targetEditor);
+            if (isMonacoActive() && targetEditor === elements.editor) {
+                insertTextInMainEditor(text);
+            } else {
+                insertEditorText(text, targetEditor);
+            }
         }
     } catch (err) {
         notifyTerminal('Failed to paste from clipboard.', 'error');
@@ -14260,16 +11717,63 @@ const jupyterSpellCheckHandles = {};
 const lspSpellCheckExclusions = { symbols: [], tokens: [], keywords: [] };
 
 function applyLspSpellCheckExclusions() {
-    const merged = [
-        ...lspSpellCheckExclusions.symbols,
-        ...lspSpellCheckExclusions.tokens,
-        ...lspSpellCheckExclusions.keywords,
-    ];
+    const merged = Array.from(getLspSpellCheckExclusionSet());
     notesSpellCheckHandle?.setExclusions(merged);
 }
 
 if (elements.editor) {
     let editorInputSequence = 0;
+
+    function resolveUndoRedoDirection(event) {
+        const key = String(event?.key || '').toLowerCase();
+        const hasPrimaryModifier = Boolean(event?.metaKey || event?.ctrlKey);
+        if (!hasPrimaryModifier || event?.altKey) {
+            return '';
+        }
+
+        if (key === 'z') {
+            return event.shiftKey ? 'redo' : 'undo';
+        }
+
+        if (key === 'y') {
+            return 'redo';
+        }
+
+        return '';
+    }
+
+    function maybeHandleManagedUndoRedoShortcut(event) {
+        if (!event || document.activeElement !== elements.editor) {
+            return false;
+        }
+
+        const direction = resolveUndoRedoDirection(event);
+        if (!direction) {
+            return false;
+        }
+
+        const canApply = direction === 'undo'
+            ? notesUndoManager.canUndo()
+            : notesUndoManager.canRedo();
+        if (!canApply) {
+            return false;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const applySnapshot = (tx, txDirection) => {
+            notesMutationAdapter.applySnapshot(elements.editor, tx, txDirection, true);
+        };
+
+        if (direction === 'undo') {
+            notesUndoManager.undo(applySnapshot);
+            return true;
+        }
+
+        notesUndoManager.redo(applySnapshot);
+        return true;
+    }
 
     function maybeDispatchInputFallbackAfterShortcut(event) {
         const isModifierShortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
@@ -14303,6 +11807,10 @@ if (elements.editor) {
     }
 
     elements.editor.addEventListener('keydown', async (event) => {
+        if (maybeHandleManagedUndoRedoShortcut(event)) {
+            return;
+        }
+
         maybeDispatchInputFallbackAfterShortcut(event);
 
         if (event.key === 'Escape' && closeOpenLspTooltips()) {
@@ -14351,8 +11859,14 @@ if (elements.editor) {
             const start = elements.editor.selectionStart;
             const end = elements.editor.selectionEnd;
             const indentation = await getIndentationString();
-            elements.editor.setRangeText(indentation, start, end, 'end');
-            elements.editor.dispatchEvent(new Event('input'));
+            notesMutationAdapter.replaceRange(elements.editor, {
+                start,
+                end,
+                text: indentation,
+                source: 'editor-tab-indent',
+                label: 'Tab indentation (completion open)',
+                emit: true,
+            });
             return;
         }
 
@@ -14383,38 +11897,68 @@ if (elements.editor) {
         const start = elements.editor.selectionStart;
         const end = elements.editor.selectionEnd;
         const indentation = await getIndentationString();
-        elements.editor.setRangeText(indentation, start, end, 'end');
-        elements.editor.dispatchEvent(new Event('input'));
+        notesMutationAdapter.replaceRange(elements.editor, {
+            start,
+            end,
+            text: indentation,
+            source: 'editor-tab-indent',
+            label: 'Tab indentation',
+            emit: true,
+        });
     });
 
     elements.editor.addEventListener('input', () => {
+        if (isMonacoActive() && !suppressMonacoChange) {
+            const textareaValue = String(elements.editor.value || '');
+            if (monacoMainEditor.getValue() !== textareaValue) {
+                suppressMonacoChange = true;
+                monacoMainEditor.setValue(textareaValue);
+                suppressMonacoChange = false;
+            }
+        }
+
         editorInputSequence += 1;
         state.lastEditorInputAt = Date.now();
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
-        state.lspSemanticRequestId += 1;
-        state.lspSemanticTokens = [];
         state.lspInlayRequestId += 1;
         state.lspInlayHints = [];
         clearCurrentFileLspDiagnosticsCache();
         clearVisibleLspDiagnostics({ preserveCompletion: true });
 
-        const cursor = elements.editor.selectionStart || 0;
-        const value = elements.editor.value || '';
-        const prevChar = cursor > 0 ? value[cursor - 1] : '';
+        if (!isMonacoActive()) {
+            const cursor = elements.editor.selectionStart || 0;
+            const value = elements.editor.value || '';
+            const prevChar = cursor > 0 ? value[cursor - 1] : '';
 
-        // If LSP completion menu is visible, keep it open and re-filter based on current position.
-        // Otherwise, check for trigger characters to open it.
-        if (state.lspCompletionVisible) {
-            // Menu is open - sync first, then re-request completion to filter by current text.
-            void requestLspCompletionAfterSync(value, '', 1);
+            // If LSP completion menu is visible, keep it open and re-filter based on current position.
+            // Otherwise, check for trigger characters to open it.
+            if (state.lspCompletionVisible) {
+                // Menu is open - sync first, then re-request completion to filter by current text.
+                void requestLspCompletionAfterSync(value, '', 1);
+            } else {
+                // Menu is closed - check for trigger characters
+                if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+                    void requestLspCompletionAfterSync(value, prevChar);
+                } else {
+                    // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
+                    const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
+                    if (!isIdentifierChar) {
+                        hideLspCompletion();
+                    }
+                }
+            }
         } else {
-            // Menu is closed - check for trigger characters
-            if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+            const cursor = elements.editor.selectionStart || 0;
+            const value = elements.editor.value || '';
+            const prevChar = cursor > 0 ? value[cursor - 1] : '';
+
+            if (state.lspCompletionVisible) {
+                void requestLspCompletionAfterSync(value, '', 1);
+            } else if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
                 void requestLspCompletionAfterSync(value, prevChar);
             } else {
-                // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
                 const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
                 if (!isIdentifierChar) {
                     hideLspCompletion();
@@ -14448,7 +11992,6 @@ if (elements.editor) {
         }
         scheduleLspDidChange();
         scheduleTyposDidChange();
-        scheduleLspEditorAutoFormat();
         scheduleAutoSave();
     });
 
@@ -14477,25 +12020,25 @@ if (elements.editor) {
     elements.editor.addEventListener('blur', () => {
         hideLspHoverTooltip();
         hideLspCompletion();
-        flushLspEditorAutoFormat();
     });
 
     elements.editor.addEventListener('paste', (event) => {
         handleEditorImagePaste(event);
     });
 
-    elements.editor.addEventListener('mouseup', async (event) => {
-        // Middle-click should paste via the same text/image-aware clipboard logic.
-        if (event.button !== 1 || state.viewMode !== 'editor') {
-            return;
-        }
-
-        event.preventDefault();
-        await pasteFromGoClipboard(elements.editor, true);
+    attachVimMode(elements.editor, {
+        mutationAdapter: notesMutationAdapter,
+        undoManager: notesUndoManager,
+        filePathResolver: () => state.currentFile || '',
     });
-
-    attachVimMode(elements.editor);
-    notesSpellCheckHandle = attachSpellCheck(elements.editor);
+    notesSpellCheckHandle = attachSpellCheck(elements.editor, {
+        onMisspellingsChange: (misspellings) => {
+            if (!isMonacoActive()) {
+                return;
+            }
+            monacoMainEditor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
+        },
+    });
 }
 
 let _editorSelectionBeforeContextMenu = null;
@@ -14509,7 +12052,7 @@ elements.editor.addEventListener('mousedown', (e) => {
     }
 });
 
-elements.editor.addEventListener('contextmenu', async (e) => {
+function openMainEditorContextMenu(e) {
     // Restore selection that WebKit changed on right-click
     if (_editorSelectionBeforeContextMenu !== null) {
         elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
@@ -14519,7 +12062,7 @@ elements.editor.addEventListener('contextmenu', async (e) => {
     e.preventDefault();
 
     const menuItems = [
-        createCopyMenuItem(() => getEditorSelectionText(), 'Copy'),
+        createCopyMenuItem(() => getMainEditorSelectionText(), 'Copy'),
         {
             title: 'Paste',
             icon: CONTEXT_ICON_PASTE,
@@ -14564,6 +12107,8 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                 },
             },
         );
+
+
     }
 
     if (state.currentFileType === 'markdown') {
@@ -14573,31 +12118,24 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                 title: 'Insert checkbox',
                 icon: CONTEXT_ICON_CHECKBOX,
                 onSelect: () => {
-                    const lineStart = elements.editor.value.lastIndexOf('\n', elements.editor.selectionStart - 1) + 1;
-                    elements.editor.focus();
-                    elements.editor.selectionStart = lineStart;
-                    elements.editor.selectionEnd = lineStart;
-                    document.execCommand('insertText', false, '- [ ] ');
+                    insertTextAtMainEditorLineStart('- [ ] ');
                 },
             },
             {
                 title: 'Insert code block',
                 icon: CONTEXT_ICON_CODE,
                 onSelect: () => {
-                    const selStart = elements.editor.selectionStart;
-                    const selected = elements.editor.value.slice(selStart, elements.editor.selectionEnd);
-                    elements.editor.focus();
-                    document.execCommand('insertText', false, '```\n' + selected + '\n```');
-                    elements.editor.selectionStart = selStart + 3;
-                    elements.editor.selectionEnd = selStart + 3;
+                    const range = getMainEditorSelectionRange();
+                    const selected = getMainEditorSelectionText();
+                    replaceMainEditorRange(range.start, range.end, '```\n' + selected + '\n```');
+                    setMainEditorSelectionRange(range.start + 3, range.start + 3);
                 },
             },
             {
                 title: 'Insert table 3x1',
                 icon: CONTEXT_ICON_TABLE,
                 onSelect: () => {
-                    elements.editor.focus();
-                    document.execCommand('insertText', false, '| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
+                    insertTextInMainEditor('| A | B | C |\n| --- | --- | --- |\n| cell | cell | cell |\n');
                 },
             },
             {
@@ -14609,7 +12147,8 @@ elements.editor.addEventListener('contextmenu', async (e) => {
             },
         );
 
-        const imageAtCursor = getMarkdownImageAtCursor(elements.editor.value, elements.editor.selectionStart);
+        const cursor = getMainEditorSelectionRange().start;
+        const imageAtCursor = getMarkdownImageAtCursor(getMainEditorValue(), cursor);
         if (state.currentFile && imageAtCursor && isRelativeMarkdownImagePath(imageAtCursor.imagePath)) {
             menuItems.push(
             { title: '-' },
@@ -14622,10 +12161,7 @@ elements.editor.addEventListener('contextmenu', async (e) => {
                     try {
                         await DeleteFile(imageDiskPath);
 
-                        elements.editor.focus();
-                        elements.editor.selectionStart = imageAtCursor.markdownStart;
-                        elements.editor.selectionEnd = imageAtCursor.markdownEnd;
-                        document.execCommand('insertText', false, '');
+                        replaceMainEditorRange(imageAtCursor.markdownStart, imageAtCursor.markdownEnd, '');
                         notifyTerminal(`Deleted image ${imageAtCursor.imagePath}.`, 'info');
                     } catch (err) {
                         notifyTerminal(`Failed to delete image ${imageAtCursor.imagePath}.`, 'error');
@@ -14656,7 +12192,25 @@ elements.editor.addEventListener('contextmenu', async (e) => {
         createPrintMenuItem('Print...'),
     );
 
+    if (isMonacoActive()) {
+        menuItems.push(
+            { title: '-' },
+            {
+                title: 'Editor options',
+                icon: CONTEXT_ICON_CODE,
+                onSelect: () => {
+                    setTimeout(() => {
+                        monacoMainEditor?.openCommandPalette?.();
+                    }, 0);
+                },
+        });
+    }
+
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
+}
+
+elements.editor.addEventListener('contextmenu', (e) => {
+    openMainEditorContextMenu(e);
 });
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');
@@ -14980,6 +12534,13 @@ if (elements.findFilesInput) {
     });
 
     elements.findFilesInput.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            if (tryOpenFindHistoryMenuForInput(elements.findFilesInput)) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         if (event.key !== 'Enter') {
             return;
         }
@@ -15149,11 +12710,13 @@ if (elements.listFilterClear && elements.listFilter) {
 
 elements.findNext.addEventListener('mousedown', (event) => {
     event.preventDefault();
+    persistFindFieldHistory(elements.findInput);
     nextMatch();
 });
 
 elements.findPrev.addEventListener('mousedown', (event) => {
     event.preventDefault();
+    persistFindFieldHistory(elements.findInput);
     prevMatch();
 });
 
@@ -15326,18 +12889,6 @@ document.addEventListener('keydown', (event) => {
     });
 }, true);
 
-document.addEventListener('mouseup', (event) => {
-    if (document.getElementById('fullscreen-image-overlay')) {
-        return;
-    }
-
-    if (event.button !== 0) {
-        return;
-    }
-
-    handleViewerSelectionAutoCopy();
-});
-
 window.addEventListener('beforeunload', () => {
     closeOpenLspDocument();
     closeCurrentTyposDocument();
@@ -15352,8 +12903,16 @@ elements.modalInput.addEventListener('keydown', (event) => {
 });
 
 elements.findInput.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (tryOpenFindHistoryMenuForInput(elements.findInput)) {
+            event.preventDefault();
+            return;
+        }
+    }
+
     if (event.key === 'Enter') {
         event.preventDefault();
+        persistFindFieldHistory(elements.findInput);
         if (event.shiftKey) {
             prevMatch();
         } else {
@@ -15364,11 +12923,20 @@ elements.findInput.addEventListener('keydown', (event) => {
 
 if (elements.replaceInput) {
     elements.replaceInput.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            if (tryOpenFindHistoryMenuForInput(elements.replaceInput)) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         if (event.key !== 'Enter') {
             return;
         }
 
         event.preventDefault();
+        persistFindFieldHistory(elements.findInput);
+        persistFindFieldHistory(elements.replaceInput);
         if (event.shiftKey) {
             replaceAllMatches();
         } else {
@@ -15382,6 +12950,9 @@ renderProjectFindResults();
 updateFindFilesClearButtonVisibility();
 updateFindInputClearButtonVisibility();
 updateReplaceInputClearButtonVisibility();
+hydrateFindFieldHistory(elements.findInput);
+hydrateFindFieldHistory(elements.replaceInput);
+hydrateFindFieldHistory(elements.findFilesInput);
 
 // Load initial notes list on startup; later notesUpdate events will refresh it.
 refreshFiles();

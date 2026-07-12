@@ -1216,3 +1216,39 @@
   Template: |-
     {{ .Code }}
   FileExtension: md
+
+- Aliases: [ html, htm, handlebars, razor ]
+  Description: Hyper Text Markup Language
+  Template: |-
+    {{ .Code }}
+  FileExtension: html
+
+- Aliases: [ css ]
+  Description: Cascading Style Sheet
+  Template: |-
+    {{ .Code }}
+  FileExtension: css
+
+- Aliases: [ sass ]
+  Description: Cascading Style Sheet (SCSS)
+  Template: |-
+    {{ .Code }}
+  FileExtension: sass
+
+- Aliases: [ less ]
+  Description: Cascading Style Sheet (Less)
+  Template: |-
+    {{ .Code }}
+  FileExtension: less
+
+- Aliases: [ json, jsonc, jsonlines ]
+  Description: JavaScript Object Notation (json)
+  Template: |-
+    {{ .Code }}
+  FileExtension: json
+
+- Aliases: [ yaml, yml ]
+  Description: YAML Ain't Markup Language
+  Template: |-
+    {{ .Code }}
+  FileExtension: yaml

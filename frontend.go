@@ -1938,6 +1938,14 @@ func (a *WApp) NotesRecentFiles() []string {
 	return notes.GetRecentList(a.projRoot)
 }
 
+func (a *WApp) GetNotesFindFieldValues(fieldName string) []string {
+	return notes.GetFindFieldValues(fieldName)
+}
+
+func (a *WApp) AddNotesFindFieldValue(fieldName, value string) []string {
+	return notes.AddFindFieldValue(fieldName, value)
+}
+
 func (a *WApp) NotesHistoryAdd(filename string) {
 	expanded := a.filePath(filename)
 	if err := notes.HistoryListAdd(a.projRoot, expanded); err != nil {
@@ -2054,6 +2062,24 @@ func (a *WApp) HyperlinkOpenWithDefault(url string) {
 	}
 
 	menuhyperlink.OpenWithDefault(renderer, url, "")
+}
+
+func (a *WApp) ShowTooltip(text string) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.ShowTooltip(text)
+}
+
+func (a *WApp) CloseTooltip() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+
+	renderer.CloseTooltip()
 }
 
 // SaveFile saves a file. If projectPath is empty, it uses the current $PROJECT.

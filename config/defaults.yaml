@@ -117,14 +117,19 @@ TypeFace:
 Notes:
   # Maximum size of files that can be opened in Notes
   # Units: megabytes (MB)
-  MaxFileSizeMB: 50
+  MaxFileSizeMB: 100
 
   # Maximum file size for the JSON/YAML structured view
   StructViewMaxSizeKB: 1024
 
   MaxRecentFiles: 10
 
-  MaxLogLines: 1000
+  MaxLogLines: 200
+
+  ExcludeDirectories:
+    ".git": true
+    ".terraform": true
+    "node_modules": true
 
   Languages:
     yaml:
@@ -149,7 +154,7 @@ Notes:
 Window:
   StatusBar: true
 
-  HoverEffectHighlight: true
+  HoverEffectHighlight: false
 
   BellVisualNotification: false
   BellPlayAudio: true

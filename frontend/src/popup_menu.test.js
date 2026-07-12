@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const terminalMenuHighlightMock = vi.fn(() => Promise.resolve());
 const terminalMenuSelectMock = vi.fn(() => Promise.resolve());
@@ -59,6 +59,14 @@ describe('popup menu hide/show transitions', () => {
         terminalRequestRedrawMock.mockImplementation(() => Promise.resolve());
         commandPaletteSelectMock.mockImplementation(() => Promise.resolve());
         vi.resetModules();
+    });
+
+    afterEach(() => {
+        const menu = document.getElementById('ttyphoon-listbox-menu');
+        if (menu) {
+            menu.dispatchEvent(new Event('animationend', { bubbles: true }));
+            menu.remove();
+        }
     });
 
     it('opens command palette at top center, hides items until typing, and selects via Go callback', async () => {

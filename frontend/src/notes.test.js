@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import * as swaggerUtils from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
+
+const notesCss = readFileSync('./src/notes.css', 'utf8');
+
+function getNotesRenderedStyles() {
+    const inline = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
+    return inline.join('\n') + '\n' + notesCss;
+}
 
 const getWindowStyleMock = vi.fn();
 const getNotesMaxLogLinesMock = vi.fn();
@@ -64,6 +72,8 @@ const composeNoteLocationPathMock = vi.fn((location, name) => `${location}/${Str
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
 const runHyperlinkMenuActionMock = vi.fn(() => Promise.resolve());
 const displayHyperlinkMenuMock = vi.fn(() => Promise.resolve());
+const showTooltipMock = vi.fn(() => Promise.resolve());
+const closeTooltipMock = vi.fn(() => Promise.resolve());
 const notesKeyPressMock = vi.fn(() => Promise.resolve({ consume: false, prefixActive: false }));
 const resolveNotesLspLanguageMock = vi.fn(() => Promise.resolve(''));
 const notesLspOpenDocumentMock = vi.fn(() => Promise.resolve());
@@ -75,7 +85,6 @@ const notesTyposChangeDocumentMock = vi.fn(() => Promise.resolve());
 const notesTyposCloseDocumentMock = vi.fn(() => Promise.resolve());
 const notesLspStopAllMock = vi.fn(() => Promise.resolve());
 const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
-const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve([]));
 const notesLspCodeLensMock = vi.fn(() => Promise.resolve([]));
 const notesLspExecuteCodeLensMock = vi.fn(() => Promise.resolve(false));
 const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
@@ -101,6 +110,8 @@ const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', File
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
 const setDocumentCacheMock = vi.fn(() => Promise.resolve());
+const getNotesFindFieldValuesMock = vi.fn(() => Promise.resolve([]));
+const addNotesFindFieldValueMock = vi.fn(() => Promise.resolve([]));
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const showLocalMenuMock = vi.fn();
@@ -149,7 +160,6 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesTyposCloseDocument: notesTyposCloseDocumentMock,
     NotesLspStopAll: notesLspStopAllMock,
     NotesLspHover: notesLspHoverMock,
-    NotesLspSemanticTokens: notesLspSemanticTokensMock,
     NotesLspCodeLens: notesLspCodeLensMock,
     NotesLspExecuteCodeLens: notesLspExecuteCodeLensMock,
     NotesLspInlayHints: notesLspInlayHintsMock,
@@ -176,12 +186,16 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
     SetDocumentCache: setDocumentCacheMock,
+    GetNotesFindFieldValues: getNotesFindFieldValuesMock,
+    AddNotesFindFieldValue: addNotesFindFieldValueMock,
     FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
+    ShowTooltip: showTooltipMock,
+    CloseTooltip: closeTooltipMock,
     NotesKeyPress: notesKeyPressMock,
     NotesSpellCheck: vi.fn(() => Promise.resolve([])),
 }));
@@ -340,7 +354,6 @@ describe('notes rendering', () => {
         notesTyposCloseDocumentMock.mockReset();
         notesLspStopAllMock.mockReset();
         notesLspHoverMock.mockReset();
-        notesLspSemanticTokensMock.mockReset();
         notesLspCodeLensMock.mockReset();
         notesLspExecuteCodeLensMock.mockReset();
         notesLspInlayHintsMock.mockReset();
@@ -403,7 +416,6 @@ describe('notes rendering', () => {
         resolveFilePathMock.mockResolvedValue('');
         resolveNotesLspLanguageMock.mockResolvedValue('');
         notesLspHoverMock.mockResolvedValue('');
-        notesLspSemanticTokensMock.mockResolvedValue([]);
         notesLspCodeLensMock.mockResolvedValue([]);
         notesLspExecuteCodeLensMock.mockResolvedValue(false);
         notesLspInlayHintsMock.mockResolvedValue([]);
@@ -467,7 +479,9 @@ describe('notes rendering', () => {
 
         filterInput.value = 'guide';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
-        expect(clearButton?.dataset.visible).toBe('true');
+        await vi.waitFor(() => {
+            expect(clearButton?.dataset.visible).toBe('true');
+        });
 
         const visibleFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
         expect(visibleFiles).toEqual(['$GLOBAL/docs/guide.md']);
@@ -476,27 +490,35 @@ describe('notes rendering', () => {
         filterInput.value = 'missing';
         filterInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-        expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+        await vi.waitFor(() => {
+            expect(document.getElementById('notes-empty')?.textContent).toBe('No matching files.');
+        });
 
         clearButton.click();
         expect(filterInput.value).toBe('');
-        expect(clearButton?.dataset.visible).toBe('false');
+        await vi.waitFor(() => {
+            expect(clearButton?.dataset.visible).toBe('false');
+        });
 
-        const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
-        expect(restoredAfterClear).toEqual(expect.arrayContaining([
-            '$GLOBAL/docs/guide.md',
-            '$GLOBAL/images/logo.png',
-            '$NOTES/todo.md',
-        ]));
+        await vi.waitFor(() => {
+            const restoredAfterClear = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+            expect(restoredAfterClear).toEqual(expect.arrayContaining([
+                '$GLOBAL/docs/guide.md',
+                '$GLOBAL/images/logo.png',
+                '$NOTES/todo.md',
+            ]));
+        });
 
         filterInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-        const restoredFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
-        expect(restoredFiles).toEqual(expect.arrayContaining([
-            '$GLOBAL/docs/guide.md',
-            '$GLOBAL/images/logo.png',
-            '$NOTES/todo.md',
-        ]));
+        await vi.waitFor(() => {
+            const restoredFiles = Array.from(document.querySelectorAll('.notes-file')).map((node) => node.dataset.file);
+            expect(restoredFiles).toEqual(expect.arrayContaining([
+                '$GLOBAL/docs/guide.md',
+                '$GLOBAL/images/logo.png',
+                '$NOTES/todo.md',
+            ]));
+        });
     });
 
     it('keeps folders collapsible while the sidebar file filter is active', async () => {
@@ -633,6 +655,40 @@ describe('notes rendering', () => {
         expect(editor.selectionEnd).toBe(secondLineEnd);
     });
 
+    it('undoes and redoes adapter-backed editor edits with keyboard shortcuts', async () => {
+        listFilesMock.mockResolvedValue([]);
+
+        await importNotesModule();
+
+        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
+        expect(typeof createAndOpenHandler).toBe('function');
+        await createAndOpenHandler({ filename: '$NOTES/sample.md', contents: 'abc' });
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+        editor.value = 'abc';
+        editor.selectionStart = 3;
+        editor.selectionEnd = 3;
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(editor.value).toBe('abc    ');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('abc');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(editor.value).toBe('abc    ');
+    });
+
     it('refreshes markdown preview after ctrl+z style edits when input is not emitted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
@@ -757,7 +813,7 @@ describe('notes rendering', () => {
         })).not.toThrow();
     });
 
-    it('renders diagnostics markers and uses CSS-driven opacity for diagnostics tooltip', async () => {
+    it('accepts diagnostics without legacy gutter marker rendering', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
         resolveFilePathMock.mockImplementation(async (file) => {
@@ -793,18 +849,13 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const gutterDot = document.querySelector('.lsp-gutter-mark');
-        expect(gutterDot).not.toBeNull();
-
-        gutterDot.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        await flushPromises();
+        expect(gutterDot).toBeNull();
 
         const tooltip = document.getElementById('notes-lsp-tooltip');
-        expect(tooltip?.style.display).toBe('block');
-        expect(tooltip?.textContent).toContain('example diagnostic');
+        expect(tooltip?.style.display || '').not.toBe('block');
         expect(tooltip?.style.opacity || '').toBe('');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-tooltip {');
         expect(styles).toContain('#notes-lsp-tooltip:hover { opacity: 1; }');
     });
@@ -915,7 +966,7 @@ describe('notes rendering', () => {
     it('requests and shows LSP hover tooltip at cursor', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
-        notesLspHoverMock.mockResolvedValue('**Hover docs**\n\n[Docs](https://example.com)');
+        notesLspHoverMock.mockResolvedValue('**Hover docs**\n\n[Docs](https://example.com)\n\n<TypeHint<T>>');
         getFileMock.mockResolvedValue({ contents: '# Todo\n\nInitial content', text: '', error: '' });
 
         await importNotesModule();
@@ -939,12 +990,13 @@ describe('notes rendering', () => {
         const hoverTooltip = document.getElementById('notes-lsp-hover-tooltip');
         expect(hoverTooltip?.classList.contains('markdown-body')).toBe(true);
         expect(hoverTooltip?.innerHTML).toContain('<strong>Hover docs</strong>');
+        expect(hoverTooltip?.innerHTML).toContain('&lt;TypeHint&lt;T&gt;&gt;');
+        expect(hoverTooltip?.textContent || '').toContain('<TypeHint<T>>');
         const link = hoverTooltip?.querySelector('a');
         expect(link).not.toBeNull();
         expect(link?.getAttribute('href')).toBe('https://example.com');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {');
         expect(styles).toContain('#notes-lsp-hover-tooltip > :first-child { margin-top: 0; }');
         expect(styles).toContain('#notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }');
@@ -985,7 +1037,7 @@ describe('notes rendering', () => {
         expect(firstItem).not.toBeNull();
         expect(firstItem?.classList.contains('tty-menu-row')).toBe(true);
         expect(firstItem?.classList.contains('is-deprecated')).toBe(true);
-        expect(firstItem?.querySelector('.notes-lsp-completion-icon')?.textContent).toBe('Fn');
+        expect(firstItem?.querySelector('.notes-lsp-completion-icon')?.classList.contains('codicon-symbol-function')).toBe(true);
         expect(firstItem?.querySelector('.notes-lsp-completion-kind')?.textContent).toBe('function');
         firstItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
@@ -1243,7 +1295,7 @@ describe('notes rendering', () => {
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
 
-    it('requests and renders LSP inlay hints in the editor overlay', async () => {
+    it('requests LSP inlay hints without legacy overlay rendering', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('go');
         notesLspInlayHintsMock.mockResolvedValue([
@@ -1263,47 +1315,11 @@ describe('notes rendering', () => {
         expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
 
         const hints = Array.from(document.querySelectorAll('.notes-lsp-inlay-hint'));
-        expect(hints).toHaveLength(2);
-        expect(hints[0]?.textContent).toBe('name:');
-        expect(hints[0]?.classList.contains('has-padding-right')).toBe(true);
-        expect(hints[1]?.textContent).toBe(': string');
-        expect(hints[1]?.classList.contains('has-padding-left')).toBe(true);
+        expect(hints).toHaveLength(0);
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('.notes-lsp-inlay-hint {');
         expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
-    });
-
-    it('requests and renders LSP semantic tokens in the editor overlay', async () => {
-        listFilesMock.mockResolvedValue([]);
-        resolveNotesLspLanguageMock.mockResolvedValue('go');
-        notesLspSemanticTokensMock.mockResolvedValue([
-            { line: 0, character: 0, length: 4, tokenType: 1, tokenModifiers: 1 },
-        ]);
-        getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
-
-        await importNotesModule();
-
-        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
-        expect(typeof createAndOpenHandler).toBe('function');
-        await createAndOpenHandler({ filename: '$NOTES/main.go', contents: 'name := value\n' });
-        await flushPromises();
-        await flushPromises();
-
-        expect(notesLspSemanticTokensMock).toHaveBeenCalledWith('$NOTES/main.go');
-
-        const token = document.querySelector('.notes-lsp-semantic-token');
-        expect(token).not.toBeNull();
-        expect(token?.textContent).toBe('name');
-        expect(token?.getAttribute('data-token-type')).toBe('1');
-        expect(token?.classList.contains('mod-declaration')).toBe(true);
-
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
-        expect(styles).toContain('.notes-lsp-semantic-token {');
-        expect(styles).toContain('.notes-lsp-semantic-token[data-token-type="1"] {');
-        expect(styles).toContain('.notes-lsp-semantic-token.mod-declaration,');
     });
 
     it('lists and executes code lens actions from editor context menu', async () => {
@@ -1399,11 +1415,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const hover = document.getElementById('notes-lsp-hover-tooltip');
-        expect(hover?.style.display).toBe('block');
+        expect(hover?.style.display).toBe('none');
         expect(hover?.style.opacity || '').toBe('');
 
-        const styleSheets = Array.from(document.querySelectorAll('style')).map((el) => String(el.textContent || ''));
-        const styles = styleSheets.join('\n');
+        const styles = getNotesRenderedStyles();
         expect(styles).toContain('#notes-lsp-completion {');
         expect(styles).toContain('--notes-lsp-completion-visible-rows: 12;');
         expect(styles).toContain('max-height: calc(var(--notes-lsp-completion-visible-rows) * var(--notes-lsp-completion-row-height) + 12px);');
@@ -1452,6 +1467,14 @@ describe('notes rendering', () => {
 
         expect(notesLspFormatMock).toHaveBeenCalledWith('$NOTES/main.go');
         expect(editor.value).toContain('func main() {');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\nfunc main(){println("ok")}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\n\nfunc main() {\n\tprintln("ok")\n}\n');
     });
 
     it('formats selected range via editor context menu action', async () => {
@@ -1765,6 +1788,14 @@ describe('notes rendering', () => {
 
         expect(notesLspApplyCodeActionMock).toHaveBeenCalled();
         expect(editor.value).toContain('import "fmt"');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\nfunc main(){_ = fmt.Errorf("x")}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('package main\n\nimport "fmt"\n\nfunc main() { _ = fmt.Errorf("x") }\n');
     });
 
     it('groups LSP code actions by kind in the editor context menu', async () => {
@@ -1864,6 +1895,14 @@ describe('notes rendering', () => {
         expect(notesLspPrepareRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1);
         expect(promptSpy).toHaveBeenCalledWith('Rename symbol to:', 'println');
         expect(notesLspRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1, 'Println');
+        expect(editor.value).toContain('Println("ok")');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toContain('println("ok")');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
         expect(editor.value).toContain('Println("ok")');
 
         promptSpy.mockRestore();
@@ -2918,7 +2957,7 @@ describe('notes rendering', () => {
         expect(findNext.disabled).toBe(false);
     });
 
-    it('auto-copies markdown viewer selection when highlighted', async () => {
+    it('does not auto-copy markdown viewer selection when highlighted', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2943,17 +2982,11 @@ describe('notes rendering', () => {
 
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         await flushPromises();
-        expect(clipboardSetTextMock).toHaveBeenCalledWith('Selected markdown text');
-        expect(sendIpcMock).toHaveBeenCalledWith('terminal-notify', {
+        expect(clipboardSetTextMock).not.toHaveBeenCalled();
+        expect(sendIpcMock).not.toHaveBeenCalledWith('terminal-notify', {
             level: 'info',
             message: 'Selection copied to clipboard',
         });
-
-        // Repeat with the same selection should not re-copy.
-        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
-        await flushPromises();
-        expect(clipboardSetTextMock).toHaveBeenCalledTimes(1);
-        expect(sendIpcMock).toHaveBeenCalledTimes(1);
 
         window.getSelection = originalGetSelection;
     });
@@ -3143,7 +3176,7 @@ describe('notes rendering', () => {
         expect(metaRoot.querySelectorAll('code').length).toBeGreaterThan(0);
     });
 
-    it('keeps the code-style highlight layer as wide as the scrollable editor content', async () => {
+    it('uses Monaco-only editor surface without legacy highlight overlay', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/config.json']);
         getFileMock.mockResolvedValue({ contents: '{"longPropertyName": "value"}', text: '', error: '' });
 
@@ -3154,19 +3187,55 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
+        const monacoEditor = document.getElementById('notes-monaco-editor');
         const notesEditor = document.getElementById('notes-editor');
         const editorHighlight = document.getElementById('notes-editor-highlight');
-
-        Object.defineProperty(notesEditor, 'scrollWidth', { configurable: true, value: 640 });
-        Object.defineProperty(notesEditor, 'clientWidth', { configurable: true, value: 320 });
-        Object.defineProperty(notesEditor, 'scrollHeight', { configurable: true, value: 240 });
-        Object.defineProperty(notesEditor, 'clientHeight', { configurable: true, value: 180 });
 
         notesEditor.value = '{"veryLongPropertyNameThatForcesHorizontalScrolling": "value"}';
         notesEditor.dispatchEvent(new Event('input', { bubbles: true }));
 
-        expect(editorHighlight.style.minWidth).toBe('640px');
-        expect(editorHighlight.style.minHeight).toBe('240px');
+        expect(monacoEditor).toBeTruthy();
+        expect(editorHighlight).toBeNull();
+    });
+
+    it('undoes and redoes structured JSON format actions from editor context menu', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/config.json']);
+        getFileMock.mockResolvedValue({
+            contents: '{\n  "name": "ttyphoon",\n  "ok": true\n}',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/config.json"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        editor.focus();
+
+        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        const minifyIndex = menuConfig.options.findIndex((title) => title === 'Format: Minify');
+        expect(minifyIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(minifyIndex);
+        await flushPromises();
+
+        const minified = '{"name":"ttyphoon","ok":true}';
+        expect(editor.value).toBe(minified);
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('{' + '\n  "name": "ttyphoon",\n  "ok": true\n}');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe(minified);
     });
 
     it('cycles visible notes tabs with ctrl+tab', async () => {
@@ -3619,6 +3688,56 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(runNoteMock).not.toHaveBeenCalled();
+    });
+
+    it('undoes and redoes CSV table row insertion from Run mode context menu', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/table.csv']);
+        getFileMock.mockResolvedValue({
+            contents: 'Name,Value\nAlpha,1',
+            text: '',
+            error: '',
+        });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/table.csv"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const runTab = document.getElementById('notes-tab-csv-run');
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+
+        const tableCell = document.querySelector('#notes-csv-view tbody tr td');
+        expect(tableCell).toBeTruthy();
+
+        tableCell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[showLocalMenuMock.mock.calls.length - 1][0];
+        const insertRowIndex = menuConfig.options.findIndex((title) => title === 'Insert row (after)');
+        expect(insertRowIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(insertRowIndex);
+        await flushPromises();
+
+        const editor = document.getElementById('notes-editor');
+        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
+
+        const editTab = document.getElementById('notes-tab-csv-edit');
+        editTab.click();
+        await flushPromises();
+        editor.focus();
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('Name,Value\nAlpha,1');
+
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
     });
 
     it('clears table highlight styles when context menu is cancelled', async () => {

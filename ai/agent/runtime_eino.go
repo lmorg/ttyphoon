@@ -17,6 +17,7 @@ import (
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 )
 
 type einoRuntime struct {
@@ -27,12 +28,12 @@ type einoRuntime struct {
 type aiStreamCallbackCtxKey struct{}
 
 type einoAgentTool struct {
-	delegate         Tool
+	delegate         aitypes.Tool
 	info             *schema.ToolInfo
 	unwrapInputField bool
 }
 
-func newEinoAgentTool(t Tool) (*einoAgentTool, error) {
+func newEinoAgentTool(t aitypes.Tool) (*einoAgentTool, error) {
 	if t == nil {
 		return nil, fmt.Errorf("nil tool")
 	}

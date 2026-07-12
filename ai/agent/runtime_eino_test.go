@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 )
 
 type fakeAgentTool struct {
@@ -14,12 +15,12 @@ type fakeAgentTool struct {
 	input   string
 }
 
-func (f *fakeAgentTool) New(_ *Agent) (Tool, error) { return f, nil }
-func (f *fakeAgentTool) Enabled() bool              { return f.enabled }
-func (f *fakeAgentTool) Toggle()                    { f.enabled = !f.enabled }
-func (f *fakeAgentTool) Name() string               { return "fake.tool" }
-func (f *fakeAgentTool) Path() string               { return "internal" }
-func (f *fakeAgentTool) Description() string        { return "fake" }
+func (f *fakeAgentTool) New(_ aitypes.Agent) (aitypes.Tool, error) { return f, nil }
+func (f *fakeAgentTool) Enabled() bool                             { return f.enabled }
+func (f *fakeAgentTool) Toggle()                                   { f.enabled = !f.enabled }
+func (f *fakeAgentTool) Name() string                              { return "fake.tool" }
+func (f *fakeAgentTool) Path() string                              { return "internal" }
+func (f *fakeAgentTool) Description() string                       { return "fake" }
 func (f *fakeAgentTool) Call(_ context.Context, s string) (string, error) {
 	f.input = s
 	return "", nil
@@ -104,7 +105,7 @@ func TestNewEinoRuntime_AnthropicRequiresModel(t *testing.T) {
 }
 
 func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
-	rt := &einoRuntime{agent: &Agent{_tools: []Tool{
+	rt := &einoRuntime{agent: &Agent{_tools: []aitypes.Tool{
 		&mcpTool{
 			server:      "srv",
 			name:        "enabled",
@@ -154,7 +155,7 @@ func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
 }
 
 func TestToolsConfig_DuplicateSanitizedNamesAreMadeUnique(t *testing.T) {
-	rt := &einoRuntime{agent: &Agent{_tools: []Tool{
+	rt := &einoRuntime{agent: &Agent{_tools: []aitypes.Tool{
 		&mcpTool{server: "atlassian", name: "search", description: "one", schema: []byte(`{"type":"object"}`), enabled: true},
 		&mcpTool{server: "atlassian", name: "search", description: "two", schema: []byte(`{"type":"object"}`), enabled: true},
 	}}}
@@ -185,7 +186,7 @@ func TestToolsConfig_DuplicateSanitizedNamesAreMadeUnique(t *testing.T) {
 }
 
 func TestToolsConfig_InvalidSchemaReturnsError(t *testing.T) {
-	rt := &einoRuntime{agent: &Agent{_tools: []Tool{
+	rt := &einoRuntime{agent: &Agent{_tools: []aitypes.Tool{
 		&mcpTool{
 			server:      "srv",
 			name:        "broken",

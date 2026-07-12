@@ -8,6 +8,7 @@ import (
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/cache"
+	"github.com/lmorg/ttyphoon/utils/recentlist"
 )
 
 func getRecentList(projectRoot string) []string {
@@ -38,20 +39,7 @@ func RecentListAdd(projectRoot, filename string) error {
 	}
 
 	recent := getRecentList(projectRoot)
-
-	i := lists.MatchIndexString(recent, filename)
-	if i > -1 {
-		new, err := lists.RemoveOrdered(recent, i)
-		if err != nil {
-			return err
-		}
-		recent = new
-	}
-
-	recent = append(recent, filename)
-	if len(recent) > config.Config.Notes.MaxRecentFiles {
-		recent = recent[1:]
-	}
+	recent = recentlist.Promote(recent, filename, config.Config.Notes.MaxRecentFiles)
 
 	setRecentList(projectRoot, recent)
 	return nil

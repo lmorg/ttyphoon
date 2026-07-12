@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -14,7 +15,7 @@ func menuItemsSchemaHttp(link *link, menuItems []types.MenuItem) []types.MenuIte
 	}
 
 	agt := agent.Get(link.renderer.ActiveTile().Id())
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &aitypes.Meta{}
 	menuItems = append(menuItems, types.MenuItem{
 		Title: fmt.Sprintf("Summarize hyperlink (%s)", agt.ServiceName()),
 		Fn: func() {

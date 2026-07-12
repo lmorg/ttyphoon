@@ -12,6 +12,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -33,14 +34,14 @@ type duckDuckGoTopicNode struct {
 }
 
 type DuckDuckGoSearch struct {
-	agent      *agent.Agent
+	agent      aitypes.Agent
 	enabled    bool
 	maxResults int
 	client     *http.Client
 }
 
 type WebScrapePage struct {
-	agent   *agent.Agent
+	agent   aitypes.Agent
 	enabled bool
 	client  *http.Client
 }
@@ -50,7 +51,7 @@ func init() {
 	agent.ToolsAdd(&WebScrapePage{})
 }
 
-func (t *DuckDuckGoSearch) New(agentInst *agent.Agent) (agent.Tool, error) {
+func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 	return &DuckDuckGoSearch{
 		agent:      agentInst,
 		enabled:    true,
@@ -133,7 +134,7 @@ func collectDuckDuckGoTopics(nodes []duckDuckGoTopicNode, results *[]string, max
 	}
 }
 
-func (t *WebScrapePage) New(agentInst *agent.Agent) (agent.Tool, error) {
+func (t *WebScrapePage) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 	return &WebScrapePage{
 		agent:   agentInst,
 		enabled: true,

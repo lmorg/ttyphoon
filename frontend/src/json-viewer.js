@@ -68,6 +68,12 @@ function buildKeyPrefix(key, path, parentType) {
         return '';
     }
 
+    const isArrayIndex = parentType === 'array' && /^\d+$/.test(String(key));
+
+    if (isArrayIndex) {
+        return `<span class="json-key json-key-index">${escapeHtml(key)}</span><span class="json-colon">: </span>`;
+    }
+
     const isEditableKey = parentType === 'object';
     const keyHtml = isEditableKey
         ? `<span class="json-key json-editable" data-json-edit="key" data-json-path="${encodePath(path)}">"${escapeHtml(key)}"</span>`

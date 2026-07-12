@@ -9,6 +9,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/config"
@@ -177,7 +178,7 @@ func (term *Term) _mouseClickContextMenuOutputBlock(absPosY int) {
 	absBlockPos := term.getBlockStartAndEndAbs(absPosY)
 	relBlockPos := term.getBlockStartAndEndRel(absBlockPos)
 	agt := agent.Get(term.tile.Id())
-	agt.Meta = &agent.Meta{
+	agt.Meta = &aitypes.Meta{
 		Pwd:         term.RowSrcFromScrollBack(absBlockPos[0]).Pwd,
 		CmdLine:     string(term.getCmdLine(int(absBlockPos[0]))),
 		OutputBlock: string(term.copyOutputBlock(absBlockPos)),

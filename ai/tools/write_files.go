@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	"golang.org/x/tools/txtar"
 )
 
 type Write struct {
-	agent   *agent.Agent
+	agent   aitypes.Agent
 	enabled bool
 }
 
@@ -21,7 +22,7 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
-func (t *Write) New(agent *agent.Agent) (agent.Tool, error) {
+func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Write{agent: agent, enabled: false}, nil
 }
 
@@ -47,10 +48,10 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 	arc := txtar.Parse([]byte(input))
 	for i := range arc.Files {
 		var filename string
-		if strings.HasPrefix(arc.Files[i].Name, t.agent.Meta.Pwd) {
+		if strings.HasPrefix(arc.Files[i].Name, t.agent.GetMeta().Pwd) {
 			filename = arc.Files[i].Name
 		} else {
-			filename = t.agent.Meta.Pwd + "/" + arc.Files[i].Name
+			filename = t.agent.GetMeta().Pwd + "/" + arc.Files[i].Name
 		}
 
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" writing file: "+filename)

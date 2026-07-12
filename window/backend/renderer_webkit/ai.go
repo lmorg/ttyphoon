@@ -6,6 +6,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -13,7 +14,7 @@ import (
 func (wr *webkitRender) AskAi() {
 	//log.Println("[debug] *webkitRender.AskAi()")
 	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &aitypes.Meta{}
 
 	wr.DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
@@ -61,7 +62,7 @@ func askAiSkills(wr *webkitRender) {
 
 func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 	agt := agent.Get(wr.termWin.Active.Id())
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &aitypes.Meta{}
 
 	parameters := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{

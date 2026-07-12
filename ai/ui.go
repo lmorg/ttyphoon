@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/app"
@@ -20,7 +21,7 @@ import (
 func ExplainCmdOutput(agt *agent.Agent) {
 	fn := func(v *types.InputBoxCallbackResultT) {
 		if agt.Meta == nil {
-			agt.Meta = &agent.Meta{}
+			agt.Meta = &aitypes.Meta{}
 		}
 		agt.Meta.Variables = v.Variables
 
@@ -49,7 +50,7 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 		return
 	}
 
-	agt.Meta = &agent.Meta{
+	agt.Meta = &aitypes.Meta{
 		Pwd:         tile.Pwd(),
 		CmdLine:     filename,
 		OutputBlock: contents,
@@ -181,7 +182,7 @@ func finishAIJob(agt *agent.Agent) {
 }
 
 func UriPrompt(agt *agent.Agent, prompt, tools string) {
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &aitypes.Meta{}
 	toolOptions := []string{""}
 	if tools == "" {
 		toolOptions[0] = "eg mcp(atlassian)"
@@ -206,7 +207,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			if agt.Meta == nil {
-				agt.Meta = &agent.Meta{}
+				agt.Meta = &aitypes.Meta{}
 			}
 			agt.Meta.Variables = v.Variables
 

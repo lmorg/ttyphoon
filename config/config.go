@@ -172,6 +172,8 @@ type configT struct {
 		MaxRecentFiles    int   `yaml:"MaxRecentFiles"`
 		MaxLogLines       int   `yaml:"MaxLogLines"`
 
+		ExcludeDirectories map[string]bool `yaml:"ExcludeDirectories"`
+
 		Languages LanguagesT `yaml:"Languages"`
 
 		SpellCheck struct {

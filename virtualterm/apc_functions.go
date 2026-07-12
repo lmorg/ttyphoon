@@ -10,6 +10,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
@@ -191,7 +192,7 @@ func (term *Term) endOutputBlock(params *endOutputBlockT, aiMeta *types.AiMetaT)
 
 func (term *Term) askAi(prompt string) {
 	agt := agent.Get(term.tile.Id())
-	agt.Meta = &agent.Meta{}
+	agt.Meta = &aitypes.Meta{}
 	ai.AskAI(agt, prompt)
 }
 

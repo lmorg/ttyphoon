@@ -664,7 +664,7 @@ describe('vim-mode — indicator element', () => {
         key(ta, 'Escape');
         key(ta, 'r');
         const indicator = document.querySelector('.vim-mode-indicator');
-        expect(indicator.textContent).toBe('-- REPLACE (r) --');
+        expect(indicator.textContent).toBe('-- REPLACE (once) --');
     });
 
     it('indicator is hidden again after returning to insert', () => {

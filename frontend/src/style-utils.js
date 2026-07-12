@@ -167,6 +167,7 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
             border: 1px solid var(--bg);
             color: var(--bg);
             background: var(--fg);
+            text-align: left;
         }
     `;
 }
@@ -179,13 +180,16 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
  * @returns {string} CSS text for syntax highlighting
  */
 export function getHighlightJsTheme(colors, useCssVars = true) {
+    const mixChannel = (a, b, ratio) => Math.round((a * (1 - ratio)) + (b * ratio));
     const fg = useCssVars ? 'var(--fg)' : `rgb(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue})`;
-    const blueBright = useCssVars ? 'var(--blue-bright)' : `rgb(${colors.blueBright.Red}, ${colors.blueBright.Green}, ${colors.blueBright.Blue})`;
-    const magenta = useCssVars ? 'var(--magenta)' : `rgb(${colors.magenta.Red}, ${colors.magenta.Green}, ${colors.magenta.Blue})`;
+    const bg = useCssVars ? 'var(--bg)' : `rgb(${colors.bg.Red}, ${colors.bg.Green}, ${colors.bg.Blue})`;
+    const accent = useCssVars ? 'var(--accent)' : `rgb(${colors.accent.Red}, ${colors.accent.Green}, ${colors.accent.Blue})`;
+    const blue = useCssVars ? 'var(--blue)' : `rgb(${colors.blue.Red}, ${colors.blue.Green}, ${colors.blue.Blue})`;
     const green = useCssVars ? 'var(--green)' : `rgb(${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue})`;
-    const yellow = useCssVars ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
     const cyan = useCssVars ? 'var(--cyan)' : `rgb(${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue})`;
-    const red = useCssVars ? 'var(--red)' : `rgb(${colors.red.Red}, ${colors.red.Green}, ${colors.red.Blue})`;
+    const comment = useCssVars
+        ? 'color-mix(in srgb, var(--fg) 55%, var(--bg) 45%)'
+        : `rgb(${mixChannel(colors.fg.Red, colors.bg.Red, 0.45)}, ${mixChannel(colors.fg.Green, colors.bg.Green, 0.45)}, ${mixChannel(colors.fg.Blue, colors.bg.Blue, 0.45)})`;
 
     return `
         pre code.hljs {
@@ -197,64 +201,61 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
 
         .hljs-comment,
         .hljs-quote {
-            color: ${blueBright};
-            font-style: italic;
+            color: ${comment};
         }
 
         .hljs-keyword,
         .hljs-selector-tag,
-        .hljs-subst {
-            color: ${magenta};
-            font-weight: bold;
+        .hljs-subst,
+        .hljs-literal,
+        .hljs-built_in {
+            color: ${accent};
         }
 
         .hljs-string,
-        .hljs-title,
         .hljs-name,
-        .hljs-type,
         .hljs-attribute,
         .hljs-symbol,
         .hljs-bullet,
         .hljs-addition,
         .hljs-code,
-        .hljs-built_in {
+        .hljs-regexp,
+        .hljs-link {
             color: ${green};
         }
 
+        .hljs-number,
+        .hljs-variable,
+        .hljs-template-variable {
+            color: ${cyan};
+        }
+
+        .hljs-type,
+        .hljs-class,
+        .hljs-title.class_ {
+            color: ${blue};
+        }
+
+        .hljs-punctuation,
+        .hljs-title,
+        .hljs-title.function_,
+        .hljs-section,
+        .hljs-function,
+        .hljs-params,
+        .hljs-meta,
+        .hljs-meta-keyword,
+        .hljs-tag {
+            color: ${fg};
+        }
+
         .hljs-emphasis {
-            color: ${magenta};
+            color: ${fg};
             font-style: italic;
         }
 
         .hljs-strong {
-            color: ${yellow};
-            font-weight: bold;
-        }
-
-        .hljs-number,
-        .hljs-literal,
-        .hljs-variable,
-        .hljs-template-variable {
-            color: ${yellow};
-        }
-
-        .hljs-section,
-        .hljs-meta,
-        .hljs-function,
-        .hljs-class,
-        .hljs-title.class_ {
-            color: ${cyan};
-        }
-
-        .hljs-deletion,
-        .hljs-regexp,
-        .hljs-link {
-            color: ${red};
-        }
-
-        .hljs-punctuation,
-        .hljs-tag {
             color: ${fg};
+            font-weight: bold;
         }
     `;
 }

@@ -9,12 +9,13 @@ import (
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
 type Directory struct {
-	agent   *agent.Agent
+	agent   aitypes.Agent
 	enabled bool
 }
 
@@ -22,7 +23,7 @@ func init() {
 	agent.ToolsAdd(&Directory{})
 }
 
-func (t Directory) New(agent *agent.Agent) (agent.Tool, error) {
+func (t Directory) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Directory{agent: agent, enabled: true}, nil
 }
 
@@ -47,10 +48,10 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 	}
 
 	var pathname string
-	if strings.HasPrefix(input, t.agent.Meta.Pwd) {
+	if strings.HasPrefix(input, t.agent.GetMeta().Pwd) {
 		pathname = input
 	} else {
-		pathname = t.agent.Meta.Pwd + "/" + input
+		pathname = t.agent.GetMeta().Pwd + "/" + input
 	}
 
 	var result strings.Builder

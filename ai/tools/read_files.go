@@ -9,13 +9,14 @@ import (
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	"golang.org/x/tools/txtar"
 )
 
 type ReadFiles struct {
-	agent   *agent.Agent
+	agent   aitypes.Agent
 	enabled bool
 }
 
@@ -23,7 +24,7 @@ func init() {
 	agent.ToolsAdd(&ReadFiles{})
 }
 
-func (f *ReadFiles) New(agent *agent.Agent) (agent.Tool, error) {
+func (f *ReadFiles) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &ReadFiles{agent: agent, enabled: true}, nil
 }
 
@@ -61,11 +62,11 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	for i := range files {
 		filename := files[i]
 
-		if !strings.HasPrefix(filename, t.agent.Meta.Pwd) {
-			filename = t.agent.Meta.Pwd + "/" + files[i]
+		if !strings.HasPrefix(filename, t.agent.GetMeta().Pwd) {
+			filename = t.agent.GetMeta().Pwd + "/" + files[i]
 		}
 
-		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" requesting file: "+filename[len(t.agent.Meta.Pwd):])
+		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" requesting file: "+filename[len(t.agent.GetMeta().Pwd):])
 
 		var b []byte
 		info, err := os.Stat(filename)

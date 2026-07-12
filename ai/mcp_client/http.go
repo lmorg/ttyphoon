@@ -20,7 +20,6 @@ type OAuthConfig struct {
 	RedirectURI           string
 	Scopes                []string
 	AuthServerMetadataURL string
-	PKCEEnabled           bool
 	TokenFile             string
 }
 
@@ -36,16 +35,22 @@ func ConnectHttp(overrides *mcp_config.OverrideT, url string) (*Client, error) {
 	return initClientFromGoSDK(g, overrides)
 }
 
+// authFailureRx matches how the MCP transport signals that authorization is
+// required. The go-sdk (v1.6.1) does not expose a typed HTTP-status error for
+// connect/operation failures: a 401/403 without an OAuth handler surfaces as a
+// plain fmt.Errorf carrying http.StatusText (e.g. "...: Unauthorized"). We
+// therefore match the canonical 401/403 status texts and the WWW-Authenticate
+// challenge header as whole words — as precise as the SDK allows. The bare
+// status numbers and free-form phrases were intentionally dropped to reduce the
+// chance that a downstream tool error (rather than the MCP connection itself) is
+// misread as an authorization failure.
+var authFailureRx = regexp.MustCompile(`(?i)\b(unauthorized|forbidden|www-authenticate)\b`)
+
 func IsAuthorizationFailure(err error) bool {
 	if err == nil {
 		return false
 	}
-
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "401") ||
-		strings.Contains(msg, "unauthorized") ||
-		strings.Contains(msg, "www-authenticate") ||
-		strings.Contains(msg, "authorization required")
+	return authFailureRx.MatchString(err.Error())
 }
 
 func DefaultRedirectURI() string {

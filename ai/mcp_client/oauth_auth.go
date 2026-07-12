@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
@@ -32,13 +33,12 @@ type OAuthUIHooks struct {
 func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string, oauth *mcp_config.OAuthT, hooks OAuthUIHooks, onOAuthRequired func(), useClient func(*Client) error) error {
 	log.Printf("MCP OAuth: start ConnectAndUseHttp server=%q mcp_url=%q oauth_configured=%t", server, sanitizeURLForLog(serverURL), oauth != nil)
 	if oauth != nil {
-		log.Printf("MCP OAuth: provided config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t pkce=%t",
+		log.Printf("MCP OAuth: provided config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
 			oauth.RedirectURI,
 			sanitizeURLForLog(oauth.AuthServerMetadataURL),
 			len(oauth.Scopes),
 			oauth.ClientID != "",
 			oauth.ClientSecret != "",
-			oauth.PKCEEnabled,
 		)
 	}
 
@@ -71,13 +71,12 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 	}
 
 	oauthCfg := BuildOAuthConfig(server, serverURL, oauth)
-	log.Printf("MCP OAuth: interactive config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t pkce=%t",
+	log.Printf("MCP OAuth: interactive config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
 		oauthCfg.RedirectURI,
 		sanitizeURLForLog(oauthCfg.AuthServerMetadataURL),
 		len(oauthCfg.Scopes),
 		oauthCfg.ClientID != "",
 		oauthCfg.ClientSecret != "",
-		oauthCfg.PKCEEnabled,
 	)
 
 	c, err = ConnectHttpOAuthInteractive(overrides, serverURL, oauthCfg, hooks)
@@ -91,35 +90,29 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 		return nil
 	}
 
-	err = useClient(c)
-	if err != nil && IsAuthorizationFailure(err) {
-		log.Printf("MCP OAuth: operation still unauthorized after interactive auth, retrying OAuth: %v", err)
-		c, err = ConnectHttpOAuthInteractive(overrides, serverURL, oauthCfg, hooks)
-		if err != nil {
-			log.Printf("MCP OAuth: retry interactive connect failed: %v", err)
-			return err
+	// The interactive client carries an OAuthHandler, so the go-sdk transport
+	// already performs the Authorize + single-retry dance internally on any
+	// 401/403 seen during this operation. A further outer retry here would only
+	// re-run the entire interactive flow (re-opening the browser) for a request
+	// the SDK has already failed to authorize, so we surface the error instead.
+	if err := useClient(c); err != nil {
+		if IsAuthorizationFailure(err) {
+			log.Printf("MCP OAuth: operation still unauthorized after interactive auth (SDK already retried): %v", err)
 		}
-
-		log.Printf("MCP OAuth: retry interactive connect succeeded; retrying operation")
-		return useClient(c)
+		return err
 	}
-
-	return err
+	return nil
 }
 
 func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthConfig {
 	redirectURI := DefaultRedirectURI()
 	clientURI := ""
-	pkceEnabled := true
 	var clientID, clientSecret, authServerMetadataURL string
 	var scopes []string
 
 	if oauth != nil {
 		if oauth.RedirectURI != "" {
 			redirectURI = oauth.RedirectURI
-		}
-		if oauth.Enabled || oauth.PKCEEnabled {
-			pkceEnabled = oauth.PKCEEnabled
 		}
 		clientID = oauth.ClientID
 		if oauth.ClientURI != "" {
@@ -137,7 +130,6 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 
 	cfg := OAuthConfig{
 		RedirectURI:           redirectURI,
-		PKCEEnabled:           pkceEnabled,
 		ClientID:              clientID,
 		ClientURI:             clientURI,
 		ClientSecret:          clientSecret,
@@ -163,12 +155,6 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 	return cfg
 }
 
-// AuthenticateOAuthInteractive is deprecated and kept for reference only.
-// OAuth authentication now uses go-sdk AuthorizationCodeHandler via buildGoSDKAuthHandler.
-func AuthenticateOAuthInteractive(oauthErr error, serverURL, redirectURI string, overrides *mcp_config.OverrideT, openBrowser func(string), promptCallbackURL func() (string, error), onAutoCallbackUnavailable func(error)) error {
-	return fmt.Errorf("OAuth authentication requires go-sdk handler (legacy mark3labs path removed)")
-}
-
 func ConnectHttpOAuthInteractive(overrides *mcp_config.OverrideT, serverURL string, oauthCfg OAuthConfig, hooks OAuthUIHooks) (*Client, error) {
 	log.Printf("MCP OAuth: ConnectHttpOAuthInteractive mcp_url=%q redirect_uri=%q metadata_url=%q", sanitizeURLForLog(serverURL), oauthCfg.RedirectURI, sanitizeURLForLog(oauthCfg.AuthServerMetadataURL))
 	log.Printf("MCP OAuth: configured registration methods=%s", oauthRegistrationMethodsSummary(oauthCfg))
@@ -188,9 +174,6 @@ func ConnectHttpOAuthInteractive(overrides *mcp_config.OverrideT, serverURL stri
 		log.Printf("MCP OAuth: failed creating authorization handler: %v", hErr)
 		return nil, fmt.Errorf("failed to create OAuth authorization handler: %w", hErr)
 	}
-
-	// If go-sdk flow fails, return error (no fallback to legacy)
-	//return nil, fmt.Errorf("failed to establish OAuth connection to %s", serverURL)
 }
 
 // buildGoSDKAuthHandler constructs an auth.OAuthHandler backed by the
@@ -302,18 +285,8 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	}
 	log.Printf("MCP OAuth: NewAuthorizationCodeHandler created")
 
-	preferredIssuer := ""
-	if oauthCfg.AuthServerMetadataURL != "" {
-		issuer, issuerErr := resolvePreferredAuthIssuer(context.Background(), oauthCfg.AuthServerMetadataURL, cfg.Client)
-		if issuerErr != nil {
-			log.Printf("MCP OAuth: unable to resolve preferred issuer from metadata URL: %v", issuerErr)
-		} else {
-			preferredIssuer = issuer
-		}
-	}
-
 	// Wrap the handler to persist tokens to file
-	return &gosdkOAuthHandler{inner: h, preferredAuthIssuer: preferredIssuer, tokenFile: oauthCfg.TokenFile}, nil
+	return &gosdkOAuthHandler{inner: h, tokenFile: oauthCfg.TokenFile}, nil
 }
 
 func ensureAuthorizationRequestScopes(rawURL string, scopes []string) string {
@@ -354,7 +327,6 @@ func buildDynamicClientRegistrationMetadata(oauthCfg OAuthConfig) *oauthex.Clien
 type gosdkOAuthHandler struct {
 	inner                 *authsdk.AuthorizationCodeHandler
 	tokenFile             string
-	preferredAuthIssuer   string
 	prmMu                 sync.Mutex
 	prmMetadataBaseURL    string
 	prmMetadataServer     *http.Server
@@ -398,6 +370,10 @@ func (g *gosdkOAuthHandler) Authorize(ctx context.Context, req *http.Request, re
 	if resp != nil && req != nil {
 		g.maybeInjectProtectedResourceMetadata(req, resp)
 	}
+	// The local PRM shim (if started by maybeInjectProtectedResourceMetadata) is
+	// only needed for the duration of this authorization flow; tear it down when
+	// Authorize returns so we don't leak a listener for the process lifetime.
+	defer g.closeProtectedResourceMetadataServer()
 
 	reqURL := ""
 	if req != nil && req.URL != nil {
@@ -420,6 +396,30 @@ func (g *gosdkOAuthHandler) Authorize(ctx context.Context, req *http.Request, re
 	return err
 }
 
+// closeProtectedResourceMetadataServer shuts down the local PRM shim server (if
+// one was started) and resets its state so a later authorization attempt can
+// start a fresh one. Safe to call when no server is running.
+func (g *gosdkOAuthHandler) closeProtectedResourceMetadataServer() {
+	g.prmMu.Lock()
+	server := g.prmMetadataServer
+	g.prmMetadataServer = nil
+	g.prmMetadataBaseURL = ""
+	g.prmMetadataServerAddr = ""
+	g.prmMu.Unlock()
+
+	if server == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("MCP OAuth: error shutting down local PRM server: %v", err)
+		return
+	}
+	log.Printf("MCP OAuth: local PRM server shut down")
+}
+
 func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Request, resp *http.Response) {
 	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
 		return
@@ -438,36 +438,75 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 
 	rmURL := resourceMetadataURLFromChallenges(challenges)
 	if rmURL == "" {
-		if !isPRMShimEnabled() {
-			log.Printf("MCP OAuth: PRM shim disabled by default (set TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM=1 to enable)")
+		if isPRMShimEnabled() {
+			log.Printf("MCP OAuth: PRM shim forced but the challenge carried no resource_metadata to normalize")
 		}
 		return
 	}
 
-	// Fetch PRM once to get the raw (possibly pathful) authorization server issuer
-	rawIssuer, err := extractIssuerFromResourceMetadata(context.Background(), rmURL)
+	// Fetch the PRM once to get the (possibly pathful) authorization server issuer
+	// and the resource's advertised scopes. The shim must forward scopes_supported
+	// so the SDK requests the same scopes it would without the shim; otherwise the
+	// authorize request is sent with no scope and the provider issues a token with
+	// reduced/default scopes (Atlassian: only ...:agent-interface scopes, which the
+	// Jira/Confluence data tools reject with "scope does not match").
+	rm, err := fetchResourceMetadata(context.Background(), rmURL)
 	if err != nil {
-		log.Printf("MCP OAuth: failed to extract issuer from resource_metadata: %v", err)
+		log.Printf("MCP OAuth: failed to read resource_metadata: %v", err)
+		return
+	}
+	rawIssuer := rm.authorizationServer
+
+	// The shim rewrites the authorization server's issuer so the SDK's strict
+	// RFC 8414 issuer validation passes, which weakens the mix-up defence. Only
+	// trust the issuer's metadata when it is served over HTTPS.
+	if !isHTTPSURL(rawIssuer) {
+		log.Printf("MCP OAuth: not applying PRM shim, authorization server issuer is not HTTPS issuer=%q", rawIssuer)
 		return
 	}
 
-	// Auto-enable if pathful issuer detected (e.g. Atlassian's tenant-scoped issuers)
-	if issuerHasPathComponent(rawIssuer) {
-		log.Printf("MCP OAuth: detected pathful issuer in resource_metadata, auto-enabling PRM shim for normalization issuer=%q", rawIssuer)
-	} else if !isPRMShimEnabled() {
-		log.Printf("MCP OAuth: PRM shim disabled by default (set TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM=1 to enable)")
-		return
-	}
-
-	// Fetch the real auth server metadata from the pathful issuer URL.
-	// This is where providers like Atlassian advertise their registration_endpoint.
+	// Fetch the real authorization server metadata (the same document the SDK
+	// fetches). Providers like Atlassian use a pathful issuer but declare the bare
+	// origin as the metadata issuer, which trips the SDK's strict RFC 8414 check;
+	// that is exactly the mismatch this shim normalizes.
 	realMeta, metaErr := fetchAuthServerMetadataForPathfulIssuer(context.Background(), rawIssuer)
 	if metaErr != nil {
-		log.Printf("MCP OAuth: failed to fetch auth server metadata for issuer=%q: %v (continuing without)", rawIssuer, metaErr)
+		log.Printf("MCP OAuth: could not fetch authorization server metadata for issuer=%q: %v", rawIssuer, metaErr)
+	}
+
+	metaIssuer := ""
+	if realMeta != nil {
+		metaIssuer, _ = realMeta.raw["issuer"].(string)
+	}
+	issuerMismatch := strings.TrimSpace(metaIssuer) != "" &&
+		strings.TrimRight(strings.TrimSpace(metaIssuer), "/") != strings.TrimRight(strings.TrimSpace(rawIssuer), "/")
+
+	// Only bypass the SDK's issuer validation when it would otherwise fail (the
+	// advertised issuer disagrees with the metadata's declared issuer) or when
+	// explicitly forced. Compliant providers keep the SDK's fully-validated flow.
+	switch {
+	case issuerMismatch:
+		log.Printf("MCP OAuth: authorization server metadata issuer %q does not match advertised issuer %q (RFC 8414 mismatch); applying PRM shim", metaIssuer, rawIssuer)
+	case isPRMShimEnabled():
+		log.Printf("MCP OAuth: applying PRM shim (forced via TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM) issuer=%q", rawIssuer)
+	default:
+		log.Printf("MCP OAuth: PRM shim not needed; authorization server issuer validates normally issuer=%q", rawIssuer)
+		return
+	}
+
+	// Every credential-bearing endpoint the SDK will use must be HTTPS, or the
+	// shim (which already defeats issuer validation) could let a tampered metadata
+	// document downgrade the authorize/token/registration flow to plaintext and
+	// leak the authorization code or tokens.
+	if realMeta != nil {
+		if err := validateAuthServerEndpointsHTTPS(realMeta.raw); err != nil {
+			log.Printf("MCP OAuth: refusing PRM shim, %v", err)
+			return
+		}
 	}
 
 	resource := req.URL.String()
-	prmURL, err := g.ensureLocalProtectedResourceMetadataEndpoints(resource, realMeta)
+	prmURL, err := g.ensureLocalProtectedResourceMetadataEndpoints(resource, realMeta, rm.scopesSupported)
 	if err != nil {
 		log.Printf("MCP OAuth: failed to create local PRM endpoint: %v", err)
 		return
@@ -485,7 +524,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 //     (matching the PRM entry) plus all real endpoints including registration_endpoint
 //
 // This lets go-sdk pass strict issuer validation while still finding the provider's DCR endpoint.
-func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resource string, realMeta *realAuthServerMeta) (string, error) {
+func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resource string, realMeta *realAuthServerMeta, scopesSupported []string) (string, error) {
 	g.prmMu.Lock()
 	defer g.prmMu.Unlock()
 
@@ -511,6 +550,9 @@ func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resour
 			payload := map[string]any{
 				"resource":              requestedResource,
 				"authorization_servers": []string{localBase},
+			}
+			if len(scopesSupported) > 0 {
+				payload["scopes_supported"] = scopesSupported
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(payload); err != nil {
@@ -553,38 +595,83 @@ type realAuthServerMeta struct {
 	registrationEndpoint string
 }
 
-// fetchAuthServerMetadataForPathfulIssuer fetches auth server metadata from a potentially
-// pathful issuer URL (e.g. https://auth.atlassian.com/tenant-id/...).
-// It tries {issuer}/.well-known/oauth-authorization-server, which is where providers like
-// Atlassian advertise the tenant-scoped registration_endpoint.
+// authServerMetadataCandidateURLs returns the well-known metadata URLs to try for
+// an authorization-server issuer, in priority order. For a pathful issuer it
+// tries the RFC 8414 layout first (well-known inserted between host and path,
+// e.g. https://host/.well-known/oauth-authorization-server/<tenant>), which is
+// what providers like Atlassian actually serve, then the OIDC path-appended
+// layouts, then the root well-known endpoints.
+func authServerMetadataCandidateURLs(issuer string) []string {
+	u, err := url.Parse(strings.TrimSpace(issuer))
+	if err != nil || u == nil || u.Scheme == "" || u.Host == "" {
+		return nil
+	}
+
+	origin := u.Scheme + "://" + u.Host
+	pathPart := strings.Trim(u.Path, "/")
+
+	var urls []string
+	if pathPart != "" {
+		urls = append(urls,
+			origin+"/.well-known/oauth-authorization-server/"+pathPart,
+			origin+"/"+pathPart+"/.well-known/oauth-authorization-server",
+			origin+"/"+pathPart+"/.well-known/openid-configuration",
+		)
+	}
+	urls = append(urls,
+		origin+"/.well-known/oauth-authorization-server",
+		origin+"/.well-known/openid-configuration",
+	)
+	return urls
+}
+
+// fetchAuthServerMetadataForPathfulIssuer fetches authorization-server metadata for
+// an issuer that may carry a path (e.g. https://auth.atlassian.com/<tenant>). It
+// tries the RFC 8414 and OIDC well-known layouts in turn and returns the first
+// document it can retrieve, preserving the tenant-scoped registration_endpoint.
 func fetchAuthServerMetadataForPathfulIssuer(ctx context.Context, pathfulIssuer string) (*realAuthServerMeta, error) {
-	metaURL := strings.TrimRight(pathfulIssuer, "/") + "/.well-known/oauth-authorization-server"
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metaURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
+	candidates := authServerMetadataCandidateURLs(pathfulIssuer)
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("invalid issuer URL %q", pathfulIssuer)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", metaURL, err)
+	var lastErr error
+	for _, metaURL := range candidates {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, metaURL, nil)
+		if err != nil {
+			lastErr = fmt.Errorf("build request %s: %w", metaURL, err)
+			continue
+		}
+
+		resp, err := ssrfSafeOAuthClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("fetch %s: %w", metaURL, err)
+			continue
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("fetch %s: status %d", metaURL, resp.StatusCode)
+			continue
+		}
+
+		var raw map[string]interface{}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&raw)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("decode %s: %w", metaURL, err)
+			continue
+		}
+
+		regEndpoint, _ := raw["registration_endpoint"].(string)
+		metaIssuer, _ := raw["issuer"].(string)
+		log.Printf("MCP OAuth: fetched authorization server metadata from %q issuer=%q registration_endpoint=%q",
+			sanitizeURLForLog(metaURL), metaIssuer, sanitizeURLForLog(regEndpoint))
+
+		return &realAuthServerMeta{raw: raw, registrationEndpoint: regEndpoint}, nil
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("fetch %s: status %d", metaURL, resp.StatusCode)
-	}
-
-	var raw map[string]interface{}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", metaURL, err)
-	}
-
-	regEndpoint, _ := raw["registration_endpoint"].(string)
-	log.Printf("MCP OAuth: fetched pathful issuer metadata from %q registration_endpoint=%q",
-		sanitizeURLForLog(metaURL), sanitizeURLForLog(regEndpoint))
-
-	return &realAuthServerMeta{raw: raw, registrationEndpoint: regEndpoint}, nil
+	return nil, lastErr
 }
 
 // buildSyntheticAuthServerMetadata builds an auth server metadata document for the local shim.
@@ -604,6 +691,36 @@ func buildSyntheticAuthServerMetadata(localBase string, realMeta *realAuthServer
 	return m
 }
 
+// isHTTPSURL reports whether raw is a well-formed https:// URL with a host.
+func isHTTPSURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, "https") && u.Host != ""
+}
+
+// validateAuthServerEndpointsHTTPS ensures the credential-bearing endpoints in a
+// discovered authorization-server metadata document use HTTPS. It hardens the
+// PRM shim, which bypasses the SDK's issuer validation, against a tampered
+// metadata document downgrading the flow to plaintext.
+func validateAuthServerEndpointsHTTPS(meta map[string]interface{}) error {
+	for _, key := range []string{"authorization_endpoint", "token_endpoint", "registration_endpoint"} {
+		v, ok := meta[key]
+		if !ok {
+			continue
+		}
+		s, _ := v.(string)
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		if !isHTTPSURL(s) {
+			return fmt.Errorf("auth server %s is not HTTPS: %q", key, s)
+		}
+	}
+	return nil
+}
+
 func resourceMetadataURLFromChallenges(cs []oauthex.Challenge) string {
 	for _, c := range cs {
 		if u := strings.TrimSpace(c.Params["resource_metadata"]); u != "" {
@@ -611,53 +728,6 @@ func resourceMetadataURLFromChallenges(cs []oauthex.Challenge) string {
 		}
 	}
 	return ""
-}
-
-func normalizedIssuerFromResourceMetadata(ctx context.Context, metadataURL, resourceURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("build PRM request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch PRM: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("PRM status %d", resp.StatusCode)
-	}
-
-	var prm struct {
-		Resource             string   `json:"resource"`
-		AuthorizationServers []string `json:"authorization_servers"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&prm); err != nil {
-		return "", fmt.Errorf("decode PRM JSON: %w", err)
-	}
-	if prm.Resource != "" && resourceURL != "" && prm.Resource != resourceURL {
-		log.Printf("MCP OAuth: PRM resource mismatch prm_resource=%q request_resource=%q", prm.Resource, resourceURL)
-	}
-	if len(prm.AuthorizationServers) == 0 {
-		return "", fmt.Errorf("PRM missing authorization_servers")
-	}
-
-	issuerRaw := strings.TrimSpace(prm.AuthorizationServers[0])
-	u, err := url.Parse(issuerRaw)
-	if err != nil {
-		return "", fmt.Errorf("parse authorization server URL: %w", err)
-	}
-	if u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("invalid authorization server URL %q", issuerRaw)
-	}
-
-	normalized := u.Scheme + "://" + u.Host
-	if normalized == issuerRaw {
-		return "", nil
-	}
-	log.Printf("MCP OAuth: normalizing authorization server issuer from %q to %q", issuerRaw, normalized)
-	return normalized, nil
 }
 
 func parseOAuthCallbackURL(raw string) (code string, state string, err error) {
@@ -678,50 +748,6 @@ func parseOAuthCallbackURL(raw string) (code string, state string, err error) {
 	}
 
 	return code, state, nil
-}
-
-func resolvePreferredAuthIssuer(ctx context.Context, metadataURL string, httpClient *http.Client) (string, error) {
-	if strings.TrimSpace(metadataURL) == "" {
-		return "", nil
-	}
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
-
-	log.Printf("MCP OAuth: resolving preferred auth issuer from metadata_url=%q", sanitizeURLForLog(metadataURL))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("build metadata request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetch metadata: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", fmt.Errorf("read metadata body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("metadata status %d", resp.StatusCode)
-	}
-
-	var parsed struct {
-		Issuer string `json:"issuer"`
-	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("decode metadata JSON: %w", err)
-	}
-
-	issuer := strings.TrimSpace(parsed.Issuer)
-	if issuer == "" {
-		return "", fmt.Errorf("metadata missing issuer")
-	}
-
-	log.Printf("MCP OAuth: resolved preferred auth issuer=%q from metadata_url=%q", issuer, sanitizeURLForLog(metadataURL))
-	return issuer, nil
 }
 
 func hostFromURL(raw string) string {
@@ -831,6 +857,57 @@ func newOAuthLoggingClient() *http.Client {
 	return &http.Client{Transport: &oauthLoggingRoundTripper{base: http.DefaultTransport}}
 }
 
+// ssrfSafeOAuthClient is used for OAuth metadata fetches whose target URL comes
+// from server-controlled data (the resource_metadata and issuer URLs advertised
+// in a WWW-Authenticate challenge). It refuses to connect to loopback, private,
+// link-local, multicast or unspecified addresses to blunt SSRF attempts,
+// including DNS-rebinding, because the Control hook runs after name resolution.
+//
+// It is deliberately NOT used for the SDK's own client (newOAuthLoggingClient),
+// which must be able to reach the local 127.0.0.1 PRM shim.
+var ssrfSafeOAuthClient = newSSRFSafeOAuthClient()
+
+func newSSRFSafeOAuthClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 30 * time.Second}
+	dialer.Control = func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return fmt.Errorf("ssrf guard: cannot parse address %q: %w", address, err)
+		}
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("ssrf guard: unresolved address %q", host)
+		}
+		if !isPublicIP(ip) {
+			return fmt.Errorf("ssrf guard: refusing to connect to non-public address %s", ip)
+		}
+		return nil
+	}
+
+	transport := &http.Transport{
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+	return &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &oauthLoggingRoundTripper{base: transport},
+	}
+}
+
+// isPublicIP reports whether ip is a globally routable unicast address, i.e. not
+// loopback, private (RFC 1918 / RFC 4193), link-local, multicast or unspecified.
+func isPublicIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+		return false
+	}
+	return true
+}
+
 type oauthLoggingRoundTripper struct {
 	base http.RoundTripper
 }
@@ -916,44 +993,44 @@ func isPRMShimEnabled() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-func issuerHasPathComponent(issuer string) bool {
-	if issuer == "" {
-		return false
-	}
-	u, err := url.Parse(issuer)
-	if err != nil {
-		return false
-	}
-	path := strings.TrimSpace(u.Path)
-	// Has path component if non-empty and not just "/"
-	return path != "" && path != "/"
+type resourceMetadata struct {
+	authorizationServer string
+	scopesSupported     []string
 }
 
-func extractIssuerFromResourceMetadata(ctx context.Context, metadataURL string) (string, error) {
+// fetchResourceMetadata reads an RFC 9728 Protected Resource Metadata document.
+// It returns the first advertised authorization server and the resource's
+// scopes_supported. The shim must forward scopes_supported so the SDK requests
+// the same scopes it would without the shim.
+func fetchResourceMetadata(ctx context.Context, metadataURL string) (*resourceMetadata, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := ssrfSafeOAuthClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("fetch metadata: %w", err)
+		return nil, fmt.Errorf("fetch metadata: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
 	var prm struct {
 		AuthorizationServers []string `json:"authorization_servers"`
+		ScopesSupported      []string `json:"scopes_supported"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&prm); err != nil {
-		return "", fmt.Errorf("decode JSON: %w", err)
+		return nil, fmt.Errorf("decode JSON: %w", err)
 	}
 	if len(prm.AuthorizationServers) == 0 {
-		return "", fmt.Errorf("no authorization_servers")
+		return nil, fmt.Errorf("no authorization_servers")
 	}
 
-	return strings.TrimSpace(prm.AuthorizationServers[0]), nil
+	return &resourceMetadata{
+		authorizationServer: strings.TrimSpace(prm.AuthorizationServers[0]),
+		scopesSupported:     prm.ScopesSupported,
+	}, nil
 }

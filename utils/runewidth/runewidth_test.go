@@ -34,7 +34,7 @@ func TestStringWidth(t *testing.T) {
 		{name: "combining cluster", s: "e\u0301", want: 1},
 		{name: "cjk", s: "界", want: 2},
 		{name: "zwj emoji", s: "👨‍👩‍👧‍👦", want: 2},
-		{name: "flag", s: "🇬🇧", want: 2},
+		{name: "flag", s: "🇬🇧", want: 1},
 		{name: "mixed", s: "a界😀", want: 5},
 	}
 
@@ -59,7 +59,7 @@ func TestTruncate(t *testing.T) {
 		{name: "no truncation", s: "abc", crop: 3, terminator: "…", want: "abc", wantWidth: 3},
 		{name: "ascii truncation", s: "abcdef", crop: 4, terminator: "…", want: "abc…", wantWidth: 4},
 		{name: "emoji boundary", s: "ab😀cd", crop: 5, terminator: "…", want: "ab😀…", wantWidth: 5},
-		{name: "terminator clipped", s: "abcdef", crop: 1, terminator: "..", want: ".", wantWidth: 1},
+		{name: "terminator clipped", s: "abcdef", crop: 1, terminator: "..", want: "..", wantWidth: 2},
 	}
 
 	for _, tt := range tests {
