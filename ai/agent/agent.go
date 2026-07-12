@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -19,20 +20,12 @@ type Agent struct {
 	term     types.Term
 	renderer types.Renderer
 
-	Meta *Meta
+	Meta *aitypes.Meta
 
 	fnCancel context.CancelFunc
 
 	_mcpServers map[string]client
-	_tools      []Tool
-}
-
-type Meta struct {
-	CmdLine     string
-	Pwd         string
-	OutputBlock string
-	Function    string
-	Variables   map[string]any
+	_tools      []aitypes.Tool
 }
 
 type allTheAgentsT struct {
@@ -125,4 +118,8 @@ func Close(tileId string) {
 			}
 		}
 	}
+}
+
+func (agent *Agent) GetMeta() *aitypes.Meta {
+	return agent.Meta
 }

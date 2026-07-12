@@ -8,6 +8,7 @@ import (
 
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -16,7 +17,7 @@ import (
 var description string
 
 type Jq struct {
-	agent   *agent.Agent
+	agent   aitypes.Agent
 	enabled bool
 }
 
@@ -26,7 +27,7 @@ func init() {
 	}
 }
 
-func (t Jq) New(agent *agent.Agent) (agent.Tool, error) {
+func (t Jq) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Jq{agent: agent, enabled: true}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
@@ -99,7 +100,7 @@ func (el *ElementCodeBlock) MouseClick(_ *types.XY, button types.MouseButtonT, _
 
 func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 	agt := agent.Get(el.tile.Id())
-	agt.Meta = &agent.Meta{
+	agt.Meta = &aitypes.Meta{
 		CmdLine: string(el.raw),
 	}
 

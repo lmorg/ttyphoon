@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
@@ -13,7 +14,7 @@ import (
 
 type mcpTool struct {
 	client      *mcp_client.Client
-	agent       *Agent
+	agent       aitypes.Agent
 	server      string
 	name        string
 	path        string
@@ -22,8 +23,7 @@ type mcpTool struct {
 	enabled     bool
 }
 
-func (t *mcpTool) New(agent *Agent) (Tool, error) {
-
+func (t *mcpTool) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &mcpTool{
 		client:      t.client,
 		agent:       agent,
@@ -61,7 +61,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 		}()
 	}
 
-	t.agent.renderer.DisplayNotification(types.NOTIFY_INFO,
+	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.agent.ServiceName(), t.Name()))
 
 	var args map[string]any
@@ -73,7 +73,8 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
-		t.agent.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+		t.agent.Renderer().DisplayNotification(types.NOTIFY_WARN, err.Error())
 	}
+
 	return response, err
 }
