@@ -22,6 +22,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
@@ -1995,6 +1996,21 @@ func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
 	notes.SetDocumentCache(a.projRoot, filename, ptr)
 }
 
+func (a *WApp) GetAISessionCache(workspace string) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+
+	cache, err := sessiondb.ActiveSessionMarkdown(agt.Workspace(), 256)
+	if err != nil {
+		log.Printf("ai session cache: %v", err)
+		return ""
+	}
+
+	return cache
+}
+
 func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {
 	return notes.GetColumnWidths(filename, view, headings, wrapped)
 }
@@ -2307,6 +2323,153 @@ func (a *WApp) CommandPaletteSelect(index int) {
 		return
 	}
 	renderer.CommandPaletteSelect(index)
+}
+
+func (a *WApp) activeAgent() (*agent.Agent, bool) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok || renderer == nil {
+		return nil, false
+	}
+
+	tile := renderer.ActiveTile()
+	if tile == nil {
+		return nil, false
+	}
+
+	agt, ok := agent.TryGet(tile.Id())
+	if !ok || agt == nil {
+		return nil, false
+	}
+
+	return agt, true
+}
+
+func (a *WApp) ListAIModelSelections() []string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return []string{}
+	}
+
+	_, labels := agt.ListModels()
+	slices.Sort(labels)
+	return labels
+}
+
+func (a *WApp) GetCurrentAIModelSelection() string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+
+	return agt.CurrentModelLabel()
+}
+
+func (a *WApp) SetCurrentAIModelSelection(selection string) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return errors.New("AI agent is unavailable")
+	}
+
+	err := agt.SetServiceModelFromSelection(selection)
+	if err != nil {
+		log.Printf("ai: failed to set model selection %q: %v", selection, err)
+		return err
+	}
+
+	return nil
+}
+
+func (a *WApp) ShowAIToolsMenu() {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	agt.ChooseTools(nil)
+}
+
+func (a *WApp) ShowAIMcpMenu() {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	agt.McpMenu(nil)
+}
+
+func (a *WApp) GetAISessionManagement() sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.GetFrontendState(agt.Workspace(), 24)
+	if err != nil {
+		log.Printf("ai session management: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
+}
+
+func (a *WApp) CreateAISession() sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.CreateSession(agt.Workspace(), "", 24)
+	if err != nil {
+		log.Printf("ai create session: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
+}
+
+func (a *WApp) SetActiveAISession(tableID int64) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.SetActiveSession(agt.Workspace(), tableID, 24)
+	if err != nil {
+		log.Printf("ai set active session: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
+}
+
+func (a *WApp) DeleteAISession(tableID int64) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.DeleteSession(agt.Workspace(), tableID, 24)
+	if err != nil {
+		log.Printf("ai delete session: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
+}
+
+func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.ClearActiveSession(agt.Workspace(), 24)
+	if err != nil {
+		log.Printf("ai clear session history: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
 }
 
 func (a *WApp) AskAI(callerType, filename, contents string) {

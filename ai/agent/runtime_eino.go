@@ -18,12 +18,15 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 )
 
 type einoRuntime struct {
 	agent      *Agent
 	agentReact *react.Agent
 }
+
+const einoMaxHistoryTurns = 8
 
 type aiStreamCallbackCtxKey struct{}
 
@@ -350,7 +353,31 @@ func (r *einoRuntime) Reset() {
 	r.agentReact = nil
 }
 
-func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
+func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []*schema.Message) []*schema.Message {
+	start := 0
+	if len(history) > einoMaxHistoryTurns {
+		start = len(history) - einoMaxHistoryTurns
+	}
+
+	messages := make([]*schema.Message, 0, ((len(history)-start)*2)+len(currentMessages))
+
+	for i := start; i < len(history); i++ {
+		query := strings.TrimSpace(history[i].Prompt)
+		if query != "" {
+			messages = append(messages, schema.UserMessage(query))
+		}
+
+		response := strings.TrimSpace(history[i].LLMResponse)
+		if response != "" {
+			messages = append(messages, schema.AssistantMessage(response, nil))
+		}
+	}
+
+	messages = append(messages, currentMessages...)
+	return messages
+}
+
+func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
 			return "", err
@@ -359,7 +386,12 @@ func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, strea
 
 	ctx = withAIStreamCallback(ctx, streamCallback)
 
-	stream, err := r.agentReact.Stream(ctx, []*schema.Message{schema.UserMessage(prompt)})
+	history, err := sessiondb.ActiveSessionEntries(r.agent.Workspace(), einoMaxHistoryTurns)
+	if err != nil {
+		return "", err
+	}
+
+	stream, err := r.agentReact.Stream(ctx, buildEinoConversationMessages(history, messages))
 	if err != nil {
 		return "", err
 	}
@@ -386,4 +418,8 @@ func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, strea
 	}
 
 	return response.String(), nil
+}
+
+func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
+	return r.RunLLMWithMessageStream(ctx, []*schema.Message{schema.UserMessage(prompt)}, streamCallback)
 }

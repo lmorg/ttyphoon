@@ -9,6 +9,10 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
+    GetAISessionCache,
+    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
+    ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
+    ShowAIToolsMenu, ShowAIMcpMenu, ClearAISessionHistory,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -524,11 +528,14 @@ app.innerHTML = `
                     <div id="notes-tools-content" class="notes-tools-content">
                         <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
+                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Jump to prompt">Jump to prompt...</button>
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
                                 <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
+                                <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
                             </div>
                             <div id="notes-ai-output" class="notes-ai-output"></div>
+                            <button id="notes-ai-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest AI output">Latest</button>
                         </div>
                         <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
                             <div id="notes-tools-toc" class="notes-tools-toc"></div>
@@ -620,6 +627,36 @@ app.innerHTML = `
                 <button id="notes-delete-cancel" type="button">Cancel</button>
                 <button id="notes-delete-confirm" type="button">Delete</button>
             </div>
+        </div>
+    </div>
+    <div id="notes-ai-settings-modal" data-open="false" aria-hidden="true">
+        <div id="notes-ai-settings-card" class="markdown-body" role="dialog" aria-modal="true" aria-labelledby="notes-ai-settings-title">
+            <h1 id="notes-ai-settings-title">AI Session Management</h1>
+
+            <h2>Default Model</h2>
+            <p>Choose the default model for new AI requests.</p>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-model-picker" type="button" class="notes-ai-model-picker" title="Select AI model">Model</button>
+            </div>
+
+            <h2>Tools</h2>
+            <p>tool and mcp controls</p>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-tools-toggle" type="button">Tools...</button>
+                <button id="notes-ai-settings-mcp-toggle" type="button">MCP...</button>
+            </div>
+
+            <h2>Sessions</h2>
+            <p>Create, switch, clear, or delete sessions for this workspace.</p>
+            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-session-new" type="button">New session</button>
+                <button id="notes-ai-settings-history-clear" type="button">Clear active history</button>
+            </div>
+
+            <h2>Active Session Transcript</h2>
+            <p>Recent prompts and responses from the active session.</p>
+            <div id="notes-ai-settings-history-list" class="notes-ai-settings-history-list"></div>
         </div>
     </div>
 `;
@@ -716,10 +753,21 @@ const elements = {
     toolsFrontmatter: document.getElementById('notes-tools-frontmatter'),
     toolsPanel: document.getElementById('notes-tools-panel'),
     toolsMinimize: document.getElementById('notes-tools-minimize'),
+    toolsAIPromptJump: document.getElementById('notes-tools-ai-prompt-jump'),
+    aiSettingsModelPicker: document.getElementById('notes-ai-settings-model-picker'),
     toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
+    toolsAISettings: document.getElementById('notes-tools-ai-settings'),
     toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
+    aiScrollBottom: document.getElementById('notes-ai-scroll-bottom'),
+    aiSettingsModal: document.getElementById('notes-ai-settings-modal'),
+    aiSettingsSessionsList: document.getElementById('notes-ai-settings-sessions-list'),
+    aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
+    aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
+    aiSettingsToolsToggle: document.getElementById('notes-ai-settings-tools-toggle'),
+    aiSettingsMcpToggle: document.getElementById('notes-ai-settings-mcp-toggle'),
+    aiSettingsHistoryClear: document.getElementById('notes-ai-settings-history-clear'),
     logOutput: document.getElementById('notes-log-output'),
     toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
     toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
@@ -802,6 +850,16 @@ const state = {
     hexLoadingPromise: null,
     markdownWrapMode: false,  // New: track word wrap mode for markdown files
     markdownTableWordWrapMode: true,  // track table word wrap mode for View/Run modes
+    aiModelSelections: [],
+    aiCurrentModelSelection: '',
+    aiSessionCache: '',
+    aiSessionManagement: {
+        activeSessionId: 0,
+        sessions: [],
+        history: [],
+    },
+    aiPromptJumpTargets: [],
+    aiStickToBottom: true,
     lspChangeTimer: null,
     lspOpenFile: '',
     typosOpenFile: '',
@@ -821,11 +879,14 @@ const state = {
 const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
+const AI_BOTTOM_THRESHOLD_PX = 24;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
 let suppressMonacoChange = false;
 let latestWindowStyle = null;
+let aiPromptJumpRefreshTimer = null;
+let aiPromptJumpObserver = null;
 
 function isMonacoPhase0Enabled() {
     try {
@@ -6893,7 +6954,10 @@ async function refreshFiles(options = {}) {
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
-        elements.title.innerText = await GetCurrentGroupName();
+        const workspaceName = await GetCurrentGroupName();
+        elements.title.innerText = workspaceName;
+        await loadAISessionCache(workspaceName);
+        await refreshAIModelPicker();
         await loadProjectCache({ skipHistoryRestore });
         await applyFileFilter();
     } catch (err) {
@@ -10325,6 +10389,329 @@ async function askAIAboutCurrentDocument() {
     }
 }
 
+function openAISessionManagementModal() {
+    if (!elements.aiSettingsModal) {
+        return;
+    }
+
+    renderAISessionManagement();
+    elements.aiSettingsModal.dataset.open = 'true';
+    elements.aiSettingsModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeAISessionManagementModal() {
+    if (!elements.aiSettingsModal) {
+        return;
+    }
+
+    elements.aiSettingsModal.dataset.open = 'false';
+    elements.aiSettingsModal.setAttribute('aria-hidden', 'true');
+}
+
+function normalizeAISessionManagement(stateValue) {
+    const next = stateValue && typeof stateValue === 'object' ? stateValue : {};
+    return {
+        activeSessionId: Number(next.activeSessionId) || 0,
+        sessions: Array.isArray(next.sessions) ? next.sessions : [],
+        history: Array.isArray(next.history) ? next.history : [],
+    };
+}
+
+function applyAISessionManagement(nextState) {
+    state.aiSessionManagement = normalizeAISessionManagement(nextState);
+}
+
+async function loadAISessionManagement() {
+    try {
+        const sessionState = await GetAISessionManagement();
+        applyAISessionManagement(sessionState);
+    } catch (err) {
+        console.error('Failed to load AI session management:', err);
+        applyAISessionManagement(null);
+    }
+}
+
+function renderAISessionManagement() {
+    renderAISessionList();
+    renderAISessionHistory();
+}
+
+function summarizePromptText(value, fallback) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return fallback;
+    }
+    if (normalized.length <= 90) {
+        return normalized;
+    }
+    return `${normalized.slice(0, 87).trimEnd()}...`;
+}
+
+function collectAIPromptTargets() {
+    if (!elements.aiOutput) {
+        return [];
+    }
+
+    const targets = [];
+
+    const titleElements = elements.aiOutput.querySelectorAll('.notes-ai-title');
+    for (const titleEl of titleElements) {
+        targets.push({
+            element: titleEl,
+            summary: summarizePromptText(titleEl.textContent, `Prompt ${targets.length + 1}`),
+        });
+    }
+
+    const promptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-markdown h2, .notes-ai-markdown h3');
+    for (const heading of promptHeadings) {
+        const label = String(heading.textContent || '').trim().toLowerCase();
+        if (label !== 'prompt') {
+            continue;
+        }
+
+        let summaryText = '';
+        let sibling = heading.nextElementSibling;
+        while (sibling) {
+            summaryText = summarizePromptText(sibling.textContent, '');
+            if (summaryText) {
+                break;
+            }
+            sibling = sibling.nextElementSibling;
+        }
+
+        targets.push({
+            element: heading,
+            summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
+        });
+    }
+
+    return targets;
+}
+
+function renderAIPromptJumpDropdown() {
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+
+    const targets = collectAIPromptTargets();
+    state.aiPromptJumpTargets = targets;
+    elements.toolsAIPromptJump.disabled = targets.length === 0;
+    elements.toolsAIPromptJump.textContent = targets.length > 0
+        ? `Jump to prompt (${targets.length})`
+        : 'Jump to prompt...';
+}
+
+function scheduleAIPromptJumpRefresh() {
+    if (aiPromptJumpRefreshTimer) {
+        clearTimeout(aiPromptJumpRefreshTimer);
+    }
+
+    aiPromptJumpRefreshTimer = setTimeout(() => {
+        aiPromptJumpRefreshTimer = null;
+        renderAIPromptJumpDropdown();
+    }, 40);
+}
+
+function jumpToAIPrompt(index) {
+    if (!elements.aiOutput) {
+        return;
+    }
+
+    const target = state.aiPromptJumpTargets[index]?.element;
+    if (!(target instanceof Element)) {
+        return;
+    }
+
+    const nextTop = Math.max(0, Number(target.offsetTop) - 8);
+    elements.aiOutput.scrollTo({ top: nextTop, behavior: 'smooth' });
+    state.aiStickToBottom = false;
+    updateAIScrollBottomButton();
+}
+
+function openAIPromptJumpMenu() {
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+
+    const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
+    if (targets.length === 0) {
+        return;
+    }
+
+    const options = targets.map((target, index) => `${index + 1}. ${target.summary}`);
+    const rect = elements.toolsAIPromptJump.getBoundingClientRect();
+    showLocalMenu({
+        title: 'Jump to prompt',
+        options,
+        icons: options.map(() => 0x20),
+        x: rect.left,
+        y: rect.bottom,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            if (typeof index !== 'number' || index < 0 || index >= targets.length) {
+                return;
+            }
+            jumpToAIPrompt(index);
+        },
+    });
+}
+
+function initAIPromptJumpObserver() {
+    if (!elements.aiOutput || aiPromptJumpObserver) {
+        return;
+    }
+
+    aiPromptJumpObserver = new MutationObserver(() => {
+        scheduleAIPromptJumpRefresh();
+    });
+
+    aiPromptJumpObserver.observe(elements.aiOutput, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+    });
+
+    scheduleAIPromptJumpRefresh();
+}
+
+function renderAISessionList() {
+    if (!elements.aiSettingsSessionsList) {
+        return;
+    }
+
+    const sessions = Array.isArray(state.aiSessionManagement?.sessions) ? state.aiSessionManagement.sessions : [];
+    if (sessions.length === 0) {
+        elements.aiSettingsSessionsList.textContent = 'No sessions yet for this workspace.';
+        elements.aiSettingsSessionsList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsSessionsList.dataset.empty = 'false';
+    const items = sessions.map((session) => {
+        const tableId = Number(session.tableId) || 0;
+        const safeSummary = escapeHtml(session.summary || `Session ${tableId}`);
+        const safeUpdated = escapeHtml(session.updated || '');
+        const safeCreated = escapeHtml(session.created || '');
+        const count = Number(session.entryCount) || 0;
+        const active = session.active === true;
+        const createdHtml = safeCreated ? `<div class="notes-ai-settings-session-meta">Created ${safeCreated}</div>` : '';
+        const updatedHtml = safeUpdated ? `<div class="notes-ai-settings-session-meta">Updated ${safeUpdated}</div>` : '';
+        return `
+            <div class="notes-ai-settings-session-item" data-session-id="${tableId}" data-active="${active ? 'true' : 'false'}">
+                <div class="notes-ai-settings-session-main">
+                    <div class="notes-ai-settings-session-heading">${safeSummary}</div>
+                    <div class="notes-ai-settings-session-meta">${count} entr${count === 1 ? 'y' : 'ies'}</div>
+                    ${createdHtml}
+                    ${updatedHtml}
+                </div>
+                <div class="notes-ai-settings-session-actions">
+                    <button type="button" data-action="activate" data-session-id="${tableId}" ${active ? 'disabled' : ''}>${active ? 'Active' : 'Open'}</button>
+                    <button type="button" data-action="delete" data-session-id="${tableId}">Delete</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    elements.aiSettingsSessionsList.innerHTML = items;
+}
+
+function renderAISessionHistory() {
+    if (!elements.aiSettingsHistoryList) {
+        return;
+    }
+
+    const sessions = Array.isArray(state.aiSessionManagement?.history) ? state.aiSessionManagement.history : [];
+    if (sessions.length === 0) {
+        elements.aiSettingsHistoryList.textContent = 'No history yet for the active session.';
+        elements.aiSettingsHistoryList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsHistoryList.dataset.empty = 'false';
+    const items = sessions.slice(0, 12).map((entry) => {
+        const safeTitle = escapeHtml(entry.prompt || 'AI prompt');
+        const safeCmdLine = escapeHtml(entry.commandLine || '');
+        const safeExcerpt = escapeHtml(entry.excerpt || '');
+        const safeOutput = escapeHtml(entry.outputBlock || '');
+        const cmdLineHtml = safeCmdLine ? `<div class="notes-ai-settings-history-meta">${safeCmdLine}</div>` : '';
+        const outputHtml = safeOutput ? `<div class="notes-ai-settings-history-output">${safeOutput}</div>` : '';
+        const excerptHtml = safeExcerpt ? `<div class="notes-ai-settings-history-excerpt">${safeExcerpt}</div>` : '';
+        return `
+            <div class="notes-ai-settings-history-item">
+                <div class="notes-ai-settings-history-heading">${safeTitle}</div>
+                ${cmdLineHtml}
+                ${outputHtml}
+                ${excerptHtml}
+            </div>
+        `;
+    }).join('');
+
+    elements.aiSettingsHistoryList.innerHTML = items;
+}
+
+async function refreshAIModelPicker() {
+    if (!elements.aiSettingsModelPicker) {
+        return;
+    }
+
+    try {
+        const [options, current] = await Promise.all([
+            ListAIModelSelections(),
+            GetCurrentAIModelSelection(),
+        ]);
+
+        state.aiModelSelections = Array.isArray(options) ? options : [];
+        state.aiCurrentModelSelection = String(current || '').trim();
+
+        const fallback = state.aiModelSelections[0] || 'Model';
+        elements.aiSettingsModelPicker.textContent = state.aiCurrentModelSelection || fallback;
+        elements.aiSettingsModelPicker.disabled = state.aiModelSelections.length === 0;
+    } catch (err) {
+        console.error('Failed to refresh AI model picker:', err);
+        elements.aiSettingsModelPicker.textContent = 'Model';
+        elements.aiSettingsModelPicker.disabled = true;
+    }
+}
+
+function openAIModelPickerMenu() {
+    if (!elements.aiSettingsModelPicker) {
+        return;
+    }
+
+    const options = Array.isArray(state.aiModelSelections) ? state.aiModelSelections : [];
+    if (options.length === 0) {
+        return;
+    }
+
+    const current = String(state.aiCurrentModelSelection || '').trim();
+    const icons = options.map((option) => String(option || '').trim() === current ? CONTEXT_ICON_TICK : 0x20);
+
+    const rect = elements.aiSettingsModelPicker.getBoundingClientRect();
+    showLocalMenu({
+        title: 'Model',
+        options,
+        icons,
+        x: rect.left,
+        y: rect.bottom,
+        showNextToMouseCursor: true,
+        onSelect: (index) => {
+            const selected = options[index];
+            if (typeof selected !== 'string' || selected.trim() === '') {
+                return;
+            }
+
+            SetCurrentAIModelSelection(selected).then(() => {
+                state.aiCurrentModelSelection = selected;
+                elements.aiSettingsModelPicker.textContent = selected;
+            }).catch((err) => {
+                notifyTerminal('Failed to update AI model', 'error');
+                console.error(err);
+                void refreshAIModelPicker();
+            });
+        },
+    });
+}
+
 async function askAIFromToolbar() {
     setToolsPanelCollapsed(false);
     setToolsTab('ai');
@@ -11057,7 +11444,8 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("notesUpdate", () => {
+EventsOn("notesUpdate", (groupName) => {
+    void loadAISessionCache(groupName);
     CancelNotesListFiles().catch(() => {}).finally(() => {
         refreshFiles();
     });
@@ -11188,11 +11576,28 @@ function setToolsPanelCollapsed(collapsed) {
     if (elements.toolsRestore) {
         elements.toolsRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
     }
+    // If AI output was rendered while hidden, force a layout-time bottom snap
+    // when the panel becomes visible again.
+    if (!isCollapsed && state.aiStickToBottom && isAIToolsTabActive()) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                scrollAIOutputToBottom();
+            });
+        });
+    }
 }
 
 function toggleToolsPanel() {
     const isCollapsed = elements.toolsPanel.dataset.collapsed === 'true';
     setToolsPanelCollapsed(!isCollapsed);
+}
+function isAIToolsTabActive() {
+    if (!elements.toolsPanel) {
+        return false;
+    }
+
+    const activePane = elements.toolsPanel.querySelector('.notes-tools-pane[data-active="true"]');
+    return activePane?.dataset?.tab === 'ai';
 }
 
 function setToolsTab(tabName) {
@@ -11211,6 +11616,15 @@ function setToolsTab(tabName) {
     for (const pane of panes) {
         const isActive = pane.dataset.tab === nextTab;
         pane.dataset.active = isActive ? 'true' : 'false';
+    }
+
+    if (nextTab === 'ai' && state.aiStickToBottom) {
+        // Switching to AI can reveal previously hidden content; scroll after layout.
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                scrollAIOutputToBottom();
+            });
+        });
     }
 }
 
@@ -11232,11 +11646,29 @@ function saveDocumentCache() {
 }
 
 function clearAIOutput() {
+    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.clear();
+    scheduleAIPromptJumpRefresh();
+    if (shouldStick) {
+        requestAnimationFrame(() => {
+            scrollAIOutputToBottom();
+        });
+    }
 }
 
 function startAIJob(title) {
+    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.startJob(String(title || ''));
+    scheduleAIPromptJumpRefresh();
+    if (shouldStick) {
+        requestAnimationFrame(() => {
+            scrollAIOutputToBottom();
+        });
+    } else {
+        requestAnimationFrame(() => {
+            updateAIScrollBottomButton();
+        });
+    }
 }
 
 function finishAIJob() {
@@ -11244,7 +11676,77 @@ function finishAIJob() {
 }
 
 function appendAIText(text) {
+    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.appendChunk(text);
+    scheduleAIPromptJumpRefresh();
+    if (shouldStick) {
+        requestAnimationFrame(() => {
+            scrollAIOutputToBottom();
+        });
+    } else {
+        requestAnimationFrame(() => {
+            updateAIScrollBottomButton();
+        });
+    }
+}
+
+function setAIFinalOutput(text, options = {}) {
+    const forceBottom = options.forceBottom === true;
+    const shouldStick = forceBottom || state.aiStickToBottom || isAIOutputNearBottom();
+    aiPipelineFormatter.setText(String(text || ''));
+    scheduleAIPromptJumpRefresh();
+    if (shouldStick) {
+        requestAnimationFrame(() => {
+            scrollAIOutputToBottom();
+        });
+    } else {
+        requestAnimationFrame(() => {
+            updateAIScrollBottomButton();
+        });
+    }
+}
+
+function isAIOutputNearBottom() {
+    if (!elements.aiOutput) {
+        return true;
+    }
+
+    const remaining = elements.aiOutput.scrollHeight - (elements.aiOutput.scrollTop + elements.aiOutput.clientHeight);
+    return remaining <= AI_BOTTOM_THRESHOLD_PX;
+}
+
+function updateAIScrollBottomButton() {
+    if (!elements.aiScrollBottom) {
+        return;
+    }
+
+    const visible = !isAIOutputNearBottom();
+    elements.aiScrollBottom.dataset.visible = visible ? 'true' : 'false';
+}
+
+function scrollAIOutputToBottom() {
+    if (!elements.aiOutput) {
+        return;
+    }
+
+    elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+    state.aiStickToBottom = true;
+    updateAIScrollBottomButton();
+}
+
+async function loadAISessionCache(workspaceName) {
+    try {
+        const cache = await GetAISessionCache(String(workspaceName || ''));
+        state.aiSessionCache = String(cache || '');
+        setAIFinalOutput(cache, { forceBottom: true });
+        if (elements.aiSettingsModal?.dataset?.open === 'true') {
+            void loadAISessionManagement().then(() => {
+                renderAISessionManagement();
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load AI session cache:', err);
+    }
 }
 
 const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
@@ -11291,6 +11793,11 @@ EventsOn("aiResponseStream", (chunk) => {
     if (text) {
         appendAIText(text);
     }
+});
+
+// Event emitted by Go when AI generation completes with the full output text.
+EventsOn("aiResponseFinal", (output) => {
+    setAIFinalOutput(output);
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
@@ -11352,11 +11859,129 @@ if (elements.toolsAIAsk) {
         void askAIFromToolbar();
     });
 }
+if (elements.toolsAIPromptJump) {
+    elements.toolsAIPromptJump.addEventListener('click', () => {
+        openAIPromptJumpMenu();
+    });
+}
+if (elements.aiSettingsModelPicker) {
+    elements.aiSettingsModelPicker.addEventListener('click', () => {
+        openAIModelPickerMenu();
+    });
+}
+if (elements.aiOutput) {
+    elements.aiOutput.addEventListener('scroll', () => {
+        state.aiStickToBottom = isAIOutputNearBottom();
+        updateAIScrollBottomButton();
+    });
+}
+if (elements.aiScrollBottom) {
+    elements.aiScrollBottom.addEventListener('click', () => {
+        scrollAIOutputToBottom();
+    });
+}
+if (elements.toolsAISettings) {
+    elements.toolsAISettings.addEventListener('click', () => {
+        void loadAISessionManagement().then(() => {
+            openAISessionManagementModal();
+        });
+    });
+}
+if (elements.aiSettingsSessionsList) {
+    elements.aiSettingsSessionsList.addEventListener('click', (event) => {
+        const button = event.target instanceof HTMLElement ? event.target.closest('button[data-action]') : null;
+        if (!button) {
+            return;
+        }
+
+        const sessionId = Number(button.dataset.sessionId) || 0;
+        if (sessionId <= 0) {
+            return;
+        }
+
+        const action = String(button.dataset.action || '');
+        if (action === 'activate') {
+            SetActiveAISession(sessionId).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                void loadAISessionCache('');
+            }).catch((err) => {
+                notifyTerminal('Failed to switch AI session', 'error');
+                console.error(err);
+            });
+            return;
+        }
+
+        if (action === 'delete') {
+            DeleteAISession(sessionId).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                void loadAISessionCache('');
+                notifyTerminal('AI session deleted', 'info');
+            }).catch((err) => {
+                notifyTerminal('Failed to delete AI session', 'error');
+                console.error(err);
+            });
+        }
+    });
+}
+if (elements.aiSettingsSessionNew) {
+    elements.aiSettingsSessionNew.addEventListener('click', () => {
+        CreateAISession().then((sessionState) => {
+            applyAISessionManagement(sessionState);
+            renderAISessionManagement();
+            void loadAISessionCache('');
+            notifyTerminal('AI session created', 'info');
+        }).catch((err) => {
+            notifyTerminal('Failed to create AI session', 'error');
+            console.error(err);
+        });
+    });
+}
+if (elements.aiSettingsModal) {
+    elements.aiSettingsModal.addEventListener('click', (event) => {
+        if (event.target === elements.aiSettingsModal) {
+            closeAISessionManagementModal();
+        }
+    });
+}
+if (elements.aiSettingsToolsToggle) {
+    elements.aiSettingsToolsToggle.addEventListener('click', () => {
+        ShowAIToolsMenu().catch((err) => {
+            notifyTerminal('Failed to open AI tools menu', 'error');
+            console.error(err);
+        });
+    });
+}
+if (elements.aiSettingsMcpToggle) {
+    elements.aiSettingsMcpToggle.addEventListener('click', () => {
+        ShowAIMcpMenu().catch((err) => {
+            notifyTerminal('Failed to open AI MCP menu', 'error');
+            console.error(err);
+        });
+    });
+}
+if (elements.aiSettingsHistoryClear) {
+    elements.aiSettingsHistoryClear.addEventListener('click', () => {
+        ClearAISessionHistory().then((sessionState) => {
+            applyAISessionManagement(sessionState);
+            renderAISessionManagement();
+            void loadAISessionCache('');
+            notifyTerminal('AI session history cleared', 'info');
+        }).catch((err) => {
+            notifyTerminal('Failed to clear AI session history', 'error');
+            console.error(err);
+        });
+    });
+}
 if (elements.toolsRestore) {
     elements.toolsRestore.addEventListener('click', () => setToolsPanelCollapsed(false));
 }
 if (elements.toolsTabAI) {
-    elements.toolsTabAI.addEventListener('click', () => setToolsTab('ai'));
+    elements.toolsTabAI.addEventListener('click', () => {
+        setToolsTab('ai');
+        void refreshAIModelPicker();
+    });
 }
 if (elements.toolsTabToC) {
     elements.toolsTabToC.addEventListener('click', () => setToolsTab('toc'));
@@ -11390,6 +12015,7 @@ GetNotesStructViewMaxSizeKB().then((maxSizeKb) => {
 });
 
 initNotesAIPanel(elements);
+initAIPromptJumpObserver();
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
         const tocButton = event.target.closest('.notes-tools-toc-item');
@@ -12965,6 +13591,9 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
         event.preventDefault();
         closeDeletePrompt();
+    } else if (event.key === 'Escape' && elements.aiSettingsModal?.dataset?.open === 'true') {
+        event.preventDefault();
+        closeAISessionManagementModal();
     }
 });
 

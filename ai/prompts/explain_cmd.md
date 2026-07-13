@@ -1,7 +1,3 @@
-# Previous Chat
-
-$HISTORY
-
 $SYSTEM_PROMPT
 
 # Instructions

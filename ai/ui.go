@@ -8,8 +8,10 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/app"
@@ -27,7 +29,7 @@ func ExplainCmdOutput(agt *agent.Agent) {
 
 		query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
 		query = strings.TrimSpace(query)
-		askAI(agt, prompts.GetExplainCmd(agt, query), query)
+		askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
 	}
 
 	params := &types.InputBoxWT{
@@ -64,7 +66,7 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
-			askAI(agt, prompts.GetExplainDoc(agt, v.String()), v.String())
+			askAI(agt, prompts.GetExplainDocMessages(agt, v.String()), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -74,14 +76,33 @@ const _STICKY_MESSAGE = "Asking %s...."
 
 func AskAI(agt *agent.Agent, prompt string) {
 	go func() {
-		askAI(agt, prompts.GetAsk(agt, prompt), prompt)
+		askAI(agt, prompts.GetAskMessages(agt, prompt), prompt)
 	}()
 }
 
 const SAVE_RESPONSE = "saveResponse"
 
-func askAI(agt *agent.Agent, prompt string, query string) {
-	prompt += prompts.AgentsMd()
+func joinPromptMessages(messages []*schema.Message) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(messages))
+	for i := range messages {
+		if messages[i] == nil {
+			continue
+		}
+		content := strings.TrimSpace(messages[i].Content)
+		if content == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("[%s]\n%s", messages[i].Role, content))
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 	sticky := agt.Renderer().DisplaySticky(
 		types.NOTIFY_INFO,
 		fmt.Sprintf(_STICKY_MESSAGE, agt.ServiceName()),
@@ -115,21 +136,25 @@ func askAI(agt *agent.Agent, prompt string, query string) {
 
 		startAIJob(agt, query)
 
-		result, err := agt.RunLLMWithStream(ctx, prompt, func(chunk string) {
+		result, err := agt.RunLLMWithMessageStream(ctx, promptMessages, func(chunk string) {
 			if chunk == "" {
 				return
 			}
 			emitAIResponseChunk(agt, chunk)
 		})
 		sticky.Close()
-		finishAIJob(agt)
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
 
 		} else {
-			agt.AddHistory(query, result)
+			if storeErr := sessiondb.AppendActiveSessionEntry(agt.Workspace(), query, agt.Meta.CmdLine, agt.Meta.OutputBlock, result); storeErr != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
+			}
 		}
+
+		emitAIFinalResponse(agt, result)
+		finishAIJob(agt)
 
 		endTime := time.Now()
 		data := &historymd.TemplateFieldsT{
@@ -142,7 +167,7 @@ func askAI(agt *agent.Agent, prompt string, query string) {
 			Pwd:          agt.Meta.Pwd,
 			Agent:        agt.ServiceName(),
 			Query:        query,
-			FullPrompt:   prompt,
+			FullPrompt:   joinPromptMessages(promptMessages),
 			Output:       result,
 		}
 
@@ -170,15 +195,30 @@ func SaveMarkdownToggle(Default bool) types.InputBoxWTVariables {
 }
 
 func startAIJob(agt *agent.Agent, title string) {
-	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart", title)
+	SessionCacheStartJob(agt.Workspace(), title)
+	if agt.IsWorkspaceActive() {
+		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart", title)
+	}
 }
 
 func emitAIResponseChunk(agt *agent.Agent, chunk string) {
-	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseStream", chunk)
+	SessionCacheAppendChunk(agt.Workspace(), chunk)
+	if agt.IsWorkspaceActive() {
+		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseStream", chunk)
+	}
+}
+
+func emitAIFinalResponse(agt *agent.Agent, output string) {
+	SessionCacheFinalizeJob(agt.Workspace(), output)
+	if agt.IsWorkspaceActive() {
+		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseFinal", output)
+	}
 }
 
 func finishAIJob(agt *agent.Agent) {
-	runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobFinish")
+	if agt.IsWorkspaceActive() {
+		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobFinish")
+	}
 }
 
 func UriPrompt(agt *agent.Agent, prompt, tools string) {

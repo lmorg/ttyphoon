@@ -14,6 +14,10 @@ export function CancelNotesListFiles() {
   return window['go']['main']['WApp']['CancelNotesListFiles']();
 }
 
+export function ClearAISessionHistory() {
+  return window['go']['main']['WApp']['ClearAISessionHistory']();
+}
+
 export function CloseNotification(arg1) {
   return window['go']['main']['WApp']['CloseNotification'](arg1);
 }
@@ -32,6 +36,14 @@ export function CompleteSyntax(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
 
 export function ComposeNoteLocationPath(arg1, arg2) {
   return window['go']['main']['WApp']['ComposeNoteLocationPath'](arg1, arg2);
+}
+
+export function CreateAISession() {
+  return window['go']['main']['WApp']['CreateAISession']();
+}
+
+export function DeleteAISession(arg1) {
+  return window['go']['main']['WApp']['DeleteAISession'](arg1);
 }
 
 export function DeleteFile(arg1) {
@@ -62,6 +74,14 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
+export function GetAISessionCache(arg1) {
+  return window['go']['main']['WApp']['GetAISessionCache'](arg1);
+}
+
+export function GetAISessionManagement() {
+  return window['go']['main']['WApp']['GetAISessionManagement']();
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
@@ -72,6 +92,10 @@ export function GetAppTitle() {
 
 export function GetClipboardData() {
   return window['go']['main']['WApp']['GetClipboardData']();
+}
+
+export function GetCurrentAIModelSelection() {
+  return window['go']['main']['WApp']['GetCurrentAIModelSelection']();
 }
 
 export function GetCurrentGroupName() {
@@ -148,6 +172,10 @@ export function GetWindowStyle() {
 
 export function HyperlinkOpenWithDefault(arg1) {
   return window['go']['main']['WApp']['HyperlinkOpenWithDefault'](arg1);
+}
+
+export function ListAIModelSelections() {
+  return window['go']['main']['WApp']['ListAIModelSelections']();
 }
 
 export function ListFiles() {
@@ -342,6 +370,14 @@ export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
 }
 
+export function SetActiveAISession(arg1) {
+  return window['go']['main']['WApp']['SetActiveAISession'](arg1);
+}
+
+export function SetCurrentAIModelSelection(arg1) {
+  return window['go']['main']['WApp']['SetCurrentAIModelSelection'](arg1);
+}
+
 export function SetDocumentCache(arg1, arg2) {
   return window['go']['main']['WApp']['SetDocumentCache'](arg1, arg2);
 }
@@ -352,6 +388,14 @@ export function SetNotesColumnWidths(arg1, arg2, arg3, arg4, arg5) {
 
 export function SetProjectCache(arg1) {
   return window['go']['main']['WApp']['SetProjectCache'](arg1);
+}
+
+export function ShowAIMcpMenu() {
+  return window['go']['main']['WApp']['ShowAIMcpMenu']();
+}
+
+export function ShowAIToolsMenu() {
+  return window['go']['main']['WApp']['ShowAIToolsMenu']();
 }
 
 export function ShowCommandPalette() {

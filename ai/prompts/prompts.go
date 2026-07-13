@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
@@ -35,8 +36,22 @@ func GetExplainCmd(agt *agent.Agent, userPrompt string) string {
 	return os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agt, userPrompt))
 }
 
+func GetExplainCmdMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
+	return []*schema.Message{
+		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+		schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agt, userPrompt)))),
+	}
+}
+
 func GetExplainDoc(agt *agent.Agent, userPrompt string) string {
 	return os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agt, userPrompt))
+}
+
+func GetExplainDocMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
+	return []*schema.Message{
+		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+		schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agt, userPrompt)))),
+	}
 }
 
 func GetAsk(agt *agent.Agent, userPrompt string) string {
@@ -58,23 +73,69 @@ func GetAsk(agt *agent.Agent, userPrompt string) string {
 	return os.Expand(skill.Prompt+"\n$SYSTEM_PROMPT\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agt, userPrompt))
 }
 
+func GetAskMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
+	fn := rxSkillFunction.FindString(userPrompt)
+	if fn == "" {
+		return []*schema.Message{
+			schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+			schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt)))),
+		}
+	}
+
+	agt.Meta.Function = strings.TrimRight(fn[1:], " ")
+	skill := skills.ReadSkills().FromFunctionName(agt.Meta.Function)
+	if skill == nil {
+		return []*schema.Message{
+			schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+			schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt)))),
+		}
+	}
+
+	err := agt.StartTools(skill.Tools)
+	if err != nil {
+		agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+
+	user := strings.TrimSpace(os.Expand(skill.Prompt+"\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agt, userPrompt)))
+	return []*schema.Message{
+		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+		schema.UserMessage(user),
+	}
+}
+
 func GetTitle(agt *agent.Agent, userPrompt string) string {
 	return os.Expand(_PROMPT_TITLE, promptVars(agt, userPrompt))
+}
+
+func GetTitleMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
+	return []*schema.Message{
+		schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_TITLE, promptVars(agt, userPrompt)))),
+	}
+}
+
+func buildPromptSystem(agt *agent.Agent, userPrompt string) string {
+	system := strings.TrimSpace(os.Expand(_PROMPT_SYSTEM, promptVars(agt, userPrompt)))
+	agents := strings.TrimSpace(AgentsMd())
+	if agents == "" {
+		return system
+	}
+	if system == "" {
+		return agents
+	}
+	return system + "\n\n" + agents
 }
 
 func promptVars(agt *agent.Agent, userPrompt string) func(string) string {
 	return func(s string) string {
 		switch s {
 		case "SYSTEM_PROMPT":
-			return os.Expand(_PROMPT_SYSTEM, promptVars(agt, userPrompt))
+			return buildPromptSystem(agt, userPrompt)
 		case "MAX_ITERATIONS":
 			return strconv.Itoa(agt.MaxIterations())
 		case "HOST_OS":
 			return runtime.GOOS
 		case "HOST_CPU":
 			return runtime.GOARCH
-		case "HISTORY":
-			return agt.History.String()
 		case "USER_PROMPT":
 			return userPrompt
 		case "COMMAND_LINE":

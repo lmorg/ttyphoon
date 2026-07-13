@@ -44,6 +44,17 @@ const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
+const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
+const getAISessionManagementMock = vi.fn(() => Promise.resolve({ activeSessionId: 0, sessions: [], history: [] }));
+const createAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const setActiveAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const deleteAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1']));
+const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
+const setCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve());
+const showAIToolsMenuMock = vi.fn(() => Promise.resolve());
+const showAIMcpMenuMock = vi.fn(() => Promise.resolve());
+const clearAISessionHistoryMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
 const getCurrentGroupNameMock = vi.fn(() => Promise.resolve(''));
 const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
@@ -143,6 +154,17 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
+    GetAISessionCache: getAISessionCacheMock,
+    GetAISessionManagement: getAISessionManagementMock,
+    CreateAISession: createAISessionMock,
+    SetActiveAISession: setActiveAISessionMock,
+    DeleteAISession: deleteAISessionMock,
+    ListAIModelSelections: listAIModelSelectionsMock,
+    GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
+    SetCurrentAIModelSelection: setCurrentAIModelSelectionMock,
+    ShowAIToolsMenu: showAIToolsMenuMock,
+    ShowAIMcpMenu: showAIMcpMenuMock,
+    ClearAISessionHistory: clearAISessionHistoryMock,
     GetCurrentProject: getCurrentProjectMock,
     GetCurrentGroupName: getCurrentGroupNameMock,
     GetFileMetaMarkdown: getFileMetaMarkdownMock,

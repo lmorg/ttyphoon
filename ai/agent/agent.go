@@ -15,7 +15,6 @@ type Agent struct {
 	serviceName   string
 	modelName     string
 	maxIterations int
-	History       HistoryT
 
 	term     types.Term
 	renderer types.Renderer
@@ -69,36 +68,40 @@ func New(renderer types.Renderer, tile types.Tile) {
 }
 
 func Get(tileId string) *Agent {
-	agent, ok := allTheAgents.Get(tileId)
+	agt, ok := allTheAgents.Get(tileId)
 	if !ok {
 		panic("agent not initialized")
 	}
 
-	return agent
+	return agt
 }
 
-func (agent *Agent) MaxIterations() int {
-	return agent.maxIterations
+func TryGet(tileId string) (*Agent, bool) {
+	return allTheAgents.Get(tileId)
 }
 
-func (agent *Agent) Reload() {
-	if agent.runtime != nil {
-		agent.runtime.Reset()
+func (agt *Agent) MaxIterations() int {
+	return agt.maxIterations
+}
+
+func (agt *Agent) Reload() {
+	if agt.runtime != nil {
+		agt.runtime.Reset()
 	}
-	agent.runtime = nil
+	agt.runtime = nil
 }
 
-func (agent *Agent) McpServerAdd(server string, client client) {
-	agent._mcpServers[server] = client
+func (agt *Agent) McpServerAdd(server string, client client) {
+	agt._mcpServers[server] = client
 }
 
-func (agent *Agent) McpServerExists(server string) bool {
-	_, ok := agent._mcpServers[server]
+func (agt *Agent) McpServerExists(server string) bool {
+	_, ok := agt._mcpServers[server]
 	return ok
 }
 
-func (agent *Agent) Renderer() types.Renderer { return agent.renderer }
-func (agent *Agent) Term() types.Term         { return agent.term }
+func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
+func (agt *Agent) Term() types.Term         { return agt.term }
 
 func Close(tileId string) {
 	agent, ok := allTheAgents.Get(tileId)
@@ -120,6 +123,40 @@ func Close(tileId string) {
 	}
 }
 
-func (agent *Agent) GetMeta() *aitypes.Meta {
-	return agent.Meta
+func (agt *Agent) GetMeta() *aitypes.Meta {
+	return agt.Meta
+}
+
+func (agt *Agent) Workspace() string {
+	if agt == nil {
+		return ""
+	}
+	term := agt.Term()
+	if term == nil {
+		return ""
+	}
+
+	tile := term.Tile()
+	if tile == nil {
+		return ""
+	}
+
+	return tile.GroupName()
+}
+
+func (agt *Agent) IsWorkspaceActive() bool {
+	if agt == nil {
+		return false
+	}
+	renderer := agt.Renderer()
+	if renderer == nil {
+		return false
+	}
+
+	activeTile := renderer.ActiveTile()
+	if activeTile == nil {
+		return false
+	}
+
+	return activeTile.GroupName() == agt.Workspace()
 }

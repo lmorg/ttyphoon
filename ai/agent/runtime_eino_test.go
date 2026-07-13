@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 )
 
 type fakeAgentTool struct {
@@ -31,17 +33,18 @@ type fakeRuntime struct {
 	err    error
 	chunks []string
 
-	called bool
-	ctx    context.Context
-	prompt string
+	called   bool
+	ctx      context.Context
+	prompt   string
+	messages []*schema.Message
 
 	resetCalled bool
 }
 
-func (f *fakeRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
+func (f *fakeRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	f.called = true
 	f.ctx = ctx
-	f.prompt = prompt
+	f.messages = messages
 	if streamCallback != nil {
 		if len(f.chunks) == 0 {
 			streamCallback("chunk")
@@ -52,6 +55,11 @@ func (f *fakeRuntime) RunLLMWithStream(ctx context.Context, prompt string, strea
 		}
 	}
 	return f.result, f.err
+}
+
+func (f *fakeRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
+	f.prompt = prompt
+	return f.RunLLMWithMessageStream(ctx, []*schema.Message{schema.UserMessage(prompt)}, streamCallback)
 }
 
 func (f *fakeRuntime) Reset() {
@@ -238,6 +246,60 @@ func TestEmitAIStreamToolProgress_NoCallbackNoPanic(t *testing.T) {
 	emitAIStreamToolProgress(context.Background(), "")
 }
 
+func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {
+	history := []sessiondb.Entry{
+		{Prompt: "first question", LLMResponse: "first answer"},
+		{Prompt: "second question", LLMResponse: "second answer"},
+	}
+
+	msgs := buildEinoConversationMessages(history, []*schema.Message{schema.UserMessage("current prompt")})
+	if len(msgs) != 5 {
+		t.Fatalf("message count = %d, want 5", len(msgs))
+	}
+
+	if msgs[0].Role != schema.User || msgs[0].Content != "first question" {
+		t.Fatalf("msg[0] = (%s, %q), want (user, %q)", msgs[0].Role, msgs[0].Content, "first question")
+	}
+	if msgs[1].Role != schema.Assistant || msgs[1].Content != "first answer" {
+		t.Fatalf("msg[1] = (%s, %q), want (assistant, %q)", msgs[1].Role, msgs[1].Content, "first answer")
+	}
+	if msgs[2].Role != schema.User || msgs[2].Content != "second question" {
+		t.Fatalf("msg[2] = (%s, %q), want (user, %q)", msgs[2].Role, msgs[2].Content, "second question")
+	}
+	if msgs[3].Role != schema.Assistant || msgs[3].Content != "second answer" {
+		t.Fatalf("msg[3] = (%s, %q), want (assistant, %q)", msgs[3].Role, msgs[3].Content, "second answer")
+	}
+	if msgs[4].Role != schema.User || msgs[4].Content != "current prompt" {
+		t.Fatalf("msg[4] = (%s, %q), want (user, %q)", msgs[4].Role, msgs[4].Content, "current prompt")
+	}
+}
+
+func TestBuildEinoConversationMessages_TrimsToMaxHistoryTurns(t *testing.T) {
+	history := make([]sessiondb.Entry, 0, einoMaxHistoryTurns+3)
+	for i := 0; i < einoMaxHistoryTurns+3; i++ {
+		history = append(history, sessiondb.Entry{
+			Prompt:      fmt.Sprintf("question %d", i),
+			LLMResponse: fmt.Sprintf("answer %d", i),
+		})
+	}
+
+	msgs := buildEinoConversationMessages(history, []*schema.Message{schema.UserMessage("now")})
+	expected := (einoMaxHistoryTurns * 2) + 1
+	if len(msgs) != expected {
+		t.Fatalf("message count = %d, want %d", len(msgs), expected)
+	}
+
+	if msgs[0].Content != "question 3" {
+		t.Fatalf("oldest retained question = %q, want %q", msgs[0].Content, "question 3")
+	}
+	if msgs[1].Content != "answer 3" {
+		t.Fatalf("oldest retained answer = %q, want %q", msgs[1].Content, "answer 3")
+	}
+	if msgs[len(msgs)-1].Content != "now" {
+		t.Fatalf("latest prompt = %q, want %q", msgs[len(msgs)-1].Content, "now")
+	}
+}
+
 func TestUnwrapToolInput_WrappedObject(t *testing.T) {
 	got := unwrapToolInput(`{"input":"hello"}`)
 	if got != "hello" {
@@ -366,6 +428,9 @@ func TestAgentRunLLMWithStream_InvokesCancelThenRuntime(t *testing.T) {
 	if rt.prompt != "prompt" {
 		t.Fatalf("runtime prompt = %q, want %q", rt.prompt, "prompt")
 	}
+	if len(rt.messages) != 1 || rt.messages[0].Content != "prompt" {
+		t.Fatalf("runtime messages = %#v, want single user prompt", rt.messages)
+	}
 	if chunks != "chunk" {
 		t.Fatalf("streamed chunks = %q, want %q", chunks, "chunk")
 	}
@@ -437,5 +502,28 @@ func TestAgentRunLLMWithStream_PreservesPartialResultOnError(t *testing.T) {
 	}
 	if result != "partial-response" {
 		t.Fatalf("RunLLMWithStream() result = %q, want %q", result, "partial-response")
+	}
+}
+
+func TestAgentRunLLMWithMessageStream_UsesStructuredMessages(t *testing.T) {
+	rt := &fakeRuntime{result: "done"}
+	agent := &Agent{runtime: rt}
+	messages := []*schema.Message{
+		schema.SystemMessage("system"),
+		schema.UserMessage("question"),
+	}
+
+	result, err := agent.RunLLMWithMessageStream(context.Background(), messages, nil)
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "done" {
+		t.Fatalf("RunLLMWithMessageStream() result = %q, want %q", result, "done")
+	}
+	if len(rt.messages) != 2 {
+		t.Fatalf("runtime messages len = %d, want 2", len(rt.messages))
+	}
+	if rt.messages[0].Role != schema.System || rt.messages[1].Role != schema.User {
+		t.Fatalf("runtime messages roles = (%s, %s), want (system, user)", rt.messages[0].Role, rt.messages[1].Role)
 	}
 }

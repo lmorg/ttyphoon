@@ -55,7 +55,7 @@ func summarizeAINoteTitle(agent *agent.Agent, query string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), aiNoteTitleTimeout)
 	defer cancel()
 
-	title, err := agent.RunLLMWithStream(ctx, prompts.GetTitle(agent, query), nil)
+	title, err := agent.RunLLMWithMessageStream(ctx, prompts.GetTitleMessages(agent, query), nil)
 	if err != nil {
 		return ""
 	}

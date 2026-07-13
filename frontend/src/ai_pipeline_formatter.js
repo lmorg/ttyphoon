@@ -358,23 +358,41 @@ export function createAIPipelineFormatter(container, options = {}) {
         const root = ensureJobRoot();
         const sections = parseSections(streamText);
 
-        // No structured sections: patch a single raw text node and bail.
+        // No structured sections: render the whole stream as markdown.
         if (sections.length === 0) {
-            const first = root.firstChild;
-            if (!streamText) {
+            let markdownRoot = root.querySelector('.notes-ai-markdown');
+            if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
                 root.textContent = '';
-            } else if (first && first.nodeType === Node.TEXT_NODE) {
-                first.textContent = streamText;
-            } else {
-                root.textContent = '';
-                root.appendChild(document.createTextNode(streamText));
+                markdownRoot = document.createElement('div');
+                markdownRoot.className = 'notes-ai-markdown markdown-body';
+                root.appendChild(markdownRoot);
             }
+
+            if (!streamText) {
+                markdownRoot.innerHTML = '';
+                return;
+            }
+
+            markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
+            if (processMarkdownContainer) {
+                await processMarkdownContainer(markdownRoot);
+                if (version !== renderVersion) {
+                    return;
+                }
+            }
+
             return;
         }
 
         // Remove any stale leading raw text node if sections appeared.
         if (root.firstChild && root.firstChild.nodeType === Node.TEXT_NODE) {
             root.removeChild(root.firstChild);
+        }
+
+        // Remove fallback markdown root when transitioning into structured sections.
+        const topLevelMarkdown = Array.from(root.children).filter((el) => el.classList.contains('notes-ai-markdown'));
+        for (const el of topLevelMarkdown) {
+            root.removeChild(el);
         }
 
         // Build a key for each section so duplicates (eg two Actions) are distinct.
@@ -506,10 +524,33 @@ export function createAIPipelineFormatter(container, options = {}) {
         })();
     }
 
+    function setText(text) {
+        streamText = String(text || '');
+        renderVersion += 1;
+
+        if (isRendering) {
+            needsRender = true;
+            return;
+        }
+
+        void (async () => {
+            isRendering = true;
+            try {
+                do {
+                    needsRender = false;
+                    await renderCurrentStream(renderVersion);
+                } while (needsRender);
+            } finally {
+                isRendering = false;
+            }
+        })();
+    }
+
     return {
         clear,
         startJob,
         finishJob,
         appendChunk,
+        setText,
     };
 }

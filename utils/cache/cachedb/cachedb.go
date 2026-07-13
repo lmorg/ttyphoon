@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lmorg/ttyphoon/debug"
-
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/lmorg/ttyphoon/debug"
 )
 
 const driverName = "sqlite3"
@@ -56,7 +56,7 @@ func CreateTable(namespace string) {
 
 func dbFailed(message string, err error) {
 	if debug.Enabled {
-		log.Println(fmt.Sprintf("%s: %s", message, err.Error()))
+		log.Printf("%s: %s", message, err.Error())
 	}
 	Enabled.Store(false)
 }

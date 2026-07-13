@@ -607,6 +607,89 @@ export namespace notes {
 
 }
 
+export namespace sessiondb {
+	
+	export class FrontendHistoryItemT {
+	    id: number;
+	    prompt: string;
+	    commandLine: string;
+	    outputBlock: string;
+	    response: string;
+	    excerpt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FrontendHistoryItemT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.prompt = source["prompt"];
+	        this.commandLine = source["commandLine"];
+	        this.outputBlock = source["outputBlock"];
+	        this.response = source["response"];
+	        this.excerpt = source["excerpt"];
+	    }
+	}
+	export class FrontendSessionMetaT {
+	    tableId: number;
+	    summary: string;
+	    created: string;
+	    updated: string;
+	    active: boolean;
+	    entryCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FrontendSessionMetaT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tableId = source["tableId"];
+	        this.summary = source["summary"];
+	        this.created = source["created"];
+	        this.updated = source["updated"];
+	        this.active = source["active"];
+	        this.entryCount = source["entryCount"];
+	    }
+	}
+	export class FrontendStateT {
+	    activeSessionId: number;
+	    sessions: FrontendSessionMetaT[];
+	    history: FrontendHistoryItemT[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FrontendStateT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.activeSessionId = source["activeSessionId"];
+	        this.sessions = this.convertValues(source["sessions"], FrontendSessionMetaT);
+	        this.history = this.convertValues(source["history"], FrontendHistoryItemT);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace swagger {
 	
 	export class RequestT {
