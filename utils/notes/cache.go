@@ -34,6 +34,7 @@ type DocumentCacheT struct {
 	DocumentTab string // which mode (eg View, Run, Hex) is selected. "" means the first tab
 	ToolsOpen   bool   // default false means Tools panel is minimized
 	ToolsTab    string // which tab is selected in Tools. "" means the first tab
+	WordWrap    bool   // whether editor word wrap was enabled for this document
 }
 
 func GetDocumentCache(projectRoot, filename string) *DocumentCacheT {

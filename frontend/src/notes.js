@@ -4141,6 +4141,52 @@ function getMonacoCompletionMenuAnchor() {
     return getLspAnchorViewportPoint();
 }
 
+function buildLineIndentationEdit(source, start, end, indentation, outdent = false) {
+    const text = String(source || '');
+    const indent = String(indentation || '');
+    const indentWidth = Math.max(1, indent.length);
+    const safeStart = Math.max(0, Math.min(Number(start) || 0, text.length));
+    const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, text.length));
+
+    if (safeEnd <= safeStart) {
+        return null;
+    }
+
+    const lineStart = text.lastIndexOf('\n', Math.max(0, safeStart - 1)) + 1;
+    const inclusiveEnd = (safeEnd > safeStart && text[safeEnd - 1] === '\n')
+        ? Math.max(safeStart, safeEnd - 1)
+        : safeEnd;
+    const lineEndIdx = text.indexOf('\n', inclusiveEnd);
+    const lineEnd = lineEndIdx === -1 ? text.length : lineEndIdx;
+
+    const selectedBlock = text.slice(lineStart, lineEnd);
+    const lines = selectedBlock.split('\n');
+    const transformed = lines.map((line) => {
+        if (!outdent) {
+            return indent + line;
+        }
+
+        if (line.startsWith('\t')) {
+            return line.slice(1);
+        }
+
+        let remove = 0;
+        while (remove < indentWidth && line[remove] === ' ') {
+            remove += 1;
+        }
+        return line.slice(remove);
+    });
+
+    const replacement = transformed.join('\n');
+    return {
+        start: lineStart,
+        end: lineEnd,
+        text: replacement,
+        selectionStart: lineStart,
+        selectionEnd: lineStart + replacement.length,
+    };
+}
+
 function shouldMonacoTabIndent() {
     const selection = monacoMainEditor?.getSelectionOffsets?.();
     const cursor = Number(selection?.start) || 0;
@@ -4167,6 +4213,31 @@ async function applyMonacoTabIndent() {
     monacoMainEditor.focus();
 }
 
+async function applyMonacoLineIndentationForSelection(outdent = false) {
+    if (!isMonacoActive()) {
+        return false;
+    }
+
+    const selection = monacoMainEditor.getSelectionOffsets();
+    const start = Number(selection?.start) || 0;
+    const end = Number(selection?.end) || start;
+    if (end <= start) {
+        return false;
+    }
+
+    const indentation = await getIndentationString();
+    const edit = buildLineIndentationEdit(getMainEditorValue(), start, end, indentation, outdent);
+    if (!edit) {
+        return false;
+    }
+
+    hideLspCompletion();
+    monacoMainEditor.replaceRange(edit.start, edit.end, edit.text, outdent ? 'notes-monaco-shift-tab-outdent' : 'notes-monaco-tab-indent-lines');
+    monacoMainEditor.setSelectionOffsets(edit.selectionStart, edit.selectionEnd);
+    monacoMainEditor.focus();
+    return true;
+}
+
 function handleMonacoCompletionRequest(payload = {}) {
     if (!isMonacoActive() || state.lspActiveBlockId) {
         return false;
@@ -4181,6 +4252,17 @@ function handleMonacoCompletionRequest(payload = {}) {
     const ctrlKey = payload.ctrlKey === true;
     const metaKey = payload.metaKey === true;
     const altKey = payload.altKey === true;
+    const shiftKey = payload.shiftKey === true;
+
+    if (source === 'keydown' && !ctrlKey && !metaKey && !altKey && key === 'Tab') {
+        const selection = monacoMainEditor?.getSelectionOffsets?.();
+        const start = Number(selection?.start) || 0;
+        const end = Number(selection?.end) || start;
+        if (end > start) {
+            void applyMonacoLineIndentationForSelection(shiftKey);
+            return true;
+        }
+    }
 
     if (source === 'keydown' && state.lspCompletionVisible) {
         if (key === 'Escape') {
@@ -5966,6 +6048,7 @@ function toggleMarkdownWrapMode() {
     }
 
     setEditorWrapMode(!state.markdownWrapMode);
+    saveDocumentCache();
     
     // Re-render decorations to adjust layout
     renderEditorDecorations();
@@ -6389,6 +6472,35 @@ function convertToJupyterCodeBlocks() {
             }
 
             if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+
+            const hasSelection = (editableCode.selectionEnd || 0) > (editableCode.selectionStart || 0);
+            if (hasSelection) {
+                event.preventDefault();
+                event.stopPropagation();
+                const indentation = await getIndentationString();
+                const edit = buildLineIndentationEdit(
+                    editableCode.value || '',
+                    editableCode.selectionStart || 0,
+                    editableCode.selectionEnd || 0,
+                    indentation,
+                    event.shiftKey === true,
+                );
+
+                if (!edit) {
+                    return;
+                }
+
+                notesMutationAdapter.replaceDocumentText(editableCode, {
+                    text: editableCode.value.slice(0, edit.start) + edit.text + editableCode.value.slice(edit.end),
+                    selectionStart: edit.selectionStart,
+                    selectionEnd: edit.selectionEnd,
+                    source: event.shiftKey === true ? 'jupyter-shift-tab-outdent' : 'jupyter-tab-indent-lines',
+                    label: event.shiftKey === true ? 'Jupyter shift+tab outdent selection' : 'Jupyter tab indent selection',
+                    filePath: state.currentFile ? `${state.currentFile}#${blockId}` : blockId,
+                    emit: true,
+                });
                 return;
             }
 
@@ -6819,6 +6931,10 @@ async function restoreDocumentCache(file) {
     const documentCache = await GetDocumentCache(file);
     if (!documentCache) {
         return;
+    }
+
+    if (typeof documentCache.WordWrap === 'boolean') {
+        setEditorWrapMode(documentCache.WordWrap === true);
     }
 
     if (documentCache.DocumentTab) {
@@ -8243,6 +8359,10 @@ function setupSwaggerTabSwitching() {
 async function loadFile(file, options = {}) {
     if (!file) {
         return;
+    }
+
+    if (state.currentFile && state.currentFile !== file) {
+        saveDocumentCache();
     }
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
@@ -11105,6 +11225,7 @@ function saveDocumentCache() {
         DocumentTab: state.viewMode || '',
         ToolsOpen: false,
         ToolsTab: '',
+        WordWrap: state.markdownWrapMode === true,
     }).catch((err) => {
         console.error('Failed to save document cache:', err);
     });

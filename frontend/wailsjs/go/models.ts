@@ -578,6 +578,7 @@ export namespace notes {
 	    DocumentTab: string;
 	    ToolsOpen: boolean;
 	    ToolsTab: string;
+	    WordWrap: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DocumentCacheT(source);
@@ -588,6 +589,7 @@ export namespace notes {
 	        this.DocumentTab = source["DocumentTab"];
 	        this.ToolsOpen = source["ToolsOpen"];
 	        this.ToolsTab = source["ToolsTab"];
+	        this.WordWrap = source["WordWrap"];
 	    }
 	}
 	export class ProjectCacheT {
