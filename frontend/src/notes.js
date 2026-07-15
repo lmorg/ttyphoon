@@ -786,6 +786,7 @@ const state = {
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
     suspendDocumentCacheSave: false,
     dirty: false,
+    viewTainted: false,
     useMonacoEditor: false,
     renderTimer: null,
     autosaveTimer: null,
@@ -12727,7 +12728,12 @@ if (elements.editor) {
             }
         }
 
-        if (usesCodeEditorDecorations()) {
+        if (isMonacoActive()) {
+            // In Monaco (Edit) mode, defer view regeneration until the View tab is
+            // clicked.  This avoids expensive re-renders on every keystroke /
+            // autosave cycle, which is especially noticeable for JSON/YAML files.
+            state.viewTainted = true;
+        } else if (usesCodeEditorDecorations()) {
             refreshEditorLanguage(state.currentFile, elements.editor.value);
             if (state.currentFileType === 'markdown' || state.currentFileType === 'html') {
                 scheduleRender();
@@ -12739,15 +12745,19 @@ if (elements.editor) {
         }
 
         if (state.currentFileType === 'json') {
-            // Revalidate JSON/YAML, refresh the viewer, and only expose Run for docs with a swagger key.
+            // Revalidate JSON/YAML and only expose Run for docs with a swagger key.
+            // Always update the spec and tab visibility; only re-render the viewer
+            // when Monaco is NOT active (deferred to View tab click when tainted).
             state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
             state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
             updateTabVisibility('json');
-            renderSwaggerJsonView();
+            if (!isMonacoActive()) {
+                renderSwaggerJsonView();
+            }
 
             if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
                 setViewMode('swagger-view');
-            } else if (state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
+            } else if (state.swaggerRunAvailable && state.viewMode === 'swagger-run' && !isMonacoActive()) {
                 renderSwaggerUI();
             }
         }
@@ -13053,6 +13063,10 @@ elements.tabHex.addEventListener('click', () => {
 
 elements.tabViewer.addEventListener('click', () => {
     setViewMode('viewer');
+    if (state.viewTainted && state.currentFileType === 'markdown') {
+        state.viewTainted = false;
+        scheduleRender();
+    }
 });
 
 elements.tabJupyter.addEventListener('click', () => {
@@ -13062,6 +13076,7 @@ elements.tabJupyter.addEventListener('click', () => {
 
 elements.tabSwaggerView.addEventListener('click', () => {
     setViewMode('swagger-view');
+    state.viewTainted = false;
     renderSwaggerJsonView();
 });
 
