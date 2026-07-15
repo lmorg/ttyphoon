@@ -73,7 +73,12 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
-		t.agent.Renderer().DisplayNotification(types.NOTIFY_WARN, err.Error())
+		// Display error to user; truncate long errors to fit in notification
+		errMsg := err.Error()
+		if len(errMsg) > 300 {
+			errMsg = errMsg[:300] + "..."
+		}
+		t.agent.Renderer().DisplayNotification(types.NOTIFY_WARN, errMsg)
 	}
 
 	return response, err
