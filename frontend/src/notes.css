@@ -46,6 +46,10 @@ text-align: left;
     font-family: var(--font-family);
 }
 
+:root {
+    --notes-ai-code-max-lines: 10;
+}
+
 body {
     margin: 0 !important;
     padding: 0 !important;
@@ -1401,13 +1405,18 @@ body {
     overflow-y: auto;
     overflow-wrap: anywhere;
     word-break: break-word;
-    max-height: calc(1.5em * 10 + 16px);
+    max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
 }
 
 #notes-ai-output .notes-ai-code code {
     white-space: inherit;
     overflow-wrap: inherit;
     word-break: inherit;
+}
+
+#notes-ai-output .notes-ai-markdown pre {
+    max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
+    overflow-y: auto;
 }
 
 #notes-ai-output:empty::before {

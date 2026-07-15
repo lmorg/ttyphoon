@@ -327,50 +327,32 @@ func ActiveSessionEntries(workspace string, limit int) ([]Entry, error) {
 	return entries, nil
 }
 
-func ActiveSessionMarkdown(workspace string, limit int) (string, error) {
-	entries, err := ActiveSessionEntries(workspace, limit)
+func ActiveSessionID(workspace string) (int64, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	db, err := openDB(workspace)
 	if err != nil {
-		return "", err
+		return 0, err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("cannot begin sessiondb transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	activeID, err := ensureActiveSessionTx(tx)
+	if err != nil {
+		return 0, err
 	}
 
-	var b strings.Builder
-	for i := range entries {
-		if i > 0 {
-			b.WriteString("\n\n---\n\n")
-		}
-
-		prompt := strings.TrimSpace(entries[i].Prompt)
-		if prompt != "" {
-			b.WriteString("### Prompt\n\n")
-			b.WriteString(prompt)
-			b.WriteString("\n\n")
-		}
-
-		commandLine := strings.TrimSpace(entries[i].CommandLine)
-		if commandLine != "" {
-			b.WriteString("#### Command\n\n")
-			b.WriteString("~~~sh\n")
-			b.WriteString(commandLine)
-			b.WriteString("\n~~~\n\n")
-		}
-
-		outputBlock := strings.TrimSpace(entries[i].OutputBlock)
-		if outputBlock != "" {
-			b.WriteString("#### Output\n\n")
-			b.WriteString("~~~text\n")
-			b.WriteString(outputBlock)
-			b.WriteString("\n~~~\n\n")
-		}
-
-		response := strings.TrimSpace(entries[i].LLMResponse)
-		if response != "" {
-			b.WriteString("#### Response\n\n")
-			b.WriteString(response)
-			b.WriteString("\n")
-		}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("cannot commit sessiondb transaction: %w", err)
 	}
 
-	return strings.TrimSpace(b.String()), nil
+	return activeID, nil
 }
 
 func frontendStateTx(tx *sql.Tx, activeID int64, limit int) (FrontendStateT, error) {

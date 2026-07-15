@@ -1997,18 +1997,15 @@ func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
 }
 
 func (a *WApp) GetAISessionCache(workspace string) string {
-	agt, ok := a.activeAgent()
-	if !ok {
-		return ""
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return ""
+		}
+		workspace = agt.Workspace()
 	}
 
-	cache, err := sessiondb.ActiveSessionMarkdown(agt.Workspace(), 256)
-	if err != nil {
-		log.Printf("ai session cache: %v", err)
-		return ""
-	}
-
-	return cache
+	return sessiondb.GetSessionLog(workspace)
 }
 
 func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {
@@ -2454,6 +2451,10 @@ func (a *WApp) DeleteAISession(tableID int64) sessiondb.FrontendStateT {
 		return sessiondb.FrontendStateT{}
 	}
 
+	if err := sessiondb.DeleteSessionLog(agt.Workspace(), tableID); err != nil {
+		log.Printf("ai delete session log: %v", err)
+	}
+
 	return state
 }
 
@@ -2467,6 +2468,10 @@ func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
 	if err != nil {
 		log.Printf("ai clear session history: %v", err)
 		return sessiondb.FrontendStateT{}
+	}
+
+	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
+		log.Printf("ai clear session log: %v", err)
 	}
 
 	return state

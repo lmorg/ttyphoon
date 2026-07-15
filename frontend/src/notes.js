@@ -11014,6 +11014,14 @@ async function processAIMarkdownContainer(container) {
     wrapTablesForHorizontalScroll(container);
     setupTableSorting(container);
     applyNotesTableWordWrapMode(container);
+
+    // Session-log markdown can render fenced code blocks outside the
+    // structured streaming path, so clamp them and pin them to the latest
+    // lines just like live Action / Action Input sections.
+    const codeBlocks = container.querySelectorAll('pre');
+    for (const block of codeBlocks) {
+        block.scrollTop = block.scrollHeight;
+    }
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
@@ -11738,7 +11746,13 @@ async function loadAISessionCache(workspaceName) {
     try {
         const cache = await GetAISessionCache(String(workspaceName || ''));
         state.aiSessionCache = String(cache || '');
-        setAIFinalOutput(cache, { forceBottom: true });
+        // The session log file on disk is the source of truth for the panel.
+        // Fully reset the panel before rendering so content from a previously
+        // active workspace cannot persist across a workspace (tmux tab) switch.
+        aiPipelineFormatter.clear();
+        if (state.aiSessionCache) {
+            setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+        }
         if (elements.aiSettingsModal?.dataset?.open === 'true') {
             void loadAISessionManagement().then(() => {
                 renderAISessionManagement();
@@ -11753,7 +11767,12 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
     marked,
     processMarkdownContainer: processAIMarkdownContainer,
     processCodeContainer: processAIMarkdownContainer,
-    codeMaxLines: 10,
+    codeMaxLines: Number.parseInt(
+        getComputedStyle(document.documentElement)
+            .getPropertyValue('--notes-ai-code-max-lines')
+            .trim(),
+        10,
+    ) || 10,
 });
 
 // Event emitted by Go when an AI job begins (before first chunk)
@@ -11793,11 +11812,6 @@ EventsOn("aiResponseStream", (chunk) => {
     if (text) {
         appendAIText(text);
     }
-});
-
-// Event emitted by Go when AI generation completes with the full output text.
-EventsOn("aiResponseFinal", (output) => {
-    setAIFinalOutput(output);
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.

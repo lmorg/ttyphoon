@@ -195,30 +195,50 @@ func SaveMarkdownToggle(Default bool) types.InputBoxWTVariables {
 }
 
 func startAIJob(agt *agent.Agent, title string) {
-	SessionCacheStartJob(agt.Workspace(), title)
-	if agt.IsWorkspaceActive() {
-		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobStart", title)
-	}
+	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
+		Workspace:       agt.Workspace(),
+		Query:           title,
+		CommandLine:     agt.Meta.CmdLine,
+		OutputBlock:     agt.Meta.OutputBlock,
+		WorkspaceActive: agt.IsWorkspaceActive(),
+		Emit: func(event string, payload any) {
+			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
+		},
+	}, sessiondb.SESSION_LOG_START_JOB, title)
 }
 
 func emitAIResponseChunk(agt *agent.Agent, chunk string) {
-	SessionCacheAppendChunk(agt.Workspace(), chunk)
-	if agt.IsWorkspaceActive() {
-		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseStream", chunk)
-	}
+	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
+		Workspace:       agt.Workspace(),
+		CommandLine:     agt.Meta.CmdLine,
+		OutputBlock:     agt.Meta.OutputBlock,
+		WorkspaceActive: agt.IsWorkspaceActive(),
+		Emit: func(event string, payload any) {
+			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
+		},
+	}, sessiondb.SESSION_LOG_APPEND_CHUNK, chunk)
 }
 
 func emitAIFinalResponse(agt *agent.Agent, output string) {
-	SessionCacheFinalizeJob(agt.Workspace(), output)
-	if agt.IsWorkspaceActive() {
-		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiResponseFinal", output)
-	}
+	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
+		Workspace:       agt.Workspace(),
+		CommandLine:     agt.Meta.CmdLine,
+		OutputBlock:     agt.Meta.OutputBlock,
+		WorkspaceActive: agt.IsWorkspaceActive(),
+		Emit: func(event string, payload any) {
+			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
+		},
+	}, sessiondb.SESSION_LOG_FINALIZE_JOB, output)
 }
 
 func finishAIJob(agt *agent.Agent) {
-	if agt.IsWorkspaceActive() {
-		runtime.EventsEmit(agt.Renderer().GetWindowContext(), "aiJobFinish")
-	}
+	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
+		Workspace:       agt.Workspace(),
+		WorkspaceActive: agt.IsWorkspaceActive(),
+		Emit: func(event string, payload any) {
+			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
+		},
+	}, sessiondb.SESSION_LOG_FINISH_JOB, "")
 }
 
 func UriPrompt(agt *agent.Agent, prompt, tools string) {
