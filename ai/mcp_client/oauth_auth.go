@@ -30,7 +30,7 @@ type OAuthUIHooks struct {
 	OnAutoCallbackUnavailable func(error)
 }
 
-func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string, oauth *mcp_config.OAuthT, hooks OAuthUIHooks, onOAuthRequired func(), useClient func(*Client) error) error {
+func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serverURL string, oauth *mcp_config.OAuthT, hooks OAuthUIHooks, onOAuthRequired func(), useClient func(*Client) error) error {
 	log.Printf("MCP OAuth: start ConnectAndUseHttp server=%q mcp_url=%q oauth_configured=%t", server, sanitizeURLForLog(serverURL), oauth != nil)
 	if oauth != nil {
 		log.Printf("MCP OAuth: provided config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
@@ -70,7 +70,7 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 		onOAuthRequired()
 	}
 
-	oauthCfg := BuildOAuthConfig(server, serverURL, oauth)
+	oauthCfg := BuildOAuthConfig(workspace, server, serverURL, oauth)
 	log.Printf("MCP OAuth: interactive config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
 		oauthCfg.RedirectURI,
 		sanitizeURLForLog(oauthCfg.AuthServerMetadataURL),
@@ -104,7 +104,7 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, server, serverURL string
 	return nil
 }
 
-func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthConfig {
+func BuildOAuthConfig(workspace, server, serverURL string, oauth *mcp_config.OAuthT) OAuthConfig {
 	redirectURI := DefaultRedirectURI()
 	clientURI := ""
 	var clientID, clientSecret, authServerMetadataURL string
@@ -123,7 +123,7 @@ func BuildOAuthConfig(server, serverURL string, oauth *mcp_config.OAuthT) OAuthC
 		authServerMetadataURL = oauth.AuthServerMetadataURL
 	}
 
-	tokenFile := DefaultTokenFile(server, serverURL)
+	tokenFile := DefaultTokenFile(workspace, server, serverURL)
 	if oauth != nil && oauth.TokenFile != "" {
 		tokenFile = oauth.TokenFile
 	}

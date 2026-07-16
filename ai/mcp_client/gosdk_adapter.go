@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	authsdk "github.com/modelcontextprotocol/go-sdk/auth"
@@ -24,6 +25,14 @@ type GoSDKClient struct {
 	client  *mcp_sdk.Client
 	session *mcp_sdk.ClientSession
 	Tools   *mcp_sdk.ListToolsResult
+
+	// mu guards session during reconnection so concurrent tool calls don't
+	// observe a half-swapped session.
+	mu sync.Mutex
+	// reconnect rebuilds a fresh session on the same client. For HTTP+OAuth
+	// transports this transparently re-authenticates by reusing the persisted
+	// token; for stdio transports it re-spawns the server subprocess.
+	reconnect func(ctx context.Context) (*mcp_sdk.ClientSession, error)
 }
 
 // ConnectCmdLineGoSDK connects to a local MCP server process using the Go SDK transports.
@@ -35,20 +44,30 @@ func ConnectCmdLineGoSDK(overrides *mcp_config.OverrideT, envvars []string, comm
 
 	client := mcp_sdk.NewClient(impl, nil)
 
-	cmd := exec.Command(command, args...)
-	// inherit envvars if provided
-	if len(envvars) > 0 {
-		cmd.Env = append(cmd.Env, envvars...)
+	// connect builds a fresh transport + session. A new exec.Command is created
+	// on every call because a Cmd cannot be restarted once run.
+	connect := func(ctx context.Context) (*mcp_sdk.ClientSession, error) {
+		cmd := exec.Command(command, args...)
+		// inherit envvars if provided
+		if len(envvars) > 0 {
+			cmd.Env = append(cmd.Env, envvars...)
+		}
+
+		transport := &mcp_sdk.CommandTransport{Command: cmd}
+
+		sess, err := client.Connect(ctx, transport, nil)
+		if err != nil {
+			return nil, fmt.Errorf("gosdk: connect command transport failed: %w", err)
+		}
+		return sess, nil
 	}
 
-	transport := &mcp_sdk.CommandTransport{Command: cmd}
-
-	sess, err := client.Connect(context.Background(), transport, nil)
+	sess, err := connect(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("gosdk: connect command transport failed: %w", err)
+		return nil, err
 	}
 
-	return &GoSDKClient{client: client, session: sess}, nil
+	return &GoSDKClient{client: client, session: sess, reconnect: connect}, nil
 }
 
 // ConnectHttpGoSDK connects to a streamable HTTP MCP endpoint. oauth may be nil.
@@ -60,18 +79,29 @@ func ConnectHttpGoSDK(overrides *mcp_config.OverrideT, endpoint string, oauth au
 
 	client := mcp_sdk.NewClient(impl, nil)
 
-	transport := &mcp_sdk.StreamableClientTransport{
-		Endpoint:     endpoint,
-		HTTPClient:   http.DefaultClient,
-		OAuthHandler: oauth,
+	// connect builds a fresh transport + session. When oauth is non-nil the
+	// handler reuses the persisted token, so reconnecting re-authenticates a
+	// previously authenticated client without a new browser round-trip.
+	connect := func(ctx context.Context) (*mcp_sdk.ClientSession, error) {
+		transport := &mcp_sdk.StreamableClientTransport{
+			Endpoint:     endpoint,
+			HTTPClient:   http.DefaultClient,
+			OAuthHandler: oauth,
+		}
+
+		sess, err := client.Connect(ctx, transport, nil)
+		if err != nil {
+			return nil, fmt.Errorf("gosdk: connect http transport failed: %w", err)
+		}
+		return sess, nil
 	}
 
-	sess, err := client.Connect(context.Background(), transport, nil)
+	sess, err := connect(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("gosdk: connect http transport failed: %w", err)
+		return nil, err
 	}
 
-	return &GoSDKClient{client: client, session: sess}, nil
+	return &GoSDKClient{client: client, session: sess, reconnect: connect}, nil
 }
 
 // ListTools calls ListTools on the underlying session and caches the result.
@@ -126,9 +156,23 @@ func (c *GoSDKClient) Call(ctx context.Context, name string, args map[string]any
 			if backoff > maxWait {
 				backoff = maxWait
 			}
+
+			// The prior session reported "client is closing"; it is dead and
+			// reusing it will always fail. Rebuild the session (re-authenticating
+			// via the persisted OAuth token) before retrying.
+			if err := c.reestablishSession(ctx); err != nil {
+				lastErr = err
+				log.Printf("MCP tool %q: reconnect before retry failed: %v", name, err)
+				continue
+			}
+			log.Printf("MCP tool %q: session re-established before retry", name)
 		}
 
-		res, err := c.session.CallTool(ctx, params)
+		c.mu.Lock()
+		sess := c.session
+		c.mu.Unlock()
+
+		res, err := sess.CallTool(ctx, params)
 		if err == nil {
 			if attempt > 0 {
 				log.Printf("MCP tool %q: connection recovered after %d retries", name, attempt)
@@ -163,6 +207,32 @@ func (c *GoSDKClient) Call(ctx context.Context, name string, args map[string]any
 
 	// All retries exhausted
 	return "", fmt.Errorf("MCP tool call failed after %d retries: %w", maxRetries+1, lastErr)
+}
+
+// reestablishSession closes the stale session and builds a fresh one on the same
+// client. For HTTP+OAuth transports the persisted token is reused so the client
+// re-authenticates without a new browser round-trip; for stdio transports the
+// server subprocess is re-spawned.
+func (c *GoSDKClient) reestablishSession(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.reconnect == nil {
+		return fmt.Errorf("gosdk: no reconnect handler available")
+	}
+
+	// Best-effort close of the stale session before replacing it.
+	if c.session != nil {
+		_ = c.session.Close()
+	}
+
+	sess, err := c.reconnect(ctx)
+	if err != nil {
+		return fmt.Errorf("gosdk: reconnect failed: %w", err)
+	}
+
+	c.session = sess
+	return nil
 }
 
 // isTransientError checks if an error is likely transient (network-related)
@@ -239,6 +309,8 @@ func printGoSDKToolResult(result *mcp_sdk.CallToolResult) string {
 
 // Close closes the session.
 func (c *GoSDKClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.session != nil {
 		_ = c.session.Close()
 	}

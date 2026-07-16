@@ -45,6 +45,7 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 
 	return mcp_client.ConnectAndUseHttp(
 		&svr.Override,
+		agent.Workspace(),
 		server,
 		serverURL,
 		svr.OAuth,

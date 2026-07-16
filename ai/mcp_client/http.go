@@ -25,6 +25,11 @@ type OAuthConfig struct {
 
 var rxUnsafeTokenPath = regexp.MustCompile(`[^-_a-zA-Z0-9.]+`)
 
+// rxUnsafeWorkspaceSegment is stricter than rxUnsafeTokenPath: it also collapses
+// '.' characters so a workspace name can never introduce a ".." path-traversal
+// segment into the token directory.
+var rxUnsafeWorkspaceSegment = regexp.MustCompile(`[^-_a-zA-Z0-9]+`)
+
 func ConnectHttp(overrides *mcp_config.OverrideT, url string) (*Client, error) {
 	// Use the Go-SDK HTTP adapter for HTTP transport
 	g, err := ConnectHttpGoSDK(overrides, url, nil)
@@ -63,7 +68,7 @@ func DefaultClientURI() string {
 	return ""
 }
 
-func DefaultTokenFile(serverName, rawURL string) string {
+func DefaultTokenFile(workspace, serverName, rawURL string) string {
 	host := serverName
 	if u, err := url.Parse(rawURL); err == nil {
 		host = u.Hostname()
@@ -80,7 +85,15 @@ func DefaultTokenFile(serverName, rawURL string) string {
 		name = "default"
 	}
 
-	cacheFile := path.Join(xdg.CacheHome, app.DirName, "mcp-tokens", name+".json")
+	// Namespace tokens per workspace so credentials granted in one workspace are
+	// not shared with (or overwritten by) another. When the workspace is unknown
+	// we fall back to the shared, un-namespaced location for backward compat.
+	dir := path.Join(xdg.CacheHome, app.DirName, "mcp-tokens")
+	if ws := strings.Trim(rxUnsafeWorkspaceSegment.ReplaceAllString(workspace, "-"), "-"); ws != "" {
+		dir = path.Join(dir, ws)
+	}
+
+	cacheFile := path.Join(dir, name+".json")
 	log.Printf(`MCP OAuth: DefaultTokenFile="%s"`, cacheFile)
 	return cacheFile
 }
