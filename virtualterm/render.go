@@ -5,6 +5,14 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
+func blockMeta(row *types.Row) types.BlockMetaFlag {
+	if row == nil || row.Block == nil {
+		return types.META_BLOCK_NONE
+	}
+
+	return row.Block.Meta
+}
+
 func (term *Term) Render() bool {
 	if term.Pty.BufSize() > 0 && term._ssLargeBuf.Add(1) < 1000 {
 		return false
@@ -107,16 +115,24 @@ func (term *Term) _renderLigs(screen types.Screen) {
 }
 
 func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
+	if len(screen) == 0 {
+		return
+	}
+
 	var begin, y int
-	if screen[0].Block.Meta == types.META_BLOCK_NONE {
+	if blockMeta(screen[0]) == types.META_BLOCK_NONE {
 		begin = -1
 	}
 	for y = 0; y < len(screen); y++ {
+		if screen[y] == nil {
+			continue
+		}
+
 		if len(screen[y].Hidden) != 0 {
 			lastHidden := screen[y].Hidden[len(screen[y].Hidden)-1]
 			var foldColour *types.Colour
 			if lastHidden.RowMeta.Is(types.META_ROW_END_BLOCK) {
-				foldColour = _outputBlockChromeColour(lastHidden.Block.Meta)
+				foldColour = _outputBlockChromeColour(blockMeta(lastHidden))
 			} else {
 				foldColour = types.COLOR_FOLDED
 			}
@@ -129,12 +145,12 @@ func (term *Term) _renderOutputBlockChrome(screen types.Screen) {
 			if begin == -1 {
 				continue
 			}
-			term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), _outputBlockChromeColour(screen[y].Block.Meta), false)
+			term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), _outputBlockChromeColour(blockMeta(screen[y])), false)
 			begin = -1
 		}
 	}
 	if begin != -1 {
-		c := _outputBlockChromeColour(screen[y-1].Block.Meta)
+		c := _outputBlockChromeColour(blockMeta(screen[y-1]))
 		if c != types.COLOR_FOLDED {
 			term.renderer.DrawOutputBlockChrome(term.tile, int32(begin), int32(y-begin), c, false)
 		}

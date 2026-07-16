@@ -1320,6 +1320,31 @@ body {
     color: var(--bg);
 }
 
+#terminal-maximize {
+    margin-left: auto !important;
+    border: 1px solid rgba(var(--fg-rgb), 0.3) !important;
+    background: transparent !important;
+    color: var(--fg) !important;
+    padding: 4px 10px !important;
+    cursor: pointer !important;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif !important;
+    font-weight: 900 !important;
+    font-size: var(--notes-font-size-minus-2) !important;
+    transition: all 0.2s ease !important;
+    border-radius: 3px !important;
+}
+
+#terminal-maximize:hover {
+    border-color: var(--accent) !important;
+    background-color: rgba(var(--accent-rgb), 0.2) !important;
+}
+
+#terminal-maximize[data-enabled="true"] {
+    background-color: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--bg) !important;
+}
+
 #notes-tools-log-wordwrap[data-wrapped="true"] {
     background-color: var(--accent);
     border-color: var(--accent);
@@ -1685,6 +1710,17 @@ body {
     min-height: 0;
     overflow-x: auto;
     overflow-y: auto;
+}
+
+/* Terminal maximize layout */
+[data-terminal-maximized="true"] #notes-pane,
+[data-terminal-maximized="true"] #notes-terminal-split {
+    display: none !important;
+}
+
+[data-terminal-maximized="true"] #terminal-pane {
+    width: 100%;
+    flex: 1 1 auto;
 }
 
 #notes-editor {
