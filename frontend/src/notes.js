@@ -10346,6 +10346,25 @@ function getRenderedSelectionText(container) {
     return selection.toString();
 }
 
+function getRenderedCodeBlockText(container, eventTarget) {
+    if (!(eventTarget instanceof Element) || !container || !container.contains(eventTarget)) {
+        return '';
+    }
+
+    const codeEl = eventTarget.closest('pre code, pre, code');
+    if (!codeEl || !container.contains(codeEl)) {
+        return '';
+    }
+
+    const pre = codeEl.closest('pre');
+    if (!pre || !container.contains(pre)) {
+        return '';
+    }
+
+    const preCode = pre.querySelector('code');
+    return String((preCode ? preCode.textContent : pre.textContent) || '');
+}
+
 function createCopyMenuItem(getText, title = 'Copy') {
     return {
         title,
@@ -11006,6 +11025,7 @@ function initAIOutputContextMenu(container) {
         e.preventDefault();
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const codeBlockText = getRenderedCodeBlockText(container, e.target);
         const tableItems = table && container.contains(table)
             ? [...createTableCopyMenuItems(table), { title: '-' }]
             : [];
@@ -11023,9 +11043,19 @@ function initAIOutputContextMenu(container) {
             }, { title: '-' }]
             : [];
 
+        const copyItems = codeBlockText
+            ? [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createCopyMenuItem(() => codeBlockText, 'Copy code'),
+                { title: '-' },
+            ]
+            : [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                { title: '-' },
+            ];
+
         const menuItems = [
-            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
-            { title: '-' },
+            ...copyItems,
             ...tableItems,
             ...wordWrapItems,
         ];
@@ -11131,6 +11161,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
         e.preventDefault();
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const codeBlockText = getRenderedCodeBlockText(container, e.target);
         const isRunMode = state.viewMode === 'jupyter';
         const tableIndex = table ? Array.from(container.querySelectorAll('table')).indexOf(table) : -1;
         const tableItems = table && container.contains(table)
@@ -11151,9 +11182,19 @@ function initRenderedNotesContextMenu(container, viewMode) {
             }, { title: '-' }]
             : [];
 
+        const copyItems = codeBlockText
+            ? [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createCopyMenuItem(() => codeBlockText, 'Copy code'),
+                { title: '-' },
+            ]
+            : [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                { title: '-' },
+            ];
+
         const allMenuItems = [
-            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
-            { title: '-' },
+            ...copyItems,
             ...tableItems,
             ...wordWrapItems,
             ...insertItems,

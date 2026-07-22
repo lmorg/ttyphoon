@@ -2311,6 +2311,42 @@ describe('notes rendering', () => {
         expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
+    it('adds Copy code and renames Copy to Copy selection when right-clicking a code block', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/code.md']);
+        getFileMock.mockResolvedValue({ contents: '# Code\n\n```js\nconst x = 1;\n```', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/code.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        showLocalMenuMock.mockClear();
+        clipboardSetTextMock.mockClear();
+
+        const preview = document.getElementById('notes-preview');
+        preview.innerHTML = '<pre><code>const x = 1;\nconst y = 2;\n</code></pre>';
+        const codeEl = preview.querySelector('code');
+
+        codeEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toContain('Copy selection');
+        expect(menuConfig.options).toContain('Copy code');
+        expect(menuConfig.options).not.toContain('Copy');
+
+        const copyCodeIndex = menuConfig.options.findIndex((option) => option === 'Copy code');
+        expect(copyCodeIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(copyCodeIndex);
+        await flushPromises();
+
+        expect(clipboardSetTextMock).toHaveBeenCalledWith('const x = 1;\nconst y = 2;\n');
+    });
+
     it('invokes backend AskAI notesPromptToolbar caller from toolbar Ask button', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
         getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
