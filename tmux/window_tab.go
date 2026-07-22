@@ -14,13 +14,23 @@ func (tmux *Tmux) GetTermTiles() *types.AppWindowTerms {
 
 	aw := new(types.AppWindowTerms)
 
+	var zoomed *PaneT
 	for pane := range tmux.activeWindow.panes.Each() {
 		if pane.closed {
 			debug.Log(fmt.Sprintf("skipping closed pane %s", pane.id))
 			pane.exit()
 			continue
 		}
+		if pane.zoomed {
+			zoomed = pane
+		}
 		aw.Tiles = append(aw.Tiles, pane)
+	}
+
+	// When a pane is zoomed tmux maximises it to fill the window and hides the
+	// others. Mirror that by rendering only the zoomed pane.
+	if zoomed != nil {
+		aw.Tiles = []types.Tile{zoomed}
 	}
 
 	aw.Active = tmux.activeWindow.ActivePane()

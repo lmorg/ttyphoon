@@ -2,6 +2,7 @@ package rendererwebkit
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -233,6 +234,42 @@ func (wr *webkitRender) SelectWindow(windowID string) {
 	}
 
 	wr.RefreshWindowList()
+}
+
+func (wr *webkitRender) ZoomActivePane() error {
+	if wr.tmux == nil {
+		return fmt.Errorf("tmux not available")
+	}
+
+	pane, err := wr.tmux.ActivePane()
+	if err != nil {
+		return err
+	}
+	if pane == nil {
+		return fmt.Errorf("no active pane")
+	}
+
+	if err := wr.tmux.ZoomPane(pane.Id()); err != nil {
+		return err
+	}
+
+	// ZoomPane blocks until tmux has applied the (un)zoom, so re-read the tile
+	// layout now to pick up the new pane geometry.
+	wr.RefreshWindowList()
+	return nil
+}
+
+func (wr *webkitRender) GetActivePaneId() string {
+	if wr.tmux == nil {
+		return ""
+	}
+
+	pane, err := wr.tmux.ActivePane()
+	if err != nil || pane == nil {
+		return ""
+	}
+
+	return pane.Id()
 }
 
 func (wr *webkitRender) Bell() {

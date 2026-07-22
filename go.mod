@@ -40,7 +40,7 @@ require (
 	github.com/tree-sitter/tree-sitter-scala v0.26.0
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 	github.com/tree-sitter/tree-sitter-verilog v1.0.3
-	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	golang.design/x/clipboard v0.8.0
 	golang.design/x/hotkey v0.6.1
 	golang.org/x/image v0.43.0

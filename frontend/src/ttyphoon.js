@@ -174,6 +174,9 @@ let notesOriginalStyle;
 let notesFullsizeOverlay = null;
 let notesFullsizeActive = false;
 
+let terminalFullsizeOverlay = null;
+let terminalFullsizeActive = false;
+
 let isDraggingSplit = false;
 let notesCollapsed = false;
 let lastNotesWidthPercent = 50;
@@ -934,6 +937,110 @@ function exitNotesFullsize() {
 window.addEventListener('ttyphoon-notes-fullsize-toggle', () => {
     if (notesFullsizeActive) exitNotesFullsize();
     else enterNotesFullsize();
+});
+
+function enterTerminalFullsize() {
+    if (terminalFullsizeActive || !terminalPane) return;
+
+    // Snapshot where terminalPane currently lives so we can restore it.
+    terminalFullsizeActive = true;
+    const savedParent = terminalPane.parentElement;
+    const savedSibling = terminalPane.nextElementSibling;
+    const savedStyle = {
+        width:        terminalPane.style.width,
+        height:       terminalPane.style.height,
+        position:     terminalPane.style.position,
+        overflow:     terminalPane.style.overflow,
+        flexShrink:   terminalPane.style.flexShrink,
+        borderRight:  terminalPane.style.borderRight,
+        borderRadius: terminalPane.style.borderRadius,
+    };
+
+    const overlay = document.createElement('div');
+    overlay.id = 'terminal-fullsize-overlay';
+    overlay.style.cssText = [
+        'position: fixed',
+        'inset: 0',
+        'z-index: 500',
+        'display: flex',
+        'align-items: center',
+        'justify-content: center',
+        'background: rgba(0, 0, 0, 0.7)',
+    ].join('; ');
+    // Clicking the darkened border exits full-size mode.
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) exitTerminalFullsize();
+    });
+
+    overlay.appendChild(terminalPane);
+    document.body.appendChild(overlay);
+    terminalFullsizeOverlay = overlay;
+
+    terminalPane.style.width        = 'calc(100vw - 100px)';
+    terminalPane.style.height       = 'calc(100vh - 100px)';
+    terminalPane.style.position     = 'relative';
+    terminalPane.style.overflow     = 'hidden';
+    terminalPane.style.flexShrink   = '0';
+    terminalPane.style.borderRight  = '0';
+    terminalPane.style.borderRadius = '8px';
+    terminalPane.dataset.fullsize   = 'true';
+
+    // Store restore info on the overlay element for use in exitTerminalFullsize.
+    overlay._savedParent  = savedParent;
+    overlay._savedSibling = savedSibling;
+    overlay._savedStyle   = savedStyle;
+
+    const btn = document.getElementById('terminal-zoom-btn');
+    if (btn) {
+        btn.dataset.enabled = 'true';
+    }
+
+    requestTerminalResizeAfterLayout();
+}
+
+function exitTerminalFullsize() {
+    if (!terminalFullsizeActive || !terminalFullsizeOverlay || !terminalPane) return;
+
+    const overlay = terminalFullsizeOverlay;
+
+    const { _savedParent: savedParent, _savedSibling: savedSibling, _savedStyle: savedStyle } = overlay;
+
+    if (savedParent) {
+        if (savedSibling && savedSibling.parentElement === savedParent) {
+            savedParent.insertBefore(terminalPane, savedSibling);
+        } else {
+            savedParent.appendChild(terminalPane);
+        }
+    } else if (contentWrapper) {
+        contentWrapper.appendChild(terminalPane);
+    }
+
+    if (savedStyle) {
+        terminalPane.style.width        = savedStyle.width;
+        terminalPane.style.height       = savedStyle.height;
+        terminalPane.style.position     = savedStyle.position;
+        terminalPane.style.overflow     = savedStyle.overflow;
+        terminalPane.style.flexShrink   = savedStyle.flexShrink;
+        terminalPane.style.borderRight  = savedStyle.borderRight;
+        terminalPane.style.borderRadius = savedStyle.borderRadius;
+    }
+    delete terminalPane.dataset.fullsize;
+
+    overlay.remove();
+    terminalFullsizeOverlay = null;
+    terminalFullsizeActive = false;
+
+    const btn = document.getElementById('terminal-zoom-btn');
+    if (btn) {
+        btn.dataset.enabled = 'false';
+    }
+
+    requestTerminalResizeAfterLayout();
+}
+
+window.addEventListener('ttyphoon-terminal-fullsize-toggle', () => {
+    if (terminalFullsizeActive) exitTerminalFullsize();
+    else enterTerminalFullsize();
 });
 
 window.addEventListener('ttyphoon-focus-terminal', () => {

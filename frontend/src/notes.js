@@ -8751,6 +8751,7 @@ async function saveFile() {
             await NotesLspSaveDocument(state.currentFile);
         }
         setDirty(false);
+        maybeRefreshProjectFindAfterSave();
     } catch (err) {
         notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
         console.error(err);
@@ -9172,13 +9173,32 @@ function jumpEditorToLine(lineNumber) {
         };
 
         // Monaco can be created/layouted asynchronously when editor view opens.
-        // Retry briefly so grep-navigation still lands on the requested line.
-        tryRevealWhenReady(2);
+        // Retry for a bit longer so grep-navigation still lands on the requested line.
+        tryRevealWhenReady(20);
     }
 
     const editor = elements.editor;
     editor.focus();
     scrollEditorToSelection(editor, start);
+}
+
+function maybeRefreshProjectFindAfterSave() {
+    if (!isProjectFindListModeActive()) {
+        return;
+    }
+
+    const query = String(state.findFilesQuery || '').trim();
+    if (!query) {
+        return;
+    }
+
+    // Force a fresh grep run after save/autosave so file-list matches stay current.
+    state.findFilesLastExecutedSignature = '';
+    const scrollTop = Number(elements.list?.scrollTop) || 0;
+    runProjectFindSearch(query, {
+        preserveScrollTop: scrollTop,
+        preserveVirtualStart: true,
+    });
 }
 
 function renderProjectFindResults() {
@@ -9218,8 +9238,10 @@ function renderProjectFindResults() {
     elements.findFilesResults.appendChild(placeholder);
 }
 
-async function runProjectFindSearch(query) {
+async function runProjectFindSearch(query, options = {}) {
     const trimmed = String(query || '').trim();
+    const preserveVirtualStart = options?.preserveVirtualStart === true;
+    const preserveScrollTop = Math.max(0, Number(options?.preserveScrollTop) || 0);
     state.findFilesQuery = trimmed;
     if (trimmed) {
         persistFindFieldHistory(elements.findFilesInput);
@@ -9248,10 +9270,27 @@ async function runProjectFindSearch(query) {
     state.findFilesBusy = true;
     state.findFilesError = '';
     state.findFilesResults = [];
-    resetProjectFindPaging();
+    if (!preserveVirtualStart) {
+        resetProjectFindPaging();
+    }
     cleanupProjectFindStreamListeners();
     renderProjectFindResults();
     renderFileList();
+
+    const applyPreservedScrollPosition = () => {
+        if (!preserveVirtualStart) {
+            return;
+        }
+
+        state.findFilesVirtualStart = getProjectFindVirtualStartFromScroll(
+            state.findFilesResults.length,
+            preserveScrollTop,
+        );
+
+        if (elements.list) {
+            elements.list.scrollTop = preserveScrollTop;
+        }
+    };
 
     // Set up event listeners for streaming results
     const onBatch = (batch) => {
@@ -9268,6 +9307,7 @@ async function runProjectFindSearch(query) {
             context: Array.isArray(item?.context) ? item.context.map((l) => String(l)) : [],
         }));
         state.findFilesResults = state.findFilesResults.concat(mappedBatch);
+        applyPreservedScrollPosition();
         scheduleFindFilesRender();
     };
 
@@ -9287,6 +9327,7 @@ async function runProjectFindSearch(query) {
         }
         state.findFilesLastExecutedSignature = searchSignature;
         state.findFilesBusy = false;
+        applyPreservedScrollPosition();
         cleanupProjectFindStreamListeners();
         scheduleFindFilesRender();
     };

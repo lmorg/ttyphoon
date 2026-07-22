@@ -99,6 +99,8 @@ export function ListAIModelSelections():Promise<Array<string>>;
 
 export function ListFiles():Promise<Array<string>>;
 
+export function Log(arg1:string):Promise<void>;
+
 export function NotesGrepStream(arg1:string,arg2:grep.Options):Promise<void>;
 
 export function NotesHistoryAdd(arg1:string):Promise<void>;
@@ -234,6 +236,8 @@ export function TerminalMouseButton(arg1:number,arg2:number,arg3:number,arg4:num
 export function TerminalMouseMotion(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number):Promise<void>;
 
 export function TerminalMouseWheel(arg1:number,arg2:number,arg3:number,arg4:number):Promise<void>;
+
+export function TerminalPaneZoom():Promise<void>;
 
 export function TerminalRequestRedraw():Promise<void>;
 

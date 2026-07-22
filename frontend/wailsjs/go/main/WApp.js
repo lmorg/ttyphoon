@@ -182,6 +182,10 @@ export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
 }
 
+export function Log(arg1) {
+  return window['go']['main']['WApp']['Log'](arg1);
+}
+
 export function NotesGrepStream(arg1, arg2) {
   return window['go']['main']['WApp']['NotesGrepStream'](arg1, arg2);
 }
@@ -452,6 +456,10 @@ export function TerminalMouseMotion(arg1, arg2, arg3, arg4, arg5) {
 
 export function TerminalMouseWheel(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['TerminalMouseWheel'](arg1, arg2, arg3, arg4);
+}
+
+export function TerminalPaneZoom() {
+  return window['go']['main']['WApp']['TerminalPaneZoom']();
 }
 
 export function TerminalRequestRedraw() {

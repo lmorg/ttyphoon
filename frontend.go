@@ -465,12 +465,16 @@ func (a *WApp) TerminalGetTabs() []map[string]any {
 
 	tabs := renderer.GetWindowTabs()
 	out := make([]map[string]any, 0, len(tabs))
+
+	activePaneId := renderer.GetActivePaneId()
+
 	for i := range tabs {
 		out = append(out, map[string]any{
-			"id":     tabs[i].ID,
-			"name":   tabs[i].Name,
-			"index":  tabs[i].Index,
-			"active": tabs[i].Active,
+			"id":           tabs[i].ID,
+			"name":         tabs[i].Name,
+			"index":        tabs[i].Index,
+			"active":       tabs[i].Active,
+			"activePaneId": activePaneId,
 		})
 	}
 
@@ -484,6 +488,24 @@ func (a *WApp) TerminalSelectWindow(windowID string) {
 	}
 
 	renderer.SelectWindow(windowID)
+}
+
+func (a *WApp) TerminalPaneZoom() {
+	log.Println("TerminalPaneZoom()")
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		//return fmt.Errorf("renderer not available")
+		panic("renderer not available")
+	}
+
+	err := renderer.ZoomActivePane()
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
+func (a *WApp) Log(s string) {
+	log.Println(s)
 }
 
 func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {

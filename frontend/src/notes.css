@@ -1320,29 +1320,40 @@ body {
     color: var(--bg);
 }
 
-#terminal-maximize {
-    margin-left: auto !important;
-    border: 1px solid rgba(var(--fg-rgb), 0.3) !important;
-    background: transparent !important;
-    color: var(--fg) !important;
-    padding: 4px 10px !important;
-    cursor: pointer !important;
-    font-family: "Font Awesome Solid", "Font Awesome", sans-serif !important;
-    font-weight: 900 !important;
-    font-size: var(--notes-font-size-minus-2) !important;
-    transition: all 0.2s ease !important;
-    border-radius: 3px !important;
+/* Terminal zoom button - hover overlay in top-right corner */
+#terminal-zoom-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    border: 1px solid rgba(var(--fg-rgb), 0.3);
+    background: transparent;
+    color: var(--fg);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 900;
+    font-size: var(--notes-font-size-minus-2);
+    transition: all 0.2s ease;
+    border-radius: 3px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
 }
 
-#terminal-maximize:hover {
-    border-color: var(--accent) !important;
-    background-color: rgba(var(--accent-rgb), 0.2) !important;
+#terminal-pane:hover #terminal-zoom-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-#terminal-maximize[data-enabled="true"] {
-    background-color: var(--accent) !important;
-    border-color: var(--accent) !important;
-    color: var(--bg) !important;
+#terminal-zoom-btn:hover {
+    border-color: var(--accent);
+    background-color: rgba(var(--accent-rgb), 0.2);
+}
+
+#terminal-zoom-btn[data-enabled="true"] {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
 }
 
 #notes-tools-log-wordwrap[data-wrapped="true"] {
@@ -1710,17 +1721,6 @@ body {
     min-height: 0;
     overflow-x: auto;
     overflow-y: auto;
-}
-
-/* Terminal maximize layout */
-[data-terminal-maximized="true"] #notes-pane,
-[data-terminal-maximized="true"] #notes-terminal-split {
-    display: none !important;
-}
-
-[data-terminal-maximized="true"] #terminal-pane {
-    width: 100%;
-    flex: 1 1 auto;
 }
 
 #notes-editor {

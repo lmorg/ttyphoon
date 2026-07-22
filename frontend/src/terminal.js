@@ -1,4 +1,4 @@
-import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalPaneZoom, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -269,30 +269,6 @@ function updateNotificationOffset() {
     notifContainer.style.top = `${tabsHeight + 8}px`;
 }
 
-let isTerminalMaximized = false;
-
-const setTerminalMaximized = (enabled) => {
-    if (typeof enabled !== 'boolean') {
-        enabled = !isTerminalMaximized;
-    }
-    const nextState = enabled;
-    if (nextState === isTerminalMaximized) {
-        return;
-    }
-    isTerminalMaximized = nextState;
-    const appRoot = document.getElementById('app') || document.body;
-    appRoot.dataset.terminalMaximized = isTerminalMaximized ? 'true' : 'false';
-    if (document.getElementById('terminal-maximize')) {
-        document.getElementById('terminal-maximize').dataset.enabled = isTerminalMaximized ? 'true' : 'false';
-    }
-    // Allow CSS layout to complete before resizing canvas
-    requestAnimationFrame(() => {
-        fitCanvasToWindow();
-        syncTerminalGridSize();
-        TerminalRequestRedraw().catch(() => {});
-    });
-};
-
 if (tabsEl) {
     // Convert wheel up/down into horizontal scrolling so hidden tabs are reachable.
     tabsEl.addEventListener('wheel', (event) => {
@@ -363,21 +339,29 @@ function renderTerminalTabs(tabs) {
     tabsEl.style.display = (tabState.length > 0 || jupyterTabEnabled) ? 'flex' : 'none';
     updateNotificationOffset();
 
-    // Add maximize button at the end of the tab row, on the right
-    if (tabsEl.style.display !== 'none') {
-        const maximizeBtn = document.createElement('button');
-        maximizeBtn.id = 'terminal-maximize';
-        maximizeBtn.type = 'button';
-        maximizeBtn.className = 'notes-tools-clear';
-        maximizeBtn.title = 'Maximize terminal';
-        maximizeBtn.dataset.enabled = isTerminalMaximized ? 'true' : 'false';
-        maximizeBtn.innerHTML = '&#xf065;';
-        maximizeBtn.style.marginLeft = 'auto';
-        maximizeBtn.addEventListener('click', () => {
-            setTerminalMaximized(!isTerminalMaximized);
-        });
-        tabsEl.appendChild(maximizeBtn);
+    // Ensure the pane zoom (fullscreen) button exists
+    createOrUpdateZoomButton();
+}
+
+function createOrUpdateZoomButton() {
+    if (document.getElementById('terminal-zoom-btn')) {
+        return;
     }
+
+    const btn = document.createElement('button');
+    btn.id = 'terminal-zoom-btn';
+    btn.type = 'button';
+    btn.className = 'notes-tools-clear';
+    btn.title = 'Zoom pane';
+    btn.innerHTML = '&#xf065;';
+    btn.dataset.enabled = 'false';
+    btn.addEventListener('click', () => {
+        // Zoom the active tmux pane so only it fills the maximized overlay, then
+        // toggle the fullscreen overlay (mirrors the Notes full-size model).
+        TerminalPaneZoom();
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+    });
+    document.getElementById('terminal-pane').appendChild(btn);
 }
 
 function applyEmbeddedJupyterVisibility() {

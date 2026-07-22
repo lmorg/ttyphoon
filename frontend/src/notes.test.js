@@ -117,6 +117,7 @@ const notesHistoryAddMock = vi.fn(() => Promise.resolve());
 const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
 const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const notesGrepWithOptionsMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
+const notesGrepStreamMock = vi.fn(() => Promise.resolve());
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -203,7 +204,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryCurrent: notesHistoryCurrentMock,
     NotesGrep: notesGrepMock,
     NotesGrepWithOptions: notesGrepWithOptionsMock,
-    NotesGrepStream: vi.fn(() => Promise.resolve()),
+    NotesGrepStream: notesGrepStreamMock,
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -396,6 +397,7 @@ describe('notes rendering', () => {
         notesHistoryCurrentMock.mockReset();
         notesGrepMock.mockReset();
         notesGrepWithOptionsMock.mockReset();
+        notesGrepStreamMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -456,6 +458,7 @@ describe('notes rendering', () => {
         notesHistoryCurrentMock.mockResolvedValue('');
         notesGrepMock.mockResolvedValue({ results: [], error: '' });
         notesGrepWithOptionsMock.mockResolvedValue({ results: [], error: '' });
+        notesGrepStreamMock.mockResolvedValue();
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -2838,6 +2841,84 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(editor.value).toBe('omega beta omega');
+    });
+
+    it('re-runs project grep immediately when grep option toggles are clicked', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nalpha', text: '', error: '' });
+
+        await importNotesModule();
+
+        const findFilesInput = document.getElementById('notes-find-files-input');
+        const findOptionWord = document.getElementById('notes-find-option-word');
+
+        findFilesInput.value = 'alpha';
+        findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(1);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(1, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: false,
+            fileFilter: '',
+        });
+
+        findOptionWord.click();
+        await flushPromises();
+
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(2);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(2, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: true,
+            fileFilter: '',
+        });
+    });
+
+    it('invalidates and re-runs project grep after autosave while keeping find mode active', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nalpha', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+
+        const findFilesInput = document.getElementById('notes-find-files-input');
+        const editor = document.getElementById('notes-editor');
+
+        findFilesInput.value = 'alpha';
+        findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(1);
+
+        vi.useFakeTimers();
+        try {
+            editor.value = '# Guide\n\nalpha updated';
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+            await vi.advanceTimersByTimeAsync(1100);
+        } finally {
+            vi.useRealTimers();
+        }
+
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalled();
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(2);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(2, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: false,
+            fileFilter: '',
+        });
     });
 
     it('toggles AI maximize state from the AI pane button', async () => {
