@@ -31,7 +31,7 @@ func (f *ReadFiles) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *ReadFiles) Enabled() bool { return t.enabled }
 func (t *ReadFiles) Toggle()       { t.enabled = !t.enabled }
 
-func (t *ReadFiles) Name() string { return "Read Files" }
+func (t *ReadFiles) Name() string { return "readFiles" }
 func (t *ReadFiles) Path() string { return "internal" }
 func (t *ReadFiles) Description() string {
 	return `Open a local files for reading and return their contents.

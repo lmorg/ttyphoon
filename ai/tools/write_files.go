@@ -29,7 +29,7 @@ func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *Write) Enabled() bool { return t.enabled }
 func (t *Write) Toggle()       { t.enabled = !t.enabled }
 
-func (t *Write) Name() string { return "Write File" }
+func (t *Write) Name() string { return "writeFile" }
 func (t *Write) Path() string { return "internal" }
 
 func (t *Write) Description() string {
