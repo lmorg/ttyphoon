@@ -26,12 +26,11 @@ func (t DateTime) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *DateTime) Enabled() bool { return t.enabled }
 func (t *DateTime) Toggle()       { t.enabled = !t.enabled }
 
+func (t *DateTime) Name() string { return "dateTime" }
+func (t *DateTime) Path() string { return "internal" }
 func (t *DateTime) Description() string {
 	return `Returns current date, time and timezone`
 }
-
-func (t *DateTime) Name() string { return "dateTime" }
-func (t *DateTime) Path() string { return "internal" }
 
 func (t *DateTime) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {

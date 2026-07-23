@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lmorg/ttyphoon/app"
 )
 
 const (
@@ -656,7 +658,7 @@ func dbPath(workspace string) (string, error) {
 	}
 
 	name := sanitizeWorkspace(workspace)
-	return filepath.Join(homeDir, "Documents", "ttyphoon", fmt.Sprintf("session.%s.db", name)), nil
+	return filepath.Join(homeDir, "Documents", app.DirName, fmt.Sprintf("session.%s.db", name)), nil
 }
 
 func sanitizeWorkspace(workspace string) string {

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lmorg/ttyphoon/app"
 )
 
 const (
@@ -58,7 +60,7 @@ func sessionLogPath(workspace string, sessionID int64) (string, error) {
 		return "", err
 	}
 
-	dir := filepath.Join(homeDir, "Documents", "ttyphoon")
+	dir := filepath.Join(homeDir, "Documents", app.DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

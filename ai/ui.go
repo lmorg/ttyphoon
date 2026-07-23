@@ -21,29 +21,31 @@ import (
 )
 
 func ExplainCmdOutput(agt *agent.Agent) {
-	fn := func(v *types.InputBoxCallbackResultT) {
-		if agt.Meta == nil {
-			agt.Meta = &aitypes.Meta{}
-		}
-		agt.Meta.Variables = v.Variables
-
-		query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
-		query = strings.TrimSpace(query)
-		askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
-	}
-
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:       "Explain output",
 			Placeholder: "Optional",
 			Multiline:   true,
-			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
+			Variables: []types.InputBoxWTVariables{
+				agt.ListModelsInputVariable(),
+				SaveMarkdownToggle(false),
+			},
 		},
-		OkFunc: fn,
+
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			if agt.Meta == nil {
+				agt.Meta = &aitypes.Meta{}
+			}
+			agt.Meta.Variables = v.Variables
+
+			agt.SetModelFromInputVariable(v.Variables)
+
+			query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
+			query = strings.TrimSpace(query)
+			askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
+		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
-
-	//agt.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
 func ExplainDoc(agt *agent.Agent, filename, contents string) {
@@ -62,10 +64,14 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 			Title:       "Ask AI about " + filename,
 			Placeholder: "Optional",
 			Multiline:   true,
-			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
+			Variables: []types.InputBoxWTVariables{
+				agt.ListModelsInputVariable(),
+				SaveMarkdownToggle(false),
+			},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
+			agt.SetModelFromInputVariable(v.Variables)
 			askAI(agt, prompts.GetExplainDocMessages(agt, v.String()), v.String())
 		},
 	}
@@ -271,16 +277,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 			}
 			agt.Meta.Variables = v.Variables
 
-			if raw, ok := v.Variables["model"]; ok {
-				selectedModel := strings.TrimSpace(fmt.Sprint(raw))
-				if selectedModel != "" {
-					err := agt.SetServiceModelFromSelection(selectedModel)
-					if err != nil {
-						agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
-						return
-					}
-				}
-			}
+			agt.SetModelFromInputVariable(v.Variables)
 
 			var selectedTools string
 			raw, ok := v.Variables["tools"]

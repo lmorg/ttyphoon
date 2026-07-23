@@ -30,13 +30,12 @@ func (t Directory) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *Directory) Enabled() bool { return t.enabled }
 func (t *Directory) Toggle()       { t.enabled = !t.enabled }
 
+func (t *Directory) Name() string { return "readDirectory" }
+func (t *Directory) Path() string { return "internal" }
 func (t *Directory) Description() string {
 	return `Check the contents of a directory.
 Returns a bullet point list of all files and directories found inside a directory.`
 }
-
-func (t *Directory) Name() string { return "readDirectory" }
-func (t *Directory) Path() string { return "internal" }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {

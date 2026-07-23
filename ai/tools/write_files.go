@@ -31,7 +31,6 @@ func (t *Write) Toggle()       { t.enabled = !t.enabled }
 
 func (t *Write) Name() string { return "writeFile" }
 func (t *Write) Path() string { return "internal" }
-
 func (t *Write) Description() string {
 	return `Writes new files, overwrites an existing files.
 Useful for making changes, correcting mistakes, and writing new code and configuration.

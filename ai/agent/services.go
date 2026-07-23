@@ -23,12 +23,12 @@ func init() {
 	refreshServiceList()
 }
 
-func (agent *Agent) ServiceName() string {
-	return agent.serviceName
+func (agt *Agent) ServiceName() string {
+	return agt.serviceName
 }
 
-func (agent *Agent) ModelName() string {
-	return agent.modelName
+func (agt *Agent) ModelName() string {
+	return agt.modelName
 }
 
 type ServiceModelIndexT struct {
@@ -40,26 +40,38 @@ func modelSelectionLabel(serviceName, modelName string) string {
 	return fmt.Sprintf("%s: %s", serviceName, modelName)
 }
 
-func (agent *Agent) CurrentModelLabel() string {
-	return modelSelectionLabel(agent.serviceName, agent.modelName)
+func (agt *Agent) CurrentModelLabel() string {
+	return modelSelectionLabel(agt.serviceName, agt.modelName)
 }
 
 // ListModelsInputVariable returns a pre-configured InputBox variable definition
 // that can be used directly in InputBoxWT options.
-func (agent *Agent) ListModelsInputVariable() types.InputBoxWTVariables {
-	_, labels := agent.ListModels()
+func (agt *Agent) ListModelsInputVariable() types.InputBoxWTVariables {
+	_, labels := agt.ListModels()
 
 	return types.InputBoxWTVariables{
 		Name:        "model",
 		Label:       "Model",
 		Description: "AI LLM model to use for query",
-		Default:     agent.CurrentModelLabel(),
+		Default:     agt.CurrentModelLabel(),
 		Options:     labels,
 		Type:        "list",
 	}
 }
+func (agt *Agent) SetModelFromInputVariable(variables map[string]any) {
+	if raw, ok := variables["model"]; ok {
+		selectedModel := strings.TrimSpace(fmt.Sprint(raw))
+		if selectedModel != "" {
+			err := agt.SetServiceModelFromSelection(selectedModel)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+		}
+	}
+}
 
-func (agent *Agent) ListModels() ([]ServiceModelIndexT, []string) {
+func (agt *Agent) ListModels() ([]ServiceModelIndexT, []string) {
 	var (
 		modelXRef []ServiceModelIndexT
 		labels    []string
@@ -80,7 +92,7 @@ func (agent *Agent) ListModels() ([]ServiceModelIndexT, []string) {
 
 // SetServiceModelFromSelection sets the active service/model from a list label
 // formatted as "<Service>: <Model>".
-func (agent *Agent) SetServiceModelFromSelection(selection string) error {
+func (agt *Agent) SetServiceModelFromSelection(selection string) error {
 	parts := strings.SplitN(strings.TrimSpace(selection), ":", 2)
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid model selection format: %q", selection)
@@ -101,30 +113,30 @@ func (agent *Agent) SetServiceModelFromSelection(selection string) error {
 		return fmt.Errorf("unknown model for service %q: %q", serviceName, modelName)
 	}
 
-	agent.serviceName = serviceName
-	agent.modelName = modelName
-	agent.Reload()
+	agt.serviceName = serviceName
+	agt.modelName = modelName
+	agt.Reload()
 
 	return nil
 }
 
-func (agent *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
-	agent.serviceName = modelXRef[i].service
-	agent.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
-	agent.Reload()
+func (agt *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
+	agt.serviceName = modelXRef[i].service
+	agt.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
+	agt.Reload()
 }
 
-func (agent *Agent) SelectServiceModel(returnFn func()) {
-	modelXRef, labels := agent.ListModels()
+func (agt *Agent) SelectServiceModel(returnFn func()) {
+	modelXRef, labels := agt.ListModels()
 
 	selectFn := func(i int) {
-		agent.SwitchServiceModel(modelXRef, i)
+		agt.SwitchServiceModel(modelXRef, i)
 		if returnFn != nil {
 			returnFn()
 		}
 	}
 
-	agent.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
+	agt.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
 }
 
 func refreshServiceList() {
@@ -137,19 +149,19 @@ func refreshServiceList() {
 	}()
 }
 
-func (agent *Agent) setDefaultModels() {
+func (agt *Agent) setDefaultModels() {
 	if len(models[config.Config.Ai.DefaultService]) != 0 {
-		agent.serviceName = config.Config.Ai.DefaultService
+		agt.serviceName = config.Config.Ai.DefaultService
 	} else {
-		for agent.serviceName = range models {
+		for agt.serviceName = range models {
 			// just get the first service, whatever that service might be
 			break
 		}
 	}
 
-	if config.Config.Ai.DefaultModels[agent.serviceName] != "" {
-		agent.modelName = config.Config.Ai.DefaultModels[agent.serviceName]
+	if config.Config.Ai.DefaultModels[agt.serviceName] != "" {
+		agt.modelName = config.Config.Ai.DefaultModels[agt.serviceName]
 	} else {
-		agent.modelName = models[agent.serviceName][0]
+		agt.modelName = models[agt.serviceName][0]
 	}
 }
