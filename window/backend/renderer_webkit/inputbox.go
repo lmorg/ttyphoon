@@ -79,17 +79,19 @@ func (wr *webkitRender) DisplayInputBoxW(parameters *types.InputBoxWT) {
 
 	// get history
 
-	var cacheKey string
+	cacheKey := parameters.Options.CacheKey
 	if len(parameters.Options.History) == 0 {
-		// get caller
-		pc, _, _, ok := goruntime.Caller(2)
-		if !ok {
-			cacheKey = "DisplayInputBoxW()"
-		} else {
-			fn := goruntime.FuncForPC(pc)
-			cacheKey = strings.Replace(fn.Name(), app.ProjectSourcePath, "", 1)
+		if cacheKey == "" {
+			// get caller
+			pc, _, _, ok := goruntime.Caller(2)
+			if !ok {
+				cacheKey = "DisplayInputBoxW()"
+			} else {
+				fn := goruntime.FuncForPC(pc)
+				cacheKey = strings.Replace(fn.Name(), app.ProjectSourcePath, "", 1)
+			}
+			cacheKey += parameters.Options.Title
 		}
-		cacheKey += parameters.Options.Title
 		cache.Read(cache.NS_INPUTBOXW_HISTORY, cacheKey, &parameters.Options.History)
 	}
 

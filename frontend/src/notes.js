@@ -6952,15 +6952,20 @@ async function restoreJupyterBlockState(blockId) {
 async function refreshFiles(options = {}) {
     try {
         const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
+        const previousFileProject = String(state.currentFileProject || '');
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
         const workspaceName = await GetCurrentGroupName();
+        const workspaceChanged = previousFileProject !== '' && previousFileProject !== state.currentProjectRoot;
         elements.title.innerText = workspaceName;
         await loadAISessionCache(workspaceName);
         await refreshAIModelPicker();
         await loadProjectCache({ skipHistoryRestore });
         await applyFileFilter();
+        if (workspaceChanged) {
+            scrollActiveFileListItemIntoView();
+        }
     } catch (err) {
         notifyTerminal('Failed to load file list', 'error');
         console.error(err);
@@ -7106,9 +7111,10 @@ function clampProjectFindScrollTop() {
     }
 }
 
-function resetProjectFindPaging() {
+function resetProjectFindPaging(options = {}) {
+    const resetListScroll = options?.resetListScroll !== false;
     state.findFilesVirtualStart = 0;
-    if (elements.list) {
+    if (resetListScroll && elements.list) {
         elements.list.scrollTop = 0;
     }
 }
@@ -7258,7 +7264,7 @@ function updateListFilterClearButtonVisibility() {
 
 function renderFileList() {
     const projectFindMode = isProjectFindListModeActive();
-    const previousScrollTop = projectFindMode && elements.list ? elements.list.scrollTop : 0;
+    const previousScrollTop = elements.list ? elements.list.scrollTop : 0;
 
     updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
@@ -7282,6 +7288,9 @@ function renderFileList() {
         empty.id = 'notes-empty';
         empty.textContent = 'No notes found.';
         elements.list.appendChild(empty);
+        if (elements.list && previousScrollTop > 0) {
+            elements.list.scrollTop = previousScrollTop;
+        }
         return;
     }
 
@@ -7290,6 +7299,9 @@ function renderFileList() {
         empty.id = 'notes-empty';
         empty.textContent = 'No matching files.';
         elements.list.appendChild(empty);
+        if (elements.list && previousScrollTop > 0) {
+            elements.list.scrollTop = previousScrollTop;
+        }
         return;
     }
 
@@ -7365,6 +7377,10 @@ function renderFileList() {
 
         elements.list.appendChild(categoryContent);
     });
+
+    if (elements.list && previousScrollTop > 0) {
+        elements.list.scrollTop = previousScrollTop;
+    }
 }
 
 function scrollActiveFileListItemIntoView() {
@@ -7379,6 +7395,7 @@ function scrollActiveFileListItemIntoView() {
     }
 
     activeItem.scrollIntoView({
+        //block: 'nearest',
         block: 'center',
         inline: 'nearest',
     });
@@ -8507,7 +8524,6 @@ async function loadFile(file, options = {}) {
             saveDocumentCache();
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
             if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
@@ -8536,7 +8552,6 @@ async function loadFile(file, options = {}) {
             setViewMode('meta');
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
             return;
         }
 
@@ -8563,7 +8578,6 @@ async function loadFile(file, options = {}) {
 
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
 
             if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
@@ -8698,7 +8712,6 @@ async function loadFile(file, options = {}) {
         
         setDirty(false);
         renderFileList();
-        scrollActiveFileListItemIntoView();
         
         // Refresh the JSON viewer when switching to JSON files
         if (state.currentFileType === 'json') {
@@ -8925,7 +8938,7 @@ function closeFindBar() {
         state.findFilesTimer = null;
     }
     cleanupProjectFindStreamListeners();
-    resetProjectFindPaging();
+    resetProjectFindPaging({ resetListScroll: false });
     state.findFilesQuery = '';
     state.findFilesResults = [];
     state.findFilesLastExecutedSignature = '';
@@ -8948,7 +8961,7 @@ function clearProjectFindResults({ keepInputFocus = true } = {}) {
     }
 
     cleanupProjectFindStreamListeners();
-    resetProjectFindPaging();
+    resetProjectFindPaging({ resetListScroll: false });
 
     state.findFilesQuery = '';
     state.findFilesResults = [];

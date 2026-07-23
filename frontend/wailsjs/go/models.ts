@@ -1,10 +1,10 @@
 export namespace grep {
 	
 	export class Options {
-	    CaseSensitive: boolean;
-	    Regex: boolean;
-	    WholeWord: boolean;
-	    FileFilter: string;
+	    caseSensitive: boolean;
+	    regex: boolean;
+	    wholeWord: boolean;
+	    fileFilter: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Options(source);
@@ -12,10 +12,10 @@ export namespace grep {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.CaseSensitive = source["CaseSensitive"];
-	        this.Regex = source["Regex"];
-	        this.WholeWord = source["WholeWord"];
-	        this.FileFilter = source["FileFilter"];
+	        this.caseSensitive = source["caseSensitive"];
+	        this.regex = source["regex"];
+	        this.wholeWord = source["wholeWord"];
+	        this.fileFilter = source["fileFilter"];
 	    }
 	}
 

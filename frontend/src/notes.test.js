@@ -118,6 +118,7 @@ const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
 const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const notesGrepWithOptionsMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const notesGrepStreamMock = vi.fn(() => Promise.resolve());
+const cancelNotesListFilesMock = vi.fn(() => Promise.resolve());
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -205,6 +206,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesGrep: notesGrepMock,
     NotesGrepWithOptions: notesGrepWithOptionsMock,
     NotesGrepStream: notesGrepStreamMock,
+    CancelNotesListFiles: cancelNotesListFilesMock,
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -398,6 +400,7 @@ describe('notes rendering', () => {
         notesGrepMock.mockReset();
         notesGrepWithOptionsMock.mockReset();
         notesGrepStreamMock.mockReset();
+        cancelNotesListFilesMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -459,6 +462,7 @@ describe('notes rendering', () => {
         notesGrepMock.mockResolvedValue({ results: [], error: '' });
         notesGrepWithOptionsMock.mockResolvedValue({ results: [], error: '' });
         notesGrepStreamMock.mockResolvedValue();
+        cancelNotesListFilesMock.mockResolvedValue();
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -2096,6 +2100,70 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
         expect(document.activeElement).toBe(notesEditor);
+    });
+
+    it('preserves file-list scroll position when opening another file', async () => {
+        listFilesMock.mockResolvedValue([
+            '$NOTES/a.md',
+            '$NOTES/b.md',
+            '$NOTES/c.md',
+        ]);
+        getFileMock.mockImplementation(async (file) => ({ contents: `# ${file}\ncontent`, text: '', error: '' }));
+
+        await importNotesModule();
+
+        const list = document.getElementById('notes-list');
+        let listScrollTop = 0;
+        Object.defineProperty(list, 'scrollTop', {
+            configurable: true,
+            get() {
+                return listScrollTop;
+            },
+            set(value) {
+                listScrollTop = Number(value) || 0;
+            },
+        });
+        list.scrollTop = 123;
+
+        const firstButton = document.querySelector('[data-file="$NOTES/a.md"]');
+        firstButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        list.scrollTop = 123;
+        const secondButton = document.querySelector('[data-file="$NOTES/b.md"]');
+        secondButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(list.scrollTop).toBe(123);
+    });
+
+    it('scrolls the active file into view when workspace project changes', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getCurrentGroupNameMock.mockResolvedValueOnce('Workspace One').mockResolvedValue('Workspace Two');
+        getCurrentProjectMock.mockResolvedValue('/tmp/project-one');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+        scrollSpy.mockClear();
+
+        const notesUpdateHandler = getEventHandler('notesUpdate');
+        expect(typeof notesUpdateHandler).toBe('function');
+        getCurrentProjectMock.mockResolvedValue('/tmp/project-two');
+        notesUpdateHandler('Workspace Two');
+        await flushPromises();
+        await flushPromises();
+
+        expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+        scrollSpy.mockRestore();
     });
 
     it('shows a file context menu with copy actions and Go-provided file handlers', async () => {

@@ -54,6 +54,7 @@ type InputBoxWTOptions struct {
 	History     []string              `json:"history"`
 	Multiline   bool                  `json:"multiline"`
 	Variables   []InputBoxWTVariables `json:"variables"`
+	CacheKey    string
 }
 
 type InputBoxWTVariables struct {

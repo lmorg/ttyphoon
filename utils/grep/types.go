@@ -16,8 +16,8 @@ type ReturnValue struct {
 
 // Options configures the search behavior.
 type Options struct {
-	CaseSensitive bool
-	Regex         bool
-	WholeWord     bool
-	FileFilter    string // Optional: filter results by file path/name using the find package syntax (plain words=AND, "or", "!", "rx" regexp, "g" glob)
+	CaseSensitive bool   `json:"caseSensitive"`
+	Regex         bool   `json:"regex"`
+	WholeWord     bool   `json:"wholeWord"`
+	FileFilter    string `json:"fileFilter"` // Optional: filter results by file path/name using the find package syntax (plain words=AND, "or", "!", "rx" regexp, "g" glob)
 }

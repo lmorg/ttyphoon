@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/lmorg/ttyphoon/app"
 )
 
 // backoff constants for restart.
@@ -314,7 +316,7 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 		},
 		"offsetEncoding": []string{string(PositionEncodingUTF16), string(PositionEncodingUTF8)},
 		"clientInfo": map[string]any{
-			"name": "ttyphoon",
+			"name": app.Name(),
 		},
 	}
 
