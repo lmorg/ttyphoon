@@ -82,6 +82,10 @@ export function GetAISessionManagement() {
   return window['go']['main']['WApp']['GetAISessionManagement']();
 }
 
+export function GetAIToolsList() {
+  return window['go']['main']['WApp']['GetAIToolsList']();
+}
+
 export function GetAllLanguageDescriptions() {
   return window['go']['main']['WApp']['GetAllLanguageDescriptions']();
 }
@@ -372,6 +376,10 @@ export function SendIpc(arg1, arg2) {
 
 export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
+}
+
+export function SetAIToolEnabled(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolEnabled'](arg1, arg2);
 }
 
 export function SetActiveAISession(arg1) {

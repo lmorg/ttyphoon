@@ -50,3 +50,28 @@ func (agent *Agent) ChooseTools(cancel types.MenuCallbackT) {
 
 	agent.renderer.DisplayMenu("AI tools", s, nil, fnOk, cancel)
 }
+
+func (agent *Agent) ListTools() []map[string]interface{} {
+	tools := make([]map[string]interface{}, len(agent._tools))
+	for i, tool := range agent._tools {
+		tools[i] = map[string]interface{}{
+			"name":    tool.Name(),
+			"enabled": tool.Enabled(),
+		}
+	}
+	return tools
+}
+
+func (agent *Agent) SetToolEnabled(toolName string, enabled bool) error {
+	for _, tool := range agent._tools {
+		if tool.Name() == toolName {
+			currentEnabled := tool.Enabled()
+			if currentEnabled != enabled {
+				tool.Toggle()
+				agent.Reload()
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("tool %q not found", toolName)
+}

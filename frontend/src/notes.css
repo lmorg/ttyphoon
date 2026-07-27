@@ -1,44 +1,47 @@
 
 .notes-cellref {
-position: absolute;
-right: 0;
-bottom: 0;
-opacity: 0.2;
-font-size: calc(var(--notes-table-font-size, 1em) - 2px);
-color: currentColor;
-pointer-events: none;
-z-index: 1;
-line-height: 1;
-user-select: none;
-text-align: right;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    opacity: 0.2;
+    font-size: calc(var(--notes-table-font-size, 1em) - 2px);
+    color: currentColor;
+    pointer-events: none;
+    z-index: 1;
+    line-height: 1;
+    user-select: none;
+    text-align: right;
 }
+
 .notes-table-cell-wrap {
-position: relative;
-display: block;
-width: 100%;
-height: 100%;
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
 }
+
 .notes-table-cell-wrap > span:first-child {
-font-family: "Lato", var(--font-family), sans-serif !important;
-font-size: inherit !important;
-font-weight: inherit !important;
-letter-spacing: 1px !important;
+    font-family: "Lato", var(--font-family), sans-serif !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    letter-spacing: 1px !important;
 }
 .notes-sort-icon {
-display: inline-block;
-font-family: "Font Awesome Solid";
-font-weight: 900;
-margin-right: 6px;
-color: var(--red);
-vertical-align: middle;
-font-style: normal;
-pointer-events: none;
-user-select: none;
+    display: inline-block;
+    font-family: "Font Awesome Solid";
+    font-weight: 900;
+    margin-right: 6px;
+    color: var(--red);
+    vertical-align: middle;
+    font-style: normal;
+    pointer-events: none;
+    user-select: none;
 }
+
 thead th {
-cursor: pointer;
-user-select: none;
-text-align: left;
+    cursor: pointer;
+    user-select: none;
+    text-align: left;
 }
 
 * {
@@ -270,10 +273,18 @@ body {
 .notes-ai-settings-session-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 10px;
     border: 1px solid rgba(var(--fg-rgb), 0.2);
     padding: 8px;
     border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.notes-ai-settings-session-item:hover {
+    border-color: rgba(var(--accent-rgb), 0.4);
+    background: rgba(var(--accent-rgb), 0.05);
 }
 
 .notes-ai-settings-session-item[data-active="true"] {
@@ -296,11 +307,73 @@ body {
     overflow-wrap: anywhere;
 }
 
-.notes-ai-settings-session-actions {
+.notes-ai-settings-session-delete {
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 8px;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: stretch;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 900;
+    transition: color 0.2s, background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.notes-ai-settings-session-delete::before {
+    content: "\f1f8";
+}
+
+.notes-ai-settings-session-delete:hover {
+    color: var(--red);
+    background-color: rgba(var(--red-rgb), 0.2);
+}
+
+.notes-ai-settings-tools-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin: 8px 0;
+    max-height: 260px;
+    overflow: auto;
+    padding: 4px;
+    border: 1px solid rgba(var(--fg-rgb), 0.2);
+    background: rgba(var(--bg-rgb), 0.35);
+}
+
+.notes-ai-settings-tools-list[data-empty="true"] {
+    opacity: 0.75;
+}
+
+.notes-ai-settings-tool-item {
+    display: flex;
+    align-items: center;
+    gap: 0px;
+    /*padding: 4px 6px;*/
+    padding: 2px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.notes-ai-settings-tool-item:hover {
+    background-color: rgba(var(--accent-rgb), 0.1);
+}
+
+.notes-ai-settings-tool-checkbox {
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.notes-ai-settings-tool-name {
+    flex: 1;
+    font-family: "Lato", var(--font-family), sans-serif !important;
+    font-size: var(--notes-font-size-minus-1);
 }
 
 .notes-ai-settings-history-list {
@@ -312,7 +385,7 @@ body {
     overflow: auto;
     padding: 8px;
     border: 1px solid rgba(var(--fg-rgb), 0.2);
-    background: rgba(var(--bg-rgb), 0.35);
+    background: var(--darken-background-overlay);
 }
 
 .notes-ai-settings-history-list[data-empty="true"] {
@@ -323,16 +396,23 @@ body {
     border: 1px solid rgba(var(--fg-rgb), 0.2);
     padding: 8px;
     border-radius: 4px;
+    background: var(--bg);
+    max-height: 100px;
+    overflow-y: hidden;
 }
 
 .notes-ai-settings-history-heading {
     font-weight: 700;
+    font-size: var(--notes-font-size-minus-1);
+    color: var(--accent);
+    font-family: "Lato", var(--font-family), sans-serif !important;
 }
 
 .notes-ai-settings-history-meta {
     opacity: 0.7;
     font-size: var(--notes-font-size-minus-2);
     margin-top: 2px;
+    font-family: "Lato", var(--font-family), sans-serif !important;
 }
 
 .notes-ai-settings-history-output {
@@ -342,14 +422,16 @@ body {
     background: rgba(var(--bg-rgb), 0.5);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: calc(var(--notes-font-size-minus-2) - 2px);
+    font-size: var(--notes-font-size-minus-2);
     opacity: 0.85;
+    font-family: "Lato", var(--font-family), sans-serif !important;
 }
 
 .notes-ai-settings-history-excerpt {
     margin-top: 6px;
-    font-size: calc(var(--notes-font-size) - 2px);
+    font-size: var(--notes-font-size-minus-2);
     opacity: 0.9;
+    font-family: "Lato", var(--font-family), sans-serif !important;
 }
 
 .notes-ai-settings-controls button {

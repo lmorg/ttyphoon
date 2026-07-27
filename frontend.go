@@ -2407,6 +2407,24 @@ func (a *WApp) ShowAIToolsMenu() {
 	agt.ChooseTools(nil)
 }
 
+func (a *WApp) GetAIToolsList() []map[string]interface{} {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return []map[string]interface{}{}
+	}
+
+	return agt.ListTools()
+}
+
+func (a *WApp) SetAIToolEnabled(toolName string, enabled bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+
+	return agt.SetToolEnabled(toolName, enabled)
+}
+
 func (a *WApp) ShowAIMcpMenu() {
 	agt, ok := a.activeAgent()
 	if !ok {

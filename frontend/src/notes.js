@@ -12,7 +12,7 @@ import {
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
-    ShowAIToolsMenu, ShowAIMcpMenu, ClearAISessionHistory,
+    GetAIToolsList, SetAIToolEnabled, ShowAIMcpMenu, ClearAISessionHistory,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -528,7 +528,7 @@ app.innerHTML = `
                     <div id="notes-tools-content" class="notes-tools-content">
                         <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
-                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Jump to prompt">Jump to prompt...</button>
+                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt...</button>
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
                                 <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
@@ -640,9 +640,9 @@ app.innerHTML = `
             </div>
 
             <h2>Tools</h2>
-            <p>tool and mcp controls</p>
+            <p>Enable or disable tools for AI requests.</p>
+            <div id="notes-ai-settings-tools-list" class="notes-ai-settings-tools-list"></div>
             <div class="notes-ai-settings-controls">
-                <button id="notes-ai-settings-tools-toggle" type="button">Tools...</button>
                 <button id="notes-ai-settings-mcp-toggle" type="button">MCP...</button>
             </div>
 
@@ -765,7 +765,7 @@ const elements = {
     aiSettingsSessionsList: document.getElementById('notes-ai-settings-sessions-list'),
     aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
     aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
-    aiSettingsToolsToggle: document.getElementById('notes-ai-settings-tools-toggle'),
+    aiSettingsToolsList: document.getElementById('notes-ai-settings-tools-list'),
     aiSettingsMcpToggle: document.getElementById('notes-ai-settings-mcp-toggle'),
     aiSettingsHistoryClear: document.getElementById('notes-ai-settings-history-clear'),
     logOutput: document.getElementById('notes-log-output'),
@@ -10497,17 +10497,23 @@ function applyAISessionManagement(nextState) {
 
 async function loadAISessionManagement() {
     try {
-        const sessionState = await GetAISessionManagement();
+        const [sessionState, toolsList] = await Promise.all([
+            GetAISessionManagement(),
+            GetAIToolsList(),
+        ]);
         applyAISessionManagement(sessionState);
+        state.aiToolsList = Array.isArray(toolsList) ? toolsList : [];
     } catch (err) {
         console.error('Failed to load AI session management:', err);
         applyAISessionManagement(null);
+        state.aiToolsList = [];
     }
 }
 
 function renderAISessionManagement() {
     renderAISessionList();
     renderAISessionHistory();
+    renderAIToolsList();
 }
 
 function summarizePromptText(value, fallback) {
@@ -10570,9 +10576,6 @@ function renderAIPromptJumpDropdown() {
     const targets = collectAIPromptTargets();
     state.aiPromptJumpTargets = targets;
     elements.toolsAIPromptJump.disabled = targets.length === 0;
-    elements.toolsAIPromptJump.textContent = targets.length > 0
-        ? `Jump to prompt (${targets.length})`
-        : 'Jump to prompt...';
 }
 
 function scheduleAIPromptJumpRefresh() {
@@ -10612,20 +10615,21 @@ function openAIPromptJumpMenu() {
         return;
     }
 
-    const options = targets.map((target, index) => `${index + 1}. ${target.summary}`);
+    const reversedTargets = [...targets].reverse();
+    const options = reversedTargets.map((target) => target.summary);
     const rect = elements.toolsAIPromptJump.getBoundingClientRect();
     showLocalMenu({
-        title: 'Jump to prompt',
+        title: 'Prompts',
         options,
-        icons: options.map(() => 0x20),
         x: rect.left,
         y: rect.bottom,
         showNextToMouseCursor: true,
         onSelect: (index) => {
-            if (typeof index !== 'number' || index < 0 || index >= targets.length) {
+            if (typeof index !== 'number' || index < 0 || index >= reversedTargets.length) {
                 return;
             }
-            jumpToAIPrompt(index);
+            const originalIndex = targets.indexOf(reversedTargets[index]);
+            jumpToAIPrompt(originalIndex);
         },
     });
 }
@@ -10678,10 +10682,7 @@ function renderAISessionList() {
                     ${createdHtml}
                     ${updatedHtml}
                 </div>
-                <div class="notes-ai-settings-session-actions">
-                    <button type="button" data-action="activate" data-session-id="${tableId}" ${active ? 'disabled' : ''}>${active ? 'Active' : 'Open'}</button>
-                    <button type="button" data-action="delete" data-session-id="${tableId}">Delete</button>
-                </div>
+                <button type="button" class="notes-ai-settings-session-delete" data-action="delete" data-session-id="${tableId}" aria-label="Delete session"></button>
             </div>
         `;
     }).join('');
@@ -10721,6 +10722,33 @@ function renderAISessionHistory() {
     }).join('');
 
     elements.aiSettingsHistoryList.innerHTML = items;
+}
+
+function renderAIToolsList() {
+    if (!elements.aiSettingsToolsList) {
+        return;
+    }
+
+    const tools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
+    if (tools.length === 0) {
+        elements.aiSettingsToolsList.textContent = 'No tools available.';
+        elements.aiSettingsToolsList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsToolsList.dataset.empty = 'false';
+    const items = tools.map((tool) => {
+        const safeName = escapeHtml(tool.name || 'Unknown tool');
+        const checked = tool.enabled === true;
+        return `
+            <label class="notes-ai-settings-tool-item">
+                <input type="checkbox" class="notes-ai-settings-tool-checkbox" data-tool-name="${safeName}" ${checked ? 'checked' : ''}>
+                <span class="notes-ai-settings-tool-name">${safeName}</span>
+            </label>
+        `;
+    }).join('');
+
+    elements.aiSettingsToolsList.innerHTML = items;
 }
 
 async function refreshAIModelPicker() {
@@ -11999,30 +12027,19 @@ if (elements.toolsAISettings) {
 }
 if (elements.aiSettingsSessionsList) {
     elements.aiSettingsSessionsList.addEventListener('click', (event) => {
-        const button = event.target instanceof HTMLElement ? event.target.closest('button[data-action]') : null;
-        if (!button) {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) {
             return;
         }
 
-        const sessionId = Number(button.dataset.sessionId) || 0;
-        if (sessionId <= 0) {
-            return;
-        }
+        // Handle delete button click
+        const deleteButton = target.closest('button[data-action="delete"]');
+        if (deleteButton) {
+            const sessionId = Number(deleteButton.dataset.sessionId) || 0;
+            if (sessionId <= 0) {
+                return;
+            }
 
-        const action = String(button.dataset.action || '');
-        if (action === 'activate') {
-            SetActiveAISession(sessionId).then((sessionState) => {
-                applyAISessionManagement(sessionState);
-                renderAISessionManagement();
-                void loadAISessionCache('');
-            }).catch((err) => {
-                notifyTerminal('Failed to switch AI session', 'error');
-                console.error(err);
-            });
-            return;
-        }
-
-        if (action === 'delete') {
             DeleteAISession(sessionId).then((sessionState) => {
                 applyAISessionManagement(sessionState);
                 renderAISessionManagement();
@@ -12032,6 +12049,26 @@ if (elements.aiSettingsSessionsList) {
                 notifyTerminal('Failed to delete AI session', 'error');
                 console.error(err);
             });
+            return;
+        }
+
+        // Handle session item click for activation
+        const sessionItem = target.closest('.notes-ai-settings-session-item');
+        if (sessionItem) {
+            const sessionId = Number(sessionItem.dataset.sessionId) || 0;
+            if (sessionId <= 0 || target.closest('button')) {
+                return; // Don't activate if clicking a button inside the item
+            }
+
+            SetActiveAISession(sessionId).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                void loadAISessionCache('');
+            }).catch((err) => {
+                notifyTerminal('Failed to switch AI session', 'error');
+                console.error(err);
+            });
+            return;
         }
     });
 }
@@ -12055,11 +12092,27 @@ if (elements.aiSettingsModal) {
         }
     });
 }
-if (elements.aiSettingsToolsToggle) {
-    elements.aiSettingsToolsToggle.addEventListener('click', () => {
-        ShowAIToolsMenu().catch((err) => {
-            notifyTerminal('Failed to open AI tools menu', 'error');
+if (elements.aiSettingsToolsList) {
+    elements.aiSettingsToolsList.addEventListener('change', (event) => {
+        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
+        if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const toolName = String(checkbox.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const enabled = checkbox.checked;
+        SetAIToolEnabled(toolName, enabled).then(() => {
+            // Reload tools list to reflect changes
+            void loadAISessionManagement();
+        }).catch((err) => {
+            notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
             console.error(err);
+            // Revert checkbox on error
+            checkbox.checked = !enabled;
         });
     });
 }

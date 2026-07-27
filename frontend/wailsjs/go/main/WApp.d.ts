@@ -49,6 +49,8 @@ export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
 
+export function GetAIToolsList():Promise<Array<Record<string, any>>>;
+
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
 export function GetAppTitle():Promise<string>;
@@ -194,6 +196,8 @@ export function SaveImageDialog(arg1:string):Promise<string>;
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SendToTerminal(arg1:string):Promise<void>;
+
+export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetActiveAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
