@@ -89,7 +89,16 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		toolInput = unwrapToolInput(argumentsInJSON)
 	}
 
-	return t.delegate.Call(ctx, toolInput)
+	output, err := t.delegate.Call(ctx, toolInput)
+	if err != nil {
+		return output, err
+	}
+
+	if output != "" {
+		emitAIStreamToolProgress(ctx, "Action Output: "+output+"\n")
+	}
+
+	return output, nil
 }
 
 func unwrapToolInput(argumentsInJSON string) string {

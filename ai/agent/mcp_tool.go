@@ -53,13 +53,13 @@ func (t *mcpTool) Description() string {
 }
 
 func (t *mcpTool) Call(ctx context.Context, input string) (response string, err error) {
-	if debug.Trace {
+	/*if debug.Trace {
 		log.Printf("MCP tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
 			log.Printf("MCP tool '%s' response:\n%s", t.Name(), response)
 			log.Printf("MCP tool '%s' error: %v", t.Name(), err)
 		}()
-	}
+	}*/
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.agent.ServiceName(), t.Name()))
@@ -68,6 +68,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 	err = json.Unmarshal([]byte(input), &args)
 	if err != nil {
 		err = nil
+		
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 

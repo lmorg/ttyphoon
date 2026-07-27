@@ -2,13 +2,11 @@ package mcp_client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	mcp_sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
-	"github.com/lmorg/ttyphoon/debug"
 )
 
 type Client struct {
@@ -55,17 +53,4 @@ func (c *Client) Close() error {
 		return c.gosdk.Close()
 	}
 	return fmt.Errorf("no underlying client available")
-}
-
-// Helper function to print tool results
-func printToolResult(result interface{}) string {
-	var results string
-
-	// Marshal result to JSON for display
-	if data, err := json.MarshalIndent(result, "", "  "); err == nil {
-		results = string(data) + "\n"
-	}
-
-	debug.Log(results)
-	return results
 }

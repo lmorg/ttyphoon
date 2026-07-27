@@ -12,10 +12,10 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;');
 }
 
-const SECTION_REGEX = /^(Question|Thought|Final Answer|Action|Action Input):[ \t]*/gm;
+const SECTION_REGEX = /^(Question|Thought|Final Answer|Action|Action Input|Action Output):[ \t]*/gm;
 
 const ACTION_INPUT_HEADING_REGEX = /Action Input:[ \t]*/g;
-const INLINE_HEADING_REGEX = /[ \t]*(Question|Thought|Final Answer|Action|Action Input):[ \t]*/y;
+const INLINE_HEADING_REGEX = /[ \t]*(Question|Thought|Final Answer|Action|Action Input|Action Output):[ \t]*/y;
 
 function findJsonBoundary(text, startIndex) {
     let i = startIndex;
@@ -119,7 +119,7 @@ function normalizeInlineHeadingBoundaries(text) {
 
 function sectionKindFromLabel(label) {
     const lower = String(label || '').toLowerCase();
-    if (lower === 'action' || lower === 'action input') {
+    if (lower === 'action' || lower === 'action input' || lower === 'action output') {
         return 'code';
     }
     return 'markdown';
@@ -323,7 +323,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         const pre = document.createElement('pre');
         pre.className = 'notes-ai-code';
         const code = document.createElement('code');
-        if (label === 'Action Input') {
+        if (label === 'Action Input' || label === 'Action Output') {
             code.className = 'language-json';
         }
         code.textContent = content;
@@ -422,7 +422,7 @@ export function createAIPipelineFormatter(container, options = {}) {
                 const n = (codeCounts.get(section.label) || 0) + 1;
                 codeCounts.set(section.label, n);
 
-                const content = section.label === 'Action Input'
+                const content = (section.label === 'Action Input' || section.label === 'Action Output')
                     ? normalizeActionInputContent(section.content)
                     : String(section.content || '');
 
