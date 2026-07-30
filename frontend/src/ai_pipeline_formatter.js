@@ -45,12 +45,14 @@ function parseSections(source) {
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
+    const lazyChunkSize = Math.max(8, Number(options.lazyChunkSize) || 24);
 
     let streamText = '';
     let renderVersion = 0;
     let jobRoot = null;
     let isRendering = false;
     let needsRender = false;
+    let lazyChunkObserver = null;
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -78,6 +80,7 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function clear() {
+        destroyLazyObserver();
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -275,6 +278,11 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function setText(text) {
+        // setText is used for one-shot full-document renders (eg session restore).
+        // The content is already complete, so render it as a single markdown
+        // block rather than running it through parseSections — which would split
+        // a large historical log into N sections and call processMarkdownContainer
+        // N times (one full hljs + link-scan pass per section), locking the UI.
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -288,12 +296,183 @@ export function createAIPipelineFormatter(container, options = {}) {
             try {
                 do {
                     needsRender = false;
-                    await renderCurrentStream(renderVersion);
+                    await renderTextAsMarkdown(renderVersion);
                 } while (needsRender);
             } finally {
                 isRendering = false;
             }
         })();
+    }
+
+    function destroyLazyObserver() {
+        if (lazyChunkObserver) {
+            lazyChunkObserver.disconnect();
+            lazyChunkObserver = null;
+        }
+    }
+
+    function buildLazyChunks(markdownRoot) {
+        const children = Array.from(markdownRoot.children);
+        if (children.length === 0) {
+            return [];
+        }
+
+        const fragments = [];
+        for (let i = 0; i < children.length; i += lazyChunkSize) {
+            fragments.push(children.slice(i, i + lazyChunkSize));
+        }
+
+        markdownRoot.textContent = '';
+
+        const chunks = [];
+        for (const nodes of fragments) {
+            const chunk = document.createElement('section');
+            chunk.className = 'notes-ai-lazy-chunk';
+            chunk.dataset.lazyProcessed = '';
+
+            const content = document.createElement('div');
+            content.className = 'notes-ai-lazy-chunk-content';
+            for (const node of nodes) {
+                content.appendChild(node);
+            }
+
+            const spinner = document.createElement('div');
+            spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-chunk';
+
+            chunk.appendChild(content);
+            chunk.appendChild(spinner);
+            markdownRoot.appendChild(chunk);
+            chunks.push(chunk);
+        }
+
+        return chunks;
+    }
+
+    function primeLazyChunks(chunks, version) {
+        if (!Array.isArray(chunks) || chunks.length === 0) {
+            return;
+        }
+
+        const viewportTop = Number(container.scrollTop) || 0;
+        const viewportBottom = viewportTop + (Number(container.clientHeight) || 0);
+        const prewarmTop = Math.max(0, viewportTop - ((Number(container.clientHeight) || 0) * 2));
+        const prewarmBottom = viewportBottom + ((Number(container.clientHeight) || 0) * 2);
+
+        let matched = 0;
+        for (const chunk of chunks) {
+            const chunkTop = chunk.offsetTop;
+            const chunkBottom = chunkTop + chunk.offsetHeight;
+            if (chunkBottom < prewarmTop || chunkTop > prewarmBottom) {
+                continue;
+            }
+
+            matched += 1;
+            void processLazyChunk(chunk, version);
+        }
+
+        if (matched > 0) {
+            return;
+        }
+
+        const fromBottom = isNearBottom(container);
+        const seed = fromBottom ? chunks.slice(-3) : chunks.slice(0, 3);
+        for (const chunk of seed) {
+            void processLazyChunk(chunk, version);
+        }
+    }
+
+    async function renderTextAsMarkdown(version) {
+        destroyLazyObserver();
+
+        const root = ensureJobRoot();
+        let markdownRoot = root.querySelector('.notes-ai-markdown');
+        if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
+            root.textContent = '';
+            markdownRoot = document.createElement('div');
+            markdownRoot.className = 'notes-ai-markdown markdown-body';
+            root.appendChild(markdownRoot);
+        }
+
+        if (!streamText) {
+            markdownRoot.innerHTML = '';
+            return;
+        }
+
+        // Show a loading spinner while marked.parse() runs (synchronous and
+        // can block for large documents).  We yield to the browser after
+        // inserting the spinner so it actually paints before we block.
+        markdownRoot.innerHTML = '';
+        const loadingSpinner = document.createElement('div');
+        loadingSpinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
+        markdownRoot.appendChild(loadingSpinner);
+
+        // Yield so the browser paints the spinner before the blocking parse
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if (version !== renderVersion) return;
+
+        // Parse markdown into HTML and insert into DOM.
+        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
+
+        // Lazy-process elements as they scroll into view using IntersectionObserver.
+        // This avoids running expensive operations (syntax highlighting, mermaid,
+        // autoHyperlink, table setup, image processing) on the entire document at
+        // once, which would lock the UI for large session logs.
+        if (!processMarkdownContainer) {
+            return;
+        }
+
+        const scrollRoot = container; // the scroll parent (#notes-ai-output)
+
+        const chunks = buildLazyChunks(markdownRoot);
+
+        lazyChunkObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) {
+                    continue;
+                }
+
+                const chunk = entry.target;
+                lazyChunkObserver.unobserve(chunk);
+                void processLazyChunk(chunk, version);
+            }
+        }, {
+            root: scrollRoot,
+            rootMargin: '1200px 0px',
+        });
+
+        for (const chunk of chunks) {
+            lazyChunkObserver.observe(chunk);
+        }
+
+        primeLazyChunks(chunks, version);
+    }
+
+    async function processLazyChunk(chunk, version) {
+        if (!chunk || chunk.dataset.lazyProcessed === 'done' || chunk.dataset.lazyProcessed === 'pending') {
+            return;
+        }
+
+        chunk.dataset.lazyProcessed = 'pending';
+
+        const chunkContent = chunk.querySelector('.notes-ai-lazy-chunk-content');
+        if (!chunkContent) {
+            chunk.dataset.lazyProcessed = 'done';
+            return;
+        }
+
+        try {
+            await processMarkdownContainer(chunkContent);
+            if (version !== renderVersion) {
+                return;
+            }
+
+            const codeBlocks = chunkContent.querySelectorAll('pre');
+            for (const block of codeBlocks) {
+                block.scrollTop = block.scrollHeight;
+            }
+        } finally {
+            chunk.dataset.lazyProcessed = 'done';
+        }
     }
 
     return {

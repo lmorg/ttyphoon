@@ -1585,6 +1585,70 @@ body {
     margin: 18px 0 14px;
 }
 
+.notes-ai-lazy-spinner {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(128, 128, 128, 0.3);
+    border-top-color: var(--accent, #888);
+    border-radius: 50%;
+    animation: notes-ai-spin 0.6s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+#notes-ai-output .notes-ai-lazy-chunk {
+    position: relative;
+    content-visibility: auto;
+    contain-intrinsic-size: 360px;
+    min-height: 56px;
+}
+
+#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed=''] .notes-ai-lazy-chunk-content,
+#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='pending'] .notes-ai-lazy-chunk-content {
+    opacity: 0.01;
+}
+
+#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-chunk-content {
+    opacity: 1;
+}
+
+#notes-ai-output .notes-ai-lazy-chunk-content {
+    transition: opacity 120ms linear;
+}
+
+#notes-ai-output .notes-ai-lazy-spinner-chunk {
+    top: 20px;
+}
+
+#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-spinner,
+#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-spinner-chunk {
+    display: none;
+}
+
+.notes-ai-lazy-spinner-page {
+    position: static;
+    display: block;
+    margin: 40px auto;
+    width: 32px;
+    height: 32px;
+    border-width: 3px;
+    left: auto;
+    transform: none;
+    animation-name: notes-ai-spin-static;
+}
+
+@keyframes notes-ai-spin {
+    to { transform: translateX(-50%) rotate(360deg); }
+}
+
+@keyframes notes-ai-spin-static {
+    to { transform: rotate(360deg); }
+}
+
 #notes-ai-output .notes-ai-timestamp {
     margin: 0 0 4px;
     font-size: 0.8em;

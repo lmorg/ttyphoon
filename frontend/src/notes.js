@@ -871,6 +871,8 @@ const state = {
     aiToolsList: [],
     aiPromptJumpTargets: [],
     aiStickToBottom: true,
+    currentWorkspaceName: '',
+    currentWorkspaceKey: '',
     lspChangeTimer: null,
     lspOpenFile: '',
     typosOpenFile: '',
@@ -898,6 +900,7 @@ let suppressMonacoChange = false;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
 let aiPromptJumpObserver = null;
+let aiBottomScrollRetryTimers = [];
 
 function isMonacoPhase0Enabled() {
     try {
@@ -6962,17 +6965,29 @@ async function restoreJupyterBlockState(blockId) {
 async function refreshFiles(options = {}) {
     try {
         const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
-        const previousFileProject = String(state.currentFileProject || '');
+        const previousWorkspaceKey = String(state.currentWorkspaceKey || '');
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
         const workspaceName = await GetCurrentGroupName();
-        const workspaceChanged = previousFileProject !== '' && previousFileProject !== state.currentProjectRoot;
+        const workspaceKey = `${String(state.currentProjectRoot || '')}::${String(workspaceName || '')}`;
+        const workspaceChanged = previousWorkspaceKey !== '' && previousWorkspaceKey !== workspaceKey;
+        const workspaceScopedRefresh = previousWorkspaceKey === '' || workspaceChanged;
+
+        state.currentWorkspaceName = String(workspaceName || '');
+        state.currentWorkspaceKey = workspaceKey;
         elements.title.innerText = workspaceName;
-        await loadAISessionCache(workspaceName);
-        await refreshAIModelPicker();
-        await loadProjectCache({ skipHistoryRestore });
+
+        if (workspaceScopedRefresh) {
+            await loadAISessionCache(workspaceName);
+            await refreshAIModelPicker();
+        }
+
+        await loadProjectCache({
+            skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh,
+        });
         await applyFileFilter();
+
         if (workspaceChanged) {
             scrollActiveFileListItemIntoView();
         }
@@ -11658,8 +11673,7 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("notesUpdate", (groupName) => {
-    void loadAISessionCache(groupName);
+EventsOn("notesUpdate", () => {
     CancelNotesListFiles().catch(() => {}).finally(() => {
         refreshFiles();
     });
@@ -11913,9 +11927,7 @@ function setAIFinalOutput(text, options = {}) {
     aiPipelineFormatter.setText(String(text || ''));
     scheduleAIPromptJumpRefresh();
     if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
+        requestAIScrollToBottom();
     } else {
         requestAnimationFrame(() => {
             updateAIScrollBottomButton();
@@ -11941,14 +11953,78 @@ function updateAIScrollBottomButton() {
     elements.aiScrollBottom.dataset.visible = visible ? 'true' : 'false';
 }
 
+function clearAIBottomScrollRetries() {
+    for (const timerId of aiBottomScrollRetryTimers) {
+        clearTimeout(timerId);
+    }
+    aiBottomScrollRetryTimers = [];
+}
+
+function requestAIScrollToBottom() {
+    if (!elements.aiOutput) {
+        return;
+    }
+
+    state.aiStickToBottom = true;
+    clearAIBottomScrollRetries();
+
+    // Run immediately and then retry after known async render phases:
+    // requestAnimationFrame, markup parse completion, and lazy chunk expansion.
+    scrollAIOutputToBottom();
+    const retryDelays = [0, 40, 120, 260, 520];
+    for (const delay of retryDelays) {
+        const timerId = setTimeout(() => {
+            if (!elements.aiOutput || !state.aiStickToBottom) {
+                return;
+            }
+            scrollAIOutputToBottom();
+        }, delay);
+        aiBottomScrollRetryTimers.push(timerId);
+    }
+}
+
 function scrollAIOutputToBottom() {
     if (!elements.aiOutput) {
         return;
     }
 
-    elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+    const output = elements.aiOutput;
+    let frame = 0;
+    let stableFrames = 0;
+    let lastHeight = Number(output.scrollHeight) || 0;
+    const maxFrames = 120;
+
+    const chaseBottom = () => {
+        if (!elements.aiOutput || !state.aiStickToBottom) {
+            return;
+        }
+
+        output.scrollTop = output.scrollHeight;
+
+        const currentHeight = Number(output.scrollHeight) || 0;
+        const atBottom = isAIOutputNearBottom();
+        const heightDelta = Math.abs(currentHeight - lastHeight);
+
+        if (atBottom && heightDelta < 1) {
+            stableFrames += 1;
+        } else {
+            stableFrames = 0;
+        }
+
+        lastHeight = currentHeight;
+        frame += 1;
+
+        if (stableFrames >= 2 || frame >= maxFrames) {
+            updateAIScrollBottomButton();
+            return;
+        }
+
+        requestAnimationFrame(chaseBottom);
+    };
+
     state.aiStickToBottom = true;
-    updateAIScrollBottomButton();
+    output.scrollTop = output.scrollHeight;
+    requestAnimationFrame(chaseBottom);
 }
 
 async function loadAISessionCache(workspaceName) {
@@ -12100,7 +12176,7 @@ if (elements.aiOutput) {
 }
 if (elements.aiScrollBottom) {
     elements.aiScrollBottom.addEventListener('click', () => {
-        scrollAIOutputToBottom();
+        requestAIScrollToBottom();
     });
 }
 if (elements.toolsAISettings) {
