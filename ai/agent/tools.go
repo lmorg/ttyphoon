@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -54,9 +55,36 @@ func (agent *Agent) ChooseTools(cancel types.MenuCallbackT) {
 func (agent *Agent) ListTools() []map[string]interface{} {
 	tools := make([]map[string]interface{}, len(agent._tools))
 	for i, tool := range agent._tools {
+		schema := map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"input": map[string]any{
+					"type":        "string",
+					"description": "Raw input string for the tool.",
+				},
+			},
+			"required": []string{"input"},
+		}
+
+		if mcp, ok := tool.(*mcpTool); ok && len(mcp.schema) > 0 {
+			var parsed any
+			if err := json.Unmarshal(mcp.schema, &parsed); err == nil {
+				if parsedMap, isMap := parsed.(map[string]any); isMap {
+					schema = parsedMap
+				}
+			}
+		}
+
+		schemaJSON, err := json.MarshalIndent(schema, "", "  ")
+		if err != nil {
+			schemaJSON = []byte("{}")
+		}
+
 		tools[i] = map[string]interface{}{
-			"name":    tool.Name(),
-			"enabled": tool.Enabled(),
+			"name":        tool.Name(),
+			"enabled":     tool.Enabled(),
+			"description": tool.Description(),
+			"schema":      string(schemaJSON),
 		}
 	}
 	return tools

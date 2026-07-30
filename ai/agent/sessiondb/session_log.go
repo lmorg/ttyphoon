@@ -178,12 +178,12 @@ func buildSessionLogFinalizeSuffix(streamed, finalOutput string, now time.Time) 
 	return b.String()
 }
 
-func finishActiveSessionLogLocked(state *sessionLogState, finalOutput string, now time.Time) {
+func finishActiveSessionLogLocked(state *sessionLogState, suffix string) {
 	if state == nil || state.path == "" {
 		return
 	}
 
-	_ = appendSessionLog(state.path, buildSessionLogFinalizeSuffix(state.streamed.String(), finalOutput, now))
+	_ = appendSessionLog(state.path, suffix)
 	state.streamed.Reset()
 	state.requestOpen = false
 }
@@ -191,16 +191,19 @@ func finishActiveSessionLogLocked(state *sessionLogState, finalOutput string, no
 // ensureRequestOpenLocked writes the request header/prefix exactly once per
 // request. It is a no-op when the request is already open, which prevents the
 // prompt block from being written twice (start job + first chunk).
-func ensureRequestOpenLocked(state *sessionLogState, ctx SessionLogContext, now time.Time) {
+// It returns the prefix that was written, or an empty string when it was a no-op.
+func ensureRequestOpenLocked(state *sessionLogState, ctx SessionLogContext, now time.Time) string {
 	if state == nil || state.requestOpen {
-		return
+		return ""
 	}
 	if err := writeSessionLogHeaderIfNeeded(state.path, state.workspace, state.sessionID); err != nil {
-		return
+		return ""
 	}
 	state.streamed.Reset()
 	state.requestOpen = true
-	_ = appendSessionLog(state.path, buildSessionLogRequestPrefix(ctx.Query, ctx.CommandLine, ctx.OutputBlock, now))
+	prefix := buildSessionLogRequestPrefix(ctx.Query, ctx.CommandLine, ctx.OutputBlock, now)
+	_ = appendSessionLog(state.path, prefix)
+	return prefix
 }
 
 func activeSessionLogStateLocked(workspace string) (*sessionLogState, error) {
@@ -290,22 +293,23 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 	switch state {
 	case SESSION_LOG_START_JOB:
 		now := time.Now()
+		var prefix string
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			// Close any request left open by an interrupted job before starting
 			// a new one.
 			if ref.requestOpen {
-				finishActiveSessionLogLocked(ref, "", now)
+				suffix := buildSessionLogFinalizeSuffix(ref.streamed.String(), "", now)
+				finishActiveSessionLogLocked(ref, suffix)
 			}
-			ensureRequestOpenLocked(ref, ctx, now)
+			prefix = ensureRequestOpenLocked(ref, ctx, now)
 		}
 		aiSessionLogStore.Unlock()
 
-		// The panel renders the prompt from the job title, so the request prefix
-		// is deliberately NOT streamed to the frontend (that would duplicate the
-		// prompt on screen). It is only written to the log file.
+		// Emit the same markdown prefix to the frontend that was written to the
+		// log file so both destinations receive identical content.
 		if ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiJobStart", payload)
+			ctx.Emit("aiJobStart", prefix)
 		}
 
 	case SESSION_LOG_APPEND_CHUNK:
@@ -328,21 +332,23 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 
 	case SESSION_LOG_FINALIZE_JOB:
 		now := time.Now()
+		var suffix string
 		streamedEmpty := true
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
 			streamedEmpty = strings.TrimSpace(ref.streamed.String()) == ""
-			finishActiveSessionLogLocked(ref, payload, now)
+			suffix = buildSessionLogFinalizeSuffix(ref.streamed.String(), payload, now)
+			finishActiveSessionLogLocked(ref, suffix)
 		}
 		aiSessionLogStore.Unlock()
 
-		// When nothing was streamed (eg a non-streaming completion) the panel
-		// would otherwise be left blank, so surface the final answer once. When
-		// content WAS streamed it is already on screen, so we emit nothing here
-		// to avoid duplicating the response.
-		if streamedEmpty && payload != "" && ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiResponseStream", payload)
+		// Emit the same suffix markdown that was written to the log file.
+		// When nothing was streamed the suffix contains the final response under
+		// a ### Response heading; when content was streamed it is only HTML
+		// comments which render as nothing.
+		if streamedEmpty && suffix != "" && ctx.WorkspaceActive && ctx.Emit != nil {
+			ctx.Emit("aiResponseStream", suffix)
 		}
 
 	case SESSION_LOG_FINISH_JOB:

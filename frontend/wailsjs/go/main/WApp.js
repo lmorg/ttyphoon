@@ -14,6 +14,10 @@ export function CancelNotesListFiles() {
   return window['go']['main']['WApp']['CancelNotesListFiles']();
 }
 
+export function ClearAILog() {
+  return window['go']['main']['WApp']['ClearAILog']();
+}
+
 export function ClearAISessionHistory() {
   return window['go']['main']['WApp']['ClearAISessionHistory']();
 }

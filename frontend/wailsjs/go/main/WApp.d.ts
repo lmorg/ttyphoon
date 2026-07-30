@@ -15,6 +15,8 @@ export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CancelNotesListFiles():Promise<void>;
 
+export function ClearAILog():Promise<void>;
+
 export function ClearAISessionHistory():Promise<sessiondb.FrontendStateT>;
 
 export function CloseNotification(arg1:number):Promise<void>;

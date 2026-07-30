@@ -226,23 +226,25 @@ func TestWithAIStreamCallback_EmitsToolProgress(t *testing.T) {
 		chunks = append(chunks, s)
 	})
 
-	emitAIStreamToolProgress(ctx, "Action: mcp_atlassian_search\n")
-	emitAIStreamToolProgress(ctx, "Action Input: {\"query\":\"abc\"}\n")
+	emitAIStreamToolProgress(ctx, "\n## Action\n\nmcp_atlassian_search\n\n")
+	emitAIStreamToolProgress(ctx, "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n")
 
 	if len(chunks) != 2 {
 		t.Fatalf("emitted chunks = %d, want 2", len(chunks))
 	}
-	if chunks[0] != "Action: mcp_atlassian_search\n" {
-		t.Fatalf("chunk[0] = %q", chunks[0])
+	wantChunk0 := "\n## Action\n\nmcp_atlassian_search\n\n"
+	if chunks[0] != wantChunk0 {
+		t.Fatalf("chunk[0] = %q, want %q", chunks[0], wantChunk0)
 	}
-	if chunks[1] != "Action Input: {\"query\":\"abc\"}\n" {
-		t.Fatalf("chunk[1] = %q", chunks[1])
+	wantChunk1 := "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n"
+	if chunks[1] != wantChunk1 {
+		t.Fatalf("chunk[1] = %q, want %q", chunks[1], wantChunk1)
 	}
 }
 
 func TestEmitAIStreamToolProgress_NoCallbackNoPanic(t *testing.T) {
-	emitAIStreamToolProgress(context.Background(), "Action: x\n")
-	emitAIStreamToolProgress(nil, "Action: x\n")
+	emitAIStreamToolProgress(context.Background(), "\n## Action\n\nx\n\n")
+	emitAIStreamToolProgress(nil, "\n## Action\n\nx\n\n")
 	emitAIStreamToolProgress(context.Background(), "")
 }
 

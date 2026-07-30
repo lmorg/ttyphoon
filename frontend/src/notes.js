@@ -12,7 +12,7 @@ import {
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
-    GetAIToolsList, SetAIToolEnabled, ShowAIMcpMenu, ClearAISessionHistory,
+    GetAIToolsList, SetAIToolEnabled, ShowAIMcpMenu, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -657,6 +657,12 @@ app.innerHTML = `
             <h2>Active Session Transcript</h2>
             <p>Recent prompts and responses from the active session.</p>
             <div id="notes-ai-settings-history-list" class="notes-ai-settings-history-list"></div>
+
+            <div id="notes-ai-tool-meta-modal" data-open="false" aria-hidden="true">
+                <div id="notes-ai-tool-meta-card" class="markdown-body" role="dialog" aria-modal="true" aria-label="Tool metadata" tabindex="-1">
+                    <div id="notes-ai-tool-meta-content"></div>
+                </div>
+            </div>
         </div>
     </div>
 `;
@@ -766,6 +772,9 @@ const elements = {
     aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
     aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
     aiSettingsToolsList: document.getElementById('notes-ai-settings-tools-list'),
+    aiToolMetaModal: document.getElementById('notes-ai-tool-meta-modal'),
+    aiToolMetaCard: document.getElementById('notes-ai-tool-meta-card'),
+    aiToolMetaContent: document.getElementById('notes-ai-tool-meta-content'),
     aiSettingsMcpToggle: document.getElementById('notes-ai-settings-mcp-toggle'),
     aiSettingsHistoryClear: document.getElementById('notes-ai-settings-history-clear'),
     logOutput: document.getElementById('notes-log-output'),
@@ -859,6 +868,7 @@ const state = {
         sessions: [],
         history: [],
     },
+    aiToolsList: [],
     aiPromptJumpTargets: [],
     aiStickToBottom: true,
     lspChangeTimer: null,
@@ -10478,6 +10488,7 @@ function closeAISessionManagementModal() {
         return;
     }
 
+    closeAIToolMetadataModal();
     elements.aiSettingsModal.dataset.open = 'false';
     elements.aiSettingsModal.setAttribute('aria-hidden', 'true');
 }
@@ -10534,11 +10545,26 @@ function collectAIPromptTargets() {
 
     const targets = [];
 
-    const titleElements = elements.aiOutput.querySelectorAll('.notes-ai-title');
-    for (const titleEl of titleElements) {
+    const prefixPromptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-prefix h2, .notes-ai-prefix h3');
+    for (const heading of prefixPromptHeadings) {
+        const label = String(heading.textContent || '').trim().toLowerCase();
+        if (label !== 'prompt') {
+            continue;
+        }
+
+        let summaryText = '';
+        let sibling = heading.nextElementSibling;
+        while (sibling) {
+            summaryText = summarizePromptText(sibling.textContent, '');
+            if (summaryText) {
+                break;
+            }
+            sibling = sibling.nextElementSibling;
+        }
+
         targets.push({
-            element: titleEl,
-            summary: summarizePromptText(titleEl.textContent, `Prompt ${targets.length + 1}`),
+            element: heading,
+            summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
         });
     }
 
@@ -10737,18 +10763,74 @@ function renderAIToolsList() {
     }
 
     elements.aiSettingsToolsList.dataset.empty = 'false';
-    const items = tools.map((tool) => {
+    const items = tools.map((tool, index) => {
         const safeName = escapeHtml(tool.name || 'Unknown tool');
         const checked = tool.enabled === true;
         return `
-            <label class="notes-ai-settings-tool-item">
+            <div class="notes-ai-settings-tool-item" data-tool-index="${index}">
                 <input type="checkbox" class="notes-ai-settings-tool-checkbox" data-tool-name="${safeName}" ${checked ? 'checked' : ''}>
                 <span class="notes-ai-settings-tool-name">${safeName}</span>
-            </label>
+            </div>
         `;
     }).join('');
 
     elements.aiSettingsToolsList.innerHTML = items;
+}
+
+function formatAIToolMetadataMarkdown(tool) {
+    const name = String(tool?.name || '').trim() || 'Unknown tool';
+    const description = String(tool?.description || '').trim() || 'No description available.';
+    const enabled = tool?.enabled === true;
+
+    let schema = String(tool?.schema || '').trim();
+    if (!schema) {
+        schema = '{}';
+    }
+
+    return `## ${name}\n\n- [${enabled ? 'x' : ' '}] Enabled\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
+}
+
+async function openAIToolMetadataModal(index) {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaCard || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    const tools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
+    const tool = tools[index];
+    if (!tool) {
+        return;
+    }
+
+    const markdown = formatAIToolMetadataMarkdown(tool);
+    elements.aiToolMetaContent.innerHTML = marked.parse(markdown);
+    await processMarkdownContainer(elements.aiToolMetaContent);
+
+    const enabledCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
+    if (enabledCheckbox instanceof HTMLInputElement) {
+        enabledCheckbox.disabled = false;
+        enabledCheckbox.checked = tool.enabled === true;
+        enabledCheckbox.dataset.toolIndex = String(index);
+        enabledCheckbox.dataset.toolName = String(tool.name || '');
+        enabledCheckbox.setAttribute('aria-label', 'Enabled');
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'true';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'false');
+    elements.aiToolMetaCard.focus();
+}
+
+function closeAIToolMetadataModal() {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'false';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'true');
+    elements.aiToolMetaContent.innerHTML = '';
+
+    void loadAISessionManagement().then(() => {
+        renderAISessionManagement();
+    });
 }
 
 async function refreshAIModelPicker() {
@@ -11781,6 +11863,9 @@ function clearAIOutput() {
     const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.clear();
     scheduleAIPromptJumpRefresh();
+    ClearAILog().catch((err) => {
+        console.error('Failed to clear AI log:', err);
+    });
     if (shouldStick) {
         requestAnimationFrame(() => {
             scrollAIOutputToBottom();
@@ -12112,6 +12197,72 @@ if (elements.aiSettingsToolsList) {
             notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
             console.error(err);
             // Revert checkbox on error
+            checkbox.checked = !enabled;
+        });
+    });
+
+    elements.aiSettingsToolsList.addEventListener('click', (event) => {
+        if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox') {
+            return;
+        }
+
+        const item = event.target instanceof Element ? event.target.closest('.notes-ai-settings-tool-item') : null;
+        if (!item || !elements.aiSettingsToolsList.contains(item)) {
+            return;
+        }
+
+        const index = Number(item.dataset.toolIndex);
+        if (!Number.isInteger(index) || index < 0) {
+            return;
+        }
+
+        void openAIToolMetadataModal(index);
+    });
+}
+if (elements.aiToolMetaModal && elements.aiToolMetaCard) {
+    elements.aiToolMetaModal.addEventListener('click', (event) => {
+        if (event.target === elements.aiToolMetaModal) {
+            closeAIToolMetadataModal();
+        }
+    });
+
+    elements.aiToolMetaCard.addEventListener('click', (event) => {
+        event.stopPropagation();
+    });
+}
+if (elements.aiToolMetaContent) {
+    elements.aiToolMetaContent.addEventListener('change', (event) => {
+        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
+        if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const toolName = String(checkbox.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const enabled = checkbox.checked;
+        SetAIToolEnabled(toolName, enabled).then(() => {
+            const index = Number.parseInt(String(checkbox.dataset.toolIndex || ''), 10);
+            if (Number.isInteger(index) && index >= 0 && index < state.aiToolsList.length) {
+                state.aiToolsList[index] = {
+                    ...state.aiToolsList[index],
+                    enabled,
+                };
+            }
+
+            if (elements.aiSettingsToolsList) {
+                const listCheckbox = elements.aiSettingsToolsList.querySelector(
+                    `.notes-ai-settings-tool-item[data-tool-index="${Number.parseInt(String(checkbox.dataset.toolIndex || ''), 10)}"] .notes-ai-settings-tool-checkbox`
+                );
+                if (listCheckbox instanceof HTMLInputElement) {
+                    listCheckbox.checked = enabled;
+                }
+            }
+        }).catch((err) => {
+            notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
+            console.error(err);
             checkbox.checked = !enabled;
         });
     });
@@ -13768,6 +13919,9 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
         event.preventDefault();
         closeDeletePrompt();
+    } else if (event.key === 'Escape' && elements.aiToolMetaModal?.dataset?.open === 'true') {
+        event.preventDefault();
+        closeAIToolMetadataModal();
     } else if (event.key === 'Escape' && elements.aiSettingsModal?.dataset?.open === 'true') {
         event.preventDefault();
         closeAISessionManagementModal();

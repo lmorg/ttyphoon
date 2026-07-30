@@ -2489,7 +2489,7 @@ describe('notes rendering', () => {
         expect(toolsPanel.dataset.collapsed).toBe('false');
     });
 
-    it('formats pipelined AI output sections and keeps code blocks in a ten-line scrolling region', async () => {
+    it('formats pipelined AI output sections and renders action input as a markdown code block', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2505,11 +2505,17 @@ describe('notes rendering', () => {
             '',
             'Thought: We can use markdown here.',
             '',
-            'Action: run-command',
+            '## Action',
             '',
-            'Action Input: {',
+            'run-command',
+            '',
+            '## Action Input',
+            '',
+            '```',
+            '{',
             actionInputLines,
             '}',
+            '```',
             '',
             'Final Answer: Done.',
         ].join('\n');
@@ -2519,152 +2525,20 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Question', 'Thought', 'Action', 'Action Input', 'Final Answer']);
+        expect(headings).toEqual(['Question', 'Thought', 'Final Answer']);
 
         expect(aiOutput.querySelector('.notes-ai-markdown strong')?.textContent).toBe('What is this?');
 
-        const codeBlocks = aiOutput.querySelectorAll('.notes-ai-code code');
-        expect(codeBlocks.length).toBeGreaterThanOrEqual(2);
+        // Action, Action Input and Action Output are rendered as markdown headings and code blocks
+        const codeBlock = aiOutput.querySelector('pre code');
+        expect(codeBlock).not.toBeNull();
 
-        const actionInputText = codeBlocks[1].textContent || '';
+        const actionInputText = codeBlock?.textContent || '';
         expect(actionInputText).toContain('"k0": 0');
         expect(actionInputText).toContain('"k11": 11');
-        expect(actionInputText.endsWith('\n')).toBe(true);
-
-        const actionInputPre = codeBlocks[1].parentElement;
-        expect(actionInputPre).not.toBeNull();
-        expect(actionInputPre.classList.contains('notes-ai-code')).toBe(true);
-        expect(codeBlocks[1].classList.contains('language-json')).toBe(true);
     });
 
-    it('starts a new heading when Thought follows the closing action input brace on the same line', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {}Thought: I have thoughts');
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Action Input', 'Thought']);
-
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{}\n');
-
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBe(1);
-        expect(markdownBlocks[0].textContent).toContain('I have thoughts');
-    });
-
-    it('starts a new heading when Thought follows nested Action Input JSON with inline spacing', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {"a":{"b":1},"txt":"x}y"}   Thought: Nested works');
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Action Input', 'Thought']);
-
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{"a":{"b":1},"txt":"x}y"}\n');
-
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBe(1);
-        expect(markdownBlocks[0].textContent).toContain('Nested works');
-    });
-
-    it('does not duplicate Final Answer when trailing text and a real Final Answer label both carry the same content', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        // The model outputs trailing text after the JSON AND a proper Final Answer label
-        // with the same content — previously this produced two Final Answer sections.
-        aiResponseHandler('Action Input: {"tool":"search"}Here is the result\nFinal Answer: Here is the result');
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        const finalAnswerCount = headings.filter((h) => h === 'Final Answer').length;
-        expect(finalAnswerCount).toBe(1);
-    });
-
-    it('splits trailing unlabeled narrative text from Action Input JSON into Final Answer', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}I found your Jira tickets.');
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toContain('Action Input');
-        expect(headings).toContain('Final Answer');
-
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}\n');
-
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBeGreaterThanOrEqual(1);
-        expect(markdownBlocks[markdownBlocks.length - 1].textContent).toContain('I found your Jira tickets.');
-    });
-
-    it('does not force code block autoscroll when the user has scrolled up', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {\n  "first": 1\n}');
-        await flushPromises();
-        await flushPromises();
-
-        const firstPre = aiOutput.querySelector('.notes-ai-code');
-        expect(firstPre).not.toBeNull();
-
-        Object.defineProperty(firstPre, 'scrollHeight', { configurable: true, value: 200 });
-        Object.defineProperty(firstPre, 'clientHeight', { configurable: true, value: 100 });
-        firstPre.scrollTop = 0;
-
-        aiResponseHandler('\n  "second": 2\n}');
-        await flushPromises();
-        await flushPromises();
-
-        const nextPre = aiOutput.querySelector('.notes-ai-code');
-        expect(nextPre).not.toBeNull();
-        expect(nextPre.scrollTop).toBe(0);
-    });
-
-    it('reuses markdown processing pipeline for AI code sections', async () => {
+    it('reuses markdown processing pipeline for AI sections', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2676,7 +2550,7 @@ describe('notes rendering', () => {
         const aiResponseHandler = getEventHandler('aiResponseStream');
         expect(typeof aiResponseHandler).toBe('function');
 
-        aiResponseHandler('Action Input: {"a": 1}');
+        aiResponseHandler('\n## Action\n\nsearch\n\n## Action Input\n\n```\n{"a": 1}\n```\n');
         await flushPromises();
         await flushPromises();
 
@@ -2737,7 +2611,7 @@ describe('notes rendering', () => {
         expect(ts).not.toBeNull();
     });
 
-    it('renders job title as markdown after the timestamp when provided', async () => {
+    it('renders job prefix as markdown after the timestamp when provided', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const processMarkdownContainerMock = vi.fn();
@@ -2745,29 +2619,28 @@ describe('notes rendering', () => {
             processMarkdownContainer: processMarkdownContainerMock,
         });
 
-        fmt.startJob('> What is this?');
+        fmt.startJob('## Request\n\n### Prompt\n\nWhat is this?\n');
         await flushPromises();
 
-        // Title element exists and contains the query text
-        const title = wrapper.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
-        expect(title.textContent).toContain('What is this?');
+        // Prefix element exists as a standard markdown div
+        const prefix = wrapper.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
 
-        // Title appears after the timestamp in DOM order
+        // Prefix appears after the timestamp in DOM order
         const children = Array.from(wrapper.children);
         const tsIdx = children.indexOf(wrapper.querySelector('.notes-ai-timestamp'));
-        const titleIdx = children.indexOf(title);
-        expect(titleIdx).toBeGreaterThan(tsIdx);
+        const prefixIdx = children.indexOf(prefix);
+        expect(prefixIdx).toBeGreaterThan(tsIdx);
 
-        // Title appears before the stream output root
+        // Prefix appears before the stream output root
         const jobIdx = children.indexOf(wrapper.querySelector('.notes-ai-job'));
-        expect(titleIdx).toBeLessThan(jobIdx);
+        expect(prefixIdx).toBeLessThan(jobIdx);
 
-        // Markdown processing was applied to the title element
-        expect(processMarkdownContainerMock).toHaveBeenCalledWith(title);
+        // Markdown processing was applied to the prefix element
+        expect(processMarkdownContainerMock).toHaveBeenCalledWith(prefix);
     });
 
-    it('highlights a slash-command prefix in quoted AI prompts', async () => {
+    it('renders blockquote markdown in job prefix without special span coloring', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
@@ -2775,28 +2648,25 @@ describe('notes rendering', () => {
         fmt.startJob('> /jira show my tickets');
         await flushPromises();
 
-        const title = wrapper.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
+        const prefix = wrapper.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
 
-        const spans = title.querySelectorAll('blockquote p span');
-        expect(spans).toHaveLength(2);
-        expect(spans[0].textContent).toBe('/jira ');
-        expect(spans[0].getAttribute('style')).toContain('var(--yellow)');
-        expect(spans[1].textContent).toBe('show my tickets');
-        expect(spans[1].getAttribute('style')).toContain('var(--fg)');
+        // No custom coloured spans from the old renderPromptTitleHtml formatting
+        const spans = prefix.querySelectorAll('span[style]');
+        expect(spans).toHaveLength(0);
     });
 
-    it('omits the title element when startJob is called without a title', async () => {
+    it('omits the prefix element when startJob is called without content', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
 
         fmt.startJob();
 
-        expect(wrapper.querySelector('.notes-ai-title')).toBeNull();
+        expect(wrapper.querySelector('.notes-ai-prefix')).toBeNull();
     });
 
-    it('passes job title from aiJobStart event through to the AI panel', async () => {
+    it('passes job prefix markdown from aiJobStart event through to the AI panel', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2805,14 +2675,13 @@ describe('notes rendering', () => {
         const aiJobStartHandler = getEventHandler('aiJobStart');
         expect(typeof aiJobStartHandler).toBe('function');
 
-        aiJobStartHandler('> How do I do this?');
+        aiJobStartHandler('## Request\n\n### Prompt\n\nHow do I do this?\n');
         await flushPromises();
         await flushPromises();
 
         const aiOutput = document.getElementById('notes-ai-output');
-        const title = aiOutput.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
-        expect(title.textContent).toContain('How do I do this?');
+        const prefix = aiOutput.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
     });
 
     it('adds an hr separator when a second AI job starts with existing content', async () => {

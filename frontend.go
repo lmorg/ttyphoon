@@ -2517,6 +2517,17 @@ func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
 	return state
 }
 
+func (a *WApp) ClearAILog() {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
+		log.Printf("ai clear log: %v", err)
+	}
+}
+
 func (a *WApp) AskAI(callerType, filename, contents string) {
 	log.Printf(`[debug] WApp AskAI: callerType="%s"`, callerType)
 

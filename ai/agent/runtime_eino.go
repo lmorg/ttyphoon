@@ -81,8 +81,8 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	emitAIStreamToolProgress(ctx, "Action: "+t.delegate.Name()+"\n")
-	emitAIStreamToolProgress(ctx, "Action Input: "+argumentsInJSON+"\n")
+	emitAIStreamToolProgress(ctx, "\n## Action\n\n> "+t.delegate.Name()+"\n\n")
+	emitAIStreamToolProgress(ctx, "\n## Action Input\n\n```\n"+argumentsInJSON+"\n```\n\n")
 
 	toolInput := argumentsInJSON
 	if t.unwrapInputField {
@@ -95,7 +95,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	}
 
 	if output != "" {
-		emitAIStreamToolProgress(ctx, "Action Output: "+output+"\n")
+		emitAIStreamToolProgress(ctx, "\n## Action Output\n\n```\n"+output+"\n```\n\n")
 	}
 
 	return output, nil

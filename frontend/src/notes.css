@@ -243,6 +243,42 @@ body {
     border-radius: 5px;
 }
 
+#notes-ai-tool-meta-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 1002;
+}
+
+#notes-ai-tool-meta-modal[data-open="true"] {
+    display: flex;
+}
+
+#notes-ai-tool-meta-card {
+    width: 54vw;
+    min-width: 54vw;
+    max-width: 54vw;
+    max-height: 72vh;
+    overflow: auto;
+    border: 2px solid var(--fg);
+    background: var(--bg);
+    color: var(--fg);
+    padding: 14px;
+    border-radius: 5px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+
+#notes-ai-tool-meta-card h2 {
+    margin-top: 0;
+}
+
+#notes-ai-tool-meta-content {
+    overflow-wrap: anywhere;
+}
+
 #notes-ai-settings-card h1,
 #notes-ai-settings-card h2 {
     margin-top: 0;
