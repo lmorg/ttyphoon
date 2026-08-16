@@ -22,6 +22,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
@@ -859,6 +860,19 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 
 var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)
 
+// resolveMarkdownAssetPath mirrors how the Notes viewer locates relative asset
+// paths: absolute-from-root first, falling back to the current document's directory.
+func (a *WApp) resolveMarkdownAssetPath(path string) string {
+	resolvedPath := path
+	if !filepath.IsAbs(resolvedPath) {
+		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
+	}
+	if _, err := os.Stat(resolvedPath); err != nil {
+		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
+	}
+	return resolvedPath
+}
+
 func (a *WApp) GetImage(path string) string {
 	if len(path) == 0 {
 		return "error: empty string"
@@ -869,13 +883,7 @@ func (a *WApp) GetImage(path string) string {
 		return "error: extension not found"
 	}
 
-	resolvedPath := path
-	if !filepath.IsAbs(resolvedPath) {
-		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
-	}
-	if _, err := os.Stat(resolvedPath); err != nil {
-		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
-	}
+	resolvedPath := a.resolveMarkdownAssetPath(path)
 
 	f, err := os.Open(resolvedPath)
 	if err != nil {
@@ -903,6 +911,76 @@ func imageMime(ext string) string {
 		return "image/svg+xml"
 	}
 	return "image/" + ext[1:]
+}
+
+const (
+	maxAIImageAttachments = 6
+	maxAIImageBytes       = 8 * 1024 * 1024
+)
+
+var (
+	rxMarkdownImage = regexp.MustCompile(`!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)`)
+	rxDataURLImage  = regexp.MustCompile(`^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$`)
+)
+
+// collectAIImageAttachments finds images to attach to an AI prompt: either the
+// whole contents is a single data URL (Notes image viewer), or contents is
+// markdown with embedded image references to resolve and read from disk.
+func (a *WApp) collectAIImageAttachments(contents string) []aitypes.ImageAttachment {
+	if m := rxDataURLImage.FindStringSubmatch(strings.TrimSpace(contents)); m != nil {
+		return []aitypes.ImageAttachment{{MIMEType: m[1], Base64: m[2]}}
+	}
+
+	matches := rxMarkdownImage.FindAllStringSubmatch(contents, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	images := make([]aitypes.ImageAttachment, 0, len(matches))
+	for _, match := range matches {
+		if len(images) >= maxAIImageAttachments {
+			break
+		}
+
+		ref := strings.TrimSpace(match[1])
+		if dm := rxDataURLImage.FindStringSubmatch(ref); dm != nil {
+			images = append(images, aitypes.ImageAttachment{MIMEType: dm[1], Base64: dm[2]})
+			continue
+		}
+		if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+			continue // remote images are not fetched for AI attachments
+		}
+
+		if attachment, ok := a.readImageAttachment(ref); ok {
+			images = append(images, attachment)
+		}
+	}
+
+	return images
+}
+
+func (a *WApp) readImageAttachment(path string) (aitypes.ImageAttachment, bool) {
+	ext := strings.ToLower(rxExtension.FindString(path))
+	if ext == "" {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	resolvedPath := a.resolveMarkdownAssetPath(path)
+
+	stat, err := os.Stat(resolvedPath)
+	if err != nil || stat.Size() > maxAIImageBytes {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	b, err := os.ReadFile(resolvedPath)
+	if err != nil {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	return aitypes.ImageAttachment{
+		MIMEType: imageMime(ext),
+		Base64:   base64.StdEncoding.EncodeToString(b),
+	}, true
 }
 
 type FilterResultsT struct {
@@ -2565,7 +2643,7 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 		if agt == nil {
 			return
 		}
-		ai.ExplainDoc(agt, filename, contents)
+		ai.ExplainDoc(agt, filename, contents, a.collectAIImageAttachments(contents))
 	case "notesPromptToolbar":
 		renderer.AskAi()
 	case "notesPromptUri":

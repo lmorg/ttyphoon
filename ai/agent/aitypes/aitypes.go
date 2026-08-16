@@ -29,3 +29,9 @@ type Meta struct {
 	Function    string
 	Variables   map[string]any
 }
+
+// ImageAttachment carries an inline image to send alongside a prompt.
+type ImageAttachment struct {
+	MIMEType string
+	Base64   string
+}

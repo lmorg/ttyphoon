@@ -11,6 +11,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -52,6 +53,41 @@ func GetExplainDocMessages(agt *agent.Agent, userPrompt string) []*schema.Messag
 		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
 		schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agt, userPrompt)))),
 	}
+}
+
+func GetExplainDocMessagesWithImages(agt *agent.Agent, userPrompt string, images []aitypes.ImageAttachment) []*schema.Message {
+	text := strings.TrimSpace(os.Expand(_PROMPT_EXPLAIN_DOC, promptVars(agt, userPrompt)))
+	return []*schema.Message{
+		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+		buildUserMessageWithImages(text, images),
+	}
+}
+
+// buildUserMessageWithImages attaches images as multimodal parts so the same message
+// works unmodified across Claude, OpenAI, and Ollama chat model backends.
+func buildUserMessageWithImages(text string, images []aitypes.ImageAttachment) *schema.Message {
+	if len(images) == 0 {
+		return schema.UserMessage(text)
+	}
+
+	parts := make([]schema.MessageInputPart, 0, len(images)+1)
+	if text != "" {
+		parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: text})
+	}
+	for _, img := range images {
+		img := img
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &img.Base64,
+					MIMEType:   img.MIMEType,
+				},
+			},
+		})
+	}
+
+	return &schema.Message{Role: schema.User, UserInputMultiContent: parts}
 }
 
 func GetAsk(agt *agent.Agent, userPrompt string) string {

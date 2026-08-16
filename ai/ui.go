@@ -48,7 +48,7 @@ func ExplainCmdOutput(agt *agent.Agent) {
 	agt.Renderer().DisplayInputBoxW(params)
 }
 
-func ExplainDoc(agt *agent.Agent, filename, contents string) {
+func ExplainDoc(agt *agent.Agent, filename, contents string, images []aitypes.ImageAttachment) {
 	tile := agt.Renderer().ActiveTile()
 	if tile == nil {
 		return
@@ -72,7 +72,7 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
 			agt.SetModelFromInputVariable(v.Variables)
-			askAI(agt, prompts.GetExplainDocMessages(agt, v.String()), v.String())
+			askAI(agt, prompts.GetExplainDocMessagesWithImages(agt, v.String(), images), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
