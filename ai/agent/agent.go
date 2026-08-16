@@ -23,8 +23,9 @@ type Agent struct {
 
 	fnCancel context.CancelFunc
 
-	_mcpServers map[string]client
-	_tools      []aitypes.Tool
+	_mcpServers       map[string]client
+	_mcpServerSources map[string]string
+	_tools            []aitypes.Tool
 }
 
 type allTheAgentsT struct {
@@ -55,10 +56,11 @@ var allTheAgents = allTheAgentsT{_map: map[string]*Agent{}}
 
 func New(renderer types.Renderer, tile types.Tile) {
 	agent := &Agent{
-		_mcpServers:   make(map[string]client),
-		maxIterations: config.Config.Ai.MaxIterations,
-		term:          tile.GetTerm(),
-		renderer:      renderer,
+		_mcpServers:       make(map[string]client),
+		_mcpServerSources: make(map[string]string),
+		maxIterations:     config.Config.Ai.MaxIterations,
+		term:              tile.GetTerm(),
+		renderer:          renderer,
 	}
 
 	agent.setDefaultModels()
@@ -91,13 +93,23 @@ func (agt *Agent) Reload() {
 	agt.runtime = nil
 }
 
-func (agt *Agent) McpServerAdd(server string, client client) {
+func (agt *Agent) McpServerAdd(server, source string, client client) {
 	agt._mcpServers[server] = client
+	agt._mcpServerSources[server] = source
 }
 
 func (agt *Agent) McpServerExists(server string) bool {
 	_, ok := agt._mcpServers[server]
 	return ok
+}
+
+func (agt *Agent) McpServerSource(server string) string {
+	return agt._mcpServerSources[server]
+}
+
+func (agt *Agent) McpServerRemove(server string) {
+	delete(agt._mcpServers, server)
+	delete(agt._mcpServerSources, server)
 }
 
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }

@@ -401,6 +401,14 @@ body {
     background-color: rgba(var(--accent-rgb), 0.1);
 }
 
+.notes-ai-settings-tool-item-disabled {
+    opacity: 0.55;
+}
+
+.notes-ai-settings-tool-item-disabled:hover {
+    background-color: transparent;
+}
+
 .notes-ai-settings-tool-checkbox {
     cursor: pointer;
     flex-shrink: 0;

@@ -1,15 +1,34 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
 )
+
+const mcpServerKeySeparator = "::"
+
+func makeMcpServerKey(source, server string) string {
+	return source + mcpServerKeySeparator + server
+}
+
+func parseMcpServerKey(key string) (source, server string, err error) {
+	parts := strings.SplitN(strings.TrimSpace(key), mcpServerKeySeparator, 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", fmt.Errorf("invalid MCP server key")
+	}
+
+	return parts[0], parts[1], nil
+}
 
 func (agent *Agent) McpMenu(cancel types.MenuCallbackT) {
 	files := file.GetConfigFiles("mcp", ".json")
@@ -54,7 +73,6 @@ func (agent *Agent) StartServersFromJson(filename string) error {
 }
 
 func (agent *Agent) StartServersFromConfig(config *mcp_config.ConfigT) error {
-	var err error
 	cache := &map[string]string{}
 
 	for i := range config.Mcp.Inputs {
@@ -66,76 +84,213 @@ func (agent *Agent) StartServersFromConfig(config *mcp_config.ConfigT) error {
 	}
 
 	for name, svr := range config.Mcp.Servers {
-		if agent.McpServerExists(name) {
-			//renderer.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("Skipping MCP server '%s': a server with the same name is already running", name))
-			continue
-		}
-		sticky := agent.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
-		envs := svr.Env.Slice()
-
-		if err = updateVars(agent, envs, cache); err != nil {
-			sticky.Close()
+		if err := agent.startServerFromConfigEntry(config.Source, name, svr, cache); err != nil {
 			return err
 		}
-		if err = updateVars(agent, svr.Args, cache); err != nil {
-			sticky.Close()
+	}
+
+	return nil
+}
+
+func (agent *Agent) StartServerFromConfigServer(config *mcp_config.ConfigT, server string) error {
+	if config == nil {
+		return fmt.Errorf("MCP config is nil")
+	}
+
+	cache := &map[string]string{}
+	for i := range config.Mcp.Inputs {
+		val, err := config.Mcp.Inputs[i].Get(agent.renderer)
+		if err != nil {
 			return err
 		}
-		if svr.Url != "" {
-			svr.Url, err = _updateVarsRxReplace(agent, svr.Url, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-		}
-		if svr.OAuth != nil {
-			svr.OAuth.ClientID, err = _updateVarsRxReplace(agent, svr.OAuth.ClientID, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			svr.OAuth.ClientURI, err = _updateVarsRxReplace(agent, svr.OAuth.ClientURI, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			svr.OAuth.ClientSecret, err = _updateVarsRxReplace(agent, svr.OAuth.ClientSecret, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			svr.OAuth.RedirectURI, err = _updateVarsRxReplace(agent, svr.OAuth.RedirectURI, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			svr.OAuth.AuthServerMetadataURL, err = _updateVarsRxReplace(agent, svr.OAuth.AuthServerMetadataURL, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			svr.OAuth.TokenFile, err = _updateVarsRxReplace(agent, svr.OAuth.TokenFile, cache)
-			if err != nil {
-				sticky.Close()
-				return err
-			}
-			if err = updateVars(agent, svr.OAuth.Scopes, cache); err != nil {
-				sticky.Close()
-				return err
-			}
-		}
+		(*cache)[config.Mcp.Inputs[i].Id] = val
+	}
 
-		switch svr.Type {
-		case "http", "https":
-			err = startServerHttp(config.Source, agent, name, svr)
-		default:
-			err = startServerCmdLine(config.Source, agent, envs, name, svr)
-		}
-		sticky.Close()
+	svr, ok := config.Mcp.Servers[server]
+	if !ok {
+		return fmt.Errorf("MCP server %q not found in %s", server, config.Source)
+	}
+
+	return agent.startServerFromConfigEntry(config.Source, server, svr, cache)
+}
+
+func (agent *Agent) startServerFromConfigEntry(source, name string, svr mcp_config.ServerT, cache *map[string]string) error {
+	if agent.McpServerExists(name) {
+		return nil
+	}
+
+	sticky := agent.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
+	defer sticky.Close()
+
+	envs := svr.Env.Slice()
+
+	var err error
+	if err = updateVars(agent, envs, cache); err != nil {
+		return err
+	}
+	if err = updateVars(agent, svr.Args, cache); err != nil {
+		return err
+	}
+	if svr.Url != "" {
+		svr.Url, err = _updateVarsRxReplace(agent, svr.Url, cache)
 		if err != nil {
 			return err
 		}
 	}
+	if svr.OAuth != nil {
+		svr.OAuth.ClientID, err = _updateVarsRxReplace(agent, svr.OAuth.ClientID, cache)
+		if err != nil {
+			return err
+		}
+		svr.OAuth.ClientURI, err = _updateVarsRxReplace(agent, svr.OAuth.ClientURI, cache)
+		if err != nil {
+			return err
+		}
+		svr.OAuth.ClientSecret, err = _updateVarsRxReplace(agent, svr.OAuth.ClientSecret, cache)
+		if err != nil {
+			return err
+		}
+		svr.OAuth.RedirectURI, err = _updateVarsRxReplace(agent, svr.OAuth.RedirectURI, cache)
+		if err != nil {
+			return err
+		}
+		svr.OAuth.AuthServerMetadataURL, err = _updateVarsRxReplace(agent, svr.OAuth.AuthServerMetadataURL, cache)
+		if err != nil {
+			return err
+		}
+		svr.OAuth.TokenFile, err = _updateVarsRxReplace(agent, svr.OAuth.TokenFile, cache)
+		if err != nil {
+			return err
+		}
+		if err = updateVars(agent, svr.OAuth.Scopes, cache); err != nil {
+			return err
+		}
+	}
+
+	switch svr.Type {
+	case "http", "https":
+		return startServerHttp(source, agent, name, svr)
+	default:
+		return startServerCmdLine(source, agent, envs, name, svr)
+	}
+}
+
+func (agent *Agent) ListMcpServers() []map[string]interface{} {
+	files := file.GetConfigFiles("mcp", ".json")
+	sort.Strings(files)
+
+	servers := make([]map[string]interface{}, 0)
+	for _, cfgPath := range files {
+		config, err := mcp_config.ReadJson(cfgPath)
+		if err != nil {
+			servers = append(servers, map[string]interface{}{
+				"key":         makeMcpServerKey(cfgPath, ""),
+				"name":        filepath.Base(cfgPath),
+				"source":      cfgPath,
+				"loaded":      false,
+				"loadable":    false,
+				"config":      "{}",
+				"configError": err.Error(),
+			})
+			continue
+		}
+
+		for name, svr := range config.Mcp.Servers {
+			cfgJSON, marshalErr := json.MarshalIndent(svr, "", "  ")
+			if marshalErr != nil {
+				cfgJSON = []byte("{}")
+			}
+
+			loadedSource := agent.McpServerSource(name)
+			loaded := loadedSource != "" && loadedSource == cfgPath
+			loadedElsewhere := loadedSource != "" && loadedSource != cfgPath
+
+			servers = append(servers, map[string]interface{}{
+				"key":               makeMcpServerKey(cfgPath, name),
+				"name":              name,
+				"source":            cfgPath,
+				"loaded":            loaded,
+				"loadable":          !loadedElsewhere,
+				"loadedFrom":        loadedSource,
+				"loadedElsewhere":   loadedElsewhere,
+				"serverType":        svr.Type,
+				"url":               svr.Url,
+				"command":           svr.Command,
+				"args":              append([]string{}, svr.Args...),
+				"config":            string(cfgJSON),
+				"configDisplayName": fmt.Sprintf("%s (%s)", name, filepath.Base(cfgPath)),
+			})
+		}
+	}
+
+	sort.Slice(servers, func(i, j int) bool {
+		left := fmt.Sprintf("%s::%s", servers[i]["name"], servers[i]["source"])
+		right := fmt.Sprintf("%s::%s", servers[j]["name"], servers[j]["source"])
+		return left < right
+	})
+
+	return servers
+}
+
+func (agent *Agent) SetMcpServerEnabled(serverKey string, enabled bool) error {
+	source, server, err := parseMcpServerKey(serverKey)
+	if err != nil {
+		return err
+	}
+
+	loadedSource := agent.McpServerSource(server)
+
+	if enabled {
+		if loadedSource == source {
+			return nil
+		}
+		if loadedSource != "" && loadedSource != source {
+			return fmt.Errorf("MCP server %q is already loaded from %s", server, loadedSource)
+		}
+
+		config, err := mcp_config.ReadJson(source)
+		if err != nil {
+			return err
+		}
+		config.Source = source
+
+		if err := agent.StartServerFromConfigServer(config, server); err != nil {
+			return err
+		}
+
+		agent.Reload()
+		return nil
+	}
+
+	if loadedSource == "" {
+		return nil
+	}
+	if loadedSource != source {
+		return fmt.Errorf("MCP server %q is loaded from %s", server, loadedSource)
+	}
+
+	client, ok := agent._mcpServers[server]
+	if !ok || client == nil {
+		agent.McpServerRemove(server)
+		return nil
+	}
+
+	if err := client.Close(); err != nil {
+		return err
+	}
+
+	agent.McpServerRemove(server)
+
+	nextTools := make([]aitypes.Tool, 0, len(agent._tools))
+	for _, tool := range agent._tools {
+		mcp, ok := tool.(*mcpTool)
+		if ok && mcp.server == server {
+			continue
+		}
+		nextTools = append(nextTools, tool)
+	}
+	agent._tools = nextTools
+	agent.Reload()
 
 	return nil
 }

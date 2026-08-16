@@ -85,7 +85,7 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 		return err
 	}
 
-	agent.McpServerAdd(server, c)
+	agent.McpServerAdd(server, cfgPath, c)
 
 	toolNames := make([]string, len(c.Tools.Tools))
 	for i := range c.Tools.Tools {

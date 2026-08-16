@@ -78,6 +78,10 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
+export function GetAIMcpServers() {
+  return window['go']['main']['WApp']['GetAIMcpServers']();
+}
+
 export function GetAISessionCache(arg1) {
   return window['go']['main']['WApp']['GetAISessionCache'](arg1);
 }
@@ -380,6 +384,10 @@ export function SendIpc(arg1, arg2) {
 
 export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
+}
+
+export function SetAIMcpServerEnabled(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIMcpServerEnabled'](arg1, arg2);
 }
 
 export function SetAIToolEnabled(arg1, arg2) {

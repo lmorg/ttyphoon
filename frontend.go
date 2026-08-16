@@ -2425,6 +2425,24 @@ func (a *WApp) SetAIToolEnabled(toolName string, enabled bool) error {
 	return agt.SetToolEnabled(toolName, enabled)
 }
 
+func (a *WApp) GetAIMcpServers() []map[string]interface{} {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return []map[string]interface{}{}
+	}
+
+	return agt.ListMcpServers()
+}
+
+func (a *WApp) SetAIMcpServerEnabled(serverKey string, enabled bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+
+	return agt.SetMcpServerEnabled(serverKey, enabled)
+}
+
 func (a *WApp) ShowAIMcpMenu() {
 	agt, ok := a.activeAgent()
 	if !ok {

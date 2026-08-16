@@ -12,7 +12,7 @@ import {
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
-    GetAIToolsList, SetAIToolEnabled, ShowAIMcpMenu, ClearAISessionHistory, ClearAILog,
+    GetAIToolsList, SetAIToolEnabled, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -642,9 +642,10 @@ app.innerHTML = `
             <h2>Tools</h2>
             <p>Enable or disable tools for AI requests.</p>
             <div id="notes-ai-settings-tools-list" class="notes-ai-settings-tools-list"></div>
-            <div class="notes-ai-settings-controls">
-                <button id="notes-ai-settings-mcp-toggle" type="button">MCP...</button>
-            </div>
+
+            <h2>MCP Servers</h2>
+            <p>Load or unload MCP servers for AI requests.</p>
+            <div id="notes-ai-settings-mcp-list" class="notes-ai-settings-tools-list"></div>
 
             <h2>Sessions</h2>
             <p>Create, switch, clear, or delete sessions for this workspace.</p>
@@ -772,10 +773,10 @@ const elements = {
     aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
     aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
     aiSettingsToolsList: document.getElementById('notes-ai-settings-tools-list'),
+    aiSettingsMcpList: document.getElementById('notes-ai-settings-mcp-list'),
     aiToolMetaModal: document.getElementById('notes-ai-tool-meta-modal'),
     aiToolMetaCard: document.getElementById('notes-ai-tool-meta-card'),
     aiToolMetaContent: document.getElementById('notes-ai-tool-meta-content'),
-    aiSettingsMcpToggle: document.getElementById('notes-ai-settings-mcp-toggle'),
     aiSettingsHistoryClear: document.getElementById('notes-ai-settings-history-clear'),
     logOutput: document.getElementById('notes-log-output'),
     toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
@@ -869,6 +870,7 @@ const state = {
         history: [],
     },
     aiToolsList: [],
+    aiMcpServersList: [],
     aiPromptJumpTargets: [],
     aiStickToBottom: true,
     currentWorkspaceName: '',
@@ -10523,16 +10525,19 @@ function applyAISessionManagement(nextState) {
 
 async function loadAISessionManagement() {
     try {
-        const [sessionState, toolsList] = await Promise.all([
+        const [sessionState, toolsList, mcpServers] = await Promise.all([
             GetAISessionManagement(),
             GetAIToolsList(),
+            GetAIMcpServers(),
         ]);
         applyAISessionManagement(sessionState);
         state.aiToolsList = Array.isArray(toolsList) ? toolsList : [];
+        state.aiMcpServersList = Array.isArray(mcpServers) ? mcpServers : [];
     } catch (err) {
         console.error('Failed to load AI session management:', err);
         applyAISessionManagement(null);
         state.aiToolsList = [];
+        state.aiMcpServersList = [];
     }
 }
 
@@ -10540,6 +10545,7 @@ function renderAISessionManagement() {
     renderAISessionList();
     renderAISessionHistory();
     renderAIToolsList();
+    renderAIMcpServersList();
 }
 
 function summarizePromptText(value, fallback) {
@@ -10792,6 +10798,45 @@ function renderAIToolsList() {
     elements.aiSettingsToolsList.innerHTML = items;
 }
 
+function getMcpServerDisplayName(server) {
+    const name = String(server?.name || '').trim() || 'Unknown MCP server';
+    const source = String(server?.source || '').trim();
+    const sourceLabel = source ? source.split('/').pop() : 'unknown source';
+    return `${name} (${sourceLabel})`;
+}
+
+function renderAIMcpServersList() {
+    if (!elements.aiSettingsMcpList) {
+        return;
+    }
+
+    const servers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
+    if (servers.length === 0) {
+        elements.aiSettingsMcpList.textContent = 'No MCP servers found in config.';
+        elements.aiSettingsMcpList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsMcpList.dataset.empty = 'false';
+    const items = servers.map((server, index) => {
+        const safeName = escapeHtml(getMcpServerDisplayName(server));
+        const safeKey = escapeHtml(String(server.key || ''));
+        const checked = server.loaded === true;
+        const loadable = server.loadable !== false;
+        const disabledAttr = loadable ? '' : 'disabled';
+        const itemClass = loadable ? 'notes-ai-settings-tool-item' : 'notes-ai-settings-tool-item notes-ai-settings-tool-item-disabled';
+
+        return `
+            <div class="${itemClass}" data-mcp-index="${index}">
+                <input type="checkbox" class="notes-ai-settings-tool-checkbox" data-mcp-key="${safeKey}" ${checked ? 'checked' : ''} ${disabledAttr}>
+                <span class="notes-ai-settings-tool-name">${safeName}</span>
+            </div>
+        `;
+    }).join('');
+
+    elements.aiSettingsMcpList.innerHTML = items;
+}
+
 function formatAIToolMetadataMarkdown(tool) {
     const name = String(tool?.name || '').trim() || 'Unknown tool';
     const description = String(tool?.description || '').trim() || 'No description available.';
@@ -10803,6 +10848,22 @@ function formatAIToolMetadataMarkdown(tool) {
     }
 
     return `## ${name}\n\n- [${enabled ? 'x' : ' '}] Enabled\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
+}
+
+function formatAIMcpServerMetadataMarkdown(server) {
+    const name = getMcpServerDisplayName(server);
+    const loaded = server?.loaded === true;
+    const loadable = server?.loadable !== false;
+    const source = String(server?.source || '').trim() || 'Unknown source';
+    const serverType = String(server?.serverType || server?.type || 'command').trim();
+    const loadedFrom = String(server?.loadedFrom || '').trim();
+    const config = String(server?.config || '{}').trim() || '{}';
+
+    const conflict = (!loadable && loadedFrom)
+        ? `\n\n> This server name is already loaded from:\n> ${loadedFrom}`
+        : '';
+
+    return `## ${name}\n\n- [${loaded ? 'x' : ' '}] Loaded\n- [${loadable ? 'x' : ' '}] Loadable\n- Source: ${source}\n- Type: ${serverType}${conflict}\n\n### Config\n\n\`\`\`json\n${config}\n\`\`\``;
 }
 
 async function openAIToolMetadataModal(index) {
@@ -10824,9 +10885,40 @@ async function openAIToolMetadataModal(index) {
     if (enabledCheckbox instanceof HTMLInputElement) {
         enabledCheckbox.disabled = false;
         enabledCheckbox.checked = tool.enabled === true;
+        enabledCheckbox.dataset.configType = 'tool';
         enabledCheckbox.dataset.toolIndex = String(index);
         enabledCheckbox.dataset.toolName = String(tool.name || '');
         enabledCheckbox.setAttribute('aria-label', 'Enabled');
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'true';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'false');
+    elements.aiToolMetaCard.focus();
+}
+
+async function openAIMcpServerMetadataModal(index) {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaCard || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    const servers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
+    const server = servers[index];
+    if (!server) {
+        return;
+    }
+
+    const markdown = formatAIMcpServerMetadataMarkdown(server);
+    elements.aiToolMetaContent.innerHTML = marked.parse(markdown);
+    await processMarkdownContainer(elements.aiToolMetaContent);
+
+    const enabledCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
+    if (enabledCheckbox instanceof HTMLInputElement) {
+        enabledCheckbox.disabled = server.loadable === false;
+        enabledCheckbox.checked = server.loaded === true;
+        enabledCheckbox.dataset.configType = 'mcp';
+        enabledCheckbox.dataset.mcpIndex = String(index);
+        enabledCheckbox.dataset.mcpKey = String(server.key || '');
+        enabledCheckbox.setAttribute('aria-label', 'Loaded');
     }
 
     elements.aiToolMetaModal.dataset.open = 'true';
@@ -12267,8 +12359,9 @@ if (elements.aiSettingsToolsList) {
 
         const enabled = checkbox.checked;
         SetAIToolEnabled(toolName, enabled).then(() => {
-            // Reload tools list to reflect changes
-            void loadAISessionManagement();
+            void loadAISessionManagement().then(() => {
+                renderAISessionManagement();
+            });
         }).catch((err) => {
             notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
             console.error(err);
@@ -12295,6 +12388,48 @@ if (elements.aiSettingsToolsList) {
         void openAIToolMetadataModal(index);
     });
 }
+if (elements.aiSettingsMcpList) {
+    elements.aiSettingsMcpList.addEventListener('change', (event) => {
+        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
+        if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const serverKey = String(checkbox.dataset.mcpKey || '').trim();
+        if (!serverKey) {
+            return;
+        }
+
+        const enabled = checkbox.checked;
+        SetAIMcpServerEnabled(serverKey, enabled).then(() => {
+            void loadAISessionManagement().then(() => {
+                renderAISessionManagement();
+            });
+        }).catch((err) => {
+            notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
+            console.error(err);
+            checkbox.checked = !enabled;
+        });
+    });
+
+    elements.aiSettingsMcpList.addEventListener('click', (event) => {
+        if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox') {
+            return;
+        }
+
+        const item = event.target instanceof Element ? event.target.closest('.notes-ai-settings-tool-item') : null;
+        if (!item || !elements.aiSettingsMcpList.contains(item)) {
+            return;
+        }
+
+        const index = Number(item.dataset.mcpIndex);
+        if (!Number.isInteger(index) || index < 0) {
+            return;
+        }
+
+        void openAIMcpServerMetadataModal(index);
+    });
+}
 if (elements.aiToolMetaModal && elements.aiToolMetaCard) {
     elements.aiToolMetaModal.addEventListener('click', (event) => {
         if (event.target === elements.aiToolMetaModal) {
@@ -12310,6 +12445,26 @@ if (elements.aiToolMetaContent) {
     elements.aiToolMetaContent.addEventListener('change', (event) => {
         const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
         if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const configType = String(checkbox.dataset.configType || '').trim();
+        if (configType === 'mcp') {
+            const serverKey = String(checkbox.dataset.mcpKey || '').trim();
+            if (!serverKey) {
+                return;
+            }
+
+            const enabled = checkbox.checked;
+            SetAIMcpServerEnabled(serverKey, enabled).then(() => {
+                void loadAISessionManagement().then(() => {
+                    renderAISessionManagement();
+                });
+            }).catch((err) => {
+                notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
+                console.error(err);
+                checkbox.checked = !enabled;
+            });
             return;
         }
 
@@ -12340,14 +12495,6 @@ if (elements.aiToolMetaContent) {
             notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
             console.error(err);
             checkbox.checked = !enabled;
-        });
-    });
-}
-if (elements.aiSettingsMcpToggle) {
-    elements.aiSettingsMcpToggle.addEventListener('click', () => {
-        ShowAIMcpMenu().catch((err) => {
-            notifyTerminal('Failed to open AI MCP menu', 'error');
-            console.error(err);
         });
     });
 }

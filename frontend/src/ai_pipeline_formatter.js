@@ -1,3 +1,4 @@
+import { applySyntaxHighlighting } from './markdown-utils.js';
 
 function normalizeChunk(value) {
     return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -11,10 +12,121 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;');
 }
 
-const SECTION_REGEX = /^(Question|Thought|Final Answer):[ 	]*/gm;
+const SECTION_REGEX = /^(Question|Thought|Final Answer|Action|Action Input|Action Output):[ \t]*/gm;
+
+const ACTION_INPUT_HEADING_REGEX = /Action Input:[ \t]*/g;
+const INLINE_HEADING_REGEX = /[ \t]*(Question|Thought|Final Answer|Action|Action Input|Action Output):[ \t]*/y;
+
+function findJsonBoundary(text, startIndex) {
+    let i = startIndex;
+    while (i < text.length && /\s/.test(text[i])) {
+        i += 1;
+    }
+
+    if (i >= text.length) {
+        return -1;
+    }
+
+    const opening = text[i];
+    if (opening !== '{' && opening !== '[') {
+        return -1;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let j = i; j < text.length; j += 1) {
+        const ch = text[j];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (ch === '{' || ch === '[') {
+            depth += 1;
+            continue;
+        }
+
+        if (ch === '}' || ch === ']') {
+            depth -= 1;
+            if (depth === 0) {
+                return j + 1;
+            }
+            if (depth < 0) {
+                return -1;
+            }
+        }
+    }
+
+    return -1;
+}
+
+function splitInlineHeadingsAfterActionInputJson(text) {
+    let source = String(text || '');
+    let scanFrom = 0;
+
+    while (scanFrom < source.length) {
+        ACTION_INPUT_HEADING_REGEX.lastIndex = scanFrom;
+        const headingMatch = ACTION_INPUT_HEADING_REGEX.exec(source);
+
+        if (!headingMatch) {
+            break;
+        }
+
+        const contentStart = headingMatch.index + headingMatch[0].length;
+        const jsonBoundary = findJsonBoundary(source, contentStart);
+        if (jsonBoundary === -1) {
+            scanFrom = contentStart;
+            continue;
+        }
+
+        let cursor = jsonBoundary;
+        while (cursor < source.length && (source[cursor] === ' ' || source[cursor] === '\t')) {
+            cursor += 1;
+        }
+
+        INLINE_HEADING_REGEX.lastIndex = cursor;
+        const inlineHeadingMatch = INLINE_HEADING_REGEX.exec(source);
+
+        if (inlineHeadingMatch && source[jsonBoundary - 1] !== '\n') {
+            source = `${source.slice(0, jsonBoundary)}\n${source.slice(cursor)}`;
+            scanFrom = jsonBoundary + 1;
+            continue;
+        }
+
+        scanFrom = jsonBoundary;
+    }
+
+    return source;
+}
+
+function normalizeInlineHeadingBoundaries(text) {
+    return splitInlineHeadingsAfterActionInputJson(text);
+}
+
+function sectionKindFromLabel(label) {
+    const lower = String(label || '').toLowerCase();
+    if (lower === 'action' || lower === 'action input' || lower === 'action output') {
+        return 'code';
+    }
+    return 'markdown';
+}
 
 function parseSections(source) {
-    const text = String(source || '');
+    const text = normalizeInlineHeadingBoundaries(source);
     const matches = Array.from(text.matchAll(SECTION_REGEX));
 
     if (matches.length === 0) {
@@ -34,25 +146,90 @@ function parseSections(source) {
 
         sections.push({
             label,
-            kind: 'markdown',
+            kind: sectionKindFromLabel(label),
             content,
         });
     }
 
-    return sections;
+    const expanded = [];
+    for (let i = 0; i < sections.length; i += 1) {
+        const section = sections[i];
+        if (section.label !== 'Action Input') {
+            expanded.push(section);
+            continue;
+        }
+
+        const split = splitActionInputContent(section.content);
+        expanded.push({
+            ...section,
+            content: split.actionInput,
+        });
+
+        // Only synthesise a trailing Final Answer if the next real section is
+        // NOT already a Final Answer — otherwise the same text would appear twice.
+        const nextSection = sections[i + 1];
+        const nextIsFinalAnswer = nextSection && nextSection.label === 'Final Answer';
+        if (split.trailingFinalAnswer && !nextIsFinalAnswer) {
+            expanded.push({
+                label: 'Final Answer',
+                kind: 'markdown',
+                content: split.trailingFinalAnswer,
+            });
+        }
+    }
+
+    return expanded;
+}
+
+function normalizeActionInputContent(text) {
+    const value = String(text || '');
+    if (value.endsWith('}') && !value.endsWith('}\n')) {
+        return `${value}\n`;
+    }
+    return value;
+}
+
+function splitActionInputContent(content) {
+    const text = String(content || '');
+    const boundary = findJsonBoundary(text, 0);
+    if (boundary === -1) {
+        return {
+            actionInput: text,
+            trailingFinalAnswer: '',
+        };
+    }
+
+    const actionInput = text.slice(0, boundary);
+    const trailingFinalAnswer = text.slice(boundary).trimStart();
+
+    return {
+        actionInput,
+        trailingFinalAnswer,
+    };
+}
+
+function renderPromptTitleHtml(title) {
+    const source = String(title || '');
+    const prompt = source.replace(/^\s*>\s?/, '');
+    const commandMatch = prompt.match(/^(\/[\-_.a-zA-Z0-9]+ )(.*)$/s);
+
+    if (!commandMatch) {
+        return `<blockquote><p><span style="color: var(--fg);">${escapeHtml(prompt)}</span></p></blockquote>`;
+    }
+
+    return `<blockquote><p><span style="color: var(--yellow);">${escapeHtml(commandMatch[1])}</span><span style="color: var(--fg);">${escapeHtml(commandMatch[2])}</span></p></blockquote>`;
 }
 
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
-    const lazyChunkSize = Math.max(8, Number(options.lazyChunkSize) || 24);
+    const processCodeContainer = options.processCodeContainer || processMarkdownContainer;
 
     let streamText = '';
     let renderVersion = 0;
     let jobRoot = null;
     let isRendering = false;
     let needsRender = false;
-    let lazyChunkObserver = null;
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -80,7 +257,6 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function clear() {
-        destroyLazyObserver();
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -88,7 +264,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         container.textContent = '';
     }
 
-    function startJob(content = '') {
+    function startJob(title = '') {
         const hasContent = container.children.length > 0
             || container.textContent.trim().length > 0;
         if (hasContent) {
@@ -109,14 +285,15 @@ export function createAIPipelineFormatter(container, options = {}) {
         ts.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         container.appendChild(ts);
 
-        if (content) {
-            const prefixEl = document.createElement('div');
-            prefixEl.className = 'notes-ai-prefix markdown-body';
-            container.appendChild(prefixEl);
+        if (title) {
+            const titleEl = document.createElement('div');
+            titleEl.className = 'notes-ai-title markdown-body';
+            titleEl.textContent = title;
+            container.appendChild(titleEl);
             void (async () => {
-                prefixEl.innerHTML = markedInstance ? markedInstance.parse(String(content)) : String(content);
+                titleEl.innerHTML = renderPromptTitleHtml(title);
                 if (processMarkdownContainer) {
-                    await processMarkdownContainer(prefixEl);
+                    await processMarkdownContainer(titleEl);
                 }
             })();
         }
@@ -141,6 +318,20 @@ export function createAIPipelineFormatter(container, options = {}) {
         return sectionEl;
     }
 
+    function buildCodeSection(label, content) {
+        const sectionEl = buildSectionShell(label);
+        const pre = document.createElement('pre');
+        pre.className = 'notes-ai-code';
+        const code = document.createElement('code');
+        if (label === 'Action Input' || label === 'Action Output') {
+            code.className = 'language-json';
+        }
+        code.textContent = content;
+        pre.appendChild(code);
+        sectionEl.appendChild(pre);
+        return sectionEl;
+    }
+
     async function patchMarkdownSection(sectionEl, content, version) {
         let markdownRoot = sectionEl.querySelector('.notes-ai-markdown');
         if (!markdownRoot) {
@@ -152,6 +343,14 @@ export function createAIPipelineFormatter(container, options = {}) {
         if (processMarkdownContainer) {
             await processMarkdownContainer(markdownRoot);
         }
+        return version === renderVersion;
+    }
+
+    async function patchCodeSection(sectionEl, version) {
+        if (processCodeContainer) {
+            await processCodeContainer(sectionEl);
+        }
+        await applySyntaxHighlighting(sectionEl);
         return version === renderVersion;
     }
 
@@ -212,37 +411,85 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
 
         // ── Patch / append each section ──────────────────────────────────────────
+        const codeCounts = new Map();
+
         for (let i = 0; i < sections.length; i += 1) {
             const section = sections[i];
             const key = sectionKeys[i];
             let el = existingEls[i];
 
-            const rawContent = section.content || '';
+            if (section.kind === 'code') {
+                const n = (codeCounts.get(section.label) || 0) + 1;
+                codeCounts.set(section.label, n);
 
-            if (el && el.dataset.label === section.label && el.dataset.key === key) {
-                // Same slot — only re-render if content changed.
-                if (el.dataset.rawContent !== rawContent) {
-                    el.dataset.rawContent = rawContent;
-                    const ok = await patchMarkdownSection(el, rawContent, version);
+                const content = (section.label === 'Action Input' || section.label === 'Action Output')
+                    ? normalizeActionInputContent(section.content)
+                    : String(section.content || '');
+
+                if (el && el.dataset.label === section.label && el.dataset.key === key) {
+                    // Same slot, same section type — only patch changed text.
+                    const code = el.querySelector('code');
+                    if (code && code.textContent !== content) {
+                        const pre = el.querySelector('.notes-ai-code');
+                        const sticky = isNearBottom(pre);
+                        code.textContent = content;
+                        const ok = await patchCodeSection(el, version);
+                        if (!ok) {
+                            return;
+                        }
+                        if (sticky) {
+                            pre.scrollTop = pre.scrollHeight;
+                        }
+                    }
+                } else {
+                    // New section or label mismatch — build fresh.
+                    const newEl = buildCodeSection(section.label, content);
+                    newEl.dataset.key = key;
+                    if (el) {
+                        root.replaceChild(newEl, el);
+                        existingEls[i] = newEl;
+                    } else {
+                        root.appendChild(newEl);
+                        existingEls.push(newEl);
+                    }
+                    const ok = await patchCodeSection(newEl, version);
                     if (!ok) {
                         return;
                     }
+                    // New code block always starts scrolled to bottom.
+                    const pre = newEl.querySelector('.notes-ai-code');
+                    if (pre) {
+                        pre.scrollTop = pre.scrollHeight;
+                    }
                 }
             } else {
-                // New section or label mismatch — build fresh.
-                const newEl = buildSectionShell(section.label);
-                newEl.dataset.key = key;
-                newEl.dataset.rawContent = rawContent;
-                if (el) {
-                    root.replaceChild(newEl, el);
-                    existingEls[i] = newEl;
+                const rawContent = section.content || '';
+
+                if (el && el.dataset.label === section.label && el.dataset.key === key) {
+                    // Same slot — only re-render if content changed.
+                    if (el.dataset.rawContent !== rawContent) {
+                        el.dataset.rawContent = rawContent;
+                        const ok = await patchMarkdownSection(el, rawContent, version);
+                        if (!ok) {
+                            return;
+                        }
+                    }
                 } else {
-                    root.appendChild(newEl);
-                    existingEls.push(newEl);
-                }
-                const ok = await patchMarkdownSection(newEl, rawContent, version);
-                if (!ok) {
-                    return;
+                    // New section or label mismatch — build fresh.
+                    const newEl = buildSectionShell(section.label);
+                    newEl.dataset.key = key;
+                    newEl.dataset.rawContent = rawContent;
+                    if (el) {
+                        root.replaceChild(newEl, el);
+                        existingEls[i] = newEl;
+                    } else {
+                        root.appendChild(newEl);
+                        existingEls.push(newEl);
+                    }
+                    const ok = await patchMarkdownSection(newEl, rawContent, version);
+                    if (!ok) {
+                        return;
+                    }
                 }
             }
         }
@@ -278,11 +525,6 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function setText(text) {
-        // setText is used for one-shot full-document renders (eg session restore).
-        // The content is already complete, so render it as a single markdown
-        // block rather than running it through parseSections — which would split
-        // a large historical log into N sections and call processMarkdownContainer
-        // N times (one full hljs + link-scan pass per section), locking the UI.
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -296,183 +538,12 @@ export function createAIPipelineFormatter(container, options = {}) {
             try {
                 do {
                     needsRender = false;
-                    await renderTextAsMarkdown(renderVersion);
+                    await renderCurrentStream(renderVersion);
                 } while (needsRender);
             } finally {
                 isRendering = false;
             }
         })();
-    }
-
-    function destroyLazyObserver() {
-        if (lazyChunkObserver) {
-            lazyChunkObserver.disconnect();
-            lazyChunkObserver = null;
-        }
-    }
-
-    function buildLazyChunks(markdownRoot) {
-        const children = Array.from(markdownRoot.children);
-        if (children.length === 0) {
-            return [];
-        }
-
-        const fragments = [];
-        for (let i = 0; i < children.length; i += lazyChunkSize) {
-            fragments.push(children.slice(i, i + lazyChunkSize));
-        }
-
-        markdownRoot.textContent = '';
-
-        const chunks = [];
-        for (const nodes of fragments) {
-            const chunk = document.createElement('section');
-            chunk.className = 'notes-ai-lazy-chunk';
-            chunk.dataset.lazyProcessed = '';
-
-            const content = document.createElement('div');
-            content.className = 'notes-ai-lazy-chunk-content';
-            for (const node of nodes) {
-                content.appendChild(node);
-            }
-
-            const spinner = document.createElement('div');
-            spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-chunk';
-
-            chunk.appendChild(content);
-            chunk.appendChild(spinner);
-            markdownRoot.appendChild(chunk);
-            chunks.push(chunk);
-        }
-
-        return chunks;
-    }
-
-    function primeLazyChunks(chunks, version) {
-        if (!Array.isArray(chunks) || chunks.length === 0) {
-            return;
-        }
-
-        const viewportTop = Number(container.scrollTop) || 0;
-        const viewportBottom = viewportTop + (Number(container.clientHeight) || 0);
-        const prewarmTop = Math.max(0, viewportTop - ((Number(container.clientHeight) || 0) * 2));
-        const prewarmBottom = viewportBottom + ((Number(container.clientHeight) || 0) * 2);
-
-        let matched = 0;
-        for (const chunk of chunks) {
-            const chunkTop = chunk.offsetTop;
-            const chunkBottom = chunkTop + chunk.offsetHeight;
-            if (chunkBottom < prewarmTop || chunkTop > prewarmBottom) {
-                continue;
-            }
-
-            matched += 1;
-            void processLazyChunk(chunk, version);
-        }
-
-        if (matched > 0) {
-            return;
-        }
-
-        const fromBottom = isNearBottom(container);
-        const seed = fromBottom ? chunks.slice(-3) : chunks.slice(0, 3);
-        for (const chunk of seed) {
-            void processLazyChunk(chunk, version);
-        }
-    }
-
-    async function renderTextAsMarkdown(version) {
-        destroyLazyObserver();
-
-        const root = ensureJobRoot();
-        let markdownRoot = root.querySelector('.notes-ai-markdown');
-        if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
-            root.textContent = '';
-            markdownRoot = document.createElement('div');
-            markdownRoot.className = 'notes-ai-markdown markdown-body';
-            root.appendChild(markdownRoot);
-        }
-
-        if (!streamText) {
-            markdownRoot.innerHTML = '';
-            return;
-        }
-
-        // Show a loading spinner while marked.parse() runs (synchronous and
-        // can block for large documents).  We yield to the browser after
-        // inserting the spinner so it actually paints before we block.
-        markdownRoot.innerHTML = '';
-        const loadingSpinner = document.createElement('div');
-        loadingSpinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
-        markdownRoot.appendChild(loadingSpinner);
-
-        // Yield so the browser paints the spinner before the blocking parse
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-        if (version !== renderVersion) return;
-
-        // Parse markdown into HTML and insert into DOM.
-        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
-
-        // Lazy-process elements as they scroll into view using IntersectionObserver.
-        // This avoids running expensive operations (syntax highlighting, mermaid,
-        // autoHyperlink, table setup, image processing) on the entire document at
-        // once, which would lock the UI for large session logs.
-        if (!processMarkdownContainer) {
-            return;
-        }
-
-        const scrollRoot = container; // the scroll parent (#notes-ai-output)
-
-        const chunks = buildLazyChunks(markdownRoot);
-
-        lazyChunkObserver = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                if (!entry.isIntersecting) {
-                    continue;
-                }
-
-                const chunk = entry.target;
-                lazyChunkObserver.unobserve(chunk);
-                void processLazyChunk(chunk, version);
-            }
-        }, {
-            root: scrollRoot,
-            rootMargin: '1200px 0px',
-        });
-
-        for (const chunk of chunks) {
-            lazyChunkObserver.observe(chunk);
-        }
-
-        primeLazyChunks(chunks, version);
-    }
-
-    async function processLazyChunk(chunk, version) {
-        if (!chunk || chunk.dataset.lazyProcessed === 'done' || chunk.dataset.lazyProcessed === 'pending') {
-            return;
-        }
-
-        chunk.dataset.lazyProcessed = 'pending';
-
-        const chunkContent = chunk.querySelector('.notes-ai-lazy-chunk-content');
-        if (!chunkContent) {
-            chunk.dataset.lazyProcessed = 'done';
-            return;
-        }
-
-        try {
-            await processMarkdownContainer(chunkContent);
-            if (version !== renderVersion) {
-                return;
-            }
-
-            const codeBlocks = chunkContent.querySelectorAll('pre');
-            for (const block of codeBlocks) {
-                block.scrollTop = block.scrollHeight;
-            }
-        } finally {
-            chunk.dataset.lazyProcessed = 'done';
-        }
     }
 
     return {

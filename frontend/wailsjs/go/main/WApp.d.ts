@@ -47,6 +47,8 @@ export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
 export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
+export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
+
 export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
@@ -198,6 +200,8 @@ export function SaveImageDialog(arg1:string):Promise<string>;
 export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SendToTerminal(arg1:string):Promise<void>;
+
+export function SetAIMcpServerEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 

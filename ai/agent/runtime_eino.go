@@ -28,6 +28,9 @@ type einoRuntime struct {
 
 const einoMaxHistoryTurns = 8
 
+// Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
+const einoAnthropicMaxTokens = 8192
+
 type aiStreamCallbackCtxKey struct{}
 
 type einoAgentTool struct {
@@ -81,8 +84,8 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	emitAIStreamToolProgress(ctx, "\n## Action\n\n> "+t.delegate.Name()+"\n\n")
-	emitAIStreamToolProgress(ctx, "\n## Action Input\n\n```\n"+argumentsInJSON+"\n```\n\n")
+	emitAIStreamToolProgress(ctx, "Action: "+t.delegate.Name()+"\n")
+	emitAIStreamToolProgress(ctx, "Action Input: "+argumentsInJSON+"\n")
 
 	toolInput := argumentsInJSON
 	if t.unwrapInputField {
@@ -95,7 +98,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	}
 
 	if output != "" {
-		emitAIStreamToolProgress(ctx, "\n## Action Output\n\n```\n"+output+"\n```\n\n")
+		emitAIStreamToolProgress(ctx, "Action Output: "+output+"\n")
 	}
 
 	return output, nil
@@ -283,7 +286,7 @@ func (r *einoRuntime) initAnthropic() error {
 		APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
 		BaseURL:   baseURL,
 		Model:     r.agent.ModelName(),
-		MaxTokens: 3000,
+		MaxTokens: einoAnthropicMaxTokens,
 	})
 	if err != nil {
 		return err
