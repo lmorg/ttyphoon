@@ -5,17 +5,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einoOllama "github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/callbacks"
+	einoModel "github.com/cloudwego/eino/components/model"
 	einoTool "github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	einoAgent "github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
+	einoCBUtils "github.com/cloudwego/eino/utils/callbacks"
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
@@ -30,6 +36,9 @@ const einoMaxHistoryTurns = 8
 
 // Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
 const einoAnthropicMaxTokens = 8192
+
+// Anthropic's thinking budget; must be less than einoAnthropicMaxTokens.
+const einoAnthropicThinkingBudget = 2048
 
 type aiStreamCallbackCtxKey struct{}
 
@@ -84,8 +93,7 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	emitAIStreamToolProgress(ctx, "Action: "+t.delegate.Name()+"\n")
-	emitAIStreamToolProgress(ctx, "Action Input: "+argumentsInJSON+"\n")
+	emitAIStreamToolProgress(ctx, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON))
 
 	toolInput := argumentsInJSON
 	if t.unwrapInputField {
@@ -94,14 +102,31 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 	output, err := t.delegate.Call(ctx, toolInput)
 	if err != nil {
+		emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
 		return output, err
 	}
 
 	if output != "" {
-		emitAIStreamToolProgress(ctx, "Action Output: "+output+"\n")
+		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
 	}
 
 	return output, nil
+}
+
+// Tool progress is emitted as real markdown with ~~~~ tilde fences (rather than
+// ``` triple-backticks) so tool arguments or outputs that themselves contain
+// ``` blocks don't prematurely close the fence and leak into the surrounding UI.
+
+func formatToolCallMarkdown(name, argumentsInJSON string) string {
+	return fmt.Sprintf("\n\n**Tool call:** `%s`\n\n~~~~json\n%s\n~~~~\n\n", name, argumentsInJSON)
+}
+
+func formatToolOutputMarkdown(output string) string {
+	return fmt.Sprintf("**Tool output:**\n\n~~~~\n%s\n~~~~\n\n", output)
+}
+
+func formatToolErrorMarkdown(err error) string {
+	return fmt.Sprintf("**Tool error:**\n\n~~~~\n%s\n~~~~\n\n", err.Error())
 }
 
 func unwrapToolInput(argumentsInJSON string) string {
@@ -125,23 +150,64 @@ func unwrapToolInput(argumentsInJSON string) string {
 	return argumentsInJSON
 }
 
-func withAIStreamCallback(ctx context.Context, fn func(string)) context.Context {
-	if fn == nil {
+// aiStreamEmitter serialises text and reasoning chunks onto a single stream,
+// wrapping reasoning in a markdown blockquote that opens on the first reasoning
+// chunk and closes when non-reasoning content follows.
+type aiStreamEmitter struct {
+	mu         sync.Mutex
+	fn         func(string)
+	inThinking bool
+}
+
+func (e *aiStreamEmitter) emitText(text string) {
+	if e == nil || e.fn == nil || text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.inThinking {
+		e.fn("\n\n")
+		e.inThinking = false
+	}
+	e.fn(text)
+}
+
+func (e *aiStreamEmitter) emitReasoning(text string) {
+	if e == nil || e.fn == nil || text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.inThinking {
+		e.fn("\n> **Thinking:** ")
+		e.inThinking = true
+	}
+	e.fn(strings.ReplaceAll(text, "\n", "\n> "))
+}
+
+func withAIStreamCallback(ctx context.Context, emitter *aiStreamEmitter) context.Context {
+	if emitter == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, aiStreamCallbackCtxKey{}, fn)
+	return context.WithValue(ctx, aiStreamCallbackCtxKey{}, emitter)
 }
 
 func emitAIStreamToolProgress(ctx context.Context, text string) {
 	if text == "" || ctx == nil {
 		return
 	}
-	v := ctx.Value(aiStreamCallbackCtxKey{})
-	fn, ok := v.(func(string))
-	if !ok || fn == nil {
+	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
+		emitter.emitText(text)
+	}
+}
+
+func emitAIStreamReasoning(ctx context.Context, text string) {
+	if text == "" || ctx == nil {
 		return
 	}
-	fn(text)
+	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
+		emitter.emitReasoning(text)
+	}
 }
 
 func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
@@ -287,6 +353,10 @@ func (r *einoRuntime) initAnthropic() error {
 		BaseURL:   baseURL,
 		Model:     r.agent.ModelName(),
 		MaxTokens: einoAnthropicMaxTokens,
+		Thinking: &claude.Thinking{
+			Enable:       true,
+			BudgetTokens: einoAnthropicThinkingBudget,
+		},
 	})
 	if err != nil {
 		return err
@@ -396,40 +466,87 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 	}
 
-	ctx = withAIStreamCallback(ctx, streamCallback)
+	emitter := &aiStreamEmitter{fn: streamCallback}
+	ctx = withAIStreamCallback(ctx, emitter)
 
 	history, err := sessiondb.ActiveSessionEntries(r.agent.Workspace(), einoMaxHistoryTurns)
 	if err != nil {
 		return "", err
 	}
 
-	stream, err := r.agentReact.Stream(ctx, buildEinoConversationMessages(history, messages))
+	// The react agent's stream branch consumes intermediate model turns to detect tool calls,
+	// so reasoning content emitted before tool calls never reaches the outer stream. Hook a
+	// per-model-node callback to observe every turn's stream and forward reasoning to the emitter.
+	reasoningWait := &sync.WaitGroup{}
+	modelHandler := &einoCBUtils.ModelCallbackHandler{
+		OnEndWithStreamOutput: func(cbCtx context.Context, _ *callbacks.RunInfo, stream *schema.StreamReader[*einoModel.CallbackOutput]) context.Context {
+			reasoningWait.Add(1)
+			go func() {
+				defer reasoningWait.Done()
+				drainReasoningStream(stream, emitter)
+			}()
+			return cbCtx
+		},
+	}
+	cbHandler := einoCBUtils.NewHandlerHelper().ChatModel(modelHandler).Handler()
+
+	stream, err := r.agentReact.Stream(ctx,
+		buildEinoConversationMessages(history, messages),
+		einoAgent.WithComposeOptions(compose.WithCallbacks(cbHandler)),
+	)
 	if err != nil {
 		return "", err
 	}
 	defer stream.Close()
 
+	// Reasoning is streamed to the frontend and log via the callback above; the outer loop only
+	// accumulates Content into the returned string used for conversation history.
 	var response strings.Builder
+	var chunkCount, contentChunks int
 	for {
 		msg, recvErr := stream.Recv()
 		if recvErr == io.EOF {
 			break
 		}
 		if recvErr != nil {
+			reasoningWait.Wait()
 			return response.String(), recvErr
 		}
 
-		if msg == nil || msg.Content == "" {
+		if msg == nil {
 			continue
 		}
+		chunkCount++
 
-		response.WriteString(msg.Content)
-		if streamCallback != nil {
-			streamCallback(msg.Content)
+		if msg.Content != "" {
+			contentChunks++
+			response.WriteString(msg.Content)
+			emitter.emitText(msg.Content)
 		}
 	}
+	reasoningWait.Wait()
+	log.Printf("[debug] AI stream drained: chunks=%d content=%d", chunkCount, contentChunks)
 
 	return response.String(), nil
+}
+
+func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput], emitter *aiStreamEmitter) {
+	defer stream.Close()
+	for {
+		out, err := stream.Recv()
+		if err == io.EOF {
+			return
+		}
+		if err != nil {
+			return
+		}
+		if out == nil || out.Message == nil {
+			continue
+		}
+		if out.Message.ReasoningContent != "" {
+			emitter.emitReasoning(out.Message.ReasoningContent)
+		}
+	}
 }
 
 func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {

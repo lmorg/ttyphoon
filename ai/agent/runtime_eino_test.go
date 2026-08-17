@@ -222,9 +222,10 @@ func TestSanitizeToolName_AllowsOnlyProviderSafeCharacters(t *testing.T) {
 
 func TestWithAIStreamCallback_EmitsToolProgress(t *testing.T) {
 	var chunks []string
-	ctx := withAIStreamCallback(context.Background(), func(s string) {
+	emitter := &aiStreamEmitter{fn: func(s string) {
 		chunks = append(chunks, s)
-	})
+	}}
+	ctx := withAIStreamCallback(context.Background(), emitter)
 
 	emitAIStreamToolProgress(ctx, "\n## Action\n\nmcp_atlassian_search\n\n")
 	emitAIStreamToolProgress(ctx, "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n")
@@ -242,10 +243,57 @@ func TestWithAIStreamCallback_EmitsToolProgress(t *testing.T) {
 	}
 }
 
+func TestAIStreamEmitter_WrapsReasoningAsBlockquote(t *testing.T) {
+	var chunks []string
+	emitter := &aiStreamEmitter{fn: func(s string) { chunks = append(chunks, s) }}
+
+	emitter.emitReasoning("first thought")
+	emitter.emitReasoning("\nsecond thought")
+	emitter.emitText("Final answer.")
+
+	got := strings.Join(chunks, "")
+	want := "\n> **Thinking:** first thought\n> second thought\n\nFinal answer."
+	if got != want {
+		t.Fatalf("emitted stream = %q, want %q", got, want)
+	}
+}
+
+func TestAIStreamEmitter_ReopensBlockquoteAfterText(t *testing.T) {
+	var chunks []string
+	emitter := &aiStreamEmitter{fn: func(s string) { chunks = append(chunks, s) }}
+
+	emitter.emitReasoning("thinking A")
+	emitter.emitText("Action: foo\n")
+	emitter.emitReasoning("thinking B")
+	emitter.emitText("Final.")
+
+	got := strings.Join(chunks, "")
+	want := "\n> **Thinking:** thinking A\n\nAction: foo\n\n> **Thinking:** thinking B\n\nFinal."
+	if got != want {
+		t.Fatalf("emitted stream = %q, want %q", got, want)
+	}
+}
+
 func TestEmitAIStreamToolProgress_NoCallbackNoPanic(t *testing.T) {
 	emitAIStreamToolProgress(context.Background(), "\n## Action\n\nx\n\n")
 	emitAIStreamToolProgress(nil, "\n## Action\n\nx\n\n")
 	emitAIStreamToolProgress(context.Background(), "")
+}
+
+func TestFormatToolCallMarkdown_UsesTildeFences(t *testing.T) {
+	got := formatToolCallMarkdown("mcp_atlassian_search", `{"query":"abc"}`)
+	want := "\n\n**Tool call:** `mcp_atlassian_search`\n\n~~~~json\n{\"query\":\"abc\"}\n~~~~\n\n"
+	if got != want {
+		t.Fatalf("formatToolCallMarkdown = %q, want %q", got, want)
+	}
+}
+
+func TestFormatToolOutputMarkdown_UsesTildeFences(t *testing.T) {
+	got := formatToolOutputMarkdown("some text with ``` inside")
+	want := "**Tool output:**\n\n~~~~\nsome text with ``` inside\n~~~~\n\n"
+	if got != want {
+		t.Fatalf("formatToolOutputMarkdown = %q, want %q", got, want)
+	}
 }
 
 func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {

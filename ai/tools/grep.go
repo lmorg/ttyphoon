@@ -95,6 +95,9 @@ func (t *Grep) newSearch(input *grepInputT) *grepReturnT {
 		return &grepReturnT{Error: err.Error()}
 	}
 
+	if len(t.cache) == 0 {
+		return &grepReturnT{Results: []*grep.Result{}}
+	}
 	return &grepReturnT{PageCount: len(t.cache), Results: t.cache[0]}
 }
 
