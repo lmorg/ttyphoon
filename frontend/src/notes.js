@@ -12,6 +12,7 @@ import {
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
+    ListAIPromptLogs, GetAIPromptLog,
     GetAIToolsList, SetAIToolEnabled, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
@@ -10560,6 +10561,8 @@ function summarizePromptText(value, fallback) {
 }
 
 function collectAIPromptTargets() {
+    // Deprecated: legacy DOM-based prompt collector kept as a fallback for the
+    // initial refresh before the async backend list resolves.
     if (!elements.aiOutput) {
         return [];
     }
@@ -10584,29 +10587,7 @@ function collectAIPromptTargets() {
         }
 
         targets.push({
-            element: heading,
-            summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
-        });
-    }
-
-    const promptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-markdown h2, .notes-ai-markdown h3');
-    for (const heading of promptHeadings) {
-        const label = String(heading.textContent || '').trim().toLowerCase();
-        if (label !== 'prompt') {
-            continue;
-        }
-
-        let summaryText = '';
-        let sibling = heading.nextElementSibling;
-        while (sibling) {
-            summaryText = summarizePromptText(sibling.textContent, '');
-            if (summaryText) {
-                break;
-            }
-            sibling = sibling.nextElementSibling;
-        }
-
-        targets.push({
+            source: 'dom',
             element: heading,
             summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
         });
@@ -10615,14 +10596,47 @@ function collectAIPromptTargets() {
     return targets;
 }
 
-function renderAIPromptJumpDropdown() {
+// Backend-provided prompt log metadata, refreshed on aiJobFinish / panel init.
+// Each entry is { sessionId, promptId, heading, summary } from Go via
+// ListAIPromptLogs. The heading is the "<!-- request heading: … -->" comment
+// captured when the prompt started; summary is the rendered dropdown label.
+async function refreshAIPromptJumpFromBackend() {
     if (!elements.toolsAIPromptJump) {
         return;
     }
 
-    const targets = collectAIPromptTargets();
+    let metas = [];
+    try {
+        const raw = await ListAIPromptLogs();
+        metas = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+        console.error('Failed to load AI prompt logs:', err);
+        metas = [];
+    }
+
+    const targets = metas.map((meta, index) => ({
+        source: 'backend',
+        sessionId: Number(meta?.sessionId) || 0,
+        promptId: Number(meta?.promptId) || 0,
+        summary: summarizePromptText(String(meta?.heading || ''), `Prompt ${index + 1}`),
+    })).filter((entry) => entry.sessionId > 0 && entry.promptId > 0);
+
     state.aiPromptJumpTargets = targets;
     elements.toolsAIPromptJump.disabled = targets.length === 0;
+}
+
+function renderAIPromptJumpDropdown() {
+    // Initial synchronous render uses any DOM-collected prompts, then the
+    // backend list overrides asynchronously.
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+    const domTargets = collectAIPromptTargets();
+    if (!Array.isArray(state.aiPromptJumpTargets) || state.aiPromptJumpTargets.length === 0) {
+        state.aiPromptJumpTargets = domTargets;
+    }
+    elements.toolsAIPromptJump.disabled = state.aiPromptJumpTargets.length === 0;
+    void refreshAIPromptJumpFromBackend();
 }
 
 function scheduleAIPromptJumpRefresh() {
@@ -10636,17 +10650,31 @@ function scheduleAIPromptJumpRefresh() {
     }, 40);
 }
 
-function jumpToAIPrompt(index) {
-    if (!elements.aiOutput) {
+async function jumpToAIPrompt(index) {
+    const target = state.aiPromptJumpTargets[index];
+    if (!target) {
         return;
     }
 
-    const target = state.aiPromptJumpTargets[index]?.element;
-    if (!(target instanceof Element)) {
+    if (target.source === 'backend' && target.sessionId > 0 && target.promptId > 0) {
+        try {
+            const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
+            aiPipelineFormatter.clear();
+            if (markdown) {
+                setAIFinalOutput(String(markdown), { forceBottom: true });
+            }
+            state.aiSessionCache = String(markdown || '');
+        } catch (err) {
+            console.error('Failed to load AI prompt log:', err);
+        }
         return;
     }
 
-    const nextTop = Math.max(0, Number(target.offsetTop) - 8);
+    if (!elements.aiOutput || !(target.element instanceof Element)) {
+        return;
+    }
+
+    const nextTop = Math.max(0, Number(target.element.offsetTop) - 8);
     elements.aiOutput.scrollTo({ top: nextTop, behavior: 'smooth' });
     state.aiStickToBottom = false;
     updateAIScrollBottomButton();
@@ -10676,7 +10704,7 @@ function openAIPromptJumpMenu() {
                 return;
             }
             const originalIndex = targets.indexOf(reversedTargets[index]);
-            jumpToAIPrompt(originalIndex);
+            void jumpToAIPrompt(originalIndex);
         },
     });
 }
@@ -11980,22 +12008,19 @@ function clearAIOutput() {
 }
 
 function startAIJob(title) {
-    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
+    // Per-prompt log files: clear the panel so only the new prompt renders.
+    aiPipelineFormatter.clear();
     aiPipelineFormatter.startJob(String(title || ''));
     scheduleAIPromptJumpRefresh();
-    if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
-    } else {
-        requestAnimationFrame(() => {
-            updateAIScrollBottomButton();
-        });
-    }
+    requestAnimationFrame(() => {
+        scrollAIOutputToBottom();
+    });
 }
 
 function finishAIJob() {
     aiPipelineFormatter.finishJob();
+    // Newly-finalized prompt log is now on disk; refresh the dropdown.
+    void refreshAIPromptJumpFromBackend();
 }
 
 function appendAIText(text) {
@@ -12130,6 +12155,7 @@ async function loadAISessionCache(workspaceName) {
         if (state.aiSessionCache) {
             setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
         }
+        void refreshAIPromptJumpFromBackend();
         if (elements.aiSettingsModal?.dataset?.open === 'true') {
             void loadAISessionManagement().then(() => {
                 renderAISessionManagement();
@@ -12553,6 +12579,7 @@ GetNotesStructViewMaxSizeKB().then((maxSizeKb) => {
 
 initNotesAIPanel(elements);
 initAIPromptJumpObserver();
+void refreshAIPromptJumpFromBackend();
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
         const tocButton = event.target.closest('.notes-tools-toc-item');

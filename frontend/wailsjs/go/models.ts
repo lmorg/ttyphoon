@@ -687,6 +687,24 @@ export namespace sessiondb {
 		    return a;
 		}
 	}
+	export class PromptLogMeta {
+	    sessionId: number;
+	    promptId: number;
+	    heading: string;
+	    sizeBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptLogMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.promptId = source["promptId"];
+	        this.heading = source["heading"];
+	        this.sizeBytes = source["sizeBytes"];
+	    }
+	}
 
 }
 

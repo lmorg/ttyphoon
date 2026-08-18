@@ -201,15 +201,6 @@ func emitAIStreamToolProgress(ctx context.Context, text string) {
 	}
 }
 
-func emitAIStreamReasoning(ctx context.Context, text string) {
-	if text == "" || ctx == nil {
-		return
-	}
-	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
-		emitter.emitReasoning(text)
-	}
-}
-
 func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 	tools := make([]einoTool.BaseTool, 0)
 	usedNames := make(map[string]struct{})

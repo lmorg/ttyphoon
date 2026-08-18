@@ -152,14 +152,14 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
-
-		} else {
-			if storeErr := sessiondb.AppendActiveSessionEntry(agt.Workspace(), query, agt.Meta.CmdLine, agt.Meta.OutputBlock, result); storeErr != nil {
-				agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
-			}
 		}
 
-		emitAIFinalResponse(agt, result)
+		_, promptID, storeErr := sessiondb.AppendActiveSessionEntry(agt.Workspace(), query, agt.Meta.CmdLine, agt.Meta.OutputBlock, result)
+		if storeErr != nil {
+			agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
+		}
+
+		emitAIFinalResponse(agt, result, promptID)
 		finishAIJob(agt)
 
 		endTime := time.Now()
@@ -225,11 +225,12 @@ func emitAIResponseChunk(agt *agent.Agent, chunk string) {
 	}, sessiondb.SESSION_LOG_APPEND_CHUNK, chunk)
 }
 
-func emitAIFinalResponse(agt *agent.Agent, output string) {
+func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64) {
 	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
 		Workspace:       agt.Workspace(),
 		CommandLine:     agt.Meta.CmdLine,
 		OutputBlock:     agt.Meta.OutputBlock,
+		PromptID:        promptID,
 		WorkspaceActive: agt.IsWorkspaceActive(),
 		Emit: func(event string, payload any) {
 			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)

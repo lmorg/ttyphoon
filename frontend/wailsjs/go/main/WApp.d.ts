@@ -49,6 +49,8 @@ export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<
 
 export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
 
+export function GetAIPromptLog(arg1:number,arg2:number):Promise<string>;
+
 export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
@@ -102,6 +104,8 @@ export function GetWindowStyle():Promise<main.WindowStyleT>;
 export function HyperlinkOpenWithDefault(arg1:string):Promise<void>;
 
 export function ListAIModelSelections():Promise<Array<string>>;
+
+export function ListAIPromptLogs():Promise<Array<sessiondb.PromptLogMeta>>;
 
 export function ListFiles():Promise<Array<string>>;
 

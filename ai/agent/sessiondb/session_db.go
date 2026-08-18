@@ -247,28 +247,30 @@ func ClearActiveSession(workspace string, limit int) (FrontendStateT, error) {
 	return state, nil
 }
 
-func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmResponse string) error {
+// AppendActiveSessionEntry inserts a new prompt/response row into the active session's history
+// table and returns the promptID (the row's autoincrement id) alongside the active session id.
+func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmResponse string) (sessionID, promptID int64, err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	db, err := openDB(workspace)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		return fmt.Errorf("cannot begin sessiondb transaction: %w", err)
+		return 0, 0, fmt.Errorf("cannot begin sessiondb transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	activeID, err := ensureActiveSessionTx(tx)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	_, err = tx.Exec(
+	res, err := tx.Exec(
 		fmt.Sprintf(`INSERT INTO %s (prompt, command_line, output_block, llm_response) VALUES (?, ?, ?, ?)`, quotedSessionTable(activeID)),
 		strings.TrimSpace(prompt),
 		strings.TrimSpace(commandLine),
@@ -276,7 +278,12 @@ func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmRe
 		strings.TrimSpace(llmResponse),
 	)
 	if err != nil {
-		return fmt.Errorf("cannot insert session history row: %w", err)
+		return 0, 0, fmt.Errorf("cannot insert session history row: %w", err)
+	}
+
+	insertedID, err := res.LastInsertId()
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot resolve inserted prompt id: %w", err)
 	}
 
 	if _, err := tx.Exec(
@@ -286,14 +293,14 @@ func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmRe
 		sessionSummary(prompt),
 		activeID,
 	); err != nil {
-		return fmt.Errorf("cannot update active session metadata: %w", err)
+		return 0, 0, fmt.Errorf("cannot update active session metadata: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("cannot commit sessiondb transaction: %w", err)
+		return 0, 0, fmt.Errorf("cannot commit sessiondb transaction: %w", err)
 	}
 
-	return nil
+	return activeID, insertedID, nil
 }
 
 func ActiveSessionEntries(workspace string, limit int) ([]Entry, error) {

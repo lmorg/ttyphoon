@@ -2108,6 +2108,26 @@ func (a *WApp) GetAISessionCache(workspace string) string {
 	return sessiondb.GetSessionLog(workspace)
 }
 
+// ListAIPromptLogs returns metadata for every per-prompt log file in the active
+// AI session for the current workspace. Ordered chronologically (oldest first).
+func (a *WApp) ListAIPromptLogs() []sessiondb.PromptLogMeta {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return nil
+	}
+	return sessiondb.ListPromptLogs(agt.Workspace())
+}
+
+// GetAIPromptLog returns the markdown content of a specific prompt log for the
+// current workspace's AI session.
+func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
+}
+
 func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {
 	return notes.GetColumnWidths(filename, view, headings, wrapped)
 }

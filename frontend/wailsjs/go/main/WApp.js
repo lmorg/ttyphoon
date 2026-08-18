@@ -82,6 +82,10 @@ export function GetAIMcpServers() {
   return window['go']['main']['WApp']['GetAIMcpServers']();
 }
 
+export function GetAIPromptLog(arg1, arg2) {
+  return window['go']['main']['WApp']['GetAIPromptLog'](arg1, arg2);
+}
+
 export function GetAISessionCache(arg1) {
   return window['go']['main']['WApp']['GetAISessionCache'](arg1);
 }
@@ -188,6 +192,10 @@ export function HyperlinkOpenWithDefault(arg1) {
 
 export function ListAIModelSelections() {
   return window['go']['main']['WApp']['ListAIModelSelections']();
+}
+
+export function ListAIPromptLogs() {
+  return window['go']['main']['WApp']['ListAIPromptLogs']();
 }
 
 export function ListFiles() {
