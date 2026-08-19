@@ -21,21 +21,21 @@ func lookupTertiaryCsi(_ *Term, code []rune) {
 	case 'B':
 		switch param {
 		case "1":
-			log.Printf("DEBUG: BEGIN 1")
+			log.Print(`[trace] term: lookupTertiaryCsi()="B1"`)
 
 		default:
-			log.Printf("Tertiary CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), param)
+			log.Printf("[warn] term: Tertiary CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), param)
 		}
 
 	case 'E':
 		switch param {
 		case "1":
-			log.Printf("DEBUG: END 1")
+			log.Print(`[trace] term: lookupTertiaryCsi()="E1"`)
 		default:
-			log.Printf("Tertiary CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), param)
+			log.Printf("[warn] term: Tertiary CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), param)
 		}
 
 	default:
-		log.Printf("Tertiary CSI code not implemented: %s (%s)", string(r), string(code))
+		log.Printf("[warn] term: Tertiary CSI code not implemented: %s (%s)", string(r), string(code))
 	}
 }

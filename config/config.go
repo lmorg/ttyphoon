@@ -70,7 +70,7 @@ func readConfigFile(r io.Reader) error {
 
 	err := yml.Decode(&Config)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[error] %v", err)
 		return err
 	}
 

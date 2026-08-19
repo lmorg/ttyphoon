@@ -15,7 +15,7 @@ import (
 
 func startServerCmdLine(cfgPath string, agent *Agent, envvars []string, server string, svr mcp_config.ServerT) error {
 	debug.Log(envvars)
-	log.Printf("MCP server %s: %s %v", server, svr.Command, svr.Args)
+	log.Printf("[info] MCP server %s: %s %v", server, svr.Command, svr.Args)
 
 	c, err := mcp_client.ConnectCmdLine(&svr.Override, envvars, svr.Command, svr.Args...)
 	if err != nil {
@@ -27,7 +27,7 @@ func startServerCmdLine(cfgPath string, agent *Agent, envvars []string, server s
 
 func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config.ServerT) error {
 	serverURL := svr.Url
-	log.Printf("MCP server %s: %s", server, serverURL)
+	log.Printf("[info] MCP server %s: %s", server, serverURL)
 	hooks := mcp_client.OAuthUIHooks{
 		OpenBrowser: func(authURL string) {
 			rctx := agent.Renderer().GetWindowContext()
@@ -91,7 +91,7 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 	for i := range c.Tools.Tools {
 		toolNames[i] = c.Tools.Tools[i].Name
 	}
-	log.Printf("MCP server %s: %d tools advertised: %s", server, len(toolNames), strings.Join(toolNames, ", "))
+	log.Printf("[debug] MCP server %s: %d tools advertised: %s", server, len(toolNames), strings.Join(toolNames, ", "))
 
 	for i := range c.Tools.Tools {
 		tool := c.Tools.Tools[i]

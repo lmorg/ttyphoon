@@ -30,6 +30,6 @@ func (term *Term) osc1337iTerm2(params []string) {
 		_osc7UpdatePath(term, host, kv[1])
 
 	default:
-		log.Printf("unsupported iTerm2 escape sequence: %s", params[0])
+		log.Printf("[error] term: unsupported iTerm2 escape sequence: %s", params[0])
 	}
 }

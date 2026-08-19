@@ -63,7 +63,7 @@ func ReadEnvConfig() {
 	for i := range files {
 		f, err := os.Open(files[i])
 		if err != nil {
-			log.Print(err)
+			log.Printf("[error] %v", err)
 			continue
 		}
 		scanner := bufio.NewScanner(f)

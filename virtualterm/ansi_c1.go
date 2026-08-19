@@ -62,20 +62,20 @@ func (term *Term) parseC1Codes() {
 			term.c1DecalnTestAlignment()
 
 		default:
-			log.Printf("TODO: Unhandled DEC C1 escape sequence: {ESC}#%s", string(r))
+			log.Printf("[warn] term: Unhandled DEC C1 escape sequence: {ESC}#%s", string(r))
 		}
 
 	case ' ':
 		// 7/8bit controls
 		// ANSI conformance level
 		param, _ := term.Pty.Read()
-		log.Printf("DEBUG: Ignored '{ESC}%%%s' sequence", string(param))
+		log.Printf("[warn] term: Ignored '{ESC}%%%s' sequence", string(param))
 
 	case '%':
 		// @: Select default character set.  That is ISO 8859-1 (ISO 2022).
 		// G: Select UTF-8 character set, ISO 2022.
 		param, _ := term.Pty.Read() // Ignore these sequences. We always default to UTF-8
-		log.Printf("DEBUG: Ignored '{ESC}%%%s' sequence, we always default to UTF-8", string(param))
+		log.Printf("[warn] term: Ignored '{ESC}%%%s' sequence, we always default to UTF-8", string(param))
 
 	case '(':
 		// Designate G0 Character Set (ISO 2022), VT100.
@@ -117,7 +117,7 @@ func (term *Term) parseC1Codes() {
 
 	case 'c':
 		// Full Reset (RIS)
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'k':
 		// Tmux: allow-rename [on | off]
@@ -163,19 +163,19 @@ func (term *Term) parseC1Codes() {
 
 	case '@':
 		// Padding Character
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'A':
 		// High Octet Preset
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'B':
 		// Break Permitted Here
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'C':
 		// No Break Here
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'D':
 		// Index (IND  is 0x84).
@@ -202,22 +202,22 @@ func (term *Term) parseC1Codes() {
 	case 'I':
 		// Character Tabulation With Justification
 		// Horizontal Tabulation With Justification
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'J':
 		// Line Tabulation Set
 		// Vertical Tabulation Set
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'K':
 		// Partial Line Forward
 		// Partial Line Down
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'L':
 		// Partial Line Backward
 		// Partial Line Up
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'M':
 		// Reverse Index (RI  is 0x8d).
@@ -251,47 +251,47 @@ func (term *Term) parseC1Codes() {
 
 	case 'Q':
 		// Private Use 1
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'R':
 		// Private Use 2
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'S':
 		// Set Transmit State
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'T':
 		// Cancel character
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'U':
 		// Message Waiting
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'V':
 		// Start of Protected Area
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'W':
 		// End of Protected Area
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'X':
 		// Start of String
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'Y':
 		// Single Graphic Character Introducer
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case 'Z':
 		// Single Character Introducer
-		log.Printf("TODO: Unhandled C1 code: %s", string(r))
+		log.Printf("[warn] term: Unhandled C1 code: %s", string(r))
 
 	case '\\':
 		// String Terminator
-		log.Printf("DEBUG: unexpected string terminator")
+		log.Printf("[error] term: unexpected string terminator")
 
 	/////
 

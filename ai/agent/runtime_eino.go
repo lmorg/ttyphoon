@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
@@ -493,7 +494,9 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	// Reasoning is streamed to the frontend and log via the callback above; the outer loop only
 	// accumulates Content into the returned string used for conversation history.
 	var response strings.Builder
-	var chunkCount, contentChunks int
+	var chunkCount, contentChunks, contentBytes int
+	streamStart := time.Now()
+	var firstContentAt, lastContentAt time.Time
 	for {
 		msg, recvErr := stream.Recv()
 		if recvErr == io.EOF {
@@ -511,21 +514,45 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 
 		if msg.Content != "" {
 			contentChunks++
+			contentBytes += len(msg.Content)
+			if firstContentAt.IsZero() {
+				firstContentAt = time.Now()
+			}
+			lastContentAt = time.Now()
 			response.WriteString(msg.Content)
 			emitter.emitText(msg.Content)
 		}
 	}
 	reasoningWait.Wait()
-	log.Printf("[debug] AI stream drained: chunks=%d content=%d", chunkCount, contentChunks)
+
+	spread := time.Duration(0)
+	if !firstContentAt.IsZero() && !lastContentAt.IsZero() {
+		spread = lastContentAt.Sub(firstContentAt)
+	}
+	log.Printf(
+		"[debug] AI outer stream drained: chunks=%d content_chunks=%d content_bytes=%d ttfb=%s content_spread=%s total=%s",
+		chunkCount, contentChunks, contentBytes,
+		firstContentAt.Sub(streamStart).Round(time.Millisecond),
+		spread.Round(time.Millisecond),
+		time.Since(streamStart).Round(time.Millisecond),
+	)
 
 	return response.String(), nil
 }
 
 func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput], emitter *aiStreamEmitter) {
 	defer stream.Close()
+	start := time.Now()
+	var reasoningChunks, contentChunks int
+	var reasoningBytes, contentBytes int
 	for {
 		out, err := stream.Recv()
 		if err == io.EOF {
+			log.Printf(
+				"[debug] AI model-turn stream drained: reasoning_chunks=%d reasoning_bytes=%d content_chunks=%d content_bytes=%d elapsed=%s",
+				reasoningChunks, reasoningBytes, contentChunks, contentBytes,
+				time.Since(start).Round(time.Millisecond),
+			)
 			return
 		}
 		if err != nil {
@@ -535,7 +562,13 @@ func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput]
 			continue
 		}
 		if out.Message.ReasoningContent != "" {
+			reasoningChunks++
+			reasoningBytes += len(out.Message.ReasoningContent)
 			emitter.emitReasoning(out.Message.ReasoningContent)
+		}
+		if out.Message.Content != "" {
+			contentChunks++
+			contentBytes += len(out.Message.Content)
 		}
 	}
 }

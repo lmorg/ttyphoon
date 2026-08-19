@@ -31,9 +31,9 @@ type OAuthUIHooks struct {
 }
 
 func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serverURL string, oauth *mcp_config.OAuthT, hooks OAuthUIHooks, onOAuthRequired func(), useClient func(*Client) error) error {
-	log.Printf("MCP OAuth: start ConnectAndUseHttp server=%q mcp_url=%q oauth_configured=%t", server, sanitizeURLForLog(serverURL), oauth != nil)
+	log.Printf("[debug] MCP OAuth: start ConnectAndUseHttp server=%q mcp_url=%q oauth_configured=%t", server, sanitizeURLForLog(serverURL), oauth != nil)
 	if oauth != nil {
-		log.Printf("MCP OAuth: provided config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
+		log.Printf("[debug] MCP OAuth: provided config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
 			oauth.RedirectURI,
 			sanitizeURLForLog(oauth.AuthServerMetadataURL),
 			len(oauth.Scopes),
@@ -44,26 +44,26 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serve
 
 	c, err := ConnectHttp(overrides, serverURL)
 	if err == nil {
-		log.Printf("MCP OAuth: initial HTTP connect succeeded without OAuth")
+		log.Printf("[debug] MCP OAuth: initial HTTP connect succeeded without OAuth")
 		if useClient == nil {
 			return nil
 		}
 
 		err = useClient(c)
 		if err == nil {
-			log.Printf("MCP OAuth: initial operation succeeded without OAuth")
+			log.Printf("[debug] MCP OAuth: initial operation succeeded without OAuth")
 			return nil
 		}
 		if !IsAuthorizationFailure(err) {
-			log.Printf("MCP OAuth: initial operation failed with non-auth error: %v", err)
+			log.Printf("[debug] MCP OAuth: initial operation failed with non-auth error: %v", err)
 			return err
 		}
-		log.Printf("MCP OAuth: initial operation indicates OAuth required: %v", err)
+		log.Printf("[debug] MCP OAuth: initial operation indicates OAuth required: %v", err)
 	} else if !IsAuthorizationFailure(err) {
-		log.Printf("MCP OAuth: initial connect failed with non-auth error: %v", err)
+		log.Printf("[error] MCP OAuth: initial connect failed with non-auth error: %v", err)
 		return err
 	} else {
-		log.Printf("MCP OAuth: initial connect indicates OAuth required: %v", err)
+		log.Printf("[debug] MCP OAuth: initial connect indicates OAuth required: %v", err)
 	}
 
 	if onOAuthRequired != nil {
@@ -71,7 +71,7 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serve
 	}
 
 	oauthCfg := BuildOAuthConfig(workspace, server, serverURL, oauth)
-	log.Printf("MCP OAuth: interactive config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
+	log.Printf("[debug] MCP OAuth: interactive config redirect_uri=%q metadata_url=%q scopes=%d client_id_set=%t client_secret_set=%t",
 		oauthCfg.RedirectURI,
 		sanitizeURLForLog(oauthCfg.AuthServerMetadataURL),
 		len(oauthCfg.Scopes),
@@ -81,10 +81,10 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serve
 
 	c, err = ConnectHttpOAuthInteractive(overrides, serverURL, oauthCfg, hooks)
 	if err != nil {
-		log.Printf("MCP OAuth: interactive connect failed: %v", err)
+		log.Printf("[error] MCP OAuth: interactive connect failed: %v", err)
 		return err
 	}
-	log.Printf("MCP OAuth: interactive connect succeeded")
+	log.Printf("[debug] MCP OAuth: interactive connect succeeded")
 
 	if useClient == nil {
 		return nil
@@ -97,7 +97,7 @@ func ConnectAndUseHttp(overrides *mcp_config.OverrideT, workspace, server, serve
 	// the SDK has already failed to authorize, so we surface the error instead.
 	if err := useClient(c); err != nil {
 		if IsAuthorizationFailure(err) {
-			log.Printf("MCP OAuth: operation still unauthorized after interactive auth (SDK already retried): %v", err)
+			log.Printf("[error] MCP OAuth: operation still unauthorized after interactive auth (SDK already retried): %v", err)
 		}
 		return err
 	}
@@ -141,37 +141,37 @@ func BuildOAuthConfig(workspace, server, serverURL string, oauth *mcp_config.OAu
 	mcpHost := hostFromURL(serverURL)
 	authHost := hostFromURL(authServerMetadataURL)
 	redirectHost := hostFromURL(redirectURI)
-	log.Printf("MCP OAuth: BuildOAuthConfig server=%q mcp_host=%q auth_metadata_host=%q redirect_host=%q", server, mcpHost, authHost, redirectHost)
+	log.Printf("[debug] MCP OAuth: BuildOAuthConfig server=%q mcp_host=%q auth_metadata_host=%q redirect_host=%q", server, mcpHost, authHost, redirectHost)
 	if cfg.ClientURI != "" {
-		log.Printf("MCP OAuth: BuildOAuthConfig client_uri=%q", sanitizeURLForLog(cfg.ClientURI))
+		log.Printf("[debug] MCP OAuth: BuildOAuthConfig client_uri=%q", sanitizeURLForLog(cfg.ClientURI))
 	}
 	if len(cfg.Scopes) > 0 {
-		log.Printf("MCP OAuth: BuildOAuthConfig default/requested scopes=%v", cfg.Scopes)
+		log.Printf("[debug] MCP OAuth: BuildOAuthConfig default/requested scopes=%v", cfg.Scopes)
 	}
 	if mcpHost != "" && authHost != "" && mcpHost != authHost {
-		log.Printf("MCP OAuth: info MCP host differs from Auth host (often valid): mcp=%q auth=%q", mcpHost, authHost)
+		log.Printf("[debug] MCP OAuth: info MCP host differs from Auth host (often valid): mcp=%q auth=%q", mcpHost, authHost)
 	}
 
 	return cfg
 }
 
 func ConnectHttpOAuthInteractive(overrides *mcp_config.OverrideT, serverURL string, oauthCfg OAuthConfig, hooks OAuthUIHooks) (*Client, error) {
-	log.Printf("MCP OAuth: ConnectHttpOAuthInteractive mcp_url=%q redirect_uri=%q metadata_url=%q", sanitizeURLForLog(serverURL), oauthCfg.RedirectURI, sanitizeURLForLog(oauthCfg.AuthServerMetadataURL))
-	log.Printf("MCP OAuth: configured registration methods=%s", oauthRegistrationMethodsSummary(oauthCfg))
+	log.Printf("[debug] MCP OAuth: ConnectHttpOAuthInteractive mcp_url=%q redirect_uri=%q metadata_url=%q", sanitizeURLForLog(serverURL), oauthCfg.RedirectURI, sanitizeURLForLog(oauthCfg.AuthServerMetadataURL))
+	log.Printf("[debug] MCP OAuth: configured registration methods=%s", oauthRegistrationMethodsSummary(oauthCfg))
 
 	// Try Go-SDK AuthorizationCodeHandler-backed flow using UI hooks
 	if handler, hErr := buildGoSDKAuthHandler(oauthCfg, overrides, hooks); hErr == nil && handler != nil {
-		log.Printf("MCP OAuth: authorization handler created")
+		log.Printf("[debug] MCP OAuth: authorization handler created")
 		if g, connErr := ConnectHttpGoSDK(overrides, serverURL, handler); connErr == nil {
-			log.Printf("MCP OAuth: OAuth HTTP connect succeeded")
+			log.Printf("[debug] MCP OAuth: OAuth HTTP connect succeeded")
 			return initClientFromGoSDK(g, overrides)
 		} else {
 			enriched := enrichOAuthConnectError(connErr, oauthCfg)
-			log.Printf("MCP OAuth: OAuth HTTP connect failed: %v", enriched)
+			log.Printf("[error] MCP OAuth: OAuth HTTP connect failed: %v", enriched)
 			return nil, fmt.Errorf("failed to establish OAuth connection to %s: %w", serverURL, enriched)
 		}
 	} else {
-		log.Printf("MCP OAuth: failed creating authorization handler: %v", hErr)
+		log.Printf("[error] MCP OAuth: failed creating authorization handler: %v", hErr)
 		return nil, fmt.Errorf("failed to create OAuth authorization handler: %w", hErr)
 	}
 }
@@ -183,7 +183,7 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 		return nil, fmt.Errorf("redirect URI required for interactive OAuth")
 	}
 
-	log.Printf("MCP OAuth: buildGoSDKAuthHandler redirect_host=%q auth_metadata_host=%q", hostFromURL(oauthCfg.RedirectURI), hostFromURL(oauthCfg.AuthServerMetadataURL))
+	log.Printf("[debug] MCP OAuth: buildGoSDKAuthHandler redirect_host=%q auth_metadata_host=%q", hostFromURL(oauthCfg.RedirectURI), hostFromURL(oauthCfg.AuthServerMetadataURL))
 
 	fetcher := func(ctx context.Context, args *authsdk.AuthorizationArgs) (*authsdk.AuthorizationResult, error) {
 		authURL := ensureAuthorizationRequestScopes(args.URL, oauthCfg.Scopes)
@@ -192,22 +192,22 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 		// Try automatic callback server first
 		callback, err := StartOAuthCallbackServer(oauthCfg.RedirectURI)
 		if err == nil {
-			log.Printf("MCP OAuth: automatic callback server started redirect_uri=%q", oauthCfg.RedirectURI)
+			log.Printf("[debug] MCP OAuth: automatic callback server started redirect_uri=%q", oauthCfg.RedirectURI)
 			defer callback.Close()
 			if hooks.OpenBrowser != nil {
-				log.Printf("MCP OAuth: opening browser for authorization")
+				log.Printf("[debug] MCP OAuth: opening browser for authorization")
 				hooks.OpenBrowser(authURL)
 			}
-			log.Printf("MCP OAuth: waiting for automatic callback")
+			log.Printf("[debug] MCP OAuth: waiting for automatic callback")
 			res, waitErr := callback.Wait(2 * time.Minute)
 			if waitErr != nil {
-				log.Printf("MCP OAuth: automatic callback wait failed: %v", waitErr)
+				log.Printf("[error] MCP OAuth: automatic callback wait failed: %v", waitErr)
 				return nil, waitErr
 			}
-			log.Printf("MCP OAuth: automatic callback received state_present=%t code_len=%d", res.State != "", len(res.Code))
+			log.Printf("[debug] MCP OAuth: automatic callback received state_present=%t code_len=%d", res.State != "", len(res.Code))
 			return &authsdk.AuthorizationResult{Code: res.Code, State: res.State}, nil
 		}
-		log.Printf("MCP OAuth: automatic callback unavailable: %v", err)
+		log.Printf("[error] MCP OAuth: automatic callback unavailable: %v", err)
 
 		if hooks.OnAutoCallbackUnavailable != nil {
 			hooks.OnAutoCallbackUnavailable(err)
@@ -215,25 +215,25 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 
 		// Fallback to pasted callback URL
 		if hooks.PromptCallbackURL == nil {
-			log.Printf("MCP OAuth: no PromptCallbackURL hook available")
+			log.Printf("[error] MCP OAuth: no PromptCallbackURL hook available")
 			return nil, fmt.Errorf("no method to obtain callback URL")
 		}
 		if hooks.OpenBrowser != nil {
-			log.Printf("MCP OAuth: opening browser for authorization (manual callback mode)")
+			log.Printf("[debug] MCP OAuth: opening browser for authorization (manual callback mode)")
 			hooks.OpenBrowser(authURL)
 		}
 		raw, pErr := hooks.PromptCallbackURL()
 		if pErr != nil {
-			log.Printf("MCP OAuth: PromptCallbackURL failed: %v", pErr)
+			log.Printf("[debug] MCP OAuth: PromptCallbackURL failed: %v", pErr)
 			return nil, pErr
 		}
-		log.Printf("MCP OAuth: manual callback URL received callback_host=%q callback_url=%q", hostFromURL(raw), sanitizeURLForLog(raw))
+		log.Printf("[debug] MCP OAuth: manual callback URL received callback_host=%q callback_url=%q", hostFromURL(raw), sanitizeURLForLog(raw))
 		code, state, parseErr := parseOAuthCallbackURL(raw)
 		if parseErr != nil {
-			log.Printf("MCP OAuth: manual callback parse failed: %v", parseErr)
+			log.Printf("[debug] MCP OAuth: manual callback parse failed: %v", parseErr)
 			return nil, parseErr
 		}
-		log.Printf("MCP OAuth: manual callback parsed state_present=%t code_len=%d", state != "", len(code))
+		log.Printf("[debug] MCP OAuth: manual callback parsed state_present=%t code_len=%d", state != "", len(code))
 		return &authsdk.AuthorizationResult{Code: code, State: state}, nil
 	}
 
@@ -249,13 +249,13 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 		clientIDMetadataURL = strings.TrimSpace(oauthCfg.ClientID)
 	}
 	if clientIDMetadataURL != "" {
-		log.Printf("MCP OAuth: enabling Client ID Metadata Document registration url=%q", sanitizeURLForLog(clientIDMetadataURL))
+		log.Printf("[debug] MCP OAuth: enabling Client ID Metadata Document registration url=%q", sanitizeURLForLog(clientIDMetadataURL))
 		cfg.ClientIDMetadataDocumentConfig = &authsdk.ClientIDMetadataDocumentConfig{URL: clientIDMetadataURL}
 	}
 
 	// client registration: prefer preregistered client if provided
 	if oauthCfg.ClientID != "" && clientIDMetadataURL != oauthCfg.ClientID {
-		log.Printf("MCP OAuth: using preregistered client client_secret_set=%t", oauthCfg.ClientSecret != "")
+		log.Printf("[debug] MCP OAuth: using preregistered client client_secret_set=%t", oauthCfg.ClientSecret != "")
 		cfg.PreregisteredClient = &oauthex.ClientCredentials{
 			ClientID: oauthCfg.ClientID,
 		}
@@ -266,24 +266,24 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 
 	// Use dynamic registration whenever we are not using explicit pre-registered credentials.
 	if cfg.PreregisteredClient == nil {
-		log.Printf("MCP OAuth: using dynamic client registration")
+		log.Printf("[debug] MCP OAuth: using dynamic client registration")
 		cfg.DynamicClientRegistrationConfig = &authsdk.DynamicClientRegistrationConfig{
 			Metadata: buildDynamicClientRegistrationMetadata(oauthCfg),
 		}
 	} else if cfg.DynamicClientRegistrationConfig == nil {
-		log.Printf("MCP OAuth: dynamic client registration disabled due to explicit client credentials")
+		log.Printf("[error] MCP OAuth: dynamic client registration disabled due to explicit client credentials")
 	}
 
 	if cfg.ClientIDMetadataDocumentConfig == nil && cfg.PreregisteredClient == nil && cfg.DynamicClientRegistrationConfig == nil {
-		log.Printf("MCP OAuth: warning no client registration method configured")
+		log.Printf("[warn] MCP OAuth: warning no client registration method configured")
 	}
 
 	h, err := authsdk.NewAuthorizationCodeHandler(cfg)
 	if err != nil {
-		log.Printf("MCP OAuth: NewAuthorizationCodeHandler failed: %v", err)
+		log.Printf("[error] MCP OAuth: NewAuthorizationCodeHandler failed: %v", err)
 		return nil, err
 	}
-	log.Printf("MCP OAuth: NewAuthorizationCodeHandler created")
+	log.Printf("[debug] MCP OAuth: NewAuthorizationCodeHandler created")
 
 	// Wrap the handler to persist tokens to file
 	return &gosdkOAuthHandler{inner: h, tokenFile: oauthCfg.TokenFile}, nil
@@ -307,7 +307,7 @@ func ensureAuthorizationRequestScopes(rawURL string, scopes []string) string {
 	q.Set("scope", strings.Join(scopes, " "))
 	u.RawQuery = q.Encode()
 	patched := u.String()
-	log.Printf("MCP OAuth: injected scopes into authorization request scope=%q", strings.Join(scopes, " "))
+	log.Printf("[debug] MCP OAuth: injected scopes into authorization request scope=%q", strings.Join(scopes, " "))
 	return patched
 }
 
@@ -337,11 +337,11 @@ func (g *gosdkOAuthHandler) TokenSource(ctx context.Context) (oauth2.TokenSource
 	log.Printf("MCP OAuth: TokenSource requested token_file_set=%t", g.tokenFile != "")
 	base, err := g.inner.TokenSource(ctx)
 	if err != nil {
-		log.Printf("MCP OAuth: inner TokenSource failed: %v", err)
+		log.Printf("[debug] MCP OAuth: inner TokenSource failed: %v", err)
 		return nil, err
 	}
 	if g.tokenFile == "" {
-		log.Printf("MCP OAuth: TokenSource ready without persistence")
+		log.Printf("[debug] MCP OAuth: TokenSource ready without persistence")
 		return base, nil
 	}
 
@@ -355,14 +355,14 @@ func (g *gosdkOAuthHandler) TokenSource(ctx context.Context) (oauth2.TokenSource
 		// re-authorization. If none exists (or it has expired and cannot be
 		// refreshed here), fall through to nil and let the interactive flow run.
 		if tok, rerr := readTokenFile(g.tokenFile); rerr == nil && tok.Valid() {
-			log.Printf("MCP OAuth: reusing persisted token token_file=%q", g.tokenFile)
+			log.Printf("[debug] MCP OAuth: reusing persisted token token_file=%q", g.tokenFile)
 			return oauth2.StaticTokenSource(tok), nil
 		}
-		log.Printf("MCP OAuth: no usable persisted token; deferring to interactive authorization")
+		log.Printf("[debug] MCP OAuth: no usable persisted token; deferring to interactive authorization")
 		return nil, nil
 	}
 
-	log.Printf("MCP OAuth: TokenSource wrapped with file persistence token_file=%q", g.tokenFile)
+	log.Printf("[debug] MCP OAuth: TokenSource wrapped with file persistence token_file=%q", g.tokenFile)
 	return NewFilePersistingTokenSource(g.tokenFile, base), nil
 }
 
@@ -386,12 +386,12 @@ func (g *gosdkOAuthHandler) Authorize(ctx context.Context, req *http.Request, re
 		wwwAuthenticate = resp.Header.Get("Www-Authenticate")
 	}
 
-	log.Printf("MCP OAuth: Authorize called request_host=%q response_status=%q www_authenticate_present=%t", hostFromURL(reqURL), status, strings.TrimSpace(wwwAuthenticate) != "")
+	log.Printf("[debug] MCP OAuth: Authorize called request_host=%q response_status=%q www_authenticate_present=%t", hostFromURL(reqURL), status, strings.TrimSpace(wwwAuthenticate) != "")
 	err := g.inner.Authorize(ctx, req, resp)
 	if err != nil {
-		log.Printf("MCP OAuth: Authorize failed: %v", err)
+		log.Printf("[error] MCP OAuth: Authorize failed: %v", err)
 	} else {
-		log.Printf("MCP OAuth: Authorize completed")
+		log.Printf("[debug] MCP OAuth: Authorize completed")
 	}
 	return err
 }
@@ -414,10 +414,10 @@ func (g *gosdkOAuthHandler) closeProtectedResourceMetadataServer() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("MCP OAuth: error shutting down local PRM server: %v", err)
+		log.Printf("[error] MCP OAuth: error shutting down local PRM server: %v", err)
 		return
 	}
-	log.Printf("MCP OAuth: local PRM server shut down")
+	log.Printf("[debug] MCP OAuth: local PRM server shut down")
 }
 
 func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Request, resp *http.Response) {
@@ -432,14 +432,14 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 
 	challenges, err := oauthex.ParseWWWAuthenticate(hdrVals)
 	if err != nil {
-		log.Printf("MCP OAuth: cannot parse WWW-Authenticate for PRM injection: %v", err)
+		log.Printf("[error] MCP OAuth: cannot parse WWW-Authenticate for PRM injection: %v", err)
 		return
 	}
 
 	rmURL := resourceMetadataURLFromChallenges(challenges)
 	if rmURL == "" {
 		if isPRMShimEnabled() {
-			log.Printf("MCP OAuth: PRM shim forced but the challenge carried no resource_metadata to normalize")
+			log.Printf("[debug] MCP OAuth: PRM shim forced but the challenge carried no resource_metadata to normalize")
 		}
 		return
 	}
@@ -452,7 +452,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	// Jira/Confluence data tools reject with "scope does not match").
 	rm, err := fetchResourceMetadata(context.Background(), rmURL)
 	if err != nil {
-		log.Printf("MCP OAuth: failed to read resource_metadata: %v", err)
+		log.Printf("[error] MCP OAuth: failed to read resource_metadata: %v", err)
 		return
 	}
 	rawIssuer := rm.authorizationServer
@@ -461,7 +461,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	// RFC 8414 issuer validation passes, which weakens the mix-up defence. Only
 	// trust the issuer's metadata when it is served over HTTPS.
 	if !isHTTPSURL(rawIssuer) {
-		log.Printf("MCP OAuth: not applying PRM shim, authorization server issuer is not HTTPS issuer=%q", rawIssuer)
+		log.Printf("[error] MCP OAuth: not applying PRM shim, authorization server issuer is not HTTPS issuer=%q", rawIssuer)
 		return
 	}
 
@@ -471,7 +471,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	// that is exactly the mismatch this shim normalizes.
 	realMeta, metaErr := fetchAuthServerMetadataForPathfulIssuer(context.Background(), rawIssuer)
 	if metaErr != nil {
-		log.Printf("MCP OAuth: could not fetch authorization server metadata for issuer=%q: %v", rawIssuer, metaErr)
+		log.Printf("[error] MCP OAuth: could not fetch authorization server metadata for issuer=%q: %v", rawIssuer, metaErr)
 	}
 
 	metaIssuer := ""
@@ -486,11 +486,11 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	// explicitly forced. Compliant providers keep the SDK's fully-validated flow.
 	switch {
 	case issuerMismatch:
-		log.Printf("MCP OAuth: authorization server metadata issuer %q does not match advertised issuer %q (RFC 8414 mismatch); applying PRM shim", metaIssuer, rawIssuer)
+		log.Printf("[info] MCP OAuth: authorization server metadata issuer %q does not match advertised issuer %q (RFC 8414 mismatch); applying PRM shim", metaIssuer, rawIssuer)
 	case isPRMShimEnabled():
-		log.Printf("MCP OAuth: applying PRM shim (forced via TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM) issuer=%q", rawIssuer)
+		log.Printf("[info] MCP OAuth: applying PRM shim (forced via TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM) issuer=%q", rawIssuer)
 	default:
-		log.Printf("MCP OAuth: PRM shim not needed; authorization server issuer validates normally issuer=%q", rawIssuer)
+		log.Printf("[debug] MCP OAuth: PRM shim not needed; authorization server issuer validates normally issuer=%q", rawIssuer)
 		return
 	}
 
@@ -500,7 +500,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	// leak the authorization code or tokens.
 	if realMeta != nil {
 		if err := validateAuthServerEndpointsHTTPS(realMeta.raw); err != nil {
-			log.Printf("MCP OAuth: refusing PRM shim, %v", err)
+			log.Printf("[error] MCP OAuth: refusing PRM shim, %v", err)
 			return
 		}
 	}
@@ -508,14 +508,14 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	resource := req.URL.String()
 	prmURL, err := g.ensureLocalProtectedResourceMetadataEndpoints(resource, realMeta, rm.scopesSupported)
 	if err != nil {
-		log.Printf("MCP OAuth: failed to create local PRM endpoint: %v", err)
+		log.Printf("[error] MCP OAuth: failed to create local PRM endpoint: %v", err)
 		return
 	}
 
 	canonical := http.CanonicalHeaderKey("WWW-Authenticate")
 	existing := append([]string{}, resp.Header[canonical]...)
 	resp.Header[canonical] = append([]string{fmt.Sprintf(`Bearer resource_metadata=%q`, prmURL)}, existing...)
-	log.Printf("MCP OAuth: injected local PRM metadata URL prm_url=%q raw_issuer=%q", prmURL, rawIssuer)
+	log.Printf("[debug] MCP OAuth: injected local PRM metadata URL prm_url=%q raw_issuer=%q", prmURL, rawIssuer)
 }
 
 // ensureLocalProtectedResourceMetadataEndpoints starts a local HTTP server (once) that serves:
@@ -575,7 +575,7 @@ func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resour
 
 		go func() {
 			if err := g.prmMetadataServer.Serve(ln); err != nil && err != http.ErrServerClosed {
-				log.Printf("MCP OAuth: local PRM server error: %v", err)
+				log.Printf("[error] MCP OAuth: local PRM server error: %v", err)
 			}
 		}()
 
@@ -583,7 +583,7 @@ func (g *gosdkOAuthHandler) ensureLocalProtectedResourceMetadataEndpoints(resour
 		if realMeta != nil {
 			regEndpoint = realMeta.registrationEndpoint
 		}
-		log.Printf("MCP OAuth: started local shim at %q local_issuer=%q registration_endpoint=%q",
+		log.Printf("[debug] MCP OAuth: started local shim at %q local_issuer=%q registration_endpoint=%q",
 			g.prmMetadataBaseURL, localBase, sanitizeURLForLog(regEndpoint))
 	}
 
@@ -665,7 +665,7 @@ func fetchAuthServerMetadataForPathfulIssuer(ctx context.Context, pathfulIssuer 
 
 		regEndpoint, _ := raw["registration_endpoint"].(string)
 		metaIssuer, _ := raw["issuer"].(string)
-		log.Printf("MCP OAuth: fetched authorization server metadata from %q issuer=%q registration_endpoint=%q",
+		log.Printf("[debug] MCP OAuth: fetched authorization server metadata from %q issuer=%q registration_endpoint=%q",
 			sanitizeURLForLog(metaURL), metaIssuer, sanitizeURLForLog(regEndpoint))
 
 		return &realAuthServerMeta{raw: raw, registrationEndpoint: regEndpoint}, nil
@@ -820,7 +820,7 @@ func oauthRegistrationMethodsSummary(oauthCfg OAuthConfig) string {
 func logOAuthAuthorizeRequest(rawURL string) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u == nil {
-		log.Printf("MCP OAuth: authorization request authorize_url=%q (unparseable: %v)", sanitizeURLForLog(rawURL), err)
+		log.Printf("[error] MCP OAuth: authorization request authorize_url=%q (unparseable: %v)", sanitizeURLForLog(rawURL), err)
 		return
 	}
 
@@ -915,15 +915,15 @@ type oauthLoggingRoundTripper struct {
 func (rt *oauthLoggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	sanitized := sanitizeURLForLog(req.URL.String())
-	log.Printf("MCP OAuth: http request method=%s url=%q", req.Method, sanitized)
+	log.Printf("[debug] MCP OAuth: http request method=%s url=%q", req.Method, sanitized)
 
 	resp, err := rt.base.RoundTrip(req)
 	if err != nil {
-		log.Printf("MCP OAuth: http request failed method=%s url=%q err=%v", req.Method, sanitized, err)
+		log.Printf("[error] MCP OAuth: http request failed method=%s url=%q err=%v", req.Method, sanitized, err)
 		return resp, err
 	}
 
-	log.Printf("MCP OAuth: http response status=%d url=%q duration=%s", resp.StatusCode, sanitized, time.Since(start).Round(time.Millisecond))
+	log.Printf("[debug] MCP OAuth: http response status=%d url=%q duration=%s", resp.StatusCode, sanitized, time.Since(start).Round(time.Millisecond))
 	logSafeOAuthResponseFields(resp)
 	return resp, nil
 }
@@ -971,7 +971,7 @@ func logSafeOAuthResponseFields(resp *http.Response) {
 		}
 	}
 	if len(fields) > 0 {
-		log.Printf("MCP OAuth: response fields %s", strings.Join(fields, " "))
+		log.Printf("[debug] MCP OAuth: response fields %s", strings.Join(fields, " "))
 	}
 }
 

@@ -38,14 +38,6 @@ Returns a bullet point list of all files and directories found inside a director
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
-	if debug.Trace {
-		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
-		defer func() {
-			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
-			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
-		}()
-	}
-
 	var pathname string
 	if strings.HasPrefix(input, t.agent.GetMeta().Pwd) {
 		pathname = input

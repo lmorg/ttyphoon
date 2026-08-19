@@ -94,6 +94,6 @@ func DefaultTokenFile(workspace, serverName, rawURL string) string {
 	}
 
 	cacheFile := path.Join(dir, name+".json")
-	log.Printf(`MCP OAuth: DefaultTokenFile="%s"`, cacheFile)
+	log.Printf(`[debug] MCP OAuth: DefaultTokenFile="%s"`, cacheFile)
 	return cacheFile
 }

@@ -25,7 +25,7 @@ func main() {
 	cacheDbFile := "cache.db"
 	cacheDbPath, err := xdg.CacheFile(cacheDbFile)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[error] %v", err)
 		cacheDbPath = fmt.Sprintf("%s/%s-%s", os.TempDir(), app.DirName, cacheDbFile)
 	}
 	cache.SetPath(cacheDbPath)

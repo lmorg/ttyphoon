@@ -46,7 +46,7 @@ func (t *mcpTool) Description() string {
 	description := t.description //+ "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
 
 	if debug.Trace {
-		log.Printf("MCP tool '%s' description:\n%s", t.Name(), description)
+		log.Printf("[trace] MCP tool '%s' description:\n%s", t.Name(), description)
 	}
 
 	return description

@@ -109,7 +109,7 @@ func (term *Term) parseCsiCodes() {
 				term.moveCursorToPos(stack[0], stack[1])
 			default:
 				term.moveCursorToPos(stack[0], stack[1])
-				log.Printf("WARNING: more parameters than expected for %s: %v (%s)", string(r), stack, string(cache))
+				log.Printf("[warn] term: more parameters than expected for %s: %v (%s)", string(r), stack, string(cache))
 			}
 
 		case 'F':
@@ -133,7 +133,7 @@ func (term *Term) parseCsiCodes() {
 			case 3:
 				term.csiResetTabStops()
 			default:
-				log.Printf("WARNING: Unhandled parameter for %s: %v (%s)", string(r), stack, string(cache))
+				log.Printf("[warn] term: Unhandled parameter for %s: %v (%s)", string(r), stack, string(cache))
 			}
 
 		case 'G':
@@ -204,7 +204,7 @@ func (term *Term) parseCsiCodes() {
 				*/
 
 			default:
-				log.Printf("WARNING: Unknown Set Mode (SM) sequence: %s", string(cache))
+				log.Printf("[warn] term: Unknown Set Mode (SM) sequence: %s", string(cache))
 			}
 
 		case 'H':
@@ -218,7 +218,7 @@ func (term *Term) parseCsiCodes() {
 				term.moveCursorToPos(stack[0], stack[1])
 			default:
 				term.moveCursorToPos(stack[0], stack[1])
-				log.Printf("WARNING: invalid parameters %s: %v (%s)", string(r), stack, string(cache))
+				log.Printf("[warn] term: invalid parameters %s: %v (%s)", string(r), stack, string(cache))
 			}
 
 		//case 'i':
@@ -255,7 +255,7 @@ func (term *Term) parseCsiCodes() {
 				term.csiEraseDisplay()
 				term.eraseScrollBack()
 			default:
-				log.Printf("WARNING: Unknown Erase in Display (ED) sequence: %d", *n)
+				log.Printf("[warn] term: Unknown Erase in Display (ED) sequence: %d", *n)
 			}
 
 		case 'K':
@@ -268,7 +268,7 @@ func (term *Term) parseCsiCodes() {
 			case 2:
 				term.csiEraseLine()
 			default:
-				log.Printf("WARNING: Unknown Erase in Line (EL) sequence: %d", *n)
+				log.Printf("[warn] term: Unknown Erase in Line (EL) sequence: %d", *n)
 			}
 
 		case 'l':
@@ -285,7 +285,7 @@ func (term *Term) parseCsiCodes() {
 				// Ps = 2 0  ⇒  Normal Linefeed (LNM).
 
 			default:
-				log.Printf("WARNING: Unknown Reset Mode (RM) sequence: %d", *n)
+				log.Printf("[warn] term: Unknown Reset Mode (RM) sequence: %d", *n)
 			}
 
 		case 'L':
@@ -313,7 +313,7 @@ func (term *Term) parseCsiCodes() {
 				pos := term.curPos()
 				term.csiCallback("%d;%dR", pos.Y+1, pos.X+1)
 			default:
-				log.Printf("WARNING: Unknown Device Status Report (DSR) sequence: %d", *n)
+				log.Printf("[warn] term: Unknown Device Status Report (DSR) sequence: %d", *n)
 			}
 
 		case 'P':
@@ -332,7 +332,7 @@ func (term *Term) parseCsiCodes() {
 			case 2:
 				term.setScrollingRegion(stack)
 			default:
-				log.Printf("WARNING: Unexpected number of parameters in CSI r (%s): %v", string(cache), stack)
+				log.Printf("[warn] term: Unexpected number of parameters in CSI r (%s): %v", string(cache), stack)
 			}
 
 		case 's':
@@ -361,17 +361,17 @@ func (term *Term) parseCsiCodes() {
 				case 0, 2:
 					term.csiWindowTitleStackSaveTo()
 				default:
-					log.Printf("WARNING: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
+					log.Printf("[warn] term: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
 				}
 			case 23:
 				switch p2 {
 				case 0, 2:
 					term.csiWindowTitleStackRestoreFrom()
 				default:
-					log.Printf("WARNING: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
+					log.Printf("[warn] term: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
 				}
 			default:
-				log.Printf("WARNING: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
+				log.Printf("[warn] term: Unknown Window manipulation (XTWINOPS) sequence %d: %v (%s)", *n, stack, string(cache))
 			}
 
 		case 'T':
@@ -414,7 +414,7 @@ func (term *Term) parseCsiCodes() {
 			if err != nil {
 				return
 			}
-			log.Printf("TODO: Secondary CSI code ignored: '%s%s'", string(cache), string(code))
+			log.Printf("[debug] term: Secondary CSI code ignored: '%s%s'", string(cache), string(code))
 			return
 
 		case '=': // tertiary codes
@@ -436,14 +436,14 @@ func (term *Term) parseCsiCodes() {
 				if err != nil {
 					return
 				}
-				log.Printf("WARNING: Unknown extended CSI code %s: %v [string: %s]", string(r), append(cache, code...), string(cache)+string(code))
+				log.Printf("[warn] term: Unknown extended CSI code %s: %v [string: %s]", string(r), append(cache, code...), string(cache)+string(code))
 				return
 			}
 		}
 
 		if isCsiTerminator(r) {
 			if unknown {
-				log.Printf("WARNING: Unknown CSI code %s: %v [string: %s]", string(r), cache, string(cache))
+				log.Printf("[warn] term: Unknown CSI code %s: %v [string: %s]", string(r), cache, string(cache))
 			}
 			return
 		}

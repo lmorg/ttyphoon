@@ -85,7 +85,7 @@ func ListenForNotifications(
 func parseLogMessage(raw json.RawMessage) (LspLogPayload, bool) {
 	var params logMessageParams
 	if err := json.Unmarshal(raw, &params); err != nil {
-		log.Printf("lsp: parse window/logMessage: %v", err)
+		log.Printf("[error] lsp: parse window/logMessage: %v", err)
 		return LspLogPayload{}, false
 	}
 
@@ -99,7 +99,7 @@ func parseLogMessage(raw json.RawMessage) (LspLogPayload, bool) {
 func parseProgressMessage(raw json.RawMessage) (LspProgressPayload, bool) {
 	var params progressParams
 	if err := json.Unmarshal(raw, &params); err != nil {
-		log.Printf("lsp: parse $/progress: %v", err)
+		log.Printf("[error] lsp: parse $/progress: %v", err)
 		return LspProgressPayload{}, false
 	}
 

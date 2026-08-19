@@ -39,5 +39,5 @@ func (term *Term) parsePmCodes() {
 		}
 	}
 
-	log.Printf("DEBUG: Ignored PM code %s", string(text[:len(text)-2]))
+	log.Printf("[warn] term: Ignored PM code %s", string(text[:len(text)-2]))
 }

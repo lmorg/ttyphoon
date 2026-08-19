@@ -2696,8 +2696,9 @@ func (lw *logWriter) Write(p []byte) (int, error) {
 	if !rxLogCategory.MatchString(text[20:]) {
 		text = text[:20] + "[debug] " + text[20:]
 	}
+	text = strings.ReplaceAll(text, "\n", " | ")
 
-	if text != "" && lw.ctx != nil {
+	if lw.ctx != nil {
 		runtime.EventsEmit(lw.ctx, "notesLog", text)
 	}
 	// Also output to stderr so it's visible in console

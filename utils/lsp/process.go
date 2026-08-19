@@ -94,7 +94,7 @@ func (sp *ServerProcess) Start(ctx context.Context) error {
 }
 
 func (sp *ServerProcess) startLocked(ctx context.Context) error {
-	log.Println("starting lsp: ", sp.argv)
+	log.Println("[info] starting lsp: ", sp.argv)
 	procCtx, cancel := context.WithCancel(ctx)
 
 	cmd := exec.CommandContext(procCtx, sp.argv[0], sp.argv[1:]...)
@@ -146,7 +146,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("lsp %s stderr: %s", sp.argv[0], scanner.Text())
+			log.Printf("[trace] lsp %s stderr: %s", sp.argv[0], scanner.Text())
 		}
 	}()
 
@@ -164,9 +164,9 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 		}
 
 		if readErr != nil {
-			log.Printf("lsp[%s] read loop exited: %v — will restart", sp.argv[0], readErr)
+			log.Printf("[warn] lsp[%s] read loop exited: %v — will restart", sp.argv[0], readErr)
 		} else {
-			log.Printf("lsp[%s] process exited — will restart", sp.argv[0])
+			log.Printf("[warn] lsp[%s] process exited — will restart", sp.argv[0])
 		}
 
 		sp.restartWithBackoff(ctx)
@@ -194,7 +194,7 @@ func (sp *ServerProcess) restartWithBackoff(ctx context.Context) {
 		}
 	}
 
-	log.Printf("lsp[%s] restart #%d in %s", sp.argv[0], attempt, delay)
+	log.Printf("[info] lsp[%s] restart #%d in %s", sp.argv[0], attempt, delay)
 
 	select {
 	case <-ctx.Done():
@@ -210,7 +210,7 @@ func (sp *ServerProcess) restartWithBackoff(ctx context.Context) {
 	}
 
 	if err := sp.startLocked(ctx); err != nil {
-		log.Printf("lsp[%s] restart failed: %v", sp.argv[0], err)
+		log.Printf("[error] lsp[%s] restart failed: %v", sp.argv[0], err)
 	}
 }
 
@@ -233,10 +233,10 @@ func (sp *ServerProcess) Stop() {
 		ctx, cancelShutdown := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		_, err := t.Call(ctx, "shutdown", map[string]any{}, 400*time.Millisecond)
 		if err != nil {
-			log.Printf("lsp[%s] shutdown request failed: %v", sp.argv[0], err)
+			log.Printf("[error] lsp[%s] shutdown request failed: %v", sp.argv[0], err)
 		}
 		if err := t.Notify("exit", map[string]any{}); err != nil {
-			log.Printf("lsp[%s] exit notify failed: %v", sp.argv[0], err)
+			log.Printf("[error] lsp[%s] exit notify failed: %v", sp.argv[0], err)
 		}
 		cancelShutdown()
 	}

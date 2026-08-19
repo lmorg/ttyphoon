@@ -29,11 +29,11 @@ func (term *Term) parseVt52Codes() {
 
 	case '=':
 		// Enter alternate keypad mode.
-		log.Printf("TODO: VT52 code not implemented: %s", string(r))
+		log.Printf("[warn] term: VT52 code not implemented: %s", string(r))
 
 	case '>':
 		// Exit alternate keypad mode.
-		log.Printf("TODO: VT52 code not implemented: %s", string(r))
+		log.Printf("[warn] term: VT52 code not implemented: %s", string(r))
 
 	case 'A':
 		// Cursor up.
@@ -53,11 +53,11 @@ func (term *Term) parseVt52Codes() {
 
 	case 'F':
 		// Enter graphics mode.
-		log.Printf("TODO: VT52 code not implemented: %s", string(r))
+		log.Printf("[warn] term: VT52 code not implemented: %s", string(r))
 
 	case 'G':
 		// Exit graphics mode.
-		log.Printf("TODO: VT52 code not implemented: %s", string(r))
+		log.Printf("[warn] term: VT52 code not implemented: %s", string(r))
 
 	case 'H':
 		// Move the cursor to the home position.
@@ -96,6 +96,6 @@ func (term *Term) parseVt52Codes() {
 		term.Reply([]byte{codes.AsciiEscape, '/', 'Z'})
 
 	default:
-		log.Printf("WARNING: VT52 code not recognized: %s", string(r))
+		log.Printf("[warn] term: VT52 code not recognized: %s", string(r))
 	}
 }

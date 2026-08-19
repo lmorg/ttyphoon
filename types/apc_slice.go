@@ -45,7 +45,7 @@ func (as *ApcSlice) Parameters(params any) error {
 	if s != "" {
 		err := json.Unmarshal([]byte(s), params)
 		if err != nil {
-			log.Printf("WARNING: cannot decode APC string '%s': %v", s, err)
+			log.Printf("[error] term: cannot decode APC string '%s': %v", s, err)
 			return err
 		}
 	}
