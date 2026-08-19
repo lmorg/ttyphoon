@@ -2558,7 +2558,7 @@ func (a *WApp) GetAISessionManagement() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.GetFrontendState(agt.Workspace(), 24)
 	if err != nil {
-		log.Printf("ai session management: %v", err)
+		log.Printf("[debug] ai session management: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2573,7 +2573,7 @@ func (a *WApp) CreateAISession() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.CreateSession(agt.Workspace(), "", 24)
 	if err != nil {
-		log.Printf("ai create session: %v", err)
+		log.Printf("[debug] ai create session: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2588,7 +2588,7 @@ func (a *WApp) SetActiveAISession(tableID int64) sessiondb.FrontendStateT {
 
 	state, err := sessiondb.SetActiveSession(agt.Workspace(), tableID, 24)
 	if err != nil {
-		log.Printf("ai set active session: %v", err)
+		log.Printf("[debug] ai set active session: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2608,7 +2608,7 @@ func (a *WApp) DeleteAISession(tableID int64) sessiondb.FrontendStateT {
 	}
 
 	if err := sessiondb.DeleteSessionLog(agt.Workspace(), tableID); err != nil {
-		log.Printf("ai delete session log: %v", err)
+		log.Printf("[debug] [debug] ai delete session log: %v", err)
 	}
 
 	return state
@@ -2622,12 +2622,12 @@ func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.ClearActiveSession(agt.Workspace(), 24)
 	if err != nil {
-		log.Printf("ai clear session history: %v", err)
+		log.Printf("[debug] ai clear session history: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
 	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
-		log.Printf("ai clear session log: %v", err)
+		log.Printf("[debug] ai clear session log: %v", err)
 	}
 
 	return state
@@ -2640,7 +2640,7 @@ func (a *WApp) ClearAILog() {
 	}
 
 	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
-		log.Printf("ai clear log: %v", err)
+		log.Printf("[debug] ai clear log: %v", err)
 	}
 }
 
@@ -2692,11 +2692,11 @@ var rxLogCategory = regexp.MustCompile(`^\[[a-z]+\] `)
 
 func (lw *logWriter) Write(p []byte) (int, error) {
 	// Send each line to frontend, also write to original stderr
-	text := string(p) //strings.TrimSpace(string(p))
+	text := string(p)
 	if !rxLogCategory.MatchString(text[20:]) {
 		text = text[:20] + "[debug] " + text[20:]
 	}
-	text = strings.ReplaceAll(text, "\n", " | ")
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\n", " | ")
 
 	if lw.ctx != nil {
 		runtime.EventsEmit(lw.ctx, "notesLog", text)

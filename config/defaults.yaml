@@ -124,7 +124,7 @@ Notes:
 
   MaxRecentFiles: 10
 
-  MaxLogLines: 200
+  MaxLogLines: 1000
 
   ExcludeDirectories:
     ".git": true

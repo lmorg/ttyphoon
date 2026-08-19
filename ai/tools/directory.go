@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"path/filepath"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
-	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -62,16 +60,16 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 		}
 
 		if d.IsDir() {
-			result.WriteString(fmt.Sprintf("- Directory: '%s'\n", path))
+			fmt.Fprintf(&result, "- Directory: '%s'\n", path)
 		} else {
-			result.WriteString(fmt.Sprintf("- File: '%s'\n", path))
+			fmt.Fprintf(&result, "- File: '%s'\n", path)
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		result.WriteString(fmt.Sprintf("- Error: %v\n", err))
+		fmt.Fprintf(&result, "- Error: %v\n", err)
 	}
 
 	response = result.String()
