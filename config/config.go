@@ -194,10 +194,11 @@ type configT struct {
 	} `yaml:"TypeFace"`
 
 	Ai struct {
-		MaxIterations   int                 `yaml:"MaxIterations"`
-		AvailableModels map[string][]string `yaml:"AvailableModels"`
-		DefaultModels   map[string]string   `yaml:"DefaultModels"`
-		DefaultService  string              `yaml:"DefaultService"`
+		MaxIterations               int                 `yaml:"MaxIterations"`
+		AvailableModels             map[string][]string `yaml:"AvailableModels"`
+		DefaultModels               map[string]string   `yaml:"DefaultModels"`
+		DefaultService              string              `yaml:"DefaultService"`
+		ToolSummariseThresholdChars int                 `yaml:"ToolSummariseThresholdChars"`
 	} `yaml:"AI"`
 }
 

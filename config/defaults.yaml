@@ -172,6 +172,10 @@ Window:
 
 AI:
   MaxIterations: 10
+  # Tool outputs whose length (chars) exceeds this threshold are compressed by an internal
+  # summariser sub-agent before reaching the main agent, to keep context under the LLM's window.
+  # The full raw output is still shown in the AI panel and session log.
+  ToolSummariseThresholdChars: 8192
   AvailableModels:
     OpenAI:
       # https://platform.openai.com/docs/models

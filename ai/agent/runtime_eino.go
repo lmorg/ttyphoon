@@ -26,6 +26,7 @@ import (
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 type einoRuntime struct {
@@ -44,12 +45,13 @@ const einoAnthropicThinkingBudget = 2048
 type aiStreamCallbackCtxKey struct{}
 
 type einoAgentTool struct {
+	runtime          *einoRuntime
 	delegate         aitypes.Tool
 	info             *schema.ToolInfo
 	unwrapInputField bool
 }
 
-func newEinoAgentTool(t aitypes.Tool) (*einoAgentTool, error) {
+func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 	if t == nil {
 		return nil, fmt.Errorf("nil tool")
 	}
@@ -79,6 +81,7 @@ func newEinoAgentTool(t aitypes.Tool) (*einoAgentTool, error) {
 	}
 
 	return &einoAgentTool{
+		runtime:          r,
 		delegate:         t,
 		unwrapInputField: unwrapInputField,
 		info: &schema.ToolInfo{
@@ -107,8 +110,22 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		return output, err
 	}
 
+	// UI + log always receive the full raw output.
 	if output != "" {
 		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
+	}
+
+	// Interposer: compress oversized tool outputs so the main agent's context stays
+	// under the LLM's window. The main agent only ever sees the summarised form.
+	threshold := config.Config.Ai.ToolSummariseThresholdChars
+	if t.runtime != nil && threshold > 0 && len(output) > threshold {
+		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
+		if sErr != nil {
+			emitAIStreamToolProgress(ctx, formatToolSummaryFailureMarkdown(len(output), sErr))
+			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
+		}
+		emitAIStreamToolProgress(ctx, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
+		return summary, nil
 	}
 
 	return output, nil
@@ -128,6 +145,14 @@ func formatToolOutputMarkdown(output string) string {
 
 func formatToolErrorMarkdown(err error) string {
 	return fmt.Sprintf("**Tool error:**\n\n~~~~\n%s\n~~~~\n\n", err.Error())
+}
+
+func formatToolSummaryNoticeMarkdown(rawLen, summaryLen int) string {
+	return fmt.Sprintf("_Output summarised for main agent (%d \u2192 %d chars)._\n\n", rawLen, summaryLen)
+}
+
+func formatToolSummaryFailureMarkdown(rawLen int, err error) string {
+	return fmt.Sprintf("_Output was %d chars; summariser failed and the main agent received a placeholder instead: %s_\n\n", rawLen, err.Error())
 }
 
 func unwrapToolInput(argumentsInJSON string) string {
@@ -211,7 +236,7 @@ func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 			continue
 		}
 
-		einoTool, err := newEinoAgentTool(tool)
+		einoTool, err := newEinoAgentTool(r, tool)
 		if err != nil {
 			return compose.ToolsNodeConfig{}, err
 		}

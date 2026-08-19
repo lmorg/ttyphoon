@@ -374,7 +374,7 @@ func TestUnwrapToolInput_FallbackRaw(t *testing.T) {
 
 func TestEinoAgentTool_InvokableRun_UnwrapsInputField(t *testing.T) {
 	f := &fakeAgentTool{enabled: true}
-	et, err := newEinoAgentTool(f)
+	et, err := newEinoAgentTool(nil, f)
 	if err != nil {
 		t.Fatalf("newEinoAgentTool() error = %v", err)
 	}
