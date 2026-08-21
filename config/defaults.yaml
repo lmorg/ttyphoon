@@ -176,6 +176,7 @@ AI:
   # summariser sub-agent before reaching the main agent, to keep context under the LLM's window.
   # The full raw output is still shown in the AI panel and session log.
   ToolSummariseThresholdChars: 8192
+  
   AvailableModels:
     OpenAI:
       # https://platform.openai.com/docs/models

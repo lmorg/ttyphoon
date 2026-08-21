@@ -37,12 +37,14 @@ function parseSections(source) {
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
+    const lazyChunkSize = Math.max(8, Number(options.lazyChunkSize) || 24);
 
     let streamText = '';
     let renderVersion = 0;
     let jobRoot = null;
     let isRendering = false;
     let needsRender = false;
+    let lazyChunkObserver = null;
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -53,7 +55,28 @@ export function createAIPipelineFormatter(container, options = {}) {
         return jobRoot;
     }
 
+    function destroyLazyObserver() {
+        if (lazyChunkObserver) {
+            lazyChunkObserver.disconnect();
+            lazyChunkObserver = null;
+        }
+    }
+
+    function isContainerNearBottom(threshold = 8) {
+        if (!container) {
+            return true;
+        }
+        const scrollHeight = Number(container.scrollHeight) || 0;
+        const clientHeight = Number(container.clientHeight) || 0;
+        const scrollTop = Number(container.scrollTop) || 0;
+        if (scrollHeight <= 0 || clientHeight <= 0) {
+            return true;
+        }
+        return scrollTop + clientHeight >= scrollHeight - threshold;
+    }
+
     function clear() {
+        destroyLazyObserver();
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -62,6 +85,11 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function startJob(title = '') {
+        // Any lazy observer from a previously-restored session log belongs to
+        // the old job; drop it before the new job's chunks start streaming.
+        destroyLazyObserver();
+
+        // Per-prompt log files: clear the panel so only the new prompt renders.
         const hasContent = container.children.length > 0
             || container.textContent.trim().length > 0;
         if (hasContent) {
@@ -249,6 +277,12 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function setText(text) {
+        // setText is used for one-shot full-document renders (session restore
+        // and prompt-log jumps). The whole document is already available so we
+        // render it as a single markdown block and lazily post-process visible
+        // chunks — running processMarkdownContainer over the entire document at
+        // once would lock the UI for large session logs (hljs highlighting,
+        // mermaid, hyperlink scanning, table + image setup on N sections).
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -262,12 +296,179 @@ export function createAIPipelineFormatter(container, options = {}) {
             try {
                 do {
                     needsRender = false;
-                    await renderCurrentStream(renderVersion);
+                    await renderTextAsMarkdown(renderVersion);
                 } while (needsRender);
             } finally {
                 isRendering = false;
             }
         })();
+    }
+
+    // buildLazyChunks wraps groups of top-level children in a .notes-ai-lazy-chunk
+    // section so an IntersectionObserver can process each group on demand rather
+    // than running processMarkdownContainer over the whole document up front.
+    function buildLazyChunks(markdownRoot) {
+        const children = Array.from(markdownRoot.children);
+        if (children.length === 0) {
+            return [];
+        }
+
+        const fragments = [];
+        for (let i = 0; i < children.length; i += lazyChunkSize) {
+            fragments.push(children.slice(i, i + lazyChunkSize));
+        }
+
+        markdownRoot.textContent = '';
+
+        const chunks = [];
+        for (const nodes of fragments) {
+            const chunk = document.createElement('section');
+            chunk.className = 'notes-ai-lazy-chunk';
+            chunk.dataset.lazyProcessed = '';
+
+            const content = document.createElement('div');
+            content.className = 'notes-ai-lazy-chunk-content';
+            for (const node of nodes) {
+                content.appendChild(node);
+            }
+
+            const spinner = document.createElement('div');
+            spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-chunk';
+
+            chunk.appendChild(content);
+            chunk.appendChild(spinner);
+            markdownRoot.appendChild(chunk);
+            chunks.push(chunk);
+        }
+
+        return chunks;
+    }
+
+    // primeLazyChunks processes chunks near the current scroll position immediately
+    // so users don't see a spinner in the viewport before IntersectionObserver fires.
+    function primeLazyChunks(chunks, version) {
+        if (!Array.isArray(chunks) || chunks.length === 0) {
+            return;
+        }
+
+        const viewportTop = Number(container.scrollTop) || 0;
+        const clientHeight = Number(container.clientHeight) || 0;
+        const viewportBottom = viewportTop + clientHeight;
+        const prewarmTop = Math.max(0, viewportTop - clientHeight * 2);
+        const prewarmBottom = viewportBottom + clientHeight * 2;
+
+        let matched = 0;
+        for (const chunk of chunks) {
+            const chunkTop = chunk.offsetTop;
+            const chunkBottom = chunkTop + chunk.offsetHeight;
+            if (chunkBottom < prewarmTop || chunkTop > prewarmBottom) {
+                continue;
+            }
+            matched += 1;
+            void processLazyChunk(chunk, version);
+        }
+
+        if (matched > 0) {
+            return;
+        }
+
+        // No chunks near the scroll position — seed a few at whichever end
+        // the container is scrolled towards so the initial render is stable.
+        const fromBottom = isContainerNearBottom();
+        const seed = fromBottom ? chunks.slice(-3) : chunks.slice(0, 3);
+        for (const chunk of seed) {
+            void processLazyChunk(chunk, version);
+        }
+    }
+
+    async function renderTextAsMarkdown(version) {
+        destroyLazyObserver();
+
+        const root = ensureJobRoot();
+        let markdownRoot = root.querySelector('.notes-ai-markdown');
+        if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
+            root.textContent = '';
+            markdownRoot = document.createElement('div');
+            markdownRoot.className = 'notes-ai-markdown markdown-body';
+            root.appendChild(markdownRoot);
+        }
+
+        if (!streamText) {
+            markdownRoot.innerHTML = '';
+            return;
+        }
+
+        // Show a page-level spinner while marked.parse() runs. Yield to the
+        // browser between insertion and the (synchronous, blocking) parse so
+        // the spinner actually paints.
+        markdownRoot.innerHTML = '';
+        const loadingSpinner = document.createElement('div');
+        loadingSpinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
+        markdownRoot.appendChild(loadingSpinner);
+
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if (version !== renderVersion) {
+            return;
+        }
+
+        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
+
+        if (!processMarkdownContainer) {
+            return;
+        }
+
+        const chunks = buildLazyChunks(markdownRoot);
+
+        lazyChunkObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) {
+                    continue;
+                }
+                const chunk = entry.target;
+                lazyChunkObserver.unobserve(chunk);
+                void processLazyChunk(chunk, version);
+            }
+        }, {
+            root: container,
+            rootMargin: '1200px 0px',
+        });
+
+        for (const chunk of chunks) {
+            lazyChunkObserver.observe(chunk);
+        }
+
+        primeLazyChunks(chunks, version);
+    }
+
+    async function processLazyChunk(chunk, version) {
+        if (!chunk || chunk.dataset.lazyProcessed === 'done' || chunk.dataset.lazyProcessed === 'pending') {
+            return;
+        }
+
+        chunk.dataset.lazyProcessed = 'pending';
+
+        const chunkContent = chunk.querySelector('.notes-ai-lazy-chunk-content');
+        if (!chunkContent) {
+            chunk.dataset.lazyProcessed = 'done';
+            return;
+        }
+
+        try {
+            await processMarkdownContainer(chunkContent);
+            if (version !== renderVersion) {
+                return;
+            }
+
+            // Session-log markdown can render fenced code blocks outside the
+            // structured streaming path; pin them to the latest lines just as
+            // live Action / Action Input sections would be.
+            const codeBlocks = chunkContent.querySelectorAll('pre');
+            for (const block of codeBlocks) {
+                block.scrollTop = block.scrollHeight;
+            }
+        } finally {
+            chunk.dataset.lazyProcessed = 'done';
+        }
     }
 
     return {
