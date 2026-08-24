@@ -7,6 +7,8 @@ function logLevelColour(levelToken) {
         .toLowerCase();
 
     switch (normalized) {
+        case 'trace':
+            return 'var(--blue)';
         case 'error':
             return 'var(--red)';
         case 'warn':
@@ -160,6 +162,16 @@ function appendColourisedLogLine(logOutput, line) {
         const spaceAfterLevel = levelMatch[2];
         const messageText = levelMatch[3];
 
+        const normalizedLevel = levelToken
+            .replace(/^\[/, '')
+            .replace(/\]$/, '')
+            .replace(/:$/, '')
+            .trim()
+            .toLowerCase();
+        if (normalizedLevel) {
+            lineEl.dataset.level = normalizedLevel;
+        }
+
         const levelSpan = document.createElement('span');
         levelSpan.style.color = logLevelColour(levelToken);
         levelSpan.textContent = levelToken;
@@ -194,7 +206,7 @@ function trimLogLines(logOutput, maxLogLines) {
     }
 }
 
-function appendColourisedLogMessage(logOutput, message, maxLogLines) {
+function appendColourisedLogMessage(logOutput, message, maxLogLines, stickToBottom = true) {
     const lines = String(message ?? '').split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
         if (i === lines.length - 1 && lines[i] === '') {
@@ -203,8 +215,12 @@ function appendColourisedLogMessage(logOutput, message, maxLogLines) {
         appendColourisedLogLine(logOutput, lines[i]);
     }
     trimLogLines(logOutput, maxLogLines);
-    logOutput.scrollTop = logOutput.scrollHeight;
+    if (stickToBottom) {
+        logOutput.scrollTop = logOutput.scrollHeight;
+    }
 }
+
+const LOG_BOTTOM_THRESHOLD_PX = 24;
 
 export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_LOG_LINES) {
     if (!elements?.logOutput) {
@@ -214,10 +230,32 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
     const appRoot = elements.appRoot || document.getElementById('notes-pane') || document.getElementById('app') || document.body;
     let isWordWrapped = false;
     let isTimestampVisible = false;
+    let isTraceVisible = false;
     let isLogMaximized = false;
     let restoreWordWrapOnClose = false;
     let restoreTimestampOnClose = false;
     let lineLimit = normalizeMaxLogLines(maxLogLines);
+
+    const isLogOutputNearBottom = () => {
+        const remaining = elements.logOutput.scrollHeight - (elements.logOutput.scrollTop + elements.logOutput.clientHeight);
+        return remaining <= LOG_BOTTOM_THRESHOLD_PX;
+    };
+
+    const updateLogScrollBottomButton = () => {
+        if (!elements.logScrollBottom) {
+            return;
+        }
+        elements.logScrollBottom.dataset.visible = isLogOutputNearBottom() ? 'false' : 'true';
+    };
+
+    if (elements.logScrollBottom) {
+        elements.logOutput.addEventListener('scroll', updateLogScrollBottomButton);
+
+        elements.logScrollBottom.addEventListener('click', () => {
+            elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+            updateLogScrollBottomButton();
+        });
+    }
 
     const setWordWrap = (enabled) => {
         isWordWrapped = enabled === true;
@@ -242,6 +280,14 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
             elements.toolsLogTimestamp.dataset.enabled = isTimestampVisible ? 'true' : 'false';
         }
         elements.logOutput.dataset.showTimestamp = isTimestampVisible ? 'true' : 'false';
+    };
+
+    const setTraceVisible = (enabled) => {
+        isTraceVisible = enabled === true;
+        if (elements.toolsLogTrace) {
+            elements.toolsLogTrace.dataset.enabled = isTraceVisible ? 'true' : 'false';
+        }
+        elements.logOutput.dataset.showTrace = isTraceVisible ? 'true' : 'false';
     };
 
     const setLogMaximized = (enabled) => {
@@ -367,15 +413,22 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
         });
     }
 
+    if (elements.toolsLogTrace && elements.logOutput) {
+        elements.toolsLogTrace.addEventListener('click', () => {
+            setTraceVisible(!isTraceVisible);
+        });
+    }
+
     if (elements.toolsLogMaximize) {
         elements.toolsLogMaximize.addEventListener('click', () => {
             setLogMaximized(!isLogMaximized);
         });
     }
 
-    // No-wrap and hidden timestamps by default.
+    // No-wrap and hidden timestamps by default. Trace lines are hidden by default too.
     setWordWrap(false);
     setTimestampVisible(false);
+    setTraceVisible(false);
 
     if (elements.toolsLogMaximize) {
         elements.toolsLogMaximize.dataset.enabled = 'false';
@@ -383,7 +436,11 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
     }
 
     eventsOn('notesLog', (message) => {
-        appendColourisedLogMessage(elements.logOutput, message, lineLimit);
+        // Only auto-scroll when already at the bottom; otherwise leave the
+        // scroll position untouched and let the Latest button reveal itself.
+        const stickToBottom = isLogOutputNearBottom();
+        appendColourisedLogMessage(elements.logOutput, message, lineLimit, stickToBottom);
+        updateLogScrollBottomButton();
     });
 
     return {

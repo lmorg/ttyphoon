@@ -594,12 +594,14 @@ app.innerHTML = `
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-log-copy" type="button" class="notes-tools-clear" title="Copy log to clipboard">Copy</button>
                                 <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear" title="Deselect log lines">Deselect</button>
+                                <button id="notes-tools-log-trace" type="button" class="notes-tools-clear" title="Show trace-level log lines">Trace</button>
                                 <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
                                 <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
                                 <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
                                 <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
                             </div>
                             <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>
+                            <button id="notes-log-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest log output">Latest</button>
                         </div>
                     </div>
                 </div>
@@ -782,10 +784,12 @@ const elements = {
     logOutput: document.getElementById('notes-log-output'),
     toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
     toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
+    toolsLogTrace: document.getElementById('notes-tools-log-trace'),
     toolsLogWordwrap: document.getElementById('notes-tools-log-wordwrap'),
     toolsLogCopy: document.getElementById('notes-tools-log-copy'),
     toolsLogDeselect: document.getElementById('notes-tools-log-deselect'),
     toolsLogClear: document.getElementById('notes-tools-log-clear'),
+    logScrollBottom: document.getElementById('notes-log-scroll-bottom'),
     toolsRestore: document.getElementById('notes-tools-restore')
 };
 
