@@ -849,6 +849,10 @@ const state = {
     swaggerSpec: null,
     swaggerRunAvailable: false,
     swaggerViewTooLarge: false,
+    // True when the JSON/YAML View tab DOM already reflects the current file contents.
+    // Reset to false on file load, on any editor input that changes the source,
+    // and on structured-viewer edits.
+    swaggerViewCurrent: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
     frontmatter: null,  // parsed markdown frontmatter object (null when absent)
@@ -7041,7 +7045,7 @@ async function restoreDocumentCache(file) {
         if (documentCache.DocumentTab === 'jupyter') {
             await renderJupyterView();
         } else if (documentCache.DocumentTab === 'swagger-view') {
-            renderSwaggerJsonView();
+            renderSwaggerJsonViewLazy();
         } else if (documentCache.DocumentTab === 'swagger-run') {
             updateSwaggerLayoutMode();
             renderSwaggerUI();
@@ -7647,11 +7651,47 @@ function renderSwaggerJsonView() {
 
     if (state.swaggerViewTooLarge) {
         renderStructViewTooLargeMessage();
+        state.swaggerViewCurrent = true;
         return;
     }
 
     attachJsonViewerEditHandler(elements.swaggerView, commitStructuredViewerEdit);
     renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.editor.value || '{}'));
+    state.swaggerViewCurrent = true;
+}
+
+// Renders the JSON/YAML tree viewer non-blocking: paints the AI-panel lazy
+// spinner first, yields to the browser so it actually appears, then runs the
+// (still synchronous) render. No-op when the tab DOM is already current.
+function renderSwaggerJsonViewLazy() {
+    if (state.swaggerViewCurrent) {
+        return;
+    }
+
+    if (!elements.swaggerView) {
+        return;
+    }
+
+    if (state.swaggerViewTooLarge) {
+        renderStructViewTooLargeMessage();
+        state.swaggerViewCurrent = true;
+        return;
+    }
+
+    const spinner = document.createElement('div');
+    spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
+    elements.swaggerView.replaceChildren(spinner);
+
+    // Two rAFs give the browser a chance to paint the spinner before the
+    // synchronous tree render blocks the main thread.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            if (state.currentFileType !== 'json' || state.viewMode !== 'swagger-view') {
+                return;
+            }
+            renderSwaggerJsonView();
+        });
+    });
 }
 
 function isYamlStructuredFile(fileName) {
@@ -8558,9 +8598,9 @@ async function loadFile(file, options = {}) {
             return;
         }
 
-        if (loadingJson) {
+        /*if (loadingJson) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
-        }
+        }*/
 
         const result = await GetFile(file);
 
@@ -8647,7 +8687,8 @@ async function loadFile(file, options = {}) {
             // Render JSON tree view
             updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
             await yieldToUI();
-            renderSwaggerJsonView();
+            // Defer JSON/YAML tree render until the View tab is clicked; loadFile no longer eagerly renders it.
+            state.swaggerViewCurrent = false;
             
             // Render swagger UI only for JSON documents with a top-level swagger key
             if (state.swaggerRunAvailable) {
@@ -8740,12 +8781,9 @@ async function loadFile(file, options = {}) {
         
         setDirty(false);
         renderFileList();
-        
-        // Refresh the JSON viewer when switching to JSON files
-        if (state.currentFileType === 'json') {
-            renderSwaggerJsonView();
-        }
-        
+
+        // JSON/YAML tree view render is deferred until the View tab is clicked (see swaggerViewCurrent).
+
         // Clear active Find state when loading a new file.
         if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
@@ -13295,19 +13333,18 @@ if (elements.editor) {
 
         if (state.currentFileType === 'json') {
             // Revalidate JSON/YAML and only expose Run for docs with a swagger key.
-            // Always update the spec and tab visibility; only re-render the viewer
-            // when Monaco is NOT active (deferred to View tab click when tainted).
+            // The tree view render itself is deferred to the View tab click.
             state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
             state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
+            state.swaggerViewCurrent = false;
             updateTabVisibility('json');
-            if (!isMonacoActive()) {
-                renderSwaggerJsonView();
-            }
-
             if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
                 setViewMode('swagger-view');
             } else if (state.swaggerRunAvailable && state.viewMode === 'swagger-run' && !isMonacoActive()) {
                 renderSwaggerUI();
+            }
+            if (state.viewMode === 'swagger-view' && !isMonacoActive()) {
+                renderSwaggerJsonViewLazy();
             }
         }
         scheduleLspDidChange();
@@ -13626,7 +13663,7 @@ elements.tabJupyter.addEventListener('click', () => {
 elements.tabSwaggerView.addEventListener('click', () => {
     setViewMode('swagger-view');
     state.viewTainted = false;
-    renderSwaggerJsonView();
+    renderSwaggerJsonViewLazy();
 });
 
 elements.tabSwaggerEdit.addEventListener('click', () => {
