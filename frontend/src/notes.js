@@ -873,6 +873,11 @@ const state = {
     aiModelSelections: [],
     aiCurrentModelSelection: '',
     aiSessionCache: '',
+    // AI logs are loaded lazily: on workspace switch we mark them pending and
+    // only actually fetch/render once the AI tab is selected, so the (possibly
+    // large) log never blocks file/workspace switching.
+    aiSessionCachePending: false,
+    aiSessionCachePendingWorkspace: '',
     aiSessionManagement: {
         activeSessionId: 0,
         sessions: [],
@@ -2109,16 +2114,6 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-
-        folder.addEventListener('click', () => {
-            toggleFolder(folderKey);
-        });
-
-        folder.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openFolderTreeContextMenu(category, node.children || [], event.clientX, event.clientY, node.name);
-        });
         container.appendChild(folder);
 
         // Render children if expanded
@@ -2138,22 +2133,6 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         if (node.file === state.currentFile) {
             item.dataset.active = 'true';
         }
-
-        item.addEventListener('click', () => {
-            NotesHistoryAdd(node.file).catch(() => {});
-            loadFile(node.file);
-        });
-
-        item.addEventListener('dblclick', (e) => {
-            e.preventDefault();
-            void openRenamePrompt(node.file);
-        });
-
-	    item.addEventListener('contextmenu', async (e) => {
-	        e.preventDefault();
-	        e.stopPropagation();
-	        await openFileListContextMenu(node.file, e.clientX, e.clientY);
-	    });
 
         container.appendChild(item);
     }
@@ -6990,8 +6969,11 @@ async function refreshFiles(options = {}) {
         elements.title.innerText = workspaceName;
 
         if (workspaceScopedRefresh) {
-            await loadAISessionCache(workspaceName);
-            await refreshAIModelPicker();
+            // Defer AI log loading until the AI tab is selected so it never
+            // blocks workspace/file switching. Loading is triggered lazily by
+            // setToolsTab('ai') / the AI tab click.
+            markAISessionCachePending(workspaceName);
+            void refreshAIModelPicker();
         }
 
         await loadProjectCache({
@@ -7390,18 +7372,6 @@ function renderFileList() {
         categoryHeader.appendChild(arrow);
         categoryHeader.appendChild(label);
 
-        if (!hasActiveFilter) {
-            categoryHeader.addEventListener('click', () => {
-                toggleCategory(category);
-            });
-        }
-
-        categoryHeader.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openFolderTreeContextMenu(category, categoryTree, event.clientX, event.clientY, `${category} folders`);
-        });
-        
         elements.list.appendChild(categoryHeader);
 
         // Create category content container
@@ -7467,6 +7437,29 @@ function collectFolderKeys(category, nodes) {
 
     walk(Array.isArray(nodes) ? nodes : []);
     return keys;
+}
+
+// Rebuilds a category's file tree on demand (e.g. for the delegated context-menu
+// handler, which no longer keeps per-node tree references around after render).
+function getCategoryTreeNodes(category) {
+    const files = getFilteredFiles().filter((file) => splitCategoryPath(file).category === category);
+    return buildFileTree(files);
+}
+
+function findFolderNodeByPath(nodes, path) {
+    for (const node of nodes) {
+        if (node.type !== 'folder') {
+            continue;
+        }
+        if (node.path === path) {
+            return node;
+        }
+        const found = findFolderNodeByPath(node.children, path);
+        if (found) {
+            return found;
+        }
+    }
+    return null;
 }
 
 function setFolderExpansionState(folderKeys, expanded) {
@@ -12016,6 +12009,10 @@ function setToolsTab(tabName) {
             });
         });
     }
+
+    if (nextTab === 'ai') {
+        maybeLoadPendingAISessionCache();
+    }
 }
 
 function saveDocumentCache() {
@@ -12050,6 +12047,11 @@ function clearAIOutput() {
 }
 
 function startAIJob(title) {
+    // A fresh job replaces the panel contents, so drop any deferred log load
+    // that would otherwise overwrite it when the AI tab is (auto-)selected.
+    state.aiSessionCachePending = false;
+    state.aiSessionCachePendingWorkspace = '';
+
     // Per-prompt log files: clear the panel so only the new prompt renders.
     aiPipelineFormatter.clear();
     aiPipelineFormatter.startJob(String(title || ''));
@@ -12206,6 +12208,33 @@ async function loadAISessionCache(workspaceName) {
     } catch (err) {
         console.error('Failed to load AI session cache:', err);
     }
+}
+
+// markAISessionCachePending clears the panel immediately (cheap) and records
+// that the AI log for the given workspace still needs loading. The actual fetch
+// + render is deferred until the AI tab is opened so it never blocks the rest
+// of the UI on workspace/file switching.
+function markAISessionCachePending(workspaceName) {
+    state.aiSessionCachePending = true;
+    state.aiSessionCachePendingWorkspace = String(workspaceName || '');
+    state.aiSessionCache = '';
+    aiPipelineFormatter.clear();
+
+    if (isAIToolsTabActive()) {
+        maybeLoadPendingAISessionCache();
+    }
+}
+
+// maybeLoadPendingAISessionCache fires a non-blocking load when a deferred AI
+// log is outstanding. Safe to call repeatedly; it no-ops once consumed.
+function maybeLoadPendingAISessionCache() {
+    if (!state.aiSessionCachePending) {
+        return;
+    }
+    const workspaceName = state.aiSessionCachePendingWorkspace;
+    state.aiSessionCachePending = false;
+    state.aiSessionCachePendingWorkspace = '';
+    void loadAISessionCache(workspaceName);
 }
 
 const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
@@ -14060,6 +14089,70 @@ if (elements.list) {
         scheduleProjectFindVirtualScrollRender();
     });
 }
+    // Delegated handlers for file/folder/category rows: renderFileList() rebuilds
+    // the whole tree on every change, so per-node listeners would mean re-creating
+    // one-to-several closures per file/folder on every render. A single delegated
+    // listener per event type avoids that cost regardless of tree size.
+    elements.list.addEventListener('click', (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (fileItem) {
+            NotesHistoryAdd(fileItem.dataset.file).catch(() => {});
+            loadFile(fileItem.dataset.file);
+            return;
+        }
+
+        const folderButton = event.target.closest('.notes-tree-folder');
+        if (folderButton) {
+            toggleFolder(folderButton.dataset.folderKey);
+            return;
+        }
+
+        const categoryHeader = event.target.closest('.notes-category-header');
+        if (categoryHeader && state.fileFilterQuery.trim() === '') {
+            toggleCategory(categoryHeader.dataset.category);
+        }
+    });
+
+    elements.list.addEventListener('dblclick', (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (!fileItem) {
+            return;
+        }
+        event.preventDefault();
+        void openRenamePrompt(fileItem.dataset.file);
+    });
+
+    elements.list.addEventListener('contextmenu', async (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (fileItem) {
+            event.preventDefault();
+            event.stopPropagation();
+            await openFileListContextMenu(fileItem.dataset.file, event.clientX, event.clientY);
+            return;
+        }
+
+        const folderButton = event.target.closest('.notes-tree-folder');
+        if (folderButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            const folderKey = folderButton.dataset.folderKey || '';
+            const separatorIndex = folderKey.indexOf(PRIMARY_PATH_SEPARATOR);
+            const category = separatorIndex === -1 ? folderKey : folderKey.slice(0, separatorIndex);
+            const folderPath = separatorIndex === -1 ? '' : folderKey.slice(separatorIndex + 1);
+            const folderNode = findFolderNodeByPath(getCategoryTreeNodes(category), folderPath);
+            const folderName = folderNode ? folderNode.name : folderPath;
+            openFolderTreeContextMenu(category, folderNode?.children || [], event.clientX, event.clientY, folderName);
+            return;
+        }
+
+        const categoryHeader = event.target.closest('.notes-category-header');
+        if (categoryHeader) {
+            event.preventDefault();
+            event.stopPropagation();
+            const category = categoryHeader.dataset.category;
+            openFolderTreeContextMenu(category, getCategoryTreeNodes(category), event.clientX, event.clientY, `${category} folders`);
+        }
+    });
 
 if (elements.listFilterClear && elements.listFilter) {
     elements.listFilterClear.addEventListener('click', () => {
