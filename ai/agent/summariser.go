@@ -59,7 +59,7 @@ func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.Bas
 	case LLM_OPENAI:
 		return openai.NewChatModel(ctx, &openai.ChatModelConfig{
 			APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
-			Model:   r.agent.ModelName(),
+			Model:   r.agent.SummariseModelName(),
 			BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
 			ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
 		})
@@ -76,7 +76,7 @@ func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.Bas
 		return claude.NewChatModel(ctx, &claude.Config{
 			APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
 			BaseURL:   baseURL,
-			Model:     r.agent.ModelName(),
+			Model:     r.agent.SummariseModelName(),
 			MaxTokens: einoAnthropicMaxTokens,
 		})
 
@@ -90,7 +90,7 @@ func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.Bas
 		}
 		return einoOllama.NewChatModel(ctx, &einoOllama.ChatModelConfig{
 			BaseURL: baseURL,
-			Model:   r.agent.ModelName(),
+			Model:   r.agent.SummariseModelName(),
 		})
 
 	default:

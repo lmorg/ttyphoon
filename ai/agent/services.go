@@ -28,6 +28,14 @@ func (agt *Agent) ModelName() string {
 	return agt.modelName
 }
 
+func (agt *Agent) SummariseModelName() string {
+	service := findService(agt.serviceName)
+	if service == nil {
+		return agt.modelName
+	}
+	return service.SummariseModel()
+}
+
 func (agt *Agent) ProviderName() string {
 	service := findService(agt.serviceName)
 	if service == nil || service.Provider == "" {
