@@ -1,6 +1,7 @@
 package menuhyperlink
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -10,7 +11,7 @@ import (
 
 func copyLinkToClipboard(renderer types.Renderer, url string) {
 	renderer.DisplayNotification(types.NOTIFY_INFO, "Link copied to clipboard")
-	clipboard.Write(clipboard.FmtText, []byte(url))
+	clipboard.Write(context.Background(), clipboard.FmtText, []byte(url))
 }
 
 const _CONTENTS_CLIP_MAX = 10 * 1024 * 1024 // 10 MB
@@ -41,5 +42,5 @@ func copyContentsToClipboard(renderer types.Renderer, path string) {
 	}
 
 	renderer.DisplayNotification(types.NOTIFY_INFO, "File contents copied to clipboard")
-	clipboard.Write(clipboard.FmtText, b)
+	clipboard.Write(context.Background(), clipboard.FmtText, b)
 }

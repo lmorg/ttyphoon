@@ -2300,12 +2300,13 @@ func (a *WApp) ResolveNoteLocation(path string) string {
 
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
 func (a *WApp) GetClipboardData() ClipboardData {
-	b := clipboard.Read(clipboard.FmtImage)
+	b, _ := clipboard.Read(context.Background(), clipboard.FmtImage)
 	if len(b) != 0 {
 		return ClipboardData{Image: base64.StdEncoding.EncodeToString(b)}
 	}
 
-	return ClipboardData{Text: string(clipboard.Read(clipboard.FmtText))}
+	b, _ = clipboard.Read(context.Background(), clipboard.FmtText)
+	return ClipboardData{Text: string(b)}
 }
 
 func (a *WApp) RenameFile(oldPath, newPath string) error {

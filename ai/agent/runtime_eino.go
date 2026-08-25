@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einoOllama "github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -37,9 +38,6 @@ const einoMaxHistoryTurns = 8
 
 // Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
 const einoAnthropicMaxTokens = 8192
-
-// Anthropic's thinking budget; must be less than einoAnthropicMaxTokens.
-const einoAnthropicThinkingBudget = 2048
 
 type aiStreamCallbackCtxKey struct{}
 
@@ -369,9 +367,13 @@ func (r *einoRuntime) initAnthropic() error {
 		BaseURL:   baseURL,
 		Model:     r.agent.ModelName(),
 		MaxTokens: einoAnthropicMaxTokens,
-		Thinking: &claude.Thinking{
-			Enable:       true,
-			BudgetTokens: einoAnthropicThinkingBudget,
+		ThinkingConfig: &anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		},
+		AdditionalRequestFields: map[string]any{
+			"output_config": map[string]any{
+				"effort": "high",
+			},
 		},
 	})
 	if err != nil {
@@ -471,7 +473,22 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 		}
 	}
 
-	messages = append(messages, currentMessages...)
+	// Anthropic requires system messages to precede all user and assistant messages.
+	// Prompt builders place the system message before the current user message,
+	// but restored history means it would otherwise be inserted mid-conversation.
+	systemMessages := make([]*schema.Message, 0, len(currentMessages))
+	for _, message := range currentMessages {
+		if message != nil && message.Role == schema.System {
+			systemMessages = append(systemMessages, message)
+		}
+	}
+	messages = append(systemMessages, messages...)
+	for _, message := range currentMessages {
+		if message == nil || message.Role == schema.System {
+			continue
+		}
+		messages = append(messages, message)
+	}
 	return messages
 }
 

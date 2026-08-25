@@ -1,6 +1,7 @@
 package element_table
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -55,7 +56,7 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 						start = el.boundaries[i-1]
 					}
 					cell := string(el.table[pos.Y-1][start:el.boundaries[i]])
-					clipboard.Write(clipboard.FmtText, []byte(strings.TrimSpace(cell)))
+					clipboard.Write(context.Background(), clipboard.FmtText, []byte(strings.TrimSpace(cell)))
 					el.renderer.DisplayNotification(types.NOTIFY_INFO, "Cell copied to clipboard")
 					return
 				}

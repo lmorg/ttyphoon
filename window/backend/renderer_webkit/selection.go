@@ -2,6 +2,7 @@ package rendererwebkit
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/types"
@@ -279,7 +280,7 @@ func copySelectionTextToClipboard(wr *webkitRender, b []byte) {
 		return
 	}
 
-	clipboard.Write(clipboard.FmtText, b)
+	clipboard.Write(context.Background(), clipboard.FmtText, b)
 	lines := bytes.Count(b, []byte{'\n'}) + 1
 	wr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Copied %d line(s) to clipboard", lines))
 }

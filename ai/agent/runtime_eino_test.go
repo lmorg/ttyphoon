@@ -324,6 +324,29 @@ func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildEinoConversationMessagesMovesSystemPromptBeforeHistory(t *testing.T) {
+	history := []sessiondb.Entry{
+		{Prompt: "previous question", LLMResponse: "previous answer"},
+	}
+
+	msgs := buildEinoConversationMessages(history, []*schema.Message{
+		schema.SystemMessage("current system prompt"),
+		schema.UserMessage("current prompt"),
+	})
+	if len(msgs) != 4 {
+		t.Fatalf("message count = %d, want 4", len(msgs))
+	}
+	wantRoles := []string{string(schema.System), string(schema.User), string(schema.Assistant), string(schema.User)}
+	for i, wantRole := range wantRoles {
+		if string(msgs[i].Role) != wantRole {
+			t.Fatalf("msg[%d].Role = %s, want %s", i, msgs[i].Role, wantRole)
+		}
+	}
+	if msgs[0].Content != "current system prompt" || msgs[3].Content != "current prompt" {
+		t.Fatalf("messages = %#v, want system prompt first and current prompt last", msgs)
+	}
+}
+
 func TestBuildEinoConversationMessages_TrimsToMaxHistoryTurns(t *testing.T) {
 	history := make([]sessiondb.Entry, 0, einoMaxHistoryTurns+3)
 	for i := 0; i < einoMaxHistoryTurns+3; i++ {

@@ -1,6 +1,7 @@
 package rendererwebkit
 
 import (
+	"context"
 	"errors"
 
 	"github.com/lmorg/ttyphoon/types"
@@ -12,7 +13,7 @@ func (wr *webkitRender) CopyImageToClipboard(png []byte) error {
 		return errors.New("empty image data")
 	}
 
-	clipboard.Write(clipboard.FmtImage, png)
+	clipboard.Write(context.Background(), clipboard.FmtImage, png)
 
 	if wr != nil {
 		wr.DisplayNotification(types.NOTIFY_INFO, "Copied image to clipboard")

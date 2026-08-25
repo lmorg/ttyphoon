@@ -1,6 +1,7 @@
 package rendererwebkit
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -118,14 +119,14 @@ func (wr *webkitRender) clipboardPaste() {
 		return
 	}
 
-	b := clipboard.Read(clipboard.FmtText)
+	b, _ := clipboard.Read(context.Background(), clipboard.FmtText)
 	if len(b) != 0 {
 		term.Reply(b)
 		wr.TriggerRedraw()
 		return
 	}
 
-	b = clipboard.Read(clipboard.FmtImage)
+	b, _ = clipboard.Read(context.Background(), clipboard.FmtImage)
 	if len(b) != 0 {
 		f, err := os.CreateTemp("", "*.png")
 		if err != nil {
@@ -173,6 +174,6 @@ func (wr *webkitRender) writeToTemp() {
 		return
 	}
 
-	clipboard.Write(clipboard.FmtText, []byte(file.Name()))
+	clipboard.Write(context.Background(), clipboard.FmtText, []byte(file.Name()))
 	wr.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Content written to disk & path copied to clipboard:\n%s", file.Name()))
 }

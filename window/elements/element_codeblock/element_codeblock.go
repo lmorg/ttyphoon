@@ -1,6 +1,7 @@
 package element_codeblock
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/ai"
@@ -125,7 +126,7 @@ func (el *ElementCodeBlock) contextMenuItems() []types.MenuItem {
 
 func copyToClipboard(renderer types.Renderer, code string) {
 	renderer.DisplayNotification(types.NOTIFY_INFO, "Code copied to clipboard")
-	clipboard.Write(clipboard.FmtText, []byte(code))
+	clipboard.Write(context.Background(), clipboard.FmtText, []byte(code))
 }
 
 func (el *ElementCodeBlock) MouseWheel(_ *types.XY, _ *types.XY, callback types.EventIgnoredCallback) {

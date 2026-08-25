@@ -2,6 +2,7 @@ package element_table
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"strings"
@@ -234,7 +235,7 @@ func (el *ElementTable) ExportCsv() {
 		return
 	}
 
-	clipboard.Write(clipboard.FmtText, buf.Bytes())
+	clipboard.Write(context.Background(), clipboard.FmtText, buf.Bytes())
 }
 
 func (el *ElementTable) ExportMarkdown() {
@@ -246,5 +247,5 @@ func (el *ElementTable) ExportMarkdown() {
 
 	buf := bytes.NewBuffer(nil)
 	writeMarkdownTable(buf, el.exportHeadings(), rows)
-	clipboard.Write(clipboard.FmtText, buf.Bytes())
+	clipboard.Write(context.Background(), clipboard.FmtText, buf.Bytes())
 }
