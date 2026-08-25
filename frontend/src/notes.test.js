@@ -2166,7 +2166,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+        expect(scrollSpy).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' });
         scrollSpy.mockRestore();
     });
 

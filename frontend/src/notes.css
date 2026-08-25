@@ -908,6 +908,7 @@ body {
     color: var(--fg);
     padding: 6px 12px;
     cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
 }
 
 #notes-tabs button[aria-selected="true"] {
@@ -925,14 +926,15 @@ body {
     border-color: rgba(var(--fg-rgb), 0.2) !important;
 }
 
-.tab:hover {
+.tab:not([aria-selected="true"]):hover {
     border: 1px solid !important;
     border-bottom: 0 !important;
-    border-color: rgba(var(--fg-rgb), 0.2) !important;
+    border-color: var(--accent) !important;
 }
 
-#notes-tabs button:hover {
-    border-color: var(--selection);
+#notes-tabs button:not([aria-selected="true"]):hover {
+    border-color: var(--accent) !important;
+    color: var(--accent);
 }
 
 #notes-new:hover {
@@ -1176,6 +1178,7 @@ body {
     border: 1px solid;
     border-bottom: 0;
     border-color: rgba(var(--fg-rgb), 0.2);
+    transition: color 0.3s ease, border-color 0.3s ease;
 }
 
 .tools-tab[aria-selected="true"] {
@@ -1187,8 +1190,9 @@ body {
     opacity: 0.85;
 }
 
-.tools-tab:hover {
-    border-color: rgba(var(--fg-rgb), 0.2) !important;
+.tools-tab:not([aria-selected="true"]):hover {
+    border-color: var(--accent) !important;
+    color: var(--accent);
 }
 
 .notes-tools-minimize,
@@ -1380,22 +1384,22 @@ body {
 }
 
 #notes-tools-log-copy:hover {
-    color: var(--green);
-    border-color: var(--green);
-    background-color: rgba(var(--green-rgb), 0.2);
+    color: var(--blue);
+    border-color: var(--blue);
+    background-color: rgba(var(--blue-rgb), 0.2);
 }
 
 #notes-tools-log-copy {
     background-image:
         linear-gradient(
             to right,
-            rgba(var(--green-rgb), 0.05),
-            rgba(var(--green-rgb), 0.05)
+            rgba(var(--blue-rgb), 0.05),
+            rgba(var(--blue-rgb), 0.05)
         ),
         linear-gradient(
             to right,
-            rgba(var(--green-rgb), 0.35),
-            rgba(var(--green-rgb), 0.35)
+            rgba(var(--blue-rgb), 0.35),
+            rgba(var(--blue-rgb), 0.35)
         );
     background-repeat: no-repeat;
     background-position: center center, center center;
@@ -1404,7 +1408,7 @@ body {
 }
 
 #notes-tools-log-copy[data-copied="true"] {
-    border-color: var(--green);
+    border-color: var(--blue);
     animation: notes-tools-log-copy-feedback 0.48s ease-out;
 }
 
@@ -1553,8 +1557,8 @@ body {
 
 .notes-ai-scroll-bottom:hover {
     border-color: var(--accent);
-    background: rgba(var(--accent-rgb), 1);
-    color: var(--bg);
+    background: rgba(var(--bg-rgb), 1);
+    color: var(--accent);
 
 }
 

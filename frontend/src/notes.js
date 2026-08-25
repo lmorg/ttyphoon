@@ -8703,7 +8703,7 @@ async function loadFile(file, options = {}) {
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
-            setEditorWrapMode(false);  // Reset wrap mode when loading new markdown file
+            setEditorWrapMode(true);  // Word wrap on by default for markdown; cached per-doc preference overrides later
             //setCodeEditorMode(false);
             setCodeEditorMode(true); // TODO: maybe support toggling?
             elements.editorShell.dataset.fileType = 'markdown';

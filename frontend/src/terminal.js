@@ -442,6 +442,7 @@ function applyTerminalStyles(result) {
             padding: 6px 12px;
             cursor: pointer;
             white-space: nowrap;
+            transition: color 0.2s ease, border-color 0.2s ease;
         }
 
         #terminal-tabs button[aria-selected="true"] {
@@ -457,8 +458,9 @@ function applyTerminalStyles(result) {
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
-        .terminal-tab:hover {
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        .terminal-tab:not([aria-selected="true"]):hover {
+            border-color: var(--terminal-accent) !important;
+            color: var(--terminal-accent) !important;
         }
 
         #terminal-viewport {
