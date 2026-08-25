@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -313,7 +312,7 @@ func newEinoRuntime(agent *Agent) (*einoRuntime, error) {
 }
 
 func (r *einoRuntime) init() error {
-	switch r.agent.ServiceName() {
+	switch r.agent.ProviderName() {
 	case LLM_OPENAI:
 		return r.initOpenAI()
 	case LLM_ANTHROPIC:
@@ -332,10 +331,10 @@ func (r *einoRuntime) initOpenAI() error {
 	}
 
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
-		APIKey:  os.Getenv("OPENAI_API_KEY"),
+		APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
 		Model:   r.agent.ModelName(),
-		BaseURL: os.Getenv("OPENAI_BASE_URL"),
-		ByAzure: strings.EqualFold(strings.TrimSpace(os.Getenv("OPENAI_BY_AZURE")), "true"),
+		BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
+		ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
 	})
 	if err != nil {
 		return err
@@ -360,13 +359,13 @@ func (r *einoRuntime) initAnthropic() error {
 	}
 
 	var baseURL *string
-	rawBaseURL := strings.TrimSpace(os.Getenv("CLAUDE_BASE_URL"))
+	rawBaseURL := strings.TrimSpace(r.agent.EnvironmentValue("CLAUDE_BASE_URL"))
 	if rawBaseURL != "" {
 		baseURL = &rawBaseURL
 	}
 
 	chatModel, err := claude.NewChatModel(context.Background(), &claude.Config{
-		APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
 		BaseURL:   baseURL,
 		Model:     r.agent.ModelName(),
 		MaxTokens: einoAnthropicMaxTokens,
@@ -398,7 +397,7 @@ func (r *einoRuntime) initOllama() error {
 		return err
 	}
 
-	baseURL := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	baseURL := strings.TrimSpace(r.agent.EnvironmentValue("OLLAMA_HOST"))
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}

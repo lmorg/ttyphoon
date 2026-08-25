@@ -177,24 +177,38 @@ AI:
   # The full raw output is still shown in the AI panel and session log.
   ToolSummariseThresholdChars: 8192
   
-  AvailableModels:
-    OpenAI:
-      # https://platform.openai.com/docs/models
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-    Anthropic:
-      # https://platform.claude.com/docs/en/about-claude/models/overview
-      - claude-fable-5
-      - claude-opus-4-5
-      - claude-opus-4-6
-      - claude-opus-4-7
-      - claude-opus-4-8
-      - claude-sonnet-4-5
-      - claude-sonnet-4-6
-      - claude-sonnet-4-7
-      - claude-sonnet-4-8
-      - claude-haiku-4-5
-      - claude-haiku-4-6
-      - claude-haiku-4-7
-      - claude-haiku-4-8
+  DefaultService: anthropic-default
+  
+  Services:
+    openai-default:
+      Label: "OpenAI (default)"
+      Description: Default service for OpenAI
+      Provider: openai
+      Models:
+        # https://platform.openai.com/docs/models
+        - gpt-5.5
+        - gpt-5.4
+        - gpt-5.4-mini
+      DefaultModel: gpt-5.4
+
+    anthropic-default:
+      Label: "Anthropic (default)"
+      Description: Default service for Anthropic
+      Provider: anthropic
+      Models:
+        # https://platform.claude.com/docs/en/about-claude/models/overview
+        - claude-fable-5
+        - claude-opus-4-5
+        - claude-opus-4-6
+        - claude-opus-4-7
+        - claude-opus-4-8
+        - claude-sonnet-4-5
+        - claude-sonnet-4-6
+        - claude-sonnet-4-7
+        - claude-sonnet-4-8
+        - claude-haiku-4-5
+        - claude-haiku-4-6
+        - claude-haiku-4-7
+        - claude-haiku-4-8
+      DefaultModel: claude-sonnet-4-8
+      SummariseModel: claude-haiku-4-8

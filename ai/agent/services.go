@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -10,13 +11,9 @@ import (
 )
 
 const (
-	LLM_OPENAI    = "OpenAI"
-	LLM_ANTHROPIC = "Anthropic"
-	LLM_OLLAMA    = "Ollama"
-)
-
-var (
-	models map[string][]string
+	LLM_OPENAI    = "openai"
+	LLM_ANTHROPIC = "anthropic"
+	LLM_OLLAMA    = "ollama"
 )
 
 func init() {
@@ -29,6 +26,31 @@ func (agt *Agent) ServiceName() string {
 
 func (agt *Agent) ModelName() string {
 	return agt.modelName
+}
+
+func (agt *Agent) ProviderName() string {
+	service := findService(agt.serviceName)
+	if service == nil || service.Provider == "" {
+		return agt.serviceName
+	}
+	return service.Provider
+}
+
+func (agt *Agent) serviceEnv(name string) string {
+	service := findService(agt.serviceName)
+	if service != nil {
+		if value, ok := service.Env[name]; ok {
+			return value
+		}
+	}
+	return ""
+}
+
+func (agt *Agent) EnvironmentValue(name string) string {
+	if value := agt.serviceEnv(name); value != "" {
+		return value
+	}
+	return os.Getenv(name)
 }
 
 type ServiceModelIndexT struct {
@@ -77,13 +99,13 @@ func (agt *Agent) ListModels() ([]ServiceModelIndexT, []string) {
 		labels    []string
 	)
 
-	for serviceName := range models {
-		for modelId, modelName := range models[serviceName] {
+	for _, service := range config.Config.Ai.Services() {
+		for modelId, modelName := range service.Models {
 			modelXRef = append(modelXRef, ServiceModelIndexT{
-				service: serviceName,
+				service: service.Label,
 				modelId: modelId,
 			})
-			labels = append(labels, modelSelectionLabel(serviceName, modelName))
+			labels = append(labels, modelSelectionLabel(service.Label, modelName))
 		}
 	}
 
@@ -104,12 +126,12 @@ func (agt *Agent) SetServiceModelFromSelection(selection string) error {
 		return fmt.Errorf("invalid model selection format: %q", selection)
 	}
 
-	modelsByService, ok := models[serviceName]
-	if !ok {
+	service := findService(serviceName)
+	if service == nil {
 		return fmt.Errorf("unknown model service: %q", serviceName)
 	}
 
-	if !slices.Contains(modelsByService, modelName) {
+	if !slices.Contains(service.Models, modelName) {
 		return fmt.Errorf("unknown model for service %q: %q", serviceName, modelName)
 	}
 
@@ -122,7 +144,8 @@ func (agt *Agent) SetServiceModelFromSelection(selection string) error {
 
 func (agt *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
 	agt.serviceName = modelXRef[i].service
-	agt.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
+	service := findService(modelXRef[i].service)
+	agt.modelName = service.Models[modelXRef[i].modelId]
 	agt.Reload()
 }
 
@@ -140,28 +163,20 @@ func (agt *Agent) SelectServiceModel(returnFn func()) {
 }
 
 func refreshServiceList() {
-	models = config.Config.Ai.AvailableModels
-	go func() {
+	/*go func() {
 		ollama := ollamaModels()
 		if len(ollama) > 0 {
 			models[LLM_OLLAMA] = ollamaModels()
 		}
-	}()
+	}()*/
 }
 
-func (agt *Agent) setDefaultModels() {
-	if len(models[config.Config.Ai.DefaultService]) != 0 {
-		agt.serviceName = config.Config.Ai.DefaultService
-	} else {
-		for agt.serviceName = range models {
-			// just get the first service, whatever that service might be
-			break
+func findService(serviceName string) *config.AIServiceT {
+	for _, service := range config.Config.Ai.Services() {
+		if service.Label == serviceName {
+			return service
 		}
 	}
 
-	if config.Config.Ai.DefaultModels[agt.serviceName] != "" {
-		agt.modelName = config.Config.Ai.DefaultModels[agt.serviceName]
-	} else {
-		agt.modelName = models[agt.serviceName][0]
-	}
+	panic(fmt.Sprintf("service not found: '%s'", serviceName))
 }

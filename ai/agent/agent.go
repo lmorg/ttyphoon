@@ -55,7 +55,7 @@ func (ata *allTheAgentsT) Delete(key string) {
 var allTheAgents = allTheAgentsT{_map: map[string]*Agent{}}
 
 func New(renderer types.Renderer, tile types.Tile) {
-	agent := &Agent{
+	agt := &Agent{
 		_mcpServers:       make(map[string]client),
 		_mcpServerSources: make(map[string]string),
 		maxIterations:     config.Config.Ai.MaxIterations,
@@ -63,10 +63,14 @@ func New(renderer types.Renderer, tile types.Tile) {
 		renderer:          renderer,
 	}
 
-	agent.setDefaultModels()
-	agent.toolsInit()
+	//agent.setDefaultModel()
+	agt.toolsInit()
 
-	allTheAgents.Set(tile.Id(), agent)
+	service := config.Config.Ai.Service(config.Config.Ai.DefaultService)
+	agt.serviceName = service.Label
+	agt.modelName = service.DefaultModel
+
+	allTheAgents.Set(tile.Id(), agt)
 }
 
 func Get(tileId string) *Agent {

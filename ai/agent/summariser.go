@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
@@ -56,18 +55,18 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 // react agent's ChatModel: the summariser must not share tool bindings or
 // conversation history.
 func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.BaseChatModel, error) {
-	switch r.agent.ServiceName() {
+	switch r.agent.ProviderName() {
 	case LLM_OPENAI:
 		return openai.NewChatModel(ctx, &openai.ChatModelConfig{
-			APIKey:  os.Getenv("OPENAI_API_KEY"),
+			APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
 			Model:   r.agent.ModelName(),
-			BaseURL: os.Getenv("OPENAI_BASE_URL"),
-			ByAzure: strings.EqualFold(strings.TrimSpace(os.Getenv("OPENAI_BY_AZURE")), "true"),
+			BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
+			ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
 		})
 
 	case LLM_ANTHROPIC:
 		var baseURL *string
-		rawBaseURL := strings.TrimSpace(os.Getenv("CLAUDE_BASE_URL"))
+		rawBaseURL := strings.TrimSpace(r.agent.EnvironmentValue("CLAUDE_BASE_URL"))
 		if rawBaseURL != "" {
 			baseURL = &rawBaseURL
 		}
@@ -75,14 +74,14 @@ func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.Bas
 		// compression task, and the thinking budget would waste tokens we're
 		// trying to save.
 		return claude.NewChatModel(ctx, &claude.Config{
-			APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+			APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
 			BaseURL:   baseURL,
 			Model:     r.agent.ModelName(),
 			MaxTokens: einoAnthropicMaxTokens,
 		})
 
 	case LLM_OLLAMA:
-		baseURL := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+		baseURL := strings.TrimSpace(r.agent.EnvironmentValue("OLLAMA_HOST"))
 		if baseURL == "" {
 			baseURL = "http://localhost:11434"
 		}

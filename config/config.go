@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -114,6 +115,9 @@ func readConfigFile(r io.Reader) error {
 		langCache[k].ReservedWords = v.ReservedWords
 	}
 
+	// merge AI services
+	Config.Ai.services = MergeMap(Config.Ai.services, Config.Ai.ServicesYaml)
+
 	return nil
 }
 
@@ -193,13 +197,7 @@ type configT struct {
 		AdjustCellHeight int    `yaml:"AdjustCellHeight"`
 	} `yaml:"TypeFace"`
 
-	Ai struct {
-		MaxIterations               int                 `yaml:"MaxIterations"`
-		AvailableModels             map[string][]string `yaml:"AvailableModels"`
-		DefaultModels               map[string]string   `yaml:"DefaultModels"`
-		DefaultService              string              `yaml:"DefaultService"`
-		ToolSummariseThresholdChars int                 `yaml:"ToolSummariseThresholdChars"`
-	} `yaml:"AI"`
+	Ai AiT `yaml:"AI"`
 }
 
 type LanguagesT map[string]*LanguageOptionsT
@@ -214,6 +212,44 @@ type LanguageOptionsT struct {
 type LspT struct {
 	Command     []string       `yaml:"command"`
 	InitOptions map[string]any `yaml:"initializationOptions"`
+}
+
+type AiT struct {
+	MaxIterations               int                    `yaml:"MaxIterations"`
+	ServicesYaml                map[string]*AIServiceT `yaml:"Services"`
+	services                    map[string]*AIServiceT `yaml:"-"`
+	DefaultService              string                 `yaml:"DefaultService"`
+	ToolSummariseThresholdChars int                    `yaml:"ToolSummariseThresholdChars"`
+}
+
+func (ai *AiT) Service(name string) *AIServiceT {
+	service, ok := ai.services[name]
+	if !ok {
+		panic(fmt.Sprintf("service not found: '%s'", name))
+	}
+	return service
+}
+
+func (ai *AiT) Services() map[string]*AIServiceT {
+	return ai.services
+}
+
+type AIServiceT struct {
+	Label              string            `yaml:"Label"`
+	Description        string            `yaml:"Description"`
+	Provider           string            `yaml:"Provider"`
+	Models             []string          `yaml:"Models"`
+	DefaultModel       string            `yaml:"DefaultModel"`
+	SummariseModelYaml string            `yaml:"SummariseModel"`
+	Env                map[string]string `yaml:"Env"`
+}
+
+func (ais *AIServiceT) SummariseModel() string {
+	if ais.SummariseModelYaml != "" {
+		return ais.SummariseModelYaml
+	}
+
+	return ais.DefaultModel
 }
 
 // GetTabIndent returns the number of spaces to use for indentation for a given language.
