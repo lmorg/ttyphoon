@@ -10,6 +10,8 @@ type Agent interface {
 	Renderer() types.Renderer
 	ServiceName() string
 	GetMeta() *Meta
+	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
+	EnvironmentValue(string) string
 }
 
 type Tool interface {
