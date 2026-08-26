@@ -1,7 +1,8 @@
-package tools
+package filetools
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -22,6 +23,9 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
+//go:embed read_description.md
+var writeFileDescription string
+
 func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Write{agent: agent, enabled: false}, nil
 }
@@ -32,11 +36,7 @@ func (t *Write) Toggle()       { t.enabled = !t.enabled }
 func (t *Write) Name() string { return "writeFile" }
 func (t *Write) Path() string { return "internal" }
 func (t *Write) Description() string {
-	return `Writes new files, overwrites an existing files.
-Useful for making changes, correcting mistakes, and writing new code and configuration.
-File contents should contain the entire file, including parts of the file that are not changing.
-The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
-`
+	return writeFileDescription
 }
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {

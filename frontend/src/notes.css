@@ -26,6 +26,7 @@
     font-weight: inherit !important;
     letter-spacing: 1px !important;
 }
+
 .notes-sort-icon {
     display: inline-block;
     font-family: "Font Awesome Solid";
@@ -379,7 +380,7 @@ body {
     overflow: auto;
     padding: 4px;
     border: 1px solid rgba(var(--fg-rgb), 0.2);
-    background: rgba(var(--bg-rgb), 0.35);
+    background: var(--darken-background-overlay);
 }
 
 .notes-ai-settings-tools-list[data-empty="true"] {

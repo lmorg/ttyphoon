@@ -1,7 +1,8 @@
-package tools
+package filetools
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,6 +25,9 @@ func init() {
 	agent.ToolsAdd(&ReadFiles{})
 }
 
+//go:embed read_description.md
+var readDescription string
+
 func (f *ReadFiles) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &ReadFiles{agent: agent, enabled: true}, nil
 }
@@ -34,12 +38,7 @@ func (t *ReadFiles) Toggle()       { t.enabled = !t.enabled }
 func (t *ReadFiles) Name() string { return "readFiles" }
 func (t *ReadFiles) Path() string { return "internal" }
 func (t *ReadFiles) Description() string {
-	return `Open a local files for reading and return their contents.
-Useful for debugging output that references local files.
-The output of this tool will conform to the ` + "`txtar`" + ` specification.
-Any files that could not be opened will be returned with the contents saying "!!! Cannot open file"
-The input for this tool MUST be a JSON array of strings. Each array item will be a file you want the contents of.
-`
+	return readDescription
 }
 
 func (t *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
@@ -71,13 +70,13 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 		var b []byte
 		info, err := os.Stat(filename)
 		if err != nil {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %v", err))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %v", err)
 
 		} else if info.Name()[0] == '.' {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %s", "file hidden"))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %s", "file hidden")
 
 		} else if b, err = os.ReadFile(filename); err != nil {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %v", err))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %v", err)
 		}
 
 		archive.Files = append(archive.Files, txtar.File{

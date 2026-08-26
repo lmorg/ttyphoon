@@ -1,7 +1,8 @@
-package tools
+package filetools
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -21,6 +22,9 @@ func init() {
 	agent.ToolsAdd(&Directory{})
 }
 
+//go:embed directory_description.md
+var directoryDescription string
+
 func (t Directory) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Directory{agent: agent, enabled: true}, nil
 }
@@ -31,8 +35,7 @@ func (t *Directory) Toggle()       { t.enabled = !t.enabled }
 func (t *Directory) Name() string { return "readDirectory" }
 func (t *Directory) Path() string { return "internal" }
 func (t *Directory) Description() string {
-	return `Check the contents of a directory.
-Returns a bullet point list of all files and directories found inside a directory.`
+	return ``
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
