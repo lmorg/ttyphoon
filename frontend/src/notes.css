@@ -293,13 +293,13 @@ body {
 .notes-ai-settings-sessions-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
     margin: 8px 0;
     max-height: 260px;
     overflow: auto;
-    padding: 8px;
+    padding: 2px;
     border: 1px solid rgba(var(--fg-rgb), 0.2);
-    background: rgba(var(--bg-rgb), 0.35);
+    background: var(--darken-background-overlay);
 }
 
 .notes-ai-settings-sessions-list[data-empty="true"] {
@@ -311,21 +311,22 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    border: 1px solid rgba(var(--fg-rgb), 0.2);
+    border: 0px;
+    border-left: 2px solid rgba(var(--fg-rgb), 0.2);
     padding: 8px;
-    border-radius: 4px;
+    border-radius: 0;
     cursor: pointer;
     transition: border-color 0.2s, background-color 0.2s;
 }
 
 .notes-ai-settings-session-item:hover {
-    border-color: rgba(var(--accent-rgb), 0.4);
-    background: rgba(var(--accent-rgb), 0.05);
+    border-left: 2px solid var(--accent);
+    background: rgba(var(--accent-rgb), 0.2);
 }
 
 .notes-ai-settings-session-item[data-active="true"] {
-    border-color: rgba(var(--accent-rgb), 0.5);
-    background: rgba(var(--accent-rgb), 0.08);
+    border-left: 2px solid var(--green);
+    background: rgba(var(--green-rgb), 0.2);
 }
 
 .notes-ai-settings-session-main {
@@ -423,11 +424,11 @@ body {
 .notes-ai-settings-history-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin: 8px 0;
+    gap: 2px;
+    margin: 0;
     max-height: 260px;
     overflow: auto;
-    padding: 8px;
+    padding: 2px;
     border: 1px solid rgba(var(--fg-rgb), 0.2);
     background: var(--darken-background-overlay);
 }
@@ -437,12 +438,18 @@ body {
 }
 
 .notes-ai-settings-history-item {
-    border: 1px solid rgba(var(--fg-rgb), 0.2);
+    border: 0px;
+    border-left: 2px solid rgba(var(--fg-rgb), 0.2);
     padding: 8px;
-    border-radius: 4px;
-    background: var(--bg);
-    max-height: 100px;
-    overflow-y: hidden;
+    border-radius: 0;
+    /*background: rgba(var(--bg-rgb), 0.5);*/
+    /*height: 200px;*/
+    /*overflow-y: hidden;*/
+}
+
+.notes-ai-settings-history-item:hover {
+    border-left: 2px solid var(--accent);
+    background: rgba(var(--bg-rgb), 0.5);
 }
 
 .notes-ai-settings-history-heading {
