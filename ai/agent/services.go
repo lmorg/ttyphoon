@@ -61,6 +61,21 @@ func (agt *Agent) EnvironmentValue(name string) string {
 	return os.Getenv(name)
 }
 
+func (agt *Agent) ImageGenerationEnvironmentValue(name string) string {
+	service := findService(agt.serviceName)
+	if service != nil && service.ImageGenService != "" {
+		imageService := findService(service.ImageGenService)
+		if imageService != nil {
+			if value := imageService.Env[name]; value != "" {
+				return value
+			}
+		}
+		return os.Getenv(name)
+	}
+
+	return agt.EnvironmentValue(name)
+}
+
 type ServiceModelIndexT struct {
 	service string
 	modelId int

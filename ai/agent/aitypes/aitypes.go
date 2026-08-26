@@ -12,6 +12,8 @@ type Agent interface {
 	GetMeta() *Meta
 	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
 	EnvironmentValue(string) string
+	// ImageGenerationEnvironmentValue resolves image-generation settings for the configured service.
+	ImageGenerationEnvironmentValue(string) string
 }
 
 type Tool interface {

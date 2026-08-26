@@ -238,6 +238,7 @@ type AIServiceT struct {
 	Label              string            `yaml:"Label"`
 	Description        string            `yaml:"Description"`
 	Provider           string            `yaml:"Provider"`
+	ImageGenService    string            `yaml:"ImageGenService"`
 	Models             []string          `yaml:"Models"`
 	DefaultModel       string            `yaml:"DefaultModel"`
 	SummariseModelYaml string            `yaml:"SummariseModel"`

@@ -88,7 +88,7 @@ func (t *GenerateImage) Call(ctx context.Context, input string) (string, error) 
 		return "ERROR: 'prompt' is required", nil
 	}
 
-	apiKey := t.agent.EnvironmentValue("OPENAI_API_KEY")
+	apiKey := t.agent.ImageGenerationEnvironmentValue("OPENAI_API_KEY")
 	if strings.TrimSpace(apiKey) == "" {
 		return t.fail("ERROR: no OPENAI_API_KEY configured for this service"), nil
 	}
@@ -132,7 +132,7 @@ func (t *GenerateImage) fail(message string) string {
 }
 
 func (t *GenerateImage) requestImage(ctx context.Context, request generateImageInputT) ([]byte, error) {
-	model := t.agent.EnvironmentValue("OPENAI_IMAGE_MODEL")
+	model := t.agent.ImageGenerationEnvironmentValue("OPENAI_IMAGE_MODEL")
 	if strings.TrimSpace(model) == "" {
 		model = defaultImageModel
 	}
@@ -156,12 +156,12 @@ func (t *GenerateImage) requestImage(ctx context.Context, request generateImageI
 	ctx, cancel := context.WithTimeout(ctx, imageRequestTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(t.agent.EnvironmentValue("OPENAI_BASE_URL")), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(t.agent.ImageGenerationEnvironmentValue("OPENAI_BASE_URL")), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+t.agent.EnvironmentValue("OPENAI_API_KEY"))
+	req.Header.Set("Authorization", "Bearer "+t.agent.ImageGenerationEnvironmentValue("OPENAI_API_KEY"))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

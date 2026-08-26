@@ -20,6 +20,9 @@ func (a *fakeAgent) Renderer() types.Renderer         { return nil }
 func (a *fakeAgent) ServiceName() string              { return "test" }
 func (a *fakeAgent) GetMeta() *aitypes.Meta           { return &aitypes.Meta{Pwd: a.pwd} }
 func (a *fakeAgent) EnvironmentValue(n string) string { return a.env[n] }
+func (a *fakeAgent) ImageGenerationEnvironmentValue(n string) string {
+	return a.env[n]
+}
 
 func TestImageEndpoint(t *testing.T) {
 	tests := map[string]string{
