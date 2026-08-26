@@ -517,11 +517,14 @@ export async function autoHyperlink(container) {
 /**
  * Complete markdown processing pipeline - applies all common transformations
  * @param {HTMLElement} container - The container element with rendered markdown
+ * @param {{syntaxHighlighting?: boolean}} [options] - Set syntaxHighlighting false to leave code blocks unstyled
  */
-export async function processMarkdownContainer(container) {
+export async function processMarkdownContainer(container, options = {}) {
     await renderMermaidDiagrams(container);
     enableFullscreenMermaidDiagrams(container);
-    await applySyntaxHighlighting(container);
+    if (options.syntaxHighlighting !== false) {
+        await applySyntaxHighlighting(container);
+    }
     await processWailsImages(container);
     applyMarkdownImageAltSizing(container);
     enableFullscreenImages(container);

@@ -11375,7 +11375,8 @@ function initAIOutputContextMenu(container) {
 
 async function processAIMarkdownContainer(container) {
     void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
-    await processMarkdownContainer(container);
+    // AI panel code blocks stay unhighlighted; they're mostly tool output, not source.
+    await processMarkdownContainer(container, { syntaxHighlighting: false });
     wrapTablesForHorizontalScroll(container);
     setupTableSorting(container);
     applyNotesTableWordWrapMode(container);

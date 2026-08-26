@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
@@ -40,14 +42,37 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 		)),
 	}
 
-	resp, err := chatModel.Generate(ctx, messages)
+	stream, err := chatModel.Stream(ctx, messages)
 	if err != nil {
 		return "", err
 	}
-	if resp == nil || strings.TrimSpace(resp.Content) == "" {
+	defer stream.Close()
+
+	// Chunks are forwarded to the UI as they arrive so the panel keeps painting
+	// while the main agent is blocked waiting on the summary.
+	emitAIStreamToolProgress(ctx, summariserStreamOpenMarkdown())
+	defer emitAIStreamToolProgress(ctx, summariserStreamCloseMarkdown())
+
+	var content strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if chunk == nil || chunk.Content == "" {
+			continue
+		}
+		content.WriteString(chunk.Content)
+		emitAIStreamToolProgress(ctx, chunk.Content)
+	}
+
+	if strings.TrimSpace(content.String()) == "" {
 		return "", fmt.Errorf("empty summariser response")
 	}
-	return summariserPrefix + resp.Content, nil
+	return summariserPrefix + content.String(), nil
 }
 
 // newSummariserChatModel constructs a fresh ChatModel matching the agent's

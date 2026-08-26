@@ -12,8 +12,8 @@ export const DARKEN_BACKGROUND_OVERLAY = 'rgba(0, 0, 0, 0.2)';
 export function getScrollbarStyles(colors) {
     return `
         ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
+            width: 8px;
+            height: 8px;
             background-color: transparent;
             opacity: 0.5;
         }

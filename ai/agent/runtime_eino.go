@@ -107,15 +107,17 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		return output, err
 	}
 
-	// UI + log always receive the full raw output.
-	if output != "" {
-		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
-	}
-
 	// Interposer: compress oversized tool outputs so the main agent's context stays
 	// under the LLM's window. The main agent only ever sees the summarised form.
 	threshold := config.Config.Ai.ToolSummariseThresholdChars
-	if t.runtime != nil && threshold > 0 && len(output) > threshold {
+	summarising := t.runtime != nil && threshold > 0 && len(output) > threshold
+
+	// When summarising, the streamed summary replaces the raw output in the UI + log.
+	if output != "" && !summarising {
+		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
+	}
+
+	if summarising {
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
 			emitAIStreamToolProgress(ctx, formatToolSummaryFailureMarkdown(len(output), sErr))
@@ -142,6 +144,14 @@ func formatToolOutputMarkdown(output string) string {
 
 func formatToolErrorMarkdown(err error) string {
 	return fmt.Sprintf("**Tool error:**\n\n~~~~\n%s\n~~~~\n\n", err.Error())
+}
+
+func summariserStreamOpenMarkdown() string {
+	return "**Summaring tool output:**\n\n~~~~\n"
+}
+
+func summariserStreamCloseMarkdown() string {
+	return "\n~~~~\n\n"
 }
 
 func formatToolSummaryNoticeMarkdown(rawLen, summaryLen int) string {

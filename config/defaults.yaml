@@ -180,7 +180,7 @@ AI:
   DefaultService: anthropic-default
   
   Services:
-    openai-default:
+    openai:
       Label: "OpenAI (default)"
       Description: Default service for OpenAI
       Provider: openai
@@ -192,7 +192,7 @@ AI:
       DefaultModel: gpt-5.4
       SummariseModel: gpt-5.4-mini
 
-    anthropic-default:
+    anthropic:
       Label: "Anthropic (default)"
       Description: Default service for Anthropic
       Provider: anthropic
