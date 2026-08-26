@@ -12,3 +12,7 @@ ttyphoon.exe
 build/bin
 node_modules
 frontend/dist
+
+# AI working documents
+
+ai-docs/

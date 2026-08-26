@@ -348,10 +348,13 @@ func (r *einoRuntime) initOpenAI() error {
 		return err
 	}
 
+	// OpenAI-compatible proxies (OpenRouter et al) often emit content or reasoning
+	// chunks before tool_calls, which the default first-chunk checker would miss.
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
-		ToolCallingModel: chatModel,
-		ToolsConfig:      toolsConfig,
-		MaxStep:          r.agent.MaxIterations(),
+		ToolCallingModel:      chatModel,
+		ToolsConfig:           toolsConfig,
+		MaxStep:               r.agent.MaxIterations(),
+		StreamToolCallChecker: streamToolCallCheckerAllChunks,
 	})
 	if err != nil {
 		return err
