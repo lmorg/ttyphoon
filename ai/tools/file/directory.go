@@ -39,7 +39,7 @@ func (t *Directory) Description() string {
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
-	pathname, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, input)
+	pathname, err := resolveWorkspacePath(t.agent, input)
 	if err != nil {
 		return fmt.Sprintf("ERROR: %s\n", err), nil
 	}

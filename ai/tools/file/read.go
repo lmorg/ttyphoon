@@ -58,11 +58,11 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	var archive txtar.Archive
 
 	for i := range files {
-		filename, pathErr := resolveWorkspacePath(t.agent.GetMeta().Pwd, files[i])
+		filename, pathErr := resolveWorkspacePath(t.agent, files[i])
 		if pathErr != nil {
 			archive.Files = append(archive.Files, txtar.File{
 				Name: files[i],
-				Data: []byte(fmt.Sprintf("!!! Cannot open file: %v", pathErr)),
+				Data: fmt.Appendf(nil, "!!! Cannot open file: %v", pathErr),
 			})
 			continue
 		}

@@ -5,7 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/types"
 )
+
+type pathTestAgent struct {
+	projectRoot string
+}
+
+func (a *pathTestAgent) Renderer() types.Renderer                      { return nil }
+func (a *pathTestAgent) ServiceName() string                           { return "test" }
+func (a *pathTestAgent) GetMeta() *aitypes.Meta                        { return nil }
+func (a *pathTestAgent) ProjectRoot() string                           { return a.projectRoot }
+func (a *pathTestAgent) EnvironmentValue(string) string                { return "" }
+func (a *pathTestAgent) ImageGenerationEnvironmentValue(string) string { return "" }
 
 func TestApplyPatchEdits(t *testing.T) {
 	tests := []struct {
@@ -85,6 +99,7 @@ func TestApplyPatchEdits(t *testing.T) {
 
 func TestResolveWorkspacePath(t *testing.T) {
 	pwd := t.TempDir()
+	agent := &pathTestAgent{projectRoot: pwd}
 	if err := os.Mkdir(filepath.Join(pwd, "sub"), 0755); err != nil {
 		t.Fatalf("Mkdir() error = %v", err)
 	}
@@ -97,7 +112,7 @@ func TestResolveWorkspacePath(t *testing.T) {
 	}
 
 	for input, want := range tests {
-		got, err := resolveWorkspacePath(pwd, input)
+		got, err := resolveWorkspacePath(agent, input)
 		if err != nil {
 			t.Fatalf("resolveWorkspacePath(%q) error = %v", input, err)
 		}
@@ -107,7 +122,7 @@ func TestResolveWorkspacePath(t *testing.T) {
 	}
 
 	for _, input := range []string{"../outside.go", filepath.Join(pwd, "..", "outside.go")} {
-		if _, err := resolveWorkspacePath(pwd, input); err == nil {
+		if _, err := resolveWorkspacePath(agent, input); err == nil {
 			t.Errorf("resolveWorkspacePath(%q) error = nil, want outside-root error", input)
 		}
 	}

@@ -10,6 +10,7 @@ type Agent interface {
 	Renderer() types.Renderer
 	ServiceName() string
 	GetMeta() *Meta
+	ProjectRoot() string
 	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
 	EnvironmentValue(string) string
 	// ImageGenerationEnvironmentValue resolves image-generation settings for the configured service.
@@ -28,7 +29,7 @@ type Tool interface {
 
 type Meta struct {
 	CmdLine     string
-	Pwd         string
+	Pwd         string // this is not the same as the application working directory
 	OutputBlock string
 	Function    string
 	Variables   map[string]any

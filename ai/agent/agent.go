@@ -8,12 +8,14 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/notes"
 )
 
 type Agent struct {
 	runtime       agentRuntime
 	serviceName   string
 	modelName     string
+	projectRoot   string
 	maxIterations int
 
 	term     types.Term
@@ -61,6 +63,7 @@ func New(renderer types.Renderer, tile types.Tile) {
 		maxIterations:     config.Config.Ai.MaxIterations,
 		term:              tile.GetTerm(),
 		renderer:          renderer,
+		projectRoot:       notes.DirProjectRoot(tile.Pwd()),
 	}
 
 	//agent.setDefaultModel()
@@ -118,6 +121,7 @@ func (agt *Agent) McpServerRemove(server string) {
 
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
+func (agt *Agent) ProjectRoot() string      { return agt.projectRoot }
 
 func Close(tileId string) {
 	agent, ok := allTheAgents.Get(tileId)

@@ -45,7 +45,7 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 
 	arc := txtar.Parse([]byte(input))
 	for i := range arc.Files {
-		filename, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, arc.Files[i].Name)
+		filename, err := resolveWorkspacePath(t.agent, arc.Files[i].Name)
 		if err != nil {
 			result += fmt.Sprintf("ERROR '%s': %s\n", arc.Files[i].Name, err)
 			continue

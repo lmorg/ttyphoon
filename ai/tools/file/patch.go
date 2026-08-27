@@ -63,7 +63,7 @@ func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
 		return "ERROR: 'edits' must contain at least one edit", nil
 	}
 
-	filename, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, patch.File)
+	filename, err := resolveWorkspacePath(t.agent, patch.File)
 	if err != nil {
 		return t.fail(fmt.Sprintf("ERROR '%s': %s", patch.File, err)), nil
 	}

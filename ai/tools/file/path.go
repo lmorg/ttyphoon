@@ -5,9 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 )
 
-func resolveWorkspacePath(pwd, name string) (string, error) {
+func resolveWorkspacePath(agt aitypes.Agent, name string) (string, error) {
+	pwd := agt.ProjectRoot()
 	root, err := filepath.Abs(filepath.Clean(pwd))
 	if err != nil {
 		return "", err
