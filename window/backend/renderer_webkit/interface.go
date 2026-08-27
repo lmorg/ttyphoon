@@ -207,9 +207,23 @@ func (wr *webkitRender) RefreshWindowList() {
 	wr.TriggerRedraw()
 	pane, err := wr.tmux.ActivePane()
 	if err == nil {
-		wr.SetWindowTitle(pane.Name())
+		wr.setWindowTitleFromTile(pane)
 	}
 	wr.RefreshNotes()
+}
+
+// setWindowTitleFromTile falls back to the tmux window name for panes which
+// have never reported a title.
+func (wr *webkitRender) setWindowTitleFromTile(tile types.Tile) {
+	if tile == nil {
+		return
+	}
+
+	if title := tile.Name(); title != "" {
+		wr.SetWindowTitle(title)
+	} else {
+		wr.SetWindowTitle(tile.GroupName())
+	}
 }
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {

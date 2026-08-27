@@ -193,16 +193,15 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		pane = tmux.newPane(info)
 	}
 
-	/*if info.Dead {
-		pane.Close()
-		continue
-	}*/
-
 	if pane.closed {
 		return pane
 	}
 
-	pane.title = info.Title
+	// we only see title escape codes emitted while attached, so seed from
+	// tmux's own record for panes that predate us
+	if pane.title == "" {
+		pane.title = info.Title
+	}
 	pane.width = info.Width
 	pane.height = info.Height
 	pane.active = info.Active

@@ -72,13 +72,29 @@ func (term *Term) csiCursorShow() {
 	WINDOW TITLE
 */
 
+// setTitle records the title against the tile (so it survives pane / window
+// switches) as well as updating the OS window title when this term has focus.
+func (term *Term) setTitle(title string) {
+	if term.tile != nil {
+		term.tile.SetName(title)
+	}
+
+	if term.renderer == nil {
+		return
+	}
+
+	if term.visible && term._isFocused {
+		term.renderer.SetWindowTitle(title)
+	}
+}
+
 func (term *Term) csiWindowTitleStackSaveTo() {
 	term._windowTitleStack = append(term._windowTitleStack, term.renderer.GetWindowTitle())
 }
 
 func (term *Term) csiWindowTitleStackRestoreFrom() {
 	title := term._windowTitleStack[len(term._windowTitleStack)-1]
-	term.renderer.SetWindowTitle(title)
+	term.setTitle(title)
 	term._windowTitleStack = term._windowTitleStack[:len(term._windowTitleStack)-1]
 }
 
