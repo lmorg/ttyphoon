@@ -84,18 +84,31 @@ func TestApplyPatchEdits(t *testing.T) {
 }
 
 func TestResolveWorkspacePath(t *testing.T) {
-	pwd := "/tmp/workspace"
+	pwd := t.TempDir()
+	if err := os.Mkdir(filepath.Join(pwd, "sub"), 0755); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
 
 	tests := map[string]string{
-		"file.go":                    "/tmp/workspace/file.go",
-		"sub/file.go":                "/tmp/workspace/sub/file.go",
-		"/tmp/workspace/file.go":     "/tmp/workspace/file.go",
-		"/tmp/workspace/sub/file.go": "/tmp/workspace/sub/file.go",
+		"file.go":                            filepath.Join(pwd, "file.go"),
+		"sub/file.go":                        filepath.Join(pwd, "sub", "file.go"),
+		filepath.Join(pwd, "file.go"):        filepath.Join(pwd, "file.go"),
+		filepath.Join(pwd, "sub", "file.go"): filepath.Join(pwd, "sub", "file.go"),
 	}
 
 	for input, want := range tests {
-		if got := resolveWorkspacePath(pwd, input); got != want {
+		got, err := resolveWorkspacePath(pwd, input)
+		if err != nil {
+			t.Fatalf("resolveWorkspacePath(%q) error = %v", input, err)
+		}
+		if got != want {
 			t.Errorf("resolveWorkspacePath(%q) = %q, want %q", input, got, want)
+		}
+	}
+
+	for _, input := range []string{"../outside.go", filepath.Join(pwd, "..", "outside.go")} {
+		if _, err := resolveWorkspacePath(pwd, input); err == nil {
+			t.Errorf("resolveWorkspacePath(%q) error = nil, want outside-root error", input)
 		}
 	}
 }

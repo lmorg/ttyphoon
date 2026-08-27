@@ -63,7 +63,10 @@ func (t *InsertLines) Call(ctx context.Context, input string) (string, error) {
 		return "ERROR: 'inserts' must contain at least one insert", nil
 	}
 
-	filename := resolveWorkspacePath(t.agent.GetMeta().Pwd, request.File)
+	filename, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, request.File)
+	if err != nil {
+		return t.fail(fmt.Sprintf("ERROR '%s': %s", request.File, err)), nil
+	}
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" inserting lines into file: "+request.File)
 

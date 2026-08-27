@@ -63,7 +63,10 @@ func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
 		return "ERROR: 'edits' must contain at least one edit", nil
 	}
 
-	filename := resolveWorkspacePath(t.agent.GetMeta().Pwd, patch.File)
+	filename, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, patch.File)
+	if err != nil {
+		return t.fail(fmt.Sprintf("ERROR '%s': %s", patch.File, err)), nil
+	}
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" patching file: "+patch.File)
 
@@ -121,13 +124,6 @@ func applyPatchEdits(content string, edits []patchEditT) (string, error) {
 	}
 
 	return content, nil
-}
-
-func resolveWorkspacePath(pwd, name string) string {
-	if filepath.IsAbs(name) || strings.HasPrefix(name, pwd) {
-		return name
-	}
-	return filepath.Join(pwd, name)
 }
 
 func writeFileAtomic(filename string, data []byte, perm os.FileMode) error {

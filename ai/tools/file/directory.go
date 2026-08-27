@@ -39,11 +39,9 @@ func (t *Directory) Description() string {
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
-	var pathname string
-	if strings.HasPrefix(input, t.agent.GetMeta().Pwd) {
-		pathname = input
-	} else {
-		pathname = t.agent.GetMeta().Pwd + "/" + input
+	pathname, err := resolveWorkspacePath(t.agent.GetMeta().Pwd, input)
+	if err != nil {
+		return fmt.Sprintf("ERROR: %s\n", err), nil
 	}
 
 	var result strings.Builder
