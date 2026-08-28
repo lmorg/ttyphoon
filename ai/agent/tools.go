@@ -10,7 +10,19 @@ import (
 
 var _tools []aitypes.Tool
 
+const (
+	ToolStateDisabled = "disabled"
+	ToolStateApproval = "approval"
+	ToolStatePrompt   = "prompt"
+	ToolStateSession  = "session"
+	ToolStateDenied   = "denied"
+	ToolStateAlways   = "always"
+)
+
 func (agent *Agent) toolsInit() {
+	if agent.toolStates == nil {
+		agent.toolStates = make(map[string]string)
+	}
 	for i := range _tools {
 		newTool, err := _tools[i].New(agent)
 		if err != nil {
@@ -40,11 +52,17 @@ func (agent *Agent) ToolsAdd(t aitypes.Tool) error {
 func (agent *Agent) ChooseTools(cancel types.MenuCallbackT) {
 	s := make([]string, len(agent._tools))
 	for i, tool := range agent._tools {
-		s[i] = fmt.Sprintf("%s == %v", tool.Name(), tool.Enabled())
+		s[i] = fmt.Sprintf("%s == %s", tool.Name(), agent.ToolState(tool.Name()))
 	}
 
 	fnOk := func(i int) {
-		agent._tools[i].Toggle()
+		state := agent.ToolState(agent._tools[i].Name())
+		if state == ToolStateDisabled {
+			state = agent.defaultToolState(agent._tools[i])
+		} else {
+			state = ToolStateDisabled
+		}
+		agent.toolStates[agent._tools[i].Name()] = state
 		agent.Reload()
 		agent.ChooseTools(cancel)
 	}
@@ -82,7 +100,8 @@ func (agent *Agent) ListTools() []map[string]interface{} {
 
 		tools[i] = map[string]interface{}{
 			"name":        tool.Name(),
-			"enabled":     tool.Enabled(),
+			"enabled":     agent.ToolState(tool.Name()) != ToolStateDisabled,
+			"state":       agent.ToolState(tool.Name()),
 			"description": tool.Description(),
 			"schema":      string(schemaJSON),
 		}
@@ -91,15 +110,108 @@ func (agent *Agent) ListTools() []map[string]interface{} {
 }
 
 func (agent *Agent) SetToolEnabled(toolName string, enabled bool) error {
+	if enabled {
+		return agent.SetToolState(toolName, agent.defaultToolStateByName(toolName))
+	}
+	return agent.SetToolState(toolName, ToolStateDisabled)
+}
+
+func (agent *Agent) ToolState(toolName string) string {
+	if state := agent.toolStates[toolName]; state != "" {
+		return state
+	}
 	for _, tool := range agent._tools {
 		if tool.Name() == toolName {
-			currentEnabled := tool.Enabled()
-			if currentEnabled != enabled {
-				tool.Toggle()
-				agent.Reload()
+			if !tool.Enabled() {
+				return ToolStateDisabled
 			}
+			return agent.defaultToolState(tool)
+		}
+	}
+	return ToolStateDisabled
+}
+
+func (agent *Agent) defaultToolState(tool aitypes.Tool) string {
+	switch tool.Name() {
+	case "writeFile", "patchFile", "insertLines":
+		return ToolStateApproval
+	default:
+		return ToolStateAlways
+	}
+}
+
+func (agent *Agent) defaultToolStateByName(toolName string) string {
+	for _, tool := range agent._tools {
+		if tool.Name() == toolName {
+			return agent.defaultToolState(tool)
+		}
+	}
+	return ToolStateDisabled
+}
+
+func (agent *Agent) SetToolState(toolName, state string) error {
+	if state != ToolStateDisabled && state != ToolStateApproval && state != ToolStatePrompt && state != ToolStateSession && state != ToolStateDenied && state != ToolStateAlways {
+		return fmt.Errorf("invalid tool state %q", state)
+	}
+	for _, tool := range agent._tools {
+		if tool.Name() == toolName {
+			if isProjectWriteTool(toolName) {
+				for _, writeToolName := range []string{"writeFile", "patchFile", "insertLines"} {
+					agent.toolStates[writeToolName] = state
+				}
+			} else {
+				agent.toolStates[toolName] = state
+			}
+			agent.Reload()
 			return nil
 		}
 	}
 	return fmt.Errorf("tool %q not found", toolName)
+}
+
+func (agent *Agent) ShowToolStateMenu(toolName string, changed func(string)) {
+	current := agent.ToolState(toolName)
+	states := []struct {
+		value string
+		label string
+	}{
+		{ToolStateAlways, "Enabled: always allow"},
+		{ToolStateSession, "Enabled: current session"},
+		{ToolStateApproval, "Enabled: ask for permission"},
+	}
+
+	menu := agent.renderer.NewContextMenu()
+	for _, option := range states {
+		option := option
+		item := types.MenuItem{Title: option.label, Fn: func() {
+			if err := agent.SetToolState(toolName, option.value); err == nil && changed != nil {
+				changed(option.value)
+			}
+		}}
+		if option.value == current {
+			item.Icon = 0xf00c
+		}
+		menu.Append(item)
+	}
+	menu.Append(types.MenuItem{Title: types.MENU_SEPARATOR})
+	menu.Append(types.MenuItem{Title: "Disabled", Icon: func() rune {
+		if current == ToolStateDisabled {
+			return 0xf00c
+		}
+		return 0
+	}(), Fn: func() {
+		if err := agent.SetToolState(toolName, ToolStateDisabled); err == nil && changed != nil {
+			changed(ToolStateDisabled)
+		}
+	}})
+	menu.DisplayMenu(fmt.Sprintf("Tool state: %s", toolName), true)
+}
+
+func isProjectWriteTool(toolName string) bool {
+	switch toolName {
+	case "writeFile", "patchFile", "insertLines":
+		return true
+	default:
+		return false
+	}
 }

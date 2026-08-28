@@ -90,7 +90,7 @@ func (t *Grep) newSearch(input *grepInputT) *grepReturnT {
 	}()
 
 	mapper := func(s string) string { return s }
-	err := grep.BatchedStreamResults(t.agent.GetMeta().Pwd, input.Query, input.Options, mapper, ch)
+	err := grep.BatchedStreamResults(t.agent.ProjectRoot(), input.Query, input.Options, mapper, ch)
 	if err != nil {
 		return &grepReturnT{Error: err.Error()}
 	}

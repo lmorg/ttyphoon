@@ -50,6 +50,9 @@ type insertLinesInputT struct {
 
 func (t *InsertLines) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
+	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
+		return fmt.Sprintf("ERROR: %s", err), nil
+	}
 
 	var request insertLinesInputT
 	if err := json.Unmarshal([]byte(input), &request); err != nil {

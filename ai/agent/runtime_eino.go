@@ -239,7 +239,7 @@ func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 	usedNames := make(map[string]struct{})
 
 	for _, tool := range r.agent._tools {
-		if !tool.Enabled() {
+		if r.agent.ToolState(tool.Name()) == ToolStateDisabled {
 			continue
 		}
 
@@ -506,6 +506,7 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 }
 
 func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
+	r.agent.ResetWritePermission()
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
 			return "", err

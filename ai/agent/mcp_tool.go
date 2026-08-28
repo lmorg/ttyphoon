@@ -68,7 +68,7 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 	err = json.Unmarshal([]byte(input), &args)
 	if err != nil {
 		err = nil
-		
+
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 

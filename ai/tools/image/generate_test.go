@@ -1,6 +1,7 @@
 package imagetools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,10 +17,13 @@ type fakeAgent struct {
 	env map[string]string
 }
 
-func (a *fakeAgent) Renderer() types.Renderer         { return nil }
-func (a *fakeAgent) ServiceName() string              { return "test" }
-func (a *fakeAgent) GetMeta() *aitypes.Meta           { return &aitypes.Meta{Pwd: a.pwd} }
-func (a *fakeAgent) ProjectRoot() string              { return a.pwd }
+func (a *fakeAgent) Renderer() types.Renderer { return nil }
+func (a *fakeAgent) ServiceName() string      { return "test" }
+func (a *fakeAgent) GetMeta() *aitypes.Meta   { return &aitypes.Meta{Pwd: a.pwd} }
+func (a *fakeAgent) ProjectRoot() string      { return a.pwd }
+func (a *fakeAgent) RequestWritePermission(context.Context, string) error {
+	return nil
+}
 func (a *fakeAgent) EnvironmentValue(n string) string { return a.env[n] }
 func (a *fakeAgent) ImageGenerationEnvironmentValue(n string) string {
 	return a.env[n]

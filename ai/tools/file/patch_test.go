@@ -1,6 +1,7 @@
 package filetools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +15,13 @@ type pathTestAgent struct {
 	projectRoot string
 }
 
-func (a *pathTestAgent) Renderer() types.Renderer                      { return nil }
-func (a *pathTestAgent) ServiceName() string                           { return "test" }
-func (a *pathTestAgent) GetMeta() *aitypes.Meta                        { return nil }
-func (a *pathTestAgent) ProjectRoot() string                           { return a.projectRoot }
-func (a *pathTestAgent) EnvironmentValue(string) string                { return "" }
-func (a *pathTestAgent) ImageGenerationEnvironmentValue(string) string { return "" }
+func (a *pathTestAgent) Renderer() types.Renderer                             { return nil }
+func (a *pathTestAgent) ServiceName() string                                  { return "test" }
+func (a *pathTestAgent) GetMeta() *aitypes.Meta                               { return nil }
+func (a *pathTestAgent) ProjectRoot() string                                  { return a.projectRoot }
+func (a *pathTestAgent) RequestWritePermission(context.Context, string) error { return nil }
+func (a *pathTestAgent) EnvironmentValue(string) string                       { return "" }
+func (a *pathTestAgent) ImageGenerationEnvironmentValue(string) string        { return "" }
 
 func TestApplyPatchEdits(t *testing.T) {
 	tests := []struct {

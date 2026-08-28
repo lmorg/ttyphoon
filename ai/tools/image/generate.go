@@ -220,7 +220,7 @@ func downloadImage(ctx context.Context, url string) ([]byte, error) {
 // resolveOutputPath returns the path for the model to quote back, and the
 // absolute path to write to.
 func (t *GenerateImage) resolveOutputPath(name string) (relative string, absolute string, err error) {
-	pwd := t.agent.GetMeta().Pwd
+	pwd := t.agent.ProjectRoot()
 
 	name = strings.TrimSpace(name)
 	if name == "" {

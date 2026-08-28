@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/config"
@@ -12,11 +13,17 @@ import (
 )
 
 type Agent struct {
-	runtime       agentRuntime
-	serviceName   string
-	modelName     string
-	projectRoot   string
-	maxIterations int
+	runtime        agentRuntime
+	serviceName    string
+	modelName      string
+	projectRoot    string
+	maxIterations  int
+	writeMu        sync.Mutex
+	writeSession   bool
+	writePrompt    writePermission
+	writePrompting bool
+	writeWait      chan struct{}
+	toolStates     map[string]string
 
 	term     types.Term
 	renderer types.Renderer
@@ -64,6 +71,7 @@ func New(renderer types.Renderer, tile types.Tile) {
 		term:              tile.GetTerm(),
 		renderer:          renderer,
 		projectRoot:       notes.DirProjectRoot(tile.Pwd()),
+		toolStates:        make(map[string]string),
 	}
 
 	//agent.setDefaultModel()
@@ -122,6 +130,151 @@ func (agt *Agent) McpServerRemove(server string) {
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
 func (agt *Agent) ProjectRoot() string      { return agt.projectRoot }
+
+type writePermission uint8
+
+const (
+	writeUndecided writePermission = iota
+	writeAllowedPrompt
+	writeAllowedSession
+	writeDeniedPrompt
+)
+
+func (agt *Agent) ResetWritePermission() {
+	agt.writeMu.Lock()
+	defer agt.writeMu.Unlock()
+	if !agt.writeSession {
+		agt.writePrompt = writeUndecided
+	}
+}
+
+// writePermissionRequests tracks pending in-panel access-request prompts so the
+// frontend can resolve them by request ID once the user clicks an option.
+var writePermissionRequests = struct {
+	mu sync.Mutex
+	m  map[string]chan string
+}{m: map[string]chan string{}}
+
+var writePermissionSeq int64
+
+func newWritePermissionRequest() (string, chan string) {
+	id := fmt.Sprintf("wp%d", atomic.AddInt64(&writePermissionSeq, 1))
+	ch := make(chan string, 1)
+	writePermissionRequests.mu.Lock()
+	writePermissionRequests.m[id] = ch
+	writePermissionRequests.mu.Unlock()
+	return id, ch
+}
+
+func takeWritePermissionRequest(id string) (chan string, bool) {
+	writePermissionRequests.mu.Lock()
+	defer writePermissionRequests.mu.Unlock()
+	ch, ok := writePermissionRequests.m[id]
+	if ok {
+		delete(writePermissionRequests.m, id)
+	}
+	return ch, ok
+}
+
+// ResolveWritePermissionRequest is called by the frontend when the user clicks
+// one of the access-request options rendered in the AI panel output.
+func ResolveWritePermissionRequest(id, decision string) error {
+	ch, ok := takeWritePermissionRequest(id)
+	if !ok {
+		return fmt.Errorf("permission request %q not found or already resolved", id)
+	}
+	ch <- decision
+	return nil
+}
+
+func formatWritePermissionRequestMarkdown(toolName, requestID string) string {
+	return fmt.Sprintf(
+		"\n\n**Access requested for tool %s**\n\n"+
+			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=prompt)\n"+
+			"- [Allow for this session](ttyphoon://ai-tool-permission?request=%s&decision=session)\n"+
+			"- [Deny](ttyphoon://ai-tool-permission?request=%s&decision=deny)\n\n",
+		toolName, requestID, requestID, requestID,
+	)
+}
+
+func (agt *Agent) RequestWritePermission(ctx context.Context, toolName string) error {
+	state := agt.ToolState(toolName)
+	if state == ToolStateDisabled {
+		return fmt.Errorf("tool %q is disabled", toolName)
+	}
+	if state == ToolStateAlways {
+		return nil
+	}
+	if state == ToolStateSession {
+		return nil
+	}
+	if state == ToolStateDenied {
+		return fmt.Errorf("write permission denied for this prompt")
+	}
+	for {
+		agt.writeMu.Lock()
+		switch agt.writePrompt {
+		case writeAllowedPrompt, writeAllowedSession:
+			agt.writeMu.Unlock()
+			return nil
+		case writeDeniedPrompt:
+			agt.writeMu.Unlock()
+			return fmt.Errorf("write permission denied for this prompt")
+		}
+
+		if agt.writePrompting {
+			wait := agt.writeWait
+			agt.writeMu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		agt.writePrompting = true
+		agt.writeWait = make(chan struct{})
+		wait := agt.writeWait
+		agt.writeMu.Unlock()
+
+		reqID, decisionCh := newWritePermissionRequest()
+		emitAIStreamToolProgress(ctx, formatWritePermissionRequestMarkdown(toolName, reqID))
+
+		var decision string
+		select {
+		case decision = <-decisionCh:
+		case <-ctx.Done():
+			takeWritePermissionRequest(reqID)
+			agt.writeMu.Lock()
+			agt.writePrompting = false
+			close(wait)
+			agt.writeMu.Unlock()
+			return ctx.Err()
+		}
+
+		agt.writeMu.Lock()
+		switch decision {
+		case "session":
+			agt.writePrompt = writeAllowedSession
+			agt.writeSession = true
+		case "prompt":
+			agt.writePrompt = writeAllowedPrompt
+		default:
+			agt.writePrompt = writeDeniedPrompt
+		}
+		agt.writePrompting = false
+		close(wait)
+		agt.writeMu.Unlock()
+
+		select {
+		case <-wait:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
 
 func Close(tileId string) {
 	agent, ok := allTheAgents.Get(tileId)

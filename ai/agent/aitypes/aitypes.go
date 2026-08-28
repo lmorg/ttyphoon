@@ -11,6 +11,7 @@ type Agent interface {
 	ServiceName() string
 	GetMeta() *Meta
 	ProjectRoot() string
+	RequestWritePermission(context.Context, string) error
 	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
 	EnvironmentValue(string) string
 	// ImageGenerationEnvironmentValue resolves image-generation settings for the configured service.

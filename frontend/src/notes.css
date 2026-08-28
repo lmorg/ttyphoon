@@ -422,6 +422,40 @@ body {
     font-size: var(--notes-font-size-minus-1);
 }
 
+.notes-ai-settings-tool-state {
+    flex: 0 0 220px;
+    min-width: 220px;
+    border: 1px solid rgba(var(--fg-rgb), 0.3);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--fg);
+    padding: 3px 22px 3px 6px;
+    position: relative;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--notes-font-size-minus-1);
+    margin-right: 5px;
+}
+
+.notes-ai-settings-tool-state:hover,
+.notes-ai-settings-tool-state:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+    outline: none;
+}
+
+.ai-tool-permission-resolved {
+    pointer-events: none;
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+.ai-tool-permission-chosen {
+    font-weight: bold;
+    color: var(--accent);
+}
+
 .notes-ai-settings-history-list {
     display: flex;
     flex-direction: column;

@@ -400,6 +400,24 @@ export function processLinks(container, options = {}) {
             return;
         }
 
+        if (rawHref.startsWith('ttyphoon://ai-tool-permission')) {
+            // AI access-request link — dispatch a custom event carrying the
+            // request id and the chosen decision so notes.js can resolve it.
+            const qStart = rawHref.indexOf('?');
+            const params = new URLSearchParams(qStart !== -1 ? rawHref.slice(qStart + 1) : '');
+            const requestId = params.get('request') || '';
+            const decision = params.get('decision') || '';
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                a.dispatchEvent(new CustomEvent('ttyphoon-ai-tool-permission', {
+                    detail: { requestId, decision, anchor: a },
+                    bubbles: true,
+                    composed: true,
+                }));
+            });
+            return;
+        }
+
         if (rawHref.startsWith('ttyphoon://ai')) {
             // AI prompt link — parse query string params and dispatch a custom event.
             // Example: ttyphoon://ai?prompt=Summarise%20this&tools=jira

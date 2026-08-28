@@ -40,6 +40,9 @@ func (t *Write) Description() string {
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
+	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
+		return fmt.Sprintf("ERROR: %s", err), nil
+	}
 
 	var result string
 

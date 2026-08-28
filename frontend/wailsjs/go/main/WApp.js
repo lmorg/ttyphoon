@@ -346,6 +346,10 @@ export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }
 
+export function ResolveAIToolPermission(arg1, arg2) {
+  return window['go']['main']['WApp']['ResolveAIToolPermission'](arg1, arg2);
+}
+
 export function ResolveFilePath(arg1) {
   return window['go']['main']['WApp']['ResolveFilePath'](arg1);
 }
@@ -402,6 +406,10 @@ export function SetAIToolEnabled(arg1, arg2) {
   return window['go']['main']['WApp']['SetAIToolEnabled'](arg1, arg2);
 }
 
+export function SetAIToolState(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolState'](arg1, arg2);
+}
+
 export function SetActiveAISession(arg1) {
   return window['go']['main']['WApp']['SetActiveAISession'](arg1);
 }
@@ -424,6 +432,10 @@ export function SetProjectCache(arg1) {
 
 export function ShowAIMcpMenu() {
   return window['go']['main']['WApp']['ShowAIMcpMenu']();
+}
+
+export function ShowAIToolStateMenu(arg1) {
+  return window['go']['main']['WApp']['ShowAIToolStateMenu'](arg1);
 }
 
 export function ShowAIToolsMenu() {

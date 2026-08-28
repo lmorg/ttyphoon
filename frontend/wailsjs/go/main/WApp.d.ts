@@ -181,6 +181,8 @@ export function NotesTyposOpenDocument(arg1:string,arg2:string,arg3:string):Prom
 
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
 
+export function ResolveAIToolPermission(arg1:string,arg2:string):Promise<void>;
+
 export function ResolveFilePath(arg1:string):Promise<string>;
 
 export function ResolveNoteLocation(arg1:string):Promise<string>;
@@ -209,6 +211,8 @@ export function SetAIMcpServerEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 
+export function SetAIToolState(arg1:string,arg2:string):Promise<void>;
+
 export function SetActiveAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
 export function SetCurrentAIModelSelection(arg1:string):Promise<void>;
@@ -220,6 +224,8 @@ export function SetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,
 export function SetProjectCache(arg1:notes.ProjectCacheT):Promise<void>;
 
 export function ShowAIMcpMenu():Promise<void>;
+
+export function ShowAIToolStateMenu(arg1:string):Promise<void>;
 
 export function ShowAIToolsMenu():Promise<void>;
 

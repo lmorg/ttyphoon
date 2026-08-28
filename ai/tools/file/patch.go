@@ -50,6 +50,9 @@ type patchInputT struct {
 
 func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
+	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
+		return fmt.Sprintf("ERROR: %s", err), nil
+	}
 
 	var patch patchInputT
 	if err := json.Unmarshal([]byte(input), &patch); err != nil {

@@ -13,7 +13,7 @@ import {
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
     ListAIPromptLogs, GetAIPromptLog,
-    GetAIToolsList, SetAIToolEnabled, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
+    GetAIToolsList, SetAIToolEnabled, SetAIToolState, ShowAIToolStateMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -10849,10 +10849,17 @@ function renderAIToolsList() {
     elements.aiSettingsToolsList.dataset.empty = 'false';
     const items = tools.map((tool, index) => {
         const safeName = escapeHtml(tool.name || 'Unknown tool');
-        const checked = tool.enabled === true;
+        const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
+        const options = [
+            ['always', 'Enabled: always allow'],
+            ['session', 'Enabled: current session'],
+            ['approval', 'Enabled: ask for permission'],
+            ['disabled', 'Disabled'],
+        ].map(([value, label]) => ({ value, label }));
+        const stateLabel = options.find(option => option.value === toolState)?.label || 'Unknown';
         return `
             <div class="notes-ai-settings-tool-item" data-tool-index="${index}">
-                <input type="checkbox" class="notes-ai-settings-tool-checkbox" data-tool-name="${safeName}" ${checked ? 'checked' : ''}>
+                <button type="button" class="notes-ai-settings-tool-state" data-tool-name="${safeName}" data-tool-state="${toolState}">${stateLabel}</button>
                 <span class="notes-ai-settings-tool-name">${safeName}</span>
             </div>
         `;
@@ -12264,6 +12271,17 @@ EventsOn("aiJobFinish", () => {
     finishAIJob();
 });
 
+EventsOn("aiToolStateChanged", (payload) => {
+    const name = String(payload?.name || '');
+    const stateValue = String(payload?.state || '');
+    const tool = state.aiToolsList.find(item => item?.name === name);
+    if (tool) {
+        tool.state = stateValue;
+        tool.enabled = stateValue !== 'disabled';
+    }
+    renderAIToolsList();
+});
+
 // Intercept ttyphoon://ai/... links rendered anywhere in the notes UI
 document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     const prompt = e.detail?.prompt;
@@ -12277,6 +12295,37 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
         await AskAI('notesPromptUri', prompt, tools);
     } catch (err) {
         notifyTerminal('Failed to ask AI', 'error');
+        console.error(err);
+    }
+});
+
+// Access-request options rendered in the AI panel output (see
+// agent.RequestWritePermission) resolve here rather than via a native/context menu.
+document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
+    const requestId = String(e.detail?.requestId || '');
+    const decision = String(e.detail?.decision || '');
+    const anchor = e.detail?.anchor;
+    if (!requestId || !decision) {
+        return;
+    }
+
+    if (elements.aiOutput) {
+        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            if (href.startsWith('ttyphoon://ai-tool-permission') && href.includes(`request=${requestId}`)) {
+                link.classList.add('ai-tool-permission-resolved');
+                link.removeAttribute('href');
+            }
+        });
+    }
+    if (anchor instanceof HTMLElement) {
+        anchor.classList.add('ai-tool-permission-chosen');
+    }
+
+    try {
+        await ResolveAIToolPermission(requestId, decision);
+    } catch (err) {
+        notifyTerminal('Failed to resolve tool access request', 'error');
         console.error(err);
     }
 });
@@ -12444,32 +12493,24 @@ if (elements.aiSettingsModal) {
     });
 }
 if (elements.aiSettingsToolsList) {
-    elements.aiSettingsToolsList.addEventListener('change', (event) => {
-        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
-        if (!checkbox || checkbox.type !== 'checkbox') {
+    elements.aiSettingsToolsList.addEventListener('click', (event) => {
+        const stateButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-state')
+            : null;
+        if (!stateButton) {
             return;
         }
 
-        const toolName = String(checkbox.dataset.toolName || '').trim();
+        const toolName = String(stateButton.dataset.toolName || '').trim();
         if (!toolName) {
             return;
         }
 
-        const enabled = checkbox.checked;
-        SetAIToolEnabled(toolName, enabled).then(() => {
-            void loadAISessionManagement().then(() => {
-                renderAISessionManagement();
-            });
-        }).catch((err) => {
-            notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
-            console.error(err);
-            // Revert checkbox on error
-            checkbox.checked = !enabled;
-        });
+        ShowAIToolStateMenu(toolName);
     });
 
     elements.aiSettingsToolsList.addEventListener('click', (event) => {
-        if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox') {
+        if (event.target instanceof HTMLButtonElement && event.target.closest('.notes-ai-settings-tool-state')) {
             return;
         }
 

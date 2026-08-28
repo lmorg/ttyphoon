@@ -2524,6 +2524,33 @@ func (a *WApp) SetAIToolEnabled(toolName string, enabled bool) error {
 	return agt.SetToolEnabled(toolName, enabled)
 }
 
+func (a *WApp) SetAIToolState(toolName, state string) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+	return agt.SetToolState(toolName, state)
+}
+
+func (a *WApp) ShowAIToolStateMenu(toolName string) {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+	agt.ShowToolStateMenu(toolName, func(state string) {
+		runtime.EventsEmit(a.ctx, "aiToolStateChanged", map[string]string{
+			"name":  toolName,
+			"state": state,
+		})
+	})
+}
+
+// ResolveAIToolPermission is called when the user clicks an access-request
+// option rendered in the AI panel output (see agent.RequestWritePermission).
+func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
+	return agent.ResolveWritePermissionRequest(requestID, decision)
+}
+
 func (a *WApp) GetAIMcpServers() []map[string]interface{} {
 	agt, ok := a.activeAgent()
 	if !ok {
