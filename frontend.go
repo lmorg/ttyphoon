@@ -2506,6 +2506,10 @@ func (a *WApp) ShowAIToolsMenu() {
 	agt.ChooseTools(nil)
 }
 
+func (a *WApp) ShowAISkillsMenu(x, y float64) {
+	renderwebkit.AskAiSkillsAt(int(x), int(y))
+}
+
 func (a *WApp) GetAIToolsList() []map[string]interface{} {
 	agt, ok := a.activeAgent()
 	if !ok {
@@ -2532,12 +2536,12 @@ func (a *WApp) SetAIToolState(toolName, state string) error {
 	return agt.SetToolState(toolName, state)
 }
 
-func (a *WApp) ShowAIToolStateMenu(toolName string) {
+func (a *WApp) ShowAIToolStateMenu(toolName string, x, y float64) {
 	agt, ok := a.activeAgent()
 	if !ok {
 		return
 	}
-	agt.ShowToolStateMenu(toolName, func(state string) {
+	agt.ShowToolStateMenu(toolName, int(x), int(y), func(state string) {
 		runtime.EventsEmit(a.ctx, "aiToolStateChanged", map[string]string{
 			"name":  toolName,
 			"state": state,

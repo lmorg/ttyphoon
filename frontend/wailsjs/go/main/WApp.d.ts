@@ -225,7 +225,9 @@ export function SetProjectCache(arg1:notes.ProjectCacheT):Promise<void>;
 
 export function ShowAIMcpMenu():Promise<void>;
 
-export function ShowAIToolStateMenu(arg1:string):Promise<void>;
+export function ShowAISkillsMenu(arg1:number,arg2:number):Promise<void>;
+
+export function ShowAIToolStateMenu(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ShowAIToolsMenu():Promise<void>;
 

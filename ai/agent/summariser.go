@@ -3,16 +3,9 @@ package agent
 import (
 	"context"
 	_ "embed"
-	"errors"
 	"fmt"
-	"io"
-	"strings"
 
-	"github.com/cloudwego/eino-ext/components/model/claude"
-	einoOllama "github.com/cloudwego/eino-ext/components/model/ollama"
-	"github.com/cloudwego/eino-ext/components/model/openai"
-	einoModel "github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
+	"github.com/lmorg/ttyphoon/ai/subagent"
 )
 
 // summariserPrefix is prepended to every summarised tool output so the main
@@ -29,96 +22,21 @@ var summariserSystemPrompt string
 // Called by einoAgentTool.InvokableRun when the raw output would push the main
 // agent's conversation over its context budget.
 func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInput, rawOutput string) (string, error) {
-	chatModel, err := r.newSummariserChatModel(ctx)
-	if err != nil {
-		return "", fmt.Errorf("build summariser chat model: %w", err)
-	}
-
-	messages := []*schema.Message{
-		schema.SystemMessage(summariserSystemPrompt),
-		schema.UserMessage(fmt.Sprintf(
+	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), r.agent.EnvironmentValue).Run(ctx, subagent.Request{
+		SystemPrompt: summariserSystemPrompt,
+		Prompt: fmt.Sprintf(
 			"Tool name: %s\nTool input arguments (JSON):\n%s\n\nTool raw output:\n%s",
 			toolName, toolInput, rawOutput,
-		)),
-	}
-
-	stream, err := chatModel.Stream(ctx, messages)
+		),
+		EmitStream:   EmitAIStreamToolProgress(ctx),
+		StreamPrefix: summariserStreamOpenMarkdown(),
+		StreamSuffix: summariserStreamCloseMarkdown(),
+		FormatStreamChunk: func(text string) string {
+			return text
+		},
+	})
 	if err != nil {
 		return "", err
 	}
-	defer stream.Close()
-
-	// Chunks are forwarded to the UI as they arrive so the panel keeps painting
-	// while the main agent is blocked waiting on the summary.
-	emitAIStreamToolProgress(ctx, summariserStreamOpenMarkdown())
-	defer emitAIStreamToolProgress(ctx, summariserStreamCloseMarkdown())
-
-	var content strings.Builder
-	for {
-		chunk, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-		if chunk == nil || chunk.Content == "" {
-			continue
-		}
-		content.WriteString(chunk.Content)
-		emitAIStreamToolProgress(ctx, chunk.Content)
-	}
-
-	if strings.TrimSpace(content.String()) == "" {
-		return "", fmt.Errorf("empty summariser response")
-	}
-	return summariserPrefix + content.String(), nil
-}
-
-// newSummariserChatModel constructs a fresh ChatModel matching the agent's
-// configured LLM service. This is intentionally not the same instance as the
-// react agent's ChatModel: the summariser must not share tool bindings or
-// conversation history.
-func (r *einoRuntime) newSummariserChatModel(ctx context.Context) (einoModel.BaseChatModel, error) {
-	switch r.agent.ProviderName() {
-	case LLM_OPENAI:
-		return openai.NewChatModel(ctx, &openai.ChatModelConfig{
-			APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
-			Model:   r.agent.SummariseModelName(),
-			BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
-			ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
-		})
-
-	case LLM_ANTHROPIC:
-		var baseURL *string
-		rawBaseURL := strings.TrimSpace(r.agent.EnvironmentValue("CLAUDE_BASE_URL"))
-		if rawBaseURL != "" {
-			baseURL = &rawBaseURL
-		}
-		// Thinking is deliberately disabled for the summariser: it's a mechanical
-		// compression task, and the thinking budget would waste tokens we're
-		// trying to save.
-		return claude.NewChatModel(ctx, &claude.Config{
-			APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
-			BaseURL:   baseURL,
-			Model:     r.agent.SummariseModelName(),
-			MaxTokens: einoAnthropicMaxTokens,
-		})
-
-	case LLM_OLLAMA:
-		baseURL := strings.TrimSpace(r.agent.EnvironmentValue("OLLAMA_HOST"))
-		if baseURL == "" {
-			baseURL = "http://localhost:11434"
-		}
-		if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-			baseURL = "http://" + baseURL
-		}
-		return einoOllama.NewChatModel(ctx, &einoOllama.ChatModelConfig{
-			BaseURL: baseURL,
-			Model:   r.agent.SummariseModelName(),
-		})
-
-	default:
-		return nil, fmt.Errorf("summariser: service %q is not supported", r.agent.ServiceName())
-	}
+	return summariserPrefix + content, nil
 }

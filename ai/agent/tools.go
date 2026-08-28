@@ -169,7 +169,7 @@ func (agent *Agent) SetToolState(toolName, state string) error {
 	return fmt.Errorf("tool %q not found", toolName)
 }
 
-func (agent *Agent) ShowToolStateMenu(toolName string, changed func(string)) {
+func (agent *Agent) ShowToolStateMenu(toolName string, x, y int, changed func(string)) {
 	current := agent.ToolState(toolName)
 	states := []struct {
 		value string
@@ -204,7 +204,7 @@ func (agent *Agent) ShowToolStateMenu(toolName string, changed func(string)) {
 			changed(ToolStateDisabled)
 		}
 	}})
-	menu.DisplayMenu(fmt.Sprintf("Tool state: %s", toolName), true)
+	menu.DisplayMenuAt(fmt.Sprintf("Tool state: %s", toolName), x, y)
 }
 
 func isProjectWriteTool(toolName string) bool {

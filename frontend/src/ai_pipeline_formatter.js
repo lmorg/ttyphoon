@@ -7,31 +7,187 @@ function normalizeChunk(value) {
     return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+// Real yield point. `await` on a resolved promise only drains the microtask
+// queue, which never lets the browser paint or process input.
+function nextFrame() {
+    if (typeof requestAnimationFrame !== 'function') {
+        return new Promise((resolve) => setTimeout(resolve, 16));
+    }
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function canStartNewBlock(text, pos) {
+    const lineEnd = text.indexOf('\n', pos);
+    const line = text.slice(pos, lineEnd === -1 ? text.length : lineEnd);
+    if (line.trim() === '') {
+        return false;
+    }
+    // Indented, list and blockquote lines may be continuations of the block
+    // before the blank line, so they aren't safe split points.
+    return !/^(?:\s|[-*+]\s|>|\d+[.)]\s)/.test(line);
+}
+
+// An unsplittable construct (a long fenced tool output, or a reasoning
+// blockquote) has no natural block boundary, so cap how much text may sit in
+// the re-parsed tail before it is force-committed at a line boundary.
+const MAX_TAIL_BYTES = 65536;
+
+function closeFenceFor(openerLine) {
+    const match = /^ {0,3}(`{3,}|~{3,})/.exec(openerLine || '');
+    return match ? `\n${match[1]}\n` : '';
+}
+
+// Plans the offset up to which text can be committed to the DOM permanently.
+// Prefers a natural block boundary, falling back to a line boundary (closing and
+// re-opening any open fence) once the tail would otherwise grow unbounded.
+function planSplit(text, from) {
+    let natural = from;
+    let forced = from;
+    let forcedOpener = '';
+    let idx = from;
+    let inFence = false;
+    let fenceChar = '';
+    let fenceLen = 0;
+    let fenceOpener = '';
+    const limit = from + MAX_TAIL_BYTES;
+
+    while (idx < text.length) {
+        const lineEnd = text.indexOf('\n', idx);
+        if (lineEnd === -1) {
+            break; // a trailing partial line is never stable
+        }
+
+        const line = text.slice(idx, lineEnd);
+        const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+
+        if (fence) {
+            const char = fence[1][0];
+            const len = fence[1].length;
+            if (!inFence) {
+                inFence = true;
+                fenceChar = char;
+                fenceLen = len;
+                fenceOpener = line;
+            } else if (char === fenceChar && len >= fenceLen) {
+                inFence = false;
+                fenceChar = '';
+                fenceLen = 0;
+                fenceOpener = '';
+            }
+        } else if (!inFence && line.trim() === '' && canStartNewBlock(text, lineEnd + 1)) {
+            natural = lineEnd + 1;
+        }
+
+        if (lineEnd + 1 <= limit) {
+            forced = lineEnd + 1;
+            forcedOpener = inFence ? fenceOpener : '';
+        }
+
+        idx = lineEnd + 1;
+    }
+
+    if (natural > from) {
+        return { split: natural, close: '', reopen: '' };
+    }
+
+    if (forced > from && text.length - from > MAX_TAIL_BYTES) {
+        return {
+            split: forced,
+            close: closeFenceFor(forcedOpener),
+            reopen: forcedOpener ? `${forcedOpener}\n` : '',
+        };
+    }
+
+    return { split: from, close: '', reopen: '' };
+}
+
 const SECTION_REGEX = /^(Question|Thought|Final Answer):[ \t]*/gm;
+const MAX_SECTION_HEADER_LEN = 32;
 
-function parseSections(source) {
+// A tail that is one unterminated fence renders as exactly one <pre><code>, so
+// it can be grown by appending text rather than re-parsed every frame. Tool
+// output and the summariser both stream for a long time inside an open fence,
+// which has no internal block boundary for planSplit() to commit at.
+function openFenceTail(text) {
+    const firstNewline = text.indexOf('\n');
+    if (firstNewline === -1) {
+        return null;
+    }
+
+    const opener = text.slice(0, firstNewline);
+    const match = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`~]*)[ \t]*$/.exec(opener);
+    if (!match) {
+        return null;
+    }
+
+    const marker = match[1];
+    const body = text.slice(firstNewline + 1);
+    const closing = new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}[ \t]*$`, 'm');
+    if (closing.test(body)) {
+        return null;
+    }
+
+    return { opener, lang: match[2] || '', body };
+}
+
+function createSectionCache() {
+    return { scannedTo: 0, matches: [], slices: [] };
+}
+
+// Streamed text is append-only, so rescan only the new suffix and re-slice only
+// the final (still growing) section rather than the whole stream every frame.
+function parseSections(source, cache) {
     const text = String(source || '');
-    const matches = Array.from(text.matchAll(SECTION_REGEX));
 
-    if (matches.length === 0) {
-        return [];
+    if (text.length < cache.scannedTo) {
+        cache.scannedTo = 0;
+        cache.matches = [];
+        cache.slices = [];
     }
 
-    const sections = [];
-    for (let i = 0; i < matches.length; i += 1) {
-        const match = matches[i];
-        const label = match[1] || '';
-        const sectionStart = match.index ?? 0;
-        const contentStart = sectionStart + match[0].length;
-        const sectionEnd = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
+    if (text.length > cache.scannedTo) {
+        // Overlap the previous scan end so a header split across chunks is found.
+        const from = Math.max(0, cache.scannedTo - MAX_SECTION_HEADER_LEN);
+        while (cache.matches.length > 0 && cache.matches[cache.matches.length - 1].start >= from) {
+            cache.matches.pop();
+        }
 
-        const rawContent = text.slice(contentStart, sectionEnd);
-        const content = rawContent.startsWith('\n') ? rawContent.slice(1) : rawContent;
-
-        sections.push({ label, content });
+        SECTION_REGEX.lastIndex = from;
+        let match;
+        while ((match = SECTION_REGEX.exec(text)) !== null) {
+            cache.matches.push({
+                label: match[1] || '',
+                start: match.index,
+                contentStart: match.index + match[0].length,
+            });
+        }
+        cache.scannedTo = text.length;
     }
 
-    return sections;
+    if (cache.matches.length === 0) {
+        cache.slices = [];
+        return cache.slices;
+    }
+
+    const slices = [];
+    for (let i = 0; i < cache.matches.length; i += 1) {
+        const end = i + 1 < cache.matches.length ? cache.matches[i + 1].start : text.length;
+        const cached = cache.slices[i];
+        if (cached && cached.end === end && cached.label === cache.matches[i].label) {
+            slices.push(cached);
+            continue;
+        }
+
+        const raw = text.slice(cache.matches[i].contentStart, end);
+        slices.push({
+            label: cache.matches[i].label,
+            content: raw.startsWith('\n') ? raw.slice(1) : raw,
+            end,
+        });
+    }
+
+    cache.slices = slices;
+    return slices;
 }
 
 export function createAIPipelineFormatter(container, options = {}) {
@@ -45,6 +201,90 @@ export function createAIPipelineFormatter(container, options = {}) {
     let isRendering = false;
     let needsRender = false;
     let lazyChunkObserver = null;
+    // Per markdown root: how much of its text is already committed to the DOM.
+    const incrementalState = new WeakMap();
+    // Per section element: committed content length. Sections only grow, so the
+    // length detects change without keeping a second copy of the text.
+    const sectionLengths = new WeakMap();
+    const sectionCache = createSectionCache();
+
+    function resetSectionCache() {
+        sectionCache.scannedTo = 0;
+        sectionCache.matches = [];
+        sectionCache.slices = [];
+    }
+
+    // Streamed text only ever grows, so re-parsing all of it every frame is
+    // O(n^2). Commit completed blocks once and re-render only the trailing,
+    // still-changing block.
+    async function renderIncremental(markdownRoot, text) {
+        let st = incrementalState.get(markdownRoot);
+        if (!st || text.length < st.committed || !markdownRoot.contains(st.tail)) {
+            markdownRoot.textContent = '';
+            const stable = document.createElement('div');
+            stable.className = 'notes-ai-stable';
+            const tail = document.createElement('div');
+            tail.className = 'notes-ai-tail';
+            markdownRoot.appendChild(stable);
+            markdownRoot.appendChild(tail);
+            st = { committed: 0, reopen: '', stable, tail, fenceCode: null, fenceOpener: '', fenceBody: '' };
+            incrementalState.set(markdownRoot, st);
+        }
+
+        const plan = planSplit(text, st.committed);
+        if (plan.split > st.committed) {
+            const slice = st.reopen + text.slice(st.committed, plan.split) + plan.close;
+            const batch = document.createElement('div');
+            batch.className = 'notes-ai-batch';
+            batch.innerHTML = markedInstance ? markedInstance.parse(slice) : slice;
+            st.stable.appendChild(batch);
+            st.committed = plan.split;
+            st.reopen = plan.reopen;
+            if (processMarkdownContainer) {
+                await processMarkdownContainer(batch, { streaming: true });
+            }
+        }
+
+        const tailText = st.reopen + text.slice(st.committed);
+        const fence = openFenceTail(tailText);
+
+        if (fence) {
+            const canAppend = st.fenceCode
+                && st.fenceOpener === fence.opener
+                && fence.body.length >= st.fenceBody.length;
+
+            if (!canAppend) {
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                if (fence.lang) {
+                    code.className = `language-${fence.lang}`;
+                }
+                code.appendChild(document.createTextNode(fence.body));
+                pre.appendChild(code);
+                st.tail.textContent = '';
+                st.tail.appendChild(pre);
+                st.fenceCode = code;
+                st.fenceOpener = fence.opener;
+                st.fenceBody = fence.body;
+            } else if (fence.body.length > st.fenceBody.length) {
+                st.fenceCode.firstChild.appendData(fence.body.slice(st.fenceBody.length));
+                st.fenceBody = fence.body;
+            }
+        } else {
+            st.fenceCode = null;
+            st.fenceOpener = '';
+            st.fenceBody = '';
+            st.tail.innerHTML = markedInstance ? markedInstance.parse(tailText) : tailText;
+        }
+
+        if (processMarkdownContainer) {
+            await processMarkdownContainer(st.tail, { streaming: true });
+        }
+    }
+
+    function resetIncremental(markdownRoot) {
+        incrementalState.delete(markdownRoot);
+    }
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -77,6 +317,7 @@ export function createAIPipelineFormatter(container, options = {}) {
 
     function clear() {
         destroyLazyObserver();
+        resetSectionCache();
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -101,6 +342,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         renderVersion += 1;
         isRendering = false;
         needsRender = false;
+        resetSectionCache();
 
         // Timestamp sits directly in container (before jobRoot) so the render
         // loop, which owns jobRoot's contents, cannot accidentally wipe it.
@@ -129,6 +371,12 @@ export function createAIPipelineFormatter(container, options = {}) {
 
     function finishJob() {
         container.scrollTop = container.scrollHeight;
+
+        // Streaming renders skip images, mermaid, tables and auto-hyperlinking
+        // because they re-run on every frame; apply them once here instead.
+        if (jobRoot && processMarkdownContainer) {
+            void processMarkdownContainer(jobRoot);
+        }
     }
 
     function buildSectionShell(label) {
@@ -149,16 +397,13 @@ export function createAIPipelineFormatter(container, options = {}) {
             markdownRoot.className = 'notes-ai-markdown markdown-body';
             sectionEl.appendChild(markdownRoot);
         }
-        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(content || '') : content;
-        if (processMarkdownContainer) {
-            await processMarkdownContainer(markdownRoot);
-        }
+        await renderIncremental(markdownRoot, content || '');
         return version === renderVersion;
     }
 
     async function renderCurrentStream(version) {
         const root = ensureJobRoot();
-        const sections = parseSections(streamText);
+        const sections = parseSections(streamText, sectionCache);
 
         // No structured sections: render the whole stream as markdown.
         if (sections.length === 0) {
@@ -172,15 +417,13 @@ export function createAIPipelineFormatter(container, options = {}) {
 
             if (!streamText) {
                 markdownRoot.innerHTML = '';
+                resetIncremental(markdownRoot);
                 return;
             }
 
-            markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
-            if (processMarkdownContainer) {
-                await processMarkdownContainer(markdownRoot);
-                if (version !== renderVersion) {
-                    return;
-                }
+            await renderIncremental(markdownRoot, streamText);
+            if (version !== renderVersion) {
+                return;
             }
 
             return;
@@ -220,8 +463,8 @@ export function createAIPipelineFormatter(container, options = {}) {
             const rawContent = section.content || '';
 
             if (el && el.dataset.label === section.label && el.dataset.key === key) {
-                if (el.dataset.rawContent !== rawContent) {
-                    el.dataset.rawContent = rawContent;
+                if (sectionLengths.get(el) !== rawContent.length) {
+                    sectionLengths.set(el, rawContent.length);
                     const ok = await patchMarkdownSection(el, rawContent, version);
                     if (!ok) {
                         return;
@@ -232,7 +475,7 @@ export function createAIPipelineFormatter(container, options = {}) {
 
             const newEl = buildSectionShell(section.label);
             newEl.dataset.key = key;
-            newEl.dataset.rawContent = rawContent;
+            sectionLengths.set(newEl, rawContent.length);
             if (el) {
                 root.replaceChild(newEl, el);
                 existingEls[i] = newEl;
@@ -266,8 +509,18 @@ export function createAIPipelineFormatter(container, options = {}) {
         void (async () => {
             isRendering = true;
             try {
+                let firstPass = true;
                 do {
                     needsRender = false;
+                    // Chunks arrive far faster than a render completes. Awaiting
+                    // only microtasks would spin this loop without ever letting
+                    // the browser paint or handle input, so yield a real frame
+                    // between passes; that also coalesces the chunks that land
+                    // in the meantime into a single render.
+                    if (!firstPass) {
+                        await nextFrame();
+                    }
+                    firstPass = false;
                     await renderCurrentStream(renderVersion);
                 } while (needsRender);
             } finally {
@@ -395,6 +648,7 @@ export function createAIPipelineFormatter(container, options = {}) {
 
         if (!streamText) {
             markdownRoot.innerHTML = '';
+            resetIncremental(markdownRoot);
             return;
         }
 
@@ -412,6 +666,9 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
 
         markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
+        // This root is now owned by the one-shot lazy-chunk path, not the
+        // incremental streaming path.
+        resetIncremental(markdownRoot);
 
         if (!processMarkdownContainer) {
             return;
@@ -454,17 +711,11 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
 
         try {
+            // Lazy chunks come from a fully-known document (session restore /
+            // prompt-log jump), not live streaming, so this is final output.
             await processMarkdownContainer(chunkContent);
             if (version !== renderVersion) {
                 return;
-            }
-
-            // Session-log markdown can render fenced code blocks outside the
-            // structured streaming path; pin them to the latest lines just as
-            // live Action / Action Input sections would be.
-            const codeBlocks = chunkContent.querySelectorAll('pre');
-            for (const block of codeBlocks) {
-                block.scrollTop = block.scrollHeight;
             }
         } finally {
             chunk.dataset.lazyProcessed = 'done';

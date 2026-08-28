@@ -34,6 +34,10 @@ func (wr *webkitRender) AskAi() {
 }
 
 func askAiSkills(wr *webkitRender) {
+	askAiSkillsAt(wr, 0, 0, false)
+}
+
+func askAiSkillsAt(wr *webkitRender, x, y int, anchored bool) {
 	skills := skills.ReadSkills()
 
 	if len(skills) == 0 {
@@ -61,7 +65,19 @@ func askAiSkills(wr *webkitRender) {
 		askAiSkill(wr, skills[i])
 	}
 
+	if anchored {
+		wr.DisplayMenuAt("Select an agent skill", slice, x, y, nil, fnSelect, nil)
+		return
+	}
 	wr.DisplayMenu("Select an agent skill", slice, nil, fnSelect, nil)
+}
+
+func AskAiSkillsAt(x, y int) {
+	wr, ok := CurrentRenderer()
+	if !ok {
+		return
+	}
+	askAiSkillsAt(wr, x, y, true)
 }
 
 func askAiSkill(wr *webkitRender, skill *skills.SkillT) {

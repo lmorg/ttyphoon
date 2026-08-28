@@ -434,8 +434,12 @@ export function ShowAIMcpMenu() {
   return window['go']['main']['WApp']['ShowAIMcpMenu']();
 }
 
-export function ShowAIToolStateMenu(arg1) {
-  return window['go']['main']['WApp']['ShowAIToolStateMenu'](arg1);
+export function ShowAISkillsMenu(arg1, arg2) {
+  return window['go']['main']['WApp']['ShowAISkillsMenu'](arg1, arg2);
+}
+
+export function ShowAIToolStateMenu(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['ShowAIToolStateMenu'](arg1, arg2, arg3);
 }
 
 export function ShowAIToolsMenu() {

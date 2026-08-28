@@ -20,6 +20,7 @@ type MenuItem struct {
 type ContextMenu interface {
 	Append(...MenuItem)
 	DisplayMenu(title string, showNextToMouseCursor ...bool)
+	DisplayMenuAt(title string, x, y int)
 	Options() []string
 	Icons() []rune
 	Highlight(int)

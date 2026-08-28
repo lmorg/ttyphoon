@@ -9,6 +9,7 @@ import {
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
+    ShowAISkillsMenu,
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
@@ -378,7 +379,7 @@ hljs.registerLanguage('xl', xl);
 hljs.registerLanguage('xquery', xquery);
 hljs.registerLanguage('zephir', zephir);
 
-import { configureMarked, processMarkdownContainer, enableFullscreenImages } from './markdown-utils.js';
+import { configureMarked, processMarkdownContainer, enableFullscreenImages, processLinks } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
@@ -531,6 +532,7 @@ app.innerHTML = `
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt...</button>
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
+                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills...</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
                                 <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
                                 <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
@@ -767,6 +769,7 @@ const elements = {
     aiSettingsModelPicker: document.getElementById('notes-ai-settings-model-picker'),
     toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
+    toolsAISkills: document.getElementById('notes-tools-ai-skills'),
     toolsAISettings: document.getElementById('notes-tools-ai-settings'),
     toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
@@ -909,6 +912,8 @@ const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const AI_BOTTOM_THRESHOLD_PX = 24;
+// How long the bottom-chase keeps running after the last request for it.
+const AI_BOTTOM_CHASE_MS = 400;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
@@ -917,6 +922,26 @@ let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
 let aiPromptJumpObserver = null;
 let aiBottomScrollRetryTimers = [];
+let aiBottomChaseHandle = 0;
+let aiBottomChaseUntil = 0;
+let aiScrollButtonHandle = 0;
+
+function nowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+}
+
+// Coalesces the button refresh; it measures the container, which forces layout.
+function scheduleAIScrollButtonUpdate() {
+    if (aiScrollButtonHandle) {
+        return;
+    }
+    aiScrollButtonHandle = requestAnimationFrame(() => {
+        aiScrollButtonHandle = 0;
+        updateAIScrollBottomButton();
+    });
+}
 
 function isMonacoPhase0Enabled() {
     try {
@@ -10754,9 +10779,11 @@ function initAIPromptJumpObserver() {
     });
 
     aiPromptJumpObserver.observe(elements.aiOutput, {
+        // No characterData: streaming rewrites text nodes constantly and each
+        // change would queue a MutationRecord. Structural changes are enough to
+        // spot new prompts, and the stream path also refreshes explicitly.
         childList: true,
         subtree: true,
-        characterData: true,
     });
 
     scheduleAIPromptJumpRefresh();
@@ -11085,6 +11112,19 @@ async function askAIFromToolbar() {
     }
 }
 
+async function askAISkillsFromToolbar() {
+    setToolsPanelCollapsed(false);
+    setToolsTab('ai');
+
+    try {
+        const rect = elements.toolsAISkills.getBoundingClientRect();
+        await ShowAISkillsMenu(rect.left, rect.bottom + 4);
+    } catch (err) {
+        notifyTerminal('Failed to show AI skills', 'error');
+        console.error(err);
+    }
+}
+
 function createAskAIDocumentMenuItem() {
     return {
         title: 'Ask AI...',
@@ -11380,21 +11420,42 @@ function initAIOutputContextMenu(container) {
     });
 }
 
-async function processAIMarkdownContainer(container) {
+function pinAIScrollableBlocksToBottom(container, options = {}) {
+    // Tool output and reasoning stream in, so keep the clamped fenced and quote
+    // blocks showing their latest lines.
+    const blocks = container.querySelectorAll('pre, blockquote');
+    if (options.lastOnly) {
+        // Only the final block is still growing; the rest were pinned when their
+        // batch was committed, and each read/write here forces a layout.
+        const last = blocks[blocks.length - 1];
+        if (last) {
+            last.scrollTop = last.scrollHeight;
+        }
+        return;
+    }
+    for (const block of blocks) {
+        block.scrollTop = block.scrollHeight;
+    }
+}
+
+async function processAIMarkdownContainer(container, options = {}) {
+    if (options.streaming) {
+        // This subtree is re-rendered every frame while streaming, so only run
+        // the cheap DOM passes. Mermaid rendering, image loading (a Go IPC round
+        // trip per image), table wiring and auto-hyperlinking would all be
+        // repeated and discarded; finishJob applies them once at the end.
+        processLinks(container, { enableBookmarks: true });
+        pinAIScrollableBlocksToBottom(container, { lastOnly: true });
+        return;
+    }
+
     void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
     // AI panel code blocks stay unhighlighted; they're mostly tool output, not source.
     await processMarkdownContainer(container, { syntaxHighlighting: false });
     wrapTablesForHorizontalScroll(container);
     setupTableSorting(container);
     applyNotesTableWordWrapMode(container);
-
-    // Session-log markdown can render fenced code blocks outside the
-    // structured streaming path, so clamp them and pin them to the latest
-    // lines just like live Action / Action Input sections.
-    const codeBlocks = container.querySelectorAll('pre');
-    for (const block of codeBlocks) {
-        block.scrollTop = block.scrollHeight;
-    }
+    pinAIScrollableBlocksToBottom(container);
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
@@ -12076,17 +12137,15 @@ function finishAIJob() {
 }
 
 function appendAIText(text) {
-    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.appendChunk(text);
     scheduleAIPromptJumpRefresh();
-    if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
+    // The scroll listener keeps aiStickToBottom current, so don't re-measure the
+    // container here — this runs once per streamed chunk and each measurement
+    // forces a synchronous layout.
+    if (state.aiStickToBottom) {
+        scrollAIOutputToBottom();
     } else {
-        requestAnimationFrame(() => {
-            updateAIScrollBottomButton();
-        });
+        scheduleAIScrollButtonUpdate();
     }
 }
 
@@ -12127,6 +12186,12 @@ function clearAIBottomScrollRetries() {
         clearTimeout(timerId);
     }
     aiBottomScrollRetryTimers = [];
+
+    if (aiBottomChaseHandle) {
+        cancelAnimationFrame(aiBottomChaseHandle);
+        aiBottomChaseHandle = 0;
+    }
+    aiBottomChaseUntil = 0;
 }
 
 function requestAIScrollToBottom() {
@@ -12158,12 +12223,22 @@ function scrollAIOutputToBottom() {
     }
 
     const output = elements.aiOutput;
-    let frame = 0;
+    state.aiStickToBottom = true;
+
+    // Streaming calls this once per chunk. Extend the deadline of the chase
+    // that's already in flight instead of starting another: overlapping rAF
+    // loops would each force a layout every frame and stall the main thread.
+    aiBottomChaseUntil = nowMs() + AI_BOTTOM_CHASE_MS;
+    if (aiBottomChaseHandle) {
+        return;
+    }
+
+    let lastHeight = -1;
     let stableFrames = 0;
-    let lastHeight = Number(output.scrollHeight) || 0;
-    const maxFrames = 120;
 
     const chaseBottom = () => {
+        aiBottomChaseHandle = 0;
+
         if (!elements.aiOutput || !state.aiStickToBottom) {
             return;
         }
@@ -12171,29 +12246,19 @@ function scrollAIOutputToBottom() {
         output.scrollTop = output.scrollHeight;
 
         const currentHeight = Number(output.scrollHeight) || 0;
-        const atBottom = isAIOutputNearBottom();
-        const heightDelta = Math.abs(currentHeight - lastHeight);
-
-        if (atBottom && heightDelta < 1) {
-            stableFrames += 1;
-        } else {
-            stableFrames = 0;
-        }
-
+        stableFrames = Math.abs(currentHeight - lastHeight) < 1 ? stableFrames + 1 : 0;
         lastHeight = currentHeight;
-        frame += 1;
 
-        if (stableFrames >= 2 || frame >= maxFrames) {
+        if (stableFrames >= 2 && nowMs() >= aiBottomChaseUntil) {
             updateAIScrollBottomButton();
             return;
         }
 
-        requestAnimationFrame(chaseBottom);
+        aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
     };
 
-    state.aiStickToBottom = true;
     output.scrollTop = output.scrollHeight;
-    requestAnimationFrame(chaseBottom);
+    aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
 }
 
 async function loadAISessionCache(workspaceName) {
@@ -12397,6 +12462,11 @@ if (elements.toolsAIAsk) {
         void askAIFromToolbar();
     });
 }
+if (elements.toolsAISkills) {
+    elements.toolsAISkills.addEventListener('click', () => {
+        void askAISkillsFromToolbar();
+    });
+}
 if (elements.toolsAIPromptJump) {
     elements.toolsAIPromptJump.addEventListener('click', () => {
         openAIPromptJumpMenu();
@@ -12409,9 +12479,17 @@ if (elements.aiSettingsModelPicker) {
 }
 if (elements.aiOutput) {
     elements.aiOutput.addEventListener('scroll', () => {
-        state.aiStickToBottom = isAIOutputNearBottom();
-        updateAIScrollBottomButton();
-    });
+        // The bottom-chase writes scrollTop every frame, so this fires
+        // constantly while streaming; coalesce the measurements it triggers.
+        if (aiScrollButtonHandle) {
+            return;
+        }
+        aiScrollButtonHandle = requestAnimationFrame(() => {
+            aiScrollButtonHandle = 0;
+            state.aiStickToBottom = isAIOutputNearBottom();
+            updateAIScrollBottomButton();
+        });
+    }, { passive: true });
 }
 if (elements.aiScrollBottom) {
     elements.aiScrollBottom.addEventListener('click', () => {
@@ -12506,7 +12584,8 @@ if (elements.aiSettingsToolsList) {
             return;
         }
 
-        ShowAIToolStateMenu(toolName);
+        const rect = stateButton.getBoundingClientRect();
+        ShowAIToolStateMenu(toolName, rect.left, rect.bottom + 4);
     });
 
     elements.aiSettingsToolsList.addEventListener('click', (event) => {

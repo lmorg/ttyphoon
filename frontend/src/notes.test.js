@@ -55,6 +55,7 @@ const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1'
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
 const setCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve());
 const showAIToolsMenuMock = vi.fn(() => Promise.resolve());
+const showAISkillsMenuMock = vi.fn(() => Promise.resolve());
 const showAIMcpMenuMock = vi.fn(() => Promise.resolve());
 const clearAISessionHistoryMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
@@ -169,6 +170,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
     SetCurrentAIModelSelection: setCurrentAIModelSelectionMock,
     ShowAIToolsMenu: showAIToolsMenuMock,
+    ShowAISkillsMenu: showAISkillsMenuMock,
     ShowAIMcpMenu: showAIMcpMenuMock,
     ClearAISessionHistory: clearAISessionHistoryMock,
     GetCurrentProject: getCurrentProjectMock,
@@ -244,6 +246,8 @@ vi.mock('./markdown-utils.js', () => ({
     processMarkdownContainer: vi.fn(),
     enableFullscreenImages: vi.fn(),
     applySyntaxHighlighting: vi.fn(),
+    processLinks: vi.fn(),
+    autoHyperlink: vi.fn(),
 }));
 
 vi.mock('./style-utils.js', () => ({
@@ -2435,6 +2439,21 @@ describe('notes rendering', () => {
         expect(askAIMock).toHaveBeenCalledWith('notesPromptToolbar', '', '');
     });
 
+    it('shows the agent skills menu from the toolbar Skills button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
+
+        await importNotesModule();
+
+        const skillsButton = document.getElementById('notes-tools-ai-skills');
+        expect(skillsButton).not.toBeNull();
+
+        skillsButton.click();
+        await flushPromises();
+
+        expect(showAISkillsMenuMock).toHaveBeenCalledWith(0, 4);
+    });
+
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
         getFileMock.mockResolvedValue({ contents: '# Readme', text: '', error: '' });
@@ -2542,6 +2561,115 @@ describe('notes rendering', () => {
         expect(actionInputText).toContain('"k11": 11');
     });
 
+    it('grows a still-open fence by appending rather than re-rendering', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+
+        // Mirrors the summariser: a heading, then a fence left open while tokens
+        // stream in one at a time.
+        aiResponseHandler('**Summarising tool output:**\n\n~~~~\n');
+        await flushPromises();
+        await flushPromises();
+
+        aiResponseHandler('summary line one\n');
+        await flushPromises();
+        await flushPromises();
+
+        aiResponseHandler('summary line two\n');
+        await flushPromises();
+        await flushPromises();
+
+        const code = aiOutput.querySelector('.notes-ai-tail pre code');
+        expect(code).not.toBeNull();
+        expect(code.textContent).toContain('summary line one');
+        expect(code.textContent).toContain('summary line two');
+
+        aiResponseHandler('~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
+
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('summary line one');
+        expect(text).toContain('summary line two');
+        expect(text).toContain('Done.');
+        // Appending must not leave a duplicate copy behind once the fence closes.
+        expect(text.split('summary line one').length - 1).toBe(1);
+    });
+
+    it('commits an oversized unsplittable fence instead of re-parsing it forever', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+
+        // A fence with no blank line inside it has no natural split point, so it
+        // must be force-committed once it exceeds the tail cap.
+        const bulk = Array.from({ length: 6000 }, (_, i) => `tool output line ${i}`).join('\n');
+        aiResponseHandler(`~~~~\n${bulk}\n`);
+        await flushPromises();
+        await flushPromises();
+
+        const committed = aiOutput.querySelectorAll('.notes-ai-batch');
+        expect(committed.length).toBeGreaterThan(0);
+
+        aiResponseHandler('final line\n~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
+
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('tool output line 0');
+        expect(text).toContain('tool output line 5999');
+        expect(text).toContain('final line');
+        expect(text).toContain('Done.');
+
+        // The reopened fence must still render as code, not as escaped markup.
+        expect(aiOutput.querySelectorAll('pre').length).toBeGreaterThan(0);
+    });
+
+    it('renders streamed markdown incrementally without splitting fenced blocks', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+
+        // Commit a stable block, then stream a fence in across several chunks.
+        aiResponseHandler('First paragraph.\n\nSecond paragraph.\n\n');
+        await flushPromises();
+        await flushPromises();
+
+        aiResponseHandler('~~~~\ntool output line 1\n');
+        await flushPromises();
+        await flushPromises();
+
+        // Mid-fence: the blank line inside must not become a commit point.
+        aiResponseHandler('\nline after blank\n~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
+
+        const codeBlocks = aiOutput.querySelectorAll('pre');
+        expect(codeBlocks.length).toBe(1);
+
+        const codeText = codeBlocks[0].textContent || '';
+        expect(codeText).toContain('tool output line 1');
+        expect(codeText).toContain('line after blank');
+
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('First paragraph.');
+        expect(text).toContain('Second paragraph.');
+        expect(text).toContain('Done.');
+    });
+
     it('reuses markdown processing pipeline for AI sections', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
@@ -2550,11 +2678,24 @@ describe('notes rendering', () => {
 
         const markdownUtils = await import('./markdown-utils.js');
         vi.mocked(markdownUtils.processMarkdownContainer).mockClear();
+        vi.mocked(markdownUtils.processLinks).mockClear();
 
         const aiResponseHandler = getEventHandler('aiResponseStream');
         expect(typeof aiResponseHandler).toBe('function');
 
         aiResponseHandler('\n## Action\n\nsearch\n\n## Action Input\n\n```\n{"a": 1}\n```\n');
+        await flushPromises();
+        await flushPromises();
+
+        // Streaming uses the cheap pass only; the full pipeline is deferred so
+        // it isn't re-run and discarded on every chunk.
+        expect(markdownUtils.processLinks).toHaveBeenCalled();
+        expect(markdownUtils.processMarkdownContainer).not.toHaveBeenCalled();
+
+        const aiFinishHandler = getEventHandler('aiJobFinish');
+        expect(typeof aiFinishHandler).toBe('function');
+
+        aiFinishHandler();
         await flushPromises();
         await flushPromises();
 

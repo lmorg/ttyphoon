@@ -18,13 +18,19 @@ type terminalMenuEvent struct {
 	Icons   []rune   `json:"icons"`
 
 	ShowNextToMouseCursor bool `json:"showNextToMouseCursor"`
+	AnchorX               *int `json:"anchorX,omitempty"`
+	AnchorY               *int `json:"anchorY,omitempty"`
 }
 
 func (wr *webkitRender) DisplayMenu(title string, items []string, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
 	wr.openMenu(title, items, nil, highlight, ok, cancel, false)
 }
 
-func (wr *webkitRender) openMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT, showNextToMouseCursor bool) {
+func (wr *webkitRender) DisplayMenuAt(title string, items []string, x, y int, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT) {
+	wr.openMenu(title, items, nil, highlight, ok, cancel, true, x, y)
+}
+
+func (wr *webkitRender) openMenu(title string, items []string, icons []rune, highlight types.MenuCallbackT, ok types.MenuCallbackT, cancel types.MenuCallbackT, showNextToMouseCursor bool, anchor ...int) {
 	if len(items) == 0 {
 		return
 	}
@@ -49,6 +55,10 @@ func (wr *webkitRender) openMenu(title string, items []string, icons []rune, hig
 		wr.MenuCancel(menuID, -1)
 		return
 	}
+	var anchorX, anchorY *int
+	if len(anchor) >= 2 {
+		anchorX, anchorY = &anchor[0], &anchor[1]
+	}
 
 	runtime.EventsEmit(wr.wapp, "terminalListMenu", terminalMenuEvent{
 		MenuID:  menuID,
@@ -57,6 +67,8 @@ func (wr *webkitRender) openMenu(title string, items []string, icons []rune, hig
 		Icons:   append([]rune(nil), icons...),
 
 		ShowNextToMouseCursor: showNextToMouseCursor,
+		AnchorX:               anchorX,
+		AnchorY:               anchorY,
 	})
 }
 
@@ -145,6 +157,19 @@ func (cms *contextMenuStub) DisplayMenu(title string, showNextToMouseCursor ...b
 		func(i int) { cms.Callback(i) },
 		func(i int) { cms.Cancel(i) },
 		showAtCursor,
+	)
+}
+
+func (cms *contextMenuStub) DisplayMenuAt(title string, x, y int) {
+	if cms.renderer == nil {
+		return
+	}
+
+	cms.renderer.openMenu(title, cms.Options(), cms.Icons(),
+		func(i int) { cms.Highlight(i) },
+		func(i int) { cms.Callback(i) },
+		func(i int) { cms.Cancel(i) },
+		true, x, y,
 	)
 }
 

@@ -379,6 +379,13 @@ export function processLinks(container, options = {}) {
     const { enableBookmarks = false } = options;
 
     container.querySelectorAll('a').forEach(a => {
+        // Streamed content persists across renders, so guard against binding the
+        // same anchor twice and firing its handler more than once per click.
+        if (a.dataset.linkProcessed === 'true') {
+            return;
+        }
+        a.dataset.linkProcessed = 'true';
+
         const rawHref = a.getAttribute('href') || '';
         const isHashOnly = rawHref.startsWith('#');
         const isBookmark = isHashOnly || a.href.match(rxBookmark);
@@ -452,8 +459,23 @@ export function processLinks(container, options = {}) {
  * Apply custom regex hyperlinking to text nodes in the container
  * @param {HTMLElement} container - The container element to process
  */
+let cachedCustomRegexpsPromise = null;
+
+// Custom hyperlink regexps only change via config reload (app restart), so the
+// Go IPC round-trip only needs to happen once rather than on every render —
+// this is called on every streamed chunk in the AI panel.
+function getCachedCustomRegexps() {
+    if (!cachedCustomRegexpsPromise) {
+        cachedCustomRegexpsPromise = Promise.resolve(GetCustomRegexp?.() || []).catch((err) => {
+            cachedCustomRegexpsPromise = null;
+            throw err;
+        });
+    }
+    return cachedCustomRegexpsPromise;
+}
+
 export async function autoHyperlink(container) {
-    const customRegexps = await GetCustomRegexp?.() || [];
+    const customRegexps = await getCachedCustomRegexps() || [];
 
     if (!customRegexps || customRegexps.length === 0) {
         return;
@@ -537,6 +559,11 @@ export async function autoHyperlink(container) {
  * @param {HTMLElement} container - The container element with rendered markdown
  * @param {{syntaxHighlighting?: boolean}} [options] - Set syntaxHighlighting false to leave code blocks unstyled
  */
+/**
+ * Complete markdown processing pipeline - applies all common transformations
+ * @param {HTMLElement} container - The container element with rendered markdown
+ * @param {{syntaxHighlighting?: boolean, autoHyperlink?: boolean}} [options] - Set syntaxHighlighting false to leave code blocks unstyled; set autoHyperlink false to skip the custom-regexp text-node scan
+ */
 export async function processMarkdownContainer(container, options = {}) {
     await renderMermaidDiagrams(container);
     enableFullscreenMermaidDiagrams(container);
@@ -547,7 +574,9 @@ export async function processMarkdownContainer(container, options = {}) {
     applyMarkdownImageAltSizing(container);
     enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });
-    await autoHyperlink(container);
+    if (options.autoHyperlink !== false) {
+        await autoHyperlink(container);
+    }
 }
 
 /**

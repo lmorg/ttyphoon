@@ -51,7 +51,7 @@ thead th {
 }
 
 :root {
-    --notes-ai-code-max-lines: 10;
+    --notes-ai-code-max-lines: 5;
 }
 
 body {
@@ -1622,6 +1622,13 @@ body {
     font-size: inherit;
 }
 
+/* Incremental streaming wrappers must not affect layout or margin collapsing. */
+#notes-ai-output .notes-ai-stable,
+#notes-ai-output .notes-ai-tail,
+#notes-ai-output .notes-ai-batch {
+    display: contents;
+}
+
 #notes-ai-output .notes-ai-code {
     margin: 0;
     padding: 8px;
@@ -1643,6 +1650,11 @@ body {
 }
 
 #notes-ai-output .notes-ai-markdown pre {
+    max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
+    overflow-y: auto;
+}
+
+#notes-ai-output .notes-ai-markdown blockquote {
     max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
     overflow-y: auto;
 }

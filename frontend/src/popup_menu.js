@@ -792,8 +792,8 @@ export function initTerminalPopupMenu(canvas) {
         // Invalidate any pending hide callback from a previous menu instance.
         _listMenuTransitionSeq++;
 
-        anchorX = mouseX;
-        anchorY = mouseY;
+        anchorX = Number.isFinite(menu.anchorX) ? menu.anchorX : mouseX;
+        anchorY = Number.isFinite(menu.anchorY) ? menu.anchorY : mouseY;
         activeListMenuId = menu.menuId;
         listTitle.textContent = menu.title || 'Select an item';
         listTitle.style.display = menu.title ? 'block' : 'none';

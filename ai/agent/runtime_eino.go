@@ -111,9 +111,13 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	// under the LLM's window. The main agent only ever sees the summarised form.
 	threshold := config.Config.Ai.ToolSummariseThresholdChars
 	summarising := t.runtime != nil && threshold > 0 && len(output) > threshold
+	streamedOutput := false
+	if streamTool, ok := t.delegate.(interface{ StreamsOutput() bool }); ok {
+		streamedOutput = streamTool.StreamsOutput()
+	}
 
 	// When summarising, the streamed summary replaces the raw output in the UI + log.
-	if output != "" && !summarising {
+	if output != "" && !summarising && !streamedOutput {
 		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
 	}
 
@@ -186,10 +190,41 @@ func unwrapToolInput(argumentsInJSON string) string {
 // aiStreamEmitter serialises text and reasoning chunks onto a single stream,
 // wrapping reasoning in a markdown blockquote that opens on the first reasoning
 // chunk and closes when non-reasoning content follows.
+//
+// Reasoning arrives token by token, so chunks are buffered and flushed at most
+// every aiStreamEmitInterval to keep the IPC message count down.
 type aiStreamEmitter struct {
 	mu         sync.Mutex
 	fn         func(string)
 	inThinking bool
+	pending    strings.Builder
+	lastEmit   time.Time
+	flushTimer *time.Timer
+}
+
+const aiStreamEmitInterval = 100 * time.Millisecond
+
+func (e *aiStreamEmitter) flushLocked() {
+	if e.flushTimer != nil {
+		e.flushTimer.Stop()
+		e.flushTimer = nil
+	}
+	if e.pending.Len() == 0 {
+		return
+	}
+	e.fn(e.pending.String())
+	e.pending.Reset()
+	e.lastEmit = time.Now()
+}
+
+// flush pushes any buffered reasoning out, eg once a turn's stream has drained.
+func (e *aiStreamEmitter) flush() {
+	if e == nil || e.fn == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.flushLocked()
 }
 
 func (e *aiStreamEmitter) emitText(text string) {
@@ -198,11 +233,13 @@ func (e *aiStreamEmitter) emitText(text string) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.flushLocked()
 	if e.inThinking {
 		e.fn("\n\n")
 		e.inThinking = false
 	}
 	e.fn(text)
+	e.lastEmit = time.Now()
 }
 
 func (e *aiStreamEmitter) emitReasoning(text string) {
@@ -212,10 +249,16 @@ func (e *aiStreamEmitter) emitReasoning(text string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.inThinking {
-		e.fn("\n> **Thinking:** ")
+		e.pending.WriteString("\n> **Thinking:** ")
 		e.inThinking = true
 	}
-	e.fn(strings.ReplaceAll(text, "\n", "\n> "))
+	e.pending.WriteString(strings.ReplaceAll(text, "\n", "\n> "))
+
+	if elapsed := time.Since(e.lastEmit); elapsed >= aiStreamEmitInterval {
+		e.flushLocked()
+	} else if e.flushTimer == nil {
+		e.flushTimer = time.AfterFunc(aiStreamEmitInterval-elapsed, e.flush)
+	}
 }
 
 func withAIStreamCallback(ctx context.Context, emitter *aiStreamEmitter) context.Context {
@@ -231,6 +274,13 @@ func emitAIStreamToolProgress(ctx context.Context, text string) {
 	}
 	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
 		emitter.emitText(text)
+	}
+}
+
+// EmitAIStreamToolProgress returns the current run's panel and log emitter.
+func EmitAIStreamToolProgress(ctx context.Context) func(string) {
+	return func(text string) {
+		emitAIStreamToolProgress(ctx, text)
 	}
 }
 
@@ -531,6 +581,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 			go func() {
 				defer reasoningWait.Done()
 				drainReasoningStream(stream, emitter)
+				emitter.flush()
 			}()
 			return cbCtx
 		},
@@ -559,6 +610,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 		if recvErr != nil {
 			reasoningWait.Wait()
+			emitter.flush()
 			return response.String(), recvErr
 		}
 
@@ -579,6 +631,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 	}
 	reasoningWait.Wait()
+	emitter.flush()
 
 	spread := time.Duration(0)
 	if !firstContentAt.IsZero() && !lastContentAt.IsZero() {
