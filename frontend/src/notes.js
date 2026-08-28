@@ -12130,6 +12130,65 @@ function startAIJob(title) {
     });
 }
 
+const aiStreamOrder = {
+    runId: null,
+    nextSequence: 0,
+    pending: new Map(),
+    finalSequence: null,
+};
+
+function startOrderedAIJob(payload) {
+    const runId = Number(payload?.runId);
+    if (!Number.isSafeInteger(runId) || runId < 1) {
+        startAIJob(payload);
+        return;
+    }
+    aiStreamOrder.runId = runId;
+    aiStreamOrder.nextSequence = 0;
+    aiStreamOrder.pending.clear();
+    aiStreamOrder.finalSequence = null;
+    startAIJob(payload.title);
+}
+
+function flushOrderedAIStream() {
+    while (aiStreamOrder.pending.has(aiStreamOrder.nextSequence)) {
+        appendAIText(aiStreamOrder.pending.get(aiStreamOrder.nextSequence));
+        aiStreamOrder.pending.delete(aiStreamOrder.nextSequence);
+        aiStreamOrder.nextSequence++;
+    }
+    if (aiStreamOrder.finalSequence !== null && aiStreamOrder.nextSequence > aiStreamOrder.finalSequence) {
+        aiStreamOrder.finalSequence = null;
+        finishAIJob();
+    }
+}
+
+function appendOrderedAIStream(payload) {
+    if (!payload || typeof payload !== 'object') {
+        const text = String(payload ?? '');
+        if (text) appendAIText(text);
+        return;
+    }
+    const runId = Number(payload.runId);
+    const sequence = Number(payload.sequence);
+    const text = String(payload.text ?? '');
+    if (runId !== aiStreamOrder.runId || !Number.isSafeInteger(sequence) || sequence < aiStreamOrder.nextSequence || !text) {
+        return;
+    }
+    aiStreamOrder.pending.set(sequence, text);
+    flushOrderedAIStream();
+}
+
+function finishOrderedAIJob(payload) {
+    const runId = Number(payload?.runId);
+    const finalSequence = Number(payload?.finalSequence);
+    if (runId !== aiStreamOrder.runId || !Number.isInteger(finalSequence)) {
+        finishAIJob();
+        return;
+    }
+    aiStreamOrder.finalSequence = finalSequence;
+    flushOrderedAIStream();
+}
+
 function finishAIJob() {
     aiPipelineFormatter.finishJob();
     // Newly-finalized prompt log is now on disk; refresh the dropdown.
@@ -12324,7 +12383,7 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
 
 // Event emitted by Go when an AI job begins (before first chunk)
 EventsOn("aiJobStart", (title) => {
-    startAIJob(title);
+    startOrderedAIJob(title);
     setToolsTab('ai');
     if (elements.toolsPanel.dataset.collapsed === 'true') {
         toggleToolsPanel();
@@ -12332,8 +12391,8 @@ EventsOn("aiJobStart", (title) => {
 });
 
 // Event emitted by Go when an AI job finishes
-EventsOn("aiJobFinish", () => {
-    finishAIJob();
+EventsOn("aiJobFinish", (payload) => {
+    finishOrderedAIJob(payload);
 });
 
 EventsOn("aiToolStateChanged", (payload) => {
@@ -12397,10 +12456,7 @@ document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
 
 // Event listener for streaming AI responses
 EventsOn("aiResponseStream", (chunk) => {
-    const text = String(chunk ?? '');
-    if (text) {
-        appendAIText(text);
-    }
+    appendOrderedAIStream(chunk);
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.

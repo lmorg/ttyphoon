@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
@@ -33,6 +34,22 @@ type SessionLogContext struct {
 	Emit            func(event string, payload any)
 }
 
+type AIStreamChunk struct {
+	RunID    uint64 `json:"runId"`
+	Sequence uint64 `json:"sequence"`
+	Text     string `json:"text"`
+}
+
+type AIJobStart struct {
+	RunID uint64 `json:"runId"`
+	Title string `json:"title"`
+}
+
+type AIJobFinish struct {
+	RunID         uint64 `json:"runId"`
+	FinalSequence int64  `json:"finalSequence"`
+}
+
 // sessionLogState tracks the currently-streaming prompt for a workspace so
 // chunks are written to disk in order and the pending file can be renamed on
 // finalize.
@@ -42,7 +59,11 @@ type sessionLogState struct {
 	pendingPath string
 	streamed    strings.Builder
 	requestOpen bool
+	runID       uint64
+	sequence    uint64
 }
+
+var aiSessionLogRunID atomic.Uint64
 
 var aiSessionLogStore = struct {
 	sync.Mutex
@@ -465,6 +486,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 	case SESSION_LOG_START_JOB:
 		now := time.Now()
 		var prefix string
+		var runID uint64
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			// Discard any pending file left over from an interrupted job.
@@ -473,12 +495,15 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 				ref.requestOpen = false
 				_ = os.Remove(ref.pendingPath)
 			}
+			ref.runID = aiSessionLogRunID.Add(1)
+			ref.sequence = 0
+			runID = ref.runID
 			prefix = ensureRequestOpenLocked(ref, ctx, now)
 		}
 		aiSessionLogStore.Unlock()
 
 		if ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiJobStart", prefix)
+			ctx.Emit("aiJobStart", AIJobStart{RunID: runID, Title: prefix})
 		}
 
 	case SESSION_LOG_APPEND_CHUNK:
@@ -487,38 +512,61 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 
 		now := time.Now()
+		var chunk AIStreamChunk
+		streaming := false
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
 			ref.streamed.WriteString(payload)
 			_ = appendSessionLog(ref.pendingPath, payload)
+			chunk = AIStreamChunk{RunID: ref.runID, Sequence: ref.sequence, Text: payload}
+			ref.sequence++
+			streaming = true
 		}
 		aiSessionLogStore.Unlock()
 
-		if ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiResponseStream", payload)
+		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+			ctx.Emit("aiResponseStream", chunk)
 		}
 
 	case SESSION_LOG_FINALIZE_JOB:
 		now := time.Now()
 		var suffix string
 		streamedEmpty := true
+		var chunk AIStreamChunk
+		streaming := false
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
 			streamedEmpty = strings.TrimSpace(ref.streamed.String()) == ""
 			suffix = buildSessionLogFinalizeSuffix(ref.streamed.String(), payload, now)
 			finalizePromptLogLocked(ref, suffix, ctx.PromptID)
+			if streamedEmpty && suffix != "" {
+				chunk = AIStreamChunk{RunID: ref.runID, Sequence: ref.sequence, Text: suffix}
+				ref.sequence++
+				streaming = true
+			}
 		}
 		aiSessionLogStore.Unlock()
 
-		if streamedEmpty && suffix != "" && ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiResponseStream", suffix)
+		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+			ctx.Emit("aiResponseStream", chunk)
 		}
 
 	case SESSION_LOG_FINISH_JOB:
-		if ctx.WorkspaceActive && ctx.Emit != nil {
-			ctx.Emit("aiJobFinish", nil)
+		var finish AIJobFinish
+		streaming := false
+		aiSessionLogStore.Lock()
+		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
+			finish = AIJobFinish{RunID: ref.runID, FinalSequence: -1}
+			if ref.sequence > 0 {
+				finish.FinalSequence = int64(ref.sequence - 1)
+			}
+			streaming = true
+		}
+		aiSessionLogStore.Unlock()
+		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+			ctx.Emit("aiJobFinish", finish)
 		}
 	}
 }

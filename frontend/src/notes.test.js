@@ -2561,6 +2561,26 @@ describe('notes rendering', () => {
         expect(actionInputText).toContain('"k11": 11');
     });
 
+    it('orders delayed AI stream chunks before finalizing the job', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiStartHandler = getEventHandler('aiJobStart');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        const aiFinishHandler = getEventHandler('aiJobFinish');
+        aiStartHandler({ runId: 42, title: '' });
+        aiResponseHandler({ runId: 42, sequence: 1, text: 'second' });
+        aiFinishHandler({ runId: 42, finalSequence: 1 });
+        aiResponseHandler({ runId: 42, sequence: 0, text: 'first ' });
+        await flushPromises();
+        await flushPromises();
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(document.getElementById('notes-ai-output').textContent).toContain('first second');
+    });
+
     it('grows a still-open fence by appending rather than re-rendering', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
