@@ -36,6 +36,9 @@ func (t *ReadFiles) Toggle()       { t.enabled = !t.enabled }
 
 func (t *ReadFiles) Name() string { return "readFiles" }
 func (t *ReadFiles) Path() string { return "internal" }
+func (t *ReadFiles) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
+}
 func (t *ReadFiles) Description() string {
 	return readDescription
 }

@@ -37,6 +37,9 @@ func (t *Grep) Toggle()       { t.enabled = !t.enabled }
 func (t *Grep) Name() string        { return "grep" }
 func (t *Grep) Path() string        { return "internal" }
 func (t *Grep) Description() string { return grepDescription }
+func (t *Grep) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
+}
 
 type grepInputT struct {
 	Query   string       `json:"query"`

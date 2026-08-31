@@ -281,6 +281,7 @@ func (agent *Agent) SetMcpServerEnabled(serverKey string, enabled bool) error {
 
 	agent.McpServerRemove(server)
 
+	agent.toolMu.Lock()
 	nextTools := make([]aitypes.Tool, 0, len(agent._tools))
 	for _, tool := range agent._tools {
 		mcp, ok := tool.(*mcpTool)
@@ -290,6 +291,7 @@ func (agent *Agent) SetMcpServerEnabled(serverKey string, enabled bool) error {
 		nextTools = append(nextTools, tool)
 	}
 	agent._tools = nextTools
+	agent.toolMu.Unlock()
 	agent.Reload()
 
 	return nil

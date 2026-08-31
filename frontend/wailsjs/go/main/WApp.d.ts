@@ -213,6 +213,8 @@ export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAIToolState(arg1:string,arg2:string):Promise<void>;
 
+export function SetAIToolSubagentAllowed(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetActiveAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
 export function SetCurrentAIModelSelection(arg1:string):Promise<void>;

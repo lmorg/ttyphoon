@@ -1,5 +1,21 @@
 # MCP Server OAuth Configuration Options
 
+## Tool Permission Defaults
+
+Each server can configure defaults for every tool it exposes:
+
+```json
+"DefaultPermissions": {
+  "invocation": "alwaysAllow",
+  "subagents": "allow"
+}
+```
+
+`invocation` accepts `"alwaysAllow"` or `"askPermission"`; `subagents`
+accepts `"allow"` or `"deny"`. Omitted values use ttyphoon's defaults:
+always allow invocation and allow sub-agent access. Changes made in AI settings
+override these defaults for the active agent.
+
 The `oauth` block inside each server entry is fully optional. If omitted entirely, OAuth is auto-detected when the server returns 401/403. All fields within it are also optional — missing values use sensible defaults.
 
 ## Full Example

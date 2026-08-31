@@ -37,6 +37,9 @@ func (t *InsertLines) Toggle()       { t.enabled = !t.enabled }
 func (t *InsertLines) Name() string        { return "insertLines" }
 func (t *InsertLines) Path() string        { return "internal" }
 func (t *InsertLines) Description() string { return insertLinesDescription }
+func (t *InsertLines) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
+}
 
 type insertT struct {
 	Line int    `json:"line"`
@@ -50,9 +53,6 @@ type insertLinesInputT struct {
 
 func (t *InsertLines) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
-	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
-		return fmt.Sprintf("ERROR: %s", err), nil
-	}
 
 	var request insertLinesInputT
 	if err := json.Unmarshal([]byte(input), &request); err != nil {

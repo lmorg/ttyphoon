@@ -69,6 +69,9 @@ func (t *DuckDuckGoSearch) Path() string  { return "internal" }
 func (t *DuckDuckGoSearch) Description() string {
 	return "Search the web using DuckDuckGo instant answer API. Input should be a plain-text search query."
 }
+func (t *DuckDuckGoSearch) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
+}
 
 func (t *DuckDuckGoSearch) Call(ctx context.Context, input string) (string, error) {
 	query := strings.TrimSpace(input)
@@ -147,6 +150,9 @@ func (t *WebScrapePage) Name() string  { return "scrapeWebPage" }
 func (t *WebScrapePage) Path() string  { return "internal" }
 func (t *WebScrapePage) Description() string {
 	return "Fetch and extract readable text content from a web page. Input should be a URL string or JSON like {\"url\":\"https://example.com\"}."
+}
+func (t *WebScrapePage) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
 }
 
 func (t *WebScrapePage) Call(ctx context.Context, input string) (string, error) {

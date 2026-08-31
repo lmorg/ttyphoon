@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/debug"
@@ -22,7 +23,7 @@ func startServerCmdLine(cfgPath string, agent *Agent, envvars []string, server s
 		return err
 	}
 
-	return startServer(cfgPath, agent, server, c)
+	return startServer(cfgPath, agent, server, svr, c)
 }
 
 func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config.ServerT) error {
@@ -54,7 +55,7 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 			agent.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("MCP server %s requires OAuth. Starting browser authentication...", server))
 		},
 		func(c *mcp_client.Client) error {
-			return startServer(cfgPath, agent, server, c)
+			return startServer(cfgPath, agent, server, svr, c)
 		},
 	)
 }
@@ -79,7 +80,7 @@ func promptString(agent *Agent, prompt string) (string, error) {
 	}
 }
 
-func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Client) error {
+func startServer(cfgPath string, agent *Agent, server string, svr mcp_config.ServerT, c *mcp_client.Client) error {
 	err := c.ListTools()
 	if err != nil {
 		return err
@@ -112,6 +113,10 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 				tool.Description,
 				string(jsonSchema),
 			),
+			permissions: aitypes.DefaultPermissions{
+				Invocation: svr.DefaultPermissions.Invocation,
+				Subagents:  svr.DefaultPermissions.Subagents,
+			},
 		})
 		if err != nil {
 			return err

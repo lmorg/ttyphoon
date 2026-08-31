@@ -13,17 +13,16 @@ import (
 )
 
 type Agent struct {
-	runtime        agentRuntime
-	serviceName    string
-	modelName      string
-	projectRoot    string
-	maxIterations  int
-	writeMu        sync.Mutex
-	writeSession   bool
-	writePrompt    writePermission
-	writePrompting bool
-	writeWait      chan struct{}
-	toolStates     map[string]string
+	runtime          agentRuntime
+	serviceName      string
+	modelName        string
+	projectRoot      string
+	maxIterations    int
+	toolMu           sync.RWMutex
+	toolPermissionMu sync.Mutex
+	toolPermissions  map[string]*toolPermissionState
+	toolStates       map[string]string
+	subagentTools    map[string]bool
 
 	term     types.Term
 	renderer types.Renderer
@@ -72,6 +71,8 @@ func New(renderer types.Renderer, tile types.Tile) {
 		renderer:          renderer,
 		projectRoot:       notes.DirProjectRoot(tile.Pwd()),
 		toolStates:        make(map[string]string),
+		subagentTools:     make(map[string]bool),
+		toolPermissions:   make(map[string]*toolPermissionState),
 	}
 
 	//agent.setDefaultModel()
@@ -131,20 +132,28 @@ func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
 func (agt *Agent) ProjectRoot() string      { return agt.projectRoot }
 
-type writePermission uint8
+type toolPermission uint8
 
 const (
-	writeUndecided writePermission = iota
-	writeAllowedPrompt
-	writeAllowedSession
-	writeDeniedPrompt
+	toolPermissionUndecided toolPermission = iota
+	toolPermissionAllowedPrompt
+	toolPermissionAllowedSession
+	toolPermissionDeniedPrompt
 )
 
-func (agt *Agent) ResetWritePermission() {
-	agt.writeMu.Lock()
-	defer agt.writeMu.Unlock()
-	if !agt.writeSession {
-		agt.writePrompt = writeUndecided
+type toolPermissionState struct {
+	decision  toolPermission
+	prompting bool
+	wait      chan struct{}
+}
+
+func (agt *Agent) ResetToolPermissions() {
+	agt.toolPermissionMu.Lock()
+	defer agt.toolPermissionMu.Unlock()
+	for toolName, state := range agt.toolPermissions {
+		if state.decision != toolPermissionAllowedSession {
+			delete(agt.toolPermissions, toolName)
+		}
 	}
 }
 
@@ -187,7 +196,7 @@ func ResolveWritePermissionRequest(id, decision string) error {
 	return nil
 }
 
-func formatWritePermissionRequestMarkdown(toolName, requestID string) string {
+func formatToolPermissionRequestMarkdown(toolName, requestID string) string {
 	return fmt.Sprintf(
 		"\n\n**Access requested for tool %s**\n\n"+
 			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=prompt)\n"+
@@ -197,7 +206,7 @@ func formatWritePermissionRequestMarkdown(toolName, requestID string) string {
 	)
 }
 
-func (agt *Agent) RequestWritePermission(ctx context.Context, toolName string) error {
+func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) error {
 	state := agt.ToolState(toolName)
 	if state == ToolStateDisabled {
 		return fmt.Errorf("tool %q is disabled", toolName)
@@ -209,22 +218,30 @@ func (agt *Agent) RequestWritePermission(ctx context.Context, toolName string) e
 		return nil
 	}
 	if state == ToolStateDenied {
-		return fmt.Errorf("write permission denied for this prompt")
+		return fmt.Errorf("permission denied for tool %q", toolName)
 	}
 	for {
-		agt.writeMu.Lock()
-		switch agt.writePrompt {
-		case writeAllowedPrompt, writeAllowedSession:
-			agt.writeMu.Unlock()
+		agt.toolPermissionMu.Lock()
+		if agt.toolPermissions == nil {
+			agt.toolPermissions = make(map[string]*toolPermissionState)
+		}
+		permission := agt.toolPermissions[toolName]
+		if permission == nil {
+			permission = &toolPermissionState{}
+			agt.toolPermissions[toolName] = permission
+		}
+		switch permission.decision {
+		case toolPermissionAllowedPrompt, toolPermissionAllowedSession:
+			agt.toolPermissionMu.Unlock()
 			return nil
-		case writeDeniedPrompt:
-			agt.writeMu.Unlock()
-			return fmt.Errorf("write permission denied for this prompt")
+		case toolPermissionDeniedPrompt:
+			agt.toolPermissionMu.Unlock()
+			return fmt.Errorf("permission denied for tool %q", toolName)
 		}
 
-		if agt.writePrompting {
-			wait := agt.writeWait
-			agt.writeMu.Unlock()
+		if permission.prompting {
+			wait := permission.wait
+			agt.toolPermissionMu.Unlock()
 			select {
 			case <-wait:
 				continue
@@ -233,39 +250,38 @@ func (agt *Agent) RequestWritePermission(ctx context.Context, toolName string) e
 			}
 		}
 
-		agt.writePrompting = true
-		agt.writeWait = make(chan struct{})
-		wait := agt.writeWait
-		agt.writeMu.Unlock()
+		permission.prompting = true
+		permission.wait = make(chan struct{})
+		wait := permission.wait
+		agt.toolPermissionMu.Unlock()
 
 		reqID, decisionCh := newWritePermissionRequest()
-		emitAIStreamToolProgress(ctx, formatWritePermissionRequestMarkdown(toolName, reqID))
+		emitAIStreamToolProgress(ctx, formatToolPermissionRequestMarkdown(toolName, reqID))
 
 		var decision string
 		select {
 		case decision = <-decisionCh:
 		case <-ctx.Done():
 			takeWritePermissionRequest(reqID)
-			agt.writeMu.Lock()
-			agt.writePrompting = false
+			agt.toolPermissionMu.Lock()
+			permission.prompting = false
 			close(wait)
-			agt.writeMu.Unlock()
+			agt.toolPermissionMu.Unlock()
 			return ctx.Err()
 		}
 
-		agt.writeMu.Lock()
+		agt.toolPermissionMu.Lock()
 		switch decision {
 		case "session":
-			agt.writePrompt = writeAllowedSession
-			agt.writeSession = true
+			permission.decision = toolPermissionAllowedSession
 		case "prompt":
-			agt.writePrompt = writeAllowedPrompt
+			permission.decision = toolPermissionAllowedPrompt
 		default:
-			agt.writePrompt = writeDeniedPrompt
+			permission.decision = toolPermissionDeniedPrompt
 		}
-		agt.writePrompting = false
+		permission.prompting = false
 		close(wait)
-		agt.writeMu.Unlock()
+		agt.toolPermissionMu.Unlock()
 
 		select {
 		case <-wait:

@@ -21,6 +21,7 @@ type mcpTool struct {
 	description string
 	schema      []byte
 	enabled     bool
+	permissions aitypes.DefaultPermissions
 }
 
 func (t *mcpTool) New(agent aitypes.Agent) (aitypes.Tool, error) {
@@ -33,6 +34,7 @@ func (t *mcpTool) New(agent aitypes.Agent) (aitypes.Tool, error) {
 		description: t.description,
 		schema:      t.schema,
 		enabled:     true,
+		permissions: t.permissions,
 	}, nil
 }
 
@@ -50,6 +52,17 @@ func (t *mcpTool) Description() string {
 	}
 
 	return description
+}
+
+func (t *mcpTool) DefaultPermissions() aitypes.DefaultPermissions {
+	permissions := t.permissions
+	if permissions.Invocation == "" {
+		permissions.Invocation = "alwaysAllow"
+	}
+	if permissions.Subagents == "" {
+		permissions.Subagents = "allow"
+	}
+	return permissions
 }
 
 func (t *mcpTool) Call(ctx context.Context, input string) (response string, err error) {

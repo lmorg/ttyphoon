@@ -32,6 +32,7 @@ import (
 type einoRuntime struct {
 	agent      *Agent
 	agentReact *react.Agent
+	tools      []aitypes.Tool
 }
 
 const einoMaxHistoryTurns = 8
@@ -95,6 +96,12 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
 	emitAIStreamToolProgress(ctx, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON))
+	if t.runtime != nil && t.runtime.agent != nil {
+		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
+			emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+			return "", err
+		}
+	}
 
 	toolInput := argumentsInJSON
 	if t.unwrapInputField {
@@ -285,10 +292,16 @@ func EmitAIStreamToolProgress(ctx context.Context) func(string) {
 }
 
 func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
-	tools := make([]einoTool.BaseTool, 0)
+	einoTools := make([]einoTool.BaseTool, 0)
 	usedNames := make(map[string]struct{})
 
-	for _, tool := range r.agent._tools {
+	selectedTools := r.tools
+	if selectedTools == nil {
+		r.agent.toolMu.RLock()
+		selectedTools = append([]aitypes.Tool(nil), r.agent._tools...)
+		r.agent.toolMu.RUnlock()
+	}
+	for _, tool := range selectedTools {
 		if r.agent.ToolState(tool.Name()) == ToolStateDisabled {
 			continue
 		}
@@ -307,10 +320,52 @@ func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 		info.Name = uniqueName
 		usedNames[uniqueName] = struct{}{}
 
-		tools = append(tools, einoTool)
+		einoTools = append(einoTools, einoTool)
 	}
 
-	return compose.ToolsNodeConfig{Tools: tools}, nil
+	return compose.ToolsNodeConfig{Tools: einoTools}, nil
+}
+
+// RunSubagentWithTools runs a stateless ReAct turn with only tools explicitly
+// enabled for sub-agents. It intentionally excludes history and system prompts.
+func (agent *Agent) RunSubagentWithTools(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
+	agent.toolMu.RLock()
+	tools := make([]aitypes.Tool, 0)
+	for _, tool := range agent._tools {
+		if tool.Name() != "subagent" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
+			tools = append(tools, tool)
+		}
+	}
+	agent.toolMu.RUnlock()
+	runtime := &einoRuntime{agent: agent, tools: tools}
+	if err := runtime.init(); err != nil {
+		return "", err
+	}
+
+	stream, err := runtime.agentReact.Stream(ctx, []*schema.Message{schema.UserMessage(prompt)})
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+
+	var response strings.Builder
+	for {
+		message, recvErr := stream.Recv()
+		if recvErr == io.EOF {
+			break
+		}
+		if recvErr != nil {
+			return response.String(), recvErr
+		}
+		if message == nil || message.Content == "" {
+			continue
+		}
+		response.WriteString(message.Content)
+		if streamCallback != nil {
+			streamCallback(message.Content)
+		}
+	}
+	return response.String(), nil
 }
 
 func sanitizeToolName(name string) string {
@@ -556,7 +611,7 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 }
 
 func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
-	r.agent.ResetWritePermission()
+	r.agent.ResetToolPermissions()
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
 			return "", err

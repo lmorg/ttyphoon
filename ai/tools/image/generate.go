@@ -50,6 +50,9 @@ func (t *GenerateImage) Toggle()       { t.enabled = !t.enabled }
 func (t *GenerateImage) Name() string        { return "generateImage" }
 func (t *GenerateImage) Path() string        { return "internal" }
 func (t *GenerateImage) Description() string { return generateImageDescription }
+func (t *GenerateImage) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
+}
 
 type generateImageInputT struct {
 	Prompt  string `json:"prompt"`

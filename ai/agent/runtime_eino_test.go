@@ -132,6 +132,10 @@ func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
 	}}}
 
 	cfg, err := rt.toolsConfig()
+	got := sanitizeToolName("mcp.atlassian.atlassianUserInfo")
+	if got != "mcp_atlassian_atlassianUserInfo" {
+		t.Fatalf("sanitizeToolName() = %q, want %q", got, "mcp_atlassian_atlassianUserInfo")
+	}
 	if err != nil {
 		t.Fatalf("toolsConfig() error = %v", err)
 	}
@@ -408,6 +412,20 @@ func TestEinoAgentTool_InvokableRun_UnwrapsInputField(t *testing.T) {
 	}
 	if f.input != "abc" {
 		t.Fatalf("tool input = %q, want %q", f.input, "abc")
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_RejectsDisabledTool(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateDisabled}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	_, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
+	if err == nil {
+		t.Fatal("InvokableRun() error = nil, want disabled tool error")
+	}
+	if tool.input != "" {
+		t.Fatalf("disabled tool received input %q", tool.input)
 	}
 }
 

@@ -34,15 +34,15 @@ func (t *Write) Toggle()       { t.enabled = !t.enabled }
 
 func (t *Write) Name() string { return "writeFile" }
 func (t *Write) Path() string { return "internal" }
+func (t *Write) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
+}
 func (t *Write) Description() string {
 	return writeFileDescription
 }
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
-	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
-		return fmt.Sprintf("ERROR: %s", err), nil
-	}
 
 	var result string
 

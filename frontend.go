@@ -2528,6 +2528,14 @@ func (a *WApp) SetAIToolEnabled(toolName string, enabled bool) error {
 	return agt.SetToolEnabled(toolName, enabled)
 }
 
+func (a *WApp) SetAIToolSubagentAllowed(toolName string, allowed bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+	return agt.SetToolAllowedInSubagent(toolName, allowed)
+}
+
 func (a *WApp) SetAIToolState(toolName, state string) error {
 	agt, ok := a.activeAgent()
 	if !ok {

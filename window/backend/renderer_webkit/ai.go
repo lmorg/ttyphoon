@@ -12,7 +12,7 @@ import (
 )
 
 func (wr *webkitRender) AskAi() {
-	//log.Println("[debug] *webkitRender.AskAi()")
+	//log.Println("[trace] *webkitRender.AskAi()")
 	agt := agent.Get(wr.termWin.Active.Id())
 	agt.Meta = &aitypes.Meta{}
 

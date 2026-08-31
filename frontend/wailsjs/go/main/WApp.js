@@ -410,6 +410,10 @@ export function SetAIToolState(arg1, arg2) {
   return window['go']['main']['WApp']['SetAIToolState'](arg1, arg2);
 }
 
+export function SetAIToolSubagentAllowed(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolSubagentAllowed'](arg1, arg2);
+}
+
 export function SetActiveAISession(arg1) {
   return window['go']['main']['WApp']['SetActiveAISession'](arg1);
 }

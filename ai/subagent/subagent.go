@@ -72,29 +72,15 @@ type Request struct {
 	StreamPrefix      string
 	StreamSuffix      string
 	FormatStreamChunk func(string) string
+	RunWithTools      func(context.Context, string, func(string)) (string, error)
 }
 
 func (c *Client) Run(ctx context.Context, request Request) (string, error) {
-	if c == nil || c.newModel == nil {
+	if c == nil {
 		return "", errors.New("sub-agent client is required")
 	}
 
-	chatModel, err := c.newModel(ctx)
-	if err != nil {
-		return "", fmt.Errorf("build sub-agent chat model: %w", err)
-	}
-	messages := []*schema.Message{schema.UserMessage(request.Prompt)}
-	if request.SystemPrompt != "" {
-		messages = append([]*schema.Message{schema.SystemMessage(request.SystemPrompt)}, messages...)
-	}
-	stream, err := chatModel.Stream(ctx, messages)
-	if err != nil {
-		return "", err
-	}
-	defer stream.Close()
-
 	var (
-		content    strings.Builder
 		pending    strings.Builder
 		lastEmit   = time.Now()
 		flushTimer *time.Timer
@@ -118,7 +104,6 @@ func (c *Client) Run(ctx context.Context, request Request) (string, error) {
 		defer emitMu.Unlock()
 		flushLocked()
 	}
-
 	if request.EmitStream != nil {
 		prefix := request.StreamPrefix
 		if prefix == "" {
@@ -132,7 +117,53 @@ func (c *Client) Run(ctx context.Context, request Request) (string, error) {
 		defer request.EmitStream(suffix)
 		defer flush()
 	}
+	emitChunk := func(text string) {
+		if text == "" {
+			return
+		}
+		emitMu.Lock()
+		formatChunk := request.FormatStreamChunk
+		if formatChunk == nil {
+			formatChunk = Quote
+		}
+		pending.WriteString(formatChunk(text))
+		if time.Since(lastEmit) >= EmitInterval {
+			flushLocked()
+		} else if flushTimer == nil && request.EmitStream != nil {
+			flushTimer = time.AfterFunc(EmitInterval-time.Since(lastEmit), flush)
+		}
+		emitMu.Unlock()
+	}
 
+	if request.RunWithTools != nil {
+		content, err := request.RunWithTools(ctx, request.Prompt, emitChunk)
+		if err != nil {
+			return content, err
+		}
+		if strings.TrimSpace(content) == "" {
+			return "", errors.New("empty sub-agent response")
+		}
+		return content, nil
+	}
+	if c.newModel == nil {
+		return "", errors.New("sub-agent model factory is required")
+	}
+
+	chatModel, err := c.newModel(ctx)
+	if err != nil {
+		return "", fmt.Errorf("build sub-agent chat model: %w", err)
+	}
+	messages := []*schema.Message{schema.UserMessage(request.Prompt)}
+	if request.SystemPrompt != "" {
+		messages = append([]*schema.Message{schema.SystemMessage(request.SystemPrompt)}, messages...)
+	}
+	stream, err := chatModel.Stream(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+
+	var content strings.Builder
 	for {
 		chunk, recvErr := stream.Recv()
 		if errors.Is(recvErr, io.EOF) {
@@ -145,20 +176,8 @@ func (c *Client) Run(ctx context.Context, request Request) (string, error) {
 			continue
 		}
 		content.WriteString(chunk.Content)
-		emitMu.Lock()
-		formatChunk := request.FormatStreamChunk
-		if formatChunk == nil {
-			formatChunk = Quote
-		}
-		pending.WriteString(formatChunk(chunk.Content))
-		if time.Since(lastEmit) >= EmitInterval {
-			flushLocked()
-		} else if flushTimer == nil && request.EmitStream != nil {
-			flushTimer = time.AfterFunc(EmitInterval-time.Since(lastEmit), flush)
-		}
-		emitMu.Unlock()
+		emitChunk(chunk.Content)
 	}
-
 	if strings.TrimSpace(content.String()) == "" {
 		return "", errors.New("empty sub-agent response")
 	}

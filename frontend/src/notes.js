@@ -14,7 +14,7 @@ import {
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
     ListAIPromptLogs, GetAIPromptLog,
-    GetAIToolsList, SetAIToolEnabled, SetAIToolState, ShowAIToolStateMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
+    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -10937,14 +10937,14 @@ function renderAIMcpServersList() {
 function formatAIToolMetadataMarkdown(tool) {
     const name = String(tool?.name || '').trim() || 'Unknown tool';
     const description = String(tool?.description || '').trim() || 'No description available.';
-    const enabled = tool?.enabled === true;
+    const allowInSubagent = tool?.allowInSubagent === true;
 
     let schema = String(tool?.schema || '').trim();
     if (!schema) {
         schema = '{}';
     }
 
-    return `## ${name}\n\n- [${enabled ? 'x' : ' '}] Enabled\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
+    return `## ${name}\n\n- [${allowInSubagent ? 'x' : ' '}] Allow in sub-agent\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
 }
 
 function formatAIMcpServerMetadataMarkdown(server) {
@@ -10978,14 +10978,26 @@ async function openAIToolMetadataModal(index) {
     elements.aiToolMetaContent.innerHTML = marked.parse(markdown);
     await processMarkdownContainer(elements.aiToolMetaContent);
 
-    const enabledCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
-    if (enabledCheckbox instanceof HTMLInputElement) {
-        enabledCheckbox.disabled = false;
-        enabledCheckbox.checked = tool.enabled === true;
-        enabledCheckbox.dataset.configType = 'tool';
-        enabledCheckbox.dataset.toolIndex = String(index);
-        enabledCheckbox.dataset.toolName = String(tool.name || '');
-        enabledCheckbox.setAttribute('aria-label', 'Enabled');
+    const stateButton = document.createElement('button');
+    stateButton.type = 'button';
+    stateButton.className = 'notes-ai-settings-tool-state';
+    stateButton.dataset.toolName = String(tool.name || '');
+    stateButton.dataset.toolIndex = String(index);
+    const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
+    stateButton.textContent = ({
+        always: 'Enabled: always allow', session: 'Enabled: current session',
+        approval: 'Enabled: ask for permission', disabled: 'Disabled',
+    })[toolState] || 'Unknown';
+    elements.aiToolMetaContent.insertBefore(stateButton, elements.aiToolMetaContent.firstChild?.nextSibling || null);
+
+    const allowCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
+    if (allowCheckbox instanceof HTMLInputElement) {
+        allowCheckbox.disabled = false;
+        allowCheckbox.checked = tool.allowInSubagent === true;
+        allowCheckbox.dataset.configType = 'subagent-tool';
+        allowCheckbox.dataset.toolIndex = String(index);
+        allowCheckbox.dataset.toolName = String(tool.name || '');
+        allowCheckbox.setAttribute('aria-label', 'Allow in sub-agent');
     }
 
     elements.aiToolMetaModal.dataset.open = 'true';
@@ -12716,6 +12728,23 @@ if (elements.aiToolMetaModal && elements.aiToolMetaCard) {
     });
 }
 if (elements.aiToolMetaContent) {
+    elements.aiToolMetaContent.addEventListener('click', (event) => {
+        const stateButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-state')
+            : null;
+        if (!stateButton) {
+            return;
+        }
+
+        const toolName = String(stateButton.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const rect = stateButton.getBoundingClientRect();
+        ShowAIToolStateMenu(toolName, rect.left, rect.bottom + 4);
+    });
+
     elements.aiToolMetaContent.addEventListener('change', (event) => {
         const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
         if (!checkbox || checkbox.type !== 'checkbox') {
@@ -12742,33 +12771,28 @@ if (elements.aiToolMetaContent) {
             return;
         }
 
+        if (configType !== 'subagent-tool') {
+            return;
+        }
+
         const toolName = String(checkbox.dataset.toolName || '').trim();
         if (!toolName) {
             return;
         }
 
-        const enabled = checkbox.checked;
-        SetAIToolEnabled(toolName, enabled).then(() => {
+        const allowed = checkbox.checked;
+        SetAIToolSubagentAllowed(toolName, allowed).then(() => {
             const index = Number.parseInt(String(checkbox.dataset.toolIndex || ''), 10);
             if (Number.isInteger(index) && index >= 0 && index < state.aiToolsList.length) {
                 state.aiToolsList[index] = {
                     ...state.aiToolsList[index],
-                    enabled,
+                    allowInSubagent: allowed,
                 };
             }
-
-            if (elements.aiSettingsToolsList) {
-                const listCheckbox = elements.aiSettingsToolsList.querySelector(
-                    `.notes-ai-settings-tool-item[data-tool-index="${Number.parseInt(String(checkbox.dataset.toolIndex || ''), 10)}"] .notes-ai-settings-tool-checkbox`
-                );
-                if (listCheckbox instanceof HTMLInputElement) {
-                    listCheckbox.checked = enabled;
-                }
-            }
         }).catch((err) => {
-            notifyTerminal(`Failed to ${enabled ? 'enable' : 'disable'} tool: ${toolName}`, 'error');
+            notifyTerminal(`Failed to update sub-agent access for ${toolName}`, 'error');
             console.error(err);
-            checkbox.checked = !enabled;
+            checkbox.checked = !allowed;
         });
     });
 }

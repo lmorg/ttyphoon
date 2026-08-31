@@ -37,6 +37,9 @@ func (t *PatchFile) Toggle()       { t.enabled = !t.enabled }
 func (t *PatchFile) Name() string        { return "patchFile" }
 func (t *PatchFile) Path() string        { return "internal" }
 func (t *PatchFile) Description() string { return patchFileDescription }
+func (t *PatchFile) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
+}
 
 type patchEditT struct {
 	Old string `json:"old"`
@@ -50,9 +53,6 @@ type patchInputT struct {
 
 func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
-	if err := t.agent.RequestWritePermission(ctx, t.Name()); err != nil {
-		return fmt.Sprintf("ERROR: %s", err), nil
-	}
 
 	var patch patchInputT
 	if err := json.Unmarshal([]byte(input), &patch); err != nil {

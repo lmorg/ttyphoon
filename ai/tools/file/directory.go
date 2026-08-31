@@ -34,6 +34,9 @@ func (t *Directory) Toggle()       { t.enabled = !t.enabled }
 
 func (t *Directory) Name() string { return "readDirectory" }
 func (t *Directory) Path() string { return "internal" }
+func (t *Directory) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
+}
 func (t *Directory) Description() string {
 	return ``
 }

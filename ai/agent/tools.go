@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/types"
@@ -43,7 +44,9 @@ func (agent *Agent) ToolsAdd(t aitypes.Tool) error {
 		return err
 	}
 
+	agent.toolMu.Lock()
 	agent._tools = append(agent._tools, tool)
+	agent.toolMu.Unlock()
 	agent.Reload()
 
 	return nil
@@ -71,8 +74,11 @@ func (agent *Agent) ChooseTools(cancel types.MenuCallbackT) {
 }
 
 func (agent *Agent) ListTools() []map[string]interface{} {
-	tools := make([]map[string]interface{}, len(agent._tools))
-	for i, tool := range agent._tools {
+	agent.toolMu.RLock()
+	registeredTools := append([]aitypes.Tool(nil), agent._tools...)
+	agent.toolMu.RUnlock()
+	tools := make([]map[string]interface{}, len(registeredTools))
+	for i, tool := range registeredTools {
 		schema := map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -99,11 +105,12 @@ func (agent *Agent) ListTools() []map[string]interface{} {
 		}
 
 		tools[i] = map[string]interface{}{
-			"name":        tool.Name(),
-			"enabled":     agent.ToolState(tool.Name()) != ToolStateDisabled,
-			"state":       agent.ToolState(tool.Name()),
-			"description": tool.Description(),
-			"schema":      string(schemaJSON),
+			"name":            tool.Name(),
+			"enabled":         agent.ToolState(tool.Name()) != ToolStateDisabled,
+			"state":           agent.ToolState(tool.Name()),
+			"allowInSubagent": agent.ToolAllowedInSubagent(tool.Name()),
+			"description":     tool.Description(),
+			"schema":          string(schemaJSON),
 		}
 	}
 	return tools
@@ -116,7 +123,60 @@ func (agent *Agent) SetToolEnabled(toolName string, enabled bool) error {
 	return agent.SetToolState(toolName, ToolStateDisabled)
 }
 
+func (agent *Agent) ToolAllowedInSubagent(toolName string) bool {
+	agent.toolMu.RLock()
+	defer agent.toolMu.RUnlock()
+	return agent.toolAllowedInSubagentLocked(toolName)
+}
+
+func (agent *Agent) toolAllowedInSubagentLocked(toolName string) bool {
+	if allowed, ok := agent.subagentTools[toolName]; ok {
+		return allowed
+	}
+	for _, tool := range agent._tools {
+		if tool.Name() == toolName {
+			return toolDefaultPermissions(tool).Subagents == "allow"
+		}
+	}
+	return false
+}
+
+func (agent *Agent) SetToolAllowedInSubagent(toolName string, allowed bool) error {
+	agent.toolMu.Lock()
+	defer agent.toolMu.Unlock()
+	for _, tool := range agent._tools {
+		if tool.Name() == toolName {
+			if agent.subagentTools == nil {
+				agent.subagentTools = make(map[string]bool)
+			}
+			agent.subagentTools[toolName] = allowed
+			agent.Reload()
+			return nil
+		}
+	}
+	return fmt.Errorf("tool %q not found", toolName)
+}
+
+func (agent *Agent) SubagentToolNames() []string {
+	agent.toolMu.RLock()
+	defer agent.toolMu.RUnlock()
+	names := make([]string, 0)
+	for _, tool := range agent._tools {
+		if tool.Name() != "subagent" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
+			names = append(names, tool.Name())
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
 func (agent *Agent) ToolState(toolName string) string {
+	agent.toolMu.RLock()
+	defer agent.toolMu.RUnlock()
+	return agent.toolStateLocked(toolName)
+}
+
+func (agent *Agent) toolStateLocked(toolName string) string {
 	if state := agent.toolStates[toolName]; state != "" {
 		return state
 	}
@@ -132,15 +192,32 @@ func (agent *Agent) ToolState(toolName string) string {
 }
 
 func (agent *Agent) defaultToolState(tool aitypes.Tool) string {
-	switch tool.Name() {
-	case "writeFile", "patchFile", "insertLines":
+	switch toolDefaultPermissions(tool).Invocation {
+	case "askPermission":
 		return ToolStateApproval
-	default:
+	case "alwaysAllow", "":
 		return ToolStateAlways
+	default:
+		return ToolStateDisabled
 	}
 }
 
+func toolDefaultPermissions(tool aitypes.Tool) aitypes.DefaultPermissions {
+	if configured, ok := tool.(interface {
+		DefaultPermissions() aitypes.DefaultPermissions
+	}); ok {
+		return configured.DefaultPermissions()
+	}
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
+}
+
 func (agent *Agent) defaultToolStateByName(toolName string) string {
+	agent.toolMu.RLock()
+	defer agent.toolMu.RUnlock()
+	return agent.defaultToolStateByNameLocked(toolName)
+}
+
+func (agent *Agent) defaultToolStateByNameLocked(toolName string) string {
 	for _, tool := range agent._tools {
 		if tool.Name() == toolName {
 			return agent.defaultToolState(tool)
@@ -153,15 +230,11 @@ func (agent *Agent) SetToolState(toolName, state string) error {
 	if state != ToolStateDisabled && state != ToolStateApproval && state != ToolStatePrompt && state != ToolStateSession && state != ToolStateDenied && state != ToolStateAlways {
 		return fmt.Errorf("invalid tool state %q", state)
 	}
+	agent.toolMu.Lock()
+	defer agent.toolMu.Unlock()
 	for _, tool := range agent._tools {
 		if tool.Name() == toolName {
-			if isProjectWriteTool(toolName) {
-				for _, writeToolName := range []string{"writeFile", "patchFile", "insertLines"} {
-					agent.toolStates[writeToolName] = state
-				}
-			} else {
-				agent.toolStates[toolName] = state
-			}
+			agent.toolStates[toolName] = state
 			agent.Reload()
 			return nil
 		}
@@ -205,13 +278,4 @@ func (agent *Agent) ShowToolStateMenu(toolName string, x, y int, changed func(st
 		}
 	}})
 	menu.DisplayMenuAt(fmt.Sprintf("Tool state: %s", toolName), x, y)
-}
-
-func isProjectWriteTool(toolName string) bool {
-	switch toolName {
-	case "writeFile", "patchFile", "insertLines":
-		return true
-	default:
-		return false
-	}
 }
