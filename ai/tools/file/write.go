@@ -26,7 +26,7 @@ func init() {
 var writeFileDescription string
 
 func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {
-	return &Write{agent: agent, enabled: false}, nil
+	return &Write{agent: agent, enabled: true}, nil
 }
 
 func (t *Write) Enabled() bool { return t.enabled }

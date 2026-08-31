@@ -28,7 +28,7 @@ func init() {
 var patchFileDescription string
 
 func (t *PatchFile) New(agent aitypes.Agent) (aitypes.Tool, error) {
-	return &PatchFile{agent: agent, enabled: false}, nil
+	return &PatchFile{agent: agent, enabled: true}, nil
 }
 
 func (t *PatchFile) Enabled() bool { return t.enabled }

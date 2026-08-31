@@ -1065,7 +1065,8 @@ func (a *WApp) notesGrepStream(query string, opts NotesGrepOptionsT) {
 
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- grep.BatchedStreamResults(searchRoot, query, opts, pathMapper, resultsChan)
+		timeout, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		errChan <- grep.BatchedStreamResults(timeout, searchRoot, query, opts, pathMapper, resultsChan)
 	}()
 
 	// Emit batches as they arrive

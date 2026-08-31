@@ -28,7 +28,7 @@ func init() {
 var insertLinesDescription string
 
 func (t *InsertLines) New(agent aitypes.Agent) (aitypes.Tool, error) {
-	return &InsertLines{agent: agent, enabled: false}, nil
+	return &InsertLines{agent: agent, enabled: true}, nil
 }
 
 func (t *InsertLines) Enabled() bool { return t.enabled }

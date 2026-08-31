@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"log"
+	"sync"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -15,6 +16,7 @@ import (
 type Grep struct {
 	agent   aitypes.Agent
 	enabled bool
+	cacheMu sync.RWMutex
 	cache   [][]*grep.Result
 }
 
@@ -27,7 +29,7 @@ var grepDescription string
 
 //If any context line is > 100 characters then that line is cropped to 99 and appended with "…"
 
-func (t Grep) New(agent aitypes.Agent) (aitypes.Tool, error) {
+func (t *Grep) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &Grep{agent: agent, enabled: true}, nil
 }
 
@@ -38,7 +40,7 @@ func (t *Grep) Name() string        { return "grep" }
 func (t *Grep) Path() string        { return "internal" }
 func (t *Grep) Description() string { return grepDescription }
 func (t *Grep) DefaultPermissions() aitypes.DefaultPermissions {
-	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
 }
 
 type grepInputT struct {
@@ -74,7 +76,7 @@ func (t *Grep) Call(ctx context.Context, input string) (response string, err err
 	var returnT *grepReturnT
 
 	if inputT.Query != "" {
-		returnT = t.newSearch(inputT)
+		returnT = t.newSearch(ctx, inputT)
 	} else {
 		returnT = t.getPage(inputT)
 	}
@@ -83,28 +85,36 @@ func (t *Grep) Call(ctx context.Context, input string) (response string, err err
 	return string(b), err
 }
 
-func (t *Grep) newSearch(input *grepInputT) *grepReturnT {
-	t.cache = [][]*grep.Result{}
+func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
+	cache := [][]*grep.Result{}
 	ch := make(chan []*grep.Result)
+	done := make(chan struct{})
 	go func() {
 		for results := range ch {
-			t.cache = append(t.cache, results)
+			cache = append(cache, results)
 		}
+		close(done)
 	}()
 
 	mapper := func(s string) string { return s }
-	err := grep.BatchedStreamResults(t.agent.ProjectRoot(), input.Query, input.Options, mapper, ch)
+	err := grep.BatchedStreamResults(ctx, t.agent.ProjectRoot(), input.Query, input.Options, mapper, ch)
+	<-done
 	if err != nil {
 		return &grepReturnT{Error: err.Error()}
 	}
 
-	if len(t.cache) == 0 {
+	t.cacheMu.Lock()
+	t.cache = cache
+	t.cacheMu.Unlock()
+	if len(cache) == 0 {
 		return &grepReturnT{Results: []*grep.Result{}}
 	}
-	return &grepReturnT{PageCount: len(t.cache), Results: t.cache[0]}
+	return &grepReturnT{PageCount: len(cache), Results: cache[0]}
 }
 
 func (t *Grep) getPage(input *grepInputT) *grepReturnT {
+	t.cacheMu.RLock()
+	defer t.cacheMu.RUnlock()
 	if input.Page < 1 {
 		return &grepReturnT{PageCount: len(t.cache), Error: "Page numbers cannot be 0 nor negative"}
 	}
