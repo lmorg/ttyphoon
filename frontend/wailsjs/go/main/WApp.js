@@ -446,6 +446,10 @@ export function ShowAIToolStateMenu(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['ShowAIToolStateMenu'](arg1, arg2, arg3);
 }
 
+export function ShowAIToolSubagentMenu(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['ShowAIToolSubagentMenu'](arg1, arg2, arg3);
+}
+
 export function ShowAIToolsMenu() {
   return window['go']['main']['WApp']['ShowAIToolsMenu']();
 }

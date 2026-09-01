@@ -2537,6 +2537,20 @@ func (a *WApp) SetAIToolSubagentAllowed(toolName string, allowed bool) error {
 	return agt.SetToolAllowedInSubagent(toolName, allowed)
 }
 
+func (a *WApp) ShowAIToolSubagentMenu(toolName string, x, y float64) {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	agt.ShowToolSubagentMenu(toolName, int(x), int(y), func(allowed bool) {
+		runtime.EventsEmit(a.ctx, "aiToolStateChanged", map[string]any{
+			"name":            toolName,
+			"allowInSubagent": allowed,
+		})
+	})
+}
+
 func (a *WApp) SetAIToolState(toolName, state string) error {
 	agt, ok := a.activeAgent()
 	if !ok {
@@ -2564,10 +2578,10 @@ func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
 	return agent.ResolveWritePermissionRequest(requestID, decision)
 }
 
-func (a *WApp) GetAIMcpServers() []map[string]interface{} {
+func (a *WApp) GetAIMcpServers() []map[string]any {
 	agt, ok := a.activeAgent()
 	if !ok {
-		return []map[string]interface{}{}
+		return []map[string]any{}
 	}
 
 	return agt.ListMcpServers()

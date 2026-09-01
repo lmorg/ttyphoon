@@ -231,6 +231,8 @@ export function ShowAISkillsMenu(arg1:number,arg2:number):Promise<void>;
 
 export function ShowAIToolStateMenu(arg1:string,arg2:number,arg3:number):Promise<void>;
 
+export function ShowAIToolSubagentMenu(arg1:string,arg2:number,arg3:number):Promise<void>;
+
 export function ShowAIToolsMenu():Promise<void>;
 
 export function ShowCommandPalette():Promise<void>;

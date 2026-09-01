@@ -279,3 +279,27 @@ func (agent *Agent) ShowToolStateMenu(toolName string, x, y int, changed func(st
 	}})
 	menu.DisplayMenuAt(fmt.Sprintf("Tool state: %s", toolName), x, y)
 }
+
+func (agent *Agent) ShowToolSubagentMenu(toolName string, x, y int, changed func(bool)) {
+	current := agent.ToolAllowedInSubagent(toolName)
+	menu := agent.renderer.NewContextMenu()
+	for _, option := range []struct {
+		allowed bool
+		label   string
+	}{
+		{true, "Yes"},
+		{false, "No"},
+	} {
+		option := option
+		item := types.MenuItem{Title: option.label, Fn: func() {
+			if err := agent.SetToolAllowedInSubagent(toolName, option.allowed); err == nil && changed != nil {
+				changed(option.allowed)
+			}
+		}}
+		if option.allowed == current {
+			item.Icon = 0xf00c
+		}
+		menu.Append(item)
+	}
+	menu.DisplayMenuAt("Allow in subagents?", x, y)
+}

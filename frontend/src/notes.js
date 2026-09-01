@@ -14,7 +14,7 @@ import {
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
     ListAIPromptLogs, GetAIPromptLog,
-    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
+    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -530,9 +530,9 @@ app.innerHTML = `
                     <div id="notes-tools-content" class="notes-tools-content">
                         <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
-                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt...</button>
-                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
-                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills...</button>
+                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt</button>
+                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask…</button>
+                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
                                 <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
                                 <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
@@ -10877,22 +10877,43 @@ function renderAIToolsList() {
     const items = tools.map((tool, index) => {
         const safeName = escapeHtml(tool.name || 'Unknown tool');
         const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
-        const options = [
-            ['always', 'Enabled: always allow'],
-            ['session', 'Enabled: current session'],
-            ['approval', 'Enabled: ask for permission'],
-            ['disabled', 'Disabled'],
-        ].map(([value, label]) => ({ value, label }));
-        const stateLabel = options.find(option => option.value === toolState)?.label || 'Unknown';
+        const state = toolStateDisplay(toolState);
+        const subagent = subagentAccessDisplay(tool.allowInSubagent === true);
         return `
             <div class="notes-ai-settings-tool-item" data-tool-index="${index}">
-                <button type="button" class="notes-ai-settings-tool-state" data-tool-name="${safeName}" data-tool-state="${toolState}">${stateLabel}</button>
-                <span class="notes-ai-settings-tool-name">${safeName}</span>
+                <button type="button" class="notes-ai-settings-tool-state" data-tool-name="${safeName}" data-tool-state="${state.value}" title="${state.label}" aria-label="${state.label}">${state.letter}</button>
+            <button type="button" class="notes-ai-settings-tool-subagent" data-tool-name="${safeName}" data-subagent-access="${subagent.value}" title="${subagent.label}" aria-label="${subagent.label}">${subagent.letter}</button>
+                <button type="button" class="notes-ai-settings-tool-name" aria-label="Show details for ${safeName}">${safeName}</button>
             </div>
         `;
     }).join('');
 
     elements.aiSettingsToolsList.innerHTML = items;
+    elements.aiSettingsToolsList.querySelectorAll('.notes-ai-settings-tool-name').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const item = button.closest('.notes-ai-settings-tool-item');
+            const index = Number(item?.dataset.toolIndex);
+            if (Number.isInteger(index) && index >= 0) {
+                void openAIToolMetadataModal(index);
+            }
+        });
+    });
+}
+
+function toolStateDisplay(state) {
+    return ({
+        always: { value: 'always', letter: 'A', label: 'Enabled: Always allow' },
+        session: { value: 'session', letter: 'S', label: 'Enabled: Current session' },
+        approval: { value: 'approval', letter: 'P', label: 'Enabled: Ask for permission' },
+        disabled: { value: 'disabled', letter: 'D', label: 'Disabled' },
+    })[state] || { value: 'disabled', letter: 'D', label: 'Disabled' };
+}
+
+function subagentAccessDisplay(allowed) {
+    return allowed
+        ? { value: 'allow', letter: 'Y', label: 'Allow in subagents: Yes' }
+        : { value: 'deny', letter: 'N', label: 'Allow in subagents: No' };
 }
 
 function getMcpServerDisplayName(server) {
@@ -10984,10 +11005,11 @@ async function openAIToolMetadataModal(index) {
     stateButton.dataset.toolName = String(tool.name || '');
     stateButton.dataset.toolIndex = String(index);
     const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
-    stateButton.textContent = ({
-        always: 'Enabled: always allow', session: 'Enabled: current session',
-        approval: 'Enabled: ask for permission', disabled: 'Disabled',
-    })[toolState] || 'Unknown';
+    const displayState = toolStateDisplay(toolState);
+    stateButton.dataset.toolState = displayState.value;
+    stateButton.textContent = displayState.letter;
+    stateButton.title = displayState.label;
+    stateButton.setAttribute('aria-label', displayState.label);
     elements.aiToolMetaContent.insertBefore(stateButton, elements.aiToolMetaContent.firstChild?.nextSibling || null);
 
     const allowCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
@@ -12412,8 +12434,13 @@ EventsOn("aiToolStateChanged", (payload) => {
     const stateValue = String(payload?.state || '');
     const tool = state.aiToolsList.find(item => item?.name === name);
     if (tool) {
-        tool.state = stateValue;
-        tool.enabled = stateValue !== 'disabled';
+        if (stateValue) {
+            tool.state = stateValue;
+            tool.enabled = stateValue !== 'disabled';
+        }
+        if (typeof payload?.allowInSubagent === 'boolean') {
+            tool.allowInSubagent = payload.allowInSubagent;
+        }
     }
     renderAIToolsList();
 });
@@ -12657,21 +12684,20 @@ if (elements.aiSettingsToolsList) {
     });
 
     elements.aiSettingsToolsList.addEventListener('click', (event) => {
-        if (event.target instanceof HTMLButtonElement && event.target.closest('.notes-ai-settings-tool-state')) {
+        const subagentButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-subagent')
+            : null;
+        if (!subagentButton) {
             return;
         }
 
-        const item = event.target instanceof Element ? event.target.closest('.notes-ai-settings-tool-item') : null;
-        if (!item || !elements.aiSettingsToolsList.contains(item)) {
+        const toolName = String(subagentButton.dataset.toolName || '').trim();
+        if (!toolName) {
             return;
         }
 
-        const index = Number(item.dataset.toolIndex);
-        if (!Number.isInteger(index) || index < 0) {
-            return;
-        }
-
-        void openAIToolMetadataModal(index);
+        const rect = subagentButton.getBoundingClientRect();
+        ShowAIToolSubagentMenu(toolName, rect.left, rect.bottom + 4);
     });
 }
 if (elements.aiSettingsMcpList) {

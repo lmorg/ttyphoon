@@ -418,30 +418,71 @@ body {
 
 .notes-ai-settings-tool-name {
     flex: 1;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 3px 4px;
+    text-align: left;
+    cursor: pointer;
     font-family: "Lato", var(--font-family), sans-serif !important;
     font-size: var(--notes-font-size-minus-1);
 }
 
+.notes-ai-settings-tool-name:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .notes-ai-settings-tool-state {
-    flex: 0 0 220px;
-    min-width: 220px;
+    flex: 0 0 24px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
     border: 1px solid rgba(var(--fg-rgb), 0.3);
     border-radius: 3px;
     background: transparent;
     color: var(--fg);
-    padding: 3px 22px 3px 6px;
-    position: relative;
-    text-align: left;
+    padding: 0;
+    text-align: center;
     cursor: pointer;
     font: inherit;
     font-size: var(--notes-font-size-minus-1);
     margin-right: 5px;
 }
 
+.notes-ai-settings-tool-state[data-tool-state="always"] { color: var(--green); }
+.notes-ai-settings-tool-state[data-tool-state="session"] { color: var(--yellow); }
+.notes-ai-settings-tool-state[data-tool-state="approval"] { color: var(--magenta); }
+.notes-ai-settings-tool-state[data-tool-state="disabled"] { color: var(--red); }
+
+.notes-ai-settings-tool-subagent {
+    flex: 0 0 24px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    border: 1px solid rgba(var(--fg-rgb), 0.3);
+    border-radius: 3px;
+    background: transparent;
+    padding: 0;
+    text-align: center;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--notes-font-size-minus-1);
+    margin-right: 5px;
+}
+
+.notes-ai-settings-tool-subagent[data-subagent-access="allow"] { color: var(--green); }
+.notes-ai-settings-tool-subagent[data-subagent-access="deny"] { color: var(--red); }
+
+.notes-ai-settings-tool-subagent:hover,
+.notes-ai-settings-tool-subagent:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+}
+
 .notes-ai-settings-tool-state:hover,
 .notes-ai-settings-tool-state:focus-visible {
     border-color: var(--accent);
-    color: var(--accent);
     outline: none;
 }
 
