@@ -40,6 +40,10 @@ const einoMaxHistoryTurns = 8
 // Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
 const einoAnthropicMaxTokens = 8192
 
+var toolSummariserExclusions = map[string]struct{}{
+	"report": {},
+}
+
 type aiStreamCallbackCtxKey struct{}
 
 type einoAgentTool struct {
@@ -117,7 +121,8 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	// Interposer: compress oversized tool outputs so the main agent's context stays
 	// under the LLM's window. The main agent only ever sees the summarised form.
 	threshold := config.Config.Ai.ToolSummariseThresholdChars
-	summarising := t.runtime != nil && threshold > 0 && len(output) > threshold
+	_, excludedFromSummarising := toolSummariserExclusions[t.delegate.Name()]
+	summarising := t.runtime != nil && !excludedFromSummarising && threshold > 0 && len(output) > threshold
 	streamedOutput := false
 	if streamTool, ok := t.delegate.(interface{ StreamsOutput() bool }); ok {
 		streamedOutput = streamTool.StreamsOutput()
@@ -324,48 +329,6 @@ func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 	}
 
 	return compose.ToolsNodeConfig{Tools: einoTools}, nil
-}
-
-// RunSubagentWithTools runs a stateless ReAct turn with only tools explicitly
-// enabled for sub-agents. It intentionally excludes history and system prompts.
-func (agent *Agent) RunSubagentWithTools(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
-	agent.toolMu.RLock()
-	tools := make([]aitypes.Tool, 0)
-	for _, tool := range agent._tools {
-		if tool.Name() != "subagent" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
-			tools = append(tools, tool)
-		}
-	}
-	agent.toolMu.RUnlock()
-	runtime := &einoRuntime{agent: agent, tools: tools}
-	if err := runtime.init(); err != nil {
-		return "", err
-	}
-
-	stream, err := runtime.agentReact.Stream(ctx, []*schema.Message{schema.UserMessage(prompt)})
-	if err != nil {
-		return "", err
-	}
-	defer stream.Close()
-
-	var response strings.Builder
-	for {
-		message, recvErr := stream.Recv()
-		if recvErr == io.EOF {
-			break
-		}
-		if recvErr != nil {
-			return response.String(), recvErr
-		}
-		if message == nil || message.Content == "" {
-			continue
-		}
-		response.WriteString(message.Content)
-		if streamCallback != nil {
-			streamCallback(message.Content)
-		}
-	}
-	return response.String(), nil
 }
 
 func sanitizeToolName(name string) string {

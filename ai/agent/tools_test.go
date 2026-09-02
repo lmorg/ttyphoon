@@ -38,11 +38,11 @@ func TestToolDefaultPermissions(t *testing.T) {
 func TestSubagentToolNames_OnlyIncludesEnabledAllowedTools(t *testing.T) {
 	allowed := &toolStateTestTool{name: "allowed"}
 	disabled := &toolStateTestTool{name: "disabled"}
-	subagent := &toolStateTestTool{name: "subagent"}
+	delegate := &toolStateTestTool{name: "delegate"}
 	agent := &Agent{
-		_tools:        []aitypes.Tool{allowed, disabled, subagent},
+		_tools:        []aitypes.Tool{allowed, disabled, delegate},
 		toolStates:    map[string]string{"disabled": ToolStateDisabled},
-		subagentTools: map[string]bool{"allowed": true, "disabled": true, "subagent": true},
+		subagentTools: map[string]bool{"allowed": true, "disabled": true, "delegate": true},
 	}
 
 	if got := agent.SubagentToolNames(); len(got) != 1 || got[0] != "allowed" {

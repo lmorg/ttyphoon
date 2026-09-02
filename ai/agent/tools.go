@@ -162,7 +162,7 @@ func (agent *Agent) SubagentToolNames() []string {
 	defer agent.toolMu.RUnlock()
 	names := make([]string, 0)
 	for _, tool := range agent._tools {
-		if tool.Name() != "subagent" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
+		if tool.Name() != "delegate" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
 			names = append(names, tool.Name())
 		}
 	}

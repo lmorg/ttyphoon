@@ -1,4 +1,4 @@
-package tools
+package subagents
 
 import (
 	"context"
@@ -14,56 +14,105 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
+const (
+	_AGENT_DELEGATE = 1
+	_AGENT_REPORT   = 2
+)
+
 type Subagent struct {
-	agent   aitypes.Agent
-	enabled bool
+	agent     aitypes.Agent
+	enabled   bool
+	agentType int
 }
 
-type subagentRequest struct {
+type requestT struct {
 	Name   string `json:"name"`
 	Prompt string `json:"prompt"`
 }
 
-type subagentConfig interface {
+type configT interface {
 	ProviderName() string
 	ModelName() string
 	EnvironmentValue(string) string
 }
 
-type subagentToolRunner interface {
+type delegateToolRunner interface {
 	RunSubagentWithTools(context.Context, string, func(string)) (string, error)
 }
 
 func init() {
-	agent.ToolsAdd(&Subagent{})
+	agent.ToolsAdd(&Subagent{agentType: _AGENT_DELEGATE})
+	agent.ToolsAdd(&Subagent{agentType: _AGENT_REPORT})
 }
 
-//go:embed subagent_description.md
-var subagentDescription string
+//go:embed delegate_description.md
+var delegateDescription string
+
+//go:embed delegate_prompt.md
+var delegateSystemPrompt string
+
+//go:embed report_description.md
+var reportDescription string
+
+//go:embed report_prompt.md
+var reportSystemPrompt string
 
 func (t *Subagent) New(agt aitypes.Agent) (aitypes.Tool, error) {
-	return &Subagent{agent: agt, enabled: true}, nil
+	return &Subagent{agent: agt, enabled: true, agentType: t.agentType}, nil
 }
 
-func (t *Subagent) Enabled() bool       { return t.enabled }
-func (t *Subagent) Toggle()             { t.enabled = !t.enabled }
-func (t *Subagent) Name() string        { return "subagent" }
+func (t *Subagent) Enabled() bool { return t.enabled }
+func (t *Subagent) Toggle()       { t.enabled = !t.enabled }
+func (t *Subagent) Name() string {
+	switch t.agentType {
+	case _AGENT_DELEGATE:
+		return "delegate"
+	case _AGENT_REPORT:
+		return "report"
+	default:
+		panic("unknown agent type")
+	}
+}
 func (t *Subagent) Path() string        { return "internal" }
 func (t *Subagent) StreamsOutput() bool { return true }
 func (t *Subagent) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
 }
+
+func (t *Subagent) systemPrompt() string {
+	switch t.agentType {
+	case _AGENT_DELEGATE:
+		return delegateSystemPrompt
+	case _AGENT_REPORT:
+		return reportSystemPrompt
+	default:
+		panic("unknown agent type")
+	}
+}
+
+func (t *Subagent) description() string {
+	switch t.agentType {
+	case _AGENT_DELEGATE:
+		return delegateDescription
+	case _AGENT_REPORT:
+		return reportDescription
+	default:
+		panic("unknown agent type")
+	}
+}
+
 func (t *Subagent) Description() string {
+	description := t.description()
 	if configured, ok := t.agent.(interface{ SubagentToolNames() []string }); ok {
 		if names := configured.SubagentToolNames(); len(names) > 0 {
-			return subagentDescription + "\n\nAllowed sub-agent tools: `" + strings.Join(names, "`, `") + "`."
+			return description + "\n\nAllowed sub-agent tools: `" + strings.Join(names, "`, `") + "`."
 		}
 	}
-	return subagentDescription + "\n\nNo tools are currently allowed for sub-agents."
+	return description + "\n\nNo tools are currently allowed for sub-agents."
 }
 
 func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
-	var requests []*subagentRequest
+	var requests []*requestT
 	if err := json.Unmarshal([]byte(input), &requests); err != nil {
 		return "call the tool error: input must be valid json with name and prompt", nil
 	}
@@ -84,17 +133,18 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 				return
 			}
 
-			configured, ok := t.agent.(subagentConfig)
+			configured, ok := t.agent.(configT)
 			if !ok {
 				resp.store(i, request.Name, "", fmt.Errorf("sub-agent is unavailable for this AI runtime"))
 				return
 			}
 			subagentRequest := subagent.Request{
-				Name:       request.Name,
-				Prompt:     request.Prompt,
-				EmitStream: agent.EmitAIStreamToolProgress(ctx),
+				Name:         request.Name,
+				Prompt:       request.Prompt,
+				SystemPrompt: t.systemPrompt(),
+				EmitStream:   agent.EmitAIStreamToolProgress(ctx),
 			}
-			if runner, ok := t.agent.(subagentToolRunner); ok {
+			if runner, ok := t.agent.(delegateToolRunner); ok {
 				subagentRequest.RunWithTools = runner.RunSubagentWithTools
 			}
 
