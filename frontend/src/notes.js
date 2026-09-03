@@ -30,6 +30,7 @@ import {
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
     FilterStrings,
+    ResolveAIUserQuestion,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -12489,6 +12490,37 @@ document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
         await ResolveAIToolPermission(requestId, decision);
     } catch (err) {
         notifyTerminal('Failed to resolve tool access request', 'error');
+        console.error(err);
+    }
+});
+
+document.addEventListener('ttyphoon-ai-user-question', async (e) => {
+    const requestId = String(e.detail?.requestId || '');
+    const answer = String(e.detail?.answer || '');
+    const anchor = e.detail?.anchor;
+    if (!requestId || !answer) {
+        return;
+    }
+
+    if (elements.aiOutput) {
+        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            if (href.startsWith('ttyphoon://ai-user-question') && href.includes(`request=${requestId}`)) {
+                link.classList.add('ai-user-question-resolved');
+                link.removeAttribute('href');
+            }
+        });
+    }
+    if (anchor instanceof HTMLElement) {
+        anchor.classList.add('ai-user-question-chosen');
+    }
+
+    const resolveUserQuestion = typeof ResolveAIUserQuestion === 'function' ? ResolveAIUserQuestion : null;
+
+    try {
+        await resolveUserQuestion(requestId, answer);
+    } catch (err) {
+        notifyTerminal('Failed to resolve user question', 'error');
         console.error(err);
     }
 });

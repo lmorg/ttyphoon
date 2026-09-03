@@ -121,11 +121,12 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 	resp := newResponsesT(len(requests))
 
 	for i, request := range requests {
-		wg.Add(1)
-		sticky := t.agent.Renderer().DisplaySticky(types.NOTIFY_INFO, "Running subagent: "+request.Name, func() {
-			t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Subagent %s cannot be cancelled", request.Name))
-		})
+		//wg.Add(1)
+		sticky := t.agent.Renderer().DisplaySticky(types.NOTIFY_INFO, "Running subagent: "+request.Name, func() {})
+		//t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Subagent %s cannot be cancelled", request.Name))
+		//})
 		wg.Go(func() {
+			defer sticky.Close()
 			request.Name = strings.TrimSpace(request.Name)
 			request.Prompt = strings.TrimSpace(request.Prompt)
 			if request.Name == "" || request.Prompt == "" {

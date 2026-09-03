@@ -425,6 +425,22 @@ export function processLinks(container, options = {}) {
             return;
         }
 
+        if (rawHref.startsWith('ttyphoon://ai-user-question')) {
+            const qStart = rawHref.indexOf('?');
+            const params = new URLSearchParams(qStart !== -1 ? rawHref.slice(qStart + 1) : '');
+            const requestId = params.get('request') || '';
+            const answer = params.get('answer') || '';
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                a.dispatchEvent(new CustomEvent('ttyphoon-ai-user-question', {
+                    detail: { requestId, answer, anchor: a },
+                    bubbles: true,
+                    composed: true,
+                }));
+            });
+            return;
+        }
+
         if (rawHref.startsWith('ttyphoon://ai')) {
             // AI prompt link — parse query string params and dispatch a custom event.
             // Example: ttyphoon://ai?prompt=Summarise%20this&tools=jira

@@ -486,13 +486,15 @@ body {
     outline: none;
 }
 
-.ai-tool-permission-resolved {
+.ai-tool-permission-resolved,
+.ai-user-question-resolved {
     pointer-events: none;
     opacity: 0.5;
     text-decoration: line-through;
 }
 
-.ai-tool-permission-chosen {
+.ai-tool-permission-chosen,
+.ai-user-question-chosen {
     font-weight: bold;
     color: var(--accent);
 }

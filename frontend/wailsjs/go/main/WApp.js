@@ -350,6 +350,10 @@ export function ResolveAIToolPermission(arg1, arg2) {
   return window['go']['main']['WApp']['ResolveAIToolPermission'](arg1, arg2);
 }
 
+export function ResolveAIUserQuestion(arg1, arg2) {
+  return window['go']['main']['WApp']['ResolveAIUserQuestion'](arg1, arg2);
+}
+
 export function ResolveFilePath(arg1) {
   return window['go']['main']['WApp']['ResolveFilePath'](arg1);
 }

@@ -22,7 +22,7 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
-//go:embed read_description.md
+//go:embed write_description.md
 var writeFileDescription string
 
 func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {

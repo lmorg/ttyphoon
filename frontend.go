@@ -2578,6 +2578,10 @@ func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
 	return agent.ResolveWritePermissionRequest(requestID, decision)
 }
 
+func (a *WApp) ResolveAIUserQuestion(requestID, answer string) error {
+	return agent.ResolveUserQuestionRequest(requestID, answer)
+}
+
 func (a *WApp) GetAIMcpServers() []map[string]any {
 	agt, ok := a.activeAgent()
 	if !ok {
