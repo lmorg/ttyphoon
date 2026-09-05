@@ -27,6 +27,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 type einoRuntime struct {
@@ -574,6 +575,29 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 }
 
 func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
+	var response strings.Builder
+	continuationMessages := append([]*schema.Message(nil), messages...)
+
+	for continuation := 0; ; continuation++ {
+		r.agent.renderer.DisplayNotification(types.NOTIFY_DEBUG, fmt.Sprintf("Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations))
+		result, err := r.runLLMWithMessageStream(ctx, continuationMessages, streamCallback)
+		response.WriteString(result)
+		if err == nil || !isMaxStepError(err) || continuation >= config.Config.Ai.MaxContinuations {
+			return response.String(), err
+		}
+
+		emitAIStreamToolProgress(ctx, fmt.Sprintf(
+			"\n\n**Continuing after max steps (%d/%d)**\n\n",
+			continuation+1, config.Config.Ai.MaxContinuations,
+		))
+		continuationMessages = append(continuationMessages, schema.UserMessage(fmt.Sprintf(
+			"The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action. Previous run output:\n%s",
+			result,
+		)))
+	}
+}
+
+func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	r.agent.ResetToolPermissions()
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
@@ -664,6 +688,10 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	)
 
 	return response.String(), nil
+}
+
+func isMaxStepError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "exceeds max steps")
 }
 
 func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput], emitter *aiStreamEmitter) {

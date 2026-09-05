@@ -78,6 +78,10 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
+export function GetAIExecutionLimits() {
+  return window['go']['main']['WApp']['GetAIExecutionLimits']();
+}
+
 export function GetAIMcpServers() {
   return window['go']['main']['WApp']['GetAIMcpServers']();
 }

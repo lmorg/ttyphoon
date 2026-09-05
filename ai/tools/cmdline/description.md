@@ -1,1 +1,0 @@
-Command-line tool. Sends the provided text directly to the active terminal as if typed by the user.

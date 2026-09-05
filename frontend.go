@@ -70,6 +70,7 @@ type WApp struct {
 	notesListMu     sync.Mutex
 	notesListCancel context.CancelFunc
 	notesListSeq    uint64
+	lspStartErrMu   sync.Mutex
 	lspStartErrs    map[string]string
 	lspManager      *lsp.Manager
 	lspDocs         *lsp.DocumentStore
@@ -118,11 +119,14 @@ func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) 
 	}*/
 
 	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	a.lspStartErrMu.Lock()
 	if prev, ok := a.lspStartErrs[key]; ok && prev == message {
+		a.lspStartErrMu.Unlock()
 		log.Printf("lsp: %s", message)
 		return
 	}
 	a.lspStartErrs[key] = message
+	a.lspStartErrMu.Unlock()
 
 	if renderer, ok := renderwebkit.CurrentRenderer(); ok {
 		renderer.DisplayNotification(types.NOTIFY_ERROR, message)
@@ -135,6 +139,8 @@ func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) 
 
 func (a *WApp) clearLspStartError(languageID string) {
 	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	a.lspStartErrMu.Lock()
+	defer a.lspStartErrMu.Unlock()
 	delete(a.lspStartErrs, key)
 }
 
@@ -2481,6 +2487,21 @@ func (a *WApp) GetCurrentAIModelSelection() string {
 	}
 
 	return agt.CurrentModelLabel()
+}
+
+func (a *WApp) GetAIExecutionLimits() map[string]any {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return map[string]any{}
+	}
+
+	return map[string]any{
+		"agentSteps":            agt.MaxIterations(),
+		"providerMaxIterations": nil,
+		"modelContextWindow":    nil,
+		"modelMaxOutputTokens":  nil,
+		"requestTimeout":        config.Config.Ai.RequestTimeoutDuration().String(),
+	}
 }
 
 func (a *WApp) SetCurrentAIModelSelection(selection string) error {

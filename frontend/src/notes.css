@@ -291,6 +291,24 @@ body {
     margin: 8px 0 16px;
 }
 
+.notes-ai-settings-execution-limits {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 3px 12px;
+    margin: -4px 0 18px;
+    color: rgba(var(--fg-rgb), 0.75);
+    font-size: var(--notes-font-size-minus-1);
+}
+
+.notes-ai-settings-execution-limits dt,
+.notes-ai-settings-execution-limits dd {
+    margin: 0;
+}
+
+.notes-ai-settings-execution-limits dd {
+    color: var(--fg);
+}
+
 .notes-ai-settings-sessions-list {
     display: flex;
     flex-direction: column;

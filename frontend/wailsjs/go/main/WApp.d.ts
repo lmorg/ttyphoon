@@ -47,6 +47,8 @@ export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
 export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
+export function GetAIExecutionLimits():Promise<Record<string, any>>;
+
 export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
 
 export function GetAIPromptLog(arg1:number,arg2:number):Promise<string>;

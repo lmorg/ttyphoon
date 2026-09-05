@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 
@@ -88,7 +89,11 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_WARN, err.Error())
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+			return "", err
+		}
+		return fmt.Sprintf("MCP tool error: %s", err), nil
 	}
 
-	return response, err
+	return response, nil
 }

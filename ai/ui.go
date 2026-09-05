@@ -15,6 +15,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -136,7 +137,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 			}()
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 

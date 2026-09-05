@@ -46,5 +46,6 @@ type Term interface {
 	Host(*XY) string
 	Pwd(*XY) string
 	CmdLine(*XY) string
+	GetEnvVars() map[string]string
 	Close()
 }

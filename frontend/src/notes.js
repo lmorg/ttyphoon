@@ -12,7 +12,7 @@ import {
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
-    ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
+    ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection,
     ListAIPromptLogs, GetAIPromptLog,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
@@ -644,6 +644,7 @@ app.innerHTML = `
             <div class="notes-ai-settings-controls">
                 <button id="notes-ai-settings-model-picker" type="button" class="notes-ai-model-picker" title="Select AI model">Model</button>
             </div>
+            <dl id="notes-ai-settings-execution-limits" class="notes-ai-settings-execution-limits" aria-label="AI execution limits"></dl>
 
             <h2>Tools</h2>
             <p>Enable or disable tools for AI requests.</p>
@@ -768,6 +769,7 @@ const elements = {
     toolsMinimize: document.getElementById('notes-tools-minimize'),
     toolsAIPromptJump: document.getElementById('notes-tools-ai-prompt-jump'),
     aiSettingsModelPicker: document.getElementById('notes-ai-settings-model-picker'),
+    aiSettingsExecutionLimits: document.getElementById('notes-ai-settings-execution-limits'),
     toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
     toolsAISkills: document.getElementById('notes-tools-ai-skills'),
@@ -11078,9 +11080,10 @@ async function refreshAIModelPicker() {
     }
 
     try {
-        const [options, current] = await Promise.all([
+        const [options, current, limits] = await Promise.all([
             ListAIModelSelections(),
             GetCurrentAIModelSelection(),
+            GetAIExecutionLimits(),
         ]);
 
         state.aiModelSelections = Array.isArray(options) ? options : [];
@@ -11089,11 +11092,30 @@ async function refreshAIModelPicker() {
         const fallback = state.aiModelSelections[0] || 'Model';
         elements.aiSettingsModelPicker.textContent = state.aiCurrentModelSelection || fallback;
         elements.aiSettingsModelPicker.disabled = state.aiModelSelections.length === 0;
+        renderAIExecutionLimits(limits);
     } catch (err) {
         console.error('Failed to refresh AI model picker:', err);
         elements.aiSettingsModelPicker.textContent = 'Model';
         elements.aiSettingsModelPicker.disabled = true;
+        renderAIExecutionLimits({});
     }
+}
+
+function renderAIExecutionLimits(limits) {
+    if (!elements.aiSettingsExecutionLimits) {
+        return;
+    }
+
+    const value = (key) => limits && limits[key] !== null && limits[key] !== undefined && limits[key] !== ''
+        ? String(limits[key])
+        : 'Unknown';
+    elements.aiSettingsExecutionLimits.innerHTML = [
+        ['Agent step budget', value('agentSteps')],
+        ['Provider max iterations', value('providerMaxIterations')],
+        ['Model context window', value('modelContextWindow')],
+        ['Model max output tokens', value('modelMaxOutputTokens')],
+        ['Request timeout', value('requestTimeout')],
+    ].map(([label, text]) => `<dt>${label}</dt><dd>${text}</dd>`).join('');
 }
 
 function openAIModelPickerMenu() {

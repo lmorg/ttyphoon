@@ -477,3 +477,29 @@ func (term *Term) GetCellSgr(cell *types.XY) *types.Sgr {
 func (term *Term) Tile() types.Tile {
 	return term.tile
 }
+
+func (term *Term) GetEnvVars() map[string]string {
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
+	for i := len(term._normBuf) - 1; i >= 0; i-- {
+		if block := term._normBuf[i].Block; block != nil && block.EnvVars != nil {
+			return cloneEnvVars(block.EnvVars)
+		}
+	}
+	for i := len(term._scrollBuf) - 1; i >= 0; i-- {
+		if block := term._scrollBuf[i].Block; block != nil && block.EnvVars != nil {
+			return cloneEnvVars(block.EnvVars)
+		}
+	}
+
+	return map[string]string{}
+}
+
+func cloneEnvVars(envvars map[string]string) map[string]string {
+	clone := make(map[string]string, len(envvars))
+	for key, value := range envvars {
+		clone[key] = value
+	}
+	return clone
+}

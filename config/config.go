@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
@@ -216,10 +217,20 @@ type LspT struct {
 
 type AiT struct {
 	MaxIterations               int                    `yaml:"MaxIterations"`
+	MaxContinuations            int                    `yaml:"MaxContinuations"`
+	RequestTimeout              string                 `yaml:"RequestTimeout"`
 	ServicesYaml                map[string]*AIServiceT `yaml:"Services"`
 	services                    map[string]*AIServiceT `yaml:"-"`
 	DefaultService              string                 `yaml:"DefaultService"`
 	ToolSummariseThresholdChars int                    `yaml:"ToolSummariseThresholdChars"`
+}
+
+func (ai *AiT) RequestTimeoutDuration() time.Duration {
+	duration, err := time.ParseDuration(strings.TrimSpace(ai.RequestTimeout))
+	if err != nil || duration <= 0 {
+		return 5 * time.Minute
+	}
+	return duration
 }
 
 func (ai *AiT) Service(name string) *AIServiceT {
