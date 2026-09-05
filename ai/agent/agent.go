@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -137,9 +138,12 @@ type toolPermission uint8
 const (
 	toolPermissionUndecided toolPermission = iota
 	toolPermissionAllowedPrompt
-	toolPermissionAllowedSession
 	toolPermissionDeniedPrompt
 )
+
+// ErrToolPermissionRefused marks a refusal the LLM should be told about rather
+// than one that should abort the agent run.
+var ErrToolPermissionRefused = errors.New("tool call refused")
 
 type toolPermissionState struct {
 	decision  toolPermission
@@ -147,14 +151,12 @@ type toolPermissionState struct {
 	wait      chan struct{}
 }
 
+// Permissions are scoped to a single user prompt, so this must only be called
+// when a new prompt starts — not per continuation.
 func (agt *Agent) ResetToolPermissions() {
 	agt.toolPermissionMu.Lock()
 	defer agt.toolPermissionMu.Unlock()
-	for toolName, state := range agt.toolPermissions {
-		if state.decision != toolPermissionAllowedSession {
-			delete(agt.toolPermissions, toolName)
-		}
-	}
+	agt.toolPermissions = make(map[string]*toolPermissionState)
 }
 
 // writePermissionRequests tracks pending in-panel access-request prompts so the
@@ -199,17 +201,18 @@ func ResolveWritePermissionRequest(id, decision string) error {
 func formatToolPermissionRequestMarkdown(toolName, requestID string) string {
 	return fmt.Sprintf(
 		"\n\n**Access requested for tool %s**\n\n"+
-			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=prompt)\n"+
-			"- [Allow for this session](ttyphoon://ai-tool-permission?request=%s&decision=session)\n"+
-			"- [Deny](ttyphoon://ai-tool-permission?request=%s&decision=deny)\n\n",
-		toolName, requestID, requestID, requestID,
+			"- [Allow this invocation](ttyphoon://ai-tool-permission?request=%s&decision=allow-once)\n"+
+			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=allow-prompt)\n"+
+			"- [Deny this invocation](ttyphoon://ai-tool-permission?request=%s&decision=deny-once)\n"+
+			"- [Deny for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=deny-prompt)\n\n",
+		toolName, requestID, requestID, requestID, requestID,
 	)
 }
 
 func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) error {
 	state := agt.ToolState(toolName)
 	if state == ToolStateDisabled {
-		return fmt.Errorf("tool %q is disabled", toolName)
+		return fmt.Errorf("%w: tool %q is disabled", ErrToolPermissionRefused, toolName)
 	}
 	if state == ToolStateAlways {
 		return nil
@@ -218,7 +221,7 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 		return nil
 	}
 	if state == ToolStateDenied {
-		return fmt.Errorf("permission denied for tool %q", toolName)
+		return fmt.Errorf("%w: tool %q is denied", ErrToolPermissionRefused, toolName)
 	}
 	for {
 		agt.toolPermissionMu.Lock()
@@ -231,12 +234,12 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 			agt.toolPermissions[toolName] = permission
 		}
 		switch permission.decision {
-		case toolPermissionAllowedPrompt, toolPermissionAllowedSession:
+		case toolPermissionAllowedPrompt:
 			agt.toolPermissionMu.Unlock()
 			return nil
 		case toolPermissionDeniedPrompt:
 			agt.toolPermissionMu.Unlock()
-			return fmt.Errorf("permission denied for tool %q", toolName)
+			return fmt.Errorf("%w: user denied tool %q for this prompt", ErrToolPermissionRefused, toolName)
 		}
 
 		if permission.prompting {
@@ -270,25 +273,27 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 			return ctx.Err()
 		}
 
+		// Once-decisions are deliberately not stored, so a concurrent or later
+		// invocation of the same tool prompts again.
+		var allowed bool
 		agt.toolPermissionMu.Lock()
 		switch decision {
-		case "session":
-			permission.decision = toolPermissionAllowedSession
-		case "prompt":
+		case "allow-prompt":
 			permission.decision = toolPermissionAllowedPrompt
-		default:
+			allowed = true
+		case "deny-prompt":
 			permission.decision = toolPermissionDeniedPrompt
+		case "allow-once":
+			allowed = true
 		}
 		permission.prompting = false
 		close(wait)
 		agt.toolPermissionMu.Unlock()
 
-		select {
-		case <-wait:
-			continue
-		case <-ctx.Done():
-			return ctx.Err()
+		if allowed {
+			return nil
 		}
+		return fmt.Errorf("%w: user denied tool %q", ErrToolPermissionRefused, toolName)
 	}
 }
 

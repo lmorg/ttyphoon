@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -420,12 +421,119 @@ func TestEinoAgentTool_InvokableRun_RejectsDisabledTool(t *testing.T) {
 	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateDisabled}}
 	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
 
-	_, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
-	if err == nil {
-		t.Fatal("InvokableRun() error = nil, want disabled tool error")
+	out, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v, want refusal reported to the LLM", err)
+	}
+	if !strings.Contains(out, "disabled") {
+		t.Fatalf("InvokableRun() output = %q, want disabled refusal text", out)
 	}
 	if tool.input != "" {
 		t.Fatalf("disabled tool received input %q", tool.input)
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_DeniedToolDoesNotAbortRun(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateDenied}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	out, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v, want nil so the agent run continues", err)
+	}
+	if !strings.Contains(out, "refused") {
+		t.Fatalf("InvokableRun() output = %q, want refusal text", out)
+	}
+	if tool.input != "" {
+		t.Fatalf("denied tool received input %q", tool.input)
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_CancellationStaysTerminal(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateApproval}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := einoTool.InvokableRun(ctx, `{"input":"hello"}`); !errors.Is(err, context.Canceled) {
+		t.Fatalf("InvokableRun() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestRequestToolPermission_DecisionScopes(t *testing.T) {
+	tests := []struct {
+		decision    string
+		wantAllowed bool
+		wantStored  bool
+	}{
+		{decision: "allow-once", wantAllowed: true, wantStored: false},
+		{decision: "allow-prompt", wantAllowed: true, wantStored: true},
+		{decision: "deny-once", wantAllowed: false, wantStored: false},
+		{decision: "deny-prompt", wantAllowed: false, wantStored: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.decision, func(t *testing.T) {
+			agent := &Agent{toolStates: map[string]string{"fake.tool": ToolStateApproval}}
+
+			resolved := make(chan error, 1)
+			go func() {
+				resolved <- agent.RequestToolPermission(context.Background(), "fake.tool")
+			}()
+
+			var reqID string
+			for range 200 {
+				writePermissionRequests.mu.Lock()
+				for id := range writePermissionRequests.m {
+					reqID = id
+				}
+				writePermissionRequests.mu.Unlock()
+				if reqID != "" {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if reqID == "" {
+				t.Fatal("no pending permission request was raised")
+			}
+
+			if err := ResolveWritePermissionRequest(reqID, test.decision); err != nil {
+				t.Fatalf("ResolveWritePermissionRequest() error = %v", err)
+			}
+
+			err := <-resolved
+			if test.wantAllowed && err != nil {
+				t.Fatalf("RequestToolPermission() error = %v, want nil", err)
+			}
+			if !test.wantAllowed {
+				if !errors.Is(err, ErrToolPermissionRefused) {
+					t.Fatalf("RequestToolPermission() error = %v, want ErrToolPermissionRefused", err)
+				}
+			}
+
+			agent.toolPermissionMu.Lock()
+			stored := agent.toolPermissions["fake.tool"].decision != toolPermissionUndecided
+			agent.toolPermissionMu.Unlock()
+			if stored != test.wantStored {
+				t.Fatalf("decision stored = %v, want %v", stored, test.wantStored)
+			}
+		})
+	}
+}
+
+func TestResetToolPermissions_ClearsPromptScopedDecisions(t *testing.T) {
+	agent := &Agent{toolPermissions: map[string]*toolPermissionState{
+		"a": {decision: toolPermissionAllowedPrompt},
+		"b": {decision: toolPermissionDeniedPrompt},
+	}}
+
+	agent.ResetToolPermissions()
+
+	if len(agent.toolPermissions) != 0 {
+		t.Fatalf("toolPermissions = %v, want empty after reset", agent.toolPermissions)
 	}
 }
 

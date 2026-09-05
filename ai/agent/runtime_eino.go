@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -104,6 +105,9 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
 			emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+			if errors.Is(err, ErrToolPermissionRefused) {
+				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
+			}
 			return "", err
 		}
 	}
@@ -578,6 +582,9 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	var response strings.Builder
 	continuationMessages := append([]*schema.Message(nil), messages...)
 
+	// Tool permissions are scoped to the user prompt, so continuations inherit them.
+	r.agent.ResetToolPermissions()
+
 	for continuation := 0; ; continuation++ {
 		r.agent.renderer.DisplayNotification(types.NOTIFY_DEBUG, fmt.Sprintf("Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations))
 		result, err := r.runLLMWithMessageStream(ctx, continuationMessages, streamCallback)
@@ -598,7 +605,6 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 }
 
 func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
-	r.agent.ResetToolPermissions()
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
 			return "", err
