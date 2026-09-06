@@ -119,6 +119,7 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 
 	var wg sync.WaitGroup
 	resp := newResponsesT(len(requests))
+	emitToPanel := agent.EmitAIStreamToolProgress(ctx)
 
 	for i, request := range requests {
 		//wg.Add(1)
@@ -139,11 +140,22 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 				resp.store(i, request.Name, "", fmt.Errorf("sub-agent is unavailable for this AI runtime"))
 				return
 			}
+
+			// Sub-agents run in parallel but the panel is one linear stream, so
+			// buffer each job and emit it as a single contiguous block.
+			var (
+				block   strings.Builder
+				blockMu sync.Mutex
+			)
 			subagentRequest := subagent.Request{
 				Name:         request.Name,
 				Prompt:       request.Prompt,
 				SystemPrompt: t.systemPrompt(),
-				EmitStream:   agent.EmitAIStreamToolProgress(ctx),
+				EmitStream: func(chunk string) {
+					blockMu.Lock()
+					block.WriteString(chunk)
+					blockMu.Unlock()
+				},
 			}
 			if runner, ok := t.agent.(delegateToolRunner); ok {
 				subagentRequest.RunWithTools = runner.RunSubagentWithTools
@@ -151,6 +163,13 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 
 			s, err := subagent.New(configured.ProviderName(), configured.ModelName(), configured.EnvironmentValue).Run(ctx, subagentRequest)
 			resp.store(i, request.Name, s, err)
+
+			blockMu.Lock()
+			buffered := block.String()
+			blockMu.Unlock()
+			if buffered != "" && emitToPanel != nil {
+				emitToPanel(buffered)
+			}
 			sticky.Close()
 		})
 	}

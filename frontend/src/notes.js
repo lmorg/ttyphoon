@@ -12,7 +12,7 @@ import {
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
-    ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection,
+    ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
@@ -879,6 +879,8 @@ const state = {
     aiModelSelections: [],
     aiCurrentModelSelection: '',
     aiSessionCache: '',
+    // Whether the panel is following live output or showing a historical prompt.
+    aiPanelLive: true,
     // AI logs are loaded lazily: on workspace switch we mark them pending and
     // only actually fetch/render once the AI tab is selected, so the (possibly
     // large) log never blocks file/workspace switching.
@@ -10545,6 +10547,7 @@ async function askAIAboutCurrentDocument() {
     ].join('\n');
 
     setToolsPanelCollapsed(false);
+    setAIPanelLive(true);
 
     try {
         await AskAI('notesDocument', fileName, aiContext);
@@ -10685,7 +10688,17 @@ async function refreshAIPromptJumpFromBackend() {
     })).filter((entry) => entry.sessionId > 0 && entry.promptId > 0);
 
     state.aiPromptJumpTargets = targets;
-    elements.toolsAIPromptJump.disabled = targets.length === 0;
+    updateAIPromptJumpAvailability();
+}
+
+// The dropdown stays available while showing history so there's always a way
+// back to live output, even before any prompt has been logged.
+function updateAIPromptJumpAvailability() {
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+    const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
+    elements.toolsAIPromptJump.disabled = targets.length === 0 && state.aiPanelLive;
 }
 
 function renderAIPromptJumpDropdown() {
@@ -10698,7 +10711,7 @@ function renderAIPromptJumpDropdown() {
     if (!Array.isArray(state.aiPromptJumpTargets) || state.aiPromptJumpTargets.length === 0) {
         state.aiPromptJumpTargets = domTargets;
     }
-    elements.toolsAIPromptJump.disabled = state.aiPromptJumpTargets.length === 0;
+    updateAIPromptJumpAvailability();
     void refreshAIPromptJumpFromBackend();
 }
 
@@ -10713,15 +10726,26 @@ function scheduleAIPromptJumpRefresh() {
     }, 40);
 }
 
-async function jumpToAIPrompt(index) {
-    const target = state.aiPromptJumpTargets[index];
+async function resumeLiveAIOutput() {
+    setAIPanelLive(true);
+    await loadAISessionCache('');
+}
+
+async function jumpToAIPromptTarget(target) {
     if (!target) {
+        return;
+    }
+
+    if (target.source === 'live') {
+        await resumeLiveAIOutput();
         return;
     }
 
     if (target.source === 'backend' && target.sessionId > 0 && target.promptId > 0) {
         try {
             const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
+            // Showing history: suspend live emits so a running agent can't append here.
+            setAIPanelLive(false);
             aiPipelineFormatter.clear();
             if (markdown) {
                 setAIFinalOutput(String(markdown), { forceBottom: true });
@@ -10749,25 +10773,29 @@ function openAIPromptJumpMenu() {
     }
 
     const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
-    if (targets.length === 0) {
+    if (targets.length === 0 && state.aiPanelLive) {
         return;
     }
 
-    const reversedTargets = [...targets].reverse();
-    const options = reversedTargets.map((target) => target.summary);
+    const menuTargets = [
+        { source: 'live', summary: state.aiPanelLive ? 'Live output (following)' : 'Live output' },
+        ...[...targets].reverse(),
+    ];
+    const options = menuTargets.map((target) => target.summary);
+    const icons = menuTargets.map((target) => target.source === 'live' && state.aiPanelLive ? CONTEXT_ICON_TICK : 0x20);
     const rect = elements.toolsAIPromptJump.getBoundingClientRect();
     showLocalMenu({
         title: 'Prompts',
         options,
+        icons,
         x: rect.left,
         y: rect.bottom,
         showNextToMouseCursor: true,
         onSelect: (index) => {
-            if (typeof index !== 'number' || index < 0 || index >= reversedTargets.length) {
+            if (typeof index !== 'number' || index < 0 || index >= menuTargets.length) {
                 return;
             }
-            const originalIndex = targets.indexOf(reversedTargets[index]);
-            void jumpToAIPrompt(originalIndex);
+            void jumpToAIPromptTarget(menuTargets[index]);
         },
     });
 }
@@ -11160,6 +11188,7 @@ function openAIModelPickerMenu() {
 async function askAIFromToolbar() {
     setToolsPanelCollapsed(false);
     setToolsTab('ai');
+    setAIPanelLive(true);
 
     try {
         await AskAI('notesPromptToolbar', '', '');
@@ -12194,6 +12223,20 @@ const aiStreamOrder = {
     finalSequence: null,
 };
 
+// Tells Go whether the panel is following live output; guarded so stale
+// generated bindings can't throw.
+function setAIPanelLive(live) {
+    state.aiPanelLive = Boolean(live);
+    try {
+        if (typeof SetAIPanelLive === 'function') {
+            void Promise.resolve(SetAIPanelLive(Boolean(live))).catch(() => {});
+        }
+    } catch (err) {
+        console.error('Failed to update AI panel live state:', err);
+    }
+    updateAIPromptJumpAvailability();
+}
+
 function startOrderedAIJob(payload) {
     const runId = Number(payload?.runId);
     if (!Number.isSafeInteger(runId) || runId < 1) {
@@ -12477,6 +12520,7 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     const tools = String(e.detail?.tools ?? '');
     setToolsPanelCollapsed(false);
     setToolsTab('ai');
+    setAIPanelLive(true);
     try {
         await AskAI('notesPromptUri', prompt, tools);
     } catch (err) {

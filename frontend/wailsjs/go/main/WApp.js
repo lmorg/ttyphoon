@@ -410,6 +410,10 @@ export function SetAIMcpServerEnabled(arg1, arg2) {
   return window['go']['main']['WApp']['SetAIMcpServerEnabled'](arg1, arg2);
 }
 
+export function SetAIPanelLive(arg1) {
+  return window['go']['main']['WApp']['SetAIPanelLive'](arg1);
+}
+
 export function SetAIToolEnabled(arg1, arg2) {
   return window['go']['main']['WApp']['SetAIToolEnabled'](arg1, arg2);
 }

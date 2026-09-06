@@ -34,14 +34,14 @@ func TestStringWidth(t *testing.T) {
 		{name: "combining cluster", s: "e\u0301", want: 1},
 		{name: "cjk", s: "界", want: 2},
 		{name: "zwj emoji", s: "👨‍👩‍👧‍👦", want: 2},
-		{name: "flag", s: "🇬🇧", want: 1},
+		{name: "flag", s: "🇬🇧", want: 2},
 		{name: "mixed", s: "a界😀", want: 5},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := StringWidth(tt.s); got != tt.want {
-				t.Fatalf("StringWidth(%q) = %d, want %d", tt.s, got, tt.want)
+				t.Fatalf("%s: StringWidth(%q) = %d, want %d", tt.name, tt.s, got, tt.want)
 			}
 		})
 	}

@@ -80,6 +80,38 @@ func normalizeWorkspaceName(workspace string) string {
 	return w
 }
 
+// panelView tracks which workspace the AI panel is showing and whether it is
+// following live output, so runs for other workspaces (or a historical prompt
+// selected from the dropdown) still write markdown without emitting to the UI.
+var panelView = struct {
+	sync.Mutex
+	workspace string
+	live      bool
+}{live: true}
+
+// SetPanelView is called by the frontend when the AI panel switches workspace or
+// between live output and a historical prompt.
+func SetPanelView(workspace string, live bool) {
+	panelView.Lock()
+	defer panelView.Unlock()
+	panelView.workspace = normalizeWorkspaceName(workspace)
+	panelView.live = live
+}
+
+func panelShowsLive(workspace string) bool {
+	panelView.Lock()
+	defer panelView.Unlock()
+	if !panelView.live {
+		return false
+	}
+	return panelView.workspace == "" || panelView.workspace == workspace
+}
+
+// emitToPanel reports whether this run's output is the one currently on screen.
+func (ctx SessionLogContext) emitToPanel(workspace string) bool {
+	return ctx.WorkspaceActive && ctx.Emit != nil && panelShowsLive(workspace)
+}
+
 func sessionLogDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -502,7 +534,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if ctx.WorkspaceActive && ctx.Emit != nil {
+		if ctx.emitToPanel(workspace) {
 			ctx.Emit("aiJobStart", AIJobStart{RunID: runID, Title: prefix})
 		}
 
@@ -525,7 +557,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+		if streaming && ctx.emitToPanel(workspace) {
 			ctx.Emit("aiResponseStream", chunk)
 		}
 
@@ -549,7 +581,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+		if streaming && ctx.emitToPanel(workspace) {
 			ctx.Emit("aiResponseStream", chunk)
 		}
 
@@ -565,7 +597,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 			streaming = true
 		}
 		aiSessionLogStore.Unlock()
-		if streaming && ctx.WorkspaceActive && ctx.Emit != nil {
+		if streaming && ctx.emitToPanel(workspace) {
 			ctx.Emit("aiJobFinish", finish)
 		}
 	}

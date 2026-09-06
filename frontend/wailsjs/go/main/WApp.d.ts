@@ -213,6 +213,8 @@ export function SendToTerminal(arg1:string):Promise<void>;
 
 export function SetAIMcpServerEnabled(arg1:string,arg2:boolean):Promise<void>;
 
+export function SetAIPanelLive(arg1:boolean):Promise<void>;
+
 export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAIToolState(arg1:string,arg2:string):Promise<void>;

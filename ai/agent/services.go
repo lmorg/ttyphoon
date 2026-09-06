@@ -166,8 +166,11 @@ func (agt *Agent) SetServiceModelFromSelection(selection string) error {
 }
 
 func (agt *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
-	agt.serviceName = modelXRef[i].service
 	service := findService(modelXRef[i].service)
+	if service == nil || modelXRef[i].modelId >= len(service.Models) {
+		return
+	}
+	agt.serviceName = modelXRef[i].service
 	agt.modelName = service.Models[modelXRef[i].modelId]
 	agt.Reload()
 }
@@ -194,6 +197,8 @@ func refreshServiceList() {
 	}()*/
 }
 
+// findService returns nil when the service isn't configured; callers fall back
+// to the agent's own service/model names.
 func findService(serviceName string) *config.AIServiceT {
 	for _, service := range config.Config.Ai.Services() {
 		if service.Label == serviceName {
@@ -201,5 +206,5 @@ func findService(serviceName string) *config.AIServiceT {
 		}
 	}
 
-	panic(fmt.Sprintf("service not found: '%s'", serviceName))
+	return nil
 }

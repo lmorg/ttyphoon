@@ -55,6 +55,7 @@ const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1'
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
 const getAIExecutionLimitsMock = vi.fn(() => Promise.resolve({ agentSteps: 10, requestTimeout: '5m' }));
 const setCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve());
+const setAIPanelLiveMock = vi.fn(() => Promise.resolve());
 const showAIToolsMenuMock = vi.fn(() => Promise.resolve());
 const showAISkillsMenuMock = vi.fn(() => Promise.resolve());
 const setAIToolSubagentAllowedMock = vi.fn(() => Promise.resolve());
@@ -172,6 +173,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
     GetAIExecutionLimits: getAIExecutionLimitsMock,
     SetCurrentAIModelSelection: setCurrentAIModelSelectionMock,
+    SetAIPanelLive: setAIPanelLiveMock,
     SetAIToolSubagentAllowed: setAIToolSubagentAllowedMock,
     ShowAIToolsMenu: showAIToolsMenuMock,
     ShowAISkillsMenu: showAISkillsMenuMock,

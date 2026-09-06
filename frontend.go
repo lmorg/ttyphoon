@@ -2489,6 +2489,16 @@ func (a *WApp) GetCurrentAIModelSelection() string {
 	return agt.CurrentModelLabel()
 }
 
+// SetAIPanelLive tells the backend whether the AI panel is following live output
+// or showing a historical prompt, so background runs stop emitting to the UI.
+func (a *WApp) SetAIPanelLive(live bool) {
+	workspace := ""
+	if agt, ok := a.activeAgent(); ok {
+		workspace = agt.Workspace()
+	}
+	sessiondb.SetPanelView(workspace, live)
+}
+
 func (a *WApp) GetAIExecutionLimits() map[string]any {
 	agt, ok := a.activeAgent()
 	if !ok {
