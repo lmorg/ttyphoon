@@ -224,23 +224,42 @@ function toHighlightJsLanguage(language, highlightJs) {
     return '';
 }
 
+// Mirrors the hljs class groups in style-utils.js getHighlightJsTheme(), so
+// fallback-tokenised languages colour identically to rendered markdown.
 function mapHljsClassesToMonacoToken(classes) {
     const normalized = classes.map((entry) => String(entry || '').replace(/^hljs-/, '').toLowerCase());
+    const has = (...names) => normalized.some((entry) => names.includes(entry));
 
-    if (normalized.some((entry) => entry === 'comment' || entry === 'quote')) {
+    if (has('comment', 'quote')) {
         return 'comment';
     }
-    if (normalized.some((entry) => entry === 'string' || entry === 'regexp')) {
-        return 'string';
+    // Checked before the bare `title` case below, which is otherwise a function.
+    if (has('class_') || has('type', 'class')) {
+        return 'type';
     }
-    if (normalized.some((entry) => entry === 'number')) {
-        return 'number';
+    if (has('function_', 'title', 'function')) {
+        return 'function';
     }
-    if (normalized.some((entry) => entry === 'keyword' || entry === 'built_in' || entry === 'builtin' || entry === 'literal')) {
+    if (has('params')) {
+        return 'parameter';
+    }
+    if (has('keyword', 'built_in', 'builtin', 'literal', 'selector-tag', 'subst')) {
         return 'keyword';
     }
-    if (normalized.some((entry) => entry === 'type' || entry === 'class' || entry === 'title.class' || entry === 'title.class_')) {
-        return 'type';
+    if (has('string', 'regexp', 'name', 'attribute', 'attr', 'symbol', 'bullet', 'addition', 'code', 'link')) {
+        return 'string';
+    }
+    if (has('number')) {
+        return 'number';
+    }
+    if (has('variable', 'template-variable')) {
+        return 'variable';
+    }
+    if (has('emphasis')) {
+        return 'emphasis';
+    }
+    if (has('strong')) {
+        return 'strong';
     }
 
     return '';
@@ -502,15 +521,67 @@ export async function createMonacoAdapter(container, options = {}) {
         const cursorHex = rgbToHex(cursor);
         const selectionHex = rgbToHex(selection);
 
+        // Mirrors the markdown hljs palette in style-utils.js so code reads the
+        // same in the editor as it does in rendered markdown.
+        const commentHex = rgbToHex(mix(fg, bg, 0.45));
+        const greenHex = rgbToHex(parseRgb(colors.green, mix(fg, bg, 0.2)));
+        const cyanHex = rgbToHex(parseRgb(colors.cyan, mix(fg, bg, 0.15)));
+        const blueHex = rgbToHex(parseRgb(colors.blue, accent));
+        const yellowHex = rgbToHex(parseRgb(colors.yellow, fg));
+        const magentaHex = rgbToHex(parseRgb(colors.magenta, fg));
+
+        const paletteRules = [
+            // comment / quote
+            ['comment', commentHex],
+            ['comment.doc', commentHex],
+            // keyword / literal / built-in
+            ['keyword', accentHex],
+            ['keyword.control', accentHex],
+            ['modifier', accentHex],
+            ['storage', accentHex],
+            ['constant.language', accentHex],
+            ['tag', accentHex],
+            // string / regexp / link
+            ['string', greenHex],
+            ['string.escape', greenHex],
+            ['regexp', greenHex],
+            ['attribute.value', greenHex],
+            // number / variable
+            ['number', cyanHex],
+            ['constant.numeric', cyanHex],
+            ['variable', cyanHex],
+            ['variable.predefined', cyanHex],
+            ['enumMember', cyanHex],
+            // type / class
+            ['type', blueHex],
+            ['class', blueHex],
+            ['struct', blueHex],
+            ['interface', blueHex],
+            ['enum', blueHex],
+            ['typeParameter', blueHex],
+            ['namespace', blueHex],
+            ['attribute.name', blueHex],
+            // functions and parameters get their own hues so call sites stand out
+            ['function', yellowHex],
+            ['method', yellowHex],
+            ['macro', yellowHex],
+            ['support.function', yellowHex],
+            ['parameter', magentaHex],
+            ['property', fgHex],
+            ['operator', fgHex],
+            ['delimiter', fgHex],
+            ['event', fgHex],
+        ];
+
         monaco.editor.defineTheme(themeName, {
             base: darkBase ? 'vs-dark' : 'vs',
             inherit: true,
+            semanticHighlighting: true,
             rules: [
-                { token: 'comment', foreground: rgbToHex(mix(fg, bg, 0.45)) },
-                { token: 'keyword', foreground: rgbToHex(accent) },
-                { token: 'string', foreground: rgbToHex(parseRgb(colors.green, mix(fg, bg, 0.2))) },
-                { token: 'number', foreground: rgbToHex(parseRgb(colors.cyan, mix(fg, bg, 0.15))) },
-                { token: 'type', foreground: rgbToHex(parseRgb(colors.blue, accent)) },
+                ...paletteRules.map(([token, foreground]) => ({ token, foreground })),
+                { token: 'emphasis', fontStyle: 'italic' },
+                { token: 'strong', fontStyle: 'bold' },
+                { token: 'deprecated', fontStyle: 'strikethrough' },
             ],
             colors: {
                 'editor.background': `#${bgHex}`,
@@ -562,6 +633,7 @@ export async function createMonacoAdapter(container, options = {}) {
         cursorBlinking: 'blink',
         hover: { enabled: false },
         minimap: { enabled: false },
+        'semanticHighlighting.enabled': true,
         overviewRulerLanes: 0,
         hideCursorInOverviewRuler: true,
         scrollbar: {
@@ -936,10 +1008,13 @@ export async function createMonacoAdapter(container, options = {}) {
 
     const lspDisposables = [];
     let lspCodeActionCommandDisposable = null;
+    let lspGeneration = 0;
+    let inlayHintsChangeEmitter = null;
     let typosDecorationIds = [];
     let currentTyposMisspellings = [];
 
     function disposeLsp() {
+        lspGeneration++;
         while (lspDisposables.length > 0) {
             const disposable = lspDisposables.pop();
             disposable?.dispose?.();
@@ -947,6 +1022,10 @@ export async function createMonacoAdapter(container, options = {}) {
         if (lspCodeActionCommandDisposable) {
             lspCodeActionCommandDisposable.dispose();
             lspCodeActionCommandDisposable = null;
+        }
+        if (inlayHintsChangeEmitter) {
+            inlayHintsChangeEmitter.dispose();
+            inlayHintsChangeEmitter = null;
         }
         monaco.editor.setModelMarkers(model, 'notes-lsp', []);
     }
@@ -1097,10 +1176,17 @@ export async function createMonacoAdapter(container, options = {}) {
             setTyposDecorations(list);
         },
 
+        // Monaco caches provider results, so an external edit needs an explicit
+        // invalidation to re-request inlay hints and semantic tokens.
+        refreshInlayHints() {
+            inlayHintsChangeEmitter?.fire();
+        },
+
         configureLsp(callbacks = {}) {
             disposeLsp();
 
             const languageId = model.getLanguageId();
+            const generation = lspGeneration;
             const codeActionCommandId = `notes.applyCodeAction.${Date.now()}`;
 
             lspCodeActionCommandDisposable = monaco.editor.registerCommand(codeActionCommandId, async (_accessor, args) => {
@@ -1112,6 +1198,71 @@ export async function createMonacoAdapter(container, options = {}) {
                     editor.setValue(String(result.content || ''));
                 }
             });
+
+            // Monaco needs the legend synchronously at registration, but it only
+            // arrives with the server's first token response, so register late.
+            if (typeof callbacks.semanticTokens === 'function') {
+                void (async () => {
+                    let first = null;
+                    try {
+                        first = await callbacks.semanticTokens();
+                    } catch {
+                        return;
+                    }
+
+                    const tokenTypes = first?.legend?.tokenTypes;
+                    if (generation !== lspGeneration || !Array.isArray(tokenTypes) || tokenTypes.length === 0) {
+                        return;
+                    }
+                    const tokenModifiers = Array.isArray(first?.legend?.tokenModifiers)
+                        ? first.legend.tokenModifiers
+                        : [];
+
+                    let pending = first;
+                    lspDisposables.push(monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
+                        getLegend: () => ({ tokenTypes, tokenModifiers }),
+                        provideDocumentSemanticTokens: async () => {
+                            // The probe response is reused once, then discarded so
+                            // later calls always reflect current document state.
+                            const result = pending || await callbacks.semanticTokens();
+                            pending = null;
+                            const data = result?.data;
+                            if (!Array.isArray(data) || data.length === 0) {
+                                return null;
+                            }
+                            return { data: new Uint32Array(data) };
+                        },
+                        releaseDocumentSemanticTokens: () => {},
+                    }));
+                })();
+            }
+
+            if (typeof callbacks.inlayHints === 'function') {
+                inlayHintsChangeEmitter = new monaco.Emitter();
+                lspDisposables.push(monaco.languages.registerInlayHintsProvider(languageId, {
+                    onDidChangeInlayHints: inlayHintsChangeEmitter.event,
+                    provideInlayHints: async () => {
+                        const hints = await callbacks.inlayHints();
+                        if (!Array.isArray(hints) || hints.length === 0) {
+                            return { hints: [], dispose: () => {} };
+                        }
+                        return {
+                            hints: hints.map((item) => ({
+                                position: {
+                                    lineNumber: (Number(item?.line) || 0) + 1,
+                                    column: (Number(item?.character) || 0) + 1,
+                                },
+                                label: String(item?.label || ''),
+                                tooltip: item?.tooltip ? String(item.tooltip) : undefined,
+                                kind: Number(item?.kind) || undefined,
+                                paddingLeft: item?.paddingLeft === true,
+                                paddingRight: item?.paddingRight === true,
+                            })),
+                            dispose: () => {},
+                        };
+                    },
+                }));
+            }
 
             lspDisposables.push(monaco.languages.registerSignatureHelpProvider(languageId, {
                 signatureHelpTriggerCharacters: ['(', ','],

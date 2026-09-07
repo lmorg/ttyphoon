@@ -171,11 +171,9 @@ let terminalJupyterHost;
 let notesOriginalParent;
 let notesOriginalNextSibling;
 let notesOriginalStyle;
-let notesFullsizeOverlay = null;
-let notesFullsizeActive = false;
-
-let terminalFullsizeOverlay = null;
-let terminalFullsizeActive = false;
+let fullsizeOverlay = null;
+// null, or the kind of pane currently maximized ('notes' | 'terminal').
+let fullsizeActive = null;
 
 let isDraggingSplit = false;
 let notesCollapsed = false;
@@ -831,25 +829,49 @@ window.addEventListener('ttyphoon-focus-notes', () => {
     focusNotesPane();
 });
 
-function enterNotesFullsize() {
-    if (notesFullsizeActive || !notesPane) return;
+// Maximizing lifts one pane into a fixed overlay. The pane left behind must be
+// stretched explicitly: notes is fixed-width with flex-shrink:0, so it would
+// otherwise keep its split width instead of filling the window.
+const FULLSIZE_PANES = {
+    notes: { btnId: 'notes-fullsize-btn' },
+    terminal: { btnId: 'terminal-zoom-btn' },
+};
 
-    // Snapshot where notesPane currently lives so we can restore it.
-    notesFullsizeActive = true;
-    const savedParent = notesPane.parentElement;
-    const savedSibling = notesPane.nextElementSibling;
+function fullsizePaneElements(kind) {
+    return kind === 'notes'
+        ? { pane: notesPane, background: terminalPane }
+        : { pane: terminalPane, background: notesPane };
+}
+
+function setFullsizeButtonState(kind, enabled) {
+    const btn = document.getElementById(FULLSIZE_PANES[kind].btnId);
+    if (btn) {
+        btn.dataset.enabled = enabled ? 'true' : 'false';
+    }
+}
+
+function enterFullsize(kind) {
+    if (fullsizeActive) return;
+    const { pane, background } = fullsizePaneElements(kind);
+    if (!pane) return;
+
+    fullsizeActive = kind;
+
+    const savedParent = pane.parentElement;
+    const savedSibling = pane.nextElementSibling;
     const savedStyle = {
-        width:        notesPane.style.width,
-        height:       notesPane.style.height,
-        position:     notesPane.style.position,
-        overflow:     notesPane.style.overflow,
-        flexShrink:   notesPane.style.flexShrink,
-        borderRight:  notesPane.style.borderRight,
-        borderRadius: notesPane.style.borderRadius,
+        width: pane.style.width,
+        height: pane.style.height,
+        position: pane.style.position,
+        overflow: pane.style.overflow,
+        flex: pane.style.flex,
+        flexShrink: pane.style.flexShrink,
+        borderRight: pane.style.borderRight,
+        borderRadius: pane.style.borderRadius,
     };
 
     const overlay = document.createElement('div');
-    overlay.id = 'notes-fullsize-overlay';
+    overlay.id = `${kind}-fullsize-overlay`;
     overlay.style.cssText = [
         'position: fixed',
         'inset: 0',
@@ -861,186 +883,134 @@ function enterNotesFullsize() {
     ].join('; ');
     // Clicking the darkened border exits full-size mode.
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) exitNotesFullsize();
+        if (e.target === overlay) exitFullsize();
     });
 
-    overlay.appendChild(notesPane);
+    overlay.appendChild(pane);
     document.body.appendChild(overlay);
-    notesFullsizeOverlay = overlay;
+    fullsizeOverlay = overlay;
 
-    notesPane.style.width        = 'calc(100vw - 100px)';
-    notesPane.style.height       = 'calc(100vh - 100px)';
-    notesPane.style.position     = 'relative';
-    notesPane.style.overflow     = 'hidden';
-    notesPane.style.flexShrink   = '0';
-    notesPane.style.borderRight  = '0';
-    notesPane.style.borderRadius = '8px';
-    notesPane.dataset.fullsize   = 'true';
+    pane.style.width = 'calc(100vw - 100px)';
+    pane.style.height = 'calc(100vh - 100px)';
+    pane.style.position = 'relative';
+    pane.style.overflow = 'hidden';
+    // The terminal pane's base `flex:1` would override width inside the overlay.
+    pane.style.flex = '0 0 auto';
+    pane.style.flexShrink = '0';
+    pane.style.borderRight = '0';
+    pane.style.borderRadius = '8px';
+    pane.dataset.fullsize = 'true';
 
-    // Store restore info on the overlay element for use in exitNotesFullsize.
-    overlay._savedParent  = savedParent;
-    overlay._savedSibling = savedSibling;
-    overlay._savedStyle   = savedStyle;
-
-    // Update the button icon to indicate active state.
-    const btn = document.getElementById('notes-fullsize-btn');
-    if (btn) {
-        btn.style.color = 'var(--bg)';
-        btn.style.backgroundColor = 'var(--accent)';
-        btn.style.borderRadius = `5px`;
+    // Fill the gap the lifted pane left behind.
+    let backgroundStyle = null;
+    if (background) {
+        backgroundStyle = {
+            width: background.style.width,
+            flex: background.style.flex,
+            flexShrink: background.style.flexShrink,
+        };
+        background.style.width = '100%';
+        background.style.flex = '1';
+        background.style.flexShrink = '1';
     }
+
+    let splitDisplay = null;
+    if (splitHandle) {
+        splitDisplay = splitHandle.style.display;
+        splitHandle.style.display = 'none';
+    }
+
+    overlay._savedParent = savedParent;
+    overlay._savedSibling = savedSibling;
+    overlay._savedStyle = savedStyle;
+    overlay._backgroundStyle = backgroundStyle;
+    overlay._splitDisplay = splitDisplay;
+
+    setFullsizeButtonState(kind, true);
 
     requestTerminalResizeAfterLayout();
 }
 
-function exitNotesFullsize() {
-    if (!notesFullsizeActive || !notesFullsizeOverlay || !notesPane) return;
+function exitFullsize() {
+    if (!fullsizeActive || !fullsizeOverlay) return;
 
-    const overlay = notesFullsizeOverlay;
+    const kind = fullsizeActive;
+    const { pane, background } = fullsizePaneElements(kind);
+    if (!pane) return;
 
-    const { _savedParent: savedParent, _savedSibling: savedSibling, _savedStyle: savedStyle } = overlay;
+    const overlay = fullsizeOverlay;
+    const {
+        _savedParent: savedParent,
+        _savedSibling: savedSibling,
+        _savedStyle: savedStyle,
+        _backgroundStyle: backgroundStyle,
+        _splitDisplay: splitDisplay,
+    } = overlay;
 
     if (savedParent) {
         if (savedSibling && savedSibling.parentElement === savedParent) {
-            savedParent.insertBefore(notesPane, savedSibling);
+            savedParent.insertBefore(pane, savedSibling);
         } else {
-            savedParent.appendChild(notesPane);
+            savedParent.appendChild(pane);
         }
-    } else if (contentWrapper && splitHandle) {
-        contentWrapper.insertBefore(notesPane, splitHandle);
+    } else if (contentWrapper) {
+        // Notes docks to the left of the splitter; the terminal is always last.
+        if (kind === 'notes' && splitHandle) {
+            contentWrapper.insertBefore(pane, splitHandle);
+        } else {
+            contentWrapper.appendChild(pane);
+        }
     }
 
     if (savedStyle) {
-        notesPane.style.width        = savedStyle.width;
-        notesPane.style.height       = savedStyle.height;
-        notesPane.style.position     = savedStyle.position;
-        notesPane.style.overflow     = savedStyle.overflow;
-        notesPane.style.flexShrink   = savedStyle.flexShrink;
-        notesPane.style.borderRight  = savedStyle.borderRight;
-        notesPane.style.borderRadius = savedStyle.borderRadius;
+        pane.style.width = savedStyle.width;
+        pane.style.height = savedStyle.height;
+        pane.style.position = savedStyle.position;
+        pane.style.overflow = savedStyle.overflow;
+        pane.style.flex = savedStyle.flex;
+        pane.style.flexShrink = savedStyle.flexShrink;
+        pane.style.borderRight = savedStyle.borderRight;
+        pane.style.borderRadius = savedStyle.borderRadius;
     }
-    delete notesPane.dataset.fullsize;
+    delete pane.dataset.fullsize;
+
+    if (background && backgroundStyle) {
+        background.style.width = backgroundStyle.width;
+        background.style.flex = backgroundStyle.flex;
+        background.style.flexShrink = backgroundStyle.flexShrink;
+    }
+
+    if (splitHandle && splitDisplay !== null) {
+        splitHandle.style.display = splitDisplay;
+    }
 
     overlay.remove();
-    notesFullsizeOverlay = null;
-    notesFullsizeActive = false;
+    fullsizeOverlay = null;
+    fullsizeActive = null;
 
-    const btn = document.getElementById('notes-fullsize-btn');
-    if (btn) {
-        btn.style.color = '';
-        btn.style.backgroundColor = '';
-    }
+    setFullsizeButtonState(kind, false);
 
     requestTerminalResizeAfterLayout();
+}
+
+function toggleFullsize(kind) {
+    if (fullsizeActive === kind) {
+        exitFullsize();
+        return;
+    }
+    // Only one pane can be full-size at a time.
+    if (fullsizeActive) {
+        exitFullsize();
+    }
+    enterFullsize(kind);
 }
 
 window.addEventListener('ttyphoon-notes-fullsize-toggle', () => {
-    if (notesFullsizeActive) exitNotesFullsize();
-    else enterNotesFullsize();
+    toggleFullsize('notes');
 });
 
-function enterTerminalFullsize() {
-    if (terminalFullsizeActive || !terminalPane) return;
-
-    // Snapshot where terminalPane currently lives so we can restore it.
-    terminalFullsizeActive = true;
-    const savedParent = terminalPane.parentElement;
-    const savedSibling = terminalPane.nextElementSibling;
-    const savedStyle = {
-        width:        terminalPane.style.width,
-        height:       terminalPane.style.height,
-        position:     terminalPane.style.position,
-        overflow:     terminalPane.style.overflow,
-        flexShrink:   terminalPane.style.flexShrink,
-        borderRight:  terminalPane.style.borderRight,
-        borderRadius: terminalPane.style.borderRadius,
-    };
-
-    const overlay = document.createElement('div');
-    overlay.id = 'terminal-fullsize-overlay';
-    overlay.style.cssText = [
-        'position: fixed',
-        'inset: 0',
-        'z-index: 500',
-        'display: flex',
-        'align-items: center',
-        'justify-content: center',
-        'background: rgba(0, 0, 0, 0.7)',
-    ].join('; ');
-    // Clicking the darkened border exits full-size mode.
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) exitTerminalFullsize();
-    });
-
-    overlay.appendChild(terminalPane);
-    document.body.appendChild(overlay);
-    terminalFullsizeOverlay = overlay;
-
-    terminalPane.style.width        = 'calc(100vw - 100px)';
-    terminalPane.style.height       = 'calc(100vh - 100px)';
-    terminalPane.style.position     = 'relative';
-    terminalPane.style.overflow     = 'hidden';
-    terminalPane.style.flexShrink   = '0';
-    terminalPane.style.borderRight  = '0';
-    terminalPane.style.borderRadius = '8px';
-    terminalPane.dataset.fullsize   = 'true';
-
-    // Store restore info on the overlay element for use in exitTerminalFullsize.
-    overlay._savedParent  = savedParent;
-    overlay._savedSibling = savedSibling;
-    overlay._savedStyle   = savedStyle;
-
-    const btn = document.getElementById('terminal-zoom-btn');
-    if (btn) {
-        btn.dataset.enabled = 'true';
-    }
-
-    requestTerminalResizeAfterLayout();
-}
-
-function exitTerminalFullsize() {
-    if (!terminalFullsizeActive || !terminalFullsizeOverlay || !terminalPane) return;
-
-    const overlay = terminalFullsizeOverlay;
-
-    const { _savedParent: savedParent, _savedSibling: savedSibling, _savedStyle: savedStyle } = overlay;
-
-    if (savedParent) {
-        if (savedSibling && savedSibling.parentElement === savedParent) {
-            savedParent.insertBefore(terminalPane, savedSibling);
-        } else {
-            savedParent.appendChild(terminalPane);
-        }
-    } else if (contentWrapper) {
-        contentWrapper.appendChild(terminalPane);
-    }
-
-    if (savedStyle) {
-        terminalPane.style.width        = savedStyle.width;
-        terminalPane.style.height       = savedStyle.height;
-        terminalPane.style.position     = savedStyle.position;
-        terminalPane.style.overflow     = savedStyle.overflow;
-        terminalPane.style.flexShrink   = savedStyle.flexShrink;
-        terminalPane.style.borderRight  = savedStyle.borderRight;
-        terminalPane.style.borderRadius = savedStyle.borderRadius;
-    }
-    delete terminalPane.dataset.fullsize;
-
-    overlay.remove();
-    terminalFullsizeOverlay = null;
-    terminalFullsizeActive = false;
-
-    const btn = document.getElementById('terminal-zoom-btn');
-    if (btn) {
-        btn.dataset.enabled = 'false';
-    }
-
-    requestTerminalResizeAfterLayout();
-}
-
 window.addEventListener('ttyphoon-terminal-fullsize-toggle', () => {
-    if (terminalFullsizeActive) exitTerminalFullsize();
-    else enterTerminalFullsize();
+    toggleFullsize('terminal');
 });
 
 window.addEventListener('ttyphoon-focus-terminal', () => {

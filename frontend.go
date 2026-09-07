@@ -1738,7 +1738,7 @@ func (a *WApp) NotesLspInlayHints(filePath string) []lsp.InlayHintItem {
 }
 
 // NotesLspSemanticTokens requests semantic tokens for the current document.
-func (a *WApp) NotesLspSemanticTokens(filePath string) []lsp.SemanticTokenItem {
+func (a *WApp) NotesLspSemanticTokens(filePath string) *lsp.SemanticTokensResult {
 	absPath := a.filePath(filePath)
 	doc := a.lspDocs.Get(absPath)
 	if doc == nil {
@@ -1755,13 +1755,13 @@ func (a *WApp) NotesLspSemanticTokens(filePath string) []lsp.SemanticTokenItem {
 		return nil
 	}
 
-	items, err := lsp.RequestSemanticTokens(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding())
+	result, err := lsp.RequestSemanticTokens(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding(), sp.SemanticTokensLegend())
 	if err != nil {
 		log.Printf("lsp: SemanticTokens %q: %v", absPath, err)
 		return nil
 	}
 
-	return items
+	return result
 }
 
 // NotesLspCodeLens requests code lenses for the current document.

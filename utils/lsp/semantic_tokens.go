@@ -9,21 +9,32 @@ import (
 	"time"
 )
 
-// SemanticTokenItem is a frontend-ready semantic token entry.
-type SemanticTokenItem struct {
-	Line      int `json:"line"`
-	Character int `json:"character"`
-	Length    int `json:"length"`
-	TokenType int `json:"tokenType"`
-	TokenMods int `json:"tokenModifiers"`
+// SemanticTokensLegend names the token types and modifiers a server emits, in
+// the index order used by the token data stream.
+type SemanticTokensLegend struct {
+	TokenTypes     []string `json:"tokenTypes"`
+	TokenModifiers []string `json:"tokenModifiers"`
+}
+
+// SemanticTokensResult carries the server's relative-encoded token stream
+// through to Monaco unchanged, alongside the legend needed to decode it.
+type SemanticTokensResult struct {
+	Legend SemanticTokensLegend `json:"legend"`
+	Data   []int                `json:"data"`
 }
 
 type semanticTokensWire struct {
 	Data []int `json:"data"`
 }
 
-// RequestSemanticTokens sends textDocument/semanticTokens/full and normalizes tokens.
-func RequestSemanticTokens(ctx context.Context, t *Transport, uri, content string, serverPosEnc PositionEncoding) ([]SemanticTokenItem, error) {
+// RequestSemanticTokens sends textDocument/semanticTokens/full and returns the
+// raw relative-encoded data. Character offsets are converted to UTF-16 when the
+// server negotiated another encoding, because Monaco columns are UTF-16.
+func RequestSemanticTokens(ctx context.Context, t *Transport, uri, content string, serverPosEnc PositionEncoding, legend SemanticTokensLegend) (*SemanticTokensResult, error) {
+	if len(legend.TokenTypes) == 0 {
+		return nil, nil
+	}
+
 	params := map[string]any{
 		"textDocument": map[string]any{"uri": uri},
 	}
@@ -36,98 +47,78 @@ func RequestSemanticTokens(ctx context.Context, t *Transport, uri, content strin
 		}
 		return nil, err
 	}
+	// A server that supports semantic tokens may still have none to report yet, so
+	// keep returning the legend: the caller registers its provider from it.
 	if resp == nil || len(resp.Result) == 0 || string(resp.Result) == "null" {
-		return nil, nil
+		return &SemanticTokensResult{Legend: legend}, nil
 	}
 
-	items, err := parseSemanticTokensResult(resp.Result, content, serverPosEnc)
-	if err != nil {
-		return nil, err
-	}
-	if len(items) == 0 {
-		return nil, nil
-	}
-
-	return items, nil
-}
-
-func parseSemanticTokensResult(raw json.RawMessage, content string, serverPosEnc PositionEncoding) ([]SemanticTokenItem, error) {
 	var payload semanticTokensWire
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	if err := json.Unmarshal(resp.Result, &payload); err != nil {
 		return nil, fmt.Errorf("lsp: parse semanticTokens payload: %w", err)
 	}
-
 	if len(payload.Data) == 0 {
-		return nil, nil
+		return &SemanticTokensResult{Legend: legend}, nil
 	}
 	if len(payload.Data)%5 != 0 {
 		return nil, fmt.Errorf("lsp: invalid semanticTokens payload length")
 	}
 
-	lines := strings.Split(content, "\n")
-	items := make([]SemanticTokenItem, 0, len(payload.Data)/5)
+	data := payload.Data
+	if serverPosEnc != PositionEncodingUTF16 {
+		data = convertSemanticTokensToUTF16(data, content, serverPosEnc)
+	}
 
-	line := 0
-	character := 0
-	for i := 0; i < len(payload.Data); i += 5 {
-		deltaLine := payload.Data[i]
-		deltaStart := payload.Data[i+1]
-		rawLength := payload.Data[i+2]
-		tokenType := payload.Data[i+3]
-		tokenMods := payload.Data[i+4]
+	return &SemanticTokensResult{Legend: legend, Data: data}, nil
+}
 
-		if deltaLine < 0 || deltaStart < 0 || rawLength < 0 {
+// convertSemanticTokensToUTF16 re-encodes character offsets and lengths while
+// keeping the relative encoding, so each delta stays valid for the next token.
+func convertSemanticTokensToUTF16(data []int, content string, from PositionEncoding) []int {
+	lineCount := strings.Count(content, "\n") + 1
+
+	out := make([]int, 0, len(data))
+	var line, char, prevLine, prevChar int
+
+	for i := 0; i+4 < len(data); i += 5 {
+		deltaLine := data[i]
+		deltaStart := data[i+1]
+		length := data[i+2]
+
+		if deltaLine < 0 || deltaStart < 0 || length < 0 {
 			continue
 		}
 
 		line += deltaLine
 		if deltaLine > 0 {
-			character = deltaStart
+			char = deltaStart
 		} else {
-			character += deltaStart
+			char += deltaStart
 		}
 
-		if line < 0 || line >= len(lines) {
+		if line < 0 || line >= lineCount {
 			continue
 		}
 
-		lineLen := len(lines[line])
-		if character < 0 || character > lineLen {
+		startUTF16 := convertCharacterAtLine(content, line, char, from, PositionEncodingUTF16)
+		endUTF16 := convertCharacterAtLine(content, line, char+length, from, PositionEncodingUTF16)
+		if endUTF16 <= startUTF16 {
 			continue
 		}
 
-		endCharacter := character + rawLength
-		if endCharacter > lineLen {
-			endCharacter = lineLen
+		outDeltaLine := line - prevLine
+		outDeltaStart := startUTF16
+		if outDeltaLine == 0 {
+			outDeltaStart = startUTF16 - prevChar
 		}
-		if endCharacter <= character {
+		if outDeltaStart < 0 {
 			continue
 		}
 
-		outChar := character
-		outLen := endCharacter - character
-		if serverPosEnc != PositionEncodingUTF16 {
-			startUTF16 := convertCharacterAtLine(content, line, character, serverPosEnc, PositionEncodingUTF16)
-			endUTF16 := convertCharacterAtLine(content, line, endCharacter, serverPosEnc, PositionEncodingUTF16)
-			if endUTF16 <= startUTF16 {
-				continue
-			}
-			outChar = startUTF16
-			outLen = endUTF16 - startUTF16
-		}
-
-		items = append(items, SemanticTokenItem{
-			Line:      line,
-			Character: outChar,
-			Length:    outLen,
-			TokenType: tokenType,
-			TokenMods: tokenMods,
-		})
+		out = append(out, outDeltaLine, outDeltaStart, endUTF16-startUTF16, data[i+3], data[i+4])
+		prevLine = line
+		prevChar = startUTF16
 	}
 
-	if len(items) == 0 {
-		return nil, nil
-	}
-
-	return items, nil
+	return out
 }

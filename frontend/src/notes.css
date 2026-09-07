@@ -690,6 +690,13 @@ body {
     background-color: rgba(var(--accent-rgb), 0.3) !important;
 }
 
+#notes-fullsize-btn[data-enabled="true"] {
+    color: var(--bg) !important;
+    border-radius: 5px;
+    border-color: var(--accent) !important;
+    background-color: var(--accent) !important;
+}
+
 #notes-history-prev:hover,
 #notes-history-next:hover {
     color: var(--accent) !important;
@@ -3455,26 +3462,4 @@ body {
 .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-kind,
 .notes-lsp-completion-item.is-deprecated .notes-lsp-completion-icon {
     opacity: 0.65;
-}
-.notes-lsp-inlay-hint {
-    display: inline;
-    color: rgba(var(--cyan-bright-rgb), 0.78);
-    opacity: 0.82;
-    font-size: 0.92em;
-    font-style: normal;
-    pointer-events: none;
-    user-select: none;
-    white-space: pre;
-}
-.notes-lsp-inlay-hint[data-kind="1"] {
-    color: rgba(var(--yellow-bright-rgb), 0.78);
-}
-.notes-lsp-inlay-hint[data-kind="2"] {
-    color: rgba(var(--blue-bright-rgb), 0.78);
-}
-.notes-lsp-inlay-hint.has-padding-left {
-    margin-left: 0.5ch;
-}
-.notes-lsp-inlay-hint.has-padding-right {
-    margin-right: 0.5ch;
 }

@@ -161,7 +161,7 @@ export function NotesLspRename(arg1:string,arg2:number,arg3:number,arg4:string):
 
 export function NotesLspSaveDocument(arg1:string):Promise<void>;
 
-export function NotesLspSemanticTokens(arg1:string):Promise<Array<lsp.SemanticTokenItem>>;
+export function NotesLspSemanticTokens(arg1:string):Promise<lsp.SemanticTokensResult>;
 
 export function NotesLspSignatureHelp(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<string>;
 

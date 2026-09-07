@@ -105,6 +105,7 @@ const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
 const notesLspCodeLensMock = vi.fn(() => Promise.resolve([]));
 const notesLspExecuteCodeLensMock = vi.fn(() => Promise.resolve(false));
 const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
+const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve(null));
 const notesLspCompletionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDefinitionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDocumentSymbolsMock = vi.fn(() => Promise.resolve([]));
@@ -199,6 +200,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspCodeLens: notesLspCodeLensMock,
     NotesLspExecuteCodeLens: notesLspExecuteCodeLensMock,
     NotesLspInlayHints: notesLspInlayHintsMock,
+    NotesLspSemanticTokens: notesLspSemanticTokensMock,
     NotesLspCompletion: notesLspCompletionMock,
     NotesLspDefinition: notesLspDefinitionMock,
     NotesLspDocumentSymbols: notesLspDocumentSymbolsMock,
@@ -1338,13 +1340,11 @@ describe('notes rendering', () => {
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
 
-    it('requests LSP inlay hints without legacy overlay rendering', async () => {
+    // Inlay hints and semantic tokens are supplied to Monaco providers, which are
+    // disabled under jsdom, so neither should be fetched by the notes module.
+    it('leaves inlay hints and semantic tokens to Monaco providers', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('go');
-        notesLspInlayHintsMock.mockResolvedValue([
-            { label: ': string', kind: 1, line: 0, character: 4, paddingLeft: true },
-            { label: 'name:', kind: 2, line: 0, character: 0, paddingRight: true },
-        ]);
         getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
 
         await importNotesModule();
@@ -1355,14 +1355,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
-
-        const hints = Array.from(document.querySelectorAll('.notes-lsp-inlay-hint'));
-        expect(hints).toHaveLength(0);
-
-        const styles = getNotesRenderedStyles();
-        expect(styles).toContain('.notes-lsp-inlay-hint {');
-        expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
+        expect(notesLspInlayHintsMock).not.toHaveBeenCalled();
+        expect(notesLspSemanticTokensMock).not.toHaveBeenCalled();
+        expect(document.querySelectorAll('.notes-lsp-inlay-hint')).toHaveLength(0);
     });
 
     it('lists and executes code lens actions from editor context menu', async () => {

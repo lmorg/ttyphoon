@@ -36,6 +36,7 @@ type ServerProcess struct {
 	stopped     bool
 	initialized bool
 	positionEnc PositionEncoding
+	tokenLegend SemanticTokensLegend
 	initMu      sync.Mutex
 
 	notifyCh chan *Message // re-exported from transport
@@ -330,8 +331,10 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	}
 
 	positionEnc := PositionEncodingUTF16
+	var tokenLegend SemanticTokensLegend
 	if resp != nil && len(resp.Result) > 0 && string(resp.Result) != "null" {
 		positionEnc = parseInitializePositionEncoding(resp.Result)
+		tokenLegend = parseInitializeSemanticTokensLegend(resp.Result)
 	}
 
 	if err := t.Notify("initialized", map[string]any{}); err != nil {
@@ -342,10 +345,19 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	if sp.transport == t {
 		sp.initialized = true
 		sp.positionEnc = positionEnc
+		sp.tokenLegend = tokenLegend
 	}
 	sp.mu.Unlock()
 
 	return nil
+}
+
+// SemanticTokensLegend returns the legend advertised by the server, or an empty
+// legend when the server does not support semantic tokens.
+func (sp *ServerProcess) SemanticTokensLegend() SemanticTokensLegend {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.tokenLegend
 }
 
 // PositionEncoding returns the currently negotiated server position encoding.
@@ -378,4 +390,19 @@ func parseInitializePositionEncoding(raw json.RawMessage) PositionEncoding {
 	}
 
 	return PositionEncodingUTF16
+}
+
+func parseInitializeSemanticTokensLegend(raw json.RawMessage) SemanticTokensLegend {
+	var result struct {
+		Capabilities struct {
+			SemanticTokensProvider struct {
+				Legend SemanticTokensLegend `json:"legend"`
+			} `json:"semanticTokensProvider"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return SemanticTokensLegend{}
+	}
+
+	return result.Capabilities.SemanticTokensProvider.Legend
 }

@@ -25,6 +25,7 @@ import {
     NotesTyposOpenDocument, NotesTyposChangeDocument, NotesTyposCloseDocument,
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
+    NotesLspSemanticTokens,
     NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
     GetNotesLanguageTabIndent, GetNotesLanguageReservedWords,
     NotesLspSignatureHelp,
@@ -905,8 +906,6 @@ const state = {
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
     lspHoverMouseY: 0,
-    lspInlayHints: [],
-    lspInlayRequestId: 0,
     lspCompletionItems: [],
     lspCompletionIndex: 0,
     lspCompletionVisible: false,
@@ -4597,33 +4596,8 @@ async function resolveNotesFileFromAbsolutePath(absPath) {
 }
 
 async function requestLspInlayHints() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-        state.lspInlayRequestId += 1;
-        state.lspInlayHints = [];
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const requestId = state.lspInlayRequestId + 1;
-    state.lspInlayRequestId = requestId;
-
-    try {
-        const hints = await NotesLspInlayHints(state.currentFile);
-        if (requestId !== state.lspInlayRequestId || state.lspOpenFile !== state.currentFile) {
-            return;
-        }
-
-        state.lspInlayHints = Array.isArray(hints)
-            ? hints.filter((item) => item && String(item.label || '') !== '')
-            : [];
-        renderLspEditorDecorations();
-    } catch {
-        if (requestId !== state.lspInlayRequestId) {
-            return;
-        }
-
-        state.lspInlayHints = [];
-        renderLspEditorDecorations();
+    if (isMonacoActive()) {
+        monacoMainEditor.refreshInlayHints();
     }
 }
 
@@ -5495,8 +5469,6 @@ async function closeOpenLspDocument() {
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
-    state.lspInlayRequestId += 1;
-    state.lspInlayHints = [];
 
     const openFile = state.lspOpenFile;
     if (!openFile) {
@@ -5549,6 +5521,21 @@ async function openCurrentLspDocument(content) {
                         return '';
                     }
                     return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
+                },
+                semanticTokens: async () => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    return await NotesLspSemanticTokens(state.currentFile);
+                },
+                inlayHints: async () => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    const hints = await NotesLspInlayHints(state.currentFile);
+                    return Array.isArray(hints)
+                        ? hints.filter((item) => item && String(item.label || '') !== '')
+                        : [];
                 },
                 formatDocument: async () => {
                     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
@@ -13262,11 +13249,6 @@ function renderLspDiagnostics() {
 
 function renderLspEditorDecorations() {
     renderLspDiagnostics();
-    renderLspInlayHints();
-}
-
-function renderLspInlayHints() {
-    // Inlay hints are rendered by Monaco providers in Monaco-only mode.
 }
 
 document.addEventListener('scroll', () => {
@@ -13629,8 +13611,6 @@ if (elements.editor) {
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
-        state.lspInlayRequestId += 1;
-        state.lspInlayHints = [];
         clearCurrentFileLspDiagnosticsCache();
         clearVisibleLspDiagnostics({ preserveCompletion: true });
 

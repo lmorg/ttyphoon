@@ -482,6 +482,13 @@ function applyTerminalStyles(result) {
             border-color: var(--terminal-accent) !important;
         }
 
+        /* Match the maximized pane's 8px radius so the accent border curves with
+           it rather than being clipped square at the corners. */
+        #terminal-pane[data-fullsize="true"] #terminal-viewport {
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+        }
+
         #ttyphoon-terminal {
             display: block;
             width: 100%;
