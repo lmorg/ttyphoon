@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/creack/pty"
@@ -123,6 +124,16 @@ var (
 	_RESP_WINDOW_RENAMED          = "%window-renamed"
 )
 
+const (
+	// tmux control mode responses are near instant, so anything slower means the
+	// control channel is wedged rather than busy.
+	tmuxCommandTimeout = 5 * time.Second
+
+	// %output lines are octal-escaped, so one byte of pane output can become four
+	// characters. tmux flushes a large backlog after the system wakes from sleep.
+	tmuxMaxLineLength = 16 << 20
+)
+
 type Tmux struct {
 	cmd   *exec.Cmd
 	tty   *os.File
@@ -137,8 +148,9 @@ type Tmux struct {
 	activeWindow *WindowT
 	renderer     types.Renderer
 
-	limiter   sync.Mutex
-	prefixTtl time.Time
+	limiter    sync.Mutex
+	readerDead atomic.Bool
+	prefixTtl  time.Time
 }
 
 type tmuxResponseT struct {
@@ -154,7 +166,7 @@ const (
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	debug.Log(startCommand)
 	tmux := &Tmux{
-		resp:     make(chan *tmuxResponseT),
+		resp:     make(chan *tmuxResponseT, 1),
 		wins:     newWindowMap(),
 		panes:    newPaneMap(),
 		renderer: renderer,
@@ -182,6 +194,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 
 	go func() {
 		scanner := bufio.NewScanner(tmux.tty)
+		scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), tmuxMaxLineLength)
 
 		for scanner.Scan() {
 			b := scanner.Bytes()
@@ -196,9 +209,30 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 				_respDefault(tmux, b)
 			}
 		}
+
+		scanErr := scanner.Err()
+		debug.Log(fmt.Sprintf("tmux reader loop exited: %v", scanErr))
+		tmux.readerDead.Store(true)
+
+		if scanErr != nil && tmux.renderer != nil {
+			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR,
+				fmt.Sprintf("tmux control channel lost: %v", scanErr))
+		}
+
+		// Unblock whoever is waiting on a response that can no longer arrive.
+		select {
+		case tmux.resp <- &tmuxResponseT{IsErr: true, Message: [][]byte{[]byte("tmux control channel closed")}}:
+		default:
+		}
 	}()
 
-	startMessage := <-tmux.resp
+	var startMessage *tmuxResponseT
+	select {
+	case startMessage = <-tmux.resp:
+	case <-time.After(tmuxCommandTimeout):
+		return nil, fmt.Errorf("timed out after %s waiting for tmux to start", tmuxCommandTimeout)
+	}
+
 	if startMessage.IsErr {
 		err := errors.New(string(bytes.Join(startMessage.Message, []byte(": "))))
 		return nil, err
@@ -335,7 +369,12 @@ func _respBegin(tmux *Tmux, b []byte) {
 }
 
 func _respEnd(tmux *Tmux, b []byte) {
-	tmux.resp <- tmux._resp
+	select {
+	case tmux.resp <- tmux._resp:
+	default:
+		// No caller is waiting; dropping beats parking the reader goroutine.
+		debug.Log("discarding unsolicited tmux response block")
+	}
 }
 
 func _respError(tmux *Tmux, b []byte) {

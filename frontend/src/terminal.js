@@ -30,6 +30,17 @@ const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
+let rafHandle = 0;
+let rafWatchdog = 0;
+
+function clearRedrawLatch() {
+    if (rafWatchdog) {
+        clearTimeout(rafWatchdog);
+        rafWatchdog = 0;
+    }
+    rafHandle = 0;
+    rafPending = false;
+}
 
 const REDRAW_OP = {
     CELL: 1,
@@ -1134,7 +1145,7 @@ EventsOn("terminalRedraw", ops => {
         const drawOps = decodeDrawOpsPayload(ops);
 
         if (!Array.isArray(drawOps) || drawOps.length === 0) {
-            rafPending = false;
+            clearRedrawLatch();
             return;
         }
 
@@ -1197,21 +1208,54 @@ EventsOn("terminalRedraw", ops => {
             }
         }
 
-        requestAnimationFrame(() => {
+        rafHandle = requestAnimationFrame(() => {
             try {
                 paintTerminalCanvas();
                 syncCursorLoopState();
             } catch (err) {
                 console.error('terminal redraw RAF failed', err);
             } finally {
-                rafPending = false;
+                clearRedrawLatch();
             }
         });
+
+        // WebKit drops pending rAF callbacks across occlusion and display sleep;
+        // without this the latch never clears and the canvas stops updating.
+        rafWatchdog = setTimeout(() => {
+            if (!rafPending) {
+                return;
+            }
+            if (rafHandle) {
+                cancelAnimationFrame(rafHandle);
+            }
+            try {
+                paintTerminalCanvas();
+                syncCursorLoopState();
+            } catch (err) {
+                console.error('terminal redraw fallback failed', err);
+            } finally {
+                clearRedrawLatch();
+            }
+            TerminalRequestRedraw().catch(() => {});
+        }, 1000);
     } catch (err) {
         console.error('terminal redraw failed', err);
-        rafPending = false;
+        clearRedrawLatch();
     }
 });
+
+function resumeTerminalAfterSuspend() {
+    clearRedrawLatch();
+    TerminalRequestRedraw().catch(() => {});
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        resumeTerminalAfterSuspend();
+    }
+});
+window.addEventListener('focus', resumeTerminalAfterSuspend);
+window.addEventListener('pageshow', resumeTerminalAfterSuspend);
 
 EventsOn("terminalTabs", payload => {
     // Handle both old format (array of tabs) and new format (object with tabs and tileCount)

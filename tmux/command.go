@@ -2,10 +2,12 @@ package tmux
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lmorg/ttyphoon/debug"
 )
@@ -18,7 +20,20 @@ const (
 const _SEPARATOR = `|||`
 
 func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
+	if tmux.readerDead.Load() {
+		return nil, errors.New("tmux control channel is closed")
+	}
+
 	tmux.limiter.Lock()
+	defer tmux.limiter.Unlock()
+
+	// Discard any response orphaned by a previously timed out command so it
+	// cannot be mis-attributed to this one.
+	select {
+	case <-tmux.resp:
+		debug.Log("discarded stale tmux response")
+	default:
+	}
 
 	debug.Log(b)
 	_, err := tmux.tty.Write(append(b, '\n'))
@@ -28,15 +43,16 @@ func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
 		return nil, err
 	}
 
-	resp := <-tmux.resp
+	select {
+	case resp := <-tmux.resp:
+		if resp.IsErr {
+			return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
+		}
+		return resp, nil
 
-	tmux.limiter.Unlock()
-
-	if resp.IsErr {
-		return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
+	case <-time.After(tmuxCommandTimeout):
+		return nil, fmt.Errorf("timed out after %s waiting for tmux response to: %s", tmuxCommandTimeout, string(b))
 	}
-
-	return resp, nil
 }
 
 func (tmux *Tmux) SendCommandWithReflection(command string, t reflect.Type, parameters ...string) (any, error) {
