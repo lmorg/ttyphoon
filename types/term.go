@@ -47,5 +47,11 @@ type Term interface {
 	Pwd(*XY) string
 	CmdLine(*XY) string
 	GetEnvVars() map[string]string
+	SetCommandCallback(func(*BlockCallbackT))
 	Close()
+}
+
+type BlockCallbackT struct {
+	Output string
+	Meta   *BlockMeta
 }

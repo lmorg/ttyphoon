@@ -80,36 +80,40 @@ func normalizeWorkspaceName(workspace string) string {
 	return w
 }
 
-// panelView tracks which workspace the AI panel is showing and whether it is
-// following live output, so runs for other workspaces (or a historical prompt
-// selected from the dropdown) still write markdown without emitting to the UI.
+// panelView tracks whether the AI panel is following live output, so a run whose
+// output is not on screen still writes markdown without emitting to the UI.
+// Workspace scoping is handled separately by SessionLogContext.WorkspaceActive,
+// which is evaluated per run at emit time.
 var panelView = struct {
 	sync.Mutex
-	workspace string
-	live      bool
+	live bool
 }{live: true}
 
-// SetPanelView is called by the frontend when the AI panel switches workspace or
-// between live output and a historical prompt.
-func SetPanelView(workspace string, live bool) {
+// SetPanelView is called by the frontend when the AI panel switches between live
+// output and a historical prompt.
+func SetPanelView(live bool) {
 	panelView.Lock()
 	defer panelView.Unlock()
-	panelView.workspace = normalizeWorkspaceName(workspace)
 	panelView.live = live
 }
 
-func panelShowsLive(workspace string) bool {
+func panelShowsLive() bool {
 	panelView.Lock()
 	defer panelView.Unlock()
-	if !panelView.live {
-		return false
-	}
-	return panelView.workspace == "" || panelView.workspace == workspace
+	return panelView.live
 }
 
-// emitToPanel reports whether this run's output is the one currently on screen.
-func (ctx SessionLogContext) emitToPanel(workspace string) bool {
-	return ctx.WorkspaceActive && ctx.Emit != nil && panelShowsLive(workspace)
+// emitLifecycle reports whether job start/finish events should be emitted. These
+// carry the run id and final sequence the frontend needs to order the stream, so
+// they are never suppressed for a historical view — dropping one would leave the
+// frontend unable to render the rest of that run.
+func (ctx SessionLogContext) emitLifecycle() bool {
+	return ctx.WorkspaceActive && ctx.Emit != nil
+}
+
+// emitContent reports whether streamed output should reach the panel.
+func (ctx SessionLogContext) emitContent() bool {
+	return ctx.emitLifecycle() && panelShowsLive()
 }
 
 func sessionLogDir() (string, error) {
@@ -534,7 +538,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if ctx.emitToPanel(workspace) {
+		if ctx.emitLifecycle() {
 			ctx.Emit("aiJobStart", AIJobStart{RunID: runID, Title: prefix})
 		}
 
@@ -557,7 +561,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if streaming && ctx.emitToPanel(workspace) {
+		if streaming && ctx.emitContent() {
 			ctx.Emit("aiResponseStream", chunk)
 		}
 
@@ -581,7 +585,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		}
 		aiSessionLogStore.Unlock()
 
-		if streaming && ctx.emitToPanel(workspace) {
+		if streaming && ctx.emitContent() {
 			ctx.Emit("aiResponseStream", chunk)
 		}
 
@@ -597,7 +601,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 			streaming = true
 		}
 		aiSessionLogStore.Unlock()
-		if streaming && ctx.emitToPanel(workspace) {
+		if streaming && ctx.emitLifecycle() {
 			ctx.Emit("aiJobFinish", finish)
 		}
 	}

@@ -12348,6 +12348,9 @@ function setAIPanelLive(live) {
 }
 
 function startOrderedAIJob(payload) {
+    // A new job always follows live output, whichever surface triggered it.
+    setAIPanelLive(true);
+
     const runId = Number(payload?.runId);
     if (!Number.isSafeInteger(runId) || runId < 1) {
         startAIJob(payload);

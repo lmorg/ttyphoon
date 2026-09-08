@@ -2,6 +2,7 @@ package virtualterm
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime/debug"
 	"sync"
@@ -502,4 +503,15 @@ func cloneEnvVars(envvars map[string]string) map[string]string {
 		clone[key] = value
 	}
 	return clone
+}
+
+func (term *Term) SetCommandCallback(callback func(*types.BlockCallbackT)) {
+	meta := term._blockMeta
+
+	if meta == nil {
+		log.Println("cannot create callback because block meta is nil")
+		return
+	}
+
+	meta.SetCallback(callback)
 }
