@@ -1639,6 +1639,64 @@ func (a *WApp) NotesLspDefinition(filePath string, line, character int) []lsp.De
 	return locations
 }
 
+// NotesLspReferences requests references for a symbol at a document position.
+func (a *WApp) NotesLspReferences(filePath string, line, character int) []lsp.ReferenceLocation {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil || sp.Transport() == nil {
+		return nil
+	}
+
+	locations, err := lsp.RequestReferences(a.ctx, sp.Transport(), doc.URI, doc.Content(), line, character, sp.PositionEncoding(), func(uri string) (string, bool) {
+		if openDoc := a.lspDocs.GetByURI(uri); openDoc != nil {
+			return openDoc.Content(), true
+		}
+		path, pathErr := lsp.URIToFilePath(uri)
+		if pathErr != nil {
+			return "", false
+		}
+		b, readErr := os.ReadFile(path)
+		return string(b), readErr == nil
+	})
+	if err != nil {
+		log.Printf("lsp: References %q (%d,%d): %v", absPath, line, character, err)
+		return nil
+	}
+	for i := range locations {
+		locations[i].Context = lspReferenceContext(locations[i].Line, locations[i].URI, func(uri string) (string, bool) {
+			if openDoc := a.lspDocs.GetByURI(uri); openDoc != nil {
+				return openDoc.Content(), true
+			}
+			path, pathErr := lsp.URIToFilePath(uri)
+			if pathErr != nil {
+				return "", false
+			}
+			b, readErr := os.ReadFile(path)
+			return string(b), readErr == nil
+		})
+	}
+	return locations
+}
+
+func lspReferenceContext(line int, uri string, contentForURI func(string) (string, bool)) []string {
+	content, ok := contentForURI(uri)
+	if !ok {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if line < 0 || line >= len(lines) {
+		return nil
+	}
+	start := max(line-1, 0)
+	end := min(line+2, len(lines))
+	return append([]string(nil), lines[start:end]...)
+}
+
 // NotesLspDocumentSymbols requests symbols for the current document.
 func (a *WApp) NotesLspDocumentSymbols(filePath string) []lsp.DocumentSymbolItem {
 	absPath := a.filePath(filePath)

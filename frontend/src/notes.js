@@ -26,7 +26,7 @@ import {
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
     NotesLspSemanticTokens,
-    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    NotesLspDefinition, NotesLspReferences, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
     GetNotesLanguageTabIndent, GetNotesLanguageReservedWords,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
@@ -579,13 +579,14 @@ app.innerHTML = `
                                         <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
                                     </div>
                                 </div>
-                                <h1 class="notes-find-heading">For files containing</h1>
+                                <h1 id="notes-find-files-heading" class="notes-find-heading">For files containing</h1>
                                 <div id="notes-find-files-row">
                                     <div id="notes-find-files-input-wrap">
                                         <input id="notes-find-files-input" type="text" placeholder="Search project files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                                         <button id="notes-find-files-clear" type="button" title="Close results" aria-label="Close results">&#xf410;</button>
                                     </div>
                                     <div id="notes-find-options" class="notes-find-options">
+                                        <button id="notes-find-references" type="button" class="notes-find-option-btn" title="LSP references" aria-label="Find references">&#xf121;</button>
                                         <button id="notes-find-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
                                         <button id="notes-find-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
                                         <button id="notes-find-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
@@ -743,8 +744,10 @@ const elements = {
     findDocOptionRegex: document.getElementById('notes-find-doc-option-regex'),
     findDocOptionWord: document.getElementById('notes-find-doc-option-word'),
     findFilesInput: document.getElementById('notes-find-files-input'),
+    findReferences: document.getElementById('notes-find-references'),
     findFilesClear: document.getElementById('notes-find-files-clear'),
     findFilesResults: document.getElementById('notes-find-files-results'),
+    findFilesHeading: document.getElementById('notes-find-files-heading'),
     findOptionCase: document.getElementById('notes-find-option-case'),
     findOptionRegex: document.getElementById('notes-find-option-regex'),
     findOptionWord: document.getElementById('notes-find-option-word'),
@@ -827,6 +830,9 @@ const state = {
     },
     findFilesQuery: '',
     findFilesResults: [],
+    findFilesMode: 'grep',
+    findFilesSource: '',
+    findFilesReferenceSymbol: '',
     findFilesBusy: false,
     findFilesLastExecutedSignature: '',
     findFilesError: '',
@@ -5082,11 +5088,9 @@ function buildLspCodeActionMenuItems(actions, line, character, diagnostics) {
 }
 
 async function showEditorLspOptionsMenu(x, y) {
-    if (!isCurrentFileLspEligible()) {
-        return;
-    }
-
-    const menuItems = [
+    const menuItems = [];
+    if (isCurrentFileLspEligible()) {
+        menuItems.push(
         {
             title: 'Format document',
             icon: CONTEXT_ICON_CODE,
@@ -5129,7 +5133,21 @@ async function showEditorLspOptionsMenu(x, y) {
                 void renameCurrentLspSymbol();
             },
         },
-    ];
+        );
+    }
+
+    menuItems.push({
+        title: 'Find references',
+        icon: CONTEXT_ICON_FIND,
+        onSelect: () => {
+            void findReferencesFromEditor();
+        },
+    });
+
+    if (!isCurrentFileLspEligible()) {
+        showNotesLocalMenu(menuItems, x, y, 'Find references');
+        return;
+    }
 
     const codeActionData = await getLspCodeActionsForCursor();
     if (codeActionData.actions.length > 0) {
@@ -5145,6 +5163,86 @@ async function showEditorLspOptionsMenu(x, y) {
     }
 
     showNotesLocalMenu(menuItems, x, y, 'LSP options');
+}
+
+function currentEditorToken() {
+    const content = getMainEditorValue();
+    const selection = getMainEditorSelectionRange();
+    const cursor = Math.max(0, Number(selection?.start) || 0);
+    const left = content.slice(0, cursor);
+    const right = content.slice(cursor);
+    const leftMatch = left.match(/[A-Za-z_][A-Za-z0-9_]*/g);
+    const rightMatch = right.match(/^[A-Za-z0-9_]*/);
+    const leftToken = leftMatch ? leftMatch[leftMatch.length - 1] : '';
+    const rightToken = rightMatch ? rightMatch[0] : '';
+    const symbol = `${leftToken}${rightToken}`;
+    const start = cursor - leftToken.length;
+    return symbol ? { symbol, start } : null;
+}
+
+function setProjectReferencesResults(symbol, source, results) {
+    state.findFilesMode = 'references';
+    state.findFilesSource = source;
+    state.findFilesReferenceSymbol = symbol;
+    state.findFilesQuery = symbol;
+    state.findFilesResults = results;
+    state.findFilesBusy = false;
+    state.findFilesError = '';
+    state.findFilesSelectedKey = '';
+    resetProjectFindPaging();
+    elements.findFilesInput.value = symbol;
+    updateFindFilesClearButtonVisibility();
+    setToolsPanelCollapsed(false);
+    setToolsTab('find');
+    renderProjectFindResults();
+    renderFileList();
+}
+
+function formatLspReferencePath(filePath) {
+    const path = String(filePath || '').replace(/\\/g, '/');
+    const root = String(state.currentProjectRoot || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    if (root && (path === root || path.startsWith(`${root}/`))) {
+        return `$LSP/${path.slice(root.length).replace(/^\/+/, '')}`;
+    }
+    return `$LSP/${path.split('/').pop() || path}`;
+}
+
+async function findReferencesFromEditor() {
+    const token = currentEditorToken();
+    if (!token || !state.currentFile) {
+        notifyTerminal('Place the cursor on a symbol to find references', 'info');
+        return;
+    }
+
+    const pos = offsetToLspPosition(getMainEditorValue(), token.start);
+    if (isCurrentFileLspEligible()) {
+        try {
+            const locations = await NotesLspReferences(state.currentFile, pos.line, pos.character);
+            if (Array.isArray(locations) && locations.length > 0) {
+                setProjectReferencesResults(token.symbol, 'LSP', locations.map((item) => ({
+                    fileName: String(item?.filePath || item?.uri || '').split('/').pop() || token.symbol,
+                    path: String(item?.filePath || item?.uri || ''),
+                    displayPath: formatLspReferencePath(item?.filePath || item?.uri || ''),
+                    line: (Number(item?.line) || 0) + 1,
+                    source: 'LSP',
+                    context: Array.isArray(item?.context) ? item.context.map((line) => String(line)) : [],
+                })));
+                return;
+            }
+        } catch (err) {
+            console.warn('LSP references unavailable; using text search fallback', err);
+        }
+    }
+
+    state.findFilesMode = 'references';
+    state.findFilesSource = 'Text search fallback';
+    state.findFilesReferenceSymbol = token.symbol;
+    elements.findFilesInput.value = token.symbol;
+    state.findOptions.wholeWord = true;
+    updateFindOptionButtons();
+    setToolsPanelCollapsed(false);
+    setToolsTab('find');
+    runProjectFindSearch(token.symbol);
 }
 
 async function applyLspCodeActionFromCursor(index, line, character, diagnostics) {
@@ -7247,7 +7345,9 @@ function renderProjectFindResultsInFileList() {
 
         const detail = document.createElement('span');
         detail.className = 'notes-find-files-item-detail';
-        detail.textContent = `${String(item?.path || '')}:${lineNo}`;
+        const source = String(item?.source || state.findFilesSource || '').trim();
+        const displayPath = String(item?.displayPath || item?.path || '');
+        detail.textContent = `${displayPath}:${lineNo}`;
 
         button.appendChild(title);
         button.appendChild(detail);
@@ -7262,7 +7362,7 @@ function renderProjectFindResultsInFileList() {
                 span.className = i === matchIndex
                     ? 'notes-find-files-context-match'
                     : 'notes-find-files-context-other';
-                span.textContent = String(ctxLine);
+                span.textContent = String(ctxLine).trim();
                 pre.appendChild(span);
             });
             button.appendChild(pre);
@@ -9020,6 +9120,9 @@ function closeFindBar() {
     cleanupProjectFindStreamListeners();
     resetProjectFindPaging({ resetListScroll: false });
     state.findFilesQuery = '';
+    state.findFilesMode = 'grep';
+    state.findFilesSource = '';
+    state.findFilesReferenceSymbol = '';
     state.findFilesResults = [];
     state.findFilesLastExecutedSignature = '';
     state.findFilesBusy = false;
@@ -9044,6 +9147,9 @@ function clearProjectFindResults({ keepInputFocus = true } = {}) {
     resetProjectFindPaging({ resetListScroll: false });
 
     state.findFilesQuery = '';
+    state.findFilesMode = 'grep';
+    state.findFilesSource = '';
+    state.findFilesReferenceSymbol = '';
     state.findFilesResults = [];
     state.findFilesLastExecutedSignature = '';
     state.findFilesBusy = false;
@@ -9067,9 +9173,14 @@ function updateFindFilesClearButtonVisibility() {
         return;
     }
 
-    const hasValue = (elements.findFilesInput.value || '').trim().length > 0;
+    const hasValue = (elements.findFilesInput.value || '').trim().length > 0
+        || state.findFilesMode === 'references'
+        || state.findFilesResults.length > 0;
     elements.findFilesClear.dataset.visible = hasValue ? 'true' : 'false';
     elements.findFilesClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+    if (elements.findReferences) {
+        elements.findReferences.dataset.active = state.findFilesMode === 'references' ? 'true' : 'false';
+    }
 }
 
 const findFieldHistory = new Map();
@@ -9299,6 +9410,13 @@ function renderProjectFindResults() {
         return;
     }
 
+    if (elements.findFilesHeading) {
+        const source = String(state.findFilesSource || '').trim();
+        elements.findFilesHeading.textContent = source
+            ? `References (${source})`
+            : 'For files containing';
+    }
+
     clampProjectFindScrollTop();
 
     const query = String(state.findFilesQuery || '').trim();
@@ -9336,6 +9454,10 @@ async function runProjectFindSearch(query, options = {}) {
     const preserveVirtualStart = options?.preserveVirtualStart === true;
     const preserveScrollTop = Math.max(0, Number(options?.preserveScrollTop) || 0);
     state.findFilesQuery = trimmed;
+    if (state.findFilesMode !== 'references') {
+        state.findFilesSource = '';
+        state.findFilesReferenceSymbol = '';
+    }
     if (trimmed) {
         persistFindFieldHistory(elements.findFilesInput);
     }
@@ -9397,6 +9519,7 @@ async function runProjectFindSearch(query, options = {}) {
             fileName: String(item?.fileName || ''),
             path: String(item?.path || ''),
             line: Number.parseInt(String(item?.line), 10) || 1,
+            source: String(item?.source || state.findFilesSource || ''),
             context: Array.isArray(item?.context) ? item.context.map((l) => String(l)) : [],
         }));
         state.findFilesResults = state.findFilesResults.concat(mappedBatch);
@@ -13882,6 +14005,13 @@ function openMainEditorContextMenu(e) {
 
     menuItems.push(
         { title: '-' },
+        {
+            title: 'Find references',
+            icon: CONTEXT_ICON_FIND,
+            onSelect: () => {
+                void findReferencesFromEditor();
+            },
+        },
         createFindMenuItem('Find text...'),
         createAskAIDocumentMenuItem(),
         createPrintMenuItem('Print...'),
@@ -14229,10 +14359,19 @@ if (elements.findDocOptionWord) {
 
 if (elements.findFilesInput) {
     elements.findFilesInput.addEventListener('input', () => {
+        state.findFilesMode = 'grep';
+        state.findFilesSource = '';
+        state.findFilesReferenceSymbol = '';
         updateFindFilesClearButtonVisibility();
         scheduleProjectFindSearch();
     });
 
+
+if (elements.findReferences) {
+    elements.findReferences.addEventListener('click', () => {
+        void findReferencesFromEditor();
+    });
+}
     elements.findFilesInput.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
             if (tryOpenFindHistoryMenuForInput(elements.findFilesInput)) {

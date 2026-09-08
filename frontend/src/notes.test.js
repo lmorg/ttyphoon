@@ -108,6 +108,7 @@ const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
 const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve(null));
 const notesLspCompletionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDefinitionMock = vi.fn(() => Promise.resolve([]));
+const notesLspReferencesMock = vi.fn(() => Promise.resolve([]));
 const notesLspDocumentSymbolsMock = vi.fn(() => Promise.resolve([]));
 const notesLspWorkspaceSymbolsMock = vi.fn(() => Promise.resolve([]));
 const notesLspSignatureHelpMock = vi.fn(() => Promise.resolve(''));
@@ -203,6 +204,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspSemanticTokens: notesLspSemanticTokensMock,
     NotesLspCompletion: notesLspCompletionMock,
     NotesLspDefinition: notesLspDefinitionMock,
+    NotesLspReferences: notesLspReferencesMock,
     NotesLspDocumentSymbols: notesLspDocumentSymbolsMock,
     NotesLspWorkspaceSymbols: notesLspWorkspaceSymbolsMock,
     NotesLspSignatureHelp: notesLspSignatureHelpMock,

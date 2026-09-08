@@ -298,6 +298,10 @@ export function NotesLspPrepareRename(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesLspPrepareRename'](arg1, arg2, arg3);
 }
 
+export function NotesLspReferences(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspReferences'](arg1, arg2, arg3);
+}
+
 export function NotesLspRename(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['NotesLspRename'](arg1, arg2, arg3, arg4);
 }

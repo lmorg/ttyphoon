@@ -2575,12 +2575,22 @@ body {
     outline: none;
 }
 
+#notes-find-references {
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+}
+
 .notes-find-option-btn:hover {
     border-color: var(--accent);
     background: rgba(var(--accent-rgb), 0.1);
 }
 
 .notes-find-option-btn[data-active="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+}
+
+#notes-find-references[data-active="true"] {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);

@@ -292,6 +292,30 @@ export namespace lsp {
 	    }
 	}
 	
+	export class ReferenceLocation {
+	    uri: string;
+	    filePath?: string;
+	    line: number;
+	    character: number;
+	    endLine: number;
+	    endCharacter: number;
+	    context?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ReferenceLocation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.endLine = source["endLine"];
+	        this.endCharacter = source["endCharacter"];
+	        this.context = source["context"];
+	    }
+	}
 	export class RenameResult {
 	    content: string;
 	    changed: boolean;

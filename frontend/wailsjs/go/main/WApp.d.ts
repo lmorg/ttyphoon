@@ -157,6 +157,8 @@ export function NotesLspOpenDocument(arg1:string,arg2:string,arg3:string):Promis
 
 export function NotesLspPrepareRename(arg1:string,arg2:number,arg3:number):Promise<lsp.PrepareRenameResult>;
 
+export function NotesLspReferences(arg1:string,arg2:number,arg3:number):Promise<Array<lsp.ReferenceLocation>>;
+
 export function NotesLspRename(arg1:string,arg2:number,arg3:number,arg4:string):Promise<lsp.RenameResult>;
 
 export function NotesLspSaveDocument(arg1:string):Promise<void>;
