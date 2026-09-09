@@ -5654,6 +5654,11 @@ async function openCurrentLspDocument(content) {
                     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
                         return null;
                     }
+                    try {
+                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
+                    } catch {
+                        // Semantic tokens can still use the last synced state.
+                    }
                     return await NotesLspSemanticTokens(state.currentFile);
                 },
                 inlayHints: async () => {

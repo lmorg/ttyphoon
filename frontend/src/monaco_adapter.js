@@ -1219,6 +1219,7 @@ export async function createMonacoAdapter(container, options = {}) {
                         : [];
 
                     let pending = first;
+                    let lastGood = Array.isArray(first?.data) && first.data.length > 0 ? first : null;
                     lspDisposables.push(monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
                         getLegend: () => ({ tokenTypes, tokenModifiers }),
                         provideDocumentSemanticTokens: async () => {
@@ -1227,10 +1228,14 @@ export async function createMonacoAdapter(container, options = {}) {
                             const result = pending || await callbacks.semanticTokens();
                             pending = null;
                             const data = result?.data;
-                            if (!Array.isArray(data) || data.length === 0) {
-                                return null;
+                            if (Array.isArray(data) && data.length > 0) {
+                                lastGood = result;
+                                return { data: new Uint32Array(data) };
                             }
-                            return { data: new Uint32Array(data) };
+                            if (lastGood && Array.isArray(lastGood.data) && lastGood.data.length > 0) {
+                                return { data: new Uint32Array(lastGood.data) };
+                            }
+                            return null;
                         },
                         releaseDocumentSemanticTokens: () => {},
                     }));
