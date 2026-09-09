@@ -35,18 +35,63 @@ func TestToolDefaultPermissions(t *testing.T) {
 	}
 }
 
-func TestSubagentToolNames_OnlyIncludesEnabledAllowedTools(t *testing.T) {
-	allowed := &toolStateTestTool{name: "allowed"}
-	disabled := &toolStateTestTool{name: "disabled"}
-	delegate := &toolStateTestTool{name: "delegate"}
-	agent := &Agent{
-		_tools:        []aitypes.Tool{allowed, disabled, delegate},
-		toolStates:    map[string]string{"disabled": ToolStateDisabled},
-		subagentTools: map[string]bool{"allowed": true, "disabled": true, "delegate": true},
+// Sub-agents run non-interactively, so only always-allowed tools qualify.
+func TestSubagentToolNames_OnlyIncludesAlwaysAllowedTools(t *testing.T) {
+	names := []string{"always", "approval", "session", "disabled", "notAllowed"}
+	tools := make([]aitypes.Tool, 0, len(names))
+	for _, name := range names {
+		tools = append(tools, &toolStateTestTool{name: name})
 	}
 
-	if got := agent.SubagentToolNames(); len(got) != 1 || got[0] != "allowed" {
-		t.Fatalf("SubagentToolNames() = %v, want [allowed]", got)
+	agent := &Agent{
+		_tools: tools,
+		toolStates: map[string]string{
+			"always":     ToolStateAlways,
+			"approval":   ToolStateApproval,
+			"session":    ToolStateSession,
+			"disabled":   ToolStateDisabled,
+			"notAllowed": ToolStateAlways,
+		},
+		subagentTools: map[string]bool{
+			"always":     true,
+			"approval":   true,
+			"session":    true,
+			"disabled":   true,
+			"notAllowed": false,
+		},
+	}
+
+	if got := agent.SubagentToolNames(); len(got) != 1 || got[0] != "always" {
+		t.Fatalf("SubagentToolNames() = %v, want [always]", got)
+	}
+}
+
+// askUser and the sub-agent tools must stay out even when explicitly configured in.
+func TestSubagentForbiddenToolsCannotBeEnabled(t *testing.T) {
+	forbidden := []string{TOOL_DELEGATE, TOOL_REPORT, TOOL_ASK_USER}
+
+	tools := make([]aitypes.Tool, 0, len(forbidden))
+	states := map[string]string{}
+	allowed := map[string]bool{}
+	for _, name := range forbidden {
+		tools = append(tools, &toolStateTestTool{name: name})
+		states[name] = ToolStateAlways
+		allowed[name] = true
+	}
+
+	agent := &Agent{_tools: tools, toolStates: states, subagentTools: allowed}
+
+	if got := agent.SubagentToolNames(); len(got) != 0 {
+		t.Fatalf("SubagentToolNames() = %v, want none", got)
+	}
+
+	for _, name := range forbidden {
+		if agent.ToolAllowedInSubagent(name) {
+			t.Fatalf("ToolAllowedInSubagent(%q) = true, want false", name)
+		}
+		if err := agent.SetToolAllowedInSubagent(name, true); err == nil {
+			t.Fatalf("SetToolAllowedInSubagent(%q, true) = nil, want an error", name)
+		}
 	}
 }
 

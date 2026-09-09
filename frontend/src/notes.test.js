@@ -1686,12 +1686,20 @@ describe('notes rendering', () => {
         lspMenu.onSelect(gotoIndex);
         await flushPromises();
 
-        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', '');
+        // Symbols are searched server-side, so no request is made until the user types.
+        expect(notesLspWorkspaceSymbolsMock).not.toHaveBeenCalled();
         expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
 
         const symbolMenu = showLocalMenuMock.mock.calls[2][0];
-        expect(symbolMenu.options[0]).toContain('beta');
-        expect(symbolMenu.options[0]).toContain('pkg/beta.go');
+        expect(symbolMenu.options).toEqual([]);
+        expect(typeof symbolMenu.onQuery).toBe('function');
+
+        const queried = await symbolMenu.onQuery('beta');
+        await flushPromises();
+
+        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', 'beta');
+        expect(queried.options[0]).toContain('beta');
+        expect(queried.options[0]).toContain('pkg/beta.go');
 
         await symbolMenu.onSelect(0);
         await flushPromises();

@@ -927,6 +927,7 @@ const AI_BOTTOM_CHASE_MS = 400;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
+let monacoMainEditorInit = null;
 let suppressMonacoChange = false;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
@@ -1065,6 +1066,24 @@ async function ensureMonacoMainEditor() {
         return;
     }
 
+    // monacoMainEditor is only assigned after an await, so concurrent callers must
+    // share one creation or Monaco is created twice on the same container.
+    if (!monacoMainEditorInit) {
+        monacoMainEditorInit = createMonacoMainEditor().finally(() => {
+            monacoMainEditorInit = null;
+        });
+    }
+
+    try {
+        await monacoMainEditorInit;
+    } catch (err) {
+        // A failed boot leaves monacoMainEditor null and silently degrades every
+        // Monaco-dependent path, so surface it rather than reject unhandled.
+        console.error('Monaco editor creation failed:', err);
+    }
+}
+
+async function createMonacoMainEditor() {
     const typography = getMonacoTypographyOptions();
 
     monacoMainEditor = await createMonacoAdapter(elements.monacoEditor, {
@@ -4758,7 +4777,17 @@ function codeLensDisplayLabel(item) {
 }
 
 async function goToCurrentLspSymbol() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        notifyTerminal('No Language Server Protocol (LSP) has been defined for this file type', 'warn');
+        return;
+    }
+
+    if (state.lspOpenFile !== state.currentFile) {
+        await openCurrentLspDocument(getMainEditorValue());
+    }
+
+    if (state.lspOpenFile !== state.currentFile) {
+        notifyTerminal('Language server is not active for the current file', 'warn');
         return;
     }
 
@@ -4796,14 +4825,9 @@ async function goToCurrentLspSymbol() {
 
             const line = Math.max(0, Number(picked.line) || 0);
             const character = Math.max(0, Number(picked.character) || 0);
-            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+            const offset = lspPositionToEditorOffset(getMainEditorValue(), line, character);
 
-            elements.editor.focus();
-            elements.editor.setSelectionRange(offset, offset);
-
-            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
-            syncEditorScrollDecorations();
+            jumpEditorToOffset(offset);
 
             state.lspHoverLastKey = '';
             scheduleLspHover();
@@ -4813,11 +4837,12 @@ async function goToCurrentLspSymbol() {
 
 async function goToWorkspaceLspSymbol() {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
+        notifyTerminal('No Language Server Protocol (LSP) has been defined for this file type', 'warn');
         return;
     }
 
     if (state.lspOpenFile !== state.currentFile) {
-        await openCurrentLspDocument(elements.editor.value || '');
+        await openCurrentLspDocument(getMainEditorValue());
     }
 
     if (state.lspOpenFile !== state.currentFile) {
@@ -4825,32 +4850,42 @@ async function goToWorkspaceLspSymbol() {
         return;
     }
 
-    let symbols = [];
-    try {
-        symbols = await NotesLspWorkspaceSymbols(state.currentFile, '');
-    } catch {
-        notifyTerminal('Failed to fetch workspace symbols', 'error');
-        return;
-    }
+    // Servers match symbols against the query and return nothing for an empty
+    // one (and cap results), so search server-side on each keystroke.
+    let entries = [];
 
-    const entries = Array.isArray(symbols)
-        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
-        : [];
-    if (entries.length === 0) {
-        notifyTerminal('No workspace symbols found', 'info');
-        return;
-    }
+    const queryWorkspaceSymbols = async (rawQuery) => {
+        const query = String(rawQuery || '').trim();
+        entries = [];
+        if (!query) {
+            return { options: [], icons: [] };
+        }
 
-    const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
-    const icons = options.map(() => CONTEXT_ICON_CODE);
+        let symbols = [];
+        try {
+            symbols = await NotesLspWorkspaceSymbols(state.currentFile, query);
+        } catch {
+            notifyTerminal('Failed to fetch workspace symbols', 'error');
+            return { options: [], icons: [] };
+        }
+
+        entries = Array.isArray(symbols)
+            ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+            : [];
+
+        const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
+        return { options, icons: options.map(() => CONTEXT_ICON_CODE) };
+    };
+
     showLocalMenu({
         title: 'Go to workspace symbol',
-        options,
-        icons,
+        options: [],
+        icons: [],
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
         showSearch: true,
         hideItemsUntilQuery: true,
+        onQuery: queryWorkspaceSymbols,
         showNextToMouseCursor: true,
         onSelect: async (index) => {
             try {
@@ -4875,13 +4910,8 @@ async function goToWorkspaceLspSymbol() {
 
                 const line = Math.max(0, Number(picked.line) || 0);
                 const character = Math.max(0, Number(picked.character) || 0);
-                const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
-                elements.editor.focus();
-                elements.editor.setSelectionRange(offset, offset);
-
-                const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-                elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
-                syncEditorScrollDecorations();
+                const offset = lspPositionToEditorOffset(getMainEditorValue(), line, character);
+                jumpEditorToOffset(offset);
 
                 state.lspHoverLastKey = '';
                 scheduleLspHover();
@@ -9348,7 +9378,17 @@ function jumpEditorToLine(lineNumber) {
     const start = editorOffsetForLine(lineNumber);
     const text = getMainEditorValue();
     const nextBreak = text.indexOf('\n', start);
-    const end = nextBreak === -1 ? text.length : nextBreak;
+    // Grep navigation highlights the whole matched line.
+    jumpEditorToOffset(start, nextBreak === -1 ? text.length : nextBreak);
+}
+
+// Reveals an offset in whichever editor surface is live. Notes is Monaco-only in
+// normal use, so writing to the hidden textarea alone has no visible effect.
+// Defaults to a collapsed caret; pass `end` to select a range.
+function jumpEditorToOffset(start, end = start) {
+    if (!elements.editor) {
+        return;
+    }
 
     setMainEditorSelectionRange(start, end);
 
@@ -12185,6 +12225,21 @@ EventsOn("notesRunLspGoToSymbol", async () => {
     }
 
     await goToCurrentLspSymbol();
+});
+
+EventsOn("notesRunLspGoToWorkspaceSymbol", async () => {
+    if (!isCurrentFileLspEligible()) {
+        notifyTerminal("Language Server Protocol (LSP) is not supported for this file type", "warn");
+        return;
+    }
+
+    const languageID = await ResolveNotesLspLanguage(state.currentFile);
+    if (!languageID) {
+        notifyTerminal("No Language Server Protocol (LSP) has been defined for this file type", "warn");
+        return;
+    }
+
+    await goToWorkspaceLspSymbol();
 });
 
 EventsOn("noteRun", (data) => {

@@ -72,7 +72,7 @@ type Request struct {
 	StreamPrefix      string
 	StreamSuffix      string
 	FormatStreamChunk func(string) string
-	RunWithTools      func(context.Context, string, func(string)) (string, error)
+	RunWithTools      func(ctx context.Context, systemPrompt, prompt string, emit func(string)) (string, error)
 }
 
 func (c *Client) Run(ctx context.Context, request Request) (string, error) {
@@ -136,7 +136,7 @@ func (c *Client) Run(ctx context.Context, request Request) (string, error) {
 	}
 
 	if request.RunWithTools != nil {
-		content, err := request.RunWithTools(ctx, request.Prompt, emitChunk)
+		content, err := request.RunWithTools(ctx, request.SystemPrompt, request.Prompt, emitChunk)
 		if err != nil {
 			return content, err
 		}

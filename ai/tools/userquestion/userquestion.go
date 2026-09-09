@@ -29,7 +29,7 @@ func (t *AskUser) New(agt aitypes.Agent) (aitypes.Tool, error) {
 
 func (t *AskUser) Enabled() bool { return t.enabled }
 func (t *AskUser) Toggle()       { t.enabled = !t.enabled }
-func (t *AskUser) Name() string  { return "askUser" }
+func (t *AskUser) Name() string  { return agent.TOOL_ASK_USER }
 func (t *AskUser) Path() string  { return "internal" }
 func (t *AskUser) Description() string {
 	return strings.TrimSpace(description)

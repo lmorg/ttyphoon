@@ -50,7 +50,9 @@ function menuSelect(id, index) {
         _localMenuReturnFocus = null;
         _localCallbacks.get(id)?.select?.(index);
         _localCallbacks.delete(id);
-        if (returnTo) returnTo.focus();
+        // A non-null value here means the handler opened another menu, which now
+        // owns focus.
+        if (returnTo && !_localMenuReturnFocus) returnTo.focus();
         return;
     }
     TerminalMenuSelect(id, index).catch(() => { });
@@ -66,6 +68,14 @@ function menuCancel(id, index) {
         return;
     }
     TerminalMenuCancel(id, index).catch(() => { });
+}
+
+// Local menus only: re-source items from the caller for the typed query.
+function menuQuery(id, query) {
+    if (id < 0) {
+        return _localCallbacks.get(id)?.query?.(query) ?? null;
+    }
+    return null;
 }
 
 function normalizeMenuPayload(payload) {
@@ -456,6 +466,7 @@ export function initTerminalPopupMenu(canvas) {
     let query = '';
     let showSearch = false;
     let hideItemsUntilQuery = false;
+    let dynamicQuery = false;
     let showNextToMouseCursor = false;
     let mouseHighlightEnabled = true;
 
@@ -565,6 +576,7 @@ export function initTerminalPopupMenu(canvas) {
         query = '';
         showSearch = false;
         hideItemsUntilQuery = false;
+        dynamicQuery = false;
         showNextToMouseCursor = false;
         mouseHighlightEnabled = true;
         syncMouseHighlightState();
@@ -650,10 +662,15 @@ export function initTerminalPopupMenu(canvas) {
 
     function selectMenuItem(item) {
         _menuOperationInProgress = true;
-        if (activeListMenuId !== null) {
-            menuSelect(activeListMenuId, item.index);
-        }
+        const menuId = activeListMenuId;
+
+        // Dismiss before dispatching: a handler may synchronously open another
+        // menu, and hiding afterwards would tear that new menu down.
         hideListMenu(false);
+
+        if (menuId !== null) {
+            menuSelect(menuId, item.index);
+        }
         // Allow async clipboard/IO operations to complete, then clear flag
         setTimeout(() => {
             _menuOperationInProgress = false;
@@ -757,11 +774,34 @@ export function initTerminalPopupMenu(canvas) {
         positionMenu(listRoot);
     }
 
+    function setListItems(options, icons) {
+        hasIcons = Array.isArray(icons) && icons.length > 0;
+        listItems = (options || []).map((title, index) => ({
+            title,
+            index,
+            icon: icons?.[index],
+            separator: isSeparatorTitle(title),
+        }));
+    }
+
     async function renderListbox() {
         const seq = ++_goFilterSeq;
 
         if (hideItemsUntilQuery && query.length === 0) {
             filteredItems = [];
+        } else if (dynamicQuery) {
+            // Server-side search: the provider owns matching, so no local filtering.
+            let provided = null;
+            try {
+                provided = await menuQuery(activeListMenuId, query);
+            } catch {
+                provided = null;
+            }
+            if (seq !== _goFilterSeq) {
+                return;
+            }
+            setListItems(provided?.options || [], provided?.icons || []);
+            filteredItems = buildFilteredItems(listItems, '');
         } else if (query.trim()) {
             try {
                 const titles = listItems
@@ -801,14 +841,10 @@ export function initTerminalPopupMenu(canvas) {
         hasIcons = Array.isArray(menu.icons) && menu.icons.length > 0;
         showSearch = Boolean(menu.showSearch);
         hideItemsUntilQuery = Boolean(menu.hideItemsUntilQuery);
+        dynamicQuery = Boolean(menu.dynamicQuery);
         showNextToMouseCursor = Boolean(menu.showNextToMouseCursor);
 
-        listItems = (menu.options || []).map((title, index) => ({
-            title,
-            index,
-            icon: menu.icons?.[index],
-            separator: isSeparatorTitle(title),
-        }));
+        setListItems(menu.options, menu.icons);
 
         const firstSelectable = listItems.find((item) => !item.separator);
         if (firstSelectable && activeListMenuId !== null) {
@@ -891,8 +927,9 @@ export function initTerminalPopupMenu(canvas) {
                 if (highlightVisibleIndex >= 0 && highlightVisibleIndex < filteredItems.length) {
                     const item = filteredItems[highlightVisibleIndex];
                     if (!item.separator && activeListMenuId !== null) {
-                        menuSelect(activeListMenuId, item.index);
+                        const menuId = activeListMenuId;
                         hideListMenu(false);
+                        menuSelect(menuId, item.index);
                     }
                 }
                 return;
@@ -1037,6 +1074,7 @@ export function initTerminalPopupMenu(canvas) {
  * @param {function(number):void} [options.onCancel]    - Called on dismiss
  * @param {boolean} [options.showSearch]                - Force search field visible on open
  * @param {boolean} [options.hideItemsUntilQuery]       - Keep list empty until search query is typed
+ * @param {function(string):Promise<{options:string[],icons:number[]}>} [options.onQuery] - Re-source items per query (server-side search)
  * @param {boolean} [options.showNextToMouseCursor]     - When true, anchor near cursor; otherwise top-center
  */
 export function showLocalMenu({
@@ -1050,9 +1088,10 @@ export function showLocalMenu({
     onCancel,
     showSearch = false,
     hideItemsUntilQuery = false,
+    onQuery = null,
     showNextToMouseCursor = false,
 } = {}) {
-    if (!_showListMenuFn || !_setAnchorFn || options.length === 0) {
+    if (!_showListMenuFn || !_setAnchorFn || (options.length === 0 && !onQuery)) {
         return;
     }
 
@@ -1063,6 +1102,7 @@ export function showLocalMenu({
         select: onSelect || null,
         highlight: onHighlight || null,
         cancel: onCancel || null,
+        query: onQuery || null,
     });
 
     _setAnchorFn(x, y);
@@ -1073,6 +1113,7 @@ export function showLocalMenu({
         icons,
         showSearch,
         hideItemsUntilQuery,
+        dynamicQuery: Boolean(onQuery),
         showNextToMouseCursor,
     });
 }

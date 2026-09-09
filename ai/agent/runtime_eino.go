@@ -28,7 +28,6 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
-	"github.com/lmorg/ttyphoon/types"
 )
 
 type einoRuntime struct {
@@ -586,7 +585,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	r.agent.ResetToolPermissions()
 
 	for continuation := 0; ; continuation++ {
-		r.agent.renderer.DisplayNotification(types.NOTIFY_DEBUG, fmt.Sprintf("Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations))
+		log.Printf("[debug] Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations)
 		result, err := r.runLLMWithMessageStream(ctx, continuationMessages, streamCallback)
 		response.WriteString(result)
 		if err == nil || !isMaxStepError(err) || continuation >= config.Config.Ai.MaxContinuations {

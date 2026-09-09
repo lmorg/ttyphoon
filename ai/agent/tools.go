@@ -20,6 +20,20 @@ const (
 	ToolStateAlways   = "always"
 )
 
+const (
+	TOOL_DELEGATE = "delegate"
+	TOOL_REPORT   = "report"
+	TOOL_ASK_USER = "askUser"
+)
+
+// Sub-agents run non-interactively and must not recurse, so these can never be
+// delegated regardless of configuration.
+var subagentForbiddenTools = map[string]bool{
+	TOOL_DELEGATE: true,
+	TOOL_REPORT:   true,
+	TOOL_ASK_USER: true,
+}
+
 func (agent *Agent) toolsInit() {
 	if agent.toolStates == nil {
 		agent.toolStates = make(map[string]string)
@@ -130,6 +144,9 @@ func (agent *Agent) ToolAllowedInSubagent(toolName string) bool {
 }
 
 func (agent *Agent) toolAllowedInSubagentLocked(toolName string) bool {
+	if subagentForbiddenTools[toolName] {
+		return false
+	}
 	if allowed, ok := agent.subagentTools[toolName]; ok {
 		return allowed
 	}
@@ -142,6 +159,10 @@ func (agent *Agent) toolAllowedInSubagentLocked(toolName string) bool {
 }
 
 func (agent *Agent) SetToolAllowedInSubagent(toolName string, allowed bool) error {
+	if allowed && subagentForbiddenTools[toolName] {
+		return fmt.Errorf("tool %q cannot be enabled for sub-agents", toolName)
+	}
+
 	agent.toolMu.Lock()
 	defer agent.toolMu.Unlock()
 	for _, tool := range agent._tools {
@@ -162,12 +183,18 @@ func (agent *Agent) SubagentToolNames() []string {
 	defer agent.toolMu.RUnlock()
 	names := make([]string, 0)
 	for _, tool := range agent._tools {
-		if tool.Name() != "delegate" && agent.toolAllowedInSubagentLocked(tool.Name()) && agent.toolStateLocked(tool.Name()) != ToolStateDisabled {
+		if agent.toolDelegableToSubagentLocked(tool.Name()) {
 			names = append(names, tool.Name())
 		}
 	}
 	slices.Sort(names)
 	return names
+}
+
+// Sub-agents cannot answer a permission prompt, so anything short of
+// always-allow would stall them.
+func (agent *Agent) toolDelegableToSubagentLocked(toolName string) bool {
+	return agent.toolAllowedInSubagentLocked(toolName) && agent.toolStateLocked(toolName) == ToolStateAlways
 }
 
 func (agent *Agent) ToolState(toolName string) string {
@@ -292,7 +319,11 @@ func (agent *Agent) ShowToolSubagentMenu(toolName string, x, y int, changed func
 	} {
 		option := option
 		item := types.MenuItem{Title: option.label, Fn: func() {
-			if err := agent.SetToolAllowedInSubagent(toolName, option.allowed); err == nil && changed != nil {
+			if err := agent.SetToolAllowedInSubagent(toolName, option.allowed); err != nil {
+				agent.renderer.DisplayNotification(types.NOTIFY_WARN, err.Error())
+				return
+			}
+			if changed != nil {
 				changed(option.allowed)
 			}
 		}}
