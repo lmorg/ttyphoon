@@ -1220,6 +1220,7 @@ export async function createMonacoAdapter(container, options = {}) {
 
                     let pending = first;
                     let lastGood = Array.isArray(first?.data) && first.data.length > 0 ? first : null;
+                    let lastResultId = typeof first?.resultId === 'string' ? first.resultId : null;
                     lspDisposables.push(monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
                         getLegend: () => ({ tokenTypes, tokenModifiers }),
                         provideDocumentSemanticTokens: async () => {
@@ -1230,12 +1231,43 @@ export async function createMonacoAdapter(container, options = {}) {
                             const data = result?.data;
                             if (Array.isArray(data) && data.length > 0) {
                                 lastGood = result;
+                                lastResultId = typeof result?.resultId === 'string' ? result.resultId : lastResultId;
                                 return { data: new Uint32Array(data) };
                             }
                             if (lastGood && Array.isArray(lastGood.data) && lastGood.data.length > 0) {
                                 return { data: new Uint32Array(lastGood.data) };
                             }
                             return null;
+                        },
+                        provideDocumentSemanticTokensEdits: async (previousResultId) => {
+                            const result = await callbacks.semanticTokens({ previousResultId });
+                            const edits = Array.isArray(result?.edits) ? result.edits : [];
+                            const nextResultId = typeof result?.resultId === 'string' ? result.resultId : previousResultId || null;
+                            if (Array.isArray(result?.data) && result.data.length > 0) {
+                                lastGood = result;
+                                lastResultId = nextResultId;
+                                return {
+                                    resultId: nextResultId,
+                                    edits: [{ start: 0, deleteCount: 0, data: Array.from(result.data) }],
+                                };
+                            }
+                            if (edits.length === 0 && lastGood && Array.isArray(lastGood.data) && lastGood.data.length > 0) {
+                                lastResultId = nextResultId || lastResultId;
+                                return {
+                                    resultId: lastResultId,
+                                    edits: [{ start: 0, deleteCount: 0, data: Array.from(lastGood.data) }],
+                                };
+                            }
+                            if (edits.length === 0) {
+                                return { resultId: nextResultId || previousResultId || null, edits: [] };
+                            }
+                            lastGood = result;
+                            lastResultId = nextResultId;
+                            return { resultId: nextResultId || previousResultId || null, edits: edits.map((edit) => ({
+                                start: Number(edit?.start) || 0,
+                                deleteCount: Number(edit?.deleteCount) || 0,
+                                data: Array.isArray(edit?.data) ? edit.data : [],
+                            })) };
                         },
                         releaseDocumentSemanticTokens: () => {},
                     }));

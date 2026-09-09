@@ -330,6 +330,22 @@ export namespace lsp {
 	        this.changed = source["changed"];
 	    }
 	}
+	export class SemanticTokenEdit {
+	    start: number;
+	    deleteCount: number;
+	    data?: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SemanticTokenEdit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.deleteCount = source["deleteCount"];
+	        this.data = source["data"];
+	    }
+	}
 	export class SemanticTokensLegend {
 	    tokenTypes: string[];
 	    tokenModifiers: string[];
@@ -346,7 +362,9 @@ export namespace lsp {
 	}
 	export class SemanticTokensResult {
 	    legend: SemanticTokensLegend;
-	    data: number[];
+	    data?: number[];
+	    resultId?: string;
+	    edits?: SemanticTokenEdit[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SemanticTokensResult(source);
@@ -356,6 +374,8 @@ export namespace lsp {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.legend = this.convertValues(source["legend"], SemanticTokensLegend);
 	        this.data = source["data"];
+	        this.resultId = source["resultId"];
+	        this.edits = this.convertValues(source["edits"], SemanticTokenEdit);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

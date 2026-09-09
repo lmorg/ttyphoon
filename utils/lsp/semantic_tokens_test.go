@@ -104,6 +104,57 @@ func TestRequestSemanticTokens_KeepsLegendWhenServerHasNoTokensYet(t *testing.T)
 	}
 }
 
+func TestRequestSemanticTokensDelta_ParsesDeltaResult(t *testing.T) {
+	legend := SemanticTokensLegend{TokenTypes: []string{"variable"}, TokenModifiers: []string{"readonly"}}
+
+	clientToServerR, clientToServerW := io.Pipe()
+	serverToClientR, serverToClientW := io.Pipe()
+	defer func() {
+		_ = clientToServerR.Close()
+		_ = clientToServerW.Close()
+		_ = serverToClientR.Close()
+		_ = serverToClientW.Close()
+	}()
+
+	transport := NewTransport(clientToServerW, serverToClientR)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = transport.ReadLoop(ctx)
+	}()
+
+	done := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(clientToServerR)
+		msg, err := ReadMessage(reader)
+		if err != nil {
+			done <- err
+			return
+		}
+		resp := Message{JSONRPC: "2.0", ID: msg.ID, Result: json.RawMessage(`{"resultId":"r1","edits":[{"start":0,"deleteCount":1,"data":[0,0,2,1,0]}]}`)}
+		done <- WriteMessage(serverToClientW, resp)
+	}()
+
+	got, err := RequestSemanticTokensDelta(ctx, transport, "file:///main.go", "x := 1\n", PositionEncodingUTF16, legend, "prev")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("result = nil, want delta result")
+	}
+	if got.ResultID != "r1" {
+		t.Fatalf("resultId = %q, want %q", got.ResultID, "r1")
+	}
+	if len(got.Edits) != 1 || got.Edits[0].DeleteCount != 1 || len(got.Edits[0].Data) != 5 {
+		t.Fatalf("edits = %+v, want one edit with 5 data points", got.Edits)
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("server flow failed: %v", err)
+	}
+}
+
 func TestRequestSemanticTokens_ReturnsNilWhenServerHasNoLegend(t *testing.T) {
 	got, err := RequestSemanticTokens(context.Background(), nil, "file:///main.go", "", PositionEncodingUTF16, SemanticTokensLegend{})
 	if err != nil {

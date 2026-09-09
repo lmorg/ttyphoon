@@ -19,12 +19,32 @@ type SemanticTokensLegend struct {
 // SemanticTokensResult carries the server's relative-encoded token stream
 // through to Monaco unchanged, alongside the legend needed to decode it.
 type SemanticTokensResult struct {
-	Legend SemanticTokensLegend `json:"legend"`
-	Data   []int                `json:"data"`
+	Legend   SemanticTokensLegend `json:"legend"`
+	Data     []int                `json:"data,omitempty"`
+	ResultID string               `json:"resultId,omitempty"`
+	Edits    []SemanticTokenEdit  `json:"edits,omitempty"`
+}
+
+// SemanticTokenEdit models an incremental semantic token delta edit.
+type SemanticTokenEdit struct {
+	Start       int   `json:"start"`
+	DeleteCount int   `json:"deleteCount"`
+	Data        []int `json:"data,omitempty"`
 }
 
 type semanticTokensWire struct {
 	Data []int `json:"data"`
+}
+
+type semanticTokensDeltaWire struct {
+	ResultID string                  `json:"resultId,omitempty"`
+	Edits    []semanticTokenEditWire `json:"edits,omitempty"`
+}
+
+type semanticTokenEditWire struct {
+	Start       int   `json:"start"`
+	DeleteCount int   `json:"deleteCount"`
+	Data        []int `json:"data,omitempty"`
 }
 
 // RequestSemanticTokens sends textDocument/semanticTokens/full and returns the
@@ -70,6 +90,57 @@ func RequestSemanticTokens(ctx context.Context, t *Transport, uri, content strin
 	}
 
 	return &SemanticTokensResult{Legend: legend, Data: data}, nil
+}
+
+// RequestSemanticTokensDelta sends textDocument/semanticTokens/full/delta and
+// returns the delta payload expected by Monaco's incremental provider. When a
+// server does not support the delta form, it falls back to the full request.
+func RequestSemanticTokensDelta(ctx context.Context, t *Transport, uri, content string, serverPosEnc PositionEncoding, legend SemanticTokensLegend, previousResultID string) (*SemanticTokensResult, error) {
+	if len(legend.TokenTypes) == 0 {
+		return nil, nil
+	}
+
+	params := map[string]any{
+		"textDocument":     map[string]any{"uri": uri},
+		"previousResultId": previousResultID,
+	}
+
+	resp, err := t.Call(ctx, "textDocument/semanticTokens/full/delta", params, 1500*time.Millisecond)
+	if err != nil {
+		var rpcErr *RPCError
+		if errors.As(err, &rpcErr) && rpcErr.Code == -32601 {
+			return RequestSemanticTokens(ctx, t, uri, content, serverPosEnc, legend)
+		}
+		return nil, err
+	}
+	if resp == nil || len(resp.Result) == 0 || string(resp.Result) == "null" {
+		return &SemanticTokensResult{Legend: legend}, nil
+	}
+
+	var payload semanticTokensDeltaWire
+	if err := json.Unmarshal(resp.Result, &payload); err != nil {
+		return nil, fmt.Errorf("lsp: parse semanticTokens delta payload: %w", err)
+	}
+
+	result := &SemanticTokensResult{Legend: legend, ResultID: payload.ResultID}
+	for _, edit := range payload.Edits {
+		if edit.DeleteCount < 0 || edit.Start < 0 {
+			continue
+		}
+		data := edit.Data
+		if serverPosEnc != PositionEncodingUTF16 {
+			data = convertSemanticTokensToUTF16(data, content, serverPosEnc)
+		}
+		result.Edits = append(result.Edits, SemanticTokenEdit{
+			Start:       edit.Start,
+			DeleteCount: edit.DeleteCount,
+			Data:        data,
+		})
+	}
+	if len(result.Edits) == 0 && len(payload.Edits) == 0 {
+		return &SemanticTokensResult{Legend: legend, ResultID: payload.ResultID}, nil
+	}
+	return result, nil
 }
 
 // convertSemanticTokensToUTF16 re-encodes character offsets and lengths while

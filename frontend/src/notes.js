@@ -5650,7 +5650,7 @@ async function openCurrentLspDocument(content) {
                     }
                     return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
                 },
-                semanticTokens: async () => {
+                semanticTokens: async ({ previousResultId } = {}) => {
                     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
                         return null;
                     }
@@ -5658,6 +5658,9 @@ async function openCurrentLspDocument(content) {
                         await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
                     } catch {
                         // Semantic tokens can still use the last synced state.
+                    }
+                    if (previousResultId) {
+                        return await NotesLspSemanticTokensDelta(state.currentFile, previousResultId);
                     }
                     return await NotesLspSemanticTokens(state.currentFile);
                 },

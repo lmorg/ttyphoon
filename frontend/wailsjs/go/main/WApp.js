@@ -314,6 +314,10 @@ export function NotesLspSemanticTokens(arg1) {
   return window['go']['main']['WApp']['NotesLspSemanticTokens'](arg1);
 }
 
+export function NotesLspSemanticTokensDelta(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesLspSemanticTokensDelta'](arg1, arg2);
+}
+
 export function NotesLspSignatureHelp(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['WApp']['NotesLspSignatureHelp'](arg1, arg2, arg3, arg4, arg5);
 }

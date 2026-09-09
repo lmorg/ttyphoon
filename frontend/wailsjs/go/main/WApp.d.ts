@@ -165,6 +165,8 @@ export function NotesLspSaveDocument(arg1:string):Promise<void>;
 
 export function NotesLspSemanticTokens(arg1:string):Promise<lsp.SemanticTokensResult>;
 
+export function NotesLspSemanticTokensDelta(arg1:string,arg2:string):Promise<lsp.SemanticTokensResult>;
+
 export function NotesLspSignatureHelp(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<string>;
 
 export function NotesLspStopAll():Promise<void>;

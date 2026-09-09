@@ -1822,6 +1822,34 @@ func (a *WApp) NotesLspSemanticTokens(filePath string) *lsp.SemanticTokensResult
 	return result
 }
 
+// NotesLspSemanticTokensDelta requests incremental semantic token updates for the
+// current document using Monaco's previousResultId handoff when available.
+func (a *WApp) NotesLspSemanticTokensDelta(filePath, previousResultID string) *lsp.SemanticTokensResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	result, err := lsp.RequestSemanticTokensDelta(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding(), sp.SemanticTokensLegend(), previousResultID)
+	if err != nil {
+		log.Printf("lsp: SemanticTokensDelta %q: %v", absPath, err)
+		return nil
+	}
+
+	return result
+}
+
 // NotesLspCodeLens requests code lenses for the current document.
 func (a *WApp) NotesLspCodeLens(filePath string) []lsp.CodeLensItem {
 	absPath := a.filePath(filePath)
