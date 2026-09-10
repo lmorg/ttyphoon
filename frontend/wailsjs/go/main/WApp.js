@@ -358,6 +358,10 @@ export function NotesTyposOpenDocument(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesTyposOpenDocument'](arg1, arg2, arg3);
 }
 
+export function RenameAISession(arg1, arg2) {
+  return window['go']['main']['WApp']['RenameAISession'](arg1, arg2);
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
 }

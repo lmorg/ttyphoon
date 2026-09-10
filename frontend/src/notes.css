@@ -170,7 +170,9 @@ body {
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 999;
+    /* Also reused as a generic text prompt, which can be opened from within
+       the AI settings modal, so it must layer above it. */
+    z-index: 1001;
 }
 
 #notes-modal[data-open="true"] {
@@ -361,6 +363,39 @@ body {
     font-size: var(--notes-font-size-minus-2);
     margin-top: 2px;
     overflow-wrap: anywhere;
+}
+
+.notes-ai-settings-session-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.notes-ai-settings-session-rename {
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 900;
+    transition: color 0.2s, background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.notes-ai-settings-session-rename::before {
+    content: "\f304";
+}
+
+.notes-ai-settings-session-rename:hover {
+    color: var(--accent);
+    background-color: rgba(var(--accent-rgb), 0.2);
 }
 
 .notes-ai-settings-session-delete {
@@ -677,10 +712,6 @@ body {
     font-weight: 900;
     transition: color 0.2s, background-color 0.2s;
     border-width: 1px !important;
-}
-
-#notes-new:hover {
-    color: var(--green) !important;
 }
 
 #notes-fullsize-btn:hover {
@@ -1043,7 +1074,6 @@ body {
 }
 
 #notes-tabs button:not([aria-selected="true"]):hover {
-    border-color: var(--accent) !important;
     color: var(--accent);
 }
 
@@ -1053,6 +1083,7 @@ body {
     background-color: rgba(var(--green-rgb), 0.2);
     border-radius: 5px;
 }
+
 
 #notes-panel {
     position: relative;

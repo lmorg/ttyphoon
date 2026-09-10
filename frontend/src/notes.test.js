@@ -52,6 +52,7 @@ const getAISessionManagementMock = vi.fn(() => Promise.resolve({ activeSessionId
 const createAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const setActiveAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const deleteAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const renameAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1']));
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
 const getAIExecutionLimitsMock = vi.fn(() => Promise.resolve({ agentSteps: 10, requestTimeout: '5m' }));
@@ -173,6 +174,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     CreateAISession: createAISessionMock,
     SetActiveAISession: setActiveAISessionMock,
     DeleteAISession: deleteAISessionMock,
+    RenameAISession: renameAISessionMock,
     ListAIModelSelections: listAIModelSelectionsMock,
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
     GetAIExecutionLimits: getAIExecutionLimitsMock,
@@ -1921,7 +1923,7 @@ describe('notes rendering', () => {
         editor.selectionStart = cursorOffset;
         editor.selectionEnd = cursorOffset + 'println'.length;
 
-        const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Println');
+        const promptSpy = vi.spyOn(window, 'prompt');
 
         editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
@@ -1943,10 +1945,24 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspPrepareRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1);
-        expect(promptSpy).toHaveBeenCalledWith('Rename symbol to:', 'println');
+        expect(promptSpy).not.toHaveBeenCalled();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        const modalCreate = document.getElementById('notes-modal-create');
+        expect(document.getElementById('notes-modal').dataset.open).toBe('true');
+        expect(modalInput.value).toBe('println');
+
+        modalInput.value = 'Println';
+        modalCreate.click();
+        await flushPromises();
+        await flushPromises();
+
         expect(notesLspRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1, 'Println');
         expect(editor.value).toContain('Println("ok")');
 
+        // The modal steals focus while open; the user must return to the editor
+        // before undo/redo keystrokes are routed to it again.
+        editor.focus();
         editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
         expect(editor.value).toContain('println("ok")');

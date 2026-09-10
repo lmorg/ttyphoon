@@ -12,7 +12,7 @@ import {
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAIActiveStreamSnapshot,
-    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
+    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
@@ -818,6 +818,7 @@ const state = {
     autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
+    textPromptHandler: null,
     deletingFile: null,
     deleteConfirmAction: null,
     findMatches: [],
@@ -5347,7 +5348,7 @@ async function renameCurrentLspSymbol() {
     }
 
     const suggested = String(prepare.placeholder || currentSelection || '').trim();
-    const nextName = window.prompt('Rename symbol to:', suggested);
+    const nextName = await openTextPrompt({ title: 'Rename symbol', value: suggested, confirmLabel: 'Rename' });
     if (nextName === null) {
         return;
     }
@@ -10268,8 +10269,46 @@ async function openRenamePrompt(file) {
 }
 
 function closeNewFilePrompt() {
+    if (state.textPromptHandler) {
+        finishTextPrompt(null);
+        return;
+    }
     elements.modal.dataset.open = 'false';
     elements.modal.setAttribute('aria-hidden', 'true');
+}
+
+// Reuses the note create/rename modal as a generic single-line text prompt, so
+// features needing one-line input (e.g. renaming an AI session) don't fall back
+// to window.prompt. Resolves the trimmed input, or null when cancelled.
+function openTextPrompt({ title = 'Enter value', value = '', confirmLabel = 'OK', placeholder = '' } = {}) {
+    return new Promise((resolve) => {
+        state.renamingFile = null;
+        state.textPromptHandler = resolve;
+        elements.modal.dataset.open = 'true';
+        elements.modal.setAttribute('aria-hidden', 'false');
+        elements.modalLocation.style.display = 'none';
+        elements.modalInput.value = value;
+        elements.modalInput.placeholder = placeholder;
+        elements.modal.querySelector('#notes-modal-title').textContent = title;
+        elements.modalCreate.textContent = confirmLabel;
+        setTimeout(() => {
+            elements.modalInput.focus();
+            elements.modalInput.select();
+        }, 0);
+    });
+}
+
+function finishTextPrompt(value) {
+    if (!state.textPromptHandler) {
+        return;
+    }
+    const handler = state.textPromptHandler;
+    state.textPromptHandler = null;
+    elements.modalLocation.style.display = '';
+    elements.modalInput.placeholder = 'example-note';
+    elements.modal.dataset.open = 'false';
+    elements.modal.setAttribute('aria-hidden', 'true');
+    handler(value);
 }
 
 function normalizeNoteName(rawName) {
@@ -11019,7 +11058,10 @@ function renderAISessionList() {
                     ${createdHtml}
                     ${updatedHtml}
                 </div>
-                <button type="button" class="notes-ai-settings-session-delete" data-action="delete" data-session-id="${tableId}" aria-label="Delete session"></button>
+                <div class="notes-ai-settings-session-actions">
+                    <button type="button" class="notes-ai-settings-session-rename" data-action="rename" data-session-id="${tableId}" aria-label="Rename session"></button>
+                    <button type="button" class="notes-ai-settings-session-delete" data-action="delete" data-session-id="${tableId}" aria-label="Delete session"></button>
+                </div>
             </div>
         `;
     }).join('');
@@ -12043,6 +12085,11 @@ function initStructuredDataTreeContextMenu(container, options = {}) {
 }
 
 async function createNewFile() {
+    if (state.textPromptHandler) {
+        finishTextPrompt((elements.modalInput.value || '').trim());
+        return;
+    }
+
     // Handle rename operation
     if (state.renamingFile) {
         const name = (elements.modalInput.value || '').trim();
@@ -12968,9 +13015,45 @@ if (elements.toolsAISettings) {
     });
 }
 if (elements.aiSettingsSessionsList) {
-    elements.aiSettingsSessionsList.addEventListener('click', (event) => {
+    elements.aiSettingsSessionsList.addEventListener('click', async (event) => {
         const target = event.target instanceof HTMLElement ? event.target : null;
         if (!target) {
+            return;
+        }
+
+        // Handle rename button click
+        const renameButton = target.closest('button[data-action="rename"]');
+        if (renameButton) {
+            const sessionId = Number(renameButton.dataset.sessionId) || 0;
+            if (sessionId <= 0) {
+                return;
+            }
+
+            const sessions = Array.isArray(state.aiSessionManagement?.sessions) ? state.aiSessionManagement.sessions : [];
+            const session = sessions.find((item) => Number(item.tableId) === sessionId);
+            const nextSummary = await openTextPrompt({
+                title: 'Rename session',
+                value: String(session?.summary || ''),
+                confirmLabel: 'Rename',
+            });
+            if (nextSummary === null) {
+                return;
+            }
+
+            const trimmedSummary = nextSummary.trim();
+            if (!trimmedSummary) {
+                notifyTerminal('Rename cancelled: name is empty', 'warn');
+                return;
+            }
+
+            RenameAISession(sessionId, trimmedSummary).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                notifyTerminal('AI session renamed', 'info');
+            }).catch((err) => {
+                notifyTerminal('Failed to rename AI session', 'error');
+                console.error(err);
+            });
             return;
         }
 

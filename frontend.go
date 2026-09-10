@@ -2809,6 +2809,21 @@ func (a *WApp) DeleteAISession(tableID int64) sessiondb.FrontendStateT {
 	return state
 }
 
+func (a *WApp) RenameAISession(tableID int64, summary string) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.RenameSession(agt.Workspace(), tableID, summary, 24)
+	if err != nil {
+		log.Printf("ai rename session: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	return state
+}
+
 func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
 	agt, ok := a.activeAgent()
 	if !ok {

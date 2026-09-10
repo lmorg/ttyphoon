@@ -206,6 +206,43 @@ func DeleteSession(workspace string, tableID int64, limit int) (FrontendStateT, 
 	return state, nil
 }
 
+func RenameSession(workspace string, tableID int64, summary string, limit int) (FrontendStateT, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	db, err := openDB(workspace)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot begin sessiondb transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`UPDATE sessions_meta SET summary = ?, updated = ? WHERE tableId = ?`, sessionSummary(summary), nowString(), tableID); err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot rename session %d: %w", tableID, err)
+	}
+
+	activeID, err := activeSessionIDTx(tx)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+
+	state, err := frontendStateTx(tx, activeID, limit)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot commit sessiondb transaction: %w", err)
+	}
+
+	return state, nil
+}
+
 func ClearActiveSession(workspace string, limit int) (FrontendStateT, error) {
 	mu.Lock()
 	defer mu.Unlock()
