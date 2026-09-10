@@ -80,27 +80,31 @@ func normalizeWorkspaceName(workspace string) string {
 	return w
 }
 
-// panelView tracks whether the AI panel is following live output, so a run whose
-// output is not on screen still writes markdown without emitting to the UI.
-// Workspace scoping is handled separately by SessionLogContext.WorkspaceActive,
-// which is evaluated per run at emit time.
+// panelView tracks whether the AI panel is following live output, keyed by
+// workspace: concurrent agents run in different workspaces, so a user reading
+// history in one must not suppress a live run in another.
 var panelView = struct {
 	sync.Mutex
-	live bool
-}{live: true}
+	byWorkspace map[string]bool
+}{byWorkspace: map[string]bool{}}
 
 // SetPanelView is called by the frontend when the AI panel switches between live
-// output and a historical prompt.
-func SetPanelView(live bool) {
+// output and a historical prompt for the given workspace.
+func SetPanelView(workspace string, live bool) {
+	ws := normalizeWorkspaceName(workspace)
 	panelView.Lock()
 	defer panelView.Unlock()
-	panelView.live = live
+	panelView.byWorkspace[ws] = live
 }
 
-func panelShowsLive() bool {
+// panelShowsLive defaults to true so a workspace the frontend has never reported
+// on still streams to the panel.
+func panelShowsLive(workspace string) bool {
+	ws := normalizeWorkspaceName(workspace)
 	panelView.Lock()
 	defer panelView.Unlock()
-	return panelView.live
+	live, ok := panelView.byWorkspace[ws]
+	return !ok || live
 }
 
 // emitLifecycle reports whether job start/finish events should be emitted. These
@@ -113,7 +117,7 @@ func (ctx SessionLogContext) emitLifecycle() bool {
 
 // emitContent reports whether streamed output should reach the panel.
 func (ctx SessionLogContext) emitContent() bool {
-	return ctx.emitLifecycle() && panelShowsLive()
+	return ctx.emitLifecycle() && panelShowsLive(ctx.Workspace)
 }
 
 func sessionLogDir() (string, error) {
@@ -329,6 +333,39 @@ func GetSessionLog(workspace string) string {
 		return ""
 	}
 	return GetPromptLog(ws, sessionID, metas[len(metas)-1].PromptID)
+}
+
+// ActiveStreamSnapshot lets the frontend resync its ordered stream cursor when
+// the panel switches back to live: chunks generated while it was showing a
+// historical prompt were never emitted, so RunID/Sequence would otherwise
+// desync from the run's actual next-chunk sequence and the panel would stall.
+type ActiveStreamSnapshot struct {
+	Active   bool   `json:"active"`
+	RunID    uint64 `json:"runId"`
+	Sequence uint64 `json:"sequence"`
+	Text     string `json:"text"`
+}
+
+// GetActiveStreamSnapshot returns the in-progress request's accumulated text
+// and next sequence number for the given workspace, or Active=false when no
+// request is currently open.
+func GetActiveStreamSnapshot(workspace string) ActiveStreamSnapshot {
+	ws := normalizeWorkspaceName(workspace)
+
+	aiSessionLogStore.Lock()
+	defer aiSessionLogStore.Unlock()
+
+	state := aiSessionLogStore.byWorkspace[ws]
+	if state == nil || !state.requestOpen {
+		return ActiveStreamSnapshot{}
+	}
+
+	return ActiveStreamSnapshot{
+		Active:   true,
+		RunID:    state.runID,
+		Sequence: state.sequence,
+		Text:     state.streamed.String(),
+	}
 }
 
 // GetPromptLog returns the markdown for a specific prompt within a session.

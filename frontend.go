@@ -2201,6 +2201,21 @@ func (a *WApp) GetAISessionCache(workspace string) string {
 	return sessiondb.GetSessionLog(workspace)
 }
 
+// GetAIActiveStreamSnapshot returns the currently in-progress request's
+// accumulated text and next sequence number, so the frontend can resync its
+// ordered stream cursor after switching the panel back to live output.
+func (a *WApp) GetAIActiveStreamSnapshot(workspace string) sessiondb.ActiveStreamSnapshot {
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return sessiondb.ActiveStreamSnapshot{}
+		}
+		workspace = agt.Workspace()
+	}
+
+	return sessiondb.GetActiveStreamSnapshot(workspace)
+}
+
 // ListAIPromptLogs returns metadata for every per-prompt log file in the active
 // AI session for the current workspace. Ordered chronologically (oldest first).
 func (a *WApp) ListAIPromptLogs() []sessiondb.PromptLogMeta {
@@ -2577,8 +2592,16 @@ func (a *WApp) GetCurrentAIModelSelection() string {
 
 // SetAIPanelLive tells the backend whether the AI panel is following live output
 // or showing a historical prompt, so background runs stop emitting to the UI.
-func (a *WApp) SetAIPanelLive(live bool) {
-	sessiondb.SetPanelView(live)
+func (a *WApp) SetAIPanelLive(workspace string, live bool) {
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return
+		}
+		workspace = agt.Workspace()
+	}
+
+	sessiondb.SetPanelView(workspace, live)
 }
 
 func (a *WApp) GetAIExecutionLimits() map[string]any {

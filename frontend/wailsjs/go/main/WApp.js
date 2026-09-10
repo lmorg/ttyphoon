@@ -78,6 +78,10 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
+export function GetAIActiveStreamSnapshot(arg1) {
+  return window['go']['main']['WApp']['GetAIActiveStreamSnapshot'](arg1);
+}
+
 export function GetAIExecutionLimits() {
   return window['go']['main']['WApp']['GetAIExecutionLimits']();
 }
@@ -418,8 +422,8 @@ export function SetAIMcpServerEnabled(arg1, arg2) {
   return window['go']['main']['WApp']['SetAIMcpServerEnabled'](arg1, arg2);
 }
 
-export function SetAIPanelLive(arg1) {
-  return window['go']['main']['WApp']['SetAIPanelLive'](arg1);
+export function SetAIPanelLive(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIPanelLive'](arg1, arg2);
 }
 
 export function SetAIToolEnabled(arg1, arg2) {

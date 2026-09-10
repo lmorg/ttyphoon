@@ -45,6 +45,7 @@ const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
 const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
+const getAIActiveStreamSnapshotMock = vi.fn(() => Promise.resolve({ active: false, runId: 0, sequence: 0, text: '' }));
 const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
 const getAIPromptLogMock = vi.fn(() => Promise.resolve(''));
 const getAISessionManagementMock = vi.fn(() => Promise.resolve({ activeSessionId: 0, sessions: [], history: [] }));
@@ -165,6 +166,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
     GetAISessionCache: getAISessionCacheMock,
+    GetAIActiveStreamSnapshot: getAIActiveStreamSnapshotMock,
     ListAIPromptLogs: listAIPromptLogsMock,
     GetAIPromptLog: getAIPromptLogMock,
     GetAISessionManagement: getAISessionManagementMock,

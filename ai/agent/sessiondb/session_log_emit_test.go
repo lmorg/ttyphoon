@@ -2,18 +2,31 @@ package sessiondb
 
 import "testing"
 
+func resetPanelView(t *testing.T, workspaces ...string) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		panelView.Lock()
+		defer panelView.Unlock()
+		for _, ws := range workspaces {
+			delete(panelView.byWorkspace, normalizeWorkspaceName(ws))
+		}
+	})
+}
+
 // Job lifecycle events carry the run id and final sequence the frontend needs to
 // order a stream. Suppressing one leaves the frontend unable to render the rest
 // of that run, even after the user returns to live output.
 func TestEmitGating_LifecycleSurvivesHistoricalView(t *testing.T) {
-	t.Cleanup(func() { SetPanelView(true) })
+	resetPanelView(t, "alpha")
 
 	ctx := SessionLogContext{
+		Workspace:       "alpha",
 		WorkspaceActive: true,
 		Emit:            func(string, any) {},
 	}
 
-	SetPanelView(false)
+	SetPanelView("alpha", false)
 	if !ctx.emitLifecycle() {
 		t.Fatal("emitLifecycle() = false while viewing history, want true")
 	}
@@ -21,17 +34,18 @@ func TestEmitGating_LifecycleSurvivesHistoricalView(t *testing.T) {
 		t.Fatal("emitContent() = true while viewing history, want false")
 	}
 
-	SetPanelView(true)
+	SetPanelView("alpha", true)
 	if !ctx.emitLifecycle() || !ctx.emitContent() {
 		t.Fatal("live output should emit both lifecycle and content")
 	}
 }
 
 func TestEmitGating_InactiveWorkspaceEmitsNothing(t *testing.T) {
-	t.Cleanup(func() { SetPanelView(true) })
-	SetPanelView(true)
+	resetPanelView(t, "alpha")
+	SetPanelView("alpha", true)
 
 	ctx := SessionLogContext{
+		Workspace:       "alpha",
 		WorkspaceActive: false,
 		Emit:            func(string, any) {},
 	}
@@ -42,11 +56,44 @@ func TestEmitGating_InactiveWorkspaceEmitsNothing(t *testing.T) {
 }
 
 func TestEmitGating_RequiresEmitter(t *testing.T) {
-	t.Cleanup(func() { SetPanelView(true) })
-	SetPanelView(true)
+	resetPanelView(t, "alpha")
+	SetPanelView("alpha", true)
 
-	ctx := SessionLogContext{WorkspaceActive: true}
+	ctx := SessionLogContext{Workspace: "alpha", WorkspaceActive: true}
 	if ctx.emitLifecycle() || ctx.emitContent() {
 		t.Fatal("a context without an emitter must not report emittable")
+	}
+}
+
+// Concurrent agents run in separate workspaces, so reading history in one must
+// never gag a live run in another.
+func TestEmitGating_PanelViewIsPerWorkspace(t *testing.T) {
+	resetPanelView(t, "alpha", "beta")
+
+	SetPanelView("alpha", false)
+	SetPanelView("beta", true)
+
+	alpha := SessionLogContext{Workspace: "alpha", WorkspaceActive: true, Emit: func(string, any) {}}
+	beta := SessionLogContext{Workspace: "beta", WorkspaceActive: true, Emit: func(string, any) {}}
+
+	if alpha.emitContent() {
+		t.Fatal("alpha is showing history, want emitContent() = false")
+	}
+	if !beta.emitContent() {
+		t.Fatal("beta is live, want emitContent() = true despite alpha showing history")
+	}
+}
+
+// A workspace the frontend has never reported on must still stream, otherwise
+// the very first run of a session would render nothing.
+func TestEmitGating_UnknownWorkspaceDefaultsToLive(t *testing.T) {
+	ctx := SessionLogContext{
+		Workspace:       "workspace-never-reported",
+		WorkspaceActive: true,
+		Emit:            func(string, any) {},
+	}
+
+	if !ctx.emitContent() {
+		t.Fatal("emitContent() = false for an unreported workspace, want true")
 	}
 }

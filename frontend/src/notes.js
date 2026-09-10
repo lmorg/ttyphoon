@@ -11,6 +11,7 @@ import {
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
     ShowAISkillsMenu,
     GetAISessionCache,
+    GetAIActiveStreamSnapshot,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
@@ -931,6 +932,10 @@ let monacoMainEditorInit = null;
 let suppressMonacoChange = false;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
+let aiPromptJumpRefreshDeadline = 0;
+const AI_PROMPT_JUMP_REFRESH_MAX_DELAY_MS = 500;
+let aiStreamGapRecoveryTimer = null;
+const AI_STREAM_GAP_RECOVERY_MS = 400;
 let aiPromptJumpObserver = null;
 let aiBottomScrollRetryTimers = [];
 let aiBottomChaseHandle = 0;
@@ -10849,14 +10854,14 @@ async function refreshAIPromptJumpFromBackend() {
     updateAIPromptJumpAvailability();
 }
 
-// The dropdown stays available while showing history so there's always a way
-// back to live output, even before any prompt has been logged.
+// The menu always offers a "Live output" entry, so the button must stay
+// clickable: a run with no finalized prompts yet would otherwise leave no way
+// back to the live feed.
 function updateAIPromptJumpAvailability() {
     if (!elements.toolsAIPromptJump) {
         return;
     }
-    const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
-    elements.toolsAIPromptJump.disabled = targets.length === 0 && state.aiPanelLive;
+    elements.toolsAIPromptJump.disabled = false;
 }
 
 function renderAIPromptJumpDropdown() {
@@ -10874,14 +10879,23 @@ function renderAIPromptJumpDropdown() {
 }
 
 function scheduleAIPromptJumpRefresh() {
+    const now = Date.now();
+    if (!aiPromptJumpRefreshDeadline) {
+        aiPromptJumpRefreshDeadline = now + AI_PROMPT_JUMP_REFRESH_MAX_DELAY_MS;
+    }
+
     if (aiPromptJumpRefreshTimer) {
         clearTimeout(aiPromptJumpRefreshTimer);
     }
 
+    // Streaming calls this once per chunk; without the deadline cap the debounce
+    // would reset forever and the dropdown would never list finished prompts.
+    const delay = Math.max(0, Math.min(40, aiPromptJumpRefreshDeadline - now));
     aiPromptJumpRefreshTimer = setTimeout(() => {
         aiPromptJumpRefreshTimer = null;
+        aiPromptJumpRefreshDeadline = 0;
         renderAIPromptJumpDropdown();
-    }, 40);
+    }, delay);
 }
 
 async function resumeLiveAIOutput() {
@@ -10931,9 +10945,6 @@ function openAIPromptJumpMenu() {
     }
 
     const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
-    if (targets.length === 0 && state.aiPanelLive) {
-        return;
-    }
 
     const menuTargets = [
         { source: 'live', summary: state.aiPanelLive ? 'Live output (following)' : 'Live output' },
@@ -12402,7 +12413,7 @@ function setAIPanelLive(live) {
     state.aiPanelLive = Boolean(live);
     try {
         if (typeof SetAIPanelLive === 'function') {
-            void Promise.resolve(SetAIPanelLive(Boolean(live))).catch(() => {});
+            void Promise.resolve(SetAIPanelLive(String(state.currentWorkspaceName || ''), Boolean(live))).catch(() => {});
         }
     } catch (err) {
         console.error('Failed to update AI panel live state:', err);
@@ -12423,6 +12434,7 @@ function startOrderedAIJob(payload) {
     aiStreamOrder.nextSequence = 0;
     aiStreamOrder.pending.clear();
     aiStreamOrder.finalSequence = null;
+    clearAIStreamGapRecovery();
     startAIJob(payload.title);
 }
 
@@ -12436,6 +12448,35 @@ function flushOrderedAIStream() {
         aiStreamOrder.finalSequence = null;
         finishAIJob();
     }
+    if (aiStreamOrder.pending.size > 0) {
+        scheduleAIStreamGapRecovery();
+    } else {
+        clearAIStreamGapRecovery();
+    }
+}
+
+function clearAIStreamGapRecovery() {
+    if (aiStreamGapRecoveryTimer) {
+        clearTimeout(aiStreamGapRecoveryTimer);
+        aiStreamGapRecoveryTimer = null;
+    }
+}
+
+// Switching workspace mid-run can drop the chunk emitted between reading the
+// backend snapshot and applying it, leaving a permanent hole the cursor can
+// never pass. Rebuilding from the snapshot is the only way to close it.
+function scheduleAIStreamGapRecovery() {
+    if (aiStreamGapRecoveryTimer) {
+        return;
+    }
+
+    aiStreamGapRecoveryTimer = setTimeout(() => {
+        aiStreamGapRecoveryTimer = null;
+        if (aiStreamOrder.pending.size === 0) {
+            return;
+        }
+        void applyActiveStreamSnapshot(state.currentWorkspaceName);
+    }, AI_STREAM_GAP_RECOVERY_MS);
 }
 
 function appendOrderedAIStream(payload) {
@@ -12463,6 +12504,13 @@ function finishOrderedAIJob(payload) {
     }
     aiStreamOrder.finalSequence = finalSequence;
     flushOrderedAIStream();
+    // Suppressed chunks mean the cursor can never reach finalSequence, so the
+    // flush above won't finish the job; refresh anyway or the completed prompt
+    // never shows up in the dropdown.
+    if (aiStreamOrder.finalSequence !== null) {
+        aiStreamOrder.finalSequence = null;
+        void refreshAIPromptJumpFromBackend();
+    }
 }
 
 function finishAIJob() {
@@ -12596,17 +12644,61 @@ function scrollAIOutputToBottom() {
     aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
 }
 
+// Chunks are dropped, not queued, while the panel is off-live or its workspace
+// is inactive, so the ordered cursor must be resynced from the backend or the
+// panel stalls forever waiting on sequences that were never delivered.
+// Returns true when an in-progress run was restored into the panel.
+async function applyActiveStreamSnapshot(workspaceName) {
+    if (!state.aiPanelLive || typeof GetAIActiveStreamSnapshot !== 'function') {
+        return false;
+    }
+
+    let snapshot = null;
+    try {
+        snapshot = await GetAIActiveStreamSnapshot(String(workspaceName || ''));
+    } catch (err) {
+        console.error('Failed to load AI active stream snapshot:', err);
+        return false;
+    }
+
+    if (!snapshot?.active) {
+        return false;
+    }
+
+    aiStreamOrder.runId = Number(snapshot.runId) || null;
+    aiStreamOrder.nextSequence = Number(snapshot.sequence) || 0;
+    aiStreamOrder.pending.clear();
+    aiStreamOrder.finalSequence = null;
+    clearAIStreamGapRecovery();
+
+    state.aiSessionCache = String(snapshot.text || '');
+    aiPipelineFormatter.clear();
+    aiPipelineFormatter.startJob('');
+    aiPipelineFormatter.appendChunk(state.aiSessionCache);
+    requestAnimationFrame(() => {
+        scrollAIOutputToBottom();
+    });
+    return true;
+}
+
 async function loadAISessionCache(workspaceName) {
     try {
-        const cache = await GetAISessionCache(String(workspaceName || ''));
-        state.aiSessionCache = String(cache || '');
-        // The session log file on disk is the source of truth for the panel.
-        // Fully reset the panel before rendering so content from a previously
-        // active workspace cannot persist across a workspace (tmux tab) switch.
-        aiPipelineFormatter.clear();
-        if (state.aiSessionCache) {
-            setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+        // A live run outranks the on-disk log: its output is still in the pending
+        // file, which GetAISessionCache deliberately skips.
+        const restored = await applyActiveStreamSnapshot(workspaceName);
+
+        if (!restored) {
+            const cache = await GetAISessionCache(String(workspaceName || ''));
+            state.aiSessionCache = String(cache || '');
+            // The session log file on disk is the source of truth for the panel.
+            // Fully reset the panel before rendering so content from a previously
+            // active workspace cannot persist across a workspace (tmux tab) switch.
+            aiPipelineFormatter.clear();
+            if (state.aiSessionCache) {
+                setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+            }
         }
+
         void refreshAIPromptJumpFromBackend();
         if (elements.aiSettingsModal?.dataset?.open === 'true') {
             void loadAISessionManagement().then(() => {
@@ -12627,6 +12719,9 @@ function markAISessionCachePending(workspaceName) {
     state.aiSessionCachePendingWorkspace = String(workspaceName || '');
     state.aiSessionCache = '';
     aiPipelineFormatter.clear();
+    // A workspace switch resets the panel, so stop showing a stale historical
+    // prompt from the workspace being left.
+    setAIPanelLive(true);
 
     if (isAIToolsTabActive()) {
         maybeLoadPendingAISessionCache();

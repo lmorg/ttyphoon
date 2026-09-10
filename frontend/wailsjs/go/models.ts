@@ -679,6 +679,24 @@ export namespace notes {
 
 export namespace sessiondb {
 	
+	export class ActiveStreamSnapshot {
+	    active: boolean;
+	    runId: number;
+	    sequence: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActiveStreamSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.active = source["active"];
+	        this.runId = source["runId"];
+	        this.sequence = source["sequence"];
+	        this.text = source["text"];
+	    }
+	}
 	export class FrontendHistoryItemT {
 	    id: number;
 	    prompt: string;

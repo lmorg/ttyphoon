@@ -47,6 +47,8 @@ export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
 export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
+export function GetAIActiveStreamSnapshot(arg1:string):Promise<sessiondb.ActiveStreamSnapshot>;
+
 export function GetAIExecutionLimits():Promise<Record<string, any>>;
 
 export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
@@ -217,7 +219,7 @@ export function SendToTerminal(arg1:string):Promise<void>;
 
 export function SetAIMcpServerEnabled(arg1:string,arg2:boolean):Promise<void>;
 
-export function SetAIPanelLive(arg1:boolean):Promise<void>;
+export function SetAIPanelLive(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
 
