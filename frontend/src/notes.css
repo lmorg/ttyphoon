@@ -29,7 +29,6 @@
 
 .notes-sort-icon {
     display: inline-block;
-    font-family: "Font Awesome Solid";
     font-weight: 900;
     margin-right: 6px;
     color: var(--red);
@@ -37,6 +36,12 @@
     font-style: normal;
     pointer-events: none;
     user-select: none;
+}
+
+/* Filtered out by a SQL filter; kept in the DOM so cell editing and formulas
+   still resolve against a complete document. */
+.notes-table-row-filtered {
+    display: none !important;
 }
 
 thead th {
@@ -1671,6 +1676,12 @@ body {
     font-family: var(--font-family);
     color: var(--fg);
     background-color: var(--darken-background-overlay);
+}
+
+#notes-ai-output img {
+    display: block !important;
+    max-width: 100% !important;
+    height: auto !important;
 }
 
 .notes-ai-scroll-bottom {

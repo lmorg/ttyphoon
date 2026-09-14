@@ -183,21 +183,31 @@ func formatToolSummaryFailureMarkdown(rawLen int, err error) string {
 }
 
 func unwrapToolInput(argumentsInJSON string) string {
-	type wrappedInput struct {
-		Input string `json:"input"`
-	}
-
-	var wrapped wrappedInput
-	if err := json.Unmarshal([]byte(argumentsInJSON), &wrapped); err == nil {
-		if wrapped.Input != "" {
-			return wrapped.Input
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(argumentsInJSON), &object); err == nil {
+		if input, ok := object["input"]; ok {
+			if len(input) > 0 && string(input) != "null" {
+				var inputString string
+				if err := json.Unmarshal(input, &inputString); err == nil {
+					return inputString
+				}
+				return string(input)
+			}
+			return ""
 		}
-		return ""
 	}
 
 	var plain string
 	if err := json.Unmarshal([]byte(argumentsInJSON), &plain); err == nil {
 		return plain
+	}
+
+	var plainJSON any
+	if err := json.Unmarshal([]byte(argumentsInJSON), &plainJSON); err == nil {
+		encoded, marshalErr := json.Marshal(plainJSON)
+		if marshalErr == nil {
+			return string(encoded)
+		}
 	}
 
 	return argumentsInJSON

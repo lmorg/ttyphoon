@@ -10,6 +10,10 @@ export function AskAI(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['AskAI'](arg1, arg2, arg3);
 }
 
+export function AskAIImage(arg1, arg2) {
+  return window['go']['main']['WApp']['AskAIImage'](arg1, arg2);
+}
+
 export function CancelNotesListFiles() {
   return window['go']['main']['WApp']['CancelNotesListFiles']();
 }
@@ -340,6 +344,26 @@ export function NotesRecentFiles() {
 
 export function NotesSpellCheck(arg1) {
   return window['go']['main']['WApp']['NotesSpellCheck'](arg1);
+}
+
+export function NotesTableClearSort(arg1) {
+  return window['go']['main']['WApp']['NotesTableClearSort'](arg1);
+}
+
+export function NotesTableDisposeAll() {
+  return window['go']['main']['WApp']['NotesTableDisposeAll']();
+}
+
+export function NotesTableFilter(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTableFilter'](arg1, arg2);
+}
+
+export function NotesTableReconcile(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesTableReconcile'](arg1, arg2, arg3);
+}
+
+export function NotesTableSort(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTableSort'](arg1, arg2);
 }
 
 export function NotesTyposAvailable() {

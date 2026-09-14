@@ -41,6 +41,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
+	"github.com/lmorg/ttyphoon/window/elements/element_table/tablecore"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -78,6 +79,7 @@ type WApp struct {
 	typosUnavail    map[string]bool
 	typosMu         sync.Mutex
 	syntaxEngine    *syntaxcompletion.Engine
+	notesTables     *tablecore.Registry
 }
 
 // NewApp creates a new App application struct
@@ -94,6 +96,7 @@ func NewWailsApp() *WApp {
 		lspDocs:       lsp.NewDocumentStore(),
 		typosDocs:     lsp.NewDocumentStore(),
 		typosUnavail:  map[string]bool{},
+		notesTables:   tablecore.NewRegistry(),
 	}
 
 	engine, err := syntaxcompletion.NewDefaultEngine()
@@ -2889,6 +2892,78 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 	default:
 		return
 	}
+}
+
+// AskAIImage starts an image-aware document explanation without placing the
+// image data in the document text or session log metadata.
+func (a *WApp) AskAIImage(filename, dataURL string) {
+	match := rxDataURLImage.FindStringSubmatch(strings.TrimSpace(dataURL))
+	if match == nil {
+		log.Printf("[debug] WApp AskAIImage: invalid image data URL")
+		return
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+	tile := renderer.ActiveTile()
+	if tile == nil {
+		return
+	}
+	agt := agent.Get(tile.Id())
+	if agt == nil {
+		return
+	}
+
+	imageName := strings.TrimSpace(filename)
+	if imageName == "" {
+		imageName = "Image"
+	}
+
+	imagePath, err := saveAIImageUpload(match[1], match[2])
+	if err != nil {
+		log.Printf("[debug] WApp AskAIImage: save upload: %v", err)
+		return
+	}
+	imageMarkdown := fmt.Sprintf("![uploaded %s](%s)", imagePath, imagePath)
+	ai.ExplainDoc(agt, imageName, "Image attachment: "+imageName+"\n\n"+imageMarkdown, []aitypes.ImageAttachment{{
+		MIMEType: match[1],
+		Base64:   match[2],
+	}})
+}
+
+func saveAIImageUpload(mimeType, encoded string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	extension := ".bin"
+	if slash := strings.LastIndex(mimeType, "/"); slash >= 0 {
+		extension = "." + strings.ToLower(strings.TrimLeft(mimeType[slash+1:], "."))
+		if extension == ".svg+xml" {
+			extension = ".svg"
+		}
+	}
+	if !regexp.MustCompile(`^\.[a-z0-9]+$`).MatchString(extension) {
+		extension = ".bin"
+	}
+
+	payload, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join(home, app.DirName, ".images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("uploaded-image-%d%s", time.Now().UnixNano(), extension))
+	if err := os.WriteFile(path, payload, 0o664); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // --------------------

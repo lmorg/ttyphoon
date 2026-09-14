@@ -392,6 +392,20 @@ func TestUnwrapToolInput_JSONString(t *testing.T) {
 	}
 }
 
+func TestUnwrapToolInput_PlainJSONObject(t *testing.T) {
+	got := unwrapToolInput(`{"prompt":"hello","size":"1024x1024"}`)
+	if got != `{"prompt":"hello","size":"1024x1024"}` {
+		t.Fatalf("unwrapToolInput() = %q, want the plain object preserved as JSON", got)
+	}
+}
+
+func TestUnwrapToolInput_WrappedJSONObject(t *testing.T) {
+	got := unwrapToolInput(`{"input":{"prompt":"hello","size":"1024x1024"}}`)
+	if got != `{"prompt":"hello","size":"1024x1024"}` {
+		t.Fatalf("unwrapToolInput() = %q, want the wrapped object encoded as JSON", got)
+	}
+}
+
 func TestUnwrapToolInput_FallbackRaw(t *testing.T) {
 	raw := `not-json`
 	got := unwrapToolInput(raw)

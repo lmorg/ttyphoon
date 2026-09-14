@@ -231,15 +231,38 @@ func buildSessionLogRequestPrefix(query, commandLine, outputBlock string, now ti
 		b.WriteString("\n~~~\n\n")
 	}
 
-	trimmedOutput := strings.TrimSpace(head(outputBlock))
-	if trimmedOutput != "" {
-		b.WriteString("### Output\n\n~~~text\n")
-		b.WriteString(trimmedOutput)
-		b.WriteString("\n~~~\n\n")
-	}
+	writeSessionOutput(&b, outputBlock)
 
 	b.WriteString("### Stream Trace\n\n<!-- stream trace: start -->\n")
 	return b.String()
+}
+
+func writeSessionOutput(b *strings.Builder, outputBlock string) {
+	trimmed := strings.TrimSpace(head(outputBlock))
+	if trimmed == "" {
+		return
+	}
+
+	var textLines []string
+	var imageLines []string
+	for _, line := range strings.Split(trimmed, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "![") && strings.Contains(line, "](") && strings.HasSuffix(line, ")") {
+			imageLines = append(imageLines, line)
+			continue
+		}
+		textLines = append(textLines, line)
+	}
+
+	if len(textLines) > 0 {
+		b.WriteString("### Output\n\n~~~text\n")
+		b.WriteString(strings.Join(textLines, "\n"))
+		b.WriteString("\n~~~\n\n")
+	}
+	for _, image := range imageLines {
+		b.WriteString(image)
+		b.WriteString("\n\n")
+	}
 }
 
 const maxLines = 20

@@ -1,5 +1,6 @@
 import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile, GetImage,
+    NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     CancelNotesListFiles,
@@ -8,7 +9,7 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
-    ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
+    ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAIActiveStreamSnapshot,
@@ -2030,7 +2031,7 @@ function renderCsvView(content, options = {}) {
     }
 
     // Enable column sorting (available in both view and run mode)
-    setupTableSorting(elements.csvView);
+    setupNotesTableQueries(elements.csvView, 'csv', state.currentFile || '');
     void setupTableColumnResizing(elements.csvView, false, state.currentFile);
 }
 
@@ -2363,7 +2364,7 @@ async function renderMarkdown() {
     wrapTablesForHorizontalScroll(elements.preview);
 
     // Enable column sorting on all tables
-    setupTableSorting(elements.preview);
+    setupNotesTableQueries(elements.preview, 'preview', state.currentFile || '');
 
     // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
     elements.preview.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
@@ -3694,67 +3695,221 @@ async function setupTableColumnResizing(container, wrapped, filename = state.cur
     }
 }
 
-function setupTableSorting(container) {
-    if (!container) return;
+// Sorting and filtering are owned by the Go engine (tablecore), the same one the
+// terminal table widget uses, so both surfaces behave identically. Go returns an
+// order of source row indices; nothing here rewrites a cell, which is what keeps
+// formulas, cell editing, resize handles and word wrap intact.
+// See adr/0028-go-backed-notes-table-sorting.md.
+const NOTES_TABLE_EPHEMERAL_CELLS = 2000;
+const NOTES_TABLE_SORT_ASC = '\u2191';
+const NOTES_TABLE_SORT_DESC = '\u2193';
 
-    const getCellText = (cell) => {
-        return getTableCellTextContent(cell);
+// Source order, which stops matching DOM order as soon as a sort is applied.
+function notesTableSourceRows(table) {
+    return Array.from(table.querySelectorAll('tbody tr'))
+        .sort((a, b) => (Number(a.dataset.sourceRow) || 0) - (Number(b.dataset.sourceRow) || 0));
+}
+
+function notesTableSeed(table) {
+    return {
+        headings: Array.from(table.querySelectorAll('thead th')).map((th) => getTableCellTextContent(th)),
+        rows: notesTableSourceRows(table).map((row) =>
+            Array.from(row.querySelectorAll('td, th')).map((cell) => getTableCellTextContent(cell))),
+    };
+}
+
+function notesTableIsSmall(table) {
+    const columns = table.querySelectorAll('thead th').length;
+    const rows = table.querySelectorAll('tbody tr').length;
+    return columns * (rows + 1) <= NOTES_TABLE_EPHEMERAL_CELLS;
+}
+
+function notesTableRequest(table, includeSeed) {
+    return {
+        key: {
+            surface: table.dataset.tableSurface || '',
+            document: table.dataset.tableDocument || '',
+            index: Number(table.dataset.tableIndex) || 0,
+        },
+        seed: includeSeed ? notesTableSeed(table) : null,
+        sortColumn: Number(table.dataset.sortColumn) || 0,
+        sortDesc: table.dataset.sortDesc === 'true',
+        filter: table.dataset.tableFilter || '',
+    };
+}
+
+async function notesTableInvoke(table, call) {
+    // Small tables are rebuilt per query on the Go side, so send the data up
+    // front rather than paying a round trip to be told it was needed.
+    let result = await call(notesTableRequest(table, notesTableIsSmall(table)));
+    if (result && result.missing) {
+        result = await call(notesTableRequest(table, true));
+    }
+    return result;
+}
+
+function applyNotesTableResult(table, result) {
+    if (!result) {
+        return;
+    }
+    if (result.error) {
+        notifyTerminal(String(result.error), 'error');
+        return;
+    }
+
+    table.dataset.sortColumn = String(Number(result.sortColumn) || 0);
+    table.dataset.sortDesc = result.sortDesc ? 'true' : 'false';
+    table.dataset.tableFilter = String(result.filter || '');
+
+    applyNotesTableOrder(table, Array.isArray(result.order) ? result.order : []);
+    renderNotesTableSortIndicator(table);
+}
+
+function applyNotesTableOrder(table, order) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const bySource = new Map();
+    for (const row of tbody.querySelectorAll('tr')) {
+        bySource.set(Number(row.dataset.sourceRow) || 0, row);
+    }
+
+    const visible = new Set(order);
+    const fragment = document.createDocumentFragment();
+
+    for (const sourceIndex of order) {
+        const row = bySource.get(sourceIndex);
+        if (!row) continue;
+        row.classList.remove('notes-table-row-filtered');
+        fragment.appendChild(row);
+    }
+
+    // Filtered-out rows stay in the DOM, hidden, so editing and formulas keep
+    // resolving against a complete document.
+    for (const sourceIndex of Array.from(bySource.keys()).sort((a, b) => a - b)) {
+        if (visible.has(sourceIndex)) continue;
+        const row = bySource.get(sourceIndex);
+        row.classList.add('notes-table-row-filtered');
+        fragment.appendChild(row);
+    }
+
+    // A single insertion: appending row by row risks a layout pass per row.
+    tbody.appendChild(fragment);
+}
+
+function renderNotesTableSortIndicator(table) {
+    table.querySelectorAll('.notes-sort-icon').forEach((icon) => icon.remove());
+
+    const column = Number(table.dataset.sortColumn) || 0;
+    if (column < 1) {
+        return;
+    }
+
+    const th = table.querySelectorAll('thead th')[column - 1];
+    if (!th) {
+        return;
+    }
+
+    const icon = document.createElement('span');
+    icon.className = 'notes-sort-icon';
+    icon.textContent = table.dataset.sortDesc === 'true' ? NOTES_TABLE_SORT_DESC : NOTES_TABLE_SORT_ASC;
+    th.prepend(icon);
+}
+
+async function sortNotesTableColumn(table, column) {
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableSort(req, column)));
+}
+
+async function clearNotesTableSort(table) {
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableClearSort(req)));
+}
+
+async function promptNotesTableFilter(table) {
+    const where = await openTextPrompt({
+        title: 'SQL filter',
+        value: table.dataset.tableFilter || '',
+        confirmLabel: 'Apply',
+        placeholder: '"Column" > 10 — leave empty to reset',
+    });
+    if (where === null) {
+        return;
+    }
+
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableFilter(req, where)));
+}
+
+function createTableFilterMenuItem(table) {
+    return {
+        title: 'SQL filter...',
+        icon: 0xf0b0,
+        onSelect: () => {
+            void promptNotesTableFilter(table);
+        },
+    };
+}
+
+function openNotesTableHeaderMenu(table, colIndex, x, y) {
+    const headerCells = table.querySelectorAll('thead th');
+    const heading = getTableCellTextContent(headerCells[colIndex]) || `Column ${colIndex + 1}`;
+
+    const menuItems = [
+        {
+            title: 'Clear sorting',
+            icon: 0,
+            onSelect: () => {
+                void clearNotesTableSort(table);
+                clearTableHighlight(table);
+            },
+        },
+        { title: '-' },
+        createTableFilterMenuItem(table),
+    ];
+
+    const highlightCallback = (itemIndex) => {
+        const item = menuItems[itemIndex];
+        clearTableHighlight(table);
+        if (!item) {
+            return;
+        }
+        if (item.title === 'Clear sorting') {
+            highlightEntireTable(table, true);
+        } else if (item.title.startsWith('SQL filter')) {
+            highlightTableColumn(table, colIndex, true);
+        }
     };
 
-    Array.from(container.querySelectorAll('table')).forEach((table) => {
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        const headerRow = table.querySelector('thead tr');
-        if (!headerRow) return;
-        const headerCells = Array.from(headerRow.querySelectorAll('th'));
+    showNotesLocalMenu(menuItems, x, y, `Table: ${heading}`, highlightCallback, () => clearTableHighlight(table));
+}
 
-        // Stamp original order so we can restore it on clear
+function setupNotesTableQueries(container, surface, documentPath = '') {
+    if (!container) return;
+
+    const indices = [];
+
+    Array.from(container.querySelectorAll('table')).forEach((table, tableIndex) => {
+        const tbody = table.querySelector('tbody');
+        const headerRow = table.querySelector('thead tr');
+        if (!tbody || !headerRow) return;
+
+        indices.push(tableIndex);
+
+        table.dataset.tableSurface = surface;
+        table.dataset.tableDocument = documentPath;
+        table.dataset.tableIndex = String(tableIndex);
+        table.dataset.sortColumn = table.dataset.sortColumn || '0';
+        table.dataset.sortDesc = table.dataset.sortDesc || 'false';
+        table.dataset.tableFilter = table.dataset.tableFilter || '';
+
         Array.from(tbody.querySelectorAll('tr')).forEach((row, i) => {
-            row.dataset.originalSortOrder = String(i);
+            row.dataset.sourceRow = String(i);
         });
 
-        const clearSortIcons = () => {
-            headerCells.forEach((th) => {
-                const icon = th.querySelector('.notes-sort-icon');
-                if (icon) icon.remove();
-                delete th.dataset.sortType;
-            });
-        };
+        if (table.dataset.tableQueriesBound === 'true') return;
+        table.dataset.tableQueriesBound = 'true';
 
-        const clearSort = () => {
-            clearSortIcons();
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => Number(a.dataset.originalSortOrder) - Number(b.dataset.originalSortOrder));
-            rows.forEach(row => tbody.appendChild(row));
-        };
-
-        const applySort = (colIndex, sortType) => {
-            clearSortIcons();
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => {
-                const aText = getCellText(a.querySelectorAll('td, th')[colIndex] || a);
-                const bText = getCellText(b.querySelectorAll('td, th')[colIndex] || b);
-                if (sortType === 'num-asc')  return (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
-                if (sortType === 'num-desc') return (parseFloat(bText) || 0) - (parseFloat(aText) || 0);
-                if (sortType === 'char-asc')  return aText.localeCompare(bText);
-                if (sortType === 'char-desc') return bText.localeCompare(aText);
-                return 0;
-            });
-            rows.forEach(row => tbody.appendChild(row));
-
-            // Stamp sort icon onto the header cell
-            const th = headerCells[colIndex];
-            if (th) {
-                th.dataset.sortType = sortType;
-                const iconCodePoint = { 'num-asc': 0xf162, 'num-desc': 0xf886, 'char-asc': 0xf15d, 'char-desc': 0xf881 }[sortType];
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'notes-sort-icon';
-                iconSpan.textContent = String.fromCodePoint(iconCodePoint);
-                th.prepend(iconSpan);
-            }
-        };
-
-        headerCells.forEach((th, colIndex) => {
+        Array.from(headerRow.querySelectorAll('th')).forEach((th, colIndex) => {
             th.addEventListener('click', (e) => {
                 if (table.dataset.resizeDragActive === 'true') {
                     e.preventDefault();
@@ -3764,39 +3919,45 @@ function setupTableSorting(container) {
 
                 e.preventDefault();
                 e.stopPropagation();
+                void sortNotesTableColumn(table, colIndex + 1);
+            });
 
-                const headerText = getCellText(th) || `Column ${colIndex + 1}`;
-                const menuItems = [
-                    { title: 'Sort by number (low to high)',     icon: 0xf162, onSelect: () => { applySort(colIndex, 'num-asc'); clearTableHighlight(table); } },
-                    { title: 'Sort by number (high to low)',     icon: 0xf886, onSelect: () => { applySort(colIndex, 'num-desc'); clearTableHighlight(table); } },
-                    { title: 'Sort by characters (low to high)', icon: 0xf15d, onSelect: () => { applySort(colIndex, 'char-asc'); clearTableHighlight(table); } },
-                    { title: 'Sort by characters (high to low)', icon: 0xf881, onSelect: () => { applySort(colIndex, 'char-desc'); clearTableHighlight(table); } },
-                    { title: '-' },
-                    { title: 'Clear sorting', icon: 0, onSelect: () => { clearSort(); clearTableHighlight(table); } },
-                ];
+            th.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openNotesTableHeaderMenu(table, colIndex, e.clientX, e.clientY);
+            });
 
-                const highlightCallback = (itemIndex) => {
-                    const item = menuItems[itemIndex];
-                    if (!item) return;
-                    clearTableHighlight(table);
-                    if (item.title === 'Clear sorting') {
-                        highlightEntireTable(table, true);
-                    } else if (item.title.startsWith('Sort')) {
-                        highlightTableColumn(table, colIndex, true);
-                    }
-                };
+            // Middle-click clears the sort, as in the terminal. Browsers deliver
+            // it as auxclick, and mousedown has to be suppressed or WebKit starts
+            // autoscroll instead.
+            th.addEventListener('mousedown', (e) => {
+                if (e.button === 1) {
+                    e.preventDefault();
+                }
+            });
 
-                showNotesLocalMenu(
-                    menuItems,
-                    e.clientX,
-                    e.clientY,
-                    `Sort: ${headerText}`,
-                    highlightCallback,
-                    () => clearTableHighlight(table),
-                );
+            th.addEventListener('auxclick', (e) => {
+                if (e.button !== 1 || table.dataset.resizeDragActive === 'true') {
+                    return;
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                void clearNotesTableSort(table);
             });
         });
     });
+
+    // Declaring what still exists lets the backend drop everything else for this
+    // surface, so a missed cleanup self-heals rather than accumulating.
+    try {
+        if (typeof NotesTableReconcile === 'function') {
+            void Promise.resolve(NotesTableReconcile(surface, documentPath, indices)).catch(() => {});
+        }
+    } catch (err) {
+        console.error('Failed to reconcile Notes tables:', err);
+    }
 }
 
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
@@ -6315,7 +6476,7 @@ async function renderJupyterView() {
             wrapTablesForHorizontalScroll(elements.jupyter);
 
             // Enable column sorting on all tables
-            setupTableSorting(elements.jupyter);
+            setupNotesTableQueries(elements.jupyter, 'jupyter', state.currentFile || '');
 
             elements.jupyter.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
             void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, state.currentFile);
@@ -10457,14 +10618,21 @@ function resolveRelativeAssetPath(notePath, relativePath) {
 function enableImageContextMenus(container) {
     const images = container.querySelectorAll('img');
     images.forEach((img) => {
+        // The AI panel re-runs this over surviving nodes, so don't stack listeners.
+        if (img.dataset.imageMenuBound === 'true') {
+            return;
+        }
+        img.dataset.imageMenuBound = 'true';
+
         img.addEventListener('contextmenu', async (e) => {
             e.preventDefault();
+            e.stopPropagation();
             
             const src = img.src;
             if (!src) return;
             
             // Use the original filename from the data attribute if available
-            let filename = img.dataset.originalFilename || 'Image';
+            let filename = img.dataset.originalFilename || img.alt || 'Image';
             
             // For relative image paths (from note markdown images), convert to dataURL
             let dataURLToCopy = src;
@@ -10486,7 +10654,7 @@ function enableImageContextMenus(container) {
             
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...', 'Ask AI...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...'],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
@@ -10499,7 +10667,7 @@ function enableImageContextMenus(container) {
                     } else if (index === 1) {
                         saveImageToFile(filename, dataURLToCopy);
                     } else if (index === 2) {
-                        askAIAboutCurrentDocument();
+                        askAIAboutImage(filename, dataURLToCopy);
                     }
                 },
             });
@@ -10755,6 +10923,25 @@ async function askAIAboutCurrentDocument() {
         await AskAI('notesDocument', fileName, aiContext);
     } catch (err) {
         notifyTerminal('Failed to ask AI about this document', 'error');
+        console.error(err);
+    }
+}
+
+async function askAIAboutImage(filename, dataURL) {
+    const imageData = String(dataURL || '').trim();
+    if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,.+$/i.test(imageData)) {
+        notifyTerminal('Unable to prepare this image for AI', 'warn');
+        return;
+    }
+
+    const imageName = String(filename || 'Image').trim() || 'Image';
+    setToolsPanelCollapsed(false);
+    setAIPanelLive(true);
+
+    try {
+        await AskAIImage(imageName, imageData);
+    } catch (err) {
+        notifyTerminal('Failed to ask AI about this image', 'error');
         console.error(err);
     }
 }
@@ -11659,12 +11846,17 @@ function initAIOutputContextMenu(container) {
             return;
         }
 
+        // Images carry their own menu, bound per element.
+        if (e.target instanceof Element && e.target.closest('img')) {
+            return;
+        }
+
         e.preventDefault();
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
         const codeBlockText = getRenderedCodeBlockText(container, e.target);
         const tableItems = table && container.contains(table)
-            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            ? [...createTableCopyMenuItems(table), createTableFilterMenuItem(table), { title: '-' }]
             : [];
 
         const wordWrapItems = (table && container.contains(table))
@@ -11749,8 +11941,9 @@ async function processAIMarkdownContainer(container, options = {}) {
     void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
     // AI panel code blocks stay unhighlighted; they're mostly tool output, not source.
     await processMarkdownContainer(container, { syntaxHighlighting: false });
+    enableImageContextMenus(container);
     wrapTablesForHorizontalScroll(container);
-    setupTableSorting(container);
+    setupNotesTableQueries(container, 'ai', '');
     applyNotesTableWordWrapMode(container);
     pinAIScrollableBlocksToBottom(container);
 }
@@ -11824,7 +12017,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
         const isRunMode = state.viewMode === 'jupyter';
         const tableIndex = table ? Array.from(container.querySelectorAll('table')).indexOf(table) : -1;
         const tableItems = table && container.contains(table)
-            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            ? [...createTableCopyMenuItems(table), createTableFilterMenuItem(table), { title: '-' }]
             : [];
         const insertItems = (table && isRunMode && container.contains(table))
             ? [...createTableInsertMenuItems(table, e.target, tableIndex), { title: '-' }]
@@ -14293,7 +14486,7 @@ elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const table = e.target instanceof Element ? e.target.closest('table') : null;
     if (!table || !elements.csvView.contains(table)) return;
-    const menuItems = [...createTableCopyMenuItems(table)];
+    const menuItems = [...createTableCopyMenuItems(table), createTableFilterMenuItem(table)];
     const isRunMode = state.viewMode === 'csv-run';
     if (isRunMode) {
         const insertItems = createTableInsertMenuItems(table, e.target, 0);
@@ -15046,6 +15239,13 @@ window.addEventListener('beforeunload', () => {
     closeOpenLspDocument();
     closeCurrentTyposDocument();
     NotesLspStopAll();
+    try {
+        if (typeof NotesTableDisposeAll === 'function') {
+            void Promise.resolve(NotesTableDisposeAll()).catch(() => {});
+        }
+    } catch {
+        // Nothing useful to do while the window is going away.
+    }
 });
 
 elements.modalInput.addEventListener('keydown', (event) => {

@@ -13,6 +13,8 @@ export function AddNotesFindFieldValue(arg1:string,arg2:string):Promise<Array<st
 
 export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function AskAIImage(arg1:string,arg2:string):Promise<void>;
+
 export function CancelNotesListFiles():Promise<void>;
 
 export function ClearAILog():Promise<void>;
@@ -178,6 +180,16 @@ export function NotesLspWorkspaceSymbols(arg1:string,arg2:string):Promise<Array<
 export function NotesRecentFiles():Promise<Array<string>>;
 
 export function NotesSpellCheck(arg1:string):Promise<Array<main.SpellCheckSuggestionT>>;
+
+export function NotesTableClearSort(arg1:main.NotesTableRequestT):Promise<main.NotesTableResultT>;
+
+export function NotesTableDisposeAll():Promise<void>;
+
+export function NotesTableFilter(arg1:main.NotesTableRequestT,arg2:string):Promise<main.NotesTableResultT>;
+
+export function NotesTableReconcile(arg1:string,arg2:string,arg3:Array<number>):Promise<void>;
+
+export function NotesTableSort(arg1:main.NotesTableRequestT,arg2:number):Promise<main.NotesTableResultT>;
 
 export function NotesTyposAvailable():Promise<boolean>;
 

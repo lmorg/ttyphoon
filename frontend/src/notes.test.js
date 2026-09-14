@@ -15,6 +15,12 @@ const getNotesMaxLogLinesMock = vi.fn();
 const getNotesLanguageTabIndentMock = vi.fn();
 const getNotesColumnWidthsMock = vi.fn();
 const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
+const emptyTableResult = () => ({ missing: false, order: [], sortColumn: 0, sortDesc: false, filter: '', error: '' });
+const notesTableSortMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableClearSortMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableFilterMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableReconcileMock = vi.fn(() => Promise.resolve());
+const notesTableDisposeAllMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const filterStringsMock = vi.fn((query, items) => {
@@ -44,6 +50,7 @@ const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
+const askAIImageMock = vi.fn(() => Promise.resolve());
 const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
 const getAIActiveStreamSnapshotMock = vi.fn(() => Promise.resolve({ active: false, runId: 0, sequence: 0, text: '' }));
 const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
@@ -166,6 +173,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
+    AskAIImage: askAIImageMock,
     GetAISessionCache: getAISessionCacheMock,
     GetAIActiveStreamSnapshot: getAIActiveStreamSnapshotMock,
     ListAIPromptLogs: listAIPromptLogsMock,
@@ -236,6 +244,11 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
+    NotesTableSort: notesTableSortMock,
+    NotesTableClearSort: notesTableClearSortMock,
+    NotesTableFilter: notesTableFilterMock,
+    NotesTableReconcile: notesTableReconcileMock,
+    NotesTableDisposeAll: notesTableDisposeAllMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
@@ -367,6 +380,16 @@ describe('notes rendering', () => {
         getNotesLanguageTabIndentMock.mockReset();
         getNotesColumnWidthsMock.mockReset();
         setNotesColumnWidthsMock.mockReset();
+        notesTableSortMock.mockReset();
+        notesTableSortMock.mockResolvedValue(emptyTableResult());
+        notesTableClearSortMock.mockReset();
+        notesTableClearSortMock.mockResolvedValue(emptyTableResult());
+        notesTableFilterMock.mockReset();
+        notesTableFilterMock.mockResolvedValue(emptyTableResult());
+        notesTableReconcileMock.mockReset();
+        notesTableReconcileMock.mockResolvedValue();
+        notesTableDisposeAllMock.mockReset();
+        notesTableDisposeAllMock.mockResolvedValue();
         getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
@@ -2416,6 +2439,43 @@ describe('notes rendering', () => {
         expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
+    it('sends the right-clicked image to Ask AI instead of the open document', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/source.go']);
+        getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/source.go"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        getEventHandler('aiResponseStream')('\n![diagram.png](data:image/png;base64,AAAA)\n');
+        await flushPromises();
+        getEventHandler('aiJobFinish')();
+        await flushPromises();
+        await flushPromises();
+
+        const image = document.getElementById('notes-ai-output').querySelector('img');
+        expect(image).not.toBeNull();
+
+        showLocalMenuMock.mockClear();
+        image.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 20,
+            clientY: 20,
+        }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        menuConfig.onSelect(2);
+        await flushPromises();
+
+        expect(askAIImageMock).toHaveBeenCalledWith('diagram.png', 'data:image/png;base64,AAAA');
+        expect(askAIMock).not.toHaveBeenCalled();
+    });
+
     it('adds Copy code and renames Copy to Copy selection when right-clicking a code block', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/code.md']);
         getFileMock.mockResolvedValue({ contents: '# Code\n\n```js\nconst x = 1;\n```', text: '', error: '' });
@@ -2773,6 +2833,36 @@ describe('notes rendering', () => {
         expect(menuConfig.options).not.toContain('Find');
         expect(menuConfig.options).not.toContain('Ask AI...');
         expect(menuConfig.options).not.toContain('Print');
+    });
+
+    // Images in the AI stream get the same menu as images in a rendered note,
+    // and the panel's generic menu must stand aside for them.
+    it('shows the image context menu for images in the AI panel', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        getEventHandler('aiResponseStream')('\n![diagram](diagram.png)\n');
+        await flushPromises();
+        getEventHandler('aiJobFinish')();
+        await flushPromises();
+        await flushPromises();
+
+        const img = document.getElementById('notes-ai-output').querySelector('img');
+        expect(img).not.toBeNull();
+
+        showLocalMenuMock.mockReset();
+        img.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        expect(showLocalMenuMock.mock.calls[0][0].options).toEqual([
+            'Copy image to clipboard',
+            'Save image...',
+            'Ask AI (image)...',
+        ]);
     });
 
     it('adds a timestamp when an AI job starts', async () => {
@@ -4192,6 +4282,170 @@ describe('notes rendering', () => {
             expect(testCell.style.backgroundColor).toBe('');
             expect(testCell.style.color).toBe('');
         }
+    });
+
+    // Sorting and filtering are owned by the Go engine so the terminal and Notes
+    // cannot drift apart; the frontend only reorders rows it already rendered.
+    describe('Go-backed table sorting', () => {
+        const loadMarkdownTable = async () => {
+            listFilesMock.mockResolvedValue(['$NOTES/table.md']);
+            getFileMock.mockResolvedValue({ contents: [
+                '| Name | Value |',
+                '| --- | --- |',
+                '| Alpha | 1 |',
+                '| Beta | 2 |',
+                '| Gamma | 3 |',
+            ].join('\n'), text: '', error: '' });
+
+            await importNotesModule();
+
+            document.querySelector('[data-file="$NOTES/table.md"]').click();
+            await flushPromises();
+            await flushPromises();
+
+            return document.querySelector('#notes-preview table');
+        };
+
+        const bodyText = (table) => Array.from(table.querySelectorAll('tbody tr'))
+            .map((row) => row.querySelector('td')?.textContent?.trim());
+
+        it('delegates a heading click to the Go engine with a 1-based column', async () => {
+            const table = await loadMarkdownTable();
+            expect(table).toBeTruthy();
+
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [2, 0, 1], sortColumn: 1, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableSortMock).toHaveBeenCalled();
+            const [request, column] = notesTableSortMock.mock.calls[0];
+            expect(column).toBe(1);
+            expect(request.key.surface).toBe('preview');
+            expect(request.seed.headings).toEqual(['Name', 'Value']);
+            expect(request.seed.rows).toEqual([['Alpha', '1'], ['Beta', '2'], ['Gamma', '3']]);
+        });
+
+        it('reorders existing rows to the order returned by Go', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [2, 0, 1], sortColumn: 1, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(bodyText(table)).toEqual(['Gamma', 'Alpha', 'Beta']);
+        });
+
+        it('shows the sort direction with the same arrows as the terminal', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [0, 1, 2], sortColumn: 1, sortDesc: true, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(table.querySelector('.notes-sort-icon')?.textContent).toBe('\u2193');
+        });
+
+        // Rows excluded by a filter stay in the DOM so cell editing and formulas
+        // keep resolving against a complete document.
+        it('hides filtered rows without removing them', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [1], sortColumn: 0, sortDesc: false, filter: '"Value" > 1', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            expect(rows).toHaveLength(3);
+            expect(rows.filter((row) => !row.classList.contains('notes-table-row-filtered'))).toHaveLength(1);
+        });
+
+        // Losing server-side state must be recoverable, so a miss is retried once
+        // with the data attached rather than surfacing as a broken table.
+        it('resends the seed when Go reports the table is missing', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock
+                .mockResolvedValueOnce({ missing: true, order: [], sortColumn: 0, sortDesc: false, filter: '', error: '' })
+                .mockResolvedValueOnce({ missing: false, order: [0, 1, 2], sortColumn: 1, sortDesc: false, filter: '', error: '' });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableSortMock).toHaveBeenCalledTimes(2);
+            expect(notesTableSortMock.mock.calls[1][0].seed).not.toBeNull();
+        });
+
+        it('offers clear sorting and SQL filter on a heading right-click', async () => {
+            const table = await loadMarkdownTable();
+            showLocalMenuMock.mockReset();
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+            await flushPromises();
+
+            expect(showLocalMenuMock).toHaveBeenCalled();
+            expect(showLocalMenuMock.mock.calls[0][0].options).toEqual(
+                expect.arrayContaining(['Clear sorting', 'SQL filter...']));
+        });
+
+        it('clears the sort on a middle-click, as the terminal does', async () => {
+            const table = await loadMarkdownTable();
+            notesTableClearSortMock.mockResolvedValue({
+                missing: false, order: [0, 1, 2], sortColumn: 0, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableClearSortMock).toHaveBeenCalled();
+            expect(notesTableSortMock).not.toHaveBeenCalled();
+            expect(table.querySelector('.notes-sort-icon')).toBeNull();
+        });
+
+        it('ignores other auxiliary buttons on a heading', async () => {
+            const table = await loadMarkdownTable();
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 3 }));
+            await flushPromises();
+
+            expect(notesTableClearSortMock).not.toHaveBeenCalled();
+        });
+
+        // Each surface reconciles independently, so one rendering must not drop
+        // tables belonging to another.
+        it('declares the tables that still exist for each surface', async () => {
+            await loadMarkdownTable();
+
+            expect(notesTableReconcileMock).toHaveBeenCalled();
+
+            const previewCall = notesTableReconcileMock.mock.calls.find(([surface]) => surface === 'preview');
+            expect(previewCall).toBeTruthy();
+            expect(previewCall[2]).toEqual([0]);
+
+            const surfaces = notesTableReconcileMock.mock.calls.map(([surface]) => surface);
+            expect(new Set(surfaces).size).toBeGreaterThan(1);
+        });
     });
 
     it('highlights entire table when Copy table menu item is hovered in Run mode', async () => {
