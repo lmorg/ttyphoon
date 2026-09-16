@@ -268,8 +268,55 @@ func ClearActiveSession(workspace string, limit int) (FrontendStateT, error) {
 		return FrontendStateT{}, fmt.Errorf("cannot clear active session history: %w", err)
 	}
 
-	if _, err := tx.Exec(`UPDATE sessions_meta SET updated = ? WHERE tableId = ?`, nowString(), activeID); err != nil {
+	if _, err := tx.Exec(`UPDATE sessions_meta SET updated = ?, entryCount = 0 WHERE tableId = ?`, nowString(), activeID); err != nil {
 		return FrontendStateT{}, fmt.Errorf("cannot update active session timestamp: %w", err)
+	}
+
+	state, err := frontendStateTx(tx, activeID, limit)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot commit sessiondb transaction: %w", err)
+	}
+
+	return state, nil
+}
+
+// DeleteActiveSessionEntry removes a single prompt/response row (by its id, the
+// same value used as the per-prompt log file's promptID) from the active
+// session's history table.
+func DeleteActiveSessionEntry(workspace string, entryID int64, limit int) (FrontendStateT, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	db, err := openDB(workspace)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot begin sessiondb transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	activeID, err := ensureActiveSessionTx(tx)
+	if err != nil {
+		return FrontendStateT{}, err
+	}
+
+	res, err := tx.Exec(fmt.Sprintf(`DELETE FROM %s WHERE id = ?`, quotedSessionTable(activeID)), entryID)
+	if err != nil {
+		return FrontendStateT{}, fmt.Errorf("cannot delete session entry %d: %w", entryID, err)
+	}
+
+	if affected, _ := res.RowsAffected(); affected > 0 {
+		if _, err := tx.Exec(`UPDATE sessions_meta SET updated = ?, entryCount = MAX(entryCount - 1, 0) WHERE tableId = ?`, nowString(), activeID); err != nil {
+			return FrontendStateT{}, fmt.Errorf("cannot update active session metadata: %w", err)
+		}
 	}
 
 	state, err := frontendStateTx(tx, activeID, limit)
@@ -324,7 +371,7 @@ func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmRe
 	}
 
 	if _, err := tx.Exec(
-		`UPDATE sessions_meta SET updated = ?, summary = CASE WHEN TRIM(COALESCE(summary, '')) = '' OR summary = ? THEN ? ELSE summary END WHERE tableId = ?`,
+		`UPDATE sessions_meta SET updated = ?, entryCount = entryCount + 1, summary = CASE WHEN TRIM(COALESCE(summary, '')) = '' OR summary = ? THEN ? ELSE summary END WHERE tableId = ?`,
 		nowString(),
 		defaultSessionTitle,
 		sessionSummary(prompt),
@@ -420,8 +467,11 @@ func frontendStateTx(tx *sql.Tx, activeID int64, limit int) (FrontendStateT, err
 }
 
 func loadSessionMetasTx(tx *sql.Tx) ([]FrontendSessionMetaT, error) {
+	// entryCount is maintained incrementally (see AppendActiveSessionEntry and
+	// ClearActiveSession) rather than recomputed here, so opening the session
+	// list never scans a history table.
 	rows, err := tx.Query(`
-		SELECT tableId, summary, created, updated, active
+		SELECT tableId, summary, created, updated, active, entryCount
 		FROM sessions_meta
 		ORDER BY active DESC, updated DESC, tableId DESC`)
 	if err != nil {
@@ -433,17 +483,11 @@ func loadSessionMetasTx(tx *sql.Tx) ([]FrontendSessionMetaT, error) {
 	for rows.Next() {
 		var meta FrontendSessionMetaT
 		var activeInt int
-		if err := rows.Scan(&meta.TableID, &meta.Summary, &meta.Created, &meta.Updated, &activeInt); err != nil {
+		if err := rows.Scan(&meta.TableID, &meta.Summary, &meta.Created, &meta.Updated, &activeInt, &meta.EntryCount); err != nil {
 			return nil, fmt.Errorf("cannot scan session metadata: %w", err)
 		}
 
-		count, err := sessionEntryCountTx(tx, meta.TableID)
-		if err != nil {
-			return nil, err
-		}
-
 		meta.Active = activeInt == 1
-		meta.EntryCount = count
 		out = append(out, meta)
 	}
 
@@ -452,6 +496,22 @@ func loadSessionMetasTx(tx *sql.Tx) ([]FrontendSessionMetaT, error) {
 	}
 
 	return out, nil
+}
+
+// maxHistoryFieldChars caps fields rendered directly into the AI Settings
+// history list. A field this large is virtually always a stray base64 blob
+// (e.g. an image data URL that was fed through the generic "ask AI about this
+// document" path rather than the dedicated image attachment path); rendering
+// it as one giant unbroken string of text is what froze the modal, since
+// browsers are pathologically slow laying out whitespace-free text of that
+// length. This does not affect what the model saw or what is stored on disk.
+const maxHistoryFieldChars = 4000
+
+func truncateHistoryField(s string) string {
+	if len(s) <= maxHistoryFieldChars {
+		return s
+	}
+	return s[:maxHistoryFieldChars] + "\n\n[truncated for display]"
 }
 
 func loadFrontendHistoryTx(tx *sql.Tx, tableID int64, limit int) ([]FrontendHistoryItemT, error) {
@@ -470,9 +530,9 @@ func loadFrontendHistoryTx(tx *sql.Tx, tableID int64, limit int) ([]FrontendHist
 
 		out = append(out, FrontendHistoryItemT{
 			ID:          entry.ID,
-			Prompt:      strings.TrimSpace(entry.Prompt),
-			CommandLine: strings.TrimSpace(entry.CommandLine),
-			OutputBlock: strings.TrimSpace(entry.OutputBlock),
+			Prompt:      truncateHistoryField(strings.TrimSpace(entry.Prompt)),
+			CommandLine: truncateHistoryField(strings.TrimSpace(entry.CommandLine)),
+			OutputBlock: truncateHistoryField(strings.TrimSpace(entry.OutputBlock)),
 			Response:    response,
 			Excerpt:     excerpt,
 		})
@@ -549,13 +609,92 @@ func initDB(db *sql.DB) error {
 			summary TEXT NOT NULL,
 			created TEXT NOT NULL,
 			updated TEXT NOT NULL,
-			active INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0, 1))
+			active INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0, 1)),
+			entryCount INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS sessions_meta_active_idx ON sessions_meta(active) WHERE active = 1;
 	`)
 	if err != nil {
 		return fmt.Errorf("cannot initialize session metadata table: %w", err)
 	}
+
+	return migrateEntryCountColumn(db)
+}
+
+// migrateEntryCountColumn adds entryCount to a sessions_meta table created before
+// the column existed, backfilling it once from the per-session history tables.
+// Reads afterwards use this maintained column instead of scanning every
+// session's history table on every call, which is what previously made opening
+// AI Settings slow to the point of appearing hung for workspaces with a large
+// history.
+func migrateEntryCountColumn(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(sessions_meta)`)
+	if err != nil {
+		return fmt.Errorf("cannot inspect sessions_meta schema: %w", err)
+	}
+
+	hasColumn := false
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			ctype      string
+			notNull    int
+			defaultVal any
+			pk         int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultVal, &pk); err != nil {
+			rows.Close()
+			return fmt.Errorf("cannot read sessions_meta column info: %w", err)
+		}
+		if name == "entryCount" {
+			hasColumn = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("cannot iterate sessions_meta column info: %w", err)
+	}
+	rows.Close()
+
+	if hasColumn {
+		return nil
+	}
+
+	if _, err := db.Exec(`ALTER TABLE sessions_meta ADD COLUMN entryCount INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("cannot add entryCount column: %w", err)
+	}
+
+	tableIDs, err := db.Query(`SELECT tableId FROM sessions_meta`)
+	if err != nil {
+		return fmt.Errorf("cannot list sessions to backfill entryCount: %w", err)
+	}
+	defer tableIDs.Close()
+
+	ids := make([]int64, 0)
+	for tableIDs.Next() {
+		var id int64
+		if err := tableIDs.Scan(&id); err != nil {
+			return fmt.Errorf("cannot scan session id to backfill entryCount: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := tableIDs.Err(); err != nil {
+		return fmt.Errorf("cannot iterate sessions to backfill entryCount: %w", err)
+	}
+
+	// One-time backfill: every existing session is scanned exactly once here,
+	// after which entryCount is kept in sync incrementally.
+	for _, id := range ids {
+		var count int
+		if err := db.QueryRow(fmt.Sprintf(`SELECT COUNT(1) FROM %s`, quotedSessionTable(id))).Scan(&count); err != nil {
+			return fmt.Errorf("cannot backfill entryCount for session %d: %w", id, err)
+		}
+		if _, err := db.Exec(`UPDATE sessions_meta SET entryCount = ? WHERE tableId = ?`, count, id); err != nil {
+			return fmt.Errorf("cannot store entryCount for session %d: %w", id, err)
+		}
+	}
+
 	return nil
 }
 
@@ -684,15 +823,6 @@ func sessionIsActiveTx(tx *sql.Tx, tableID int64) (bool, error) {
 		return false, fmt.Errorf("cannot query session activity: %w", err)
 	}
 	return activeInt == 1, nil
-}
-
-func sessionEntryCountTx(tx *sql.Tx, tableID int64) (int, error) {
-	var count int
-	err := tx.QueryRow(fmt.Sprintf(`SELECT COUNT(1) FROM %s`, quotedSessionTable(tableID))).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("cannot count session entries for %d: %w", tableID, err)
-	}
-	return count, nil
 }
 
 func dbPath(workspace string) (string, error) {

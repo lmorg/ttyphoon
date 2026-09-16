@@ -553,6 +553,19 @@ func DeleteSessionLog(workspace string, sessionID int64) error {
 	return ClearSessionLog(workspace, sessionID)
 }
 
+// DeletePromptLog removes a single per-prompt log file, leaving the rest of the
+// session's log untouched.
+func DeletePromptLog(workspace string, sessionID, promptID int64) error {
+	path, err := sessionLogPromptPath(workspace, sessionID, promptID)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // finalizePromptLogLocked appends the closing suffix to the pending file and
 // renames it to its per-prompt destination. When promptID is 0 (unknown, e.g.
 // a race), the pending file is left in place for the next run to overwrite.

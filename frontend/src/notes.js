@@ -13,7 +13,7 @@ import {
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAIActiveStreamSnapshot,
-    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession,
+    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
@@ -538,7 +538,6 @@ app.innerHTML = `
                                 <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask…</button>
                                 <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
-                                <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
                                 <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
                             </div>
                             <div id="notes-ai-output" class="notes-ai-output"></div>
@@ -780,7 +779,6 @@ const elements = {
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
     toolsAISkills: document.getElementById('notes-tools-ai-skills'),
     toolsAISettings: document.getElementById('notes-tools-ai-settings'),
-    toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
     aiScrollBottom: document.getElementById('notes-ai-scroll-bottom'),
     aiSettingsModal: document.getElementById('notes-ai-settings-modal'),
@@ -10851,6 +10849,58 @@ function createCopyMenuItem(getText, title = 'Copy') {
     };
 }
 
+function getRenderedCopyBlockText(block) {
+    if (!(block instanceof Element)) {
+        return '';
+    }
+
+    const copy = block.cloneNode(true);
+    copy.querySelectorAll('.notes-copy-block-button').forEach((button) => button.remove());
+    const code = copy.matches('pre') ? copy.querySelector('code') : null;
+    return String((code || copy).textContent || '');
+}
+
+function ensureRenderedBlockCopyButton(block) {
+    if (!(block instanceof HTMLElement) || block.dataset.copyButtonBound === 'true') {
+        return;
+    }
+
+    block.dataset.copyButtonBound = 'true';
+    block.classList.add('notes-copy-block');
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'notes-copy-block-button';
+    button.title = 'Copy block to clipboard';
+    button.setAttribute('aria-label', 'Copy block to clipboard');
+    button.textContent = String.fromCodePoint(CONTEXT_ICON_COPY);
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextToClipboard(getRenderedCopyBlockText(block));
+        button.dataset.copied = 'true';
+        setTimeout(() => {
+            button.dataset.copied = 'false';
+        }, 700);
+    });
+    block.appendChild(button);
+}
+
+function initRenderedBlockCopyButtons(container) {
+    if (!container || container.dataset.copyBlockButtonsBound === 'true') {
+        return;
+    }
+
+    container.dataset.copyBlockButtonsBound = 'true';
+    container.addEventListener('mouseover', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const block = target?.closest('pre, blockquote');
+        if (block && container.contains(block)) {
+            ensureRenderedBlockCopyButton(block);
+        }
+    });
+}
+
 function createFindMenuItem(title = 'Find text...') {
     return {
         title,
@@ -10903,6 +10953,16 @@ async function askAIAboutCurrentDocument() {
 
     const fileName = state.currentFile;
     const fileType = state.currentFileType || 'unknown';
+
+    // Route image documents through the dedicated image path instead of
+    // embedding the base64 data URL as document text: that text is persisted
+    // verbatim to the session history and previously froze the AI Settings
+    // modal when it tried to render it back out.
+    if (String(fileType).toLowerCase() === 'image') {
+        await askAIAboutImage(getPathFileName(fileName) || fileName, String(elements.imageViewImg?.src || '').trim());
+        return;
+    }
+
     const contents = getCurrentDocumentContentsForAI();
     if (!contents) {
         notifyTerminal('This document has no content to send to AI', 'warn');
@@ -11270,6 +11330,7 @@ function renderAISessionHistory() {
 
     elements.aiSettingsHistoryList.dataset.empty = 'false';
     const items = sessions.slice(0, 12).map((entry) => {
+        const entryId = Number(entry.id) || 0;
         const safeTitle = escapeHtml(entry.prompt || 'AI prompt');
         const safeCmdLine = escapeHtml(entry.commandLine || '');
         const safeExcerpt = escapeHtml(entry.excerpt || '');
@@ -11278,11 +11339,14 @@ function renderAISessionHistory() {
         const outputHtml = safeOutput ? `<div class="notes-ai-settings-history-output">${safeOutput}</div>` : '';
         const excerptHtml = safeExcerpt ? `<div class="notes-ai-settings-history-excerpt">${safeExcerpt}</div>` : '';
         return `
-            <div class="notes-ai-settings-history-item">
-                <div class="notes-ai-settings-history-heading">${safeTitle}</div>
-                ${cmdLineHtml}
-                ${outputHtml}
-                ${excerptHtml}
+            <div class="notes-ai-settings-history-item" data-entry-id="${entryId}">
+                <div class="notes-ai-settings-history-main">
+                    <div class="notes-ai-settings-history-heading">${safeTitle}</div>
+                    ${cmdLineHtml}
+                    ${outputHtml}
+                    ${excerptHtml}
+                </div>
+                <button type="button" class="notes-ai-settings-history-erase" data-action="erase" data-entry-id="${entryId}" aria-label="Erase this prompt" title="Erase this prompt"></button>
             </div>
         `;
     }).join('');
@@ -11837,6 +11901,8 @@ function initAIOutputContextMenu(container) {
         return;
     }
 
+    initRenderedBlockCopyButtons(container);
+
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
         if (anchor && container.contains(anchor)) {
@@ -11996,6 +12062,8 @@ function initRenderedNotesContextMenu(container, viewMode) {
             hideHyperlinkHoverTooltip();
         });
     }
+
+    initRenderedBlockCopyButtons(container);
 
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
@@ -13158,9 +13226,6 @@ EventsOn('fileActionDialog', (payload) => {
 if (elements.toolsMinimize) {
     elements.toolsMinimize.addEventListener('click', toggleToolsPanel);
 }
-if (elements.toolsClear) {
-    elements.toolsClear.addEventListener('click', clearAIOutput);
-}
 if (elements.toolsAIAsk) {
     elements.toolsAIAsk.addEventListener('click', () => {
         void askAIFromToolbar();
@@ -13288,6 +13353,30 @@ if (elements.aiSettingsSessionsList) {
             });
             return;
         }
+    });
+}
+if (elements.aiSettingsHistoryList) {
+    elements.aiSettingsHistoryList.addEventListener('click', (event) => {
+        const eraseButton = event.target instanceof HTMLElement
+            ? event.target.closest('button[data-action="erase"]')
+            : null;
+        if (!eraseButton) {
+            return;
+        }
+
+        const entryId = Number(eraseButton.dataset.entryId) || 0;
+        if (entryId <= 0) {
+            return;
+        }
+
+        DeleteAIHistoryEntry(entryId).then((sessionState) => {
+            applyAISessionManagement(sessionState);
+            renderAISessionManagement();
+            void refreshAIPromptJumpFromBackend();
+        }).catch((err) => {
+            notifyTerminal('Failed to erase this prompt', 'error');
+            console.error(err);
+        });
     });
 }
 if (elements.aiSettingsSessionNew) {

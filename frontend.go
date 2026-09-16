@@ -2857,6 +2857,28 @@ func (a *WApp) ClearAILog() {
 	}
 }
 
+// DeleteAIHistoryEntry removes a single prompt/response entry from the active
+// session, both the sqlite row shown in the Settings transcript and its
+// per-prompt markdown log file.
+func (a *WApp) DeleteAIHistoryEntry(entryID int64) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.DeleteActiveSessionEntry(agt.Workspace(), entryID, 24)
+	if err != nil {
+		log.Printf("[debug] ai delete history entry: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	if err := sessiondb.DeletePromptLog(agt.Workspace(), state.ActiveSessionID, entryID); err != nil {
+		log.Printf("[debug] ai delete prompt log: %v", err)
+	}
+
+	return state
+}
+
 func (a *WApp) AskAI(callerType, filename, contents string) {
 	log.Printf(`[debug] WApp AskAI: callerType="%s"`, callerType)
 

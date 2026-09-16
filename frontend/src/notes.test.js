@@ -60,6 +60,9 @@ const createAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, se
 const setActiveAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const deleteAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const renameAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const deleteAIHistoryEntryMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const getAIToolsListMock = vi.fn(() => Promise.resolve([]));
+const getAIMcpServersMock = vi.fn(() => Promise.resolve([]));
 const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1']));
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
 const getAIExecutionLimitsMock = vi.fn(() => Promise.resolve({ agentSteps: 10, requestTimeout: '5m' }));
@@ -93,6 +96,7 @@ const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
     '- Other: `r--`',
 ].join('\n')));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
+const getImageMock = vi.fn(() => Promise.resolve('data:image/png;base64,AAAA'));
 const resolveNoteLocationMock = vi.fn(() => Promise.resolve('$NOTES'));
 const composeNoteLocationPathMock = vi.fn((location, name) => `${location}/${String(name || '').replace(/^\/+/, '')}`);
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
@@ -154,6 +158,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetNotesLanguageReservedWords: vi.fn(() => Promise.resolve([])),
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
+    GetImage: getImageMock,
     ListFiles: listFilesMock,
     FilterStrings: filterStringsMock,
     SaveFile: saveFileMock,
@@ -183,6 +188,9 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     SetActiveAISession: setActiveAISessionMock,
     DeleteAISession: deleteAISessionMock,
     RenameAISession: renameAISessionMock,
+    DeleteAIHistoryEntry: deleteAIHistoryEntryMock,
+    GetAIToolsList: getAIToolsListMock,
+    GetAIMcpServers: getAIMcpServersMock,
     ListAIModelSelections: listAIModelSelectionsMock,
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
     GetAIExecutionLimits: getAIExecutionLimitsMock,
@@ -2510,6 +2518,89 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(clipboardSetTextMock).toHaveBeenCalledWith('const x = 1;\nconst y = 2;\n');
+    });
+
+    it('shows a hover copy button for code and quote blocks in View and AI output', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/blocks.md']);
+        getFileMock.mockResolvedValue({ contents: '# Blocks', text: '', error: '' });
+
+        await importNotesModule();
+        clipboardSetTextMock.mockClear();
+
+        const preview = document.getElementById('notes-preview');
+        preview.innerHTML = '<pre><code>view code\n</code></pre><blockquote>view quote</blockquote>';
+        const viewCode = preview.querySelector('pre');
+        const viewQuote = preview.querySelector('blockquote');
+
+        viewCode.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        viewQuote.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+        const viewCodeButton = viewCode.querySelector('.notes-copy-block-button');
+        const viewQuoteButton = viewQuote.querySelector('.notes-copy-block-button');
+        expect(viewCodeButton).not.toBeNull();
+        expect(viewQuoteButton).not.toBeNull();
+
+        viewCodeButton.click();
+        viewQuoteButton.click();
+        await flushPromises();
+
+        expect(clipboardSetTextMock).toHaveBeenNthCalledWith(1, 'view code\n');
+        expect(clipboardSetTextMock).toHaveBeenNthCalledWith(2, 'view quote');
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        aiOutput.innerHTML = '<pre><code>ai code</code></pre><blockquote>ai quote</blockquote>';
+        const aiCode = aiOutput.querySelector('pre');
+        const aiQuote = aiOutput.querySelector('blockquote');
+
+        aiCode.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        aiQuote.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        expect(aiCode.querySelector('.notes-copy-block-button')).not.toBeNull();
+        expect(aiQuote.querySelector('.notes-copy-block-button')).not.toBeNull();
+    });
+
+    it('erases a single prompt from the AI Settings transcript without a global clear button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary', text: '', error: '' });
+        getAISessionManagementMock.mockResolvedValue({
+            activeSessionId: 1,
+            sessions: [],
+            history: [
+                { id: 42, prompt: 'First prompt', commandLine: '', outputBlock: '', excerpt: 'first excerpt' },
+                { id: 43, prompt: 'Second prompt', commandLine: '', outputBlock: '', excerpt: 'second excerpt' },
+            ],
+        });
+
+        await importNotesModule();
+
+        // The button is relocated into the modal; it must not exist in the toolbar.
+        expect(document.getElementById('notes-tools-clear')).toBeNull();
+
+        document.getElementById('notes-tools-ai-settings').click();
+        await flushPromises();
+        await flushPromises();
+
+        const historyList = document.getElementById('notes-ai-settings-history-list');
+        const eraseButtons = historyList.querySelectorAll('button[data-action="erase"]');
+        expect(eraseButtons).toHaveLength(2);
+        expect(eraseButtons[0].dataset.entryId).toBe('42');
+        expect(eraseButtons[1].dataset.entryId).toBe('43');
+
+        deleteAIHistoryEntryMock.mockResolvedValueOnce({
+            activeSessionId: 1,
+            sessions: [],
+            history: [
+                { id: 43, prompt: 'Second prompt', commandLine: '', outputBlock: '', excerpt: 'second excerpt' },
+            ],
+        });
+
+        eraseButtons[0].click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(deleteAIHistoryEntryMock).toHaveBeenCalledWith(42);
+        const remaining = historyList.querySelectorAll('button[data-action="erase"]');
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0].dataset.entryId).toBe('43');
     });
 
     it('invokes backend AskAI notesPromptToolbar caller from toolbar Ask button', async () => {

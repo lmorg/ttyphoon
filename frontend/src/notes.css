@@ -429,6 +429,32 @@ body {
     background-color: rgba(var(--red-rgb), 0.2);
 }
 
+.notes-ai-settings-history-erase {
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 900;
+    transition: color 0.2s, background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.notes-ai-settings-history-erase::before {
+    content: "\f12d";
+}
+
+.notes-ai-settings-history-erase:hover {
+    color: var(--red);
+    background-color: rgba(var(--red-rgb), 0.2);
+}
+
 .notes-ai-settings-tools-list {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -574,18 +600,24 @@ body {
 }
 
 .notes-ai-settings-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
     border: 0px;
     border-left: 2px solid rgba(var(--fg-rgb), 0.2);
     padding: 8px;
     border-radius: 0;
-    /*background: rgba(var(--bg-rgb), 0.5);*/
-    /*height: 200px;*/
-    /*overflow-y: hidden;*/
 }
 
 .notes-ai-settings-history-item:hover {
     border-left: 2px solid var(--accent);
     background: rgba(var(--bg-rgb), 0.5);
+}
+
+.notes-ai-settings-history-main {
+    min-width: 0;
+    flex: 1;
 }
 
 .notes-ai-settings-history-heading {
@@ -1767,6 +1799,41 @@ body {
 #notes-ai-output .notes-ai-markdown blockquote {
     max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
     overflow-y: auto;
+}
+
+.notes-copy-block {
+    position: relative;
+}
+
+.notes-copy-block-button {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(var(--fg-rgb), 0.25);
+    border-radius: 4px;
+    background: rgba(var(--bg-rgb), 0.9);
+    color: var(--fg);
+    cursor: pointer;
+    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 900;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.notes-copy-block:hover .notes-copy-block-button,
+.notes-copy-block-button:focus-visible,
+.notes-copy-block-button[data-copied="true"] {
+    opacity: 1;
+}
+
+.notes-copy-block-button:hover,
+.notes-copy-block-button[data-copied="true"] {
+    background: var(--accent);
+    color: var(--bg);
 }
 
 #notes-ai-output:empty::before {

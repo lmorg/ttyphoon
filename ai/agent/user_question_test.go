@@ -33,6 +33,27 @@ func TestUserQuestionRequestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestContinuationChoicesUseUserQuestionLinks(t *testing.T) {
+	requestID, _ := newUserQuestionRequest()
+	markdown := formatUserQuestionRequestMarkdown(
+		"The agent reached the maximum number of continuations (3). What should happen next?",
+		requestID,
+		[]string{"continue", "finish up"},
+	)
+
+	if !strings.Contains(markdown, "answer=continue") {
+		t.Fatalf("continuation prompt missing continue choice: %q", markdown)
+	}
+	if !strings.Contains(markdown, "answer=finish+up") {
+		t.Fatalf("continuation prompt missing finish up choice: %q", markdown)
+	}
+	if strings.Count(markdown, "ttyphoon://ai-user-question") != 2 {
+		t.Fatalf("continuation prompt has %d links, want 2: %q", strings.Count(markdown, "ttyphoon://ai-user-question"), markdown)
+	}
+
+	ResolveUserQuestionRequest(requestID, "continue")
+}
+
 func TestResolveUserQuestionRequest_NoopWhenRequestAlreadyResolved(t *testing.T) {
 	if err := ResolveUserQuestionRequest("missing-request-id", "staging"); err != nil {
 		t.Fatalf("ResolveUserQuestionRequest() returned error for a stale request: %v", err)

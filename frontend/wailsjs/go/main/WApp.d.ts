@@ -33,6 +33,8 @@ export function ComposeNoteLocationPath(arg1:string,arg2:string):Promise<string>
 
 export function CreateAISession():Promise<sessiondb.FrontendStateT>;
 
+export function DeleteAIHistoryEntry(arg1:number):Promise<sessiondb.FrontendStateT>;
+
 export function DeleteAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
 export function DeleteFile(arg1:string):Promise<void>;

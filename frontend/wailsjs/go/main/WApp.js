@@ -50,6 +50,10 @@ export function CreateAISession() {
   return window['go']['main']['WApp']['CreateAISession']();
 }
 
+export function DeleteAIHistoryEntry(arg1) {
+  return window['go']['main']['WApp']['DeleteAIHistoryEntry'](arg1);
+}
+
 export function DeleteAISession(arg1) {
   return window['go']['main']['WApp']['DeleteAISession'](arg1);
 }

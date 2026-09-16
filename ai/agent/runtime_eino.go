@@ -598,18 +598,39 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		log.Printf("[debug] Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations)
 		result, err := r.runLLMWithMessageStream(ctx, continuationMessages, streamCallback)
 		response.WriteString(result)
-		if err == nil || !isMaxStepError(err) || continuation >= config.Config.Ai.MaxContinuations {
+		if err == nil || !isMaxStepError(err) {
 			return response.String(), err
+		}
+
+		continuationSummary := fmt.Sprintf(
+			"The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action. Previous run output:\n%s",
+			result,
+		)
+		nextContinuation := continuation + 1
+
+		if continuation >= config.Config.Ai.MaxContinuations {
+			choice, choiceErr := RequestUserQuestion(ctx,
+				fmt.Sprintf("The agent has reached the maximum number of continuations (%d). What should happen next?", config.Config.Ai.MaxContinuations),
+				[]string{"continue", "finish up"},
+			)
+			if choiceErr != nil {
+				return response.String(), choiceErr
+			}
+			if strings.EqualFold(strings.TrimSpace(choice), "finish up") {
+				emitAIStreamToolProgress(ctx, fmt.Sprintf("\n\n**Continuation summary**\n\n%s\n\n", continuationSummary))
+				return response.String(), nil
+			}
+			// The user explicitly granted another continuation window. Reset the
+			// bounded counter so the same decision is available again later.
+			continuation = -1
+			nextContinuation = 1
 		}
 
 		emitAIStreamToolProgress(ctx, fmt.Sprintf(
 			"\n\n**Continuing after max steps (%d/%d)**\n\n",
-			continuation+1, config.Config.Ai.MaxContinuations,
+			nextContinuation, config.Config.Ai.MaxContinuations,
 		))
-		continuationMessages = append(continuationMessages, schema.UserMessage(fmt.Sprintf(
-			"The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action. Previous run output:\n%s",
-			result,
-		)))
+		continuationMessages = append(continuationMessages, schema.UserMessage(continuationSummary))
 	}
 }
 
