@@ -38,7 +38,7 @@ func (t *Directory) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
 }
 func (t *Directory) Description() string {
-	return ``
+	return directoryDescription
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {

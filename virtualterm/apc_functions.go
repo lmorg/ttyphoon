@@ -123,7 +123,9 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 }
 
 func (term *Term) beginOutputBlock(cmdLine []rune, envvars map[string]string) {
-	term._blockMeta = NewRowBlockMeta(term)
+	bm := NewRowBlockMeta(term)
+	bm.CopyCallbacks(term._blockMeta)
+	term._blockMeta = bm
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 	term._blockMeta.Query = cmdLine
 	term._blockMeta.EnvVars = envvars

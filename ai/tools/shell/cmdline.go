@@ -3,6 +3,8 @@ package shell
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
+	"fmt"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -47,15 +49,35 @@ func (t *CommandLine) shellName() string {
 func (t *CommandLine) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
 
-	/*var request cmdlineT
-	if err := json.Unmarshal([]byte(input), &request); err != nil {
-		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
-	}*/
+	c := make(chan *types.BlockCallbackT)
+
+	t.term.SetCommandCallback(func(cb *types.BlockCallbackT) {
+		c <- cb
+	})
+
+	bct := <-c
 
 	t.term.Reply([]byte(input))
 
-	result := "todo"
-	//////
-	debug.Log(result)
-	return result, nil
+	result := &resultT{
+		Output:    bct.Output,
+		ExitCode:  bct.Meta.ExitNum,
+		TimeStart: bct.Meta.TimeStart.String(),
+		TimeEnd:   bct.Meta.TimeEnd.String(),
+		Duration:  bct.Meta.TimeEnd.Sub(bct.Meta.TimeStart).String(),
+	}
+
+	b, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("Command ran but cannot marshall output: %v", err), nil
+	}
+	return string(b), nil
+}
+
+type resultT struct {
+	Output    string
+	ExitCode  int
+	TimeStart string
+	TimeEnd   string
+	Duration  string
 }

@@ -76,6 +76,14 @@ func (bm *BlockMeta) SetCallback(callback func(*BlockCallbackT)) {
 	bm.callbacks = append(bm.callbacks, callback)
 }
 
+func (bm *BlockMeta) CopyCallbacks(src *BlockMeta) {
+	bm.cbMu.Lock()
+	src.cbMu.Lock()
+	defer bm.cbMu.Unlock()
+	defer src.cbMu.Unlock()
+	bm.callbacks = append(bm.callbacks, src.callbacks...)
+}
+
 type AiMetaT struct {
 	Agent    string
 	Prompt   *string
