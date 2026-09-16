@@ -38,9 +38,13 @@ func TestImageEndpoint(t *testing.T) {
 	}
 
 	for input, want := range tests {
-		if got := imageEndpoint(input); got != want {
+		if got := imageEndpoint(input, "generations"); got != want {
 			t.Errorf("imageEndpoint(%q) = %q, want %q", input, got, want)
 		}
+	}
+
+	if got := imageEndpoint("", "edits"); got != "https://api.openai.com/v1/images/edits" {
+		t.Errorf("imageEndpoint(edits) = %q", got)
 	}
 }
 
@@ -101,4 +105,89 @@ func TestTruncate(t *testing.T) {
 	if got := truncate("abc", 10); got != "abc" {
 		t.Errorf("truncate() = %q", got)
 	}
+}
+
+func TestIsOpenRouterBaseURL(t *testing.T) {
+	tests := map[string]bool{
+		"":                             false,
+		"https://api.openai.com/v1":    false,
+		"https://openrouter.ai/api/v1": true,
+		"https://OpenRouter.ai/api/v1": true,
+	}
+	for input, want := range tests {
+		if got := isOpenRouterBaseURL(input); got != want {
+			t.Errorf("isOpenRouterBaseURL(%q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestEncodeImageDataURL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	pngHeader := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+	if err := os.WriteFile(path, pngHeader, 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := encodeImageDataURL(path)
+	if err != nil {
+		t.Fatalf("encodeImageDataURL() error = %v", err)
+	}
+	if !strings.HasPrefix(got, "data:image/png;base64,") {
+		t.Errorf("encodeImageDataURL() = %q, want image/png data URL", got)
+	}
+}
+
+func TestResolveInputImagePath(t *testing.T) {
+	pwd := t.TempDir()
+	tool := &GenerateImage{agent: &fakeAgent{pwd: pwd}}
+
+	existing := filepath.Join(pwd, "photo.png")
+	if err := os.WriteFile(existing, []byte("data"), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	t.Run("existing file within workspace", func(t *testing.T) {
+		got, err := tool.resolveInputImagePath("photo.png")
+		if err != nil {
+			t.Fatalf("resolveInputImagePath() error = %v", err)
+		}
+		if got != existing {
+			t.Errorf("resolveInputImagePath() = %q, want %q", got, existing)
+		}
+	})
+
+	t.Run("missing file is rejected", func(t *testing.T) {
+		if _, err := tool.resolveInputImagePath("missing.png"); err == nil {
+			t.Error("resolveInputImagePath() error = nil, want rejection")
+		}
+	})
+
+	t.Run("traversal outside workspace is rejected", func(t *testing.T) {
+		if _, err := tool.resolveInputImagePath("../escape.png"); err == nil {
+			t.Error("resolveInputImagePath() error = nil, want rejection")
+		}
+	})
+
+	t.Run("images dir is allowed", func(t *testing.T) {
+		dir, err := defaultImagesDir()
+		if err != nil {
+			t.Fatalf("defaultImagesDir() error = %v", err)
+		}
+		if err = os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		generated := filepath.Join(dir, "generated-image-test.png")
+		if err = os.WriteFile(generated, []byte("data"), 0644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+		defer os.Remove(generated)
+
+		got, err := tool.resolveInputImagePath(generated)
+		if err != nil {
+			t.Fatalf("resolveInputImagePath() error = %v", err)
+		}
+		if got != generated {
+			t.Errorf("resolveInputImagePath() = %q, want %q", got, generated)
+		}
+	})
 }

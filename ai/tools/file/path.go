@@ -9,7 +9,20 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 )
 
+// resolveWorkspacePath resolves name to an absolute path, rejecting anything
+// outside the project root.
 func resolveWorkspacePath(agt aitypes.Agent, name string) (string, error) {
+	return resolvePath(agt, name, true)
+}
+
+// resolveAnyPath resolves name to an absolute path without the project-root
+// restriction, for read-only tools that need to browse outside the workspace
+// (e.g. the images this agent itself generates under ~/<app>/.images).
+func resolveAnyPath(agt aitypes.Agent, name string) (string, error) {
+	return resolvePath(agt, name, false)
+}
+
+func resolvePath(agt aitypes.Agent, name string, restrictToRoot bool) (string, error) {
 	pwd := agt.ProjectRoot()
 	root, err := filepath.Abs(filepath.Clean(pwd))
 	if err != nil {
@@ -45,6 +58,10 @@ func resolveWorkspacePath(agt aitypes.Agent, name string) (string, error) {
 			return "", parentErr
 		}
 		resolvedPath = filepath.Join(resolvedParent, filepath.Base(path))
+	}
+
+	if !restrictToRoot {
+		return path, nil
 	}
 
 	relative, err := filepath.Rel(resolvedRoot, resolvedPath)

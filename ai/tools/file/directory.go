@@ -42,7 +42,9 @@ func (t *Directory) Description() string {
 }
 
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
-	pathname, err := resolveWorkspacePath(t.agent, input)
+	// Read-only listing, so unlike the other file tools this may browse
+	// outside the project root (e.g. this agent's own generated images).
+	pathname, err := resolveAnyPath(t.agent, input)
 	if err != nil {
 		return fmt.Sprintf("ERROR: %s\n", err), nil
 	}

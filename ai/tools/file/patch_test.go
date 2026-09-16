@@ -130,6 +130,27 @@ func TestResolveWorkspacePath(t *testing.T) {
 	}
 }
 
+func TestResolveAnyPath(t *testing.T) {
+	pwd := t.TempDir()
+	outside := t.TempDir()
+	agent := &pathTestAgent{projectRoot: pwd}
+
+	tests := map[string]string{
+		"file.go":                       filepath.Join(pwd, "file.go"),
+		filepath.Join(outside, "x.png"): filepath.Join(outside, "x.png"),
+	}
+
+	for input, want := range tests {
+		got, err := resolveAnyPath(agent, input)
+		if err != nil {
+			t.Fatalf("resolveAnyPath(%q) error = %v", input, err)
+		}
+		if got != want {
+			t.Errorf("resolveAnyPath(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestWriteFileAtomicPreservesMode(t *testing.T) {
 	dir := t.TempDir()
 	filename := filepath.Join(dir, "file.txt")

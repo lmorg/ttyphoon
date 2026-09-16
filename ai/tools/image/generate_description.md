@@ -1,7 +1,9 @@
 Generates an image from a text description and saves it into the workspace.
+Can also edit/modify an existing image when `inputImage` is given.
 
 Use this tool when the user asks for a picture, diagram, illustration, icon,
-logo, mockup or any other generated image.
+logo, mockup or any other generated image — or asks you to change, edit,
+recolour, extend or otherwise modify an image that already exists.
 
 The input for this tool MUST be a JSON object:
 
@@ -16,7 +18,13 @@ The input for this tool MUST be a JSON object:
 Rules:
 
 - `prompt` is required. Describe the image in detail: subject, style, colours,
-  composition and mood all improve the result.
+  composition and mood all improve the result. When `inputImage` is set,
+  describe the change you want made, not the whole scene from scratch.
+- `inputImage` is optional. Set it to the path of an existing image (relative
+  to the working directory, or a path previously returned by this tool) to
+  edit that image instead of generating a new one. The path must be inside the
+  workspace or be an image this tool previously generated; anything else is
+  rejected.
 - `file` is optional and should be **omitted** in almost every case. Only set it
   if the user has explicitly asked for the image to be saved at a particular
   name or path. Do not invent a filename. When omitted, the image is saved to a
