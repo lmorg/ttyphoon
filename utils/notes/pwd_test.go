@@ -176,16 +176,18 @@ func TestHasGitDirectory(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "returns false when .git is a file not a directory",
+			name: "returns true when .git is a file (git worktree)",
 			setup: func(t *testing.T) string {
 				tmpdir := t.TempDir()
 				gitFile := filepath.Join(tmpdir, ".git")
-				if err := os.WriteFile(gitFile, []byte(""), 0644); err != nil {
+				// In a git worktree, .git is a regular file containing a
+				// "gitdir: <path>" pointer rather than being a directory.
+				if err := os.WriteFile(gitFile, []byte("gitdir: /some/other/path/.git/worktrees/example\n"), 0644); err != nil {
 					t.Fatal(err)
 				}
 				return tmpdir
 			},
-			expected: false,
+			expected: true,
 		},
 	}
 

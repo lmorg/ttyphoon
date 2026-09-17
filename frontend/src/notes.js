@@ -12904,7 +12904,7 @@ function appendAIText(text) {
 
 function setAIFinalOutput(text, options = {}) {
     const forceBottom = options.forceBottom === true;
-    const shouldStick = forceBottom || state.aiStickToBottom || isAIOutputNearBottom();
+    const shouldStick = forceBottom || state.aiStickToBottom;
     aiPipelineFormatter.setText(String(text || ''));
     scheduleAIPromptJumpRefresh();
     if (shouldStick) {
@@ -12932,6 +12932,15 @@ function updateAIScrollBottomButton() {
 
     const visible = !isAIOutputNearBottom();
     elements.aiScrollBottom.dataset.visible = visible ? 'true' : 'false';
+}
+
+function pauseAIAutoScroll() {
+    if (!state.aiStickToBottom) {
+        return;
+    }
+    state.aiStickToBottom = false;
+    clearAIBottomScrollRetries();
+    updateAIScrollBottomButton();
 }
 
 function clearAIBottomScrollRetries() {
@@ -13309,15 +13318,25 @@ if (elements.aiSettingsModelPicker) {
     });
 }
 if (elements.aiOutput) {
+    elements.aiOutput.addEventListener('wheel', (event) => {
+        if (event.deltaY !== 0) {
+            pauseAIAutoScroll();
+        }
+    }, { passive: true });
+    elements.aiOutput.addEventListener('touchmove', () => {
+        pauseAIAutoScroll();
+    }, { passive: true });
     elements.aiOutput.addEventListener('scroll', () => {
-        // The bottom-chase writes scrollTop every frame, so this fires
-        // constantly while streaming; coalesce the measurements it triggers.
+        // Programmatic bottom writes stay in follow mode; moving away from the
+        // bottom is user intent and requires Latest to resume following.
         if (aiScrollButtonHandle) {
             return;
         }
         aiScrollButtonHandle = requestAnimationFrame(() => {
             aiScrollButtonHandle = 0;
-            state.aiStickToBottom = isAIOutputNearBottom();
+            if (!isAIOutputNearBottom()) {
+                pauseAIAutoScroll();
+            }
             updateAIScrollBottomButton();
         });
     }, { passive: true });

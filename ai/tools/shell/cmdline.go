@@ -50,15 +50,14 @@ func (t *CommandLine) shellName() string {
 func (t *CommandLine) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
 
-	c := make(chan *types.BlockCallbackT)
+	c := make(chan *types.BlockCallbackT, 1)
 
 	t.term.SetCommandCallback(func(cb *types.BlockCallbackT) {
 		c <- cb
 	})
 
-	bct := <-c
-
 	t.term.Reply([]byte(input))
+	bct := <-c
 
 	result := &resultT{
 		Output:    bct.Output,
