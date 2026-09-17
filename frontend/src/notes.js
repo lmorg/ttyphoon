@@ -419,6 +419,7 @@ const CONTEXT_ICON_ASK_AI = 0xf544;
 const CONTEXT_ICON_EXPAND_ALL = 0xf0fe;
 const CONTEXT_ICON_COLLAPSE_ALL = 0xf146;
 const CONTEXT_ICON_ADD = 0xf067;
+const CONTEXT_ICON_SEND_TO_TERMINAL = 0xf120;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -659,11 +660,11 @@ app.innerHTML = `
 
             <h2>Sessions</h2>
             <p>Create, switch, clear, or delete sessions for this workspace.</p>
-            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
             <div class="notes-ai-settings-controls">
                 <button id="notes-ai-settings-session-new" type="button">New session</button>
                 <button id="notes-ai-settings-history-clear" type="button">Clear active history</button>
             </div>
+            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
 
             <h2>Active Session Transcript</h2>
             <p>Recent prompts and responses from the active session.</p>
@@ -10855,7 +10856,7 @@ function getRenderedCopyBlockText(block) {
     }
 
     const copy = block.cloneNode(true);
-    copy.querySelectorAll('.notes-copy-block-button').forEach((button) => button.remove());
+    copy.querySelectorAll('.notes-copy-block-actions').forEach((actions) => actions.remove());
     const code = copy.matches('pre') ? copy.querySelector('code') : null;
     return String((code || copy).textContent || '');
 }
@@ -10867,6 +10868,35 @@ function ensureRenderedBlockCopyButton(block) {
 
     block.dataset.copyButtonBound = 'true';
     block.classList.add('notes-copy-block');
+
+    const actions = document.createElement('div');
+    actions.className = 'notes-copy-block-actions';
+
+    // Only code blocks (not blockquotes) can be meaningfully sent to a shell.
+    if (block.matches('pre')) {
+        const terminalButton = document.createElement('button');
+        terminalButton.type = 'button';
+        terminalButton.className = 'notes-send-terminal-block-button';
+        terminalButton.title = 'Send block to terminal';
+        terminalButton.setAttribute('aria-label', 'Send block to terminal');
+        terminalButton.textContent = String.fromCodePoint(CONTEXT_ICON_SEND_TO_TERMINAL);
+        terminalButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            try {
+                await SendToTerminal(getRenderedCopyBlockText(block));
+                window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+                terminalButton.dataset.sent = 'true';
+                setTimeout(() => {
+                    terminalButton.dataset.sent = 'false';
+                }, 700);
+            } catch (err) {
+                console.error('Error sending to terminal:', err);
+                notifyTerminal('Failed to send to terminal', 'error');
+            }
+        });
+        actions.appendChild(terminalButton);
+    }
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -10883,7 +10913,17 @@ function ensureRenderedBlockCopyButton(block) {
             button.dataset.copied = 'false';
         }, 700);
     });
-    block.appendChild(button);
+    actions.appendChild(button);
+
+    // Compositor-only transform instead of position: sticky, which was
+    // observed to flicker the panel's translucent background on WKWebView
+    // whenever the buttons faded in/out (e.g. hovering the block).
+    block.insertBefore(actions, block.firstChild);
+    const syncActionsOffset = () => {
+        actions.style.transform = `translateY(${block.scrollTop}px)`;
+    };
+    syncActionsOffset();
+    block.addEventListener('scroll', syncActionsOffset, { passive: true });
 }
 
 function initRenderedBlockCopyButtons(container) {
@@ -11275,6 +11315,24 @@ function initAIPromptJumpObserver() {
     scheduleAIPromptJumpRefresh();
 }
 
+// Renders an ISO timestamp as 'yyyy-mm-dd hh:mm' (or 'yyyy-mm-dd' without time),
+// in local time. Returns '' for anything unparseable.
+function formatSessionTimestamp(iso, includeTime) {
+    if (!iso) {
+        return '';
+    }
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    if (!includeTime) {
+        return datePart;
+    }
+    return `${datePart} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function renderAISessionList() {
     if (!elements.aiSettingsSessionsList) {
         return;
@@ -11291,19 +11349,21 @@ function renderAISessionList() {
     const items = sessions.map((session) => {
         const tableId = Number(session.tableId) || 0;
         const safeSummary = escapeHtml(session.summary || `Session ${tableId}`);
-        const safeUpdated = escapeHtml(session.updated || '');
-        const safeCreated = escapeHtml(session.created || '');
         const count = Number(session.entryCount) || 0;
         const active = session.active === true;
-        const createdHtml = safeCreated ? `<div class="notes-ai-settings-session-meta">Created ${safeCreated}</div>` : '';
-        const updatedHtml = safeUpdated ? `<div class="notes-ai-settings-session-meta">Updated ${safeUpdated}</div>` : '';
+        const latestDateTime = formatSessionTimestamp(session.updated, true);
+        const createdDate = formatSessionTimestamp(session.created, false);
+        const latestHtml = latestDateTime
+            ? `<div class="notes-ai-settings-session-meta">Latest: ${escapeHtml(latestDateTime)}${createdDate ? ` (${escapeHtml(createdDate)})` : ''}</div>`
+            : '';
         return `
             <div class="notes-ai-settings-session-item" data-session-id="${tableId}" data-active="${active ? 'true' : 'false'}">
                 <div class="notes-ai-settings-session-main">
-                    <div class="notes-ai-settings-session-heading">${safeSummary}</div>
-                    <div class="notes-ai-settings-session-meta">${count} entr${count === 1 ? 'y' : 'ies'}</div>
-                    ${createdHtml}
-                    ${updatedHtml}
+                    <div class="notes-ai-settings-session-heading">
+                        <span class="notes-ai-settings-session-count">${count}</span>
+                        <span class="notes-ai-settings-session-name">${safeSummary}</span>
+                    </div>
+                    ${latestHtml}
                 </div>
                 <div class="notes-ai-settings-session-actions">
                     <button type="button" class="notes-ai-settings-session-rename" data-action="rename" data-session-id="${tableId}" aria-label="Rename session"></button>
@@ -11334,7 +11394,9 @@ function renderAISessionHistory() {
         const safeTitle = escapeHtml(entry.prompt || 'AI prompt');
         const safeCmdLine = escapeHtml(entry.commandLine || '');
         const safeExcerpt = escapeHtml(entry.excerpt || '');
-        const safeOutput = escapeHtml(entry.outputBlock || '');
+        // Output can contain real newlines; flatten to a single flowing line
+        // like the excerpt already is, since both are clamped to 2 lines.
+        const safeOutput = escapeHtml((entry.outputBlock || '').replace(/\s*\n+\s*/g, ' ').trim());
         const cmdLineHtml = safeCmdLine ? `<div class="notes-ai-settings-history-meta">${safeCmdLine}</div>` : '';
         const outputHtml = safeOutput ? `<div class="notes-ai-settings-history-output">${safeOutput}</div>` : '';
         const excerptHtml = safeExcerpt ? `<div class="notes-ai-settings-history-excerpt">${safeExcerpt}</div>` : '';

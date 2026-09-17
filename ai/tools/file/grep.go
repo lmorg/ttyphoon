@@ -1,4 +1,4 @@
-package tools
+package filetools
 
 import (
 	"context"
@@ -51,7 +51,7 @@ type grepInputT struct {
 
 type grepReturnT struct {
 	Results    []*grep.Result `json:"results"`
-	PageCount  int            `json:"pagesCount"`
+	PageCount  int            `json:"pageCount"`
 	PageNumber int            `json:"pageNumber"`
 	Error      string         `json:"error"`
 }
@@ -107,9 +107,9 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 	t.cache = cache
 	t.cacheMu.Unlock()
 	if len(cache) == 0 {
-		return &grepReturnT{Results: []*grep.Result{}}
+		return &grepReturnT{PageNumber: 1, Results: []*grep.Result{}}
 	}
-	return &grepReturnT{PageCount: len(cache), Results: cache[0]}
+	return &grepReturnT{PageCount: len(cache), PageNumber: 1, Results: cache[0]}
 }
 
 func (t *Grep) getPage(input *grepInputT) *grepReturnT {
@@ -122,5 +122,49 @@ func (t *Grep) getPage(input *grepInputT) *grepReturnT {
 		return &grepReturnT{PageCount: len(t.cache), Error: "Page numbers cannot be greater than pageCount"}
 	}
 
-	return &grepReturnT{PageCount: len(t.cache), Results: t.cache[input.Page+1]}
+	return &grepReturnT{PageCount: len(t.cache), PageNumber: input.Page, Results: t.cache[input.Page-1]}
+}
+
+func (t *Grep) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+		return observation
+	}
+
+	var request grepInputT
+	if json.Unmarshal([]byte(input), &request) != nil || request.Query == "" {
+		observation.Inputs = []string{input}
+		return observation
+	}
+
+	var result grepReturnT
+	if json.Unmarshal([]byte(output), &result) != nil {
+		observation.SearchesRun = []aitypes.SearchObservation{{Query: request.Query, FileFilter: request.Options.FileFilter}}
+		return observation
+	}
+
+	paths := make([]string, 0, min(len(result.Results), 5))
+	seen := map[string]struct{}{}
+	for _, match := range result.Results {
+		if match == nil {
+			continue
+		}
+		if _, ok := seen[match.Path]; ok {
+			continue
+		}
+		seen[match.Path] = struct{}{}
+		paths = append(paths, match.Path)
+		if len(paths) >= 5 {
+			break
+		}
+	}
+	observation.SearchesRun = []aitypes.SearchObservation{{
+		Query:       request.Query,
+		FileFilter:  request.Options.FileFilter,
+		ResultCount: len(result.Results),
+		TopPaths:    paths,
+	}}
+	return observation
 }

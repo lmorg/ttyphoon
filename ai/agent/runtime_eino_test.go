@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 type fakeAgentTool struct {
@@ -245,6 +246,70 @@ func TestWithAIStreamCallback_EmitsToolProgress(t *testing.T) {
 	wantChunk1 := "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n"
 	if chunks[1] != wantChunk1 {
 		t.Fatalf("chunk[1] = %q, want %q", chunks[1], wantChunk1)
+	}
+}
+
+func TestEinoAgentToolRecordsContinuationObservation(t *testing.T) {
+	delegate := &fakeAgentTool{enabled: true}
+	tool := &einoAgentTool{
+		runtime:  &einoRuntime{},
+		delegate: delegate,
+	}
+	checkpoint := &continuationCheckpoint{}
+	ctx := withContinuationCheckpoint(context.Background(), checkpoint)
+
+	output, err := tool.InvokableRun(ctx, `{"path":"main.go"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v", err)
+	}
+	if output != "" {
+		t.Fatalf("InvokableRun() output = %q, want empty fake output", output)
+	}
+
+	snapshot := checkpoint.snapshot()
+	if len(snapshot.toolObservations) != 1 {
+		t.Fatalf("tool observations = %d, want 1", len(snapshot.toolObservations))
+	}
+	observation := snapshot.toolObservations[0]
+	if observation.Tool != "fake.tool" || len(observation.Inputs) != 1 || observation.Inputs[0] != `{"path":"main.go"}` {
+		t.Fatalf("observation = %+v, want fake.tool with original arguments", observation)
+	}
+}
+
+func TestFormatContinuationCheckpointMessageIncludesSemanticSections(t *testing.T) {
+	checkpoint := &continuationCheckpoint{}
+	checkpoint.setVisibleOutput("visible tail")
+	recordContinuationToolObservation(withContinuationCheckpoint(context.Background(), checkpoint), aitypes.ToolObservation{
+		Tool:              "grep",
+		Status:            "ok",
+		FilesRead:         []string{"a.go"},
+		FilesModified:     []string{"b.go"},
+		DirectoriesListed: []string{"/tmp/project"},
+		Counts:            map[string]int{"matches": 2},
+		SearchesRun:       []aitypes.SearchObservation{{Query: "needle", FileFilter: "*.go", ResultCount: 2, TopPaths: []string{"a.go", "b.go"}}},
+	})
+
+	message := formatContinuationCheckpointMessage(checkpoint)
+	for _, want := range []string{"Tool observations", "Files read: a.go", "Files modified: b.go", "Directories listed: /tmp/project", "Counts: matches=2", "Search: needle", "visible tail"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("checkpoint message missing %q:\n%s", want, message)
+		}
+	}
+}
+
+func TestFormatContinuationCheckpointMessageCapsTotalSize(t *testing.T) {
+	checkpoint := &continuationCheckpoint{}
+	ctx := withContinuationCheckpoint(context.Background(), checkpoint)
+	for i := 0; i < 10; i++ {
+		recordContinuationToolObservation(ctx, aitypes.ToolObservation{Tool: "readFiles", Outputs: []string{strings.Repeat("x", continuationCheckpointMaxFieldChars)}})
+	}
+
+	message := formatContinuationCheckpointMessage(checkpoint)
+	if len(message) > continuationCheckpointMaxTotalChars+len("\n\n[continuation checkpoint truncated]") {
+		t.Fatalf("message length = %d, want capped", len(message))
+	}
+	if !strings.Contains(message, "[continuation checkpoint truncated]") {
+		t.Fatalf("checkpoint message missing truncation marker")
 	}
 }
 
@@ -739,4 +804,154 @@ func TestAgentRunLLMWithMessageStream_UsesStructuredMessages(t *testing.T) {
 	if rt.messages[0].Role != schema.System || rt.messages[1].Role != schema.User {
 		t.Fatalf("runtime messages roles = (%s, %s), want (system, user)", rt.messages[0].Role, rt.messages[1].Role)
 	}
+}
+
+func TestEinoRuntimeContinuationAppendsPreviousWindowOutput(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 3)
+	defer restore()
+
+	var calls int
+	var secondCallMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(ctx context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			recordContinuationToolObservation(ctx, aitypes.ToolObservation{Tool: "readFiles", Inputs: []string{`{"files":["main.go"]}`}, Outputs: []string{"main.go contents"}})
+			return "partial visible output", errors.New("[GraphRunError] exceeds max steps")
+		}
+		secondCallMessages = append([]*schema.Message(nil), messages...)
+		return "done", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partial visible outputdone" {
+		t.Fatalf("result = %q, want concatenated continuation output", result)
+	}
+	if calls != 2 {
+		t.Fatalf("bounded window calls = %d, want 2", calls)
+	}
+	if len(secondCallMessages) != 2 {
+		t.Fatalf("second call messages = %d, want original + continuation", len(secondCallMessages))
+	}
+	last := secondCallMessages[len(secondCallMessages)-1]
+	if last.Role != schema.User {
+		t.Fatalf("continuation message role = %s, want user", last.Role)
+	}
+	if !strings.Contains(last.Content, "partial visible output") || !strings.Contains(last.Content, "Continue the original task") {
+		t.Fatalf("continuation message content = %q, want previous output and continuation instruction", last.Content)
+	}
+	if !strings.Contains(last.Content, "Continuation checkpoint") {
+		t.Fatalf("continuation message content = %q, want structured checkpoint section", last.Content)
+	}
+	if !strings.Contains(last.Content, "Tool observations") || !strings.Contains(last.Content, "readFiles") || !strings.Contains(last.Content, "main.go contents") {
+		t.Fatalf("continuation message content = %q, want captured tool observation", last.Content)
+	}
+	if !strings.Contains(streamed.String(), "Continuing after max steps (1/3)") {
+		t.Fatalf("streamed output = %q, want continuation progress marker", streamed.String())
+	}
+}
+
+func TestEinoRuntimeContinuationAsksUserAtConfiguredBoundary(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 1)
+	defer restore()
+
+	var calls int
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, _ []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		return "partial", errors.New("[GraphRunError] exceeds max steps")
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+		if requestID := userQuestionRequestIDFromMarkdown(chunk); requestID != "" {
+			if resolveErr := ResolveUserQuestionRequest(requestID, "finish up"); resolveErr != nil {
+				t.Errorf("ResolveUserQuestionRequest() error = %v", resolveErr)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partial" {
+		t.Fatalf("result = %q, want partial output", result)
+	}
+	if calls != 1 {
+		t.Fatalf("bounded window calls = %d, want 1", calls)
+	}
+	if !strings.Contains(streamed.String(), "maximum number of continuations (1)") {
+		t.Fatalf("streamed output = %q, want user question", streamed.String())
+	}
+	if strings.Contains(streamed.String(), "Continuing after max steps") {
+		t.Fatalf("streamed output = %q, should not continue after finish up", streamed.String())
+	}
+}
+
+func TestEinoRuntimeContinuationContinueChoiceOpensAnotherWindow(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 1)
+	defer restore()
+
+	var calls int
+	var secondCallMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			return "first", errors.New("[GraphRunError] exceeds max steps")
+		}
+		secondCallMessages = append([]*schema.Message(nil), messages...)
+		return "done", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+		if requestID := userQuestionRequestIDFromMarkdown(chunk); requestID != "" {
+			if resolveErr := ResolveUserQuestionRequest(requestID, "continue"); resolveErr != nil {
+				t.Errorf("ResolveUserQuestionRequest() error = %v", resolveErr)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "firstdone" {
+		t.Fatalf("result = %q, want firstdone", result)
+	}
+	if calls != 2 {
+		t.Fatalf("bounded window calls = %d, want 2", calls)
+	}
+	if len(secondCallMessages) != 2 {
+		t.Fatalf("second call messages = %d, want original + continuation", len(secondCallMessages))
+	}
+	if !strings.Contains(streamed.String(), "Continuing after max steps (1/1)") {
+		t.Fatalf("streamed output = %q, want reset continuation progress marker", streamed.String())
+	}
+}
+
+func setMaxContinuationsForTest(t *testing.T, value int) func() {
+	t.Helper()
+	old := config.Config.Ai.MaxContinuations
+	config.Config.Ai.MaxContinuations = value
+	return func() { config.Config.Ai.MaxContinuations = old }
+}
+
+func userQuestionRequestIDFromMarkdown(markdown string) string {
+	const marker = "ttyphoon://ai-user-question?request="
+	idx := strings.Index(markdown, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := markdown[idx+len(marker):]
+	if amp := strings.Index(rest, "&"); amp >= 0 {
+		return rest[:amp]
+	}
+	return rest
 }

@@ -82,3 +82,20 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(result)
 	return result, nil
 }
+
+func (t *Write) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+		return observation
+	}
+	arc := txtar.Parse([]byte(input))
+	files := make([]string, 0, len(arc.Files))
+	for _, file := range arc.Files {
+		files = append(files, file.Name)
+	}
+	observation.FilesModified = files
+	observation.Counts = map[string]int{"files": len(files), "bytes": len(input)}
+	return observation
+}

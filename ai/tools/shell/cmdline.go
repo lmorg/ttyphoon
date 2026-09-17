@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -72,6 +73,37 @@ func (t *CommandLine) Call(ctx context.Context, input string) (string, error) {
 		return fmt.Sprintf("Command ran but cannot marshall output: %v", err), nil
 	}
 	return string(b), nil
+}
+
+func (t *CommandLine) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+
+	command := aitypes.CommandObservation{Command: input, Status: observation.Status}
+	var result resultT
+	if json.Unmarshal([]byte(output), &result) == nil {
+		command.ExitCode = &result.ExitCode
+		if result.ExitCode != 0 {
+			command.Status = "failed"
+			observation.Status = "error"
+		}
+		command.Summary = firstNonEmptyLine(result.Output)
+	}
+	observation.CommandsRun = []aitypes.CommandObservation{command}
+	return observation
+}
+
+func firstNonEmptyLine(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 type resultT struct {

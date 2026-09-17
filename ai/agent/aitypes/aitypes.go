@@ -27,6 +27,39 @@ type Tool interface {
 	Call(context.Context, string) (string, error)
 }
 
+type ToolObservationProvider interface {
+	Observation(input, output string, err error) ToolObservation
+}
+
+type ToolObservation struct {
+	Tool              string
+	Status            string
+	Summary           string
+	Inputs            []string
+	Outputs           []string
+	FilesRead         []string
+	FilesModified     []string
+	DirectoriesListed []string
+	SearchesRun       []SearchObservation
+	CommandsRun       []CommandObservation
+	Counts            map[string]int
+	Error             string
+}
+
+type SearchObservation struct {
+	Query       string
+	FileFilter  string
+	ResultCount int
+	TopPaths    []string
+}
+
+type CommandObservation struct {
+	Command  string
+	ExitCode *int
+	Status   string
+	Summary  string
+}
+
 type DefaultPermissions struct {
 	Invocation string
 	Subagents  string

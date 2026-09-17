@@ -108,6 +108,28 @@ func (t *PatchFile) fail(message string) string {
 	return message + "\nNo changes were written to disk.\n"
 }
 
+func (t *PatchFile) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+	var patch patchInputT
+	if json.Unmarshal([]byte(input), &patch) != nil {
+		observation.Inputs = []string{input}
+		return observation
+	}
+	if patch.File != "" {
+		observation.FilesModified = []string{patch.File}
+	}
+	observation.Counts = map[string]int{"edits": len(patch.Edits)}
+	if strings.Contains(output, "ERROR") {
+		observation.Status = "error"
+		observation.Error = output
+	}
+	return observation
+}
+
 // applyPatchEdits applies every edit or none: each `old` must match exactly
 // once against the result of the preceding edits.
 func applyPatchEdits(content string, edits []patchEditT) (string, error) {

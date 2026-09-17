@@ -473,7 +473,7 @@ func loadSessionMetasTx(tx *sql.Tx) ([]FrontendSessionMetaT, error) {
 	rows, err := tx.Query(`
 		SELECT tableId, summary, created, updated, active, entryCount
 		FROM sessions_meta
-		ORDER BY active DESC, updated DESC, tableId DESC`)
+		ORDER BY updated DESC, tableId DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("cannot query session metadata: %w", err)
 	}
@@ -520,8 +520,11 @@ func loadFrontendHistoryTx(tx *sql.Tx, tableID int64, limit int) ([]FrontendHist
 		return nil, err
 	}
 
+	// loadEntriesTx returns chronological order for context reconstruction
+	// (ActiveSessionEntries); the frontend transcript wants newest first.
 	out := make([]FrontendHistoryItemT, 0, len(entries))
-	for _, entry := range entries {
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := entries[i]
 		response := strings.TrimSpace(entry.LLMResponse)
 		excerpt := strings.Join(strings.Fields(response), " ")
 		if len(excerpt) > 180 {
@@ -794,7 +797,9 @@ func setActiveSessionTx(tx *sql.Tx, tableID int64) error {
 		return fmt.Errorf("cannot clear active session flag: %w", err)
 	}
 
-	if _, err := tx.Exec(`UPDATE sessions_meta SET active = 1, updated = ? WHERE tableId = ?`, nowString(), tableID); err != nil {
+	// Selecting a session is not an update to it: `updated` reflects prompt
+	// activity only, so the list order isn't disturbed by merely switching to it.
+	if _, err := tx.Exec(`UPDATE sessions_meta SET active = 1 WHERE tableId = ?`, tableID); err != nil {
 		return fmt.Errorf("cannot activate session %d: %w", tableID, err)
 	}
 

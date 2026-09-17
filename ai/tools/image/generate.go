@@ -166,6 +166,48 @@ func (t *GenerateImage) fail(message string) string {
 	return message + "\nNo image was written to disk.\n"
 }
 
+func (t *GenerateImage) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Counts: map[string]int{"images": 1}}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+
+	var request generateImageInputT
+	if json.Unmarshal([]byte(input), &request) == nil {
+		if request.InputImage != "" {
+			observation.Inputs = []string{request.InputImage}
+		}
+		if request.Prompt != "" {
+			observation.Summary = request.Prompt
+		}
+	}
+
+	if path := imageOutputPathFromResult(output); path != "" {
+		observation.Outputs = []string{path}
+	}
+	if strings.Contains(output, "ERROR") {
+		observation.Status = "error"
+		observation.Error = output
+		observation.Counts["images"] = 0
+	}
+	return observation
+}
+
+func imageOutputPathFromResult(output string) string {
+	const marker = "image written to '"
+	idx := strings.Index(output, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := output[idx+len(marker):]
+	end := strings.Index(rest, "'")
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
 func (t *GenerateImage) requestImage(ctx context.Context, request generateImageInputT, inputImagePath string) ([]byte, error) {
 	model := t.agent.ImageGenerationEnvironmentValue("OPENAI_IMAGE_MODEL")
 	if strings.TrimSpace(model) == "" {

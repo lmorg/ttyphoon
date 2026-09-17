@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,9 +32,10 @@ import (
 )
 
 type einoRuntime struct {
-	agent      *Agent
-	agentReact *react.Agent
-	tools      []aitypes.Tool
+	agent               *Agent
+	agentReact          *react.Agent
+	tools               []aitypes.Tool
+	boundedWindowRunner func(context.Context, []*schema.Message, func(string)) (string, error)
 }
 
 const einoMaxHistoryTurns = 8
@@ -46,6 +48,18 @@ var toolSummariserExclusions = map[string]struct{}{
 }
 
 type aiStreamCallbackCtxKey struct{}
+type continuationCheckpointCtxKey struct{}
+
+const (
+	continuationCheckpointMaxFieldChars = 4000
+	continuationCheckpointMaxTotalChars = 20000
+)
+
+type continuationCheckpoint struct {
+	mu               sync.Mutex
+	visibleOutput    string
+	toolObservations []aitypes.ToolObservation
+}
 
 type einoAgentTool struct {
 	runtime          *einoRuntime
@@ -104,6 +118,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
 			emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+			recordContinuationToolObservation(ctx, t.toolObservation(argumentsInJSON, "", err))
 			if errors.Is(err, ErrToolPermissionRefused) {
 				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
 			}
@@ -119,6 +134,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	output, err := t.delegate.Call(ctx, toolInput)
 	if err != nil {
 		emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, err))
 		return output, err
 	}
 
@@ -141,13 +157,38 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
 			emitAIStreamToolProgress(ctx, formatToolSummaryFailureMarkdown(len(output), sErr))
+			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
 			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
 		}
 		emitAIStreamToolProgress(ctx, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
+		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, summary, nil))
 		return summary, nil
 	}
 
+	recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, nil))
 	return output, nil
+}
+
+func (t *einoAgentTool) toolObservation(input, output string, err error) aitypes.ToolObservation {
+	if provider, ok := t.delegate.(aitypes.ToolObservationProvider); ok {
+		observation := provider.Observation(input, output, err)
+		if strings.TrimSpace(observation.Tool) == "" {
+			observation.Tool = t.delegate.Name()
+		}
+		return observation
+	}
+
+	observation := aitypes.ToolObservation{
+		Tool:    t.delegate.Name(),
+		Status:  "ok",
+		Inputs:  []string{input},
+		Outputs: []string{output},
+	}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+	return observation
 }
 
 // Tool progress is emitted as real markdown with ~~~~ tilde fences (rather than
@@ -292,6 +333,71 @@ func withAIStreamCallback(ctx context.Context, emitter *aiStreamEmitter) context
 		return ctx
 	}
 	return context.WithValue(ctx, aiStreamCallbackCtxKey{}, emitter)
+}
+
+func withContinuationCheckpoint(ctx context.Context, checkpoint *continuationCheckpoint) context.Context {
+	if checkpoint == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, continuationCheckpointCtxKey{}, checkpoint)
+}
+
+func continuationCheckpointFromContext(ctx context.Context) (*continuationCheckpoint, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	checkpoint, ok := ctx.Value(continuationCheckpointCtxKey{}).(*continuationCheckpoint)
+	return checkpoint, ok && checkpoint != nil
+}
+
+func recordContinuationToolObservation(ctx context.Context, observation aitypes.ToolObservation) {
+	checkpoint, ok := continuationCheckpointFromContext(ctx)
+	if !ok {
+		return
+	}
+	checkpoint.mu.Lock()
+	defer checkpoint.mu.Unlock()
+	observation.Tool = truncateContinuationField(strings.TrimSpace(observation.Tool))
+	observation.Status = truncateContinuationField(strings.TrimSpace(observation.Status))
+	observation.Summary = truncateContinuationField(strings.TrimSpace(observation.Summary))
+	observation.Error = truncateContinuationField(strings.TrimSpace(observation.Error))
+	observation.Inputs = truncateContinuationFields(observation.Inputs)
+	observation.Outputs = truncateContinuationFields(observation.Outputs)
+	observation.FilesRead = truncateContinuationFields(observation.FilesRead)
+	observation.FilesModified = truncateContinuationFields(observation.FilesModified)
+	observation.DirectoriesListed = truncateContinuationFields(observation.DirectoriesListed)
+	for i := range observation.SearchesRun {
+		observation.SearchesRun[i].Query = truncateContinuationField(strings.TrimSpace(observation.SearchesRun[i].Query))
+		observation.SearchesRun[i].FileFilter = truncateContinuationField(strings.TrimSpace(observation.SearchesRun[i].FileFilter))
+		observation.SearchesRun[i].TopPaths = truncateContinuationFields(observation.SearchesRun[i].TopPaths)
+	}
+	for i := range observation.CommandsRun {
+		observation.CommandsRun[i].Command = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Command))
+		observation.CommandsRun[i].Status = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Status))
+		observation.CommandsRun[i].Summary = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Summary))
+	}
+	checkpoint.toolObservations = append(checkpoint.toolObservations, observation)
+}
+
+func (c *continuationCheckpoint) setVisibleOutput(output string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.visibleOutput = truncateContinuationField(strings.TrimSpace(output))
+}
+
+func (c *continuationCheckpoint) snapshot() continuationCheckpoint {
+	if c == nil {
+		return continuationCheckpoint{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return continuationCheckpoint{
+		visibleOutput:    c.visibleOutput,
+		toolObservations: append([]aitypes.ToolObservation(nil), c.toolObservations...),
+	}
 }
 
 func emitAIStreamToolProgress(ctx context.Context, text string) {
@@ -594,21 +700,28 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	// Tool permissions are scoped to the user prompt, so continuations inherit them.
 	r.agent.ResetToolPermissions()
 
+	// Continuation-boundary messages (progress markers, the max-continuation
+	// question) are emitted from this loop, not from inside
+	// runLLMWithMessageStream, so this ctx needs its own stream callback too -
+	// otherwise they're silently dropped and RequestUserQuestion hangs forever
+	// waiting on a choice the user was never shown.
+	ctx = withAIStreamCallback(ctx, &aiStreamEmitter{fn: streamCallback})
+
 	for continuation := 0; ; continuation++ {
 		log.Printf("[debug] Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations)
-		result, err := r.runLLMWithMessageStream(ctx, continuationMessages, streamCallback)
+		checkpoint := &continuationCheckpoint{}
+		windowCtx := withContinuationCheckpoint(ctx, checkpoint)
+		result, err := r.runBoundedWindow(windowCtx, continuationMessages, streamCallback)
+		checkpoint.setVisibleOutput(result)
 		response.WriteString(result)
 		if err == nil || !isMaxStepError(err) {
 			return response.String(), err
 		}
 
-		continuationSummary := fmt.Sprintf(
-			"The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action. Previous run output:\n%s",
-			result,
-		)
+		continuationSummary := formatContinuationCheckpointMessage(checkpoint)
 		nextContinuation := continuation + 1
 
-		if continuation >= config.Config.Ai.MaxContinuations {
+		if nextContinuation >= config.Config.Ai.MaxContinuations {
 			choice, choiceErr := RequestUserQuestion(ctx,
 				fmt.Sprintf("The agent has reached the maximum number of continuations (%d). What should happen next?", config.Config.Ai.MaxContinuations),
 				[]string{"continue", "finish up"},
@@ -632,6 +745,149 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		))
 		continuationMessages = append(continuationMessages, schema.UserMessage(continuationSummary))
 	}
+}
+
+func (r *einoRuntime) runBoundedWindow(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
+	if r.boundedWindowRunner != nil {
+		return r.boundedWindowRunner(ctx, messages, streamCallback)
+	}
+	return r.runLLMWithMessageStream(ctx, messages, streamCallback)
+}
+
+func formatContinuationCheckpointMessage(checkpoint *continuationCheckpoint) string {
+	snapshot := checkpoint.snapshot()
+	var b strings.Builder
+	b.WriteString("The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action.\n")
+	b.WriteString("\n## Continuation checkpoint\n")
+
+	if len(snapshot.toolObservations) > 0 {
+		b.WriteString("\n### Tool observations\n")
+		for _, observation := range snapshot.toolObservations {
+			name := observation.Tool
+			if name == "" {
+				name = "unknown"
+			}
+			b.WriteString("\n- Tool: `")
+			b.WriteString(name)
+			b.WriteString("`")
+			if observation.Status != "" {
+				b.WriteString("\n  Status: ")
+				b.WriteString(observation.Status)
+			}
+			if observation.Summary != "" {
+				b.WriteString("\n  Summary: ")
+				b.WriteString(observation.Summary)
+			}
+			if len(observation.Inputs) > 0 {
+				b.WriteString("\n  Inputs: ")
+				b.WriteString(strings.Join(observation.Inputs, ", "))
+			}
+			if len(observation.Outputs) > 0 {
+				b.WriteString("\n  Outputs: ")
+				b.WriteString(strings.Join(observation.Outputs, ", "))
+			}
+			if len(observation.FilesRead) > 0 {
+				b.WriteString("\n  Files read: ")
+				b.WriteString(strings.Join(observation.FilesRead, ", "))
+			}
+			if len(observation.FilesModified) > 0 {
+				b.WriteString("\n  Files modified: ")
+				b.WriteString(strings.Join(observation.FilesModified, ", "))
+			}
+			if len(observation.DirectoriesListed) > 0 {
+				b.WriteString("\n  Directories listed: ")
+				b.WriteString(strings.Join(observation.DirectoriesListed, ", "))
+			}
+			if len(observation.Counts) > 0 {
+				b.WriteString("\n  Counts: ")
+				keys := make([]string, 0, len(observation.Counts))
+				for key := range observation.Counts {
+					keys = append(keys, key)
+				}
+				sort.Strings(keys)
+				first := true
+				for _, key := range keys {
+					if !first {
+						b.WriteString(", ")
+					}
+					first = false
+					b.WriteString(fmt.Sprintf("%s=%d", key, observation.Counts[key]))
+				}
+			}
+			for _, search := range observation.SearchesRun {
+				b.WriteString("\n  Search: ")
+				b.WriteString(search.Query)
+				if search.FileFilter != "" {
+					b.WriteString(" (filter: ")
+					b.WriteString(search.FileFilter)
+					b.WriteString(")")
+				}
+				b.WriteString(fmt.Sprintf(" -> %d result(s)", search.ResultCount))
+				if len(search.TopPaths) > 0 {
+					b.WriteString("; top paths: ")
+					b.WriteString(strings.Join(search.TopPaths, ", "))
+				}
+			}
+			for _, command := range observation.CommandsRun {
+				b.WriteString("\n  Command: ")
+				b.WriteString(command.Command)
+				if command.Status != "" {
+					b.WriteString(" [")
+					b.WriteString(command.Status)
+					b.WriteString("]")
+				}
+				if command.ExitCode != nil {
+					b.WriteString(fmt.Sprintf(" exit=%d", *command.ExitCode))
+				}
+				if command.Summary != "" {
+					b.WriteString(" - ")
+					b.WriteString(command.Summary)
+				}
+			}
+			if observation.Error != "" {
+				b.WriteString("\n  Error: ")
+				b.WriteString(observation.Error)
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	if snapshot.visibleOutput != "" {
+		b.WriteString("\n### Visible assistant output\n\n")
+		b.WriteString(snapshot.visibleOutput)
+		b.WriteByte('\n')
+	}
+	if len(snapshot.toolObservations) == 0 && snapshot.visibleOutput == "" {
+		b.WriteString("\nNo visible output or tool observations were captured from the exhausted window.\n")
+	}
+
+	return compactContinuationMessage(b.String())
+}
+
+func truncateContinuationField(value string) string {
+	if len(value) <= continuationCheckpointMaxFieldChars {
+		return value
+	}
+	return value[:continuationCheckpointMaxFieldChars] + "\n[truncated for continuation]"
+}
+
+func truncateContinuationFields(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, truncateContinuationField(value))
+	}
+	return out
+}
+
+func compactContinuationMessage(value string) string {
+	if len(value) <= continuationCheckpointMaxTotalChars {
+		return value
+	}
+	return value[:continuationCheckpointMaxTotalChars] + "\n\n[continuation checkpoint truncated]"
 }
 
 func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {

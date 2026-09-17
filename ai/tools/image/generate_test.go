@@ -137,6 +137,27 @@ func TestEncodeImageDataURL(t *testing.T) {
 	}
 }
 
+func TestGenerateImageObservationRecordsOutputAndInputImage(t *testing.T) {
+	observation := (&GenerateImage{}).Observation(
+		`{"prompt":"make it brighter","inputImage":"before.png"}`,
+		"INFO: image written to 'after.png' (123 bytes). Reference it in your reply as ![](after.png)\n",
+		nil,
+	)
+
+	if observation.Tool != "generateImage" || observation.Status != "ok" {
+		t.Fatalf("observation = %+v, want generateImage ok", observation)
+	}
+	if strings.Join(observation.Inputs, ",") != "before.png" {
+		t.Fatalf("Inputs = %#v, want before.png", observation.Inputs)
+	}
+	if strings.Join(observation.Outputs, ",") != "after.png" {
+		t.Fatalf("Outputs = %#v, want after.png", observation.Outputs)
+	}
+	if observation.Counts["images"] != 1 {
+		t.Fatalf("images count = %d, want 1", observation.Counts["images"])
+	}
+}
+
 func TestResolveInputImagePath(t *testing.T) {
 	pwd := t.TempDir()
 	tool := &GenerateImage{agent: &fakeAgent{pwd: pwd}}

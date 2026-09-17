@@ -106,6 +106,28 @@ func (t *InsertLines) fail(message string) string {
 	return message + "\nNo changes were written to disk.\n"
 }
 
+func (t *InsertLines) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+	var request insertLinesInputT
+	if json.Unmarshal([]byte(input), &request) != nil {
+		observation.Inputs = []string{input}
+		return observation
+	}
+	if request.File != "" {
+		observation.FilesModified = []string{request.File}
+	}
+	observation.Counts = map[string]int{"inserts": len(request.Inserts)}
+	if strings.Contains(output, "ERROR") {
+		observation.Status = "error"
+		observation.Error = output
+	}
+	return observation
+}
+
 // applyLineInserts applies every insert or none. Line numbers all address the
 // original content, so inserts are applied bottom-up to keep them valid.
 func applyLineInserts(content string, inserts []insertT) (string, error) {

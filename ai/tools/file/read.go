@@ -96,3 +96,20 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 
 	return response, nil
 }
+
+func (t *ReadFiles) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+		return observation
+	}
+	var files []string
+	if json.Unmarshal([]byte(input), &files) != nil {
+		observation.Inputs = []string{input}
+		return observation
+	}
+	observation.FilesRead = files
+	observation.Counts = map[string]int{"files": len(files)}
+	return observation
+}
