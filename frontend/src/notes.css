@@ -1756,7 +1756,6 @@ body {
     word-break: break-word;
     font-family: var(--font-family);
     color: var(--fg);
-    background-color: var(--darken-background-overlay) !important;
 }
 
 #notes-ai-output img {
