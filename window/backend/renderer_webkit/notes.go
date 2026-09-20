@@ -70,3 +70,11 @@ func (wr *webkitRender) NotesLspGoToSymbol() {
 
 	runtime.EventsEmit(wr.wapp, "notesRunLspGoToSymbol")
 }
+
+func (wr *webkitRender) NotesLspGoToWorkspaceSymbol() {
+	if wr == nil || wr.wapp == nil {
+		return
+	}
+
+	runtime.EventsEmit(wr.wapp, "notesRunLspGoToWorkspaceSymbol")
+}

@@ -10,6 +10,11 @@ type Agent interface {
 	Renderer() types.Renderer
 	ServiceName() string
 	GetMeta() *Meta
+	ProjectRoot() string
+	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
+	EnvironmentValue(string) string
+	// ImageGenerationEnvironmentValue resolves image-generation settings for the configured service.
+	ImageGenerationEnvironmentValue(string) string
 }
 
 type Tool interface {
@@ -22,10 +27,54 @@ type Tool interface {
 	Call(context.Context, string) (string, error)
 }
 
+type ToolObservationProvider interface {
+	Observation(input, output string, err error) ToolObservation
+}
+
+type ToolObservation struct {
+	Tool              string
+	Status            string
+	Summary           string
+	Inputs            []string
+	Outputs           []string
+	FilesRead         []string
+	FilesModified     []string
+	DirectoriesListed []string
+	SearchesRun       []SearchObservation
+	CommandsRun       []CommandObservation
+	Counts            map[string]int
+	Error             string
+}
+
+type SearchObservation struct {
+	Query       string
+	FileFilter  string
+	ResultCount int
+	TopPaths    []string
+}
+
+type CommandObservation struct {
+	Command  string
+	ExitCode *int
+	Status   string
+	Summary  string
+}
+
+type DefaultPermissions struct {
+	Invocation string
+	Subagents  string
+}
+
 type Meta struct {
 	CmdLine     string
-	Pwd         string
+	Pwd         string // this is not the same as the application working directory
 	OutputBlock string
 	Function    string
 	Variables   map[string]any
+}
+
+// ImageAttachment carries an inline image to send alongside a prompt.
+type ImageAttachment struct {
+	MIMEType string
+	Base64   string
 }

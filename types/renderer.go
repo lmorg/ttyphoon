@@ -20,6 +20,7 @@ type MenuItem struct {
 type ContextMenu interface {
 	Append(...MenuItem)
 	DisplayMenu(title string, showNextToMouseCursor ...bool)
+	DisplayMenuAt(title string, x, y int)
 	Options() []string
 	Icons() []rune
 	Highlight(int)
@@ -54,6 +55,7 @@ type InputBoxWTOptions struct {
 	History     []string              `json:"history"`
 	Multiline   bool                  `json:"multiline"`
 	Variables   []InputBoxWTVariables `json:"variables"`
+	CacheKey    string
 }
 
 type InputBoxWTVariables struct {

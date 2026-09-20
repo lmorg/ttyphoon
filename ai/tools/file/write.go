@@ -1,10 +1,10 @@
-package tools
+package filetools
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -22,22 +22,23 @@ func init() {
 	agent.ToolsAdd(&Write{})
 }
 
+//go:embed write_description.md
+var writeFileDescription string
+
 func (t *Write) New(agent aitypes.Agent) (aitypes.Tool, error) {
-	return &Write{agent: agent, enabled: false}, nil
+	return &Write{agent: agent, enabled: true}, nil
 }
 
 func (t *Write) Enabled() bool { return t.enabled }
 func (t *Write) Toggle()       { t.enabled = !t.enabled }
 
-func (t *Write) Name() string { return "Write File" }
+func (t *Write) Name() string { return "writeFile" }
 func (t *Write) Path() string { return "internal" }
-
+func (t *Write) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
+}
 func (t *Write) Description() string {
-	return `Writes new files, overwrites an existing files.
-Useful for making changes, correcting mistakes, and writing new code and configuration.
-File contents should contain the entire file, including parts of the file that are not changing.
-The input of this tool MUST conform to the ` + "`txtar`" + ` specification.
-`
+	return writeFileDescription
 }
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {
@@ -47,11 +48,10 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 
 	arc := txtar.Parse([]byte(input))
 	for i := range arc.Files {
-		var filename string
-		if strings.HasPrefix(arc.Files[i].Name, t.agent.GetMeta().Pwd) {
-			filename = arc.Files[i].Name
-		} else {
-			filename = t.agent.GetMeta().Pwd + "/" + arc.Files[i].Name
+		filename, err := resolveWorkspacePath(t.agent, arc.Files[i].Name)
+		if err != nil {
+			result += fmt.Sprintf("ERROR '%s': %s\n", arc.Files[i].Name, err)
+			continue
 		}
 
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" writing file: "+filename)
@@ -81,4 +81,21 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 
 	debug.Log(result)
 	return result, nil
+}
+
+func (t *Write) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+		return observation
+	}
+	arc := txtar.Parse([]byte(input))
+	files := make([]string, 0, len(arc.Files))
+	for _, file := range arc.Files {
+		files = append(files, file.Name)
+	}
+	observation.FilesModified = files
+	observation.Counts = map[string]int{"files": len(files), "bytes": len(input)}
+	return observation
 }

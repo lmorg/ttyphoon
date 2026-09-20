@@ -110,7 +110,7 @@ func (term *Term) fetchCharacterSet() (map[rune]rune, error) {
 		*/
 
 	default:
-		e := fmt.Sprintf("DEBUG: Character set %s requested but does not exist", string(param))
+		e := fmt.Sprintf("[error] term: Character set %s requested but does not exist", string(param))
 		log.Print(e)
 		return nil, errors.New(e)
 	}

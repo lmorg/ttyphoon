@@ -40,12 +40,13 @@ Hotkeys:
     "F4::F4": LspOptionsMenu
     "F4::f": LspFormatDocument
     "F4::j": LspJumpToSymbol
+    "F4::w": LspJumpToWorkspaceSymbol
 
 Terminal:
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
   ScrollbackHistory: 10000
-  WriteMarkdownHistory: true
+  WriteMarkdownHistory: false
 
   # Close the scrollback (ie jump back to end of history) if a key is pressed
   # while in the history scrollback view
@@ -124,7 +125,7 @@ Notes:
 
   MaxRecentFiles: 10
 
-  MaxLogLines: 200
+  MaxLogLines: 1000
 
   ExcludeDirectories:
     ".git": true
@@ -172,24 +173,37 @@ Window:
 
 AI:
   MaxIterations: 10
-  AvailableModels:
-    OpenAI:
-      # https://platform.openai.com/docs/models
-      - gpt-5.5
-      - gpt-5.4
-      - gpt-5.4-mini
-    Anthropic:
-      # https://platform.claude.com/docs/en/about-claude/models/overview
-      - claude-fable-5
-      - claude-opus-4-5
-      - claude-opus-4-6
-      - claude-opus-4-7
-      - claude-opus-4-8
-      - claude-sonnet-4-5
-      - claude-sonnet-4-6
-      - claude-sonnet-4-7
-      - claude-sonnet-4-8
-      - claude-haiku-4-5
-      - claude-haiku-4-6
-      - claude-haiku-4-7
-      - claude-haiku-4-8
+  MaxContinuations: 3
+  RequestTimeout: 60m
+  # Tool outputs whose length (chars) exceeds this threshold are compressed by an internal
+  # summariser sub-agent before reaching the main agent, to keep context under the LLM's window.
+  # The full raw output is still shown in the AI panel and session log.
+  ToolSummariseThresholdChars: 8192
+  
+  DefaultService: anthropic-default
+  
+  Services:
+    openai:
+      Label: "OpenAI (default)"
+      Description: Default service for OpenAI
+      Provider: openai
+      Models:
+        # https://platform.openai.com/docs/models
+        - gpt-5.5
+        - gpt-5.4
+        - gpt-5.4-mini
+      DefaultModel: gpt-5.4
+      SummariseModel: gpt-5.4-mini
+
+    anthropic:
+      Label: "Anthropic (default)"
+      Description: Default service for Anthropic
+      Provider: anthropic
+      Models:
+        # https://platform.claude.com/docs/en/about-claude/models/overview
+        - claude-fable-5
+        - claude-opus-5
+        - claude-sonnet-5
+        - claude-haiku-4-5-20251001
+      DefaultModel: claude-sonnet-5
+      SummariseModel: claude-haiku-4-5-20251001

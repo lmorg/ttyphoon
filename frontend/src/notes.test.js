@@ -15,6 +15,12 @@ const getNotesMaxLogLinesMock = vi.fn();
 const getNotesLanguageTabIndentMock = vi.fn();
 const getNotesColumnWidthsMock = vi.fn();
 const setNotesColumnWidthsMock = vi.fn(() => Promise.resolve());
+const emptyTableResult = () => ({ missing: false, order: [], sortColumn: 0, sortDesc: false, filter: '', error: '' });
+const notesTableSortMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableClearSortMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableFilterMock = vi.fn(() => Promise.resolve(emptyTableResult()));
+const notesTableReconcileMock = vi.fn(() => Promise.resolve());
+const notesTableDisposeAllMock = vi.fn(() => Promise.resolve());
 const getFileMock = vi.fn();
 const listFilesMock = vi.fn();
 const filterStringsMock = vi.fn((query, items) => {
@@ -44,15 +50,27 @@ const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
+const askAIImageMock = vi.fn(() => Promise.resolve());
 const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
+const getAIActiveStreamSnapshotMock = vi.fn(() => Promise.resolve({ active: false, runId: 0, sequence: 0, text: '' }));
+const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
+const getAIPromptLogMock = vi.fn(() => Promise.resolve(''));
 const getAISessionManagementMock = vi.fn(() => Promise.resolve({ activeSessionId: 0, sessions: [], history: [] }));
 const createAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const setActiveAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const deleteAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const renameAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const deleteAIHistoryEntryMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
+const getAIToolsListMock = vi.fn(() => Promise.resolve([]));
+const getAIMcpServersMock = vi.fn(() => Promise.resolve([]));
 const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1']));
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
+const getAIExecutionLimitsMock = vi.fn(() => Promise.resolve({ agentSteps: 10, requestTimeout: '5m' }));
 const setCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve());
+const setAIPanelLiveMock = vi.fn(() => Promise.resolve());
 const showAIToolsMenuMock = vi.fn(() => Promise.resolve());
+const showAISkillsMenuMock = vi.fn(() => Promise.resolve());
+const setAIToolSubagentAllowedMock = vi.fn(() => Promise.resolve());
 const showAIMcpMenuMock = vi.fn(() => Promise.resolve());
 const clearAISessionHistoryMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const getCurrentProjectMock = vi.fn(() => Promise.resolve(''));
@@ -78,6 +96,7 @@ const getFileMetaMarkdownMock = vi.fn(() => Promise.resolve([
     '- Other: `r--`',
 ].join('\n')));
 const resolveFilePathMock = vi.fn(() => Promise.resolve(''));
+const getImageMock = vi.fn(() => Promise.resolve('data:image/png;base64,AAAA'));
 const resolveNoteLocationMock = vi.fn(() => Promise.resolve('$NOTES'));
 const composeNoteLocationPathMock = vi.fn((location, name) => `${location}/${String(name || '').replace(/^\/+/, '')}`);
 const getHyperlinkMenuActionsMock = vi.fn(() => Promise.resolve([]));
@@ -99,8 +118,10 @@ const notesLspHoverMock = vi.fn(() => Promise.resolve(''));
 const notesLspCodeLensMock = vi.fn(() => Promise.resolve([]));
 const notesLspExecuteCodeLensMock = vi.fn(() => Promise.resolve(false));
 const notesLspInlayHintsMock = vi.fn(() => Promise.resolve([]));
+const notesLspSemanticTokensMock = vi.fn(() => Promise.resolve(null));
 const notesLspCompletionMock = vi.fn(() => Promise.resolve([]));
 const notesLspDefinitionMock = vi.fn(() => Promise.resolve([]));
+const notesLspReferencesMock = vi.fn(() => Promise.resolve([]));
 const notesLspDocumentSymbolsMock = vi.fn(() => Promise.resolve([]));
 const notesLspWorkspaceSymbolsMock = vi.fn(() => Promise.resolve([]));
 const notesLspSignatureHelpMock = vi.fn(() => Promise.resolve(''));
@@ -117,6 +138,8 @@ const notesHistoryAddMock = vi.fn(() => Promise.resolve());
 const notesHistoryCurrentMock = vi.fn(() => Promise.resolve(''));
 const notesGrepMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
 const notesGrepWithOptionsMock = vi.fn(() => Promise.resolve({ results: [], error: '' }));
+const notesGrepStreamMock = vi.fn(() => Promise.resolve());
+const cancelNotesListFilesMock = vi.fn(() => Promise.resolve());
 const getProjectCacheMock = vi.fn(() => Promise.resolve({ LastDocument: '', FileListCollapsed: [] }));
 const setProjectCacheMock = vi.fn(() => Promise.resolve());
 const getDocumentCacheMock = vi.fn(() => Promise.resolve({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' }));
@@ -135,6 +158,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetNotesLanguageReservedWords: vi.fn(() => Promise.resolve([])),
     GetNotesColumnWidths: getNotesColumnWidthsMock,
     GetFile: getFileMock,
+    GetImage: getImageMock,
     ListFiles: listFilesMock,
     FilterStrings: filterStringsMock,
     SaveFile: saveFileMock,
@@ -154,15 +178,27 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
+    AskAIImage: askAIImageMock,
     GetAISessionCache: getAISessionCacheMock,
+    GetAIActiveStreamSnapshot: getAIActiveStreamSnapshotMock,
+    ListAIPromptLogs: listAIPromptLogsMock,
+    GetAIPromptLog: getAIPromptLogMock,
     GetAISessionManagement: getAISessionManagementMock,
     CreateAISession: createAISessionMock,
     SetActiveAISession: setActiveAISessionMock,
     DeleteAISession: deleteAISessionMock,
+    RenameAISession: renameAISessionMock,
+    DeleteAIHistoryEntry: deleteAIHistoryEntryMock,
+    GetAIToolsList: getAIToolsListMock,
+    GetAIMcpServers: getAIMcpServersMock,
     ListAIModelSelections: listAIModelSelectionsMock,
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
+    GetAIExecutionLimits: getAIExecutionLimitsMock,
     SetCurrentAIModelSelection: setCurrentAIModelSelectionMock,
+    SetAIPanelLive: setAIPanelLiveMock,
+    SetAIToolSubagentAllowed: setAIToolSubagentAllowedMock,
     ShowAIToolsMenu: showAIToolsMenuMock,
+    ShowAISkillsMenu: showAISkillsMenuMock,
     ShowAIMcpMenu: showAIMcpMenuMock,
     ClearAISessionHistory: clearAISessionHistoryMock,
     GetCurrentProject: getCurrentProjectMock,
@@ -185,8 +221,10 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesLspCodeLens: notesLspCodeLensMock,
     NotesLspExecuteCodeLens: notesLspExecuteCodeLensMock,
     NotesLspInlayHints: notesLspInlayHintsMock,
+    NotesLspSemanticTokens: notesLspSemanticTokensMock,
     NotesLspCompletion: notesLspCompletionMock,
     NotesLspDefinition: notesLspDefinitionMock,
+    NotesLspReferences: notesLspReferencesMock,
     NotesLspDocumentSymbols: notesLspDocumentSymbolsMock,
     NotesLspWorkspaceSymbols: notesLspWorkspaceSymbolsMock,
     NotesLspSignatureHelp: notesLspSignatureHelpMock,
@@ -203,7 +241,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesHistoryCurrent: notesHistoryCurrentMock,
     NotesGrep: notesGrepMock,
     NotesGrepWithOptions: notesGrepWithOptionsMock,
-    NotesGrepStream: vi.fn(() => Promise.resolve()),
+    NotesGrepStream: notesGrepStreamMock,
+    CancelNotesListFiles: cancelNotesListFilesMock,
     GetProjectCache: getProjectCacheMock,
     SetProjectCache: setProjectCacheMock,
     GetDocumentCache: getDocumentCacheMock,
@@ -213,6 +252,11 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     FormatCodeBlock: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     FormatNotesContent: vi.fn(() => Promise.resolve({ Code: '', FilePath: '', Err: '', HasFormatter: false })),
     SetNotesColumnWidths: setNotesColumnWidthsMock,
+    NotesTableSort: notesTableSortMock,
+    NotesTableClearSort: notesTableClearSortMock,
+    NotesTableFilter: notesTableFilterMock,
+    NotesTableReconcile: notesTableReconcileMock,
+    NotesTableDisposeAll: notesTableDisposeAllMock,
     GetHyperlinkMenuActions: getHyperlinkMenuActionsMock,
     RunHyperlinkMenuAction: runHyperlinkMenuActionMock,
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
@@ -237,6 +281,8 @@ vi.mock('./markdown-utils.js', () => ({
     processMarkdownContainer: vi.fn(),
     enableFullscreenImages: vi.fn(),
     applySyntaxHighlighting: vi.fn(),
+    processLinks: vi.fn(),
+    autoHyperlink: vi.fn(),
 }));
 
 vi.mock('./style-utils.js', () => ({
@@ -342,6 +388,16 @@ describe('notes rendering', () => {
         getNotesLanguageTabIndentMock.mockReset();
         getNotesColumnWidthsMock.mockReset();
         setNotesColumnWidthsMock.mockReset();
+        notesTableSortMock.mockReset();
+        notesTableSortMock.mockResolvedValue(emptyTableResult());
+        notesTableClearSortMock.mockReset();
+        notesTableClearSortMock.mockResolvedValue(emptyTableResult());
+        notesTableFilterMock.mockReset();
+        notesTableFilterMock.mockResolvedValue(emptyTableResult());
+        notesTableReconcileMock.mockReset();
+        notesTableReconcileMock.mockResolvedValue();
+        notesTableDisposeAllMock.mockReset();
+        notesTableDisposeAllMock.mockResolvedValue();
         getFileMock.mockReset();
         listFilesMock.mockReset();
         saveFileMock.mockClear();
@@ -396,6 +452,8 @@ describe('notes rendering', () => {
         notesHistoryCurrentMock.mockReset();
         notesGrepMock.mockReset();
         notesGrepWithOptionsMock.mockReset();
+        notesGrepStreamMock.mockReset();
+        cancelNotesListFilesMock.mockReset();
         getProjectCacheMock.mockReset();
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
@@ -456,6 +514,8 @@ describe('notes rendering', () => {
         notesHistoryCurrentMock.mockResolvedValue('');
         notesGrepMock.mockResolvedValue({ results: [], error: '' });
         notesGrepWithOptionsMock.mockResolvedValue({ results: [], error: '' });
+        notesGrepStreamMock.mockResolvedValue();
+        cancelNotesListFilesMock.mockResolvedValue();
         getProjectCacheMock.mockResolvedValue({ LastDocument: '', FileListCollapsed: [] });
         setProjectCacheMock.mockResolvedValue();
         getDocumentCacheMock.mockResolvedValue({ DocumentTab: '', ToolsOpen: true, ToolsTab: 'ai' });
@@ -1317,13 +1377,11 @@ describe('notes rendering', () => {
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
 
-    it('requests LSP inlay hints without legacy overlay rendering', async () => {
+    // Inlay hints and semantic tokens are supplied to Monaco providers, which are
+    // disabled under jsdom, so neither should be fetched by the notes module.
+    it('leaves inlay hints and semantic tokens to Monaco providers', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('go');
-        notesLspInlayHintsMock.mockResolvedValue([
-            { label: ': string', kind: 1, line: 0, character: 4, paddingLeft: true },
-            { label: 'name:', kind: 2, line: 0, character: 0, paddingRight: true },
-        ]);
         getFileMock.mockResolvedValue({ contents: 'name := value\n', text: '', error: '' });
 
         await importNotesModule();
@@ -1334,14 +1392,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
-
-        const hints = Array.from(document.querySelectorAll('.notes-lsp-inlay-hint'));
-        expect(hints).toHaveLength(0);
-
-        const styles = getNotesRenderedStyles();
-        expect(styles).toContain('.notes-lsp-inlay-hint {');
-        expect(styles).toContain('.notes-lsp-inlay-hint.has-padding-left {');
+        expect(notesLspInlayHintsMock).not.toHaveBeenCalled();
+        expect(notesLspSemanticTokensMock).not.toHaveBeenCalled();
+        expect(document.querySelectorAll('.notes-lsp-inlay-hint')).toHaveLength(0);
     });
 
     it('lists and executes code lens actions from editor context menu', async () => {
@@ -1668,12 +1721,20 @@ describe('notes rendering', () => {
         lspMenu.onSelect(gotoIndex);
         await flushPromises();
 
-        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', '');
+        // Symbols are searched server-side, so no request is made until the user types.
+        expect(notesLspWorkspaceSymbolsMock).not.toHaveBeenCalled();
         expect(showLocalMenuMock).toHaveBeenCalledTimes(3);
 
         const symbolMenu = showLocalMenuMock.mock.calls[2][0];
-        expect(symbolMenu.options[0]).toContain('beta');
-        expect(symbolMenu.options[0]).toContain('pkg/beta.go');
+        expect(symbolMenu.options).toEqual([]);
+        expect(typeof symbolMenu.onQuery).toBe('function');
+
+        const queried = await symbolMenu.onQuery('beta');
+        await flushPromises();
+
+        expect(notesLspWorkspaceSymbolsMock).toHaveBeenCalledWith('$NOTES/main.go', 'beta');
+        expect(queried.options[0]).toContain('beta');
+        expect(queried.options[0]).toContain('pkg/beta.go');
 
         await symbolMenu.onSelect(0);
         await flushPromises();
@@ -1893,7 +1954,7 @@ describe('notes rendering', () => {
         editor.selectionStart = cursorOffset;
         editor.selectionEnd = cursorOffset + 'println'.length;
 
-        const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Println');
+        const promptSpy = vi.spyOn(window, 'prompt');
 
         editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
@@ -1915,10 +1976,24 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspPrepareRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1);
-        expect(promptSpy).toHaveBeenCalledWith('Rename symbol to:', 'println');
+        expect(promptSpy).not.toHaveBeenCalled();
+
+        const modalInput = document.getElementById('notes-modal-input');
+        const modalCreate = document.getElementById('notes-modal-create');
+        expect(document.getElementById('notes-modal').dataset.open).toBe('true');
+        expect(modalInput.value).toBe('println');
+
+        modalInput.value = 'Println';
+        modalCreate.click();
+        await flushPromises();
+        await flushPromises();
+
         expect(notesLspRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1, 'Println');
         expect(editor.value).toContain('Println("ok")');
 
+        // The modal steals focus while open; the user must return to the editor
+        // before undo/redo keystrokes are routed to it again.
+        editor.focus();
         editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
         expect(editor.value).toContain('println("ok")');
@@ -2093,6 +2168,70 @@ describe('notes rendering', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
         expect(document.activeElement).toBe(notesEditor);
+    });
+
+    it('preserves file-list scroll position when opening another file', async () => {
+        listFilesMock.mockResolvedValue([
+            '$NOTES/a.md',
+            '$NOTES/b.md',
+            '$NOTES/c.md',
+        ]);
+        getFileMock.mockImplementation(async (file) => ({ contents: `# ${file}\ncontent`, text: '', error: '' }));
+
+        await importNotesModule();
+
+        const list = document.getElementById('notes-list');
+        let listScrollTop = 0;
+        Object.defineProperty(list, 'scrollTop', {
+            configurable: true,
+            get() {
+                return listScrollTop;
+            },
+            set(value) {
+                listScrollTop = Number(value) || 0;
+            },
+        });
+        list.scrollTop = 123;
+
+        const firstButton = document.querySelector('[data-file="$NOTES/a.md"]');
+        firstButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        list.scrollTop = 123;
+        const secondButton = document.querySelector('[data-file="$NOTES/b.md"]');
+        secondButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(list.scrollTop).toBe(123);
+    });
+
+    it('scrolls the active file into view when workspace project changes', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getCurrentGroupNameMock.mockResolvedValueOnce('Workspace One').mockResolvedValue('Workspace Two');
+        getCurrentProjectMock.mockResolvedValue('/tmp/project-one');
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+        scrollSpy.mockClear();
+
+        const notesUpdateHandler = getEventHandler('notesUpdate');
+        expect(typeof notesUpdateHandler).toBe('function');
+        getCurrentProjectMock.mockResolvedValue('/tmp/project-two');
+        notesUpdateHandler('Workspace Two');
+        await flushPromises();
+        await flushPromises();
+
+        expect(scrollSpy).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' });
+        scrollSpy.mockRestore();
     });
 
     it('shows a file context menu with copy actions and Go-provided file handlers', async () => {
@@ -2308,6 +2447,162 @@ describe('notes rendering', () => {
         expect(askAIMock.mock.calls[0][2]).toContain('Viewer side text.');
     });
 
+    it('sends the right-clicked image to Ask AI instead of the open document', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/source.go']);
+        getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/source.go"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        getEventHandler('aiResponseStream')('\n![diagram.png](data:image/png;base64,AAAA)\n');
+        await flushPromises();
+        getEventHandler('aiJobFinish')();
+        await flushPromises();
+        await flushPromises();
+
+        const image = document.getElementById('notes-ai-output').querySelector('img');
+        expect(image).not.toBeNull();
+
+        showLocalMenuMock.mockClear();
+        image.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 20,
+            clientY: 20,
+        }));
+        await flushPromises();
+
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        menuConfig.onSelect(2);
+        await flushPromises();
+
+        expect(askAIImageMock).toHaveBeenCalledWith('diagram.png', 'data:image/png;base64,AAAA');
+        expect(askAIMock).not.toHaveBeenCalled();
+    });
+
+    it('adds Copy code and renames Copy to Copy selection when right-clicking a code block', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/code.md']);
+        getFileMock.mockResolvedValue({ contents: '# Code\n\n```js\nconst x = 1;\n```', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/code.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        showLocalMenuMock.mockClear();
+        clipboardSetTextMock.mockClear();
+
+        const preview = document.getElementById('notes-preview');
+        preview.innerHTML = '<pre><code>const x = 1;\nconst y = 2;\n</code></pre>';
+        const codeEl = preview.querySelector('code');
+
+        codeEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        expect(menuConfig.options).toContain('Copy selection');
+        expect(menuConfig.options).toContain('Copy code');
+        expect(menuConfig.options).not.toContain('Copy');
+
+        const copyCodeIndex = menuConfig.options.findIndex((option) => option === 'Copy code');
+        expect(copyCodeIndex).toBeGreaterThanOrEqual(0);
+
+        menuConfig.onSelect(copyCodeIndex);
+        await flushPromises();
+
+        expect(clipboardSetTextMock).toHaveBeenCalledWith('const x = 1;\nconst y = 2;\n');
+    });
+
+    it('shows a hover copy button for code and quote blocks in View and AI output', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/blocks.md']);
+        getFileMock.mockResolvedValue({ contents: '# Blocks', text: '', error: '' });
+
+        await importNotesModule();
+        clipboardSetTextMock.mockClear();
+
+        const preview = document.getElementById('notes-preview');
+        preview.innerHTML = '<pre><code>view code\n</code></pre><blockquote>view quote</blockquote>';
+        const viewCode = preview.querySelector('pre');
+        const viewQuote = preview.querySelector('blockquote');
+
+        viewCode.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        viewQuote.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+        const viewCodeButton = viewCode.querySelector('.notes-copy-block-button');
+        const viewQuoteButton = viewQuote.querySelector('.notes-copy-block-button');
+        expect(viewCodeButton).not.toBeNull();
+        expect(viewQuoteButton).not.toBeNull();
+
+        viewCodeButton.click();
+        viewQuoteButton.click();
+        await flushPromises();
+
+        expect(clipboardSetTextMock).toHaveBeenNthCalledWith(1, 'view code\n');
+        expect(clipboardSetTextMock).toHaveBeenNthCalledWith(2, 'view quote');
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        aiOutput.innerHTML = '<pre><code>ai code</code></pre><blockquote>ai quote</blockquote>';
+        const aiCode = aiOutput.querySelector('pre');
+        const aiQuote = aiOutput.querySelector('blockquote');
+
+        aiCode.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        aiQuote.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        expect(aiCode.querySelector('.notes-copy-block-button')).not.toBeNull();
+        expect(aiQuote.querySelector('.notes-copy-block-button')).not.toBeNull();
+    });
+
+    it('erases a single prompt from the AI Settings transcript without a global clear button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary', text: '', error: '' });
+        getAISessionManagementMock.mockResolvedValue({
+            activeSessionId: 1,
+            sessions: [],
+            history: [
+                { id: 42, prompt: 'First prompt', commandLine: '', outputBlock: '', excerpt: 'first excerpt' },
+                { id: 43, prompt: 'Second prompt', commandLine: '', outputBlock: '', excerpt: 'second excerpt' },
+            ],
+        });
+
+        await importNotesModule();
+
+        // The button is relocated into the modal; it must not exist in the toolbar.
+        expect(document.getElementById('notes-tools-clear')).toBeNull();
+
+        document.getElementById('notes-tools-ai-settings').click();
+        await flushPromises();
+        await flushPromises();
+
+        const historyList = document.getElementById('notes-ai-settings-history-list');
+        const eraseButtons = historyList.querySelectorAll('button[data-action="erase"]');
+        expect(eraseButtons).toHaveLength(2);
+        expect(eraseButtons[0].dataset.entryId).toBe('42');
+        expect(eraseButtons[1].dataset.entryId).toBe('43');
+
+        deleteAIHistoryEntryMock.mockResolvedValueOnce({
+            activeSessionId: 1,
+            sessions: [],
+            history: [
+                { id: 43, prompt: 'Second prompt', commandLine: '', outputBlock: '', excerpt: 'second excerpt' },
+            ],
+        });
+
+        eraseButtons[0].click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(deleteAIHistoryEntryMock).toHaveBeenCalledWith(42);
+        const remaining = historyList.querySelectorAll('button[data-action="erase"]');
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0].dataset.entryId).toBe('43');
+    });
+
     it('invokes backend AskAI notesPromptToolbar caller from toolbar Ask button', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
         getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
@@ -2322,6 +2617,21 @@ describe('notes rendering', () => {
 
         expect(askAIMock).toHaveBeenCalledTimes(1);
         expect(askAIMock).toHaveBeenCalledWith('notesPromptToolbar', '', '');
+    });
+
+    it('shows the agent skills menu from the toolbar Skills button', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/summary.md']);
+        getFileMock.mockResolvedValue({ contents: '# Summary\n\nViewer side text.', text: '', error: '' });
+
+        await importNotesModule();
+
+        const skillsButton = document.getElementById('notes-tools-ai-skills');
+        expect(skillsButton).not.toBeNull();
+
+        skillsButton.click();
+        await flushPromises();
+
+        expect(showAISkillsMenuMock).toHaveBeenCalledWith(0, 4);
     });
 
     it('uses href as fallback label when right-clicking an empty anchor label', async () => {
@@ -2382,7 +2692,7 @@ describe('notes rendering', () => {
         expect(toolsPanel.dataset.collapsed).toBe('false');
     });
 
-    it('formats pipelined AI output sections and keeps code blocks in a ten-line scrolling region', async () => {
+    it('formats pipelined AI output sections and renders action input as a markdown code block', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2398,11 +2708,17 @@ describe('notes rendering', () => {
             '',
             'Thought: We can use markdown here.',
             '',
-            'Action: run-command',
+            '## Action',
             '',
-            'Action Input: {',
+            'run-command',
+            '',
+            '## Action Input',
+            '',
+            '```',
+            '{',
             actionInputLines,
             '}',
+            '```',
             '',
             'Final Answer: Done.',
         ].join('\n');
@@ -2412,25 +2728,40 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Question', 'Thought', 'Action', 'Action Input', 'Final Answer']);
+        expect(headings).toEqual(['Question', 'Thought', 'Final Answer']);
 
         expect(aiOutput.querySelector('.notes-ai-markdown strong')?.textContent).toBe('What is this?');
 
-        const codeBlocks = aiOutput.querySelectorAll('.notes-ai-code code');
-        expect(codeBlocks.length).toBeGreaterThanOrEqual(2);
+        // Action, Action Input and Action Output are rendered as markdown headings and code blocks
+        const codeBlock = aiOutput.querySelector('pre code');
+        expect(codeBlock).not.toBeNull();
 
-        const actionInputText = codeBlocks[1].textContent || '';
+        const actionInputText = codeBlock?.textContent || '';
         expect(actionInputText).toContain('"k0": 0');
         expect(actionInputText).toContain('"k11": 11');
-        expect(actionInputText.endsWith('\n')).toBe(true);
-
-        const actionInputPre = codeBlocks[1].parentElement;
-        expect(actionInputPre).not.toBeNull();
-        expect(actionInputPre.classList.contains('notes-ai-code')).toBe(true);
-        expect(codeBlocks[1].classList.contains('language-json')).toBe(true);
     });
 
-    it('starts a new heading when Thought follows the closing action input brace on the same line', async () => {
+    it('orders delayed AI stream chunks before finalizing the job', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiStartHandler = getEventHandler('aiJobStart');
+        const aiResponseHandler = getEventHandler('aiResponseStream');
+        const aiFinishHandler = getEventHandler('aiJobFinish');
+        aiStartHandler({ runId: 42, title: '' });
+        aiResponseHandler({ runId: 42, sequence: 1, text: 'second' });
+        aiFinishHandler({ runId: 42, finalSequence: 1 });
+        aiResponseHandler({ runId: 42, sequence: 0, text: 'first ' });
+        await flushPromises();
+        await flushPromises();
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(document.getElementById('notes-ai-output').textContent).toContain('first second');
+    });
+
+    it('grows a still-open fence by appending rather than re-rendering', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2438,24 +2769,39 @@ describe('notes rendering', () => {
 
         const aiOutput = document.getElementById('notes-ai-output');
         const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
 
-        aiResponseHandler('Action Input: {}Thought: I have thoughts');
+        // Mirrors the summariser: a heading, then a fence left open while tokens
+        // stream in one at a time.
+        aiResponseHandler('**Summarising tool output:**\n\n~~~~\n');
         await flushPromises();
         await flushPromises();
 
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Action Input', 'Thought']);
+        aiResponseHandler('summary line one\n');
+        await flushPromises();
+        await flushPromises();
 
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{}\n');
+        aiResponseHandler('summary line two\n');
+        await flushPromises();
+        await flushPromises();
 
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBe(1);
-        expect(markdownBlocks[0].textContent).toContain('I have thoughts');
+        const code = aiOutput.querySelector('.notes-ai-tail pre code');
+        expect(code).not.toBeNull();
+        expect(code.textContent).toContain('summary line one');
+        expect(code.textContent).toContain('summary line two');
+
+        aiResponseHandler('~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
+
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('summary line one');
+        expect(text).toContain('summary line two');
+        expect(text).toContain('Done.');
+        // Appending must not leave a duplicate copy behind once the fence closes.
+        expect(text.split('summary line one').length - 1).toBe(1);
     });
 
-    it('starts a new heading when Thought follows nested Action Input JSON with inline spacing', async () => {
+    it('commits an oversized unsplittable fence instead of re-parsing it forever', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2463,24 +2809,32 @@ describe('notes rendering', () => {
 
         const aiOutput = document.getElementById('notes-ai-output');
         const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
 
-        aiResponseHandler('Action Input: {"a":{"b":1},"txt":"x}y"}   Thought: Nested works');
+        // A fence with no blank line inside it has no natural split point, so it
+        // must be force-committed once it exceeds the tail cap.
+        const bulk = Array.from({ length: 6000 }, (_, i) => `tool output line ${i}`).join('\n');
+        aiResponseHandler(`~~~~\n${bulk}\n`);
         await flushPromises();
         await flushPromises();
 
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Action Input', 'Thought']);
+        const committed = aiOutput.querySelectorAll('.notes-ai-batch');
+        expect(committed.length).toBeGreaterThan(0);
 
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{"a":{"b":1},"txt":"x}y"}\n');
+        aiResponseHandler('final line\n~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
 
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBe(1);
-        expect(markdownBlocks[0].textContent).toContain('Nested works');
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('tool output line 0');
+        expect(text).toContain('tool output line 5999');
+        expect(text).toContain('final line');
+        expect(text).toContain('Done.');
+
+        // The reopened fence must still render as code, not as escaped markup.
+        expect(aiOutput.querySelectorAll('pre').length).toBeGreaterThan(0);
     });
 
-    it('does not duplicate Final Answer when trailing text and a real Final Answer label both carry the same content', async () => {
+    it('renders streamed markdown incrementally without splitting fenced blocks', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2488,76 +2842,35 @@ describe('notes rendering', () => {
 
         const aiOutput = document.getElementById('notes-ai-output');
         const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
 
-        // The model outputs trailing text after the JSON AND a proper Final Answer label
-        // with the same content — previously this produced two Final Answer sections.
-        aiResponseHandler('Action Input: {"tool":"search"}Here is the result\nFinal Answer: Here is the result');
+        // Commit a stable block, then stream a fence in across several chunks.
+        aiResponseHandler('First paragraph.\n\nSecond paragraph.\n\n');
         await flushPromises();
         await flushPromises();
 
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        const finalAnswerCount = headings.filter((h) => h === 'Final Answer').length;
-        expect(finalAnswerCount).toBe(1);
+        aiResponseHandler('~~~~\ntool output line 1\n');
+        await flushPromises();
+        await flushPromises();
+
+        // Mid-fence: the blank line inside must not become a commit point.
+        aiResponseHandler('\nline after blank\n~~~~\n\nDone.\n');
+        await flushPromises();
+        await flushPromises();
+
+        const codeBlocks = aiOutput.querySelectorAll('pre');
+        expect(codeBlocks.length).toBe(1);
+
+        const codeText = codeBlocks[0].textContent || '';
+        expect(codeText).toContain('tool output line 1');
+        expect(codeText).toContain('line after blank');
+
+        const text = aiOutput.textContent || '';
+        expect(text).toContain('First paragraph.');
+        expect(text).toContain('Second paragraph.');
+        expect(text).toContain('Done.');
     });
 
-    it('splits trailing unlabeled narrative text from Action Input JSON into Final Answer', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}I found your Jira tickets.');
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toContain('Action Input');
-        expect(headings).toContain('Final Answer');
-
-        const codeBlock = aiOutput.querySelector('.notes-ai-code code');
-        expect(codeBlock?.textContent).toBe('{"cloudId":"ee733952-df9d-43de-b881-0ac3b68eea6f","jql":"creator = currentUser()"}\n');
-
-        const markdownBlocks = aiOutput.querySelectorAll('.notes-ai-markdown');
-        expect(markdownBlocks.length).toBeGreaterThanOrEqual(1);
-        expect(markdownBlocks[markdownBlocks.length - 1].textContent).toContain('I found your Jira tickets.');
-    });
-
-    it('does not force code block autoscroll when the user has scrolled up', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        aiResponseHandler('Action Input: {\n  "first": 1\n}');
-        await flushPromises();
-        await flushPromises();
-
-        const firstPre = aiOutput.querySelector('.notes-ai-code');
-        expect(firstPre).not.toBeNull();
-
-        Object.defineProperty(firstPre, 'scrollHeight', { configurable: true, value: 200 });
-        Object.defineProperty(firstPre, 'clientHeight', { configurable: true, value: 100 });
-        firstPre.scrollTop = 0;
-
-        aiResponseHandler('\n  "second": 2\n}');
-        await flushPromises();
-        await flushPromises();
-
-        const nextPre = aiOutput.querySelector('.notes-ai-code');
-        expect(nextPre).not.toBeNull();
-        expect(nextPre.scrollTop).toBe(0);
-    });
-
-    it('reuses markdown processing pipeline for AI code sections', async () => {
+    it('reuses markdown processing pipeline for AI sections', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2565,11 +2878,24 @@ describe('notes rendering', () => {
 
         const markdownUtils = await import('./markdown-utils.js');
         vi.mocked(markdownUtils.processMarkdownContainer).mockClear();
+        vi.mocked(markdownUtils.processLinks).mockClear();
 
         const aiResponseHandler = getEventHandler('aiResponseStream');
         expect(typeof aiResponseHandler).toBe('function');
 
-        aiResponseHandler('Action Input: {"a": 1}');
+        aiResponseHandler('\n## Action\n\nsearch\n\n## Action Input\n\n```\n{"a": 1}\n```\n');
+        await flushPromises();
+        await flushPromises();
+
+        // Streaming uses the cheap pass only; the full pipeline is deferred so
+        // it isn't re-run and discarded on every chunk.
+        expect(markdownUtils.processLinks).toHaveBeenCalled();
+        expect(markdownUtils.processMarkdownContainer).not.toHaveBeenCalled();
+
+        const aiFinishHandler = getEventHandler('aiJobFinish');
+        expect(typeof aiFinishHandler).toBe('function');
+
+        aiFinishHandler();
         await flushPromises();
         await flushPromises();
 
@@ -2598,6 +2924,36 @@ describe('notes rendering', () => {
         expect(menuConfig.options).not.toContain('Find');
         expect(menuConfig.options).not.toContain('Ask AI...');
         expect(menuConfig.options).not.toContain('Print');
+    });
+
+    // Images in the AI stream get the same menu as images in a rendered note,
+    // and the panel's generic menu must stand aside for them.
+    it('shows the image context menu for images in the AI panel', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        getEventHandler('aiResponseStream')('\n![diagram](diagram.png)\n');
+        await flushPromises();
+        getEventHandler('aiJobFinish')();
+        await flushPromises();
+        await flushPromises();
+
+        const img = document.getElementById('notes-ai-output').querySelector('img');
+        expect(img).not.toBeNull();
+
+        showLocalMenuMock.mockReset();
+        img.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
+        expect(showLocalMenuMock.mock.calls[0][0].options).toEqual([
+            'Copy image to clipboard',
+            'Save image...',
+            'Ask AI (image)...',
+        ]);
     });
 
     it('adds a timestamp when an AI job starts', async () => {
@@ -2630,7 +2986,7 @@ describe('notes rendering', () => {
         expect(ts).not.toBeNull();
     });
 
-    it('renders job title as markdown after the timestamp when provided', async () => {
+    it('renders job prefix as markdown after the timestamp when provided', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const processMarkdownContainerMock = vi.fn();
@@ -2638,29 +2994,28 @@ describe('notes rendering', () => {
             processMarkdownContainer: processMarkdownContainerMock,
         });
 
-        fmt.startJob('> What is this?');
+        fmt.startJob('## Request\n\n### Prompt\n\nWhat is this?\n');
         await flushPromises();
 
-        // Title element exists and contains the query text
-        const title = wrapper.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
-        expect(title.textContent).toContain('What is this?');
+        // Prefix element exists as a standard markdown div
+        const prefix = wrapper.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
 
-        // Title appears after the timestamp in DOM order
+        // Prefix appears after the timestamp in DOM order
         const children = Array.from(wrapper.children);
         const tsIdx = children.indexOf(wrapper.querySelector('.notes-ai-timestamp'));
-        const titleIdx = children.indexOf(title);
-        expect(titleIdx).toBeGreaterThan(tsIdx);
+        const prefixIdx = children.indexOf(prefix);
+        expect(prefixIdx).toBeGreaterThan(tsIdx);
 
-        // Title appears before the stream output root
+        // Prefix appears before the stream output root
         const jobIdx = children.indexOf(wrapper.querySelector('.notes-ai-job'));
-        expect(titleIdx).toBeLessThan(jobIdx);
+        expect(prefixIdx).toBeLessThan(jobIdx);
 
-        // Markdown processing was applied to the title element
-        expect(processMarkdownContainerMock).toHaveBeenCalledWith(title);
+        // Markdown processing was applied to the prefix element
+        expect(processMarkdownContainerMock).toHaveBeenCalledWith(prefix);
     });
 
-    it('highlights a slash-command prefix in quoted AI prompts', async () => {
+    it('renders blockquote markdown in job prefix without special span coloring', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
@@ -2668,28 +3023,25 @@ describe('notes rendering', () => {
         fmt.startJob('> /jira show my tickets');
         await flushPromises();
 
-        const title = wrapper.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
+        const prefix = wrapper.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
 
-        const spans = title.querySelectorAll('blockquote p span');
-        expect(spans).toHaveLength(2);
-        expect(spans[0].textContent).toBe('/jira ');
-        expect(spans[0].getAttribute('style')).toContain('var(--yellow)');
-        expect(spans[1].textContent).toBe('show my tickets');
-        expect(spans[1].getAttribute('style')).toContain('var(--fg)');
+        // No custom coloured spans from the old renderPromptTitleHtml formatting
+        const spans = prefix.querySelectorAll('span[style]');
+        expect(spans).toHaveLength(0);
     });
 
-    it('omits the title element when startJob is called without a title', async () => {
+    it('omits the prefix element when startJob is called without content', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
 
         fmt.startJob();
 
-        expect(wrapper.querySelector('.notes-ai-title')).toBeNull();
+        expect(wrapper.querySelector('.notes-ai-prefix')).toBeNull();
     });
 
-    it('passes job title from aiJobStart event through to the AI panel', async () => {
+    it('passes job prefix markdown from aiJobStart event through to the AI panel', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2698,14 +3050,13 @@ describe('notes rendering', () => {
         const aiJobStartHandler = getEventHandler('aiJobStart');
         expect(typeof aiJobStartHandler).toBe('function');
 
-        aiJobStartHandler('> How do I do this?');
+        aiJobStartHandler('## Request\n\n### Prompt\n\nHow do I do this?\n');
         await flushPromises();
         await flushPromises();
 
         const aiOutput = document.getElementById('notes-ai-output');
-        const title = aiOutput.querySelector('.notes-ai-title');
-        expect(title).not.toBeNull();
-        expect(title.textContent).toContain('How do I do this?');
+        const prefix = aiOutput.querySelector('.notes-ai-prefix');
+        expect(prefix).not.toBeNull();
     });
 
     it('adds an hr separator when a second AI job starts with existing content', async () => {
@@ -2838,6 +3189,84 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(editor.value).toBe('omega beta omega');
+    });
+
+    it('re-runs project grep immediately when grep option toggles are clicked', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nalpha', text: '', error: '' });
+
+        await importNotesModule();
+
+        const findFilesInput = document.getElementById('notes-find-files-input');
+        const findOptionWord = document.getElementById('notes-find-option-word');
+
+        findFilesInput.value = 'alpha';
+        findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(1);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(1, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: false,
+            fileFilter: '',
+        });
+
+        findOptionWord.click();
+        await flushPromises();
+
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(2);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(2, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: true,
+            fileFilter: '',
+        });
+    });
+
+    it('invalidates and re-runs project grep after autosave while keeping find mode active', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide\n\nalpha', text: '', error: '' });
+
+        await importNotesModule();
+
+        const fileButton = document.querySelector('[data-file="$NOTES/guide.md"]');
+        fileButton.click();
+        await flushPromises();
+        await flushPromises();
+
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+
+        const findFilesInput = document.getElementById('notes-find-files-input');
+        const editor = document.getElementById('notes-editor');
+
+        findFilesInput.value = 'alpha';
+        findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(1);
+
+        vi.useFakeTimers();
+        try {
+            editor.value = '# Guide\n\nalpha updated';
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+            await vi.advanceTimersByTimeAsync(1100);
+        } finally {
+            vi.useRealTimers();
+        }
+
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalled();
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(2);
+        expect(notesGrepStreamMock).toHaveBeenNthCalledWith(2, 'alpha', {
+            caseSensitive: false,
+            regex: false,
+            wholeWord: false,
+            fileFilter: '',
+        });
     });
 
     it('toggles AI maximize state from the AI pane button', async () => {
@@ -3944,6 +4373,170 @@ describe('notes rendering', () => {
             expect(testCell.style.backgroundColor).toBe('');
             expect(testCell.style.color).toBe('');
         }
+    });
+
+    // Sorting and filtering are owned by the Go engine so the terminal and Notes
+    // cannot drift apart; the frontend only reorders rows it already rendered.
+    describe('Go-backed table sorting', () => {
+        const loadMarkdownTable = async () => {
+            listFilesMock.mockResolvedValue(['$NOTES/table.md']);
+            getFileMock.mockResolvedValue({ contents: [
+                '| Name | Value |',
+                '| --- | --- |',
+                '| Alpha | 1 |',
+                '| Beta | 2 |',
+                '| Gamma | 3 |',
+            ].join('\n'), text: '', error: '' });
+
+            await importNotesModule();
+
+            document.querySelector('[data-file="$NOTES/table.md"]').click();
+            await flushPromises();
+            await flushPromises();
+
+            return document.querySelector('#notes-preview table');
+        };
+
+        const bodyText = (table) => Array.from(table.querySelectorAll('tbody tr'))
+            .map((row) => row.querySelector('td')?.textContent?.trim());
+
+        it('delegates a heading click to the Go engine with a 1-based column', async () => {
+            const table = await loadMarkdownTable();
+            expect(table).toBeTruthy();
+
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [2, 0, 1], sortColumn: 1, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableSortMock).toHaveBeenCalled();
+            const [request, column] = notesTableSortMock.mock.calls[0];
+            expect(column).toBe(1);
+            expect(request.key.surface).toBe('preview');
+            expect(request.seed.headings).toEqual(['Name', 'Value']);
+            expect(request.seed.rows).toEqual([['Alpha', '1'], ['Beta', '2'], ['Gamma', '3']]);
+        });
+
+        it('reorders existing rows to the order returned by Go', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [2, 0, 1], sortColumn: 1, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(bodyText(table)).toEqual(['Gamma', 'Alpha', 'Beta']);
+        });
+
+        it('shows the sort direction with the same arrows as the terminal', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [0, 1, 2], sortColumn: 1, sortDesc: true, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(table.querySelector('.notes-sort-icon')?.textContent).toBe('\u2193');
+        });
+
+        // Rows excluded by a filter stay in the DOM so cell editing and formulas
+        // keep resolving against a complete document.
+        it('hides filtered rows without removing them', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock.mockResolvedValue({
+                missing: false, order: [1], sortColumn: 0, sortDesc: false, filter: '"Value" > 1', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            expect(rows).toHaveLength(3);
+            expect(rows.filter((row) => !row.classList.contains('notes-table-row-filtered'))).toHaveLength(1);
+        });
+
+        // Losing server-side state must be recoverable, so a miss is retried once
+        // with the data attached rather than surfacing as a broken table.
+        it('resends the seed when Go reports the table is missing', async () => {
+            const table = await loadMarkdownTable();
+            notesTableSortMock
+                .mockResolvedValueOnce({ missing: true, order: [], sortColumn: 0, sortDesc: false, filter: '', error: '' })
+                .mockResolvedValueOnce({ missing: false, order: [0, 1, 2], sortColumn: 1, sortDesc: false, filter: '', error: '' });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableSortMock).toHaveBeenCalledTimes(2);
+            expect(notesTableSortMock.mock.calls[1][0].seed).not.toBeNull();
+        });
+
+        it('offers clear sorting and SQL filter on a heading right-click', async () => {
+            const table = await loadMarkdownTable();
+            showLocalMenuMock.mockReset();
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+            await flushPromises();
+
+            expect(showLocalMenuMock).toHaveBeenCalled();
+            expect(showLocalMenuMock.mock.calls[0][0].options).toEqual(
+                expect.arrayContaining(['Clear sorting', 'SQL filter...']));
+        });
+
+        it('clears the sort on a middle-click, as the terminal does', async () => {
+            const table = await loadMarkdownTable();
+            notesTableClearSortMock.mockResolvedValue({
+                missing: false, order: [0, 1, 2], sortColumn: 0, sortDesc: false, filter: '', error: '',
+            });
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+            await flushPromises();
+            await flushPromises();
+
+            expect(notesTableClearSortMock).toHaveBeenCalled();
+            expect(notesTableSortMock).not.toHaveBeenCalled();
+            expect(table.querySelector('.notes-sort-icon')).toBeNull();
+        });
+
+        it('ignores other auxiliary buttons on a heading', async () => {
+            const table = await loadMarkdownTable();
+
+            table.querySelectorAll('thead th')[0].dispatchEvent(
+                new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 3 }));
+            await flushPromises();
+
+            expect(notesTableClearSortMock).not.toHaveBeenCalled();
+        });
+
+        // Each surface reconciles independently, so one rendering must not drop
+        // tables belonging to another.
+        it('declares the tables that still exist for each surface', async () => {
+            await loadMarkdownTable();
+
+            expect(notesTableReconcileMock).toHaveBeenCalled();
+
+            const previewCall = notesTableReconcileMock.mock.calls.find(([surface]) => surface === 'preview');
+            expect(previewCall).toBeTruthy();
+            expect(previewCall[2]).toEqual([0]);
+
+            const surfaces = notesTableReconcileMock.mock.calls.map(([surface]) => surface);
+            expect(new Set(surfaces).size).toBeGreaterThan(1);
+        });
     });
 
     it('highlights entire table when Copy table menu item is hovered in Run mode', async () => {

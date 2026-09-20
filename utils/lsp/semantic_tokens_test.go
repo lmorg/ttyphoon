@@ -1,58 +1,178 @@
 package lsp
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"io"
 	"testing"
 )
 
-func TestParseSemanticTokensResult_ConvertsServerUTF8CharacterAndLength(t *testing.T) {
-	raw := json.RawMessage(`{
-		"data": [
-			0, 5, 4, 2, 0
-		]
-	}`)
+func TestConvertSemanticTokensToUTF16_ConvertsCharacterAndLength(t *testing.T) {
+	// "a😀beta": the emoji is 4 UTF-8 bytes but 2 UTF-16 code units, so a token
+	// starting at UTF-8 offset 5 starts at UTF-16 offset 3.
+	got := convertSemanticTokensToUTF16([]int{0, 5, 4, 2, 0}, "a😀beta", PositionEncodingUTF8)
 
-	items, err := parseSemanticTokensResult(raw, "a😀beta", PositionEncodingUTF8)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 token, got %d", len(items))
-	}
-	if items[0].Character != 3 {
-		t.Fatalf("character = %d, want 3", items[0].Character)
-	}
-	if items[0].Length != 4 {
-		t.Fatalf("length = %d, want 4", items[0].Length)
-	}
-	if items[0].TokenType != 2 {
-		t.Fatalf("token type = %d", items[0].TokenType)
+	assertTokenData(t, got, []int{0, 3, 4, 2, 0})
+}
+
+func TestConvertSemanticTokensToUTF16_PreservesRelativeEncodingAcrossTokens(t *testing.T) {
+	// Two tokens on one line after an emoji: the second delta must be recomputed
+	// against the converted position of the first, not the raw one.
+	got := convertSemanticTokensToUTF16([]int{
+		0, 4, 2, 1, 0, // "ab" at UTF-8 offset 4 -> UTF-16 offset 2
+		0, 3, 2, 2, 0, // "cd" at UTF-8 offset 7 -> UTF-16 offset 5
+	}, "😀ab cd", PositionEncodingUTF8)
+
+	assertTokenData(t, got, []int{
+		0, 2, 2, 1, 0,
+		0, 3, 2, 2, 0,
+	})
+}
+
+func TestConvertSemanticTokensToUTF16_SkipsOutOfRangeLines(t *testing.T) {
+	got := convertSemanticTokensToUTF16([]int{9, 0, 2, 1, 0}, "only one line", PositionEncodingUTF8)
+	if len(got) != 0 {
+		t.Fatalf("got %v, want empty", got)
 	}
 }
 
-func TestParseSemanticTokensResult_DeltaLineAndDeltaStart(t *testing.T) {
-	raw := json.RawMessage(`{
-		"data": [
-			0, 0, 4, 1, 0,
-			1, 2, 3, 3, 5
-		]
-	}`)
+func TestSemanticTokensWire_ParsesRelativeData(t *testing.T) {
+	var payload semanticTokensWire
+	if err := json.Unmarshal(json.RawMessage(`{"data":[0,0,4,1,0,1,2,3,3,5]}`), &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(payload.Data) != 10 {
+		t.Fatalf("data length = %d, want 10", len(payload.Data))
+	}
+}
 
-	items, err := parseSemanticTokensResult(raw, "name\n  val\n", PositionEncodingUTF16)
+// The Monaco provider registers from the legend, so an empty token response must
+// still carry it or semantic highlighting never starts for that document.
+func TestRequestSemanticTokens_KeepsLegendWhenServerHasNoTokensYet(t *testing.T) {
+	legend := SemanticTokensLegend{TokenTypes: []string{"variable"}, TokenModifiers: []string{"readonly"}}
+
+	for _, body := range []string{`null`, `{"data":[]}`} {
+		t.Run(body, func(t *testing.T) {
+			clientToServerR, clientToServerW := io.Pipe()
+			serverToClientR, serverToClientW := io.Pipe()
+			defer func() {
+				_ = clientToServerR.Close()
+				_ = clientToServerW.Close()
+				_ = serverToClientR.Close()
+				_ = serverToClientW.Close()
+			}()
+
+			transport := NewTransport(clientToServerW, serverToClientR)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			go func() {
+				_ = transport.ReadLoop(ctx)
+			}()
+
+			done := make(chan error, 1)
+			go func() {
+				reader := bufio.NewReader(clientToServerR)
+				msg, err := ReadMessage(reader)
+				if err != nil {
+					done <- err
+					return
+				}
+				resp := Message{JSONRPC: "2.0", ID: msg.ID, Result: json.RawMessage(body)}
+				done <- WriteMessage(serverToClientW, resp)
+			}()
+
+			got, err := RequestSemanticTokens(ctx, transport, "file:///main.go", "x := 1\n", PositionEncodingUTF16, legend)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got == nil {
+				t.Fatal("result = nil, want the legend preserved")
+			}
+			if len(got.Legend.TokenTypes) != 1 || got.Legend.TokenTypes[0] != "variable" {
+				t.Fatalf("legend = %+v", got.Legend)
+			}
+			if len(got.Data) != 0 {
+				t.Fatalf("data = %v, want empty", got.Data)
+			}
+
+			if err := <-done; err != nil {
+				t.Fatalf("server flow failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestRequestSemanticTokensDelta_ParsesDeltaResult(t *testing.T) {
+	legend := SemanticTokensLegend{TokenTypes: []string{"variable"}, TokenModifiers: []string{"readonly"}}
+
+	clientToServerR, clientToServerW := io.Pipe()
+	serverToClientR, serverToClientW := io.Pipe()
+	defer func() {
+		_ = clientToServerR.Close()
+		_ = clientToServerW.Close()
+		_ = serverToClientR.Close()
+		_ = serverToClientW.Close()
+	}()
+
+	transport := NewTransport(clientToServerW, serverToClientR)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = transport.ReadLoop(ctx)
+	}()
+
+	done := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(clientToServerR)
+		msg, err := ReadMessage(reader)
+		if err != nil {
+			done <- err
+			return
+		}
+		resp := Message{JSONRPC: "2.0", ID: msg.ID, Result: json.RawMessage(`{"resultId":"r1","edits":[{"start":0,"deleteCount":1,"data":[0,0,2,1,0]}]}`)}
+		done <- WriteMessage(serverToClientW, resp)
+	}()
+
+	got, err := RequestSemanticTokensDelta(ctx, transport, "file:///main.go", "x := 1\n", PositionEncodingUTF16, legend, "prev")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 tokens, got %d", len(items))
+	if got == nil {
+		t.Fatal("result = nil, want delta result")
+	}
+	if got.ResultID != "r1" {
+		t.Fatalf("resultId = %q, want %q", got.ResultID, "r1")
+	}
+	if len(got.Edits) != 1 || got.Edits[0].DeleteCount != 1 || len(got.Edits[0].Data) != 5 {
+		t.Fatalf("edits = %+v, want one edit with 5 data points", got.Edits)
 	}
 
-	if items[0].Line != 0 || items[0].Character != 0 || items[0].Length != 4 {
-		t.Fatalf("unexpected token[0]: %+v", items[0])
+	if err := <-done; err != nil {
+		t.Fatalf("server flow failed: %v", err)
 	}
-	if items[1].Line != 1 || items[1].Character != 2 || items[1].Length != 3 {
-		t.Fatalf("unexpected token[1]: %+v", items[1])
+}
+
+func TestRequestSemanticTokens_ReturnsNilWhenServerHasNoLegend(t *testing.T) {
+	got, err := RequestSemanticTokens(context.Background(), nil, "file:///main.go", "", PositionEncodingUTF16, SemanticTokensLegend{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if items[1].TokenType != 3 || items[1].TokenMods != 5 {
-		t.Fatalf("unexpected token[1] metadata: %+v", items[1])
+	if got != nil {
+		t.Fatalf("result = %+v, want nil when the server advertises no legend", got)
+	}
+}
+
+func assertTokenData(t *testing.T, got, want []int) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
 	}
 }

@@ -1,6 +1,69 @@
 package grep
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+)
+
+func collectSearch(ctx context.Context, root, query string) ([]*Result, error) {
+	results := make(chan []*Result)
+	var collected []*Result
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+		for batch := range results {
+			collected = append(collected, batch...)
+		}
+	}()
+	err := BatchedStreamResults(ctx, root, query, Options{}, func(path string) string { return path }, results)
+	wait.Wait()
+	return collected, err
+}
+
+func TestBatchedStreamResults_ConcurrentSearchesDoNotCancelEachOther(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.txt"), []byte("alpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "two.txt"), []byte("beta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var alpha, beta []*Result
+	var alphaErr, betaErr error
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		alpha, alphaErr = collectSearch(context.Background(), root, "alpha")
+	}()
+	go func() {
+		defer wait.Done()
+		beta, betaErr = collectSearch(context.Background(), root, "beta")
+	}()
+	wait.Wait()
+
+	if alphaErr != nil || betaErr != nil {
+		t.Fatalf("search errors = %v, %v", alphaErr, betaErr)
+	}
+	if len(alpha) != 1 || len(beta) != 1 {
+		t.Fatalf("search result counts = %d, %d; want 1, 1", len(alpha), len(beta))
+	}
+}
+
+func TestBatchedStreamResults_UsesContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := collectSearch(ctx, t.TempDir(), "anything")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("BatchedStreamResults() error = %v, want context.Canceled", err)
+	}
+}
 
 // TestBuildRgArgs tests buildRgArgs function with various options.
 func TestBuildRgArgs(t *testing.T) {

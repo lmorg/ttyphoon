@@ -68,6 +68,7 @@ type PaneT struct {
 	bottom   int32
 	active   bool
 	atBottom bool
+	zoomed   bool
 	windowId string
 	pwd      string
 	tmux     *Tmux
@@ -154,6 +155,7 @@ type paneInfo struct {
 	WinActive bool   `tmux:"?window_active,true,false"`
 	AtBottom  bool   `tmux:"?pane_at_bottom,true,false"`
 	Path      string `tmux:"pane_current_path"`
+	Zoomed    bool   `tmux:"?pane_zoomed,true,false"`
 }
 
 // updatePaneInfo, paneId is optional. Leave blank to update all panes
@@ -163,7 +165,7 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 		filter = fmt.Sprintf("-f '#{m:#{pane_id},%s}'", paneId)
 	}
 
-	v, err := tmux.SendCommandWithReflection(CMD_LIST_PANES, reflect.TypeOf(paneInfo{}), "-s", filter)
+	v, err := tmux.SendCommandWithReflection(CMD_LIST_PANES, reflect.TypeFor[paneInfo](), "-s", filter)
 	if err != nil {
 		return err
 	}
@@ -191,16 +193,15 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 		pane = tmux.newPane(info)
 	}
 
-	/*if info.Dead {
-		pane.Close()
-		continue
-	}*/
-
 	if pane.closed {
 		return pane
 	}
 
-	pane.title = info.Title
+	// we only see title escape codes emitted while attached, so seed from
+	// tmux's own record for panes that predate us
+	if pane.title == "" {
+		pane.title = info.Title
+	}
 	pane.width = info.Width
 	pane.height = info.Height
 	pane.active = info.Active
@@ -210,6 +211,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	pane.right = int32(info.PosRight)
 	pane.bottom = int32(info.PosBottom)
 	pane.atBottom = info.AtBottom
+	pane.zoomed = info.Zoomed
 	pane.pwd = info.Path
 	if pane.term != nil {
 		pane.term.MakeVisible(info.WinActive)
@@ -248,6 +250,14 @@ func (tmux *Tmux) SelectPane(paneId string) error {
 	_, err := tmux.SendCommand([]byte(command))
 
 	//go tmux.UpdateSession()
+
+	return err
+}
+
+func (tmux *Tmux) ZoomPane(paneId string) error {
+	//log.Printf("ZoomPane %s\n", paneId)
+	command := fmt.Sprintf("resize-pane -t %s -Z", paneId)
+	_, err := tmux.SendCommand([]byte(command))
 
 	return err
 }

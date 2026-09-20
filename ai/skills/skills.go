@@ -50,14 +50,14 @@ func ReadSkills() (skills Skills) {
 	for i := range files {
 		f, err := os.Open(files[i])
 		if err != nil {
-			log.Printf("Cannot open skill file '%s': %v", files[i], err)
+			log.Printf("[error] Cannot open skill file '%s': %v", files[i], err)
 			continue
 		}
 
 		skill := new(SkillT)
 		b, err := frontmatter.Parse(f, skill)
 		if err != nil {
-			log.Printf("Cannot parse skill file '%s': %v", files[i], err)
+			log.Printf("[error] Cannot parse skill file '%s': %v", files[i], err)
 			continue
 		}
 		skill.Prompt = string(b)

@@ -38,7 +38,7 @@ func (p *Pty) read() {
 		b := make([]byte, 10*1024)
 		i, err := p.conPty.Read(b)
 		if err != nil && err.Error() != io.EOF.Error() {
-			log.Printf("ERROR: problem reading from Pty (%d bytes dropped): %v", i, err)
+			log.Printf("[error] problem reading from Pty (%d bytes dropped): %v", i, err)
 			continue
 		}
 

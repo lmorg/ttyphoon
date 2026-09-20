@@ -38,8 +38,11 @@ func (t *Jq) Description() string {
 	return description
 }
 
-func (t *Jq) Name() string { return "jq Script" }
+func (t *Jq) Name() string { return "jqScript" }
 func (t *Jq) Path() string { return "internal" }
+func (t *Jq) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
+}
 
 func (t *Jq) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {

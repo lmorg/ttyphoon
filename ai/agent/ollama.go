@@ -9,26 +9,6 @@ import (
 	"github.com/lmorg/ttyphoon/debug"
 )
 
-/*func Init(renderer types.Renderer) {
-	go addServiceOllama(renderer)
-}
-
-func addServiceOllama(renderer types.Renderer) {
-	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, "Querying Ollama....", func() {})
-	defer sticky.Close()
-
-	ollamaModels := ollamaModels()
-	if len(ollamaModels) > 0 {
-		go func() {
-			if len(models) > 0 {
-				models[LLM_OLLAMA] = ollamaModels
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}()
-	}
-}*/
-
 func ollamaModels() []string {
 	var (
 		buf    bytes.Buffer

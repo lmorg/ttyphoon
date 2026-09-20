@@ -1,6 +1,7 @@
 package grep
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -11,15 +12,15 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 )
 
-func buildSearchCommand(query string, opts Options) (*exec.Cmd, string, error) {
+func buildSearchCommand(ctx context.Context, query string, opts Options) (*exec.Cmd, string, error) {
 	if _, err := exec.LookPath("rg"); err == nil {
 		log.Println(`[debug] grep: cmd="rg"`)
-		return exec.Command("rg", buildRgArgs(query, opts)...), "rg", nil
+		return exec.CommandContext(ctx, "rg", buildRgArgs(query, opts)...), "rg", nil
 	}
 
 	if _, err := exec.LookPath("grep"); err == nil {
 		log.Println(`[debug] grep: cmd="grep"`)
-		return exec.Command("grep", buildGrepArgs(query, opts)...), "grep", nil
+		return exec.CommandContext(ctx, "grep", buildGrepArgs(query, opts)...), "grep", nil
 	}
 
 	return nil, "", fmt.Errorf("neither ripgrep ('rg') nor grep found in PATH")
@@ -34,7 +35,6 @@ func buildRgArgs(query string, opts Options) []string {
 	// symlinks to match grep's -R behaviour.
 	args := []string{
 		"-uu", "-n", "--no-heading", "--color", "never", "--follow",
-		//"-g", "!.git", "-g", "!node_modules",
 	}
 
 	for dir, ignore := range config.Config.Notes.ExcludeDirectories {
@@ -67,7 +67,6 @@ func buildRgArgs(query string, opts Options) []string {
 func buildGrepArgs(query string, opts Options) []string {
 	args := []string{
 		"-R", "-n", "--binary-files=without-match",
-		//"--exclude-dir=.git", "--exclude-dir=node_modules",
 	}
 
 	for dir, ignore := range config.Config.Notes.ExcludeDirectories {
@@ -115,11 +114,6 @@ func parseOutputLine(rawLine, projectDir string) (*Result, bool) {
 		return nil, false
 	}
 
-	/*result.Path = parts[0]
-	if !filepath.IsAbs(result.Path) {
-		result.Path = filepath.Join(projectDir, result.Path)
-	}
-	result.Path, _ = filepath.Abs(result.Path)*/
 	result.Path = filepath.Join(projectDir, parts[0])
 
 	return result, true

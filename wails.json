@@ -1,26 +1,26 @@
 {
-  "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "Ttyphoon",
-  "outputfilename": "ttyphoon",
-  "frontend:install": "npm install",
-  "frontend:build": "npm run build",
-  "frontend:dev:watcher": "npm run dev",
-  "frontend:dev:serverUrl": "auto",
-  "author": {
-    "name": "Laurence Morgan",
-    "email": "mail@laurencemorgan.co.uk"
-  },
-  "info": {
-    "companyName": "Laurence Morgan",
-    "productVersion": "0.32.1000",
-    "copyright": "2023-2026 Laurence Morgan",
-    "comments": "The Next Generation Terminal Emulator",
-    "protocols": [
-      {
-        "scheme": "ttyphoon",
-        "description": "Open with Ttyphoon",
-        "role": "Editor"
-      }
-    ]
-  }
+    "$schema": "https://wails.io/schemas/config.v2.json",
+    "name": "Ttyphoon",
+    "outputfilename": "ttyphoon",
+    "frontend:install": "npm install",
+    "frontend:build": "npm run build",
+    "frontend:dev:watcher": "npm run dev",
+    "frontend:dev:serverUrl": "auto",
+    "author": {
+        "name": "Laurence Morgan",
+        "email": "mail@laurencemorgan.co.uk"
+    },
+    "info": {
+        "companyName": "Laurence Morgan",
+        "productVersion": "0.41.3000",
+        "copyright": "2023-2026 Laurence Morgan",
+        "comments": "The Next Generation Terminal Emulator",
+        "protocols": [
+            {
+                "scheme": "ttyphoon",
+                "description": "Open with Ttyphoon",
+                "role": "Editor"
+            }
+        ]
+    }
 }

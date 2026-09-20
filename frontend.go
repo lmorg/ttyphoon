@@ -22,6 +22,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/ai"
 	"github.com/lmorg/ttyphoon/ai/agent"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
@@ -40,6 +41,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
+	"github.com/lmorg/ttyphoon/window/elements/element_table/tablecore"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -69,6 +71,7 @@ type WApp struct {
 	notesListMu     sync.Mutex
 	notesListCancel context.CancelFunc
 	notesListSeq    uint64
+	lspStartErrMu   sync.Mutex
 	lspStartErrs    map[string]string
 	lspManager      *lsp.Manager
 	lspDocs         *lsp.DocumentStore
@@ -76,6 +79,7 @@ type WApp struct {
 	typosUnavail    map[string]bool
 	typosMu         sync.Mutex
 	syntaxEngine    *syntaxcompletion.Engine
+	notesTables     *tablecore.Registry
 }
 
 // NewApp creates a new App application struct
@@ -92,6 +96,7 @@ func NewWailsApp() *WApp {
 		lspDocs:       lsp.NewDocumentStore(),
 		typosDocs:     lsp.NewDocumentStore(),
 		typosUnavail:  map[string]bool{},
+		notesTables:   tablecore.NewRegistry(),
 	}
 
 	engine, err := syntaxcompletion.NewDefaultEngine()
@@ -117,11 +122,14 @@ func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) 
 	}*/
 
 	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	a.lspStartErrMu.Lock()
 	if prev, ok := a.lspStartErrs[key]; ok && prev == message {
+		a.lspStartErrMu.Unlock()
 		log.Printf("lsp: %s", message)
 		return
 	}
 	a.lspStartErrs[key] = message
+	a.lspStartErrMu.Unlock()
 
 	if renderer, ok := renderwebkit.CurrentRenderer(); ok {
 		renderer.DisplayNotification(types.NOTIFY_ERROR, message)
@@ -134,6 +142,8 @@ func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) 
 
 func (a *WApp) clearLspStartError(languageID string) {
 	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	a.lspStartErrMu.Lock()
+	defer a.lspStartErrMu.Unlock()
 	delete(a.lspStartErrs, key)
 }
 
@@ -465,12 +475,16 @@ func (a *WApp) TerminalGetTabs() []map[string]any {
 
 	tabs := renderer.GetWindowTabs()
 	out := make([]map[string]any, 0, len(tabs))
+
+	activePaneId := renderer.GetActivePaneId()
+
 	for i := range tabs {
 		out = append(out, map[string]any{
-			"id":     tabs[i].ID,
-			"name":   tabs[i].Name,
-			"index":  tabs[i].Index,
-			"active": tabs[i].Active,
+			"id":           tabs[i].ID,
+			"name":         tabs[i].Name,
+			"index":        tabs[i].Index,
+			"active":       tabs[i].Active,
+			"activePaneId": activePaneId,
 		})
 	}
 
@@ -484,6 +498,24 @@ func (a *WApp) TerminalSelectWindow(windowID string) {
 	}
 
 	renderer.SelectWindow(windowID)
+}
+
+func (a *WApp) TerminalPaneZoom() {
+	log.Println("TerminalPaneZoom()")
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		//return fmt.Errorf("renderer not available")
+		panic("renderer not available")
+	}
+
+	err := renderer.ZoomActivePane()
+	if err != nil {
+		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+	}
+}
+
+func (a *WApp) Log(s string) {
+	log.Println(s)
 }
 
 func (a *WApp) TerminalKeyPress(key string, ctrl, alt, shift, meta bool) {
@@ -837,6 +869,19 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 
 var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)
 
+// resolveMarkdownAssetPath mirrors how the Notes viewer locates relative asset
+// paths: absolute-from-root first, falling back to the current document's directory.
+func (a *WApp) resolveMarkdownAssetPath(path string) string {
+	resolvedPath := path
+	if !filepath.IsAbs(resolvedPath) {
+		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
+	}
+	if _, err := os.Stat(resolvedPath); err != nil {
+		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
+	}
+	return resolvedPath
+}
+
 func (a *WApp) GetImage(path string) string {
 	if len(path) == 0 {
 		return "error: empty string"
@@ -847,13 +892,7 @@ func (a *WApp) GetImage(path string) string {
 		return "error: extension not found"
 	}
 
-	resolvedPath := path
-	if !filepath.IsAbs(resolvedPath) {
-		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
-	}
-	if _, err := os.Stat(resolvedPath); err != nil {
-		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
-	}
+	resolvedPath := a.resolveMarkdownAssetPath(path)
 
 	f, err := os.Open(resolvedPath)
 	if err != nil {
@@ -881,6 +920,76 @@ func imageMime(ext string) string {
 		return "image/svg+xml"
 	}
 	return "image/" + ext[1:]
+}
+
+const (
+	maxAIImageAttachments = 6
+	maxAIImageBytes       = 8 * 1024 * 1024
+)
+
+var (
+	rxMarkdownImage = regexp.MustCompile(`!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)`)
+	rxDataURLImage  = regexp.MustCompile(`^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$`)
+)
+
+// collectAIImageAttachments finds images to attach to an AI prompt: either the
+// whole contents is a single data URL (Notes image viewer), or contents is
+// markdown with embedded image references to resolve and read from disk.
+func (a *WApp) collectAIImageAttachments(contents string) []aitypes.ImageAttachment {
+	if m := rxDataURLImage.FindStringSubmatch(strings.TrimSpace(contents)); m != nil {
+		return []aitypes.ImageAttachment{{MIMEType: m[1], Base64: m[2]}}
+	}
+
+	matches := rxMarkdownImage.FindAllStringSubmatch(contents, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	images := make([]aitypes.ImageAttachment, 0, len(matches))
+	for _, match := range matches {
+		if len(images) >= maxAIImageAttachments {
+			break
+		}
+
+		ref := strings.TrimSpace(match[1])
+		if dm := rxDataURLImage.FindStringSubmatch(ref); dm != nil {
+			images = append(images, aitypes.ImageAttachment{MIMEType: dm[1], Base64: dm[2]})
+			continue
+		}
+		if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+			continue // remote images are not fetched for AI attachments
+		}
+
+		if attachment, ok := a.readImageAttachment(ref); ok {
+			images = append(images, attachment)
+		}
+	}
+
+	return images
+}
+
+func (a *WApp) readImageAttachment(path string) (aitypes.ImageAttachment, bool) {
+	ext := strings.ToLower(rxExtension.FindString(path))
+	if ext == "" {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	resolvedPath := a.resolveMarkdownAssetPath(path)
+
+	stat, err := os.Stat(resolvedPath)
+	if err != nil || stat.Size() > maxAIImageBytes {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	b, err := os.ReadFile(resolvedPath)
+	if err != nil {
+		return aitypes.ImageAttachment{}, false
+	}
+
+	return aitypes.ImageAttachment{
+		MIMEType: imageMime(ext),
+		Base64:   base64.StdEncoding.EncodeToString(b),
+	}, true
 }
 
 type FilterResultsT struct {
@@ -965,7 +1074,8 @@ func (a *WApp) notesGrepStream(query string, opts NotesGrepOptionsT) {
 
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- grep.BatchedStreamResults(searchRoot, query, opts, pathMapper, resultsChan)
+		timeout, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		errChan <- grep.BatchedStreamResults(timeout, searchRoot, query, opts, pathMapper, resultsChan)
 	}()
 
 	// Emit batches as they arrive
@@ -1532,6 +1642,64 @@ func (a *WApp) NotesLspDefinition(filePath string, line, character int) []lsp.De
 	return locations
 }
 
+// NotesLspReferences requests references for a symbol at a document position.
+func (a *WApp) NotesLspReferences(filePath string, line, character int) []lsp.ReferenceLocation {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil || sp.Transport() == nil {
+		return nil
+	}
+
+	locations, err := lsp.RequestReferences(a.ctx, sp.Transport(), doc.URI, doc.Content(), line, character, sp.PositionEncoding(), func(uri string) (string, bool) {
+		if openDoc := a.lspDocs.GetByURI(uri); openDoc != nil {
+			return openDoc.Content(), true
+		}
+		path, pathErr := lsp.URIToFilePath(uri)
+		if pathErr != nil {
+			return "", false
+		}
+		b, readErr := os.ReadFile(path)
+		return string(b), readErr == nil
+	})
+	if err != nil {
+		log.Printf("lsp: References %q (%d,%d): %v", absPath, line, character, err)
+		return nil
+	}
+	for i := range locations {
+		locations[i].Context = lspReferenceContext(locations[i].Line, locations[i].URI, func(uri string) (string, bool) {
+			if openDoc := a.lspDocs.GetByURI(uri); openDoc != nil {
+				return openDoc.Content(), true
+			}
+			path, pathErr := lsp.URIToFilePath(uri)
+			if pathErr != nil {
+				return "", false
+			}
+			b, readErr := os.ReadFile(path)
+			return string(b), readErr == nil
+		})
+	}
+	return locations
+}
+
+func lspReferenceContext(line int, uri string, contentForURI func(string) (string, bool)) []string {
+	content, ok := contentForURI(uri)
+	if !ok {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if line < 0 || line >= len(lines) {
+		return nil
+	}
+	start := max(line-1, 0)
+	end := min(line+2, len(lines))
+	return append([]string(nil), lines[start:end]...)
+}
+
 // NotesLspDocumentSymbols requests symbols for the current document.
 func (a *WApp) NotesLspDocumentSymbols(filePath string) []lsp.DocumentSymbolItem {
 	absPath := a.filePath(filePath)
@@ -1631,7 +1799,7 @@ func (a *WApp) NotesLspInlayHints(filePath string) []lsp.InlayHintItem {
 }
 
 // NotesLspSemanticTokens requests semantic tokens for the current document.
-func (a *WApp) NotesLspSemanticTokens(filePath string) []lsp.SemanticTokenItem {
+func (a *WApp) NotesLspSemanticTokens(filePath string) *lsp.SemanticTokensResult {
 	absPath := a.filePath(filePath)
 	doc := a.lspDocs.Get(absPath)
 	if doc == nil {
@@ -1648,13 +1816,41 @@ func (a *WApp) NotesLspSemanticTokens(filePath string) []lsp.SemanticTokenItem {
 		return nil
 	}
 
-	items, err := lsp.RequestSemanticTokens(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding())
+	result, err := lsp.RequestSemanticTokens(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding(), sp.SemanticTokensLegend())
 	if err != nil {
 		log.Printf("lsp: SemanticTokens %q: %v", absPath, err)
 		return nil
 	}
 
-	return items
+	return result
+}
+
+// NotesLspSemanticTokensDelta requests incremental semantic token updates for the
+// current document using Monaco's previousResultId handoff when available.
+func (a *WApp) NotesLspSemanticTokensDelta(filePath, previousResultID string) *lsp.SemanticTokensResult {
+	absPath := a.filePath(filePath)
+	doc := a.lspDocs.Get(absPath)
+	if doc == nil {
+		return nil
+	}
+
+	sp := a.notesLspServerFor(absPath, doc.LanguageID)
+	if sp == nil {
+		return nil
+	}
+
+	t := sp.Transport()
+	if t == nil {
+		return nil
+	}
+
+	result, err := lsp.RequestSemanticTokensDelta(a.ctx, t, doc.URI, doc.Content(), sp.PositionEncoding(), sp.SemanticTokensLegend(), previousResultID)
+	if err != nil {
+		log.Printf("lsp: SemanticTokensDelta %q: %v", absPath, err)
+		return nil
+	}
+
+	return result
 }
 
 // NotesLspCodeLens requests code lenses for the current document.
@@ -2008,6 +2204,41 @@ func (a *WApp) GetAISessionCache(workspace string) string {
 	return sessiondb.GetSessionLog(workspace)
 }
 
+// GetAIActiveStreamSnapshot returns the currently in-progress request's
+// accumulated text and next sequence number, so the frontend can resync its
+// ordered stream cursor after switching the panel back to live output.
+func (a *WApp) GetAIActiveStreamSnapshot(workspace string) sessiondb.ActiveStreamSnapshot {
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return sessiondb.ActiveStreamSnapshot{}
+		}
+		workspace = agt.Workspace()
+	}
+
+	return sessiondb.GetActiveStreamSnapshot(workspace)
+}
+
+// ListAIPromptLogs returns metadata for every per-prompt log file in the active
+// AI session for the current workspace. Ordered chronologically (oldest first).
+func (a *WApp) ListAIPromptLogs() []sessiondb.PromptLogMeta {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return nil
+	}
+	return sessiondb.ListPromptLogs(agt.Workspace())
+}
+
+// GetAIPromptLog returns the markdown content of a specific prompt log for the
+// current workspace's AI session.
+func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
+}
+
 func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {
 	return notes.GetColumnWidths(filename, view, headings, wrapped)
 }
@@ -2180,12 +2411,13 @@ func (a *WApp) ResolveNoteLocation(path string) string {
 
 // GetClipboardData returns clipboard data as either text or a base64-encoded PNG image.
 func (a *WApp) GetClipboardData() ClipboardData {
-	b := clipboard.Read(clipboard.FmtImage)
+	b, _ := clipboard.Read(context.Background(), clipboard.FmtImage)
 	if len(b) != 0 {
 		return ClipboardData{Image: base64.StdEncoding.EncodeToString(b)}
 	}
 
-	return ClipboardData{Text: string(clipboard.Read(clipboard.FmtText))}
+	b, _ = clipboard.Read(context.Background(), clipboard.FmtText)
+	return ClipboardData{Text: string(b)}
 }
 
 func (a *WApp) RenameFile(oldPath, newPath string) error {
@@ -2361,6 +2593,35 @@ func (a *WApp) GetCurrentAIModelSelection() string {
 	return agt.CurrentModelLabel()
 }
 
+// SetAIPanelLive tells the backend whether the AI panel is following live output
+// or showing a historical prompt, so background runs stop emitting to the UI.
+func (a *WApp) SetAIPanelLive(workspace string, live bool) {
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return
+		}
+		workspace = agt.Workspace()
+	}
+
+	sessiondb.SetPanelView(workspace, live)
+}
+
+func (a *WApp) GetAIExecutionLimits() map[string]any {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return map[string]any{}
+	}
+
+	return map[string]any{
+		"agentSteps":            agt.MaxIterations(),
+		"providerMaxIterations": nil,
+		"modelContextWindow":    nil,
+		"modelMaxOutputTokens":  nil,
+		"requestTimeout":        config.Config.Ai.RequestTimeoutDuration().String(),
+	}
+}
+
 func (a *WApp) SetCurrentAIModelSelection(selection string) error {
 	agt, ok := a.activeAgent()
 	if !ok {
@@ -2385,6 +2646,99 @@ func (a *WApp) ShowAIToolsMenu() {
 	agt.ChooseTools(nil)
 }
 
+func (a *WApp) ShowAISkillsMenu(x, y float64) {
+	renderwebkit.AskAiSkillsAt(int(x), int(y))
+}
+
+func (a *WApp) GetAIToolsList() []map[string]interface{} {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return []map[string]interface{}{}
+	}
+
+	return agt.ListTools()
+}
+
+func (a *WApp) SetAIToolEnabled(toolName string, enabled bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+
+	return agt.SetToolEnabled(toolName, enabled)
+}
+
+func (a *WApp) SetAIToolSubagentAllowed(toolName string, allowed bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+	return agt.SetToolAllowedInSubagent(toolName, allowed)
+}
+
+func (a *WApp) ShowAIToolSubagentMenu(toolName string, x, y float64) {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	agt.ShowToolSubagentMenu(toolName, int(x), int(y), func(allowed bool) {
+		runtime.EventsEmit(a.ctx, "aiToolStateChanged", map[string]any{
+			"name":            toolName,
+			"allowInSubagent": allowed,
+		})
+	})
+}
+
+func (a *WApp) SetAIToolState(toolName, state string) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+	return agt.SetToolState(toolName, state)
+}
+
+func (a *WApp) ShowAIToolStateMenu(toolName string, x, y float64) {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+	agt.ShowToolStateMenu(toolName, int(x), int(y), func(state string) {
+		runtime.EventsEmit(a.ctx, "aiToolStateChanged", map[string]string{
+			"name":  toolName,
+			"state": state,
+		})
+	})
+}
+
+// ResolveAIToolPermission is called when the user clicks an access-request
+// option rendered in the AI panel output (see agent.RequestWritePermission).
+func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
+	return agent.ResolveWritePermissionRequest(requestID, decision)
+}
+
+func (a *WApp) ResolveAIUserQuestion(requestID, answer string) error {
+	return agent.ResolveUserQuestionRequest(requestID, answer)
+}
+
+func (a *WApp) GetAIMcpServers() []map[string]any {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return []map[string]any{}
+	}
+
+	return agt.ListMcpServers()
+}
+
+func (a *WApp) SetAIMcpServerEnabled(serverKey string, enabled bool) error {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return fmt.Errorf("AI agent is unavailable")
+	}
+
+	return agt.SetMcpServerEnabled(serverKey, enabled)
+}
+
 func (a *WApp) ShowAIMcpMenu() {
 	agt, ok := a.activeAgent()
 	if !ok {
@@ -2402,7 +2756,7 @@ func (a *WApp) GetAISessionManagement() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.GetFrontendState(agt.Workspace(), 24)
 	if err != nil {
-		log.Printf("ai session management: %v", err)
+		log.Printf("[debug] ai session management: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2417,7 +2771,7 @@ func (a *WApp) CreateAISession() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.CreateSession(agt.Workspace(), "", 24)
 	if err != nil {
-		log.Printf("ai create session: %v", err)
+		log.Printf("[debug] ai create session: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2432,7 +2786,7 @@ func (a *WApp) SetActiveAISession(tableID int64) sessiondb.FrontendStateT {
 
 	state, err := sessiondb.SetActiveSession(agt.Workspace(), tableID, 24)
 	if err != nil {
-		log.Printf("ai set active session: %v", err)
+		log.Printf("[debug] ai set active session: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
@@ -2452,7 +2806,22 @@ func (a *WApp) DeleteAISession(tableID int64) sessiondb.FrontendStateT {
 	}
 
 	if err := sessiondb.DeleteSessionLog(agt.Workspace(), tableID); err != nil {
-		log.Printf("ai delete session log: %v", err)
+		log.Printf("[debug] [debug] ai delete session log: %v", err)
+	}
+
+	return state
+}
+
+func (a *WApp) RenameAISession(tableID int64, summary string) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.RenameSession(agt.Workspace(), tableID, summary, 24)
+	if err != nil {
+		log.Printf("ai rename session: %v", err)
+		return sessiondb.FrontendStateT{}
 	}
 
 	return state
@@ -2466,12 +2835,45 @@ func (a *WApp) ClearAISessionHistory() sessiondb.FrontendStateT {
 
 	state, err := sessiondb.ClearActiveSession(agt.Workspace(), 24)
 	if err != nil {
-		log.Printf("ai clear session history: %v", err)
+		log.Printf("[debug] ai clear session history: %v", err)
 		return sessiondb.FrontendStateT{}
 	}
 
 	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
-		log.Printf("ai clear session log: %v", err)
+		log.Printf("[debug] ai clear session log: %v", err)
+	}
+
+	return state
+}
+
+func (a *WApp) ClearAILog() {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return
+	}
+
+	if err := sessiondb.ClearActiveSessionLog(agt.Workspace()); err != nil {
+		log.Printf("[debug] ai clear log: %v", err)
+	}
+}
+
+// DeleteAIHistoryEntry removes a single prompt/response entry from the active
+// session, both the sqlite row shown in the Settings transcript and its
+// per-prompt markdown log file.
+func (a *WApp) DeleteAIHistoryEntry(entryID int64) sessiondb.FrontendStateT {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return sessiondb.FrontendStateT{}
+	}
+
+	state, err := sessiondb.DeleteActiveSessionEntry(agt.Workspace(), entryID, 24)
+	if err != nil {
+		log.Printf("[debug] ai delete history entry: %v", err)
+		return sessiondb.FrontendStateT{}
+	}
+
+	if err := sessiondb.DeletePromptLog(agt.Workspace(), state.ActiveSessionID, entryID); err != nil {
+		log.Printf("[debug] ai delete prompt log: %v", err)
 	}
 
 	return state
@@ -2496,7 +2898,7 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 		if agt == nil {
 			return
 		}
-		ai.ExplainDoc(agt, filename, contents)
+		ai.ExplainDoc(agt, filename, contents, a.collectAIImageAttachments(contents))
 	case "notesPromptToolbar":
 		renderer.AskAi()
 	case "notesPromptUri":
@@ -2514,6 +2916,78 @@ func (a *WApp) AskAI(callerType, filename, contents string) {
 	}
 }
 
+// AskAIImage starts an image-aware document explanation without placing the
+// image data in the document text or session log metadata.
+func (a *WApp) AskAIImage(filename, dataURL string) {
+	match := rxDataURLImage.FindStringSubmatch(strings.TrimSpace(dataURL))
+	if match == nil {
+		log.Printf("[debug] WApp AskAIImage: invalid image data URL")
+		return
+	}
+
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+	tile := renderer.ActiveTile()
+	if tile == nil {
+		return
+	}
+	agt := agent.Get(tile.Id())
+	if agt == nil {
+		return
+	}
+
+	imageName := strings.TrimSpace(filename)
+	if imageName == "" {
+		imageName = "Image"
+	}
+
+	imagePath, err := saveAIImageUpload(match[1], match[2])
+	if err != nil {
+		log.Printf("[debug] WApp AskAIImage: save upload: %v", err)
+		return
+	}
+	imageMarkdown := fmt.Sprintf("![uploaded %s](%s)", imagePath, imagePath)
+	ai.ExplainDoc(agt, imageName, "Image attachment: "+imageName+"\n\n"+imageMarkdown, []aitypes.ImageAttachment{{
+		MIMEType: match[1],
+		Base64:   match[2],
+	}})
+}
+
+func saveAIImageUpload(mimeType, encoded string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	extension := ".bin"
+	if slash := strings.LastIndex(mimeType, "/"); slash >= 0 {
+		extension = "." + strings.ToLower(strings.TrimLeft(mimeType[slash+1:], "."))
+		if extension == ".svg+xml" {
+			extension = ".svg"
+		}
+	}
+	if !regexp.MustCompile(`^\.[a-z0-9]+$`).MatchString(extension) {
+		extension = ".bin"
+	}
+
+	payload, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join(home, app.DirName, ".images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("uploaded-image-%d%s", time.Now().UnixNano(), extension))
+	if err := os.WriteFile(path, payload, 0o664); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // --------------------
 
 // logWriter captures log output and sends it to the frontend
@@ -2525,12 +2999,13 @@ var rxLogCategory = regexp.MustCompile(`^\[[a-z]+\] `)
 
 func (lw *logWriter) Write(p []byte) (int, error) {
 	// Send each line to frontend, also write to original stderr
-	text := string(p) //strings.TrimSpace(string(p))
+	text := string(p)
 	if !rxLogCategory.MatchString(text[20:]) {
 		text = text[:20] + "[debug] " + text[20:]
 	}
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\n", " | ")
 
-	if text != "" && lw.ctx != nil {
+	if lw.ctx != nil {
 		runtime.EventsEmit(lw.ctx, "notesLog", text)
 	}
 	// Also output to stderr so it's visible in console

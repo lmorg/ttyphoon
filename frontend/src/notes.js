@@ -1,5 +1,6 @@
 import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile, GetImage,
+    NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     CancelNotesListFiles,
@@ -8,11 +9,14 @@ import {
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
     SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
-    ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI,
+    ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
+    ShowAISkillsMenu,
     GetAISessionCache,
-    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession,
-    ListAIModelSelections, GetCurrentAIModelSelection, SetCurrentAIModelSelection,
-    ShowAIToolsMenu, ShowAIMcpMenu, ClearAISessionHistory,
+    GetAIActiveStreamSnapshot,
+    GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
+    ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
+    ListAIPromptLogs, GetAIPromptLog,
+    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -23,11 +27,13 @@ import {
     NotesTyposOpenDocument, NotesTyposChangeDocument, NotesTyposCloseDocument,
     NotesLspCodeLens, NotesLspExecuteCodeLens,
     NotesLspInlayHints,
-    NotesLspDefinition, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
+    NotesLspSemanticTokens,
+    NotesLspDefinition, NotesLspReferences, NotesLspDocumentSymbols, NotesLspWorkspaceSymbols, NotesLspFormat, NotesLspFormatRange, NotesLspCodeActions, NotesLspApplyCodeAction,
     GetNotesLanguageTabIndent, GetNotesLanguageReservedWords,
     NotesLspSignatureHelp,
     NotesLspPrepareRename, NotesLspRename,
     FilterStrings,
+    ResolveAIUserQuestion,
 } from '../wailsjs/go/main/WApp';
 import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
 
@@ -377,7 +383,7 @@ hljs.registerLanguage('xl', xl);
 hljs.registerLanguage('xquery', xquery);
 hljs.registerLanguage('zephir', zephir);
 
-import { configureMarked, processMarkdownContainer, enableFullscreenImages } from './markdown-utils.js';
+import { configureMarked, processMarkdownContainer, enableFullscreenImages, processLinks } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
@@ -413,6 +419,7 @@ const CONTEXT_ICON_ASK_AI = 0xf544;
 const CONTEXT_ICON_EXPAND_ALL = 0xf0fe;
 const CONTEXT_ICON_COLLAPSE_ALL = 0xf146;
 const CONTEXT_ICON_ADD = 0xf067;
+const CONTEXT_ICON_SEND_TO_TERMINAL = 0xf120;
 
 // Inject cell reference CSS if not present
 function ensureCellRefStyle() {
@@ -528,10 +535,10 @@ app.innerHTML = `
                     <div id="notes-tools-content" class="notes-tools-content">
                         <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
                             <div class="notes-tools-pane-header">
-                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Jump to prompt">Jump to prompt...</button>
-                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask...</button>
+                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt</button>
+                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask…</button>
+                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills</button>
                                 <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
-                                <button id="notes-tools-clear" type="button" class="notes-tools-clear" title="Clear AI output">Clear</button>
                                 <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
                             </div>
                             <div id="notes-ai-output" class="notes-ai-output"></div>
@@ -574,13 +581,14 @@ app.innerHTML = `
                                         <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
                                     </div>
                                 </div>
-                                <h1 class="notes-find-heading">For files containing</h1>
+                                <h1 id="notes-find-files-heading" class="notes-find-heading">For files containing</h1>
                                 <div id="notes-find-files-row">
                                     <div id="notes-find-files-input-wrap">
                                         <input id="notes-find-files-input" type="text" placeholder="Search project files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                                         <button id="notes-find-files-clear" type="button" title="Close results" aria-label="Close results">&#xf410;</button>
                                     </div>
                                     <div id="notes-find-options" class="notes-find-options">
+                                        <button id="notes-find-references" type="button" class="notes-find-option-btn" title="LSP references" aria-label="Find references">&#xf121;</button>
                                         <button id="notes-find-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
                                         <button id="notes-find-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
                                         <button id="notes-find-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
@@ -593,12 +601,14 @@ app.innerHTML = `
                             <div class="notes-tools-pane-header">
                                 <button id="notes-tools-log-copy" type="button" class="notes-tools-clear" title="Copy log to clipboard">Copy</button>
                                 <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear" title="Deselect log lines">Deselect</button>
+                                <button id="notes-tools-log-trace" type="button" class="notes-tools-clear" title="Show trace-level log lines">Trace</button>
                                 <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
                                 <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
                                 <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
                                 <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
                             </div>
                             <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>
+                            <button id="notes-log-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest log output">Latest</button>
                         </div>
                     </div>
                 </div>
@@ -638,25 +648,33 @@ app.innerHTML = `
             <div class="notes-ai-settings-controls">
                 <button id="notes-ai-settings-model-picker" type="button" class="notes-ai-model-picker" title="Select AI model">Model</button>
             </div>
+            <dl id="notes-ai-settings-execution-limits" class="notes-ai-settings-execution-limits" aria-label="AI execution limits"></dl>
 
             <h2>Tools</h2>
-            <p>tool and mcp controls</p>
-            <div class="notes-ai-settings-controls">
-                <button id="notes-ai-settings-tools-toggle" type="button">Tools...</button>
-                <button id="notes-ai-settings-mcp-toggle" type="button">MCP...</button>
-            </div>
+            <p>Enable or disable tools for AI requests.</p>
+            <div id="notes-ai-settings-tools-list" class="notes-ai-settings-tools-list"></div>
+
+            <h2>MCP Servers</h2>
+            <p>Load or unload MCP servers for AI requests.</p>
+            <div id="notes-ai-settings-mcp-list" class="notes-ai-settings-tools-list"></div>
 
             <h2>Sessions</h2>
             <p>Create, switch, clear, or delete sessions for this workspace.</p>
-            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
             <div class="notes-ai-settings-controls">
                 <button id="notes-ai-settings-session-new" type="button">New session</button>
                 <button id="notes-ai-settings-history-clear" type="button">Clear active history</button>
             </div>
+            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
 
             <h2>Active Session Transcript</h2>
             <p>Recent prompts and responses from the active session.</p>
             <div id="notes-ai-settings-history-list" class="notes-ai-settings-history-list"></div>
+
+            <div id="notes-ai-tool-meta-modal" data-open="false" aria-hidden="true">
+                <div id="notes-ai-tool-meta-card" class="markdown-body" role="dialog" aria-modal="true" aria-label="Tool metadata" tabindex="-1">
+                    <div id="notes-ai-tool-meta-content"></div>
+                </div>
+            </div>
         </div>
     </div>
 `;
@@ -728,8 +746,10 @@ const elements = {
     findDocOptionRegex: document.getElementById('notes-find-doc-option-regex'),
     findDocOptionWord: document.getElementById('notes-find-doc-option-word'),
     findFilesInput: document.getElementById('notes-find-files-input'),
+    findReferences: document.getElementById('notes-find-references'),
     findFilesClear: document.getElementById('notes-find-files-clear'),
     findFilesResults: document.getElementById('notes-find-files-results'),
+    findFilesHeading: document.getElementById('notes-find-files-heading'),
     findOptionCase: document.getElementById('notes-find-option-case'),
     findOptionRegex: document.getElementById('notes-find-option-regex'),
     findOptionWord: document.getElementById('notes-find-option-word'),
@@ -755,26 +775,32 @@ const elements = {
     toolsMinimize: document.getElementById('notes-tools-minimize'),
     toolsAIPromptJump: document.getElementById('notes-tools-ai-prompt-jump'),
     aiSettingsModelPicker: document.getElementById('notes-ai-settings-model-picker'),
+    aiSettingsExecutionLimits: document.getElementById('notes-ai-settings-execution-limits'),
     toolsAIMaximize: document.getElementById('notes-tools-ai-maximize'),
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
+    toolsAISkills: document.getElementById('notes-tools-ai-skills'),
     toolsAISettings: document.getElementById('notes-tools-ai-settings'),
-    toolsClear: document.getElementById('notes-tools-clear'),
     aiOutput: document.getElementById('notes-ai-output'),
     aiScrollBottom: document.getElementById('notes-ai-scroll-bottom'),
     aiSettingsModal: document.getElementById('notes-ai-settings-modal'),
     aiSettingsSessionsList: document.getElementById('notes-ai-settings-sessions-list'),
     aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
     aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
-    aiSettingsToolsToggle: document.getElementById('notes-ai-settings-tools-toggle'),
-    aiSettingsMcpToggle: document.getElementById('notes-ai-settings-mcp-toggle'),
+    aiSettingsToolsList: document.getElementById('notes-ai-settings-tools-list'),
+    aiSettingsMcpList: document.getElementById('notes-ai-settings-mcp-list'),
+    aiToolMetaModal: document.getElementById('notes-ai-tool-meta-modal'),
+    aiToolMetaCard: document.getElementById('notes-ai-tool-meta-card'),
+    aiToolMetaContent: document.getElementById('notes-ai-tool-meta-content'),
     aiSettingsHistoryClear: document.getElementById('notes-ai-settings-history-clear'),
     logOutput: document.getElementById('notes-log-output'),
     toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
     toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
+    toolsLogTrace: document.getElementById('notes-tools-log-trace'),
     toolsLogWordwrap: document.getElementById('notes-tools-log-wordwrap'),
     toolsLogCopy: document.getElementById('notes-tools-log-copy'),
     toolsLogDeselect: document.getElementById('notes-tools-log-deselect'),
     toolsLogClear: document.getElementById('notes-tools-log-clear'),
+    logScrollBottom: document.getElementById('notes-log-scroll-bottom'),
     toolsRestore: document.getElementById('notes-tools-restore')
 };
 
@@ -792,6 +818,7 @@ const state = {
     autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
+    textPromptHandler: null,
     deletingFile: null,
     deleteConfirmAction: null,
     findMatches: [],
@@ -805,6 +832,9 @@ const state = {
     },
     findFilesQuery: '',
     findFilesResults: [],
+    findFilesMode: 'grep',
+    findFilesSource: '',
+    findFilesReferenceSymbol: '',
     findFilesBusy: false,
     findFilesLastExecutedSignature: '',
     findFilesError: '',
@@ -838,6 +868,10 @@ const state = {
     swaggerSpec: null,
     swaggerRunAvailable: false,
     swaggerViewTooLarge: false,
+    // True when the JSON/YAML View tab DOM already reflects the current file contents.
+    // Reset to false on file load, on any editor input that changes the source,
+    // and on structured-viewer edits.
+    swaggerViewCurrent: false,
     swaggerSelectedEndpoint: null,
     swaggerEndpointFilter: '',
     frontmatter: null,  // parsed markdown frontmatter object (null when absent)
@@ -854,13 +888,24 @@ const state = {
     aiModelSelections: [],
     aiCurrentModelSelection: '',
     aiSessionCache: '',
+    // Whether the panel is following live output or showing a historical prompt.
+    aiPanelLive: true,
+    // AI logs are loaded lazily: on workspace switch we mark them pending and
+    // only actually fetch/render once the AI tab is selected, so the (possibly
+    // large) log never blocks file/workspace switching.
+    aiSessionCachePending: false,
+    aiSessionCachePendingWorkspace: '',
     aiSessionManagement: {
         activeSessionId: 0,
         sessions: [],
         history: [],
     },
+    aiToolsList: [],
+    aiMcpServersList: [],
     aiPromptJumpTargets: [],
     aiStickToBottom: true,
+    currentWorkspaceName: '',
+    currentWorkspaceKey: '',
     lspChangeTimer: null,
     lspOpenFile: '',
     typosOpenFile: '',
@@ -869,8 +914,6 @@ const state = {
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
     lspHoverMouseY: 0,
-    lspInlayHints: [],
-    lspInlayRequestId: 0,
     lspCompletionItems: [],
     lspCompletionIndex: 0,
     lspCompletionVisible: false,
@@ -881,13 +924,41 @@ const LSP_CHANGE_DEBOUNCE_MS = 200;
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 const LSP_HOVER_DEBOUNCE_MS = 250;
 const AI_BOTTOM_THRESHOLD_PX = 24;
+// How long the bottom-chase keeps running after the last request for it.
+const AI_BOTTOM_CHASE_MS = 400;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
+let monacoMainEditorInit = null;
 let suppressMonacoChange = false;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
+let aiPromptJumpRefreshDeadline = 0;
+const AI_PROMPT_JUMP_REFRESH_MAX_DELAY_MS = 500;
+let aiStreamGapRecoveryTimer = null;
+const AI_STREAM_GAP_RECOVERY_MS = 400;
 let aiPromptJumpObserver = null;
+let aiBottomScrollRetryTimers = [];
+let aiBottomChaseHandle = 0;
+let aiBottomChaseUntil = 0;
+let aiScrollButtonHandle = 0;
+
+function nowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+}
+
+// Coalesces the button refresh; it measures the container, which forces layout.
+function scheduleAIScrollButtonUpdate() {
+    if (aiScrollButtonHandle) {
+        return;
+    }
+    aiScrollButtonHandle = requestAnimationFrame(() => {
+        aiScrollButtonHandle = 0;
+        updateAIScrollBottomButton();
+    });
+}
 
 function isMonacoPhase0Enabled() {
     try {
@@ -1001,6 +1072,24 @@ async function ensureMonacoMainEditor() {
         return;
     }
 
+    // monacoMainEditor is only assigned after an await, so concurrent callers must
+    // share one creation or Monaco is created twice on the same container.
+    if (!monacoMainEditorInit) {
+        monacoMainEditorInit = createMonacoMainEditor().finally(() => {
+            monacoMainEditorInit = null;
+        });
+    }
+
+    try {
+        await monacoMainEditorInit;
+    } catch (err) {
+        // A failed boot leaves monacoMainEditor null and silently degrades every
+        // Monaco-dependent path, so surface it rather than reject unhandled.
+        console.error('Monaco editor creation failed:', err);
+    }
+}
+
+async function createMonacoMainEditor() {
     const typography = getMonacoTypographyOptions();
 
     monacoMainEditor = await createMonacoAdapter(elements.monacoEditor, {
@@ -1941,7 +2030,7 @@ function renderCsvView(content, options = {}) {
     }
 
     // Enable column sorting (available in both view and run mode)
-    setupTableSorting(elements.csvView);
+    setupNotesTableQueries(elements.csvView, 'csv', state.currentFile || '');
     void setupTableColumnResizing(elements.csvView, false, state.currentFile);
 }
 
@@ -2085,16 +2174,6 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         folder.dataset.folderKey = folderKey;
         folder.dataset.expanded = expanded ? 'true' : 'false';
         folder.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-
-        folder.addEventListener('click', () => {
-            toggleFolder(folderKey);
-        });
-
-        folder.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openFolderTreeContextMenu(category, node.children || [], event.clientX, event.clientY, node.name);
-        });
         container.appendChild(folder);
 
         // Render children if expanded
@@ -2114,22 +2193,6 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         if (node.file === state.currentFile) {
             item.dataset.active = 'true';
         }
-
-        item.addEventListener('click', () => {
-            NotesHistoryAdd(node.file).catch(() => {});
-            loadFile(node.file);
-        });
-
-        item.addEventListener('dblclick', (e) => {
-            e.preventDefault();
-            void openRenamePrompt(node.file);
-        });
-
-	    item.addEventListener('contextmenu', async (e) => {
-	        e.preventDefault();
-	        e.stopPropagation();
-	        await openFileListContextMenu(node.file, e.clientX, e.clientY);
-	    });
 
         container.appendChild(item);
     }
@@ -2300,7 +2363,7 @@ async function renderMarkdown() {
     wrapTablesForHorizontalScroll(elements.preview);
 
     // Enable column sorting on all tables
-    setupTableSorting(elements.preview);
+    setupNotesTableQueries(elements.preview, 'preview', state.currentFile || '');
 
     // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
     elements.preview.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
@@ -3631,67 +3694,221 @@ async function setupTableColumnResizing(container, wrapped, filename = state.cur
     }
 }
 
-function setupTableSorting(container) {
-    if (!container) return;
+// Sorting and filtering are owned by the Go engine (tablecore), the same one the
+// terminal table widget uses, so both surfaces behave identically. Go returns an
+// order of source row indices; nothing here rewrites a cell, which is what keeps
+// formulas, cell editing, resize handles and word wrap intact.
+// See adr/0028-go-backed-notes-table-sorting.md.
+const NOTES_TABLE_EPHEMERAL_CELLS = 2000;
+const NOTES_TABLE_SORT_ASC = '\u2191';
+const NOTES_TABLE_SORT_DESC = '\u2193';
 
-    const getCellText = (cell) => {
-        return getTableCellTextContent(cell);
+// Source order, which stops matching DOM order as soon as a sort is applied.
+function notesTableSourceRows(table) {
+    return Array.from(table.querySelectorAll('tbody tr'))
+        .sort((a, b) => (Number(a.dataset.sourceRow) || 0) - (Number(b.dataset.sourceRow) || 0));
+}
+
+function notesTableSeed(table) {
+    return {
+        headings: Array.from(table.querySelectorAll('thead th')).map((th) => getTableCellTextContent(th)),
+        rows: notesTableSourceRows(table).map((row) =>
+            Array.from(row.querySelectorAll('td, th')).map((cell) => getTableCellTextContent(cell))),
+    };
+}
+
+function notesTableIsSmall(table) {
+    const columns = table.querySelectorAll('thead th').length;
+    const rows = table.querySelectorAll('tbody tr').length;
+    return columns * (rows + 1) <= NOTES_TABLE_EPHEMERAL_CELLS;
+}
+
+function notesTableRequest(table, includeSeed) {
+    return {
+        key: {
+            surface: table.dataset.tableSurface || '',
+            document: table.dataset.tableDocument || '',
+            index: Number(table.dataset.tableIndex) || 0,
+        },
+        seed: includeSeed ? notesTableSeed(table) : null,
+        sortColumn: Number(table.dataset.sortColumn) || 0,
+        sortDesc: table.dataset.sortDesc === 'true',
+        filter: table.dataset.tableFilter || '',
+    };
+}
+
+async function notesTableInvoke(table, call) {
+    // Small tables are rebuilt per query on the Go side, so send the data up
+    // front rather than paying a round trip to be told it was needed.
+    let result = await call(notesTableRequest(table, notesTableIsSmall(table)));
+    if (result && result.missing) {
+        result = await call(notesTableRequest(table, true));
+    }
+    return result;
+}
+
+function applyNotesTableResult(table, result) {
+    if (!result) {
+        return;
+    }
+    if (result.error) {
+        notifyTerminal(String(result.error), 'error');
+        return;
+    }
+
+    table.dataset.sortColumn = String(Number(result.sortColumn) || 0);
+    table.dataset.sortDesc = result.sortDesc ? 'true' : 'false';
+    table.dataset.tableFilter = String(result.filter || '');
+
+    applyNotesTableOrder(table, Array.isArray(result.order) ? result.order : []);
+    renderNotesTableSortIndicator(table);
+}
+
+function applyNotesTableOrder(table, order) {
+    const tbody = table.querySelector('tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const bySource = new Map();
+    for (const row of tbody.querySelectorAll('tr')) {
+        bySource.set(Number(row.dataset.sourceRow) || 0, row);
+    }
+
+    const visible = new Set(order);
+    const fragment = document.createDocumentFragment();
+
+    for (const sourceIndex of order) {
+        const row = bySource.get(sourceIndex);
+        if (!row) continue;
+        row.classList.remove('notes-table-row-filtered');
+        fragment.appendChild(row);
+    }
+
+    // Filtered-out rows stay in the DOM, hidden, so editing and formulas keep
+    // resolving against a complete document.
+    for (const sourceIndex of Array.from(bySource.keys()).sort((a, b) => a - b)) {
+        if (visible.has(sourceIndex)) continue;
+        const row = bySource.get(sourceIndex);
+        row.classList.add('notes-table-row-filtered');
+        fragment.appendChild(row);
+    }
+
+    // A single insertion: appending row by row risks a layout pass per row.
+    tbody.appendChild(fragment);
+}
+
+function renderNotesTableSortIndicator(table) {
+    table.querySelectorAll('.notes-sort-icon').forEach((icon) => icon.remove());
+
+    const column = Number(table.dataset.sortColumn) || 0;
+    if (column < 1) {
+        return;
+    }
+
+    const th = table.querySelectorAll('thead th')[column - 1];
+    if (!th) {
+        return;
+    }
+
+    const icon = document.createElement('span');
+    icon.className = 'notes-sort-icon';
+    icon.textContent = table.dataset.sortDesc === 'true' ? NOTES_TABLE_SORT_DESC : NOTES_TABLE_SORT_ASC;
+    th.prepend(icon);
+}
+
+async function sortNotesTableColumn(table, column) {
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableSort(req, column)));
+}
+
+async function clearNotesTableSort(table) {
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableClearSort(req)));
+}
+
+async function promptNotesTableFilter(table) {
+    const where = await openTextPrompt({
+        title: 'SQL filter',
+        value: table.dataset.tableFilter || '',
+        confirmLabel: 'Apply',
+        placeholder: '"Column" > 10 — leave empty to reset',
+    });
+    if (where === null) {
+        return;
+    }
+
+    applyNotesTableResult(table, await notesTableInvoke(table, (req) => NotesTableFilter(req, where)));
+}
+
+function createTableFilterMenuItem(table) {
+    return {
+        title: 'SQL filter...',
+        icon: 0xf0b0,
+        onSelect: () => {
+            void promptNotesTableFilter(table);
+        },
+    };
+}
+
+function openNotesTableHeaderMenu(table, colIndex, x, y) {
+    const headerCells = table.querySelectorAll('thead th');
+    const heading = getTableCellTextContent(headerCells[colIndex]) || `Column ${colIndex + 1}`;
+
+    const menuItems = [
+        {
+            title: 'Clear sorting',
+            icon: 0,
+            onSelect: () => {
+                void clearNotesTableSort(table);
+                clearTableHighlight(table);
+            },
+        },
+        { title: '-' },
+        createTableFilterMenuItem(table),
+    ];
+
+    const highlightCallback = (itemIndex) => {
+        const item = menuItems[itemIndex];
+        clearTableHighlight(table);
+        if (!item) {
+            return;
+        }
+        if (item.title === 'Clear sorting') {
+            highlightEntireTable(table, true);
+        } else if (item.title.startsWith('SQL filter')) {
+            highlightTableColumn(table, colIndex, true);
+        }
     };
 
-    Array.from(container.querySelectorAll('table')).forEach((table) => {
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        const headerRow = table.querySelector('thead tr');
-        if (!headerRow) return;
-        const headerCells = Array.from(headerRow.querySelectorAll('th'));
+    showNotesLocalMenu(menuItems, x, y, `Table: ${heading}`, highlightCallback, () => clearTableHighlight(table));
+}
 
-        // Stamp original order so we can restore it on clear
+function setupNotesTableQueries(container, surface, documentPath = '') {
+    if (!container) return;
+
+    const indices = [];
+
+    Array.from(container.querySelectorAll('table')).forEach((table, tableIndex) => {
+        const tbody = table.querySelector('tbody');
+        const headerRow = table.querySelector('thead tr');
+        if (!tbody || !headerRow) return;
+
+        indices.push(tableIndex);
+
+        table.dataset.tableSurface = surface;
+        table.dataset.tableDocument = documentPath;
+        table.dataset.tableIndex = String(tableIndex);
+        table.dataset.sortColumn = table.dataset.sortColumn || '0';
+        table.dataset.sortDesc = table.dataset.sortDesc || 'false';
+        table.dataset.tableFilter = table.dataset.tableFilter || '';
+
         Array.from(tbody.querySelectorAll('tr')).forEach((row, i) => {
-            row.dataset.originalSortOrder = String(i);
+            row.dataset.sourceRow = String(i);
         });
 
-        const clearSortIcons = () => {
-            headerCells.forEach((th) => {
-                const icon = th.querySelector('.notes-sort-icon');
-                if (icon) icon.remove();
-                delete th.dataset.sortType;
-            });
-        };
+        if (table.dataset.tableQueriesBound === 'true') return;
+        table.dataset.tableQueriesBound = 'true';
 
-        const clearSort = () => {
-            clearSortIcons();
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => Number(a.dataset.originalSortOrder) - Number(b.dataset.originalSortOrder));
-            rows.forEach(row => tbody.appendChild(row));
-        };
-
-        const applySort = (colIndex, sortType) => {
-            clearSortIcons();
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort((a, b) => {
-                const aText = getCellText(a.querySelectorAll('td, th')[colIndex] || a);
-                const bText = getCellText(b.querySelectorAll('td, th')[colIndex] || b);
-                if (sortType === 'num-asc')  return (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
-                if (sortType === 'num-desc') return (parseFloat(bText) || 0) - (parseFloat(aText) || 0);
-                if (sortType === 'char-asc')  return aText.localeCompare(bText);
-                if (sortType === 'char-desc') return bText.localeCompare(aText);
-                return 0;
-            });
-            rows.forEach(row => tbody.appendChild(row));
-
-            // Stamp sort icon onto the header cell
-            const th = headerCells[colIndex];
-            if (th) {
-                th.dataset.sortType = sortType;
-                const iconCodePoint = { 'num-asc': 0xf162, 'num-desc': 0xf886, 'char-asc': 0xf15d, 'char-desc': 0xf881 }[sortType];
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'notes-sort-icon';
-                iconSpan.textContent = String.fromCodePoint(iconCodePoint);
-                th.prepend(iconSpan);
-            }
-        };
-
-        headerCells.forEach((th, colIndex) => {
+        Array.from(headerRow.querySelectorAll('th')).forEach((th, colIndex) => {
             th.addEventListener('click', (e) => {
                 if (table.dataset.resizeDragActive === 'true') {
                     e.preventDefault();
@@ -3701,39 +3918,45 @@ function setupTableSorting(container) {
 
                 e.preventDefault();
                 e.stopPropagation();
+                void sortNotesTableColumn(table, colIndex + 1);
+            });
 
-                const headerText = getCellText(th) || `Column ${colIndex + 1}`;
-                const menuItems = [
-                    { title: 'Sort by number (low to high)',     icon: 0xf162, onSelect: () => { applySort(colIndex, 'num-asc'); clearTableHighlight(table); } },
-                    { title: 'Sort by number (high to low)',     icon: 0xf886, onSelect: () => { applySort(colIndex, 'num-desc'); clearTableHighlight(table); } },
-                    { title: 'Sort by characters (low to high)', icon: 0xf15d, onSelect: () => { applySort(colIndex, 'char-asc'); clearTableHighlight(table); } },
-                    { title: 'Sort by characters (high to low)', icon: 0xf881, onSelect: () => { applySort(colIndex, 'char-desc'); clearTableHighlight(table); } },
-                    { title: '-' },
-                    { title: 'Clear sorting', icon: 0, onSelect: () => { clearSort(); clearTableHighlight(table); } },
-                ];
+            th.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openNotesTableHeaderMenu(table, colIndex, e.clientX, e.clientY);
+            });
 
-                const highlightCallback = (itemIndex) => {
-                    const item = menuItems[itemIndex];
-                    if (!item) return;
-                    clearTableHighlight(table);
-                    if (item.title === 'Clear sorting') {
-                        highlightEntireTable(table, true);
-                    } else if (item.title.startsWith('Sort')) {
-                        highlightTableColumn(table, colIndex, true);
-                    }
-                };
+            // Middle-click clears the sort, as in the terminal. Browsers deliver
+            // it as auxclick, and mousedown has to be suppressed or WebKit starts
+            // autoscroll instead.
+            th.addEventListener('mousedown', (e) => {
+                if (e.button === 1) {
+                    e.preventDefault();
+                }
+            });
 
-                showNotesLocalMenu(
-                    menuItems,
-                    e.clientX,
-                    e.clientY,
-                    `Sort: ${headerText}`,
-                    highlightCallback,
-                    () => clearTableHighlight(table),
-                );
+            th.addEventListener('auxclick', (e) => {
+                if (e.button !== 1 || table.dataset.resizeDragActive === 'true') {
+                    return;
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                void clearNotesTableSort(table);
             });
         });
     });
+
+    // Declaring what still exists lets the backend drop everything else for this
+    // surface, so a missed cleanup self-heals rather than accumulating.
+    try {
+        if (typeof NotesTableReconcile === 'function') {
+            void Promise.resolve(NotesTableReconcile(surface, documentPath, indices)).catch(() => {});
+        }
+    } catch (err) {
+        console.error('Failed to reconcile Notes tables:', err);
+    }
 }
 
 function toggleCheckboxInMarkdown(checkboxIndex, isChecked) {
@@ -4564,33 +4787,8 @@ async function resolveNotesFileFromAbsolutePath(absPath) {
 }
 
 async function requestLspInlayHints() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-        state.lspInlayRequestId += 1;
-        state.lspInlayHints = [];
-        renderLspEditorDecorations();
-        return;
-    }
-
-    const requestId = state.lspInlayRequestId + 1;
-    state.lspInlayRequestId = requestId;
-
-    try {
-        const hints = await NotesLspInlayHints(state.currentFile);
-        if (requestId !== state.lspInlayRequestId || state.lspOpenFile !== state.currentFile) {
-            return;
-        }
-
-        state.lspInlayHints = Array.isArray(hints)
-            ? hints.filter((item) => item && String(item.label || '') !== '')
-            : [];
-        renderLspEditorDecorations();
-    } catch {
-        if (requestId !== state.lspInlayRequestId) {
-            return;
-        }
-
-        state.lspInlayHints = [];
-        renderLspEditorDecorations();
+    if (isMonacoActive()) {
+        monacoMainEditor.refreshInlayHints();
     }
 }
 
@@ -4745,7 +4943,17 @@ function codeLensDisplayLabel(item) {
 }
 
 async function goToCurrentLspSymbol() {
-    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+    if (!state.currentFile || !isCurrentFileLspEligible()) {
+        notifyTerminal('No Language Server Protocol (LSP) has been defined for this file type', 'warn');
+        return;
+    }
+
+    if (state.lspOpenFile !== state.currentFile) {
+        await openCurrentLspDocument(getMainEditorValue());
+    }
+
+    if (state.lspOpenFile !== state.currentFile) {
+        notifyTerminal('Language server is not active for the current file', 'warn');
         return;
     }
 
@@ -4783,14 +4991,9 @@ async function goToCurrentLspSymbol() {
 
             const line = Math.max(0, Number(picked.line) || 0);
             const character = Math.max(0, Number(picked.character) || 0);
-            const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
+            const offset = lspPositionToEditorOffset(getMainEditorValue(), line, character);
 
-            elements.editor.focus();
-            elements.editor.setSelectionRange(offset, offset);
-
-            const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-            elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
-            syncEditorScrollDecorations();
+            jumpEditorToOffset(offset);
 
             state.lspHoverLastKey = '';
             scheduleLspHover();
@@ -4800,11 +5003,12 @@ async function goToCurrentLspSymbol() {
 
 async function goToWorkspaceLspSymbol() {
     if (!state.currentFile || !isCurrentFileLspEligible()) {
+        notifyTerminal('No Language Server Protocol (LSP) has been defined for this file type', 'warn');
         return;
     }
 
     if (state.lspOpenFile !== state.currentFile) {
-        await openCurrentLspDocument(elements.editor.value || '');
+        await openCurrentLspDocument(getMainEditorValue());
     }
 
     if (state.lspOpenFile !== state.currentFile) {
@@ -4812,32 +5016,42 @@ async function goToWorkspaceLspSymbol() {
         return;
     }
 
-    let symbols = [];
-    try {
-        symbols = await NotesLspWorkspaceSymbols(state.currentFile, '');
-    } catch {
-        notifyTerminal('Failed to fetch workspace symbols', 'error');
-        return;
-    }
+    // Servers match symbols against the query and return nothing for an empty
+    // one (and cap results), so search server-side on each keystroke.
+    let entries = [];
 
-    const entries = Array.isArray(symbols)
-        ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
-        : [];
-    if (entries.length === 0) {
-        notifyTerminal('No workspace symbols found', 'info');
-        return;
-    }
+    const queryWorkspaceSymbols = async (rawQuery) => {
+        const query = String(rawQuery || '').trim();
+        entries = [];
+        if (!query) {
+            return { options: [], icons: [] };
+        }
 
-    const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
-    const icons = options.map(() => CONTEXT_ICON_CODE);
+        let symbols = [];
+        try {
+            symbols = await NotesLspWorkspaceSymbols(state.currentFile, query);
+        } catch {
+            notifyTerminal('Failed to fetch workspace symbols', 'error');
+            return { options: [], icons: [] };
+        }
+
+        entries = Array.isArray(symbols)
+            ? symbols.filter((item) => item && String(item.name || '').trim() !== '')
+            : [];
+
+        const options = entries.map((item) => workspaceSymbolDisplayLabel(item));
+        return { options, icons: options.map(() => CONTEXT_ICON_CODE) };
+    };
+
     showLocalMenu({
         title: 'Go to workspace symbol',
-        options,
-        icons,
+        options: [],
+        icons: [],
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
         showSearch: true,
         hideItemsUntilQuery: true,
+        onQuery: queryWorkspaceSymbols,
         showNextToMouseCursor: true,
         onSelect: async (index) => {
             try {
@@ -4862,13 +5076,8 @@ async function goToWorkspaceLspSymbol() {
 
                 const line = Math.max(0, Number(picked.line) || 0);
                 const character = Math.max(0, Number(picked.character) || 0);
-                const offset = lspPositionToEditorOffset(elements.editor.value || '', line, character);
-                elements.editor.focus();
-                elements.editor.setSelectionRange(offset, offset);
-
-                const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 18;
-                elements.editor.scrollTop = Math.max(0, (line - 2) * lineHeight);
-                syncEditorScrollDecorations();
+                const offset = lspPositionToEditorOffset(getMainEditorValue(), line, character);
+                jumpEditorToOffset(offset);
 
                 state.lspHoverLastKey = '';
                 scheduleLspHover();
@@ -5075,11 +5284,9 @@ function buildLspCodeActionMenuItems(actions, line, character, diagnostics) {
 }
 
 async function showEditorLspOptionsMenu(x, y) {
-    if (!isCurrentFileLspEligible()) {
-        return;
-    }
-
-    const menuItems = [
+    const menuItems = [];
+    if (isCurrentFileLspEligible()) {
+        menuItems.push(
         {
             title: 'Format document',
             icon: CONTEXT_ICON_CODE,
@@ -5122,7 +5329,21 @@ async function showEditorLspOptionsMenu(x, y) {
                 void renameCurrentLspSymbol();
             },
         },
-    ];
+        );
+    }
+
+    menuItems.push({
+        title: 'Find references',
+        icon: CONTEXT_ICON_FIND,
+        onSelect: () => {
+            void findReferencesFromEditor();
+        },
+    });
+
+    if (!isCurrentFileLspEligible()) {
+        showNotesLocalMenu(menuItems, x, y, 'Find references');
+        return;
+    }
 
     const codeActionData = await getLspCodeActionsForCursor();
     if (codeActionData.actions.length > 0) {
@@ -5138,6 +5359,86 @@ async function showEditorLspOptionsMenu(x, y) {
     }
 
     showNotesLocalMenu(menuItems, x, y, 'LSP options');
+}
+
+function currentEditorToken() {
+    const content = getMainEditorValue();
+    const selection = getMainEditorSelectionRange();
+    const cursor = Math.max(0, Number(selection?.start) || 0);
+    const left = content.slice(0, cursor);
+    const right = content.slice(cursor);
+    const leftMatch = left.match(/[A-Za-z_][A-Za-z0-9_]*/g);
+    const rightMatch = right.match(/^[A-Za-z0-9_]*/);
+    const leftToken = leftMatch ? leftMatch[leftMatch.length - 1] : '';
+    const rightToken = rightMatch ? rightMatch[0] : '';
+    const symbol = `${leftToken}${rightToken}`;
+    const start = cursor - leftToken.length;
+    return symbol ? { symbol, start } : null;
+}
+
+function setProjectReferencesResults(symbol, source, results) {
+    state.findFilesMode = 'references';
+    state.findFilesSource = source;
+    state.findFilesReferenceSymbol = symbol;
+    state.findFilesQuery = symbol;
+    state.findFilesResults = results;
+    state.findFilesBusy = false;
+    state.findFilesError = '';
+    state.findFilesSelectedKey = '';
+    resetProjectFindPaging();
+    elements.findFilesInput.value = symbol;
+    updateFindFilesClearButtonVisibility();
+    setToolsPanelCollapsed(false);
+    setToolsTab('find');
+    renderProjectFindResults();
+    renderFileList();
+}
+
+function formatLspReferencePath(filePath) {
+    const path = String(filePath || '').replace(/\\/g, '/');
+    const root = String(state.currentProjectRoot || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    if (root && (path === root || path.startsWith(`${root}/`))) {
+        return `$LSP/${path.slice(root.length).replace(/^\/+/, '')}`;
+    }
+    return `$LSP/${path.split('/').pop() || path}`;
+}
+
+async function findReferencesFromEditor() {
+    const token = currentEditorToken();
+    if (!token || !state.currentFile) {
+        notifyTerminal('Place the cursor on a symbol to find references', 'info');
+        return;
+    }
+
+    const pos = offsetToLspPosition(getMainEditorValue(), token.start);
+    if (isCurrentFileLspEligible()) {
+        try {
+            const locations = await NotesLspReferences(state.currentFile, pos.line, pos.character);
+            if (Array.isArray(locations) && locations.length > 0) {
+                setProjectReferencesResults(token.symbol, 'LSP', locations.map((item) => ({
+                    fileName: String(item?.filePath || item?.uri || '').split('/').pop() || token.symbol,
+                    path: String(item?.filePath || item?.uri || ''),
+                    displayPath: formatLspReferencePath(item?.filePath || item?.uri || ''),
+                    line: (Number(item?.line) || 0) + 1,
+                    source: 'LSP',
+                    context: Array.isArray(item?.context) ? item.context.map((line) => String(line)) : [],
+                })));
+                return;
+            }
+        } catch (err) {
+            console.warn('LSP references unavailable; using text search fallback', err);
+        }
+    }
+
+    state.findFilesMode = 'references';
+    state.findFilesSource = 'Text search fallback';
+    state.findFilesReferenceSymbol = token.symbol;
+    elements.findFilesInput.value = token.symbol;
+    state.findOptions.wholeWord = true;
+    updateFindOptionButtons();
+    setToolsPanelCollapsed(false);
+    setToolsTab('find');
+    runProjectFindSearch(token.symbol);
 }
 
 async function applyLspCodeActionFromCursor(index, line, character, diagnostics) {
@@ -5207,7 +5508,7 @@ async function renameCurrentLspSymbol() {
     }
 
     const suggested = String(prepare.placeholder || currentSelection || '').trim();
-    const nextName = window.prompt('Rename symbol to:', suggested);
+    const nextName = await openTextPrompt({ title: 'Rename symbol', value: suggested, confirmLabel: 'Rename' });
     if (nextName === null) {
         return;
     }
@@ -5462,8 +5763,6 @@ async function closeOpenLspDocument() {
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
-    state.lspInlayRequestId += 1;
-    state.lspInlayHints = [];
 
     const openFile = state.lspOpenFile;
     if (!openFile) {
@@ -5516,6 +5815,29 @@ async function openCurrentLspDocument(content) {
                         return '';
                     }
                     return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
+                },
+                semanticTokens: async ({ previousResultId } = {}) => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return null;
+                    }
+                    try {
+                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
+                    } catch {
+                        // Semantic tokens can still use the last synced state.
+                    }
+                    if (previousResultId) {
+                        return await NotesLspSemanticTokensDelta(state.currentFile, previousResultId);
+                    }
+                    return await NotesLspSemanticTokens(state.currentFile);
+                },
+                inlayHints: async () => {
+                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                        return [];
+                    }
+                    const hints = await NotesLspInlayHints(state.currentFile);
+                    return Array.isArray(hints)
+                        ? hints.filter((item) => item && String(item.label || '') !== '')
+                        : [];
                 },
                 formatDocument: async () => {
                     if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
@@ -6153,7 +6475,7 @@ async function renderJupyterView() {
             wrapTablesForHorizontalScroll(elements.jupyter);
 
             // Enable column sorting on all tables
-            setupTableSorting(elements.jupyter);
+            setupNotesTableQueries(elements.jupyter, 'jupyter', state.currentFile || '');
 
             elements.jupyter.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
             void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, state.currentFile);
@@ -6952,15 +7274,35 @@ async function restoreJupyterBlockState(blockId) {
 async function refreshFiles(options = {}) {
     try {
         const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
+        const previousWorkspaceKey = String(state.currentWorkspaceKey || '');
         const files = await ListFiles();
         state.files = Array.isArray(files) ? files : [];
         state.currentProjectRoot = await GetCurrentProject();
         const workspaceName = await GetCurrentGroupName();
+        const workspaceKey = `${String(state.currentProjectRoot || '')}::${String(workspaceName || '')}`;
+        const workspaceChanged = previousWorkspaceKey !== '' && previousWorkspaceKey !== workspaceKey;
+        const workspaceScopedRefresh = previousWorkspaceKey === '' || workspaceChanged;
+
+        state.currentWorkspaceName = String(workspaceName || '');
+        state.currentWorkspaceKey = workspaceKey;
         elements.title.innerText = workspaceName;
-        await loadAISessionCache(workspaceName);
-        await refreshAIModelPicker();
-        await loadProjectCache({ skipHistoryRestore });
+
+        if (workspaceScopedRefresh) {
+            // Defer AI log loading until the AI tab is selected so it never
+            // blocks workspace/file switching. Loading is triggered lazily by
+            // setToolsTab('ai') / the AI tab click.
+            markAISessionCachePending(workspaceName);
+            void refreshAIModelPicker();
+        }
+
+        await loadProjectCache({
+            skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh,
+        });
         await applyFileFilter();
+
+        if (workspaceChanged) {
+            scrollActiveFileListItemIntoView();
+        }
     } catch (err) {
         notifyTerminal('Failed to load file list', 'error');
         console.error(err);
@@ -7008,7 +7350,7 @@ async function restoreDocumentCache(file) {
         if (documentCache.DocumentTab === 'jupyter') {
             await renderJupyterView();
         } else if (documentCache.DocumentTab === 'swagger-view') {
-            renderSwaggerJsonView();
+            renderSwaggerJsonViewLazy();
         } else if (documentCache.DocumentTab === 'swagger-run') {
             updateSwaggerLayoutMode();
             renderSwaggerUI();
@@ -7106,9 +7448,10 @@ function clampProjectFindScrollTop() {
     }
 }
 
-function resetProjectFindPaging() {
+function resetProjectFindPaging(options = {}) {
+    const resetListScroll = options?.resetListScroll !== false;
     state.findFilesVirtualStart = 0;
-    if (elements.list) {
+    if (resetListScroll && elements.list) {
         elements.list.scrollTop = 0;
     }
 }
@@ -7206,7 +7549,9 @@ function renderProjectFindResultsInFileList() {
 
         const detail = document.createElement('span');
         detail.className = 'notes-find-files-item-detail';
-        detail.textContent = `${String(item?.path || '')}:${lineNo}`;
+        const source = String(item?.source || state.findFilesSource || '').trim();
+        const displayPath = String(item?.displayPath || item?.path || '');
+        detail.textContent = `${displayPath}:${lineNo}`;
 
         button.appendChild(title);
         button.appendChild(detail);
@@ -7221,7 +7566,7 @@ function renderProjectFindResultsInFileList() {
                 span.className = i === matchIndex
                     ? 'notes-find-files-context-match'
                     : 'notes-find-files-context-other';
-                span.textContent = String(ctxLine);
+                span.textContent = String(ctxLine).trim();
                 pre.appendChild(span);
             });
             button.appendChild(pre);
@@ -7258,7 +7603,7 @@ function updateListFilterClearButtonVisibility() {
 
 function renderFileList() {
     const projectFindMode = isProjectFindListModeActive();
-    const previousScrollTop = projectFindMode && elements.list ? elements.list.scrollTop : 0;
+    const previousScrollTop = elements.list ? elements.list.scrollTop : 0;
 
     updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
@@ -7282,6 +7627,9 @@ function renderFileList() {
         empty.id = 'notes-empty';
         empty.textContent = 'No notes found.';
         elements.list.appendChild(empty);
+        if (elements.list && previousScrollTop > 0) {
+            elements.list.scrollTop = previousScrollTop;
+        }
         return;
     }
 
@@ -7290,6 +7638,9 @@ function renderFileList() {
         empty.id = 'notes-empty';
         empty.textContent = 'No matching files.';
         elements.list.appendChild(empty);
+        if (elements.list && previousScrollTop > 0) {
+            elements.list.scrollTop = previousScrollTop;
+        }
         return;
     }
 
@@ -7342,18 +7693,6 @@ function renderFileList() {
         categoryHeader.appendChild(arrow);
         categoryHeader.appendChild(label);
 
-        if (!hasActiveFilter) {
-            categoryHeader.addEventListener('click', () => {
-                toggleCategory(category);
-            });
-        }
-
-        categoryHeader.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openFolderTreeContextMenu(category, categoryTree, event.clientX, event.clientY, `${category} folders`);
-        });
-        
         elements.list.appendChild(categoryHeader);
 
         // Create category content container
@@ -7365,6 +7704,10 @@ function renderFileList() {
 
         elements.list.appendChild(categoryContent);
     });
+
+    if (elements.list && previousScrollTop > 0) {
+        elements.list.scrollTop = previousScrollTop;
+    }
 }
 
 function scrollActiveFileListItemIntoView() {
@@ -7379,6 +7722,7 @@ function scrollActiveFileListItemIntoView() {
     }
 
     activeItem.scrollIntoView({
+        //block: 'nearest',
         block: 'center',
         inline: 'nearest',
     });
@@ -7414,6 +7758,29 @@ function collectFolderKeys(category, nodes) {
 
     walk(Array.isArray(nodes) ? nodes : []);
     return keys;
+}
+
+// Rebuilds a category's file tree on demand (e.g. for the delegated context-menu
+// handler, which no longer keeps per-node tree references around after render).
+function getCategoryTreeNodes(category) {
+    const files = getFilteredFiles().filter((file) => splitCategoryPath(file).category === category);
+    return buildFileTree(files);
+}
+
+function findFolderNodeByPath(nodes, path) {
+    for (const node of nodes) {
+        if (node.type !== 'folder') {
+            continue;
+        }
+        if (node.path === path) {
+            return node;
+        }
+        const found = findFolderNodeByPath(node.children, path);
+        if (found) {
+            return found;
+        }
+    }
+    return null;
 }
 
 function setFolderExpansionState(folderKeys, expanded) {
@@ -7602,11 +7969,47 @@ function renderSwaggerJsonView() {
 
     if (state.swaggerViewTooLarge) {
         renderStructViewTooLargeMessage();
+        state.swaggerViewCurrent = true;
         return;
     }
 
     attachJsonViewerEditHandler(elements.swaggerView, commitStructuredViewerEdit);
     renderJsonViewer(elements.swaggerView, state.swaggerSpec ?? (elements.editor.value || '{}'));
+    state.swaggerViewCurrent = true;
+}
+
+// Renders the JSON/YAML tree viewer non-blocking: paints the AI-panel lazy
+// spinner first, yields to the browser so it actually appears, then runs the
+// (still synchronous) render. No-op when the tab DOM is already current.
+function renderSwaggerJsonViewLazy() {
+    if (state.swaggerViewCurrent) {
+        return;
+    }
+
+    if (!elements.swaggerView) {
+        return;
+    }
+
+    if (state.swaggerViewTooLarge) {
+        renderStructViewTooLargeMessage();
+        state.swaggerViewCurrent = true;
+        return;
+    }
+
+    const spinner = document.createElement('div');
+    spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
+    elements.swaggerView.replaceChildren(spinner);
+
+    // Two rAFs give the browser a chance to paint the spinner before the
+    // synchronous tree render blocks the main thread.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            if (state.currentFileType !== 'json' || state.viewMode !== 'swagger-view') {
+                return;
+            }
+            renderSwaggerJsonView();
+        });
+    });
 }
 
 function isYamlStructuredFile(fileName) {
@@ -8507,16 +8910,15 @@ async function loadFile(file, options = {}) {
             saveDocumentCache();
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
             if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
             }
             return;
         }
 
-        if (loadingJson) {
+        /*if (loadingJson) {
             openStickyProgress(stickyId, `Loading ${fileName}… reading file`);
-        }
+        }*/
 
         const result = await GetFile(file);
 
@@ -8536,7 +8938,6 @@ async function loadFile(file, options = {}) {
             setViewMode('meta');
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
             return;
         }
 
@@ -8563,7 +8964,6 @@ async function loadFile(file, options = {}) {
 
             setDirty(false);
             renderFileList();
-            scrollActiveFileListItemIntoView();
 
             if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
                 closeFindBar();
@@ -8605,7 +9005,8 @@ async function loadFile(file, options = {}) {
             // Render JSON tree view
             updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
             await yieldToUI();
-            renderSwaggerJsonView();
+            // Defer JSON/YAML tree render until the View tab is clicked; loadFile no longer eagerly renders it.
+            state.swaggerViewCurrent = false;
             
             // Render swagger UI only for JSON documents with a top-level swagger key
             if (state.swaggerRunAvailable) {
@@ -8623,7 +9024,7 @@ async function loadFile(file, options = {}) {
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
-            setEditorWrapMode(false);  // Reset wrap mode when loading new markdown file
+            setEditorWrapMode(true);  // Word wrap on by default for markdown; cached per-doc preference overrides later
             //setCodeEditorMode(false);
             setCodeEditorMode(true); // TODO: maybe support toggling?
             elements.editorShell.dataset.fileType = 'markdown';
@@ -8698,13 +9099,9 @@ async function loadFile(file, options = {}) {
         
         setDirty(false);
         renderFileList();
-        scrollActiveFileListItemIntoView();
-        
-        // Refresh the JSON viewer when switching to JSON files
-        if (state.currentFileType === 'json') {
-            renderSwaggerJsonView();
-        }
-        
+
+        // JSON/YAML tree view render is deferred until the View tab is clicked (see swaggerViewCurrent).
+
         // Clear active Find state when loading a new file.
         if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
             closeFindBar();
@@ -8751,6 +9148,7 @@ async function saveFile() {
             await NotesLspSaveDocument(state.currentFile);
         }
         setDirty(false);
+        maybeRefreshProjectFindAfterSave();
     } catch (err) {
         notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
         console.error(err);
@@ -8924,8 +9322,11 @@ function closeFindBar() {
         state.findFilesTimer = null;
     }
     cleanupProjectFindStreamListeners();
-    resetProjectFindPaging();
+    resetProjectFindPaging({ resetListScroll: false });
     state.findFilesQuery = '';
+    state.findFilesMode = 'grep';
+    state.findFilesSource = '';
+    state.findFilesReferenceSymbol = '';
     state.findFilesResults = [];
     state.findFilesLastExecutedSignature = '';
     state.findFilesBusy = false;
@@ -8947,9 +9348,12 @@ function clearProjectFindResults({ keepInputFocus = true } = {}) {
     }
 
     cleanupProjectFindStreamListeners();
-    resetProjectFindPaging();
+    resetProjectFindPaging({ resetListScroll: false });
 
     state.findFilesQuery = '';
+    state.findFilesMode = 'grep';
+    state.findFilesSource = '';
+    state.findFilesReferenceSymbol = '';
     state.findFilesResults = [];
     state.findFilesLastExecutedSignature = '';
     state.findFilesBusy = false;
@@ -8973,9 +9377,14 @@ function updateFindFilesClearButtonVisibility() {
         return;
     }
 
-    const hasValue = (elements.findFilesInput.value || '').trim().length > 0;
+    const hasValue = (elements.findFilesInput.value || '').trim().length > 0
+        || state.findFilesMode === 'references'
+        || state.findFilesResults.length > 0;
     elements.findFilesClear.dataset.visible = hasValue ? 'true' : 'false';
     elements.findFilesClear.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+    if (elements.findReferences) {
+        elements.findReferences.dataset.active = state.findFilesMode === 'references' ? 'true' : 'false';
+    }
 }
 
 const findFieldHistory = new Map();
@@ -9143,7 +9552,17 @@ function jumpEditorToLine(lineNumber) {
     const start = editorOffsetForLine(lineNumber);
     const text = getMainEditorValue();
     const nextBreak = text.indexOf('\n', start);
-    const end = nextBreak === -1 ? text.length : nextBreak;
+    // Grep navigation highlights the whole matched line.
+    jumpEditorToOffset(start, nextBreak === -1 ? text.length : nextBreak);
+}
+
+// Reveals an offset in whichever editor surface is live. Notes is Monaco-only in
+// normal use, so writing to the hidden textarea alone has no visible effect.
+// Defaults to a collapsed caret; pass `end` to select a range.
+function jumpEditorToOffset(start, end = start) {
+    if (!elements.editor) {
+        return;
+    }
 
     setMainEditorSelectionRange(start, end);
 
@@ -9172,8 +9591,8 @@ function jumpEditorToLine(lineNumber) {
         };
 
         // Monaco can be created/layouted asynchronously when editor view opens.
-        // Retry briefly so grep-navigation still lands on the requested line.
-        tryRevealWhenReady(2);
+        // Retry for a bit longer so grep-navigation still lands on the requested line.
+        tryRevealWhenReady(20);
     }
 
     const editor = elements.editor;
@@ -9181,9 +9600,35 @@ function jumpEditorToLine(lineNumber) {
     scrollEditorToSelection(editor, start);
 }
 
+function maybeRefreshProjectFindAfterSave() {
+    if (!isProjectFindListModeActive()) {
+        return;
+    }
+
+    const query = String(state.findFilesQuery || '').trim();
+    if (!query) {
+        return;
+    }
+
+    // Force a fresh grep run after save/autosave so file-list matches stay current.
+    state.findFilesLastExecutedSignature = '';
+    const scrollTop = Number(elements.list?.scrollTop) || 0;
+    runProjectFindSearch(query, {
+        preserveScrollTop: scrollTop,
+        preserveVirtualStart: true,
+    });
+}
+
 function renderProjectFindResults() {
     if (!elements.findFilesResults) {
         return;
+    }
+
+    if (elements.findFilesHeading) {
+        const source = String(state.findFilesSource || '').trim();
+        elements.findFilesHeading.textContent = source
+            ? `References (${source})`
+            : 'For files containing';
     }
 
     clampProjectFindScrollTop();
@@ -9218,9 +9663,15 @@ function renderProjectFindResults() {
     elements.findFilesResults.appendChild(placeholder);
 }
 
-async function runProjectFindSearch(query) {
+async function runProjectFindSearch(query, options = {}) {
     const trimmed = String(query || '').trim();
+    const preserveVirtualStart = options?.preserveVirtualStart === true;
+    const preserveScrollTop = Math.max(0, Number(options?.preserveScrollTop) || 0);
     state.findFilesQuery = trimmed;
+    if (state.findFilesMode !== 'references') {
+        state.findFilesSource = '';
+        state.findFilesReferenceSymbol = '';
+    }
     if (trimmed) {
         persistFindFieldHistory(elements.findFilesInput);
     }
@@ -9248,10 +9699,27 @@ async function runProjectFindSearch(query) {
     state.findFilesBusy = true;
     state.findFilesError = '';
     state.findFilesResults = [];
-    resetProjectFindPaging();
+    if (!preserveVirtualStart) {
+        resetProjectFindPaging();
+    }
     cleanupProjectFindStreamListeners();
     renderProjectFindResults();
     renderFileList();
+
+    const applyPreservedScrollPosition = () => {
+        if (!preserveVirtualStart) {
+            return;
+        }
+
+        state.findFilesVirtualStart = getProjectFindVirtualStartFromScroll(
+            state.findFilesResults.length,
+            preserveScrollTop,
+        );
+
+        if (elements.list) {
+            elements.list.scrollTop = preserveScrollTop;
+        }
+    };
 
     // Set up event listeners for streaming results
     const onBatch = (batch) => {
@@ -9265,9 +9733,11 @@ async function runProjectFindSearch(query) {
             fileName: String(item?.fileName || ''),
             path: String(item?.path || ''),
             line: Number.parseInt(String(item?.line), 10) || 1,
+            source: String(item?.source || state.findFilesSource || ''),
             context: Array.isArray(item?.context) ? item.context.map((l) => String(l)) : [],
         }));
         state.findFilesResults = state.findFilesResults.concat(mappedBatch);
+        applyPreservedScrollPosition();
         scheduleFindFilesRender();
     };
 
@@ -9287,6 +9757,7 @@ async function runProjectFindSearch(query) {
         }
         state.findFilesLastExecutedSignature = searchSignature;
         state.findFilesBusy = false;
+        applyPreservedScrollPosition();
         cleanupProjectFindStreamListeners();
         scheduleFindFilesRender();
     };
@@ -9958,8 +10429,46 @@ async function openRenamePrompt(file) {
 }
 
 function closeNewFilePrompt() {
+    if (state.textPromptHandler) {
+        finishTextPrompt(null);
+        return;
+    }
     elements.modal.dataset.open = 'false';
     elements.modal.setAttribute('aria-hidden', 'true');
+}
+
+// Reuses the note create/rename modal as a generic single-line text prompt, so
+// features needing one-line input (e.g. renaming an AI session) don't fall back
+// to window.prompt. Resolves the trimmed input, or null when cancelled.
+function openTextPrompt({ title = 'Enter value', value = '', confirmLabel = 'OK', placeholder = '' } = {}) {
+    return new Promise((resolve) => {
+        state.renamingFile = null;
+        state.textPromptHandler = resolve;
+        elements.modal.dataset.open = 'true';
+        elements.modal.setAttribute('aria-hidden', 'false');
+        elements.modalLocation.style.display = 'none';
+        elements.modalInput.value = value;
+        elements.modalInput.placeholder = placeholder;
+        elements.modal.querySelector('#notes-modal-title').textContent = title;
+        elements.modalCreate.textContent = confirmLabel;
+        setTimeout(() => {
+            elements.modalInput.focus();
+            elements.modalInput.select();
+        }, 0);
+    });
+}
+
+function finishTextPrompt(value) {
+    if (!state.textPromptHandler) {
+        return;
+    }
+    const handler = state.textPromptHandler;
+    state.textPromptHandler = null;
+    elements.modalLocation.style.display = '';
+    elements.modalInput.placeholder = 'example-note';
+    elements.modal.dataset.open = 'false';
+    elements.modal.setAttribute('aria-hidden', 'true');
+    handler(value);
 }
 
 function normalizeNoteName(rawName) {
@@ -10108,14 +10617,21 @@ function resolveRelativeAssetPath(notePath, relativePath) {
 function enableImageContextMenus(container) {
     const images = container.querySelectorAll('img');
     images.forEach((img) => {
+        // The AI panel re-runs this over surviving nodes, so don't stack listeners.
+        if (img.dataset.imageMenuBound === 'true') {
+            return;
+        }
+        img.dataset.imageMenuBound = 'true';
+
         img.addEventListener('contextmenu', async (e) => {
             e.preventDefault();
+            e.stopPropagation();
             
             const src = img.src;
             if (!src) return;
             
             // Use the original filename from the data attribute if available
-            let filename = img.dataset.originalFilename || 'Image';
+            let filename = img.dataset.originalFilename || img.alt || 'Image';
             
             // For relative image paths (from note markdown images), convert to dataURL
             let dataURLToCopy = src;
@@ -10137,7 +10653,7 @@ function enableImageContextMenus(container) {
             
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...', 'Ask AI...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...'],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
@@ -10150,7 +10666,7 @@ function enableImageContextMenus(container) {
                     } else if (index === 1) {
                         saveImageToFile(filename, dataURLToCopy);
                     } else if (index === 2) {
-                        askAIAboutCurrentDocument();
+                        askAIAboutImage(filename, dataURLToCopy);
                     }
                 },
             });
@@ -10305,6 +10821,25 @@ function getRenderedSelectionText(container) {
     return selection.toString();
 }
 
+function getRenderedCodeBlockText(container, eventTarget) {
+    if (!(eventTarget instanceof Element) || !container || !container.contains(eventTarget)) {
+        return '';
+    }
+
+    const codeEl = eventTarget.closest('pre code, pre, code');
+    if (!codeEl || !container.contains(codeEl)) {
+        return '';
+    }
+
+    const pre = codeEl.closest('pre');
+    if (!pre || !container.contains(pre)) {
+        return '';
+    }
+
+    const preCode = pre.querySelector('code');
+    return String((preCode ? preCode.textContent : pre.textContent) || '');
+}
+
 function createCopyMenuItem(getText, title = 'Copy') {
     return {
         title,
@@ -10313,6 +10848,97 @@ function createCopyMenuItem(getText, title = 'Copy') {
             copyTextToClipboard(getText());
         },
     };
+}
+
+function getRenderedCopyBlockText(block) {
+    if (!(block instanceof Element)) {
+        return '';
+    }
+
+    const copy = block.cloneNode(true);
+    copy.querySelectorAll('.notes-copy-block-actions').forEach((actions) => actions.remove());
+    const code = copy.matches('pre') ? copy.querySelector('code') : null;
+    return String((code || copy).textContent || '');
+}
+
+function ensureRenderedBlockCopyButton(block) {
+    if (!(block instanceof HTMLElement) || block.dataset.copyButtonBound === 'true') {
+        return;
+    }
+
+    block.dataset.copyButtonBound = 'true';
+    block.classList.add('notes-copy-block');
+
+    const actions = document.createElement('div');
+    actions.className = 'notes-copy-block-actions';
+
+    // Only code blocks (not blockquotes) can be meaningfully sent to a shell.
+    if (block.matches('pre')) {
+        const terminalButton = document.createElement('button');
+        terminalButton.type = 'button';
+        terminalButton.className = 'notes-send-terminal-block-button';
+        terminalButton.title = 'Send block to terminal';
+        terminalButton.setAttribute('aria-label', 'Send block to terminal');
+        terminalButton.textContent = String.fromCodePoint(CONTEXT_ICON_SEND_TO_TERMINAL);
+        terminalButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            try {
+                await SendToTerminal(getRenderedCopyBlockText(block));
+                window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+                terminalButton.dataset.sent = 'true';
+                setTimeout(() => {
+                    terminalButton.dataset.sent = 'false';
+                }, 700);
+            } catch (err) {
+                console.error('Error sending to terminal:', err);
+                notifyTerminal('Failed to send to terminal', 'error');
+            }
+        });
+        actions.appendChild(terminalButton);
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'notes-copy-block-button';
+    button.title = 'Copy block to clipboard';
+    button.setAttribute('aria-label', 'Copy block to clipboard');
+    button.textContent = String.fromCodePoint(CONTEXT_ICON_COPY);
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextToClipboard(getRenderedCopyBlockText(block));
+        button.dataset.copied = 'true';
+        setTimeout(() => {
+            button.dataset.copied = 'false';
+        }, 700);
+    });
+    actions.appendChild(button);
+
+    // Compositor-only transform instead of position: sticky, which was
+    // observed to flicker the panel's translucent background on WKWebView
+    // whenever the buttons faded in/out (e.g. hovering the block).
+    block.insertBefore(actions, block.firstChild);
+    const syncActionsOffset = () => {
+        actions.style.transform = `translateY(${block.scrollTop}px)`;
+    };
+    syncActionsOffset();
+    block.addEventListener('scroll', syncActionsOffset, { passive: true });
+}
+
+function initRenderedBlockCopyButtons(container) {
+    if (!container || container.dataset.copyBlockButtonsBound === 'true') {
+        return;
+    }
+
+    container.dataset.copyBlockButtonsBound = 'true';
+    container.addEventListener('mouseover', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const block = target?.closest('pre, blockquote');
+        if (block && container.contains(block)) {
+            ensureRenderedBlockCopyButton(block);
+        }
+    });
 }
 
 function createFindMenuItem(title = 'Find text...') {
@@ -10367,6 +10993,16 @@ async function askAIAboutCurrentDocument() {
 
     const fileName = state.currentFile;
     const fileType = state.currentFileType || 'unknown';
+
+    // Route image documents through the dedicated image path instead of
+    // embedding the base64 data URL as document text: that text is persisted
+    // verbatim to the session history and previously froze the AI Settings
+    // modal when it tried to render it back out.
+    if (String(fileType).toLowerCase() === 'image') {
+        await askAIAboutImage(getPathFileName(fileName) || fileName, String(elements.imageViewImg?.src || '').trim());
+        return;
+    }
+
     const contents = getCurrentDocumentContentsForAI();
     if (!contents) {
         notifyTerminal('This document has no content to send to AI', 'warn');
@@ -10381,11 +11017,31 @@ async function askAIAboutCurrentDocument() {
     ].join('\n');
 
     setToolsPanelCollapsed(false);
+    setAIPanelLive(true);
 
     try {
         await AskAI('notesDocument', fileName, aiContext);
     } catch (err) {
         notifyTerminal('Failed to ask AI about this document', 'error');
+        console.error(err);
+    }
+}
+
+async function askAIAboutImage(filename, dataURL) {
+    const imageData = String(dataURL || '').trim();
+    if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,.+$/i.test(imageData)) {
+        notifyTerminal('Unable to prepare this image for AI', 'warn');
+        return;
+    }
+
+    const imageName = String(filename || 'Image').trim() || 'Image';
+    setToolsPanelCollapsed(false);
+    setAIPanelLive(true);
+
+    try {
+        await AskAIImage(imageName, imageData);
+    } catch (err) {
+        notifyTerminal('Failed to ask AI about this image', 'error');
         console.error(err);
     }
 }
@@ -10405,6 +11061,7 @@ function closeAISessionManagementModal() {
         return;
     }
 
+    closeAIToolMetadataModal();
     elements.aiSettingsModal.dataset.open = 'false';
     elements.aiSettingsModal.setAttribute('aria-hidden', 'true');
 }
@@ -10424,17 +11081,27 @@ function applyAISessionManagement(nextState) {
 
 async function loadAISessionManagement() {
     try {
-        const sessionState = await GetAISessionManagement();
+        const [sessionState, toolsList, mcpServers] = await Promise.all([
+            GetAISessionManagement(),
+            GetAIToolsList(),
+            GetAIMcpServers(),
+        ]);
         applyAISessionManagement(sessionState);
+        state.aiToolsList = Array.isArray(toolsList) ? toolsList : [];
+        state.aiMcpServersList = Array.isArray(mcpServers) ? mcpServers : [];
     } catch (err) {
         console.error('Failed to load AI session management:', err);
         applyAISessionManagement(null);
+        state.aiToolsList = [];
+        state.aiMcpServersList = [];
     }
 }
 
 function renderAISessionManagement() {
     renderAISessionList();
     renderAISessionHistory();
+    renderAIToolsList();
+    renderAIMcpServersList();
 }
 
 function summarizePromptText(value, fallback) {
@@ -10449,22 +11116,16 @@ function summarizePromptText(value, fallback) {
 }
 
 function collectAIPromptTargets() {
+    // Deprecated: legacy DOM-based prompt collector kept as a fallback for the
+    // initial refresh before the async backend list resolves.
     if (!elements.aiOutput) {
         return [];
     }
 
     const targets = [];
 
-    const titleElements = elements.aiOutput.querySelectorAll('.notes-ai-title');
-    for (const titleEl of titleElements) {
-        targets.push({
-            element: titleEl,
-            summary: summarizePromptText(titleEl.textContent, `Prompt ${targets.length + 1}`),
-        });
-    }
-
-    const promptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-markdown h2, .notes-ai-markdown h3');
-    for (const heading of promptHeadings) {
+    const prefixPromptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-prefix h2, .notes-ai-prefix h3');
+    for (const heading of prefixPromptHeadings) {
         const label = String(heading.textContent || '').trim().toLowerCase();
         if (label !== 'prompt') {
             continue;
@@ -10481,6 +11142,7 @@ function collectAIPromptTargets() {
         }
 
         targets.push({
+            source: 'dom',
             element: heading,
             summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
         });
@@ -10489,41 +11151,115 @@ function collectAIPromptTargets() {
     return targets;
 }
 
-function renderAIPromptJumpDropdown() {
+// Backend-provided prompt log metadata, refreshed on aiJobFinish / panel init.
+// Each entry is { sessionId, promptId, heading, summary } from Go via
+// ListAIPromptLogs. The heading is the "<!-- request heading: … -->" comment
+// captured when the prompt started; summary is the rendered dropdown label.
+async function refreshAIPromptJumpFromBackend() {
     if (!elements.toolsAIPromptJump) {
         return;
     }
 
-    const targets = collectAIPromptTargets();
+    let metas = [];
+    try {
+        const raw = await ListAIPromptLogs();
+        metas = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+        console.error('Failed to load AI prompt logs:', err);
+        metas = [];
+    }
+
+    const targets = metas.map((meta, index) => ({
+        source: 'backend',
+        sessionId: Number(meta?.sessionId) || 0,
+        promptId: Number(meta?.promptId) || 0,
+        summary: summarizePromptText(String(meta?.heading || ''), `Prompt ${index + 1}`),
+    })).filter((entry) => entry.sessionId > 0 && entry.promptId > 0);
+
     state.aiPromptJumpTargets = targets;
-    elements.toolsAIPromptJump.disabled = targets.length === 0;
-    elements.toolsAIPromptJump.textContent = targets.length > 0
-        ? `Jump to prompt (${targets.length})`
-        : 'Jump to prompt...';
+    updateAIPromptJumpAvailability();
+}
+
+// The menu always offers a "Live output" entry, so the button must stay
+// clickable: a run with no finalized prompts yet would otherwise leave no way
+// back to the live feed.
+function updateAIPromptJumpAvailability() {
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+    elements.toolsAIPromptJump.disabled = false;
+}
+
+function renderAIPromptJumpDropdown() {
+    // Initial synchronous render uses any DOM-collected prompts, then the
+    // backend list overrides asynchronously.
+    if (!elements.toolsAIPromptJump) {
+        return;
+    }
+    const domTargets = collectAIPromptTargets();
+    if (!Array.isArray(state.aiPromptJumpTargets) || state.aiPromptJumpTargets.length === 0) {
+        state.aiPromptJumpTargets = domTargets;
+    }
+    updateAIPromptJumpAvailability();
+    void refreshAIPromptJumpFromBackend();
 }
 
 function scheduleAIPromptJumpRefresh() {
+    const now = Date.now();
+    if (!aiPromptJumpRefreshDeadline) {
+        aiPromptJumpRefreshDeadline = now + AI_PROMPT_JUMP_REFRESH_MAX_DELAY_MS;
+    }
+
     if (aiPromptJumpRefreshTimer) {
         clearTimeout(aiPromptJumpRefreshTimer);
     }
 
+    // Streaming calls this once per chunk; without the deadline cap the debounce
+    // would reset forever and the dropdown would never list finished prompts.
+    const delay = Math.max(0, Math.min(40, aiPromptJumpRefreshDeadline - now));
     aiPromptJumpRefreshTimer = setTimeout(() => {
         aiPromptJumpRefreshTimer = null;
+        aiPromptJumpRefreshDeadline = 0;
         renderAIPromptJumpDropdown();
-    }, 40);
+    }, delay);
 }
 
-function jumpToAIPrompt(index) {
-    if (!elements.aiOutput) {
+async function resumeLiveAIOutput() {
+    setAIPanelLive(true);
+    await loadAISessionCache('');
+}
+
+async function jumpToAIPromptTarget(target) {
+    if (!target) {
         return;
     }
 
-    const target = state.aiPromptJumpTargets[index]?.element;
-    if (!(target instanceof Element)) {
+    if (target.source === 'live') {
+        await resumeLiveAIOutput();
         return;
     }
 
-    const nextTop = Math.max(0, Number(target.offsetTop) - 8);
+    if (target.source === 'backend' && target.sessionId > 0 && target.promptId > 0) {
+        try {
+            const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
+            // Showing history: suspend live emits so a running agent can't append here.
+            setAIPanelLive(false);
+            aiPipelineFormatter.clear();
+            if (markdown) {
+                setAIFinalOutput(String(markdown), { forceBottom: true });
+            }
+            state.aiSessionCache = String(markdown || '');
+        } catch (err) {
+            console.error('Failed to load AI prompt log:', err);
+        }
+        return;
+    }
+
+    if (!elements.aiOutput || !(target.element instanceof Element)) {
+        return;
+    }
+
+    const nextTop = Math.max(0, Number(target.element.offsetTop) - 8);
     elements.aiOutput.scrollTo({ top: nextTop, behavior: 'smooth' });
     state.aiStickToBottom = false;
     updateAIScrollBottomButton();
@@ -10535,24 +11271,26 @@ function openAIPromptJumpMenu() {
     }
 
     const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
-    if (targets.length === 0) {
-        return;
-    }
 
-    const options = targets.map((target, index) => `${index + 1}. ${target.summary}`);
+    const menuTargets = [
+        { source: 'live', summary: state.aiPanelLive ? 'Live output (following)' : 'Live output' },
+        ...[...targets].reverse(),
+    ];
+    const options = menuTargets.map((target) => target.summary);
+    const icons = menuTargets.map((target) => target.source === 'live' && state.aiPanelLive ? CONTEXT_ICON_TICK : 0x20);
     const rect = elements.toolsAIPromptJump.getBoundingClientRect();
     showLocalMenu({
-        title: 'Jump to prompt',
+        title: 'Prompts',
         options,
-        icons: options.map(() => 0x20),
+        icons,
         x: rect.left,
         y: rect.bottom,
         showNextToMouseCursor: true,
         onSelect: (index) => {
-            if (typeof index !== 'number' || index < 0 || index >= targets.length) {
+            if (typeof index !== 'number' || index < 0 || index >= menuTargets.length) {
                 return;
             }
-            jumpToAIPrompt(index);
+            void jumpToAIPromptTarget(menuTargets[index]);
         },
     });
 }
@@ -10567,12 +11305,32 @@ function initAIPromptJumpObserver() {
     });
 
     aiPromptJumpObserver.observe(elements.aiOutput, {
+        // No characterData: streaming rewrites text nodes constantly and each
+        // change would queue a MutationRecord. Structural changes are enough to
+        // spot new prompts, and the stream path also refreshes explicitly.
         childList: true,
         subtree: true,
-        characterData: true,
     });
 
     scheduleAIPromptJumpRefresh();
+}
+
+// Renders an ISO timestamp as 'yyyy-mm-dd hh:mm' (or 'yyyy-mm-dd' without time),
+// in local time. Returns '' for anything unparseable.
+function formatSessionTimestamp(iso, includeTime) {
+    if (!iso) {
+        return '';
+    }
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    if (!includeTime) {
+        return datePart;
+    }
+    return `${datePart} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function renderAISessionList() {
@@ -10591,23 +11349,25 @@ function renderAISessionList() {
     const items = sessions.map((session) => {
         const tableId = Number(session.tableId) || 0;
         const safeSummary = escapeHtml(session.summary || `Session ${tableId}`);
-        const safeUpdated = escapeHtml(session.updated || '');
-        const safeCreated = escapeHtml(session.created || '');
         const count = Number(session.entryCount) || 0;
         const active = session.active === true;
-        const createdHtml = safeCreated ? `<div class="notes-ai-settings-session-meta">Created ${safeCreated}</div>` : '';
-        const updatedHtml = safeUpdated ? `<div class="notes-ai-settings-session-meta">Updated ${safeUpdated}</div>` : '';
+        const latestDateTime = formatSessionTimestamp(session.updated, true);
+        const createdDate = formatSessionTimestamp(session.created, false);
+        const latestHtml = latestDateTime
+            ? `<div class="notes-ai-settings-session-meta">Latest: ${escapeHtml(latestDateTime)}${createdDate ? ` (${escapeHtml(createdDate)})` : ''}</div>`
+            : '';
         return `
             <div class="notes-ai-settings-session-item" data-session-id="${tableId}" data-active="${active ? 'true' : 'false'}">
                 <div class="notes-ai-settings-session-main">
-                    <div class="notes-ai-settings-session-heading">${safeSummary}</div>
-                    <div class="notes-ai-settings-session-meta">${count} entr${count === 1 ? 'y' : 'ies'}</div>
-                    ${createdHtml}
-                    ${updatedHtml}
+                    <div class="notes-ai-settings-session-heading">
+                        <span class="notes-ai-settings-session-count">${count}</span>
+                        <span class="notes-ai-settings-session-name">${safeSummary}</span>
+                    </div>
+                    ${latestHtml}
                 </div>
                 <div class="notes-ai-settings-session-actions">
-                    <button type="button" data-action="activate" data-session-id="${tableId}" ${active ? 'disabled' : ''}>${active ? 'Active' : 'Open'}</button>
-                    <button type="button" data-action="delete" data-session-id="${tableId}">Delete</button>
+                    <button type="button" class="notes-ai-settings-session-rename" data-action="rename" data-session-id="${tableId}" aria-label="Rename session"></button>
+                    <button type="button" class="notes-ai-settings-session-delete" data-action="delete" data-session-id="${tableId}" aria-label="Delete session"></button>
                 </div>
             </div>
         `;
@@ -10630,24 +11390,240 @@ function renderAISessionHistory() {
 
     elements.aiSettingsHistoryList.dataset.empty = 'false';
     const items = sessions.slice(0, 12).map((entry) => {
+        const entryId = Number(entry.id) || 0;
         const safeTitle = escapeHtml(entry.prompt || 'AI prompt');
         const safeCmdLine = escapeHtml(entry.commandLine || '');
         const safeExcerpt = escapeHtml(entry.excerpt || '');
-        const safeOutput = escapeHtml(entry.outputBlock || '');
+        // Output can contain real newlines; flatten to a single flowing line
+        // like the excerpt already is, since both are clamped to 2 lines.
+        const safeOutput = escapeHtml((entry.outputBlock || '').replace(/\s*\n+\s*/g, ' ').trim());
         const cmdLineHtml = safeCmdLine ? `<div class="notes-ai-settings-history-meta">${safeCmdLine}</div>` : '';
         const outputHtml = safeOutput ? `<div class="notes-ai-settings-history-output">${safeOutput}</div>` : '';
         const excerptHtml = safeExcerpt ? `<div class="notes-ai-settings-history-excerpt">${safeExcerpt}</div>` : '';
         return `
-            <div class="notes-ai-settings-history-item">
-                <div class="notes-ai-settings-history-heading">${safeTitle}</div>
-                ${cmdLineHtml}
-                ${outputHtml}
-                ${excerptHtml}
+            <div class="notes-ai-settings-history-item" data-entry-id="${entryId}">
+                <div class="notes-ai-settings-history-main">
+                    <div class="notes-ai-settings-history-heading">${safeTitle}</div>
+                    ${cmdLineHtml}
+                    ${outputHtml}
+                    ${excerptHtml}
+                </div>
+                <button type="button" class="notes-ai-settings-history-erase" data-action="erase" data-entry-id="${entryId}" aria-label="Erase this prompt" title="Erase this prompt"></button>
             </div>
         `;
     }).join('');
 
     elements.aiSettingsHistoryList.innerHTML = items;
+}
+
+function renderAIToolsList() {
+    if (!elements.aiSettingsToolsList) {
+        return;
+    }
+
+    const tools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
+    if (tools.length === 0) {
+        elements.aiSettingsToolsList.textContent = 'No tools available.';
+        elements.aiSettingsToolsList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsToolsList.dataset.empty = 'false';
+    const items = tools.map((tool, index) => {
+        const safeName = escapeHtml(tool.name || 'Unknown tool');
+        const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
+        const state = toolStateDisplay(toolState);
+        const subagent = subagentAccessDisplay(tool.allowInSubagent === true);
+        return `
+            <div class="notes-ai-settings-tool-item" data-tool-index="${index}">
+                <button type="button" class="notes-ai-settings-tool-state" data-tool-name="${safeName}" data-tool-state="${state.value}" title="${state.label}" aria-label="${state.label}">${state.letter}</button>
+            <button type="button" class="notes-ai-settings-tool-subagent" data-tool-name="${safeName}" data-subagent-access="${subagent.value}" title="${subagent.label}" aria-label="${subagent.label}">${subagent.letter}</button>
+                <button type="button" class="notes-ai-settings-tool-name" aria-label="Show details for ${safeName}">${safeName}</button>
+            </div>
+        `;
+    }).join('');
+
+    elements.aiSettingsToolsList.innerHTML = items;
+    elements.aiSettingsToolsList.querySelectorAll('.notes-ai-settings-tool-name').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const item = button.closest('.notes-ai-settings-tool-item');
+            const index = Number(item?.dataset.toolIndex);
+            if (Number.isInteger(index) && index >= 0) {
+                void openAIToolMetadataModal(index);
+            }
+        });
+    });
+}
+
+function toolStateDisplay(state) {
+    return ({
+        always: { value: 'always', letter: 'A', label: 'Enabled: Always allow' },
+        session: { value: 'session', letter: 'S', label: 'Enabled: Current session' },
+        approval: { value: 'approval', letter: 'P', label: 'Enabled: Ask for permission' },
+        disabled: { value: 'disabled', letter: 'D', label: 'Disabled' },
+    })[state] || { value: 'disabled', letter: 'D', label: 'Disabled' };
+}
+
+function subagentAccessDisplay(allowed) {
+    return allowed
+        ? { value: 'allow', letter: 'Y', label: 'Allow in subagents: Yes' }
+        : { value: 'deny', letter: 'N', label: 'Allow in subagents: No' };
+}
+
+function getMcpServerDisplayName(server) {
+    const name = String(server?.name || '').trim() || 'Unknown MCP server';
+    const source = String(server?.source || '').trim();
+    const sourceLabel = source ? source.split('/').pop() : 'unknown source';
+    return `${name} (${sourceLabel})`;
+}
+
+function renderAIMcpServersList() {
+    if (!elements.aiSettingsMcpList) {
+        return;
+    }
+
+    const servers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
+    if (servers.length === 0) {
+        elements.aiSettingsMcpList.textContent = 'No MCP servers found in config.';
+        elements.aiSettingsMcpList.dataset.empty = 'true';
+        return;
+    }
+
+    elements.aiSettingsMcpList.dataset.empty = 'false';
+    const items = servers.map((server, index) => {
+        const safeName = escapeHtml(getMcpServerDisplayName(server));
+        const safeKey = escapeHtml(String(server.key || ''));
+        const checked = server.loaded === true;
+        const loadable = server.loadable !== false;
+        const disabledAttr = loadable ? '' : 'disabled';
+        const itemClass = loadable ? 'notes-ai-settings-tool-item' : 'notes-ai-settings-tool-item notes-ai-settings-tool-item-disabled';
+
+        return `
+            <div class="${itemClass}" data-mcp-index="${index}">
+                <input type="checkbox" class="notes-ai-settings-tool-checkbox" data-mcp-key="${safeKey}" ${checked ? 'checked' : ''} ${disabledAttr}>
+                <span class="notes-ai-settings-tool-name">${safeName}</span>
+            </div>
+        `;
+    }).join('');
+
+    elements.aiSettingsMcpList.innerHTML = items;
+}
+
+function formatAIToolMetadataMarkdown(tool) {
+    const name = String(tool?.name || '').trim() || 'Unknown tool';
+    const description = String(tool?.description || '').trim() || 'No description available.';
+    const allowInSubagent = tool?.allowInSubagent === true;
+
+    let schema = String(tool?.schema || '').trim();
+    if (!schema) {
+        schema = '{}';
+    }
+
+    return `## ${name}\n\n- [${allowInSubagent ? 'x' : ' '}] Allow in sub-agent\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
+}
+
+function formatAIMcpServerMetadataMarkdown(server) {
+    const name = getMcpServerDisplayName(server);
+    const loaded = server?.loaded === true;
+    const loadable = server?.loadable !== false;
+    const source = String(server?.source || '').trim() || 'Unknown source';
+    const serverType = String(server?.serverType || server?.type || 'command').trim();
+    const loadedFrom = String(server?.loadedFrom || '').trim();
+    const config = String(server?.config || '{}').trim() || '{}';
+
+    const conflict = (!loadable && loadedFrom)
+        ? `\n\n> This server name is already loaded from:\n> ${loadedFrom}`
+        : '';
+
+    return `## ${name}\n\n- [${loaded ? 'x' : ' '}] Loaded\n- [${loadable ? 'x' : ' '}] Loadable\n- Source: ${source}\n- Type: ${serverType}${conflict}\n\n### Config\n\n\`\`\`json\n${config}\n\`\`\``;
+}
+
+async function openAIToolMetadataModal(index) {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaCard || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    const tools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
+    const tool = tools[index];
+    if (!tool) {
+        return;
+    }
+
+    const markdown = formatAIToolMetadataMarkdown(tool);
+    elements.aiToolMetaContent.innerHTML = marked.parse(markdown);
+    await processMarkdownContainer(elements.aiToolMetaContent);
+
+    const stateButton = document.createElement('button');
+    stateButton.type = 'button';
+    stateButton.className = 'notes-ai-settings-tool-state';
+    stateButton.dataset.toolName = String(tool.name || '');
+    stateButton.dataset.toolIndex = String(index);
+    const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
+    const displayState = toolStateDisplay(toolState);
+    stateButton.dataset.toolState = displayState.value;
+    stateButton.textContent = displayState.letter;
+    stateButton.title = displayState.label;
+    stateButton.setAttribute('aria-label', displayState.label);
+    elements.aiToolMetaContent.insertBefore(stateButton, elements.aiToolMetaContent.firstChild?.nextSibling || null);
+
+    const allowCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
+    if (allowCheckbox instanceof HTMLInputElement) {
+        allowCheckbox.disabled = false;
+        allowCheckbox.checked = tool.allowInSubagent === true;
+        allowCheckbox.dataset.configType = 'subagent-tool';
+        allowCheckbox.dataset.toolIndex = String(index);
+        allowCheckbox.dataset.toolName = String(tool.name || '');
+        allowCheckbox.setAttribute('aria-label', 'Allow in sub-agent');
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'true';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'false');
+    elements.aiToolMetaCard.focus();
+}
+
+async function openAIMcpServerMetadataModal(index) {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaCard || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    const servers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
+    const server = servers[index];
+    if (!server) {
+        return;
+    }
+
+    const markdown = formatAIMcpServerMetadataMarkdown(server);
+    elements.aiToolMetaContent.innerHTML = marked.parse(markdown);
+    await processMarkdownContainer(elements.aiToolMetaContent);
+
+    const enabledCheckbox = elements.aiToolMetaContent.querySelector('input[type="checkbox"]');
+    if (enabledCheckbox instanceof HTMLInputElement) {
+        enabledCheckbox.disabled = server.loadable === false;
+        enabledCheckbox.checked = server.loaded === true;
+        enabledCheckbox.dataset.configType = 'mcp';
+        enabledCheckbox.dataset.mcpIndex = String(index);
+        enabledCheckbox.dataset.mcpKey = String(server.key || '');
+        enabledCheckbox.setAttribute('aria-label', 'Loaded');
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'true';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'false');
+    elements.aiToolMetaCard.focus();
+}
+
+function closeAIToolMetadataModal() {
+    if (!elements.aiToolMetaModal || !elements.aiToolMetaContent) {
+        return;
+    }
+
+    elements.aiToolMetaModal.dataset.open = 'false';
+    elements.aiToolMetaModal.setAttribute('aria-hidden', 'true');
+    elements.aiToolMetaContent.innerHTML = '';
+
+    void loadAISessionManagement().then(() => {
+        renderAISessionManagement();
+    });
 }
 
 async function refreshAIModelPicker() {
@@ -10656,9 +11632,10 @@ async function refreshAIModelPicker() {
     }
 
     try {
-        const [options, current] = await Promise.all([
+        const [options, current, limits] = await Promise.all([
             ListAIModelSelections(),
             GetCurrentAIModelSelection(),
+            GetAIExecutionLimits(),
         ]);
 
         state.aiModelSelections = Array.isArray(options) ? options : [];
@@ -10667,11 +11644,30 @@ async function refreshAIModelPicker() {
         const fallback = state.aiModelSelections[0] || 'Model';
         elements.aiSettingsModelPicker.textContent = state.aiCurrentModelSelection || fallback;
         elements.aiSettingsModelPicker.disabled = state.aiModelSelections.length === 0;
+        renderAIExecutionLimits(limits);
     } catch (err) {
         console.error('Failed to refresh AI model picker:', err);
         elements.aiSettingsModelPicker.textContent = 'Model';
         elements.aiSettingsModelPicker.disabled = true;
+        renderAIExecutionLimits({});
     }
+}
+
+function renderAIExecutionLimits(limits) {
+    if (!elements.aiSettingsExecutionLimits) {
+        return;
+    }
+
+    const value = (key) => limits && limits[key] !== null && limits[key] !== undefined && limits[key] !== ''
+        ? String(limits[key])
+        : 'Unknown';
+    elements.aiSettingsExecutionLimits.innerHTML = [
+        ['Agent step budget', value('agentSteps')],
+        ['Provider max iterations', value('providerMaxIterations')],
+        ['Model context window', value('modelContextWindow')],
+        ['Model max output tokens', value('modelMaxOutputTokens')],
+        ['Request timeout', value('requestTimeout')],
+    ].map(([label, text]) => `<dt>${label}</dt><dd>${text}</dd>`).join('');
 }
 
 function openAIModelPickerMenu() {
@@ -10716,11 +11712,25 @@ function openAIModelPickerMenu() {
 async function askAIFromToolbar() {
     setToolsPanelCollapsed(false);
     setToolsTab('ai');
+    setAIPanelLive(true);
 
     try {
         await AskAI('notesPromptToolbar', '', '');
     } catch (err) {
         notifyTerminal('Failed to ask AI', 'error');
+        console.error(err);
+    }
+}
+
+async function askAISkillsFromToolbar() {
+    setToolsPanelCollapsed(false);
+    setToolsTab('ai');
+
+    try {
+        const rect = elements.toolsAISkills.getBoundingClientRect();
+        await ShowAISkillsMenu(rect.left, rect.bottom + 4);
+    } catch (err) {
+        notifyTerminal('Failed to show AI skills', 'error');
         console.error(err);
     }
 }
@@ -10953,6 +11963,8 @@ function initAIOutputContextMenu(container) {
         return;
     }
 
+    initRenderedBlockCopyButtons(container);
+
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
         if (anchor && container.contains(anchor)) {
@@ -10962,11 +11974,17 @@ function initAIOutputContextMenu(container) {
             return;
         }
 
+        // Images carry their own menu, bound per element.
+        if (e.target instanceof Element && e.target.closest('img')) {
+            return;
+        }
+
         e.preventDefault();
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const codeBlockText = getRenderedCodeBlockText(container, e.target);
         const tableItems = table && container.contains(table)
-            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            ? [...createTableCopyMenuItems(table), createTableFilterMenuItem(table), { title: '-' }]
             : [];
 
         const wordWrapItems = (table && container.contains(table))
@@ -10982,9 +12000,19 @@ function initAIOutputContextMenu(container) {
             }, { title: '-' }]
             : [];
 
+        const copyItems = codeBlockText
+            ? [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createCopyMenuItem(() => codeBlockText, 'Copy code'),
+                { title: '-' },
+            ]
+            : [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                { title: '-' },
+            ];
+
         const menuItems = [
-            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
-            { title: '-' },
+            ...copyItems,
             ...tableItems,
             ...wordWrapItems,
         ];
@@ -11009,20 +12037,43 @@ function initAIOutputContextMenu(container) {
     });
 }
 
-async function processAIMarkdownContainer(container) {
-    void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
-    await processMarkdownContainer(container);
-    wrapTablesForHorizontalScroll(container);
-    setupTableSorting(container);
-    applyNotesTableWordWrapMode(container);
-
-    // Session-log markdown can render fenced code blocks outside the
-    // structured streaming path, so clamp them and pin them to the latest
-    // lines just like live Action / Action Input sections.
-    const codeBlocks = container.querySelectorAll('pre');
-    for (const block of codeBlocks) {
+function pinAIScrollableBlocksToBottom(container, options = {}) {
+    // Tool output and reasoning stream in, so keep the clamped fenced and quote
+    // blocks showing their latest lines.
+    const blocks = container.querySelectorAll('pre, blockquote');
+    if (options.lastOnly) {
+        // Only the final block is still growing; the rest were pinned when their
+        // batch was committed, and each read/write here forces a layout.
+        const last = blocks[blocks.length - 1];
+        if (last) {
+            last.scrollTop = last.scrollHeight;
+        }
+        return;
+    }
+    for (const block of blocks) {
         block.scrollTop = block.scrollHeight;
     }
+}
+
+async function processAIMarkdownContainer(container, options = {}) {
+    if (options.streaming) {
+        // This subtree is re-rendered every frame while streaming, so only run
+        // the cheap DOM passes. Mermaid rendering, image loading (a Go IPC round
+        // trip per image), table wiring and auto-hyperlinking would all be
+        // repeated and discarded; finishJob applies them once at the end.
+        processLinks(container, { enableBookmarks: true });
+        pinAIScrollableBlocksToBottom(container, { lastOnly: true });
+        return;
+    }
+
+    void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
+    // AI panel code blocks stay unhighlighted; they're mostly tool output, not source.
+    await processMarkdownContainer(container, { syntaxHighlighting: false });
+    enableImageContextMenus(container);
+    wrapTablesForHorizontalScroll(container);
+    setupNotesTableQueries(container, 'ai', '');
+    applyNotesTableWordWrapMode(container);
+    pinAIScrollableBlocksToBottom(container);
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
@@ -11074,6 +12125,8 @@ function initRenderedNotesContextMenu(container, viewMode) {
         });
     }
 
+    initRenderedBlockCopyButtons(container);
+
     container.addEventListener('contextmenu', (e) => {
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
         if (anchor && container.contains(anchor)) {
@@ -11090,10 +12143,11 @@ function initRenderedNotesContextMenu(container, viewMode) {
         e.preventDefault();
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
+        const codeBlockText = getRenderedCodeBlockText(container, e.target);
         const isRunMode = state.viewMode === 'jupyter';
         const tableIndex = table ? Array.from(container.querySelectorAll('table')).indexOf(table) : -1;
         const tableItems = table && container.contains(table)
-            ? [...createTableCopyMenuItems(table), { title: '-' }]
+            ? [...createTableCopyMenuItems(table), createTableFilterMenuItem(table), { title: '-' }]
             : [];
         const insertItems = (table && isRunMode && container.contains(table))
             ? [...createTableInsertMenuItems(table, e.target, tableIndex), { title: '-' }]
@@ -11110,9 +12164,19 @@ function initRenderedNotesContextMenu(container, viewMode) {
             }, { title: '-' }]
             : [];
 
+        const copyItems = codeBlockText
+            ? [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createCopyMenuItem(() => codeBlockText, 'Copy code'),
+                { title: '-' },
+            ]
+            : [
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                { title: '-' },
+            ];
+
         const allMenuItems = [
-            createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
-            { title: '-' },
+            ...copyItems,
             ...tableItems,
             ...wordWrapItems,
             ...insertItems,
@@ -11344,6 +12408,11 @@ function initStructuredDataTreeContextMenu(container, options = {}) {
 }
 
 async function createNewFile() {
+    if (state.textPromptHandler) {
+        finishTextPrompt((elements.modalInput.value || '').trim());
+        return;
+    }
+
     // Handle rename operation
     if (state.renamingFile) {
         const name = (elements.modalInput.value || '').trim();
@@ -11453,8 +12522,7 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("notesUpdate", (groupName) => {
-    void loadAISessionCache(groupName);
+EventsOn("notesUpdate", () => {
     CancelNotesListFiles().catch(() => {}).finally(() => {
         refreshFiles();
     });
@@ -11548,6 +12616,21 @@ EventsOn("notesRunLspGoToSymbol", async () => {
     await goToCurrentLspSymbol();
 });
 
+EventsOn("notesRunLspGoToWorkspaceSymbol", async () => {
+    if (!isCurrentFileLspEligible()) {
+        notifyTerminal("Language Server Protocol (LSP) is not supported for this file type", "warn");
+        return;
+    }
+
+    const languageID = await ResolveNotesLspLanguage(state.currentFile);
+    if (!languageID) {
+        notifyTerminal("No Language Server Protocol (LSP) has been defined for this file type", "warn");
+        return;
+    }
+
+    await goToWorkspaceLspSymbol();
+});
+
 EventsOn("noteRun", (data) => {
     const { blockId, output, isError } = data;
 
@@ -11635,6 +12718,10 @@ function setToolsTab(tabName) {
             });
         });
     }
+
+    if (nextTab === 'ai') {
+        maybeLoadPendingAISessionCache();
+    }
 }
 
 function saveDocumentCache() {
@@ -11658,6 +12745,9 @@ function clearAIOutput() {
     const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.clear();
     scheduleAIPromptJumpRefresh();
+    ClearAILog().catch((err) => {
+        console.error('Failed to clear AI log:', err);
+    });
     if (shouldStick) {
         requestAnimationFrame(() => {
             scrollAIOutputToBottom();
@@ -11666,48 +12756,159 @@ function clearAIOutput() {
 }
 
 function startAIJob(title) {
-    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
+    // A fresh job replaces the panel contents, so drop any deferred log load
+    // that would otherwise overwrite it when the AI tab is (auto-)selected.
+    state.aiSessionCachePending = false;
+    state.aiSessionCachePendingWorkspace = '';
+
+    // Per-prompt log files: clear the panel so only the new prompt renders.
+    aiPipelineFormatter.clear();
     aiPipelineFormatter.startJob(String(title || ''));
     scheduleAIPromptJumpRefresh();
-    if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
+    requestAnimationFrame(() => {
+        scrollAIOutputToBottom();
+    });
+}
+
+const aiStreamOrder = {
+    runId: null,
+    nextSequence: 0,
+    pending: new Map(),
+    finalSequence: null,
+};
+
+// Tells Go whether the panel is following live output; guarded so stale
+// generated bindings can't throw.
+function setAIPanelLive(live) {
+    state.aiPanelLive = Boolean(live);
+    try {
+        if (typeof SetAIPanelLive === 'function') {
+            void Promise.resolve(SetAIPanelLive(String(state.currentWorkspaceName || ''), Boolean(live))).catch(() => {});
+        }
+    } catch (err) {
+        console.error('Failed to update AI panel live state:', err);
+    }
+    updateAIPromptJumpAvailability();
+}
+
+function startOrderedAIJob(payload) {
+    // A new job always follows live output, whichever surface triggered it.
+    setAIPanelLive(true);
+
+    const runId = Number(payload?.runId);
+    if (!Number.isSafeInteger(runId) || runId < 1) {
+        startAIJob(payload);
+        return;
+    }
+    aiStreamOrder.runId = runId;
+    aiStreamOrder.nextSequence = 0;
+    aiStreamOrder.pending.clear();
+    aiStreamOrder.finalSequence = null;
+    clearAIStreamGapRecovery();
+    startAIJob(payload.title);
+}
+
+function flushOrderedAIStream() {
+    while (aiStreamOrder.pending.has(aiStreamOrder.nextSequence)) {
+        appendAIText(aiStreamOrder.pending.get(aiStreamOrder.nextSequence));
+        aiStreamOrder.pending.delete(aiStreamOrder.nextSequence);
+        aiStreamOrder.nextSequence++;
+    }
+    if (aiStreamOrder.finalSequence !== null && aiStreamOrder.nextSequence > aiStreamOrder.finalSequence) {
+        aiStreamOrder.finalSequence = null;
+        finishAIJob();
+    }
+    if (aiStreamOrder.pending.size > 0) {
+        scheduleAIStreamGapRecovery();
     } else {
-        requestAnimationFrame(() => {
-            updateAIScrollBottomButton();
-        });
+        clearAIStreamGapRecovery();
+    }
+}
+
+function clearAIStreamGapRecovery() {
+    if (aiStreamGapRecoveryTimer) {
+        clearTimeout(aiStreamGapRecoveryTimer);
+        aiStreamGapRecoveryTimer = null;
+    }
+}
+
+// Switching workspace mid-run can drop the chunk emitted between reading the
+// backend snapshot and applying it, leaving a permanent hole the cursor can
+// never pass. Rebuilding from the snapshot is the only way to close it.
+function scheduleAIStreamGapRecovery() {
+    if (aiStreamGapRecoveryTimer) {
+        return;
+    }
+
+    aiStreamGapRecoveryTimer = setTimeout(() => {
+        aiStreamGapRecoveryTimer = null;
+        if (aiStreamOrder.pending.size === 0) {
+            return;
+        }
+        void applyActiveStreamSnapshot(state.currentWorkspaceName);
+    }, AI_STREAM_GAP_RECOVERY_MS);
+}
+
+function appendOrderedAIStream(payload) {
+    if (!payload || typeof payload !== 'object') {
+        const text = String(payload ?? '');
+        if (text) appendAIText(text);
+        return;
+    }
+    const runId = Number(payload.runId);
+    const sequence = Number(payload.sequence);
+    const text = String(payload.text ?? '');
+    if (runId !== aiStreamOrder.runId || !Number.isSafeInteger(sequence) || sequence < aiStreamOrder.nextSequence || !text) {
+        return;
+    }
+    aiStreamOrder.pending.set(sequence, text);
+    flushOrderedAIStream();
+}
+
+function finishOrderedAIJob(payload) {
+    const runId = Number(payload?.runId);
+    const finalSequence = Number(payload?.finalSequence);
+    if (runId !== aiStreamOrder.runId || !Number.isInteger(finalSequence)) {
+        finishAIJob();
+        return;
+    }
+    aiStreamOrder.finalSequence = finalSequence;
+    flushOrderedAIStream();
+    // Suppressed chunks mean the cursor can never reach finalSequence, so the
+    // flush above won't finish the job; refresh anyway or the completed prompt
+    // never shows up in the dropdown.
+    if (aiStreamOrder.finalSequence !== null) {
+        aiStreamOrder.finalSequence = null;
+        void refreshAIPromptJumpFromBackend();
     }
 }
 
 function finishAIJob() {
     aiPipelineFormatter.finishJob();
+    // Newly-finalized prompt log is now on disk; refresh the dropdown.
+    void refreshAIPromptJumpFromBackend();
 }
 
 function appendAIText(text) {
-    const shouldStick = state.aiStickToBottom || isAIOutputNearBottom();
     aiPipelineFormatter.appendChunk(text);
     scheduleAIPromptJumpRefresh();
-    if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
+    // The scroll listener keeps aiStickToBottom current, so don't re-measure the
+    // container here — this runs once per streamed chunk and each measurement
+    // forces a synchronous layout.
+    if (state.aiStickToBottom) {
+        scrollAIOutputToBottom();
     } else {
-        requestAnimationFrame(() => {
-            updateAIScrollBottomButton();
-        });
+        scheduleAIScrollButtonUpdate();
     }
 }
 
 function setAIFinalOutput(text, options = {}) {
     const forceBottom = options.forceBottom === true;
-    const shouldStick = forceBottom || state.aiStickToBottom || isAIOutputNearBottom();
+    const shouldStick = forceBottom || state.aiStickToBottom;
     aiPipelineFormatter.setText(String(text || ''));
     scheduleAIPromptJumpRefresh();
     if (shouldStick) {
-        requestAnimationFrame(() => {
-            scrollAIOutputToBottom();
-        });
+        requestAIScrollToBottom();
     } else {
         requestAnimationFrame(() => {
             updateAIScrollBottomButton();
@@ -11733,27 +12934,151 @@ function updateAIScrollBottomButton() {
     elements.aiScrollBottom.dataset.visible = visible ? 'true' : 'false';
 }
 
+function pauseAIAutoScroll() {
+    if (!state.aiStickToBottom) {
+        return;
+    }
+    state.aiStickToBottom = false;
+    clearAIBottomScrollRetries();
+    updateAIScrollBottomButton();
+}
+
+function clearAIBottomScrollRetries() {
+    for (const timerId of aiBottomScrollRetryTimers) {
+        clearTimeout(timerId);
+    }
+    aiBottomScrollRetryTimers = [];
+
+    if (aiBottomChaseHandle) {
+        cancelAnimationFrame(aiBottomChaseHandle);
+        aiBottomChaseHandle = 0;
+    }
+    aiBottomChaseUntil = 0;
+}
+
+function requestAIScrollToBottom() {
+    if (!elements.aiOutput) {
+        return;
+    }
+
+    state.aiStickToBottom = true;
+    clearAIBottomScrollRetries();
+
+    // Run immediately and then retry after known async render phases:
+    // requestAnimationFrame, markup parse completion, and lazy chunk expansion.
+    scrollAIOutputToBottom();
+    const retryDelays = [0, 40, 120, 260, 520];
+    for (const delay of retryDelays) {
+        const timerId = setTimeout(() => {
+            if (!elements.aiOutput || !state.aiStickToBottom) {
+                return;
+            }
+            scrollAIOutputToBottom();
+        }, delay);
+        aiBottomScrollRetryTimers.push(timerId);
+    }
+}
+
 function scrollAIOutputToBottom() {
     if (!elements.aiOutput) {
         return;
     }
 
-    elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+    const output = elements.aiOutput;
     state.aiStickToBottom = true;
-    updateAIScrollBottomButton();
+
+    // Streaming calls this once per chunk. Extend the deadline of the chase
+    // that's already in flight instead of starting another: overlapping rAF
+    // loops would each force a layout every frame and stall the main thread.
+    aiBottomChaseUntil = nowMs() + AI_BOTTOM_CHASE_MS;
+    if (aiBottomChaseHandle) {
+        return;
+    }
+
+    let lastHeight = -1;
+    let stableFrames = 0;
+
+    const chaseBottom = () => {
+        aiBottomChaseHandle = 0;
+
+        if (!elements.aiOutput || !state.aiStickToBottom) {
+            return;
+        }
+
+        output.scrollTop = output.scrollHeight;
+
+        const currentHeight = Number(output.scrollHeight) || 0;
+        stableFrames = Math.abs(currentHeight - lastHeight) < 1 ? stableFrames + 1 : 0;
+        lastHeight = currentHeight;
+
+        if (stableFrames >= 2 && nowMs() >= aiBottomChaseUntil) {
+            updateAIScrollBottomButton();
+            return;
+        }
+
+        aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
+    };
+
+    output.scrollTop = output.scrollHeight;
+    aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
+}
+
+// Chunks are dropped, not queued, while the panel is off-live or its workspace
+// is inactive, so the ordered cursor must be resynced from the backend or the
+// panel stalls forever waiting on sequences that were never delivered.
+// Returns true when an in-progress run was restored into the panel.
+async function applyActiveStreamSnapshot(workspaceName) {
+    if (!state.aiPanelLive || typeof GetAIActiveStreamSnapshot !== 'function') {
+        return false;
+    }
+
+    let snapshot = null;
+    try {
+        snapshot = await GetAIActiveStreamSnapshot(String(workspaceName || ''));
+    } catch (err) {
+        console.error('Failed to load AI active stream snapshot:', err);
+        return false;
+    }
+
+    if (!snapshot?.active) {
+        return false;
+    }
+
+    aiStreamOrder.runId = Number(snapshot.runId) || null;
+    aiStreamOrder.nextSequence = Number(snapshot.sequence) || 0;
+    aiStreamOrder.pending.clear();
+    aiStreamOrder.finalSequence = null;
+    clearAIStreamGapRecovery();
+
+    state.aiSessionCache = String(snapshot.text || '');
+    aiPipelineFormatter.clear();
+    aiPipelineFormatter.startJob('');
+    aiPipelineFormatter.appendChunk(state.aiSessionCache);
+    requestAnimationFrame(() => {
+        scrollAIOutputToBottom();
+    });
+    return true;
 }
 
 async function loadAISessionCache(workspaceName) {
     try {
-        const cache = await GetAISessionCache(String(workspaceName || ''));
-        state.aiSessionCache = String(cache || '');
-        // The session log file on disk is the source of truth for the panel.
-        // Fully reset the panel before rendering so content from a previously
-        // active workspace cannot persist across a workspace (tmux tab) switch.
-        aiPipelineFormatter.clear();
-        if (state.aiSessionCache) {
-            setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+        // A live run outranks the on-disk log: its output is still in the pending
+        // file, which GetAISessionCache deliberately skips.
+        const restored = await applyActiveStreamSnapshot(workspaceName);
+
+        if (!restored) {
+            const cache = await GetAISessionCache(String(workspaceName || ''));
+            state.aiSessionCache = String(cache || '');
+            // The session log file on disk is the source of truth for the panel.
+            // Fully reset the panel before rendering so content from a previously
+            // active workspace cannot persist across a workspace (tmux tab) switch.
+            aiPipelineFormatter.clear();
+            if (state.aiSessionCache) {
+                setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+            }
         }
+
+        void refreshAIPromptJumpFromBackend();
         if (elements.aiSettingsModal?.dataset?.open === 'true') {
             void loadAISessionManagement().then(() => {
                 renderAISessionManagement();
@@ -11762,6 +13087,36 @@ async function loadAISessionCache(workspaceName) {
     } catch (err) {
         console.error('Failed to load AI session cache:', err);
     }
+}
+
+// markAISessionCachePending clears the panel immediately (cheap) and records
+// that the AI log for the given workspace still needs loading. The actual fetch
+// + render is deferred until the AI tab is opened so it never blocks the rest
+// of the UI on workspace/file switching.
+function markAISessionCachePending(workspaceName) {
+    state.aiSessionCachePending = true;
+    state.aiSessionCachePendingWorkspace = String(workspaceName || '');
+    state.aiSessionCache = '';
+    aiPipelineFormatter.clear();
+    // A workspace switch resets the panel, so stop showing a stale historical
+    // prompt from the workspace being left.
+    setAIPanelLive(true);
+
+    if (isAIToolsTabActive()) {
+        maybeLoadPendingAISessionCache();
+    }
+}
+
+// maybeLoadPendingAISessionCache fires a non-blocking load when a deferred AI
+// log is outstanding. Safe to call repeatedly; it no-ops once consumed.
+function maybeLoadPendingAISessionCache() {
+    if (!state.aiSessionCachePending) {
+        return;
+    }
+    const workspaceName = state.aiSessionCachePendingWorkspace;
+    state.aiSessionCachePending = false;
+    state.aiSessionCachePendingWorkspace = '';
+    void loadAISessionCache(workspaceName);
 }
 
 const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
@@ -11778,7 +13133,7 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
 
 // Event emitted by Go when an AI job begins (before first chunk)
 EventsOn("aiJobStart", (title) => {
-    startAIJob(title);
+    startOrderedAIJob(title);
     setToolsTab('ai');
     if (elements.toolsPanel.dataset.collapsed === 'true') {
         toggleToolsPanel();
@@ -11786,8 +13141,24 @@ EventsOn("aiJobStart", (title) => {
 });
 
 // Event emitted by Go when an AI job finishes
-EventsOn("aiJobFinish", () => {
-    finishAIJob();
+EventsOn("aiJobFinish", (payload) => {
+    finishOrderedAIJob(payload);
+});
+
+EventsOn("aiToolStateChanged", (payload) => {
+    const name = String(payload?.name || '');
+    const stateValue = String(payload?.state || '');
+    const tool = state.aiToolsList.find(item => item?.name === name);
+    if (tool) {
+        if (stateValue) {
+            tool.state = stateValue;
+            tool.enabled = stateValue !== 'disabled';
+        }
+        if (typeof payload?.allowInSubagent === 'boolean') {
+            tool.allowInSubagent = payload.allowInSubagent;
+        }
+    }
+    renderAIToolsList();
 });
 
 // Intercept ttyphoon://ai/... links rendered anywhere in the notes UI
@@ -11799,6 +13170,7 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     const tools = String(e.detail?.tools ?? '');
     setToolsPanelCollapsed(false);
     setToolsTab('ai');
+    setAIPanelLive(true);
     try {
         await AskAI('notesPromptUri', prompt, tools);
     } catch (err) {
@@ -11807,12 +13179,71 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     }
 });
 
+// Access-request options rendered in the AI panel output (see
+// agent.RequestWritePermission) resolve here rather than via a native/context menu.
+document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
+    const requestId = String(e.detail?.requestId || '');
+    const decision = String(e.detail?.decision || '');
+    const anchor = e.detail?.anchor;
+    if (!requestId || !decision) {
+        return;
+    }
+
+    if (elements.aiOutput) {
+        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            if (href.startsWith('ttyphoon://ai-tool-permission') && href.includes(`request=${requestId}`)) {
+                link.classList.add('ai-tool-permission-resolved');
+                link.removeAttribute('href');
+            }
+        });
+    }
+    if (anchor instanceof HTMLElement) {
+        anchor.classList.add('ai-tool-permission-chosen');
+    }
+
+    try {
+        await ResolveAIToolPermission(requestId, decision);
+    } catch (err) {
+        notifyTerminal('Failed to resolve tool access request', 'error');
+        console.error(err);
+    }
+});
+
+document.addEventListener('ttyphoon-ai-user-question', async (e) => {
+    const requestId = String(e.detail?.requestId || '');
+    const answer = String(e.detail?.answer || '');
+    const anchor = e.detail?.anchor;
+    if (!requestId || !answer) {
+        return;
+    }
+
+    if (elements.aiOutput) {
+        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
+            const href = link.getAttribute('href') || '';
+            if (href.startsWith('ttyphoon://ai-user-question') && href.includes(`request=${requestId}`)) {
+                link.classList.add('ai-user-question-resolved');
+                link.removeAttribute('href');
+            }
+        });
+    }
+    if (anchor instanceof HTMLElement) {
+        anchor.classList.add('ai-user-question-chosen');
+    }
+
+    const resolveUserQuestion = typeof ResolveAIUserQuestion === 'function' ? ResolveAIUserQuestion : null;
+
+    try {
+        await resolveUserQuestion(requestId, answer);
+    } catch (err) {
+        notifyTerminal('Failed to resolve user question', 'error');
+        console.error(err);
+    }
+});
+
 // Event listener for streaming AI responses
 EventsOn("aiResponseStream", (chunk) => {
-    const text = String(chunk ?? '');
-    if (text) {
-        appendAIText(text);
-    }
+    appendOrderedAIStream(chunk);
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
@@ -11866,12 +13297,14 @@ EventsOn('fileActionDialog', (payload) => {
 if (elements.toolsMinimize) {
     elements.toolsMinimize.addEventListener('click', toggleToolsPanel);
 }
-if (elements.toolsClear) {
-    elements.toolsClear.addEventListener('click', clearAIOutput);
-}
 if (elements.toolsAIAsk) {
     elements.toolsAIAsk.addEventListener('click', () => {
         void askAIFromToolbar();
+    });
+}
+if (elements.toolsAISkills) {
+    elements.toolsAISkills.addEventListener('click', () => {
+        void askAISkillsFromToolbar();
     });
 }
 if (elements.toolsAIPromptJump) {
@@ -11885,14 +13318,32 @@ if (elements.aiSettingsModelPicker) {
     });
 }
 if (elements.aiOutput) {
+    elements.aiOutput.addEventListener('wheel', (event) => {
+        if (event.deltaY !== 0) {
+            pauseAIAutoScroll();
+        }
+    }, { passive: true });
+    elements.aiOutput.addEventListener('touchmove', () => {
+        pauseAIAutoScroll();
+    }, { passive: true });
     elements.aiOutput.addEventListener('scroll', () => {
-        state.aiStickToBottom = isAIOutputNearBottom();
-        updateAIScrollBottomButton();
-    });
+        // Programmatic bottom writes stay in follow mode; moving away from the
+        // bottom is user intent and requires Latest to resume following.
+        if (aiScrollButtonHandle) {
+            return;
+        }
+        aiScrollButtonHandle = requestAnimationFrame(() => {
+            aiScrollButtonHandle = 0;
+            if (!isAIOutputNearBottom()) {
+                pauseAIAutoScroll();
+            }
+            updateAIScrollBottomButton();
+        });
+    }, { passive: true });
 }
 if (elements.aiScrollBottom) {
     elements.aiScrollBottom.addEventListener('click', () => {
-        scrollAIOutputToBottom();
+        requestAIScrollToBottom();
     });
 }
 if (elements.toolsAISettings) {
@@ -11903,19 +13354,76 @@ if (elements.toolsAISettings) {
     });
 }
 if (elements.aiSettingsSessionsList) {
-    elements.aiSettingsSessionsList.addEventListener('click', (event) => {
-        const button = event.target instanceof HTMLElement ? event.target.closest('button[data-action]') : null;
-        if (!button) {
+    elements.aiSettingsSessionsList.addEventListener('click', async (event) => {
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target) {
             return;
         }
 
-        const sessionId = Number(button.dataset.sessionId) || 0;
-        if (sessionId <= 0) {
+        // Handle rename button click
+        const renameButton = target.closest('button[data-action="rename"]');
+        if (renameButton) {
+            const sessionId = Number(renameButton.dataset.sessionId) || 0;
+            if (sessionId <= 0) {
+                return;
+            }
+
+            const sessions = Array.isArray(state.aiSessionManagement?.sessions) ? state.aiSessionManagement.sessions : [];
+            const session = sessions.find((item) => Number(item.tableId) === sessionId);
+            const nextSummary = await openTextPrompt({
+                title: 'Rename session',
+                value: String(session?.summary || ''),
+                confirmLabel: 'Rename',
+            });
+            if (nextSummary === null) {
+                return;
+            }
+
+            const trimmedSummary = nextSummary.trim();
+            if (!trimmedSummary) {
+                notifyTerminal('Rename cancelled: name is empty', 'warn');
+                return;
+            }
+
+            RenameAISession(sessionId, trimmedSummary).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                notifyTerminal('AI session renamed', 'info');
+            }).catch((err) => {
+                notifyTerminal('Failed to rename AI session', 'error');
+                console.error(err);
+            });
             return;
         }
 
-        const action = String(button.dataset.action || '');
-        if (action === 'activate') {
+        // Handle delete button click
+        const deleteButton = target.closest('button[data-action="delete"]');
+        if (deleteButton) {
+            const sessionId = Number(deleteButton.dataset.sessionId) || 0;
+            if (sessionId <= 0) {
+                return;
+            }
+
+            DeleteAISession(sessionId).then((sessionState) => {
+                applyAISessionManagement(sessionState);
+                renderAISessionManagement();
+                void loadAISessionCache('');
+                notifyTerminal('AI session deleted', 'info');
+            }).catch((err) => {
+                notifyTerminal('Failed to delete AI session', 'error');
+                console.error(err);
+            });
+            return;
+        }
+
+        // Handle session item click for activation
+        const sessionItem = target.closest('.notes-ai-settings-session-item');
+        if (sessionItem) {
+            const sessionId = Number(sessionItem.dataset.sessionId) || 0;
+            if (sessionId <= 0 || target.closest('button')) {
+                return; // Don't activate if clicking a button inside the item
+            }
+
             SetActiveAISession(sessionId).then((sessionState) => {
                 applyAISessionManagement(sessionState);
                 renderAISessionManagement();
@@ -11926,18 +13434,30 @@ if (elements.aiSettingsSessionsList) {
             });
             return;
         }
-
-        if (action === 'delete') {
-            DeleteAISession(sessionId).then((sessionState) => {
-                applyAISessionManagement(sessionState);
-                renderAISessionManagement();
-                void loadAISessionCache('');
-                notifyTerminal('AI session deleted', 'info');
-            }).catch((err) => {
-                notifyTerminal('Failed to delete AI session', 'error');
-                console.error(err);
-            });
+    });
+}
+if (elements.aiSettingsHistoryList) {
+    elements.aiSettingsHistoryList.addEventListener('click', (event) => {
+        const eraseButton = event.target instanceof HTMLElement
+            ? event.target.closest('button[data-action="erase"]')
+            : null;
+        if (!eraseButton) {
+            return;
         }
+
+        const entryId = Number(eraseButton.dataset.entryId) || 0;
+        if (entryId <= 0) {
+            return;
+        }
+
+        DeleteAIHistoryEntry(entryId).then((sessionState) => {
+            applyAISessionManagement(sessionState);
+            renderAISessionManagement();
+            void refreshAIPromptJumpFromBackend();
+        }).catch((err) => {
+            notifyTerminal('Failed to erase this prompt', 'error');
+            console.error(err);
+        });
     });
 }
 if (elements.aiSettingsSessionNew) {
@@ -11960,19 +13480,160 @@ if (elements.aiSettingsModal) {
         }
     });
 }
-if (elements.aiSettingsToolsToggle) {
-    elements.aiSettingsToolsToggle.addEventListener('click', () => {
-        ShowAIToolsMenu().catch((err) => {
-            notifyTerminal('Failed to open AI tools menu', 'error');
-            console.error(err);
-        });
+if (elements.aiSettingsToolsList) {
+    elements.aiSettingsToolsList.addEventListener('click', (event) => {
+        const stateButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-state')
+            : null;
+        if (!stateButton) {
+            return;
+        }
+
+        const toolName = String(stateButton.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const rect = stateButton.getBoundingClientRect();
+        ShowAIToolStateMenu(toolName, rect.left, rect.bottom + 4);
+    });
+
+    elements.aiSettingsToolsList.addEventListener('click', (event) => {
+        const subagentButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-subagent')
+            : null;
+        if (!subagentButton) {
+            return;
+        }
+
+        const toolName = String(subagentButton.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const rect = subagentButton.getBoundingClientRect();
+        ShowAIToolSubagentMenu(toolName, rect.left, rect.bottom + 4);
     });
 }
-if (elements.aiSettingsMcpToggle) {
-    elements.aiSettingsMcpToggle.addEventListener('click', () => {
-        ShowAIMcpMenu().catch((err) => {
-            notifyTerminal('Failed to open AI MCP menu', 'error');
+if (elements.aiSettingsMcpList) {
+    elements.aiSettingsMcpList.addEventListener('change', (event) => {
+        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
+        if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const serverKey = String(checkbox.dataset.mcpKey || '').trim();
+        if (!serverKey) {
+            return;
+        }
+
+        const enabled = checkbox.checked;
+        SetAIMcpServerEnabled(serverKey, enabled).then(() => {
+            void loadAISessionManagement().then(() => {
+                renderAISessionManagement();
+            });
+        }).catch((err) => {
+            notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
             console.error(err);
+            checkbox.checked = !enabled;
+        });
+    });
+
+    elements.aiSettingsMcpList.addEventListener('click', (event) => {
+        if (event.target instanceof HTMLInputElement && event.target.type === 'checkbox') {
+            return;
+        }
+
+        const item = event.target instanceof Element ? event.target.closest('.notes-ai-settings-tool-item') : null;
+        if (!item || !elements.aiSettingsMcpList.contains(item)) {
+            return;
+        }
+
+        const index = Number(item.dataset.mcpIndex);
+        if (!Number.isInteger(index) || index < 0) {
+            return;
+        }
+
+        void openAIMcpServerMetadataModal(index);
+    });
+}
+if (elements.aiToolMetaModal && elements.aiToolMetaCard) {
+    elements.aiToolMetaModal.addEventListener('click', (event) => {
+        if (event.target === elements.aiToolMetaModal) {
+            closeAIToolMetadataModal();
+        }
+    });
+
+    elements.aiToolMetaCard.addEventListener('click', (event) => {
+        event.stopPropagation();
+    });
+}
+if (elements.aiToolMetaContent) {
+    elements.aiToolMetaContent.addEventListener('click', (event) => {
+        const stateButton = event.target instanceof HTMLButtonElement
+            ? event.target.closest('.notes-ai-settings-tool-state')
+            : null;
+        if (!stateButton) {
+            return;
+        }
+
+        const toolName = String(stateButton.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const rect = stateButton.getBoundingClientRect();
+        ShowAIToolStateMenu(toolName, rect.left, rect.bottom + 4);
+    });
+
+    elements.aiToolMetaContent.addEventListener('change', (event) => {
+        const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
+        if (!checkbox || checkbox.type !== 'checkbox') {
+            return;
+        }
+
+        const configType = String(checkbox.dataset.configType || '').trim();
+        if (configType === 'mcp') {
+            const serverKey = String(checkbox.dataset.mcpKey || '').trim();
+            if (!serverKey) {
+                return;
+            }
+
+            const enabled = checkbox.checked;
+            SetAIMcpServerEnabled(serverKey, enabled).then(() => {
+                void loadAISessionManagement().then(() => {
+                    renderAISessionManagement();
+                });
+            }).catch((err) => {
+                notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
+                console.error(err);
+                checkbox.checked = !enabled;
+            });
+            return;
+        }
+
+        if (configType !== 'subagent-tool') {
+            return;
+        }
+
+        const toolName = String(checkbox.dataset.toolName || '').trim();
+        if (!toolName) {
+            return;
+        }
+
+        const allowed = checkbox.checked;
+        SetAIToolSubagentAllowed(toolName, allowed).then(() => {
+            const index = Number.parseInt(String(checkbox.dataset.toolIndex || ''), 10);
+            if (Number.isInteger(index) && index >= 0 && index < state.aiToolsList.length) {
+                state.aiToolsList[index] = {
+                    ...state.aiToolsList[index],
+                    allowInSubagent: allowed,
+                };
+            }
+        }).catch((err) => {
+            notifyTerminal(`Failed to update sub-agent access for ${toolName}`, 'error');
+            console.error(err);
+            checkbox.checked = !allowed;
         });
     });
 }
@@ -12031,6 +13692,7 @@ GetNotesStructViewMaxSizeKB().then((maxSizeKb) => {
 
 initNotesAIPanel(elements);
 initAIPromptJumpObserver();
+void refreshAIPromptJumpFromBackend();
 if (elements.toolsToC) {
     elements.toolsToC.addEventListener('click', (event) => {
         const tocButton = event.target.closest('.notes-tools-toc-item');
@@ -12317,11 +13979,6 @@ function renderLspDiagnostics() {
 
 function renderLspEditorDecorations() {
     renderLspDiagnostics();
-    renderLspInlayHints();
-}
-
-function renderLspInlayHints() {
-    // Inlay hints are rendered by Monaco providers in Monaco-only mode.
 }
 
 document.addEventListener('scroll', () => {
@@ -12684,8 +14341,6 @@ if (elements.editor) {
         setDirty(true);
         state.lspHoverLastKey = '';
         hideLspHoverTooltip();
-        state.lspInlayRequestId += 1;
-        state.lspInlayHints = [];
         clearCurrentFileLspDiagnosticsCache();
         clearVisibleLspDiagnostics({ preserveCompletion: true });
 
@@ -12746,19 +14401,18 @@ if (elements.editor) {
 
         if (state.currentFileType === 'json') {
             // Revalidate JSON/YAML and only expose Run for docs with a swagger key.
-            // Always update the spec and tab visibility; only re-render the viewer
-            // when Monaco is NOT active (deferred to View tab click when tainted).
+            // The tree view render itself is deferred to the View tab click.
             state.swaggerSpec = parseSwaggerSpec(elements.editor.value);
             state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
+            state.swaggerViewCurrent = false;
             updateTabVisibility('json');
-            if (!isMonacoActive()) {
-                renderSwaggerJsonView();
-            }
-
             if (!state.swaggerRunAvailable && state.viewMode === 'swagger-run') {
                 setViewMode('swagger-view');
             } else if (state.swaggerRunAvailable && state.viewMode === 'swagger-run' && !isMonacoActive()) {
                 renderSwaggerUI();
+            }
+            if (state.viewMode === 'swagger-view' && !isMonacoActive()) {
+                renderSwaggerJsonViewLazy();
             }
         }
         scheduleLspDidChange();
@@ -12958,6 +14612,13 @@ function openMainEditorContextMenu(e) {
 
     menuItems.push(
         { title: '-' },
+        {
+            title: 'Find references',
+            icon: CONTEXT_ICON_FIND,
+            onSelect: () => {
+                void findReferencesFromEditor();
+            },
+        },
         createFindMenuItem('Find text...'),
         createAskAIDocumentMenuItem(),
         createPrintMenuItem('Print...'),
@@ -12995,7 +14656,7 @@ elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const table = e.target instanceof Element ? e.target.closest('table') : null;
     if (!table || !elements.csvView.contains(table)) return;
-    const menuItems = [...createTableCopyMenuItems(table)];
+    const menuItems = [...createTableCopyMenuItems(table), createTableFilterMenuItem(table)];
     const isRunMode = state.viewMode === 'csv-run';
     if (isRunMode) {
         const insertItems = createTableInsertMenuItems(table, e.target, 0);
@@ -13077,7 +14738,7 @@ elements.tabJupyter.addEventListener('click', () => {
 elements.tabSwaggerView.addEventListener('click', () => {
     setViewMode('swagger-view');
     state.viewTainted = false;
-    renderSwaggerJsonView();
+    renderSwaggerJsonViewLazy();
 });
 
 elements.tabSwaggerEdit.addEventListener('click', () => {
@@ -13305,10 +14966,19 @@ if (elements.findDocOptionWord) {
 
 if (elements.findFilesInput) {
     elements.findFilesInput.addEventListener('input', () => {
+        state.findFilesMode = 'grep';
+        state.findFilesSource = '';
+        state.findFilesReferenceSymbol = '';
         updateFindFilesClearButtonVisibility();
         scheduleProjectFindSearch();
     });
 
+
+if (elements.findReferences) {
+    elements.findReferences.addEventListener('click', () => {
+        void findReferencesFromEditor();
+    });
+}
     elements.findFilesInput.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' && !event.metaKey && !event.ctrlKey && !event.altKey) {
             if (tryOpenFindHistoryMenuForInput(elements.findFilesInput)) {
@@ -13470,6 +15140,70 @@ if (elements.list) {
         scheduleProjectFindVirtualScrollRender();
     });
 }
+    // Delegated handlers for file/folder/category rows: renderFileList() rebuilds
+    // the whole tree on every change, so per-node listeners would mean re-creating
+    // one-to-several closures per file/folder on every render. A single delegated
+    // listener per event type avoids that cost regardless of tree size.
+    elements.list.addEventListener('click', (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (fileItem) {
+            NotesHistoryAdd(fileItem.dataset.file).catch(() => {});
+            loadFile(fileItem.dataset.file);
+            return;
+        }
+
+        const folderButton = event.target.closest('.notes-tree-folder');
+        if (folderButton) {
+            toggleFolder(folderButton.dataset.folderKey);
+            return;
+        }
+
+        const categoryHeader = event.target.closest('.notes-category-header');
+        if (categoryHeader && state.fileFilterQuery.trim() === '') {
+            toggleCategory(categoryHeader.dataset.category);
+        }
+    });
+
+    elements.list.addEventListener('dblclick', (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (!fileItem) {
+            return;
+        }
+        event.preventDefault();
+        void openRenamePrompt(fileItem.dataset.file);
+    });
+
+    elements.list.addEventListener('contextmenu', async (event) => {
+        const fileItem = event.target.closest('.notes-file');
+        if (fileItem) {
+            event.preventDefault();
+            event.stopPropagation();
+            await openFileListContextMenu(fileItem.dataset.file, event.clientX, event.clientY);
+            return;
+        }
+
+        const folderButton = event.target.closest('.notes-tree-folder');
+        if (folderButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            const folderKey = folderButton.dataset.folderKey || '';
+            const separatorIndex = folderKey.indexOf(PRIMARY_PATH_SEPARATOR);
+            const category = separatorIndex === -1 ? folderKey : folderKey.slice(0, separatorIndex);
+            const folderPath = separatorIndex === -1 ? '' : folderKey.slice(separatorIndex + 1);
+            const folderNode = findFolderNodeByPath(getCategoryTreeNodes(category), folderPath);
+            const folderName = folderNode ? folderNode.name : folderPath;
+            openFolderTreeContextMenu(category, folderNode?.children || [], event.clientX, event.clientY, folderName);
+            return;
+        }
+
+        const categoryHeader = event.target.closest('.notes-category-header');
+        if (categoryHeader) {
+            event.preventDefault();
+            event.stopPropagation();
+            const category = categoryHeader.dataset.category;
+            openFolderTreeContextMenu(category, getCategoryTreeNodes(category), event.clientX, event.clientY, `${category} folders`);
+        }
+    });
 
 if (elements.listFilterClear && elements.listFilter) {
     elements.listFilterClear.addEventListener('click', () => {
@@ -13620,6 +15354,9 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'Escape' && elements.deleteModal.dataset.open === 'true') {
         event.preventDefault();
         closeDeletePrompt();
+    } else if (event.key === 'Escape' && elements.aiToolMetaModal?.dataset?.open === 'true') {
+        event.preventDefault();
+        closeAIToolMetadataModal();
     } else if (event.key === 'Escape' && elements.aiSettingsModal?.dataset?.open === 'true') {
         event.preventDefault();
         closeAISessionManagementModal();
@@ -13672,6 +15409,13 @@ window.addEventListener('beforeunload', () => {
     closeOpenLspDocument();
     closeCurrentTyposDocument();
     NotesLspStopAll();
+    try {
+        if (typeof NotesTableDisposeAll === 'function') {
+            void Promise.resolve(NotesTableDisposeAll()).catch(() => {});
+        }
+    } catch {
+        // Nothing useful to do while the window is going away.
+    }
 });
 
 elements.modalInput.addEventListener('keydown', (event) => {

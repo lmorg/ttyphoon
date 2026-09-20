@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -43,6 +44,44 @@ type BlockMeta struct {
 	TimeStart time.Time
 	TimeEnd   time.Time
 	Meta      BlockMetaFlag
+	cbMu      sync.Mutex
+	callbacks []func(*BlockCallbackT)
+}
+
+func (bm *BlockMeta) HasCallbacks() bool {
+	bm.cbMu.Lock()
+	defer bm.cbMu.Unlock()
+	return len(bm.callbacks) > 0
+}
+
+func (bm *BlockMeta) RaiseCallbacks(output Screen) {
+	cb := &BlockCallbackT{
+		Output: output.PhraseAll(),
+		Meta:   bm,
+	}
+
+	bm.cbMu.Lock()
+	defer bm.cbMu.Unlock()
+
+	for i := range bm.callbacks {
+		go bm.callbacks[i](cb)
+	}
+
+	bm.callbacks = []func(*BlockCallbackT){} // empty array so it cannot be called twice
+}
+
+func (bm *BlockMeta) SetCallback(callback func(*BlockCallbackT)) {
+	bm.cbMu.Lock()
+	defer bm.cbMu.Unlock()
+	bm.callbacks = append(bm.callbacks, callback)
+}
+
+func (bm *BlockMeta) CopyCallbacks(src *BlockMeta) {
+	bm.cbMu.Lock()
+	src.cbMu.Lock()
+	defer bm.cbMu.Unlock()
+	defer src.cbMu.Unlock()
+	bm.callbacks = append(bm.callbacks, src.callbacks...)
 }
 
 type AiMetaT struct {

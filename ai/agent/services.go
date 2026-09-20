@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -10,25 +11,69 @@ import (
 )
 
 const (
-	LLM_OPENAI    = "OpenAI"
-	LLM_ANTHROPIC = "Anthropic"
-	LLM_OLLAMA    = "Ollama"
-)
-
-var (
-	models map[string][]string
+	LLM_OPENAI    = "openai"
+	LLM_ANTHROPIC = "anthropic"
+	LLM_OLLAMA    = "ollama"
 )
 
 func init() {
 	refreshServiceList()
 }
 
-func (agent *Agent) ServiceName() string {
-	return agent.serviceName
+func (agt *Agent) ServiceName() string {
+	return agt.serviceName
 }
 
-func (agent *Agent) ModelName() string {
-	return agent.modelName
+func (agt *Agent) ModelName() string {
+	return agt.modelName
+}
+
+func (agt *Agent) SummariseModelName() string {
+	service := findService(agt.serviceName)
+	if service == nil {
+		return agt.modelName
+	}
+	return service.SummariseModel()
+}
+
+func (agt *Agent) ProviderName() string {
+	service := findService(agt.serviceName)
+	if service == nil || service.Provider == "" {
+		return agt.serviceName
+	}
+	return service.Provider
+}
+
+func (agt *Agent) serviceEnv(name string) string {
+	service := findService(agt.serviceName)
+	if service != nil {
+		if value, ok := service.Env[name]; ok {
+			return value
+		}
+	}
+	return ""
+}
+
+func (agt *Agent) EnvironmentValue(name string) string {
+	if value := agt.serviceEnv(name); value != "" {
+		return value
+	}
+	return os.Getenv(name)
+}
+
+func (agt *Agent) ImageGenerationEnvironmentValue(name string) string {
+	service := findService(agt.serviceName)
+	if service != nil && service.ImageGenService != "" {
+		imageService := findService(service.ImageGenService)
+		if imageService != nil {
+			if value := imageService.Env[name]; value != "" {
+				return value
+			}
+		}
+		return os.Getenv(name)
+	}
+
+	return agt.EnvironmentValue(name)
 }
 
 type ServiceModelIndexT struct {
@@ -40,38 +85,50 @@ func modelSelectionLabel(serviceName, modelName string) string {
 	return fmt.Sprintf("%s: %s", serviceName, modelName)
 }
 
-func (agent *Agent) CurrentModelLabel() string {
-	return modelSelectionLabel(agent.serviceName, agent.modelName)
+func (agt *Agent) CurrentModelLabel() string {
+	return modelSelectionLabel(agt.serviceName, agt.modelName)
 }
 
 // ListModelsInputVariable returns a pre-configured InputBox variable definition
 // that can be used directly in InputBoxWT options.
-func (agent *Agent) ListModelsInputVariable() types.InputBoxWTVariables {
-	_, labels := agent.ListModels()
+func (agt *Agent) ListModelsInputVariable() types.InputBoxWTVariables {
+	_, labels := agt.ListModels()
 
 	return types.InputBoxWTVariables{
 		Name:        "model",
 		Label:       "Model",
 		Description: "AI LLM model to use for query",
-		Default:     agent.CurrentModelLabel(),
+		Default:     agt.CurrentModelLabel(),
 		Options:     labels,
 		Type:        "list",
 	}
 }
+func (agt *Agent) SetModelFromInputVariable(variables map[string]any) {
+	if raw, ok := variables["model"]; ok {
+		selectedModel := strings.TrimSpace(fmt.Sprint(raw))
+		if selectedModel != "" {
+			err := agt.SetServiceModelFromSelection(selectedModel)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+		}
+	}
+}
 
-func (agent *Agent) ListModels() ([]ServiceModelIndexT, []string) {
+func (agt *Agent) ListModels() ([]ServiceModelIndexT, []string) {
 	var (
 		modelXRef []ServiceModelIndexT
 		labels    []string
 	)
 
-	for serviceName := range models {
-		for modelId, modelName := range models[serviceName] {
+	for _, service := range config.Config.Ai.Services() {
+		for modelId, modelName := range service.Models {
 			modelXRef = append(modelXRef, ServiceModelIndexT{
-				service: serviceName,
+				service: service.Label,
 				modelId: modelId,
 			})
-			labels = append(labels, modelSelectionLabel(serviceName, modelName))
+			labels = append(labels, modelSelectionLabel(service.Label, modelName))
 		}
 	}
 
@@ -80,7 +137,7 @@ func (agent *Agent) ListModels() ([]ServiceModelIndexT, []string) {
 
 // SetServiceModelFromSelection sets the active service/model from a list label
 // formatted as "<Service>: <Model>".
-func (agent *Agent) SetServiceModelFromSelection(selection string) error {
+func (agt *Agent) SetServiceModelFromSelection(selection string) error {
 	parts := strings.SplitN(strings.TrimSpace(selection), ":", 2)
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid model selection format: %q", selection)
@@ -92,64 +149,62 @@ func (agent *Agent) SetServiceModelFromSelection(selection string) error {
 		return fmt.Errorf("invalid model selection format: %q", selection)
 	}
 
-	modelsByService, ok := models[serviceName]
-	if !ok {
+	service := findService(serviceName)
+	if service == nil {
 		return fmt.Errorf("unknown model service: %q", serviceName)
 	}
 
-	if !slices.Contains(modelsByService, modelName) {
+	if !slices.Contains(service.Models, modelName) {
 		return fmt.Errorf("unknown model for service %q: %q", serviceName, modelName)
 	}
 
-	agent.serviceName = serviceName
-	agent.modelName = modelName
-	agent.Reload()
+	agt.serviceName = serviceName
+	agt.modelName = modelName
+	agt.Reload()
 
 	return nil
 }
 
-func (agent *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
-	agent.serviceName = modelXRef[i].service
-	agent.modelName = models[modelXRef[i].service][modelXRef[i].modelId]
-	agent.Reload()
+func (agt *Agent) SwitchServiceModel(modelXRef []ServiceModelIndexT, i int) {
+	service := findService(modelXRef[i].service)
+	if service == nil || modelXRef[i].modelId >= len(service.Models) {
+		return
+	}
+	agt.serviceName = modelXRef[i].service
+	agt.modelName = service.Models[modelXRef[i].modelId]
+	agt.Reload()
 }
 
-func (agent *Agent) SelectServiceModel(returnFn func()) {
-	modelXRef, labels := agent.ListModels()
+func (agt *Agent) SelectServiceModel(returnFn func()) {
+	modelXRef, labels := agt.ListModels()
 
 	selectFn := func(i int) {
-		agent.SwitchServiceModel(modelXRef, i)
+		agt.SwitchServiceModel(modelXRef, i)
 		if returnFn != nil {
 			returnFn()
 		}
 	}
 
-	agent.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
+	agt.renderer.DisplayMenu("Select model to use", labels, nil, selectFn, nil)
 }
 
 func refreshServiceList() {
-	models = config.Config.Ai.AvailableModels
-	go func() {
+	/*go func() {
 		ollama := ollamaModels()
 		if len(ollama) > 0 {
 			models[LLM_OLLAMA] = ollamaModels()
 		}
-	}()
+	}()*/
 }
 
-func (agent *Agent) setDefaultModels() {
-	if len(models[config.Config.Ai.DefaultService]) != 0 {
-		agent.serviceName = config.Config.Ai.DefaultService
-	} else {
-		for agent.serviceName = range models {
-			// just get the first service, whatever that service might be
-			break
+// findService returns nil when the service isn't configured; callers fall back
+// to the agent's own service/model names.
+func findService(serviceName string) *config.AIServiceT {
+	for _, service := range config.Config.Ai.Services() {
+		if service.Label == serviceName {
+			return service
 		}
 	}
 
-	if config.Config.Ai.DefaultModels[agent.serviceName] != "" {
-		agent.modelName = config.Config.Ai.DefaultModels[agent.serviceName]
-	} else {
-		agent.modelName = models[agent.serviceName][0]
-	}
+	return nil
 }

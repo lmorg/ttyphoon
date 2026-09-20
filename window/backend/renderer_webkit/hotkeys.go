@@ -113,6 +113,10 @@ func (wr *webkitRender) hotkeys() {
 			fn = wr.NotesLspGoToSymbol
 			desc = "LSP: jump to symbol..."
 			icon = 0xf121
+		case "LspJumpToWorkspaceSymbol":
+			fn = wr.NotesLspGoToWorkspaceSymbol
+			desc = "LSP: jump to workspace symbol..."
+			icon = 0xf121
 
 		default:
 			wr.DisplayNotification(types.NOTIFY_WARN, fmt.Sprintf("unknown hotkey function: '%s'", hk.Function))

@@ -1,10 +1,10 @@
 export namespace grep {
 	
 	export class Options {
-	    CaseSensitive: boolean;
-	    Regex: boolean;
-	    WholeWord: boolean;
-	    FileFilter: string;
+	    caseSensitive: boolean;
+	    regex: boolean;
+	    wholeWord: boolean;
+	    fileFilter: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Options(source);
@@ -12,10 +12,10 @@ export namespace grep {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.CaseSensitive = source["CaseSensitive"];
-	        this.Regex = source["Regex"];
-	        this.WholeWord = source["WholeWord"];
-	        this.FileFilter = source["FileFilter"];
+	        this.caseSensitive = source["caseSensitive"];
+	        this.regex = source["regex"];
+	        this.wholeWord = source["wholeWord"];
+	        this.fileFilter = source["fileFilter"];
 	    }
 	}
 
@@ -292,6 +292,30 @@ export namespace lsp {
 	    }
 	}
 	
+	export class ReferenceLocation {
+	    uri: string;
+	    filePath?: string;
+	    line: number;
+	    character: number;
+	    endLine: number;
+	    endCharacter: number;
+	    context?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ReferenceLocation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uri = source["uri"];
+	        this.filePath = source["filePath"];
+	        this.line = source["line"];
+	        this.character = source["character"];
+	        this.endLine = source["endLine"];
+	        this.endCharacter = source["endCharacter"];
+	        this.context = source["context"];
+	    }
+	}
 	export class RenameResult {
 	    content: string;
 	    changed: boolean;
@@ -306,25 +330,71 @@ export namespace lsp {
 	        this.changed = source["changed"];
 	    }
 	}
-	export class SemanticTokenItem {
-	    line: number;
-	    character: number;
-	    length: number;
-	    tokenType: number;
-	    tokenModifiers: number;
+	export class SemanticTokenEdit {
+	    start: number;
+	    deleteCount: number;
+	    data?: number[];
 	
 	    static createFrom(source: any = {}) {
-	        return new SemanticTokenItem(source);
+	        return new SemanticTokenEdit(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.line = source["line"];
-	        this.character = source["character"];
-	        this.length = source["length"];
-	        this.tokenType = source["tokenType"];
+	        this.start = source["start"];
+	        this.deleteCount = source["deleteCount"];
+	        this.data = source["data"];
+	    }
+	}
+	export class SemanticTokensLegend {
+	    tokenTypes: string[];
+	    tokenModifiers: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SemanticTokensLegend(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.tokenTypes = source["tokenTypes"];
 	        this.tokenModifiers = source["tokenModifiers"];
 	    }
+	}
+	export class SemanticTokensResult {
+	    legend: SemanticTokensLegend;
+	    data?: number[];
+	    resultId?: string;
+	    edits?: SemanticTokenEdit[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SemanticTokensResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.legend = this.convertValues(source["legend"], SemanticTokensLegend);
+	        this.data = source["data"];
+	        this.resultId = source["resultId"];
+	        this.edits = this.convertValues(source["edits"], SemanticTokenEdit);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class WorkspaceSymbolItem {
 	    name: string;
@@ -495,6 +565,81 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class NotesTableSeedT {
+	    headings: string[];
+	    rows: string[][];
+	
+	    static createFrom(source: any = {}) {
+	        return new NotesTableSeedT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.headings = source["headings"];
+	        this.rows = source["rows"];
+	    }
+	}
+	export class NotesTableRequestT {
+	    key: tablecore.Key;
+	    seed?: NotesTableSeedT;
+	    sortColumn: number;
+	    sortDesc: boolean;
+	    filter: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotesTableRequestT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = this.convertValues(source["key"], tablecore.Key);
+	        this.seed = this.convertValues(source["seed"], NotesTableSeedT);
+	        this.sortColumn = source["sortColumn"];
+	        this.sortDesc = source["sortDesc"];
+	        this.filter = source["filter"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class NotesTableResultT {
+	    missing: boolean;
+	    order: number[];
+	    sortColumn: number;
+	    sortDesc: boolean;
+	    filter: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotesTableResultT(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.missing = source["missing"];
+	        this.order = source["order"];
+	        this.sortColumn = source["sortColumn"];
+	        this.sortDesc = source["sortDesc"];
+	        this.filter = source["filter"];
+	        this.error = source["error"];
+	    }
+	}
+	
 	export class RunFunctionReturnT {
 	    Output: string;
 	    IsError: boolean;
@@ -609,6 +754,24 @@ export namespace notes {
 
 export namespace sessiondb {
 	
+	export class ActiveStreamSnapshot {
+	    active: boolean;
+	    runId: number;
+	    sequence: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActiveStreamSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.active = source["active"];
+	        this.runId = source["runId"];
+	        this.sequence = source["sequence"];
+	        this.text = source["text"];
+	    }
+	}
 	export class FrontendHistoryItemT {
 	    id: number;
 	    prompt: string;
@@ -687,6 +850,24 @@ export namespace sessiondb {
 		    return a;
 		}
 	}
+	export class PromptLogMeta {
+	    sessionId: number;
+	    promptId: number;
+	    heading: string;
+	    sizeBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptLogMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.promptId = source["promptId"];
+	        this.heading = source["heading"];
+	        this.sizeBytes = source["sizeBytes"];
+	    }
+	}
 
 }
 
@@ -728,6 +909,27 @@ export namespace swagger {
 	        this.headers = source["headers"];
 	        this.body = source["body"];
 	        this.error = source["error"];
+	    }
+	}
+
+}
+
+export namespace tablecore {
+	
+	export class Key {
+	    surface: string;
+	    document: string;
+	    index: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Key(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.surface = source["surface"];
+	        this.document = source["document"];
+	        this.index = source["index"];
 	    }
 	}
 

@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/lmorg/ttyphoon/app"
 )
 
 // backoff constants for restart.
@@ -34,6 +36,7 @@ type ServerProcess struct {
 	stopped     bool
 	initialized bool
 	positionEnc PositionEncoding
+	tokenLegend SemanticTokensLegend
 	initMu      sync.Mutex
 
 	notifyCh chan *Message // re-exported from transport
@@ -92,7 +95,7 @@ func (sp *ServerProcess) Start(ctx context.Context) error {
 }
 
 func (sp *ServerProcess) startLocked(ctx context.Context) error {
-	log.Println("starting lsp: ", sp.argv)
+	log.Println("[info] starting lsp: ", sp.argv)
 	procCtx, cancel := context.WithCancel(ctx)
 
 	cmd := exec.CommandContext(procCtx, sp.argv[0], sp.argv[1:]...)
@@ -144,7 +147,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("lsp %s stderr: %s", sp.argv[0], scanner.Text())
+			log.Printf("[trace] lsp %s stderr: %s", sp.argv[0], scanner.Text())
 		}
 	}()
 
@@ -162,9 +165,9 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 		}
 
 		if readErr != nil {
-			log.Printf("lsp[%s] read loop exited: %v — will restart", sp.argv[0], readErr)
+			log.Printf("[warn] lsp[%s] read loop exited: %v — will restart", sp.argv[0], readErr)
 		} else {
-			log.Printf("lsp[%s] process exited — will restart", sp.argv[0])
+			log.Printf("[warn] lsp[%s] process exited — will restart", sp.argv[0])
 		}
 
 		sp.restartWithBackoff(ctx)
@@ -192,7 +195,7 @@ func (sp *ServerProcess) restartWithBackoff(ctx context.Context) {
 		}
 	}
 
-	log.Printf("lsp[%s] restart #%d in %s", sp.argv[0], attempt, delay)
+	log.Printf("[info] lsp[%s] restart #%d in %s", sp.argv[0], attempt, delay)
 
 	select {
 	case <-ctx.Done():
@@ -208,7 +211,7 @@ func (sp *ServerProcess) restartWithBackoff(ctx context.Context) {
 	}
 
 	if err := sp.startLocked(ctx); err != nil {
-		log.Printf("lsp[%s] restart failed: %v", sp.argv[0], err)
+		log.Printf("[error] lsp[%s] restart failed: %v", sp.argv[0], err)
 	}
 }
 
@@ -231,10 +234,10 @@ func (sp *ServerProcess) Stop() {
 		ctx, cancelShutdown := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		_, err := t.Call(ctx, "shutdown", map[string]any{}, 400*time.Millisecond)
 		if err != nil {
-			log.Printf("lsp[%s] shutdown request failed: %v", sp.argv[0], err)
+			log.Printf("[error] lsp[%s] shutdown request failed: %v", sp.argv[0], err)
 		}
 		if err := t.Notify("exit", map[string]any{}); err != nil {
-			log.Printf("lsp[%s] exit notify failed: %v", sp.argv[0], err)
+			log.Printf("[error] lsp[%s] exit notify failed: %v", sp.argv[0], err)
 		}
 		cancelShutdown()
 	}
@@ -314,7 +317,7 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 		},
 		"offsetEncoding": []string{string(PositionEncodingUTF16), string(PositionEncodingUTF8)},
 		"clientInfo": map[string]any{
-			"name": "ttyphoon",
+			"name": app.Name(),
 		},
 	}
 
@@ -328,8 +331,10 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	}
 
 	positionEnc := PositionEncodingUTF16
+	var tokenLegend SemanticTokensLegend
 	if resp != nil && len(resp.Result) > 0 && string(resp.Result) != "null" {
 		positionEnc = parseInitializePositionEncoding(resp.Result)
+		tokenLegend = parseInitializeSemanticTokensLegend(resp.Result)
 	}
 
 	if err := t.Notify("initialized", map[string]any{}); err != nil {
@@ -340,10 +345,19 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	if sp.transport == t {
 		sp.initialized = true
 		sp.positionEnc = positionEnc
+		sp.tokenLegend = tokenLegend
 	}
 	sp.mu.Unlock()
 
 	return nil
+}
+
+// SemanticTokensLegend returns the legend advertised by the server, or an empty
+// legend when the server does not support semantic tokens.
+func (sp *ServerProcess) SemanticTokensLegend() SemanticTokensLegend {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.tokenLegend
 }
 
 // PositionEncoding returns the currently negotiated server position encoding.
@@ -376,4 +390,19 @@ func parseInitializePositionEncoding(raw json.RawMessage) PositionEncoding {
 	}
 
 	return PositionEncodingUTF16
+}
+
+func parseInitializeSemanticTokensLegend(raw json.RawMessage) SemanticTokensLegend {
+	var result struct {
+		Capabilities struct {
+			SemanticTokensProvider struct {
+				Legend SemanticTokensLegend `json:"legend"`
+			} `json:"semanticTokensProvider"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return SemanticTokensLegend{}
+	}
+
+	return result.Capabilities.SemanticTokensProvider.Legend
 }

@@ -75,14 +75,15 @@ func dirProjectRoot(cwd string, home string) string {
 	}
 }
 
-// hasGitDirectory checks if a directory contains a .git subdirectory
+// hasGitDirectory checks if a directory contains a .git entry.
+// In a normal repository .git is a directory, but in a git worktree
+// (created via `git worktree add`) .git is a regular file containing a
+// "gitdir: <path>" pointer to the real git directory. Both cases indicate
+// a valid project root, so we only check for existence rather than type.
 func hasGitDirectory(path string) bool {
 	gitPath := filepath.Join(path, ".git")
-	info, err := os.Stat(gitPath)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
+	_, err := os.Stat(gitPath)
+	return err == nil
 }
 
 func hasProjectConfig(path string) bool {

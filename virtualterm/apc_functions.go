@@ -24,7 +24,6 @@ func (term *Term) mxapcBegin(element types.ElementID) {
 }
 
 func (term *Term) mxapcBeginContentEditable(element types.ElementID) {
-
 	term._activeElement = term.renderer.NewElement(term.tile, element, term._spellingExc)
 }
 
@@ -124,7 +123,9 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 }
 
 func (term *Term) beginOutputBlock(cmdLine []rune, envvars map[string]string) {
-	term._blockMeta = NewRowBlockMeta(term)
+	bm := NewRowBlockMeta(term)
+	bm.CopyCallbacks(term._blockMeta)
+	term._blockMeta = bm
 	(*term.screen)[term.curPos().Y].Block = term._blockMeta
 	term._blockMeta.Query = cmdLine
 	term._blockMeta.EnvVars = envvars
@@ -184,6 +185,20 @@ func (term *Term) endOutputBlock(params *endOutputBlockT, aiMeta *types.AiMetaT)
 			}
 		}
 		go historymd.Block(term.tile, screen[max(0, begin):end], historymd.TemplateWriter)
+	}
+
+	if term._blockMeta.HasCallbacks() {
+		var (
+			screen = append(term._scrollBuf, term._normBuf...)
+			begin  = int(term.curPos().Y) + len(term._scrollBuf)
+			end    = begin
+		)
+		for ; begin >= 0; begin-- {
+			if screen[begin].RowMeta.Is(types.META_ROW_BEGIN_BLOCK) {
+				break
+			}
+		}
+		term._blockMeta.RaiseCallbacks(screen[max(0, begin):end])
 	}
 
 	// prep for new block

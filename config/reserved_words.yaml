@@ -415,29 +415,6 @@ Notes:
         'send', 'freeze', 'frozen?', 'dup', 'clone',
       ]
 
-#    ruby:
-#      ReservedWords: [
-#        # Keywords
-#        '__ENCODING__', '__LINE__', '__FILE__', 'BEGIN', 'END',
-#        'alias', 'and', 'begin', 'break', 'case', 'class', 'def',
-#        'defined?', 'do', 'else', 'elsif', 'end', 'ensure', 'false',
-#        'for', 'if', 'in', 'module', 'next', 'nil', 'not', 'or',
-#        'redo', 'rescue', 'retry', 'return', 'self', 'super', 'then',
-#        'true', 'undef', 'unless', 'until', 'when', 'while', 'yield',
-#        # Built-in classes
-#        'Array', 'BasicObject', 'Binding', 'Class', 'Comparable',
-#        'Complex', 'Dir', 'Encoding', 'Enumerable', 'Enumerator',
-#        'Exception', 'FalseClass', 'File', 'Float', 'Hash', 'IO',
-#        'Integer', 'Kernel', 'Method', 'Module', 'NilClass', 'Numeric',
-#        'Object', 'Proc', 'Range', 'Rational', 'Regexp', 'String',
-#        'Symbol', 'Thread', 'Time', 'TrueClass',
-#        # Common methods
-#        'attr_accessor', 'attr_reader', 'attr_writer', 'extend', 'include',
-#        'initialize', 'new', 'prepend', 'private', 'protected', 'public',
-#        'puts', 'print', 'p', 'pp', 'raise', 'require', 'require_relative',
-#        'send', 'respond_to?', 'is_a?', 'kind_of?', 'nil?',
-#      ]
-
     lua:
       ReservedWords: [
         # Keywords

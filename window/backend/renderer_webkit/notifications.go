@@ -5,11 +5,29 @@ import (
 	"log"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var lastNotificationID atomic.Int64
+
+// Several notifications can be raised within the same millisecond (parallel
+// sub-agents), and the frontend keys on this ID, so keep it strictly increasing.
+func newNotificationID() int64 {
+	for {
+		prev := lastNotificationID.Load()
+		next := time.Now().UnixMilli()
+		if next <= prev {
+			next = prev + 1
+		}
+		if lastNotificationID.CompareAndSwap(prev, next) {
+			return next
+		}
+	}
+}
 
 type notifyT struct {
 	timed  []*notificationT
@@ -82,7 +100,7 @@ func (nt *notificationT) emit() {
 
 func (wr *webkitRender) DisplayNotification(notificationType types.NotificationType, message string) {
 	nt := &notificationT{
-		id:  time.Now().UnixMilli(),
+		id:  newNotificationID(),
 		typ: notificationType,
 		msg: message,
 		wr:  wr,
@@ -92,7 +110,7 @@ func (wr *webkitRender) DisplayNotification(notificationType types.NotificationT
 
 func (wr *webkitRender) DisplaySticky(notificationType types.NotificationType, message string, cancel func()) types.Notification {
 	nt := &notificationT{
-		id:     time.Now().UnixMilli(),
+		id:     newNotificationID(),
 		typ:    notificationType,
 		msg:    message,
 		sticky: true,
@@ -157,7 +175,7 @@ func (n *notifyT) delete(nt *notificationT) {
 	}
 
 	for i := range *notifications {
-		if (*notifications)[i].id == nt.id {
+		if (*notifications)[i] == nt {
 			*notifications = slices.Delete(*notifications, i, i+1)
 			return
 		}

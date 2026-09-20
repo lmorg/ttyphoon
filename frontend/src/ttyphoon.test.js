@@ -137,6 +137,53 @@ describe('ttyphoon focus handoff', () => {
         expect(window.terminalFocusedState).toBe(true);
     });
 
+    // The terminal pane's base `flex:1` sets flex-basis:0%/flex-grow:1, which
+    // beats `width` inside the overlay and removed its left/right margins.
+    it('neutralises flex growth on a maximized pane so its width applies', async () => {
+        await importTtyphoon();
+
+        const terminalPane = document.getElementById('terminal-pane');
+        const notesPane = document.getElementById('notes-pane');
+        expect(terminalPane.style.flex).toBe('1');
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+        await flushPromises();
+
+        expect(terminalPane.style.flex).toBe('0 0 auto');
+        expect(terminalPane.style.width).toBe('calc(100vw - 100px)');
+        expect(terminalPane.style.height).toBe('calc(100vh - 100px)');
+        // The pane left behind fills the window.
+        expect(notesPane.style.width).toBe('100%');
+        expect(document.getElementById('notes-terminal-split').style.display).toBe('none');
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+        await flushPromises();
+
+        expect(terminalPane.style.flex).toBe('1');
+        expect(notesPane.style.width).toBe('50%');
+        expect(document.getElementById('notes-terminal-split').style.display).not.toBe('none');
+    });
+
+    it('maximizes notes with the same geometry as the terminal', async () => {
+        await importTtyphoon();
+
+        const notesPane = document.getElementById('notes-pane');
+        const terminalPane = document.getElementById('terminal-pane');
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
+        await flushPromises();
+
+        expect(notesPane.style.width).toBe('calc(100vw - 100px)');
+        expect(notesPane.style.height).toBe('calc(100vh - 100px)');
+        expect(notesPane.style.flex).toBe('0 0 auto');
+        expect(terminalPane.style.width).toBe('100%');
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
+        await flushPromises();
+
+        expect(notesPane.style.width).toBe('50%');
+    });
+
     it('does not re-focus terminal when clicking embedded notes content', async () => {
         await importTtyphoon();
 

@@ -110,6 +110,93 @@ describe('popup menu hide/show transitions', () => {
         expect(commandPaletteSelectMock).toHaveBeenCalledWith(0);
     });
 
+    it('re-sources items from onQuery on each keystroke and selects by provider index', async () => {
+        const { initTerminalPopupMenu, showLocalMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        const onQuery = vi.fn(async (query) => (query === 's'
+            ? { options: ['sigma', 'sonar'], icons: [0, 0] }
+            : { options: [], icons: [] }));
+        const onSelect = vi.fn();
+
+        showLocalMenu({
+            title: 'Go to workspace symbol',
+            options: [],
+            icons: [],
+            x: 10,
+            y: 10,
+            showSearch: true,
+            hideItemsUntilQuery: true,
+            onQuery,
+            onSelect,
+        });
+
+        const listRoot = document.getElementById('ttyphoon-listbox-menu');
+        expect(listRoot.style.display).toBe('block');
+        // Nothing is requested until the user types.
+        expect(onQuery).not.toHaveBeenCalled();
+        expect(listRoot.querySelectorAll('.tty-menu-row').length).toBe(0);
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true }));
+        await vi.waitFor(() => {
+            expect(listRoot.querySelectorAll('.tty-menu-row').length).toBe(2);
+        });
+        expect(onQuery).toHaveBeenCalledWith('s');
+        // Provider owns matching, so results are shown verbatim without local filtering.
+        expect(filterStringsMock).not.toHaveBeenCalled();
+
+        const rows = listRoot.querySelectorAll('.tty-menu-row');
+        rows[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(onSelect).toHaveBeenCalledWith(1);
+    });
+
+    it('keeps a menu opened synchronously from another menu selection', async () => {
+        const { initTerminalPopupMenu, showLocalMenu } = await import('./popup_menu.js');
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        initTerminalPopupMenu(canvas);
+
+        showLocalMenu({
+            title: 'LSP options',
+            options: ['Go to workspace symbol...'],
+            icons: [0],
+            x: 10,
+            y: 10,
+            onSelect: () => {
+                // Synchronous nested menu: the outer menu is dismissed after this
+                // returns, which previously tore the new menu straight back down.
+                showLocalMenu({
+                    title: 'Go to workspace symbol',
+                    options: [],
+                    icons: [],
+                    x: 10,
+                    y: 10,
+                    showSearch: true,
+                    hideItemsUntilQuery: true,
+                    onQuery: async () => ({ options: ['alpha'], icons: [0] }),
+                    onSelect: () => { },
+                });
+            },
+        });
+
+        const listRoot = document.getElementById('ttyphoon-listbox-menu');
+        const row = listRoot.querySelector('.tty-menu-row');
+        row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+        expect(listRoot.style.display).toBe('block');
+        expect(listRoot.querySelector('.tty-menu-title').textContent).toBe('Go to workspace symbol');
+        expect(listRoot.querySelector('.tty-listbox-search').style.display).toBe('block');
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }));
+        await vi.waitFor(() => {
+            expect(listRoot.querySelectorAll('.tty-menu-row').length).toBe(1);
+        });
+    });
+
     it('ignores stale hide animation completion when a new menu is opened', async () => {
         const { initTerminalPopupMenu } = await import('./popup_menu.js');
 

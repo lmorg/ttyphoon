@@ -2,6 +2,7 @@ package element_table
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"strings"
@@ -10,60 +11,25 @@ import (
 	"golang.design/x/clipboard"
 )
 
-const _ROW_ID = "rowid"
-
-func (el *ElementTable) sqlWhere() string {
-	where := el.filter
-	if where != "" {
-		where = "WHERE " + where
-	}
-
-	return where
-}
-
-func (el *ElementTable) sqlString() string {
-	orderBy := _ROW_ID
-	var sql string
-	if el.orderByIndex > 0 {
-		orderBy = string(el.headings[el.orderByIndex-1])
-		sql = sqlSelect[el.isNumber[el.orderByIndex-1]]
-	} else {
-		sql = sqlSelect[selectNumeric]
-	}
-
-	return fmt.Sprintf(sql, el.name, el.sqlWhere(), orderBy, orderByStr[el.orderDesc], el.size.Y-1, el.limitOffset)
-}
-
+// runQuery pulls the current view from the shared engine and lays it out for the
+// terminal: column widths, boundaries and padded row strings.
 func (el *ElementTable) runQuery() error {
-	query := el.sqlString()
-	dbRows, err := el.db.Query(query)
+	rows, err := el.core.Rows(int(el.size.Y-1), int(el.limitOffset))
 	if err != nil {
-		return fmt.Errorf("cannot query table: %v\nSQL: %s", err, query)
+		return err
 	}
 
 	var (
 		table []string
 		width = make([]int, len(el.headings))
-		rows  [][]string
-		l     = len(el.headings)
 	)
 
-	for dbRows.Next() {
-		row := make([]string, l)
-		slice := _strToAnyPtr(&row, l)
-
-		err = dbRows.Scan(slice...)
-		if err != nil {
-			return err
-		}
-
+	for _, row := range rows {
 		for i := range row {
 			if len([]rune(row[i])) > width[i] {
 				width[i] = len([]rune(row[i]))
 			}
 		}
-
-		rows = append(rows, row)
 	}
 
 	boundaries := make([]int32, len(el.headings))
@@ -92,15 +58,6 @@ func (el *ElementTable) runQuery() error {
 		top += fmt.Sprintf(" %s%s ", string(el.headings[i]), strings.Repeat(" ", width[i]-len(el.headings[i])))
 	}
 
-	if err = dbRows.Err(); err != nil {
-		return fmt.Errorf("cannot retrieve rows: %v", err)
-	}
-
-	err = dbRows.Close()
-	if err != nil {
-		return err
-	}
-
 	el.table = make([][]rune, len(table))
 	for i := range table {
 		el.table[i] = []rune(table[i])
@@ -109,21 +66,13 @@ func (el *ElementTable) runQuery() error {
 	el.width = width
 	el.boundaries = boundaries
 
-	err = el.db.QueryRow(fmt.Sprintf(sqlCount, el.name, el.sqlWhere())).Scan(&el.lines)
+	count, err := el.core.Count()
 	if err != nil {
-		return fmt.Errorf("cannot get table count: %v", err)
+		return err
 	}
+	el.lines = int32(count)
 
 	return nil
-}
-
-func _strToAnyPtr(s *[]string, max int) []any {
-	slice := make([]interface{}, max)
-	for i := range slice {
-		slice[i] = &(*s)[i]
-	}
-
-	return slice
 }
 
 func (el *ElementTable) exportHeadings() []string {
@@ -136,35 +85,12 @@ func (el *ElementTable) exportHeadings() []string {
 }
 
 func (el *ElementTable) exportRows() (string, [][]string, error) {
-	query := el.sqlString()
-	dbRows, err := el.db.Query(query)
+	rows, err := el.core.Rows(int(el.size.Y-1), int(el.limitOffset))
 	if err != nil {
-		return query, nil, fmt.Errorf("cannot query table: %v", err)
-	}
-	defer func() {
-		_ = dbRows.Close()
-	}()
-
-	rows := make([][]string, 0)
-	l := len(el.headings)
-
-	for dbRows.Next() {
-		row := make([]string, l)
-		slice := _strToAnyPtr(&row, l)
-
-		err = dbRows.Scan(slice...)
-		if err != nil {
-			return query, nil, fmt.Errorf("cannot read table row: %v", err)
-		}
-
-		rows = append(rows, row)
+		return "", nil, err
 	}
 
-	if err = dbRows.Err(); err != nil {
-		return query, nil, fmt.Errorf("cannot read table row: %v", err)
-	}
-
-	return query, rows, nil
+	return el.core.Name(), rows, nil
 }
 
 func writeMarkdownTable(buf *bytes.Buffer, headings []string, rows [][]string) {
@@ -234,7 +160,7 @@ func (el *ElementTable) ExportCsv() {
 		return
 	}
 
-	clipboard.Write(clipboard.FmtText, buf.Bytes())
+	clipboard.Write(context.Background(), clipboard.FmtText, buf.Bytes())
 }
 
 func (el *ElementTable) ExportMarkdown() {
@@ -246,5 +172,5 @@ func (el *ElementTable) ExportMarkdown() {
 
 	buf := bytes.NewBuffer(nil)
 	writeMarkdownTable(buf, el.exportHeadings(), rows)
-	clipboard.Write(clipboard.FmtText, buf.Bytes())
+	clipboard.Write(context.Background(), clipboard.FmtText, buf.Bytes())
 }

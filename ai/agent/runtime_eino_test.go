@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 type fakeAgentTool struct {
@@ -132,6 +134,10 @@ func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
 	}}}
 
 	cfg, err := rt.toolsConfig()
+	got := sanitizeToolName("mcp.atlassian.atlassianUserInfo")
+	if got != "mcp_atlassian_atlassianUserInfo" {
+		t.Fatalf("sanitizeToolName() = %q, want %q", got, "mcp_atlassian_atlassianUserInfo")
+	}
 	if err != nil {
 		t.Fatalf("toolsConfig() error = %v", err)
 	}
@@ -222,28 +228,142 @@ func TestSanitizeToolName_AllowsOnlyProviderSafeCharacters(t *testing.T) {
 
 func TestWithAIStreamCallback_EmitsToolProgress(t *testing.T) {
 	var chunks []string
-	ctx := withAIStreamCallback(context.Background(), func(s string) {
+	emitter := &aiStreamEmitter{fn: func(s string) {
 		chunks = append(chunks, s)
-	})
+	}}
+	ctx := withAIStreamCallback(context.Background(), emitter)
 
-	emitAIStreamToolProgress(ctx, "Action: mcp_atlassian_search\n")
-	emitAIStreamToolProgress(ctx, "Action Input: {\"query\":\"abc\"}\n")
+	emitAIStreamToolProgress(ctx, "\n## Action\n\nmcp_atlassian_search\n\n")
+	emitAIStreamToolProgress(ctx, "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n")
 
 	if len(chunks) != 2 {
 		t.Fatalf("emitted chunks = %d, want 2", len(chunks))
 	}
-	if chunks[0] != "Action: mcp_atlassian_search\n" {
-		t.Fatalf("chunk[0] = %q", chunks[0])
+	wantChunk0 := "\n## Action\n\nmcp_atlassian_search\n\n"
+	if chunks[0] != wantChunk0 {
+		t.Fatalf("chunk[0] = %q, want %q", chunks[0], wantChunk0)
 	}
-	if chunks[1] != "Action Input: {\"query\":\"abc\"}\n" {
-		t.Fatalf("chunk[1] = %q", chunks[1])
+	wantChunk1 := "\n## Action Input\n\n```\n{\"query\":\"abc\"}\n```\n\n"
+	if chunks[1] != wantChunk1 {
+		t.Fatalf("chunk[1] = %q, want %q", chunks[1], wantChunk1)
+	}
+}
+
+func TestEinoAgentToolRecordsContinuationObservation(t *testing.T) {
+	delegate := &fakeAgentTool{enabled: true}
+	tool := &einoAgentTool{
+		runtime:  &einoRuntime{},
+		delegate: delegate,
+	}
+	checkpoint := &continuationCheckpoint{}
+	ctx := withContinuationCheckpoint(context.Background(), checkpoint)
+
+	output, err := tool.InvokableRun(ctx, `{"path":"main.go"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v", err)
+	}
+	if output != "" {
+		t.Fatalf("InvokableRun() output = %q, want empty fake output", output)
+	}
+
+	snapshot := checkpoint.snapshot()
+	if len(snapshot.toolObservations) != 1 {
+		t.Fatalf("tool observations = %d, want 1", len(snapshot.toolObservations))
+	}
+	observation := snapshot.toolObservations[0]
+	if observation.Tool != "fake.tool" || len(observation.Inputs) != 1 || observation.Inputs[0] != `{"path":"main.go"}` {
+		t.Fatalf("observation = %+v, want fake.tool with original arguments", observation)
+	}
+}
+
+func TestFormatContinuationCheckpointMessageIncludesSemanticSections(t *testing.T) {
+	checkpoint := &continuationCheckpoint{}
+	checkpoint.setVisibleOutput("visible tail")
+	recordContinuationToolObservation(withContinuationCheckpoint(context.Background(), checkpoint), aitypes.ToolObservation{
+		Tool:              "grep",
+		Status:            "ok",
+		FilesRead:         []string{"a.go"},
+		FilesModified:     []string{"b.go"},
+		DirectoriesListed: []string{"/tmp/project"},
+		Counts:            map[string]int{"matches": 2},
+		SearchesRun:       []aitypes.SearchObservation{{Query: "needle", FileFilter: "*.go", ResultCount: 2, TopPaths: []string{"a.go", "b.go"}}},
+	})
+
+	message := formatContinuationCheckpointMessage(checkpoint)
+	for _, want := range []string{"Tool observations", "Files read: a.go", "Files modified: b.go", "Directories listed: /tmp/project", "Counts: matches=2", "Search: needle", "visible tail"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("checkpoint message missing %q:\n%s", want, message)
+		}
+	}
+}
+
+func TestFormatContinuationCheckpointMessageCapsTotalSize(t *testing.T) {
+	checkpoint := &continuationCheckpoint{}
+	ctx := withContinuationCheckpoint(context.Background(), checkpoint)
+	for i := 0; i < 10; i++ {
+		recordContinuationToolObservation(ctx, aitypes.ToolObservation{Tool: "readFiles", Outputs: []string{strings.Repeat("x", continuationCheckpointMaxFieldChars)}})
+	}
+
+	message := formatContinuationCheckpointMessage(checkpoint)
+	if len(message) > continuationCheckpointMaxTotalChars+len("\n\n[continuation checkpoint truncated]") {
+		t.Fatalf("message length = %d, want capped", len(message))
+	}
+	if !strings.Contains(message, "[continuation checkpoint truncated]") {
+		t.Fatalf("checkpoint message missing truncation marker")
+	}
+}
+
+func TestAIStreamEmitter_WrapsReasoningAsBlockquote(t *testing.T) {
+	var chunks []string
+	emitter := &aiStreamEmitter{fn: func(s string) { chunks = append(chunks, s) }}
+
+	emitter.emitReasoning("first thought")
+	emitter.emitReasoning("\nsecond thought")
+	emitter.emitText("Final answer.")
+
+	got := strings.Join(chunks, "")
+	want := "\n> **Thinking:** first thought\n> second thought\n\nFinal answer."
+	if got != want {
+		t.Fatalf("emitted stream = %q, want %q", got, want)
+	}
+}
+
+func TestAIStreamEmitter_ReopensBlockquoteAfterText(t *testing.T) {
+	var chunks []string
+	emitter := &aiStreamEmitter{fn: func(s string) { chunks = append(chunks, s) }}
+
+	emitter.emitReasoning("thinking A")
+	emitter.emitText("Action: foo\n")
+	emitter.emitReasoning("thinking B")
+	emitter.emitText("Final.")
+
+	got := strings.Join(chunks, "")
+	want := "\n> **Thinking:** thinking A\n\nAction: foo\n\n> **Thinking:** thinking B\n\nFinal."
+	if got != want {
+		t.Fatalf("emitted stream = %q, want %q", got, want)
 	}
 }
 
 func TestEmitAIStreamToolProgress_NoCallbackNoPanic(t *testing.T) {
-	emitAIStreamToolProgress(context.Background(), "Action: x\n")
-	emitAIStreamToolProgress(nil, "Action: x\n")
+	emitAIStreamToolProgress(context.Background(), "\n## Action\n\nx\n\n")
+	emitAIStreamToolProgress(nil, "\n## Action\n\nx\n\n")
 	emitAIStreamToolProgress(context.Background(), "")
+}
+
+func TestFormatToolCallMarkdown_UsesTildeFences(t *testing.T) {
+	got := formatToolCallMarkdown("mcp_atlassian_search", `{"query":"abc"}`)
+	want := "\n\n**Tool call:** `mcp_atlassian_search`\n\n~~~~json\n{\"query\":\"abc\"}\n~~~~\n\n"
+	if got != want {
+		t.Fatalf("formatToolCallMarkdown = %q, want %q", got, want)
+	}
+}
+
+func TestFormatToolOutputMarkdown_UsesTildeFences(t *testing.T) {
+	got := formatToolOutputMarkdown("some text with ``` inside")
+	want := "**Tool output:**\n\n~~~~\nsome text with ``` inside\n~~~~\n\n"
+	if got != want {
+		t.Fatalf("formatToolOutputMarkdown = %q, want %q", got, want)
+	}
 }
 
 func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {
@@ -271,6 +391,29 @@ func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {
 	}
 	if msgs[4].Role != schema.User || msgs[4].Content != "current prompt" {
 		t.Fatalf("msg[4] = (%s, %q), want (user, %q)", msgs[4].Role, msgs[4].Content, "current prompt")
+	}
+}
+
+func TestBuildEinoConversationMessagesMovesSystemPromptBeforeHistory(t *testing.T) {
+	history := []sessiondb.Entry{
+		{Prompt: "previous question", LLMResponse: "previous answer"},
+	}
+
+	msgs := buildEinoConversationMessages(history, []*schema.Message{
+		schema.SystemMessage("current system prompt"),
+		schema.UserMessage("current prompt"),
+	})
+	if len(msgs) != 4 {
+		t.Fatalf("message count = %d, want 4", len(msgs))
+	}
+	wantRoles := []string{string(schema.System), string(schema.User), string(schema.Assistant), string(schema.User)}
+	for i, wantRole := range wantRoles {
+		if string(msgs[i].Role) != wantRole {
+			t.Fatalf("msg[%d].Role = %s, want %s", i, msgs[i].Role, wantRole)
+		}
+	}
+	if msgs[0].Content != "current system prompt" || msgs[3].Content != "current prompt" {
+		t.Fatalf("messages = %#v, want system prompt first and current prompt last", msgs)
 	}
 }
 
@@ -314,6 +457,20 @@ func TestUnwrapToolInput_JSONString(t *testing.T) {
 	}
 }
 
+func TestUnwrapToolInput_PlainJSONObject(t *testing.T) {
+	got := unwrapToolInput(`{"prompt":"hello","size":"1024x1024"}`)
+	if got != `{"prompt":"hello","size":"1024x1024"}` {
+		t.Fatalf("unwrapToolInput() = %q, want the plain object preserved as JSON", got)
+	}
+}
+
+func TestUnwrapToolInput_WrappedJSONObject(t *testing.T) {
+	got := unwrapToolInput(`{"input":{"prompt":"hello","size":"1024x1024"}}`)
+	if got != `{"prompt":"hello","size":"1024x1024"}` {
+		t.Fatalf("unwrapToolInput() = %q, want the wrapped object encoded as JSON", got)
+	}
+}
+
 func TestUnwrapToolInput_FallbackRaw(t *testing.T) {
 	raw := `not-json`
 	got := unwrapToolInput(raw)
@@ -324,7 +481,7 @@ func TestUnwrapToolInput_FallbackRaw(t *testing.T) {
 
 func TestEinoAgentTool_InvokableRun_UnwrapsInputField(t *testing.T) {
 	f := &fakeAgentTool{enabled: true}
-	et, err := newEinoAgentTool(f)
+	et, err := newEinoAgentTool(nil, f)
 	if err != nil {
 		t.Fatalf("newEinoAgentTool() error = %v", err)
 	}
@@ -335,6 +492,127 @@ func TestEinoAgentTool_InvokableRun_UnwrapsInputField(t *testing.T) {
 	}
 	if f.input != "abc" {
 		t.Fatalf("tool input = %q, want %q", f.input, "abc")
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_RejectsDisabledTool(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateDisabled}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	out, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v, want refusal reported to the LLM", err)
+	}
+	if !strings.Contains(out, "disabled") {
+		t.Fatalf("InvokableRun() output = %q, want disabled refusal text", out)
+	}
+	if tool.input != "" {
+		t.Fatalf("disabled tool received input %q", tool.input)
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_DeniedToolDoesNotAbortRun(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateDenied}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	out, err := einoTool.InvokableRun(context.Background(), `{"input":"hello"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun() error = %v, want nil so the agent run continues", err)
+	}
+	if !strings.Contains(out, "refused") {
+		t.Fatalf("InvokableRun() output = %q, want refusal text", out)
+	}
+	if tool.input != "" {
+		t.Fatalf("denied tool received input %q", tool.input)
+	}
+}
+
+func TestEinoAgentTool_InvokableRun_CancellationStaysTerminal(t *testing.T) {
+	tool := &fakeAgentTool{enabled: true}
+	agent := &Agent{toolStates: map[string]string{tool.Name(): ToolStateApproval}}
+	einoTool := &einoAgentTool{runtime: &einoRuntime{agent: agent}, delegate: tool}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := einoTool.InvokableRun(ctx, `{"input":"hello"}`); !errors.Is(err, context.Canceled) {
+		t.Fatalf("InvokableRun() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestRequestToolPermission_DecisionScopes(t *testing.T) {
+	tests := []struct {
+		decision    string
+		wantAllowed bool
+		wantStored  bool
+	}{
+		{decision: "allow-once", wantAllowed: true, wantStored: false},
+		{decision: "allow-prompt", wantAllowed: true, wantStored: true},
+		{decision: "deny-once", wantAllowed: false, wantStored: false},
+		{decision: "deny-prompt", wantAllowed: false, wantStored: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.decision, func(t *testing.T) {
+			agent := &Agent{toolStates: map[string]string{"fake.tool": ToolStateApproval}}
+
+			resolved := make(chan error, 1)
+			go func() {
+				resolved <- agent.RequestToolPermission(context.Background(), "fake.tool")
+			}()
+
+			var reqID string
+			for range 200 {
+				writePermissionRequests.mu.Lock()
+				for id := range writePermissionRequests.m {
+					reqID = id
+				}
+				writePermissionRequests.mu.Unlock()
+				if reqID != "" {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if reqID == "" {
+				t.Fatal("no pending permission request was raised")
+			}
+
+			if err := ResolveWritePermissionRequest(reqID, test.decision); err != nil {
+				t.Fatalf("ResolveWritePermissionRequest() error = %v", err)
+			}
+
+			err := <-resolved
+			if test.wantAllowed && err != nil {
+				t.Fatalf("RequestToolPermission() error = %v, want nil", err)
+			}
+			if !test.wantAllowed {
+				if !errors.Is(err, ErrToolPermissionRefused) {
+					t.Fatalf("RequestToolPermission() error = %v, want ErrToolPermissionRefused", err)
+				}
+			}
+
+			agent.toolPermissionMu.Lock()
+			stored := agent.toolPermissions["fake.tool"].decision != toolPermissionUndecided
+			agent.toolPermissionMu.Unlock()
+			if stored != test.wantStored {
+				t.Fatalf("decision stored = %v, want %v", stored, test.wantStored)
+			}
+		})
+	}
+}
+
+func TestResetToolPermissions_ClearsPromptScopedDecisions(t *testing.T) {
+	agent := &Agent{toolPermissions: map[string]*toolPermissionState{
+		"a": {decision: toolPermissionAllowedPrompt},
+		"b": {decision: toolPermissionDeniedPrompt},
+	}}
+
+	agent.ResetToolPermissions()
+
+	if len(agent.toolPermissions) != 0 {
+		t.Fatalf("toolPermissions = %v, want empty after reset", agent.toolPermissions)
 	}
 }
 
@@ -526,4 +804,154 @@ func TestAgentRunLLMWithMessageStream_UsesStructuredMessages(t *testing.T) {
 	if rt.messages[0].Role != schema.System || rt.messages[1].Role != schema.User {
 		t.Fatalf("runtime messages roles = (%s, %s), want (system, user)", rt.messages[0].Role, rt.messages[1].Role)
 	}
+}
+
+func TestEinoRuntimeContinuationAppendsPreviousWindowOutput(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 3)
+	defer restore()
+
+	var calls int
+	var secondCallMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(ctx context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			recordContinuationToolObservation(ctx, aitypes.ToolObservation{Tool: "readFiles", Inputs: []string{`{"files":["main.go"]}`}, Outputs: []string{"main.go contents"}})
+			return "partial visible output", errors.New("[GraphRunError] exceeds max steps")
+		}
+		secondCallMessages = append([]*schema.Message(nil), messages...)
+		return "done", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partial visible outputdone" {
+		t.Fatalf("result = %q, want concatenated continuation output", result)
+	}
+	if calls != 2 {
+		t.Fatalf("bounded window calls = %d, want 2", calls)
+	}
+	if len(secondCallMessages) != 2 {
+		t.Fatalf("second call messages = %d, want original + continuation", len(secondCallMessages))
+	}
+	last := secondCallMessages[len(secondCallMessages)-1]
+	if last.Role != schema.User {
+		t.Fatalf("continuation message role = %s, want user", last.Role)
+	}
+	if !strings.Contains(last.Content, "partial visible output") || !strings.Contains(last.Content, "Continue the original task") {
+		t.Fatalf("continuation message content = %q, want previous output and continuation instruction", last.Content)
+	}
+	if !strings.Contains(last.Content, "Continuation checkpoint") {
+		t.Fatalf("continuation message content = %q, want structured checkpoint section", last.Content)
+	}
+	if !strings.Contains(last.Content, "Tool observations") || !strings.Contains(last.Content, "readFiles") || !strings.Contains(last.Content, "main.go contents") {
+		t.Fatalf("continuation message content = %q, want captured tool observation", last.Content)
+	}
+	if !strings.Contains(streamed.String(), "Continuing after max steps (1/3)") {
+		t.Fatalf("streamed output = %q, want continuation progress marker", streamed.String())
+	}
+}
+
+func TestEinoRuntimeContinuationAsksUserAtConfiguredBoundary(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 1)
+	defer restore()
+
+	var calls int
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, _ []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		return "partial", errors.New("[GraphRunError] exceeds max steps")
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+		if requestID := userQuestionRequestIDFromMarkdown(chunk); requestID != "" {
+			if resolveErr := ResolveUserQuestionRequest(requestID, "finish up"); resolveErr != nil {
+				t.Errorf("ResolveUserQuestionRequest() error = %v", resolveErr)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partial" {
+		t.Fatalf("result = %q, want partial output", result)
+	}
+	if calls != 1 {
+		t.Fatalf("bounded window calls = %d, want 1", calls)
+	}
+	if !strings.Contains(streamed.String(), "maximum number of continuations (1)") {
+		t.Fatalf("streamed output = %q, want user question", streamed.String())
+	}
+	if strings.Contains(streamed.String(), "Continuing after max steps") {
+		t.Fatalf("streamed output = %q, should not continue after finish up", streamed.String())
+	}
+}
+
+func TestEinoRuntimeContinuationContinueChoiceOpensAnotherWindow(t *testing.T) {
+	restore := setMaxContinuationsForTest(t, 1)
+	defer restore()
+
+	var calls int
+	var secondCallMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			return "first", errors.New("[GraphRunError] exceeds max steps")
+		}
+		secondCallMessages = append([]*schema.Message(nil), messages...)
+		return "done", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+		if requestID := userQuestionRequestIDFromMarkdown(chunk); requestID != "" {
+			if resolveErr := ResolveUserQuestionRequest(requestID, "continue"); resolveErr != nil {
+				t.Errorf("ResolveUserQuestionRequest() error = %v", resolveErr)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "firstdone" {
+		t.Fatalf("result = %q, want firstdone", result)
+	}
+	if calls != 2 {
+		t.Fatalf("bounded window calls = %d, want 2", calls)
+	}
+	if len(secondCallMessages) != 2 {
+		t.Fatalf("second call messages = %d, want original + continuation", len(secondCallMessages))
+	}
+	if !strings.Contains(streamed.String(), "Continuing after max steps (1/1)") {
+		t.Fatalf("streamed output = %q, want reset continuation progress marker", streamed.String())
+	}
+}
+
+func setMaxContinuationsForTest(t *testing.T, value int) func() {
+	t.Helper()
+	old := config.Config.Ai.MaxContinuations
+	config.Config.Ai.MaxContinuations = value
+	return func() { config.Config.Ai.MaxContinuations = old }
+}
+
+func userQuestionRequestIDFromMarkdown(markdown string) string {
+	const marker = "ttyphoon://ai-user-question?request="
+	idx := strings.Index(markdown, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := markdown[idx+len(marker):]
+	if amp := strings.Index(rest, "&"); amp >= 0 {
+		return rest[:amp]
+	}
+	return rest
 }

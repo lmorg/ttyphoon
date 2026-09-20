@@ -1,12 +1,12 @@
-package tools
+package filetools
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -24,6 +24,9 @@ func init() {
 	agent.ToolsAdd(&ReadFiles{})
 }
 
+//go:embed read_description.md
+var readDescription string
+
 func (f *ReadFiles) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &ReadFiles{agent: agent, enabled: true}, nil
 }
@@ -31,15 +34,13 @@ func (f *ReadFiles) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *ReadFiles) Enabled() bool { return t.enabled }
 func (t *ReadFiles) Toggle()       { t.enabled = !t.enabled }
 
-func (t *ReadFiles) Name() string { return "Read Files" }
+func (t *ReadFiles) Name() string { return "readFiles" }
 func (t *ReadFiles) Path() string { return "internal" }
+func (t *ReadFiles) DefaultPermissions() aitypes.DefaultPermissions {
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
+}
 func (t *ReadFiles) Description() string {
-	return `Open a local files for reading and return their contents.
-Useful for debugging output that references local files.
-The output of this tool will conform to the ` + "`txtar`" + ` specification.
-Any files that could not be opened will be returned with the contents saying "!!! Cannot open file"
-The input for this tool MUST be a JSON array of strings. Each array item will be a file you want the contents of.
-`
+	return readDescription
 }
 
 func (t *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
@@ -60,10 +61,13 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	var archive txtar.Archive
 
 	for i := range files {
-		filename := files[i]
-
-		if !strings.HasPrefix(filename, t.agent.GetMeta().Pwd) {
-			filename = t.agent.GetMeta().Pwd + "/" + files[i]
+		filename, pathErr := resolveWorkspacePath(t.agent, files[i])
+		if pathErr != nil {
+			archive.Files = append(archive.Files, txtar.File{
+				Name: files[i],
+				Data: fmt.Appendf(nil, "!!! Cannot open file: %v", pathErr),
+			})
+			continue
 		}
 
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" requesting file: "+filename[len(t.agent.GetMeta().Pwd):])
@@ -71,13 +75,13 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 		var b []byte
 		info, err := os.Stat(filename)
 		if err != nil {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %v", err))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %v", err)
 
 		} else if info.Name()[0] == '.' {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %s", "file hidden"))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %s", "file hidden")
 
 		} else if b, err = os.ReadFile(filename); err != nil {
-			b = []byte(fmt.Sprintf("!!! Cannot open file: %v", err))
+			b = fmt.Appendf(nil, "!!! Cannot open file: %v", err)
 		}
 
 		archive.Files = append(archive.Files, txtar.File{
@@ -91,4 +95,21 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	response = string(txtar.Format(&archive))
 
 	return response, nil
+}
+
+func (t *ReadFiles) Observation(input, output string, err error) aitypes.ToolObservation {
+	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+		return observation
+	}
+	var files []string
+	if json.Unmarshal([]byte(input), &files) != nil {
+		observation.Inputs = []string{input}
+		return observation
+	}
+	observation.FilesRead = files
+	observation.Counts = map[string]int{"files": len(files)}
+	return observation
 }

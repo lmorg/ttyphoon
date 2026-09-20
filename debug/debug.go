@@ -49,7 +49,7 @@ skipJson:
 	pc, file, line, ok := runtime.Caller(1)
 
 	if !ok {
-		log.Printf("DEBUG: %s:%d: %s", file, line, string(b))
+		log.Printf("[trace] %s:%d: %s", file, line, string(b))
 		return
 	}
 
@@ -58,7 +58,7 @@ skipJson:
 
 	pc, _, _, ok = runtime.Caller(2)
 	if !ok {
-		log.Printf("DEBUG: %s(): %s", fnName, string(b))
+		log.Printf("[trace] %s(): %s", fnName, string(b))
 		return
 	}
 
@@ -68,6 +68,6 @@ skipJson:
 	s := strings.ReplaceAll(string(b), `\n`, "\n")
 	lines := strings.Split(s, "\n")
 	for i := range lines {
-		log.Printf("DEBUG: %s() -> %s(): %s", prevName, fnName, lines[i])
+		log.Printf("[trace] %s() -> %s(): %s", prevName, fnName, lines[i])
 	}
 }

@@ -10,8 +10,16 @@ export function AskAI(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['AskAI'](arg1, arg2, arg3);
 }
 
+export function AskAIImage(arg1, arg2) {
+  return window['go']['main']['WApp']['AskAIImage'](arg1, arg2);
+}
+
 export function CancelNotesListFiles() {
   return window['go']['main']['WApp']['CancelNotesListFiles']();
+}
+
+export function ClearAILog() {
+  return window['go']['main']['WApp']['ClearAILog']();
 }
 
 export function ClearAISessionHistory() {
@@ -40,6 +48,10 @@ export function ComposeNoteLocationPath(arg1, arg2) {
 
 export function CreateAISession() {
   return window['go']['main']['WApp']['CreateAISession']();
+}
+
+export function DeleteAIHistoryEntry(arg1) {
+  return window['go']['main']['WApp']['DeleteAIHistoryEntry'](arg1);
 }
 
 export function DeleteAISession(arg1) {
@@ -74,12 +86,32 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
+export function GetAIActiveStreamSnapshot(arg1) {
+  return window['go']['main']['WApp']['GetAIActiveStreamSnapshot'](arg1);
+}
+
+export function GetAIExecutionLimits() {
+  return window['go']['main']['WApp']['GetAIExecutionLimits']();
+}
+
+export function GetAIMcpServers() {
+  return window['go']['main']['WApp']['GetAIMcpServers']();
+}
+
+export function GetAIPromptLog(arg1, arg2) {
+  return window['go']['main']['WApp']['GetAIPromptLog'](arg1, arg2);
+}
+
 export function GetAISessionCache(arg1) {
   return window['go']['main']['WApp']['GetAISessionCache'](arg1);
 }
 
 export function GetAISessionManagement() {
   return window['go']['main']['WApp']['GetAISessionManagement']();
+}
+
+export function GetAIToolsList() {
+  return window['go']['main']['WApp']['GetAIToolsList']();
 }
 
 export function GetAllLanguageDescriptions() {
@@ -178,8 +210,16 @@ export function ListAIModelSelections() {
   return window['go']['main']['WApp']['ListAIModelSelections']();
 }
 
+export function ListAIPromptLogs() {
+  return window['go']['main']['WApp']['ListAIPromptLogs']();
+}
+
 export function ListFiles() {
   return window['go']['main']['WApp']['ListFiles']();
+}
+
+export function Log(arg1) {
+  return window['go']['main']['WApp']['Log'](arg1);
 }
 
 export function NotesGrepStream(arg1, arg2) {
@@ -270,6 +310,10 @@ export function NotesLspPrepareRename(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesLspPrepareRename'](arg1, arg2, arg3);
 }
 
+export function NotesLspReferences(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesLspReferences'](arg1, arg2, arg3);
+}
+
 export function NotesLspRename(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['NotesLspRename'](arg1, arg2, arg3, arg4);
 }
@@ -280,6 +324,10 @@ export function NotesLspSaveDocument(arg1) {
 
 export function NotesLspSemanticTokens(arg1) {
   return window['go']['main']['WApp']['NotesLspSemanticTokens'](arg1);
+}
+
+export function NotesLspSemanticTokensDelta(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesLspSemanticTokensDelta'](arg1, arg2);
 }
 
 export function NotesLspSignatureHelp(arg1, arg2, arg3, arg4, arg5) {
@@ -302,6 +350,26 @@ export function NotesSpellCheck(arg1) {
   return window['go']['main']['WApp']['NotesSpellCheck'](arg1);
 }
 
+export function NotesTableClearSort(arg1) {
+  return window['go']['main']['WApp']['NotesTableClearSort'](arg1);
+}
+
+export function NotesTableDisposeAll() {
+  return window['go']['main']['WApp']['NotesTableDisposeAll']();
+}
+
+export function NotesTableFilter(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTableFilter'](arg1, arg2);
+}
+
+export function NotesTableReconcile(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['NotesTableReconcile'](arg1, arg2, arg3);
+}
+
+export function NotesTableSort(arg1, arg2) {
+  return window['go']['main']['WApp']['NotesTableSort'](arg1, arg2);
+}
+
 export function NotesTyposAvailable() {
   return window['go']['main']['WApp']['NotesTyposAvailable']();
 }
@@ -318,8 +386,20 @@ export function NotesTyposOpenDocument(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesTyposOpenDocument'](arg1, arg2, arg3);
 }
 
+export function RenameAISession(arg1, arg2) {
+  return window['go']['main']['WApp']['RenameAISession'](arg1, arg2);
+}
+
 export function RenameFile(arg1, arg2) {
   return window['go']['main']['WApp']['RenameFile'](arg1, arg2);
+}
+
+export function ResolveAIToolPermission(arg1, arg2) {
+  return window['go']['main']['WApp']['ResolveAIToolPermission'](arg1, arg2);
+}
+
+export function ResolveAIUserQuestion(arg1, arg2) {
+  return window['go']['main']['WApp']['ResolveAIUserQuestion'](arg1, arg2);
 }
 
 export function ResolveFilePath(arg1) {
@@ -370,6 +450,26 @@ export function SendToTerminal(arg1) {
   return window['go']['main']['WApp']['SendToTerminal'](arg1);
 }
 
+export function SetAIMcpServerEnabled(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIMcpServerEnabled'](arg1, arg2);
+}
+
+export function SetAIPanelLive(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIPanelLive'](arg1, arg2);
+}
+
+export function SetAIToolEnabled(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolEnabled'](arg1, arg2);
+}
+
+export function SetAIToolState(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolState'](arg1, arg2);
+}
+
+export function SetAIToolSubagentAllowed(arg1, arg2) {
+  return window['go']['main']['WApp']['SetAIToolSubagentAllowed'](arg1, arg2);
+}
+
 export function SetActiveAISession(arg1) {
   return window['go']['main']['WApp']['SetActiveAISession'](arg1);
 }
@@ -392,6 +492,18 @@ export function SetProjectCache(arg1) {
 
 export function ShowAIMcpMenu() {
   return window['go']['main']['WApp']['ShowAIMcpMenu']();
+}
+
+export function ShowAISkillsMenu(arg1, arg2) {
+  return window['go']['main']['WApp']['ShowAISkillsMenu'](arg1, arg2);
+}
+
+export function ShowAIToolStateMenu(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['ShowAIToolStateMenu'](arg1, arg2, arg3);
+}
+
+export function ShowAIToolSubagentMenu(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['ShowAIToolSubagentMenu'](arg1, arg2, arg3);
 }
 
 export function ShowAIToolsMenu() {
@@ -452,6 +564,10 @@ export function TerminalMouseMotion(arg1, arg2, arg3, arg4, arg5) {
 
 export function TerminalMouseWheel(arg1, arg2, arg3, arg4) {
   return window['go']['main']['WApp']['TerminalMouseWheel'](arg1, arg2, arg3, arg4);
+}
+
+export function TerminalPaneZoom() {
+  return window['go']['main']['WApp']['TerminalPaneZoom']();
 }
 
 export function TerminalRequestRedraw() {

@@ -12,8 +12,8 @@ export const DARKEN_BACKGROUND_OVERLAY = 'rgba(0, 0, 0, 0.2)';
 export function getScrollbarStyles(colors) {
     return `
         ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
+            width: 8px;
+            height: 8px;
             background-color: transparent;
             opacity: 0.5;
         }
@@ -187,6 +187,8 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
     const blue = useCssVars ? 'var(--blue)' : `rgb(${colors.blue.Red}, ${colors.blue.Green}, ${colors.blue.Blue})`;
     const green = useCssVars ? 'var(--green)' : `rgb(${colors.green.Red}, ${colors.green.Green}, ${colors.green.Blue})`;
     const cyan = useCssVars ? 'var(--cyan)' : `rgb(${colors.cyan.Red}, ${colors.cyan.Green}, ${colors.cyan.Blue})`;
+    const yellow = useCssVars ? 'var(--yellow)' : `rgb(${colors.yellow.Red}, ${colors.yellow.Green}, ${colors.yellow.Blue})`;
+    const magenta = useCssVars ? 'var(--magenta)' : `rgb(${colors.magenta.Red}, ${colors.magenta.Green}, ${colors.magenta.Blue})`;
     const comment = useCssVars
         ? 'color-mix(in srgb, var(--fg) 55%, var(--bg) 45%)'
         : `rgb(${mixChannel(colors.fg.Red, colors.bg.Red, 0.45)}, ${mixChannel(colors.fg.Green, colors.bg.Green, 0.45)}, ${mixChannel(colors.fg.Blue, colors.bg.Blue, 0.45)})`;
@@ -236,12 +238,18 @@ export function getHighlightJsTheme(colors, useCssVars = true) {
             color: ${blue};
         }
 
-        .hljs-punctuation,
         .hljs-title,
         .hljs-title.function_,
+        .hljs-function {
+            color: ${yellow};
+        }
+
+        .hljs-params {
+            color: ${magenta};
+        }
+
+        .hljs-punctuation,
         .hljs-section,
-        .hljs-function,
-        .hljs-params,
         .hljs-meta,
         .hljs-meta-keyword,
         .hljs-tag {

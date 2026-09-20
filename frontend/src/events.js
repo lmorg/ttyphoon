@@ -7,20 +7,8 @@ import {
 } from '../wailsjs/go/main/WApp';
 
 function mouseButtonToGo(button) {
-    switch (button) {
-    case 0:
-        return 1;
-    case 1:
-        return 2;
-    case 2:
-        return 3;
-    case 3:
-        return 4;
-    case 4:
-        return 5;
-    default:
-        return 1;
-    }
+    if (!Number.isInteger(button) || button < 0 || button > 4) return 1;
+    return ++button;
 }
 
 function eventToCell(canvas, event, getCellSize) {

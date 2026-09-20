@@ -13,7 +13,11 @@ export function AddNotesFindFieldValue(arg1:string,arg2:string):Promise<Array<st
 
 export function AskAI(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function AskAIImage(arg1:string,arg2:string):Promise<void>;
+
 export function CancelNotesListFiles():Promise<void>;
+
+export function ClearAILog():Promise<void>;
 
 export function ClearAISessionHistory():Promise<sessiondb.FrontendStateT>;
 
@@ -28,6 +32,8 @@ export function CompleteSyntax(arg1:string,arg2:string,arg3:string,arg4:number,a
 export function ComposeNoteLocationPath(arg1:string,arg2:string):Promise<string>;
 
 export function CreateAISession():Promise<sessiondb.FrontendStateT>;
+
+export function DeleteAIHistoryEntry(arg1:number):Promise<sessiondb.FrontendStateT>;
 
 export function DeleteAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
@@ -45,9 +51,19 @@ export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
 export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
+export function GetAIActiveStreamSnapshot(arg1:string):Promise<sessiondb.ActiveStreamSnapshot>;
+
+export function GetAIExecutionLimits():Promise<Record<string, any>>;
+
+export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
+
+export function GetAIPromptLog(arg1:number,arg2:number):Promise<string>;
+
 export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
+
+export function GetAIToolsList():Promise<Array<Record<string, any>>>;
 
 export function GetAllLanguageDescriptions():Promise<Array<string>>;
 
@@ -97,7 +113,11 @@ export function HyperlinkOpenWithDefault(arg1:string):Promise<void>;
 
 export function ListAIModelSelections():Promise<Array<string>>;
 
+export function ListAIPromptLogs():Promise<Array<sessiondb.PromptLogMeta>>;
+
 export function ListFiles():Promise<Array<string>>;
+
+export function Log(arg1:string):Promise<void>;
 
 export function NotesGrepStream(arg1:string,arg2:grep.Options):Promise<void>;
 
@@ -143,11 +163,15 @@ export function NotesLspOpenDocument(arg1:string,arg2:string,arg3:string):Promis
 
 export function NotesLspPrepareRename(arg1:string,arg2:number,arg3:number):Promise<lsp.PrepareRenameResult>;
 
+export function NotesLspReferences(arg1:string,arg2:number,arg3:number):Promise<Array<lsp.ReferenceLocation>>;
+
 export function NotesLspRename(arg1:string,arg2:number,arg3:number,arg4:string):Promise<lsp.RenameResult>;
 
 export function NotesLspSaveDocument(arg1:string):Promise<void>;
 
-export function NotesLspSemanticTokens(arg1:string):Promise<Array<lsp.SemanticTokenItem>>;
+export function NotesLspSemanticTokens(arg1:string):Promise<lsp.SemanticTokensResult>;
+
+export function NotesLspSemanticTokensDelta(arg1:string,arg2:string):Promise<lsp.SemanticTokensResult>;
 
 export function NotesLspSignatureHelp(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<string>;
 
@@ -159,6 +183,16 @@ export function NotesRecentFiles():Promise<Array<string>>;
 
 export function NotesSpellCheck(arg1:string):Promise<Array<main.SpellCheckSuggestionT>>;
 
+export function NotesTableClearSort(arg1:main.NotesTableRequestT):Promise<main.NotesTableResultT>;
+
+export function NotesTableDisposeAll():Promise<void>;
+
+export function NotesTableFilter(arg1:main.NotesTableRequestT,arg2:string):Promise<main.NotesTableResultT>;
+
+export function NotesTableReconcile(arg1:string,arg2:string,arg3:Array<number>):Promise<void>;
+
+export function NotesTableSort(arg1:main.NotesTableRequestT,arg2:number):Promise<main.NotesTableResultT>;
+
 export function NotesTyposAvailable():Promise<boolean>;
 
 export function NotesTyposChangeDocument(arg1:string,arg2:string):Promise<void>;
@@ -167,7 +201,13 @@ export function NotesTyposCloseDocument(arg1:string):Promise<void>;
 
 export function NotesTyposOpenDocument(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
+export function RenameAISession(arg1:number,arg2:string):Promise<sessiondb.FrontendStateT>;
+
 export function RenameFile(arg1:string,arg2:string):Promise<void>;
+
+export function ResolveAIToolPermission(arg1:string,arg2:string):Promise<void>;
+
+export function ResolveAIUserQuestion(arg1:string,arg2:string):Promise<void>;
 
 export function ResolveFilePath(arg1:string):Promise<string>;
 
@@ -193,6 +233,16 @@ export function SendIpc(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SendToTerminal(arg1:string):Promise<void>;
 
+export function SetAIMcpServerEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetAIPanelLive(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetAIToolEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetAIToolState(arg1:string,arg2:string):Promise<void>;
+
+export function SetAIToolSubagentAllowed(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetActiveAISession(arg1:number):Promise<sessiondb.FrontendStateT>;
 
 export function SetCurrentAIModelSelection(arg1:string):Promise<void>;
@@ -204,6 +254,12 @@ export function SetNotesColumnWidths(arg1:string,arg2:string,arg3:Array<string>,
 export function SetProjectCache(arg1:notes.ProjectCacheT):Promise<void>;
 
 export function ShowAIMcpMenu():Promise<void>;
+
+export function ShowAISkillsMenu(arg1:number,arg2:number):Promise<void>;
+
+export function ShowAIToolStateMenu(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function ShowAIToolSubagentMenu(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ShowAIToolsMenu():Promise<void>;
 
@@ -234,6 +290,8 @@ export function TerminalMouseButton(arg1:number,arg2:number,arg3:number,arg4:num
 export function TerminalMouseMotion(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number):Promise<void>;
 
 export function TerminalMouseWheel(arg1:number,arg2:number,arg3:number,arg4:number):Promise<void>;
+
+export function TerminalPaneZoom():Promise<void>;
 
 export function TerminalRequestRedraw():Promise<void>;
 

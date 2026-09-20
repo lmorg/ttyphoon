@@ -1,4 +1,4 @@
-import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
+import { CloseNotification, GetWindowStyle, SendIpc, TerminalCopyImageDataURL, TerminalGetTabs, TerminalPaneZoom, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
@@ -30,6 +30,17 @@ const offCtx = offscreen.getContext('2d');
 const font = createFontController(offCtx);
 let windowStyle;
 let rafPending = false;
+let rafHandle = 0;
+let rafWatchdog = 0;
+
+function clearRedrawLatch() {
+    if (rafWatchdog) {
+        clearTimeout(rafWatchdog);
+        rafWatchdog = 0;
+    }
+    rafHandle = 0;
+    rafPending = false;
+}
 
 const REDRAW_OP = {
     CELL: 1,
@@ -338,6 +349,30 @@ function renderTerminalTabs(tabs) {
 
     tabsEl.style.display = (tabState.length > 0 || jupyterTabEnabled) ? 'flex' : 'none';
     updateNotificationOffset();
+
+    // Ensure the pane zoom (fullscreen) button exists
+    createOrUpdateZoomButton();
+}
+
+function createOrUpdateZoomButton() {
+    if (document.getElementById('terminal-zoom-btn')) {
+        return;
+    }
+
+    const btn = document.createElement('button');
+    btn.id = 'terminal-zoom-btn';
+    btn.type = 'button';
+    btn.className = 'notes-tools-clear';
+    btn.title = 'Zoom pane';
+    btn.innerHTML = '&#xf065;';
+    btn.dataset.enabled = 'false';
+    btn.addEventListener('click', () => {
+        // Zoom the active tmux pane so only it fills the maximized overlay, then
+        // toggle the fullscreen overlay (mirrors the Notes full-size model).
+        TerminalPaneZoom();
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+    });
+    document.getElementById('terminal-pane').appendChild(btn);
 }
 
 function applyEmbeddedJupyterVisibility() {
@@ -418,6 +453,7 @@ function applyTerminalStyles(result) {
             padding: 6px 12px;
             cursor: pointer;
             white-space: nowrap;
+            transition: color 0.2s ease, border-color 0.2s ease;
         }
 
         #terminal-tabs button[aria-selected="true"] {
@@ -433,8 +469,9 @@ function applyTerminalStyles(result) {
             border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
         }
 
-        .terminal-tab:hover {
-            border-color: rgba(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue}, 0.2) !important;
+        .terminal-tab:not([aria-selected="true"]):hover {
+            border-color: var(--terminal-accent) !important;
+            color: var(--terminal-accent) !important;
         }
 
         #terminal-viewport {
@@ -454,6 +491,13 @@ function applyTerminalStyles(result) {
         #terminal-pane[data-terminal-focused="true"] #terminal-viewport {
             border: 1px solid !important;
             border-color: var(--terminal-accent) !important;
+        }
+
+        /* Match the maximized pane's 8px radius so the accent border curves with
+           it rather than being clipped square at the corners. */
+        #terminal-pane[data-fullsize="true"] #terminal-viewport {
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
         }
 
         #ttyphoon-terminal {
@@ -1101,7 +1145,7 @@ EventsOn("terminalRedraw", ops => {
         const drawOps = decodeDrawOpsPayload(ops);
 
         if (!Array.isArray(drawOps) || drawOps.length === 0) {
-            rafPending = false;
+            clearRedrawLatch();
             return;
         }
 
@@ -1164,21 +1208,54 @@ EventsOn("terminalRedraw", ops => {
             }
         }
 
-        requestAnimationFrame(() => {
+        rafHandle = requestAnimationFrame(() => {
             try {
                 paintTerminalCanvas();
                 syncCursorLoopState();
             } catch (err) {
                 console.error('terminal redraw RAF failed', err);
             } finally {
-                rafPending = false;
+                clearRedrawLatch();
             }
         });
+
+        // WebKit drops pending rAF callbacks across occlusion and display sleep;
+        // without this the latch never clears and the canvas stops updating.
+        rafWatchdog = setTimeout(() => {
+            if (!rafPending) {
+                return;
+            }
+            if (rafHandle) {
+                cancelAnimationFrame(rafHandle);
+            }
+            try {
+                paintTerminalCanvas();
+                syncCursorLoopState();
+            } catch (err) {
+                console.error('terminal redraw fallback failed', err);
+            } finally {
+                clearRedrawLatch();
+            }
+            TerminalRequestRedraw().catch(() => {});
+        }, 1000);
     } catch (err) {
         console.error('terminal redraw failed', err);
-        rafPending = false;
+        clearRedrawLatch();
     }
 });
+
+function resumeTerminalAfterSuspend() {
+    clearRedrawLatch();
+    TerminalRequestRedraw().catch(() => {});
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        resumeTerminalAfterSuspend();
+    }
+});
+window.addEventListener('focus', resumeTerminalAfterSuspend);
+window.addEventListener('pageshow', resumeTerminalAfterSuspend);
 
 EventsOn("terminalTabs", payload => {
     // Handle both old format (array of tabs) and new format (object with tabs and tileCount)

@@ -2,6 +2,7 @@ package element_image
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image/png"
@@ -186,6 +187,6 @@ func (el *ElementImage) copyImageToClipboard() {
 		return
 	}
 
-	clipboard.Write(clipboard.FmtImage, bufPng.Bytes())
+	clipboard.Write(context.Background(), clipboard.FmtImage, bufPng.Bytes())
 	el.renderer.DisplayNotification(types.NOTIFY_INFO, "Copied to clipboard as PNG")
 }

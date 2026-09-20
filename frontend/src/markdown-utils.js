@@ -379,6 +379,13 @@ export function processLinks(container, options = {}) {
     const { enableBookmarks = false } = options;
 
     container.querySelectorAll('a').forEach(a => {
+        // Streamed content persists across renders, so guard against binding the
+        // same anchor twice and firing its handler more than once per click.
+        if (a.dataset.linkProcessed === 'true') {
+            return;
+        }
+        a.dataset.linkProcessed = 'true';
+
         const rawHref = a.getAttribute('href') || '';
         const isHashOnly = rawHref.startsWith('#');
         const isBookmark = isHashOnly || a.href.match(rxBookmark);
@@ -396,6 +403,40 @@ export function processLinks(container, options = {}) {
                 if (target) {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
+            });
+            return;
+        }
+
+        if (rawHref.startsWith('ttyphoon://ai-tool-permission')) {
+            // AI access-request link — dispatch a custom event carrying the
+            // request id and the chosen decision so notes.js can resolve it.
+            const qStart = rawHref.indexOf('?');
+            const params = new URLSearchParams(qStart !== -1 ? rawHref.slice(qStart + 1) : '');
+            const requestId = params.get('request') || '';
+            const decision = params.get('decision') || '';
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                a.dispatchEvent(new CustomEvent('ttyphoon-ai-tool-permission', {
+                    detail: { requestId, decision, anchor: a },
+                    bubbles: true,
+                    composed: true,
+                }));
+            });
+            return;
+        }
+
+        if (rawHref.startsWith('ttyphoon://ai-user-question')) {
+            const qStart = rawHref.indexOf('?');
+            const params = new URLSearchParams(qStart !== -1 ? rawHref.slice(qStart + 1) : '');
+            const requestId = params.get('request') || '';
+            const answer = params.get('answer') || '';
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                a.dispatchEvent(new CustomEvent('ttyphoon-ai-user-question', {
+                    detail: { requestId, answer, anchor: a },
+                    bubbles: true,
+                    composed: true,
+                }));
             });
             return;
         }
@@ -434,8 +475,23 @@ export function processLinks(container, options = {}) {
  * Apply custom regex hyperlinking to text nodes in the container
  * @param {HTMLElement} container - The container element to process
  */
+let cachedCustomRegexpsPromise = null;
+
+// Custom hyperlink regexps only change via config reload (app restart), so the
+// Go IPC round-trip only needs to happen once rather than on every render —
+// this is called on every streamed chunk in the AI panel.
+function getCachedCustomRegexps() {
+    if (!cachedCustomRegexpsPromise) {
+        cachedCustomRegexpsPromise = Promise.resolve(GetCustomRegexp?.() || []).catch((err) => {
+            cachedCustomRegexpsPromise = null;
+            throw err;
+        });
+    }
+    return cachedCustomRegexpsPromise;
+}
+
 export async function autoHyperlink(container) {
-    const customRegexps = await GetCustomRegexp?.() || [];
+    const customRegexps = await getCachedCustomRegexps() || [];
 
     if (!customRegexps || customRegexps.length === 0) {
         return;
@@ -517,16 +573,26 @@ export async function autoHyperlink(container) {
 /**
  * Complete markdown processing pipeline - applies all common transformations
  * @param {HTMLElement} container - The container element with rendered markdown
+ * @param {{syntaxHighlighting?: boolean}} [options] - Set syntaxHighlighting false to leave code blocks unstyled
  */
-export async function processMarkdownContainer(container) {
+/**
+ * Complete markdown processing pipeline - applies all common transformations
+ * @param {HTMLElement} container - The container element with rendered markdown
+ * @param {{syntaxHighlighting?: boolean, autoHyperlink?: boolean}} [options] - Set syntaxHighlighting false to leave code blocks unstyled; set autoHyperlink false to skip the custom-regexp text-node scan
+ */
+export async function processMarkdownContainer(container, options = {}) {
     await renderMermaidDiagrams(container);
     enableFullscreenMermaidDiagrams(container);
-    await applySyntaxHighlighting(container);
+    if (options.syntaxHighlighting !== false) {
+        await applySyntaxHighlighting(container);
+    }
     await processWailsImages(container);
     applyMarkdownImageAltSizing(container);
     enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });
-    await autoHyperlink(container);
+    if (options.autoHyperlink !== false) {
+        await autoHyperlink(container);
+    }
 }
 
 /**

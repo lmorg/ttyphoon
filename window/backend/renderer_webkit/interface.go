@@ -2,6 +2,7 @@ package rendererwebkit
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -206,9 +207,23 @@ func (wr *webkitRender) RefreshWindowList() {
 	wr.TriggerRedraw()
 	pane, err := wr.tmux.ActivePane()
 	if err == nil {
-		wr.SetWindowTitle(pane.Name())
+		wr.setWindowTitleFromTile(pane)
 	}
 	wr.RefreshNotes()
+}
+
+// setWindowTitleFromTile falls back to the tmux window name for panes which
+// have never reported a title.
+func (wr *webkitRender) setWindowTitleFromTile(tile types.Tile) {
+	if tile == nil {
+		return
+	}
+
+	if title := tile.Name(); title != "" {
+		wr.SetWindowTitle(title)
+	} else {
+		wr.SetWindowTitle(tile.GroupName())
+	}
 }
 
 func (wr *webkitRender) GetWindowTabs() []terminalTab {
@@ -233,6 +248,42 @@ func (wr *webkitRender) SelectWindow(windowID string) {
 	}
 
 	wr.RefreshWindowList()
+}
+
+func (wr *webkitRender) ZoomActivePane() error {
+	if wr.tmux == nil {
+		return fmt.Errorf("tmux not available")
+	}
+
+	pane, err := wr.tmux.ActivePane()
+	if err != nil {
+		return err
+	}
+	if pane == nil {
+		return fmt.Errorf("no active pane")
+	}
+
+	if err := wr.tmux.ZoomPane(pane.Id()); err != nil {
+		return err
+	}
+
+	// ZoomPane blocks until tmux has applied the (un)zoom, so re-read the tile
+	// layout now to pick up the new pane geometry.
+	wr.RefreshWindowList()
+	return nil
+}
+
+func (wr *webkitRender) GetActivePaneId() string {
+	if wr.tmux == nil {
+		return ""
+	}
+
+	pane, err := wr.tmux.ActivePane()
+	if err != nil || pane == nil {
+		return ""
+	}
+
+	return pane.Id()
 }
 
 func (wr *webkitRender) Bell() {

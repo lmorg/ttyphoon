@@ -32,8 +32,14 @@ type ServerT struct {
 	// OAuth is optional. If omitted, the client will attempt non-OAuth connection first,
 	// and if that fails with 401/403, will trigger interactive OAuth with defaults.
 	// OAuth can be partially specified to override specific aspects (scopes, custom redirectUri, etc.)
-	OAuth    *OAuthT   `json:"oauth,omitempty"`
-	Override OverrideT `json:"override"`
+	OAuth              *OAuthT             `json:"oauth,omitempty"`
+	DefaultPermissions DefaultPermissionsT `json:"DefaultPermissions"`
+	Override           OverrideT           `json:"override"`
+}
+
+type DefaultPermissionsT struct {
+	Invocation string `json:"invocation"`
+	Subagents  string `json:"subagents"`
 }
 
 // OAuthT defines OAuth 2.0 configuration for a server.

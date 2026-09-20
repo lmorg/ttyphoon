@@ -2,19 +2,28 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/notes"
 )
 
 type Agent struct {
-	runtime       agentRuntime
-	serviceName   string
-	modelName     string
-	maxIterations int
+	runtime          agentRuntime
+	serviceName      string
+	modelName        string
+	projectRoot      string
+	maxIterations    int
+	toolMu           sync.RWMutex
+	toolPermissionMu sync.Mutex
+	toolPermissions  map[string]*toolPermissionState
+	toolStates       map[string]string
+	subagentTools    map[string]bool
 
 	term     types.Term
 	renderer types.Renderer
@@ -23,8 +32,9 @@ type Agent struct {
 
 	fnCancel context.CancelFunc
 
-	_mcpServers map[string]client
-	_tools      []aitypes.Tool
+	_mcpServers       map[string]client
+	_mcpServerSources map[string]string
+	_tools            []aitypes.Tool
 }
 
 type allTheAgentsT struct {
@@ -54,17 +64,26 @@ func (ata *allTheAgentsT) Delete(key string) {
 var allTheAgents = allTheAgentsT{_map: map[string]*Agent{}}
 
 func New(renderer types.Renderer, tile types.Tile) {
-	agent := &Agent{
-		_mcpServers:   make(map[string]client),
-		maxIterations: config.Config.Ai.MaxIterations,
-		term:          tile.GetTerm(),
-		renderer:      renderer,
+	agt := &Agent{
+		_mcpServers:       make(map[string]client),
+		_mcpServerSources: make(map[string]string),
+		maxIterations:     config.Config.Ai.MaxIterations,
+		term:              tile.GetTerm(),
+		renderer:          renderer,
+		projectRoot:       notes.DirProjectRoot(tile.Pwd()),
+		toolStates:        make(map[string]string),
+		subagentTools:     make(map[string]bool),
+		toolPermissions:   make(map[string]*toolPermissionState),
 	}
 
-	agent.setDefaultModels()
-	agent.toolsInit()
+	//agent.setDefaultModel()
+	agt.toolsInit()
 
-	allTheAgents.Set(tile.Id(), agent)
+	service := config.Config.Ai.Service(config.Config.Ai.DefaultService)
+	agt.serviceName = service.Label
+	agt.modelName = service.DefaultModel
+
+	allTheAgents.Set(tile.Id(), agt)
 }
 
 func Get(tileId string) *Agent {
@@ -91,8 +110,9 @@ func (agt *Agent) Reload() {
 	agt.runtime = nil
 }
 
-func (agt *Agent) McpServerAdd(server string, client client) {
+func (agt *Agent) McpServerAdd(server, source string, client client) {
 	agt._mcpServers[server] = client
+	agt._mcpServerSources[server] = source
 }
 
 func (agt *Agent) McpServerExists(server string) bool {
@@ -100,8 +120,182 @@ func (agt *Agent) McpServerExists(server string) bool {
 	return ok
 }
 
+func (agt *Agent) McpServerSource(server string) string {
+	return agt._mcpServerSources[server]
+}
+
+func (agt *Agent) McpServerRemove(server string) {
+	delete(agt._mcpServers, server)
+	delete(agt._mcpServerSources, server)
+}
+
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
+func (agt *Agent) ProjectRoot() string      { return agt.projectRoot }
+
+type toolPermission uint8
+
+const (
+	toolPermissionUndecided toolPermission = iota
+	toolPermissionAllowedPrompt
+	toolPermissionDeniedPrompt
+)
+
+// ErrToolPermissionRefused marks a refusal the LLM should be told about rather
+// than one that should abort the agent run.
+var ErrToolPermissionRefused = errors.New("tool call refused")
+
+type toolPermissionState struct {
+	decision  toolPermission
+	prompting bool
+	wait      chan struct{}
+}
+
+// Permissions are scoped to a single user prompt, so this must only be called
+// when a new prompt starts — not per continuation.
+func (agt *Agent) ResetToolPermissions() {
+	agt.toolPermissionMu.Lock()
+	defer agt.toolPermissionMu.Unlock()
+	agt.toolPermissions = make(map[string]*toolPermissionState)
+}
+
+// writePermissionRequests tracks pending in-panel access-request prompts so the
+// frontend can resolve them by request ID once the user clicks an option.
+var writePermissionRequests = struct {
+	mu sync.Mutex
+	m  map[string]chan string
+}{m: map[string]chan string{}}
+
+var writePermissionSeq int64
+
+func newWritePermissionRequest() (string, chan string) {
+	id := fmt.Sprintf("wp%d", atomic.AddInt64(&writePermissionSeq, 1))
+	ch := make(chan string, 1)
+	writePermissionRequests.mu.Lock()
+	writePermissionRequests.m[id] = ch
+	writePermissionRequests.mu.Unlock()
+	return id, ch
+}
+
+func takeWritePermissionRequest(id string) (chan string, bool) {
+	writePermissionRequests.mu.Lock()
+	defer writePermissionRequests.mu.Unlock()
+	ch, ok := writePermissionRequests.m[id]
+	if ok {
+		delete(writePermissionRequests.m, id)
+	}
+	return ch, ok
+}
+
+// ResolveWritePermissionRequest is called by the frontend when the user clicks
+// one of the access-request options rendered in the AI panel output.
+func ResolveWritePermissionRequest(id, decision string) error {
+	ch, ok := takeWritePermissionRequest(id)
+	if !ok {
+		return fmt.Errorf("permission request %q not found or already resolved", id)
+	}
+	ch <- decision
+	return nil
+}
+
+func formatToolPermissionRequestMarkdown(toolName, requestID string) string {
+	return fmt.Sprintf(
+		"\n\n**Access requested for tool %s**\n\n"+
+			"- [Allow this invocation](ttyphoon://ai-tool-permission?request=%s&decision=allow-once)\n"+
+			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=allow-prompt)\n"+
+			"- [Deny this invocation](ttyphoon://ai-tool-permission?request=%s&decision=deny-once)\n"+
+			"- [Deny for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=deny-prompt)\n\n",
+		toolName, requestID, requestID, requestID, requestID,
+	)
+}
+
+func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) error {
+	state := agt.ToolState(toolName)
+	if state == ToolStateDisabled {
+		return fmt.Errorf("%w: tool %q is disabled", ErrToolPermissionRefused, toolName)
+	}
+	if state == ToolStateAlways {
+		return nil
+	}
+	if state == ToolStateSession {
+		return nil
+	}
+	if state == ToolStateDenied {
+		return fmt.Errorf("%w: tool %q is denied", ErrToolPermissionRefused, toolName)
+	}
+	for {
+		agt.toolPermissionMu.Lock()
+		if agt.toolPermissions == nil {
+			agt.toolPermissions = make(map[string]*toolPermissionState)
+		}
+		permission := agt.toolPermissions[toolName]
+		if permission == nil {
+			permission = &toolPermissionState{}
+			agt.toolPermissions[toolName] = permission
+		}
+		switch permission.decision {
+		case toolPermissionAllowedPrompt:
+			agt.toolPermissionMu.Unlock()
+			return nil
+		case toolPermissionDeniedPrompt:
+			agt.toolPermissionMu.Unlock()
+			return fmt.Errorf("%w: user denied tool %q for this prompt", ErrToolPermissionRefused, toolName)
+		}
+
+		if permission.prompting {
+			wait := permission.wait
+			agt.toolPermissionMu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		permission.prompting = true
+		permission.wait = make(chan struct{})
+		wait := permission.wait
+		agt.toolPermissionMu.Unlock()
+
+		reqID, decisionCh := newWritePermissionRequest()
+		emitAIStreamToolProgress(ctx, formatToolPermissionRequestMarkdown(toolName, reqID))
+
+		var decision string
+		select {
+		case decision = <-decisionCh:
+		case <-ctx.Done():
+			takeWritePermissionRequest(reqID)
+			agt.toolPermissionMu.Lock()
+			permission.prompting = false
+			close(wait)
+			agt.toolPermissionMu.Unlock()
+			return ctx.Err()
+		}
+
+		// Once-decisions are deliberately not stored, so a concurrent or later
+		// invocation of the same tool prompts again.
+		var allowed bool
+		agt.toolPermissionMu.Lock()
+		switch decision {
+		case "allow-prompt":
+			permission.decision = toolPermissionAllowedPrompt
+			allowed = true
+		case "deny-prompt":
+			permission.decision = toolPermissionDeniedPrompt
+		case "allow-once":
+			allowed = true
+		}
+		permission.prompting = false
+		close(wait)
+		agt.toolPermissionMu.Unlock()
+
+		if allowed {
+			return nil
+		}
+		return fmt.Errorf("%w: user denied tool %q", ErrToolPermissionRefused, toolName)
+	}
+}
 
 func Close(tileId string) {
 	agent, ok := allTheAgents.Get(tileId)

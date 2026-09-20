@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 
@@ -21,6 +22,7 @@ type mcpTool struct {
 	description string
 	schema      []byte
 	enabled     bool
+	permissions aitypes.DefaultPermissions
 }
 
 func (t *mcpTool) New(agent aitypes.Agent) (aitypes.Tool, error) {
@@ -33,6 +35,7 @@ func (t *mcpTool) New(agent aitypes.Agent) (aitypes.Tool, error) {
 		description: t.description,
 		schema:      t.schema,
 		enabled:     true,
+		permissions: t.permissions,
 	}, nil
 }
 
@@ -46,20 +49,31 @@ func (t *mcpTool) Description() string {
 	description := t.description //+ "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
 
 	if debug.Trace {
-		log.Printf("MCP tool '%s' description:\n%s", t.Name(), description)
+		log.Printf("[trace] MCP tool '%s' description:\n%s", t.Name(), description)
 	}
 
 	return description
 }
 
+func (t *mcpTool) DefaultPermissions() aitypes.DefaultPermissions {
+	permissions := t.permissions
+	if permissions.Invocation == "" {
+		permissions.Invocation = "alwaysAllow"
+	}
+	if permissions.Subagents == "" {
+		permissions.Subagents = "allow"
+	}
+	return permissions
+}
+
 func (t *mcpTool) Call(ctx context.Context, input string) (response string, err error) {
-	if debug.Trace {
+	/*if debug.Trace {
 		log.Printf("MCP tool '%s' input:\n%s", t.Name(), input)
 		defer func() {
 			log.Printf("MCP tool '%s' response:\n%s", t.Name(), response)
 			log.Printf("MCP tool '%s' error: %v", t.Name(), err)
 		}()
-	}
+	}*/
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO,
 		fmt.Sprintf("%s is running an MCP tool: %s", t.agent.ServiceName(), t.Name()))
@@ -68,13 +82,18 @@ func (t *mcpTool) Call(ctx context.Context, input string) (response string, err 
 	err = json.Unmarshal([]byte(input), &args)
 	if err != nil {
 		err = nil
+
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
 
 	response, err = t.client.Call(ctx, t.name, args)
 	if err != nil {
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_WARN, err.Error())
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+			return "", err
+		}
+		return fmt.Sprintf("MCP tool error: %s", err), nil
 	}
 
-	return response, err
+	return response, nil
 }

@@ -28,7 +28,7 @@ func (el *ElementTable) Draw(pos *types.XY) {
 		relPos.X++
 	}
 
-	switch el.orderByIndex {
+	switch orderByIndex, _ := el.core.SortState(); orderByIndex {
 	case 0:
 		goto skipOrderGlyph
 
@@ -36,13 +36,16 @@ func (el *ElementTable) Draw(pos *types.XY) {
 		relPos.X = pos.X + 0
 
 	default:
-		relPos.X = pos.X + el.boundaries[el.orderByIndex-2]
+		relPos.X = pos.X + el.boundaries[orderByIndex-2]
 	}
 
 	cell.Sgr.Bg = types.SGR_COLOR_RED
 	cell.Sgr.Bitwise.Set(types.SGR_BOLD)
 
-	cell.Char = arrowGlyph[el.orderDesc]
+	{
+		_, orderDesc := el.core.SortState()
+		cell.Char = arrowGlyph[orderDesc]
+	}
 	el.renderer.PrintCell(el.tile, cell, relPos)
 
 	cell.Sgr.Bitwise.Unset(types.SGR_BOLD)

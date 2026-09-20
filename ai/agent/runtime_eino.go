@@ -3,40 +3,72 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"os"
+	"log"
+	"sort"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einoOllama "github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/callbacks"
+	einoModel "github.com/cloudwego/eino/components/model"
 	einoTool "github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	einoAgent "github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
+	einoCBUtils "github.com/cloudwego/eino/utils/callbacks"
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 type einoRuntime struct {
-	agent      *Agent
-	agentReact *react.Agent
+	agent               *Agent
+	agentReact          *react.Agent
+	tools               []aitypes.Tool
+	boundedWindowRunner func(context.Context, []*schema.Message, func(string)) (string, error)
 }
 
 const einoMaxHistoryTurns = 8
 
+// Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
+const einoAnthropicMaxTokens = 8192
+
+var toolSummariserExclusions = map[string]struct{}{
+	"report": {},
+}
+
 type aiStreamCallbackCtxKey struct{}
+type continuationCheckpointCtxKey struct{}
+
+const (
+	continuationCheckpointMaxFieldChars = 4000
+	continuationCheckpointMaxTotalChars = 20000
+)
+
+type continuationCheckpoint struct {
+	mu               sync.Mutex
+	visibleOutput    string
+	toolObservations []aitypes.ToolObservation
+}
 
 type einoAgentTool struct {
+	runtime          *einoRuntime
 	delegate         aitypes.Tool
 	info             *schema.ToolInfo
 	unwrapInputField bool
 }
 
-func newEinoAgentTool(t aitypes.Tool) (*einoAgentTool, error) {
+func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 	if t == nil {
 		return nil, fmt.Errorf("nil tool")
 	}
@@ -66,6 +98,7 @@ func newEinoAgentTool(t aitypes.Tool) (*einoAgentTool, error) {
 	}
 
 	return &einoAgentTool{
+		runtime:          r,
 		delegate:         t,
 		unwrapInputField: unwrapInputField,
 		info: &schema.ToolInfo{
@@ -81,28 +114,128 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	emitAIStreamToolProgress(ctx, "Action: "+t.delegate.Name()+"\n")
-	emitAIStreamToolProgress(ctx, "Action Input: "+argumentsInJSON+"\n")
+	emitAIStreamToolProgress(ctx, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON))
+	if t.runtime != nil && t.runtime.agent != nil {
+		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
+			emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+			recordContinuationToolObservation(ctx, t.toolObservation(argumentsInJSON, "", err))
+			if errors.Is(err, ErrToolPermissionRefused) {
+				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
+			}
+			return "", err
+		}
+	}
 
 	toolInput := argumentsInJSON
 	if t.unwrapInputField {
 		toolInput = unwrapToolInput(argumentsInJSON)
 	}
 
-	return t.delegate.Call(ctx, toolInput)
+	output, err := t.delegate.Call(ctx, toolInput)
+	if err != nil {
+		emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, err))
+		return output, err
+	}
+
+	// Interposer: compress oversized tool outputs so the main agent's context stays
+	// under the LLM's window. The main agent only ever sees the summarised form.
+	threshold := config.Config.Ai.ToolSummariseThresholdChars
+	_, excludedFromSummarising := toolSummariserExclusions[t.delegate.Name()]
+	summarising := t.runtime != nil && !excludedFromSummarising && threshold > 0 && len(output) > threshold
+	streamedOutput := false
+	if streamTool, ok := t.delegate.(interface{ StreamsOutput() bool }); ok {
+		streamedOutput = streamTool.StreamsOutput()
+	}
+
+	// When summarising, the streamed summary replaces the raw output in the UI + log.
+	if output != "" && !summarising && !streamedOutput {
+		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
+	}
+
+	if summarising {
+		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
+		if sErr != nil {
+			emitAIStreamToolProgress(ctx, formatToolSummaryFailureMarkdown(len(output), sErr))
+			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
+			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
+		}
+		emitAIStreamToolProgress(ctx, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
+		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, summary, nil))
+		return summary, nil
+	}
+
+	recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, nil))
+	return output, nil
+}
+
+func (t *einoAgentTool) toolObservation(input, output string, err error) aitypes.ToolObservation {
+	if provider, ok := t.delegate.(aitypes.ToolObservationProvider); ok {
+		observation := provider.Observation(input, output, err)
+		if strings.TrimSpace(observation.Tool) == "" {
+			observation.Tool = t.delegate.Name()
+		}
+		return observation
+	}
+
+	observation := aitypes.ToolObservation{
+		Tool:    t.delegate.Name(),
+		Status:  "ok",
+		Inputs:  []string{input},
+		Outputs: []string{output},
+	}
+	if err != nil {
+		observation.Status = "error"
+		observation.Error = err.Error()
+	}
+	return observation
+}
+
+// Tool progress is emitted as real markdown with ~~~~ tilde fences (rather than
+// ``` triple-backticks) so tool arguments or outputs that themselves contain
+// ``` blocks don't prematurely close the fence and leak into the surrounding UI.
+
+func formatToolCallMarkdown(name, argumentsInJSON string) string {
+	return fmt.Sprintf("\n\n**Tool call:** `%s`\n\n~~~~json\n%s\n~~~~\n\n", name, argumentsInJSON)
+}
+
+func formatToolOutputMarkdown(output string) string {
+	return fmt.Sprintf("**Tool output:**\n\n~~~~\n%s\n~~~~\n\n", output)
+}
+
+func formatToolErrorMarkdown(err error) string {
+	return fmt.Sprintf("**Tool error:**\n\n~~~~\n%s\n~~~~\n\n", err.Error())
+}
+
+func summariserStreamOpenMarkdown() string {
+	return "**Summaring tool output:**\n\n~~~~\n"
+}
+
+func summariserStreamCloseMarkdown() string {
+	return "\n~~~~\n\n"
+}
+
+func formatToolSummaryNoticeMarkdown(rawLen, summaryLen int) string {
+	return fmt.Sprintf("_Output summarised for main agent (%d \u2192 %d chars)._\n\n", rawLen, summaryLen)
+}
+
+func formatToolSummaryFailureMarkdown(rawLen int, err error) string {
+	return fmt.Sprintf("_Output was %d chars; summariser failed and the main agent received a placeholder instead: %s_\n\n", rawLen, err.Error())
 }
 
 func unwrapToolInput(argumentsInJSON string) string {
-	type wrappedInput struct {
-		Input string `json:"input"`
-	}
-
-	var wrapped wrappedInput
-	if err := json.Unmarshal([]byte(argumentsInJSON), &wrapped); err == nil {
-		if wrapped.Input != "" {
-			return wrapped.Input
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(argumentsInJSON), &object); err == nil {
+		if input, ok := object["input"]; ok {
+			if len(input) > 0 && string(input) != "null" {
+				var inputString string
+				if err := json.Unmarshal(input, &inputString); err == nil {
+					return inputString
+				}
+				return string(input)
+			}
+			return ""
 		}
-		return ""
 	}
 
 	var plain string
@@ -110,38 +243,195 @@ func unwrapToolInput(argumentsInJSON string) string {
 		return plain
 	}
 
+	var plainJSON any
+	if err := json.Unmarshal([]byte(argumentsInJSON), &plainJSON); err == nil {
+		encoded, marshalErr := json.Marshal(plainJSON)
+		if marshalErr == nil {
+			return string(encoded)
+		}
+	}
+
 	return argumentsInJSON
 }
 
-func withAIStreamCallback(ctx context.Context, fn func(string)) context.Context {
-	if fn == nil {
+// aiStreamEmitter serialises text and reasoning chunks onto a single stream,
+// wrapping reasoning in a markdown blockquote that opens on the first reasoning
+// chunk and closes when non-reasoning content follows.
+//
+// Reasoning arrives token by token, so chunks are buffered and flushed at most
+// every aiStreamEmitInterval to keep the IPC message count down.
+type aiStreamEmitter struct {
+	mu         sync.Mutex
+	fn         func(string)
+	inThinking bool
+	pending    strings.Builder
+	lastEmit   time.Time
+	flushTimer *time.Timer
+}
+
+const aiStreamEmitInterval = 100 * time.Millisecond
+
+func (e *aiStreamEmitter) flushLocked() {
+	if e.flushTimer != nil {
+		e.flushTimer.Stop()
+		e.flushTimer = nil
+	}
+	if e.pending.Len() == 0 {
+		return
+	}
+	e.fn(e.pending.String())
+	e.pending.Reset()
+	e.lastEmit = time.Now()
+}
+
+// flush pushes any buffered reasoning out, eg once a turn's stream has drained.
+func (e *aiStreamEmitter) flush() {
+	if e == nil || e.fn == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.flushLocked()
+}
+
+func (e *aiStreamEmitter) emitText(text string) {
+	if e == nil || e.fn == nil || text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.flushLocked()
+	if e.inThinking {
+		e.fn("\n\n")
+		e.inThinking = false
+	}
+	e.fn(text)
+	e.lastEmit = time.Now()
+}
+
+func (e *aiStreamEmitter) emitReasoning(text string) {
+	if e == nil || e.fn == nil || text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.inThinking {
+		e.pending.WriteString("\n> **Thinking:** ")
+		e.inThinking = true
+	}
+	e.pending.WriteString(strings.ReplaceAll(text, "\n", "\n> "))
+
+	if elapsed := time.Since(e.lastEmit); elapsed >= aiStreamEmitInterval {
+		e.flushLocked()
+	} else if e.flushTimer == nil {
+		e.flushTimer = time.AfterFunc(aiStreamEmitInterval-elapsed, e.flush)
+	}
+}
+
+func withAIStreamCallback(ctx context.Context, emitter *aiStreamEmitter) context.Context {
+	if emitter == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, aiStreamCallbackCtxKey{}, fn)
+	return context.WithValue(ctx, aiStreamCallbackCtxKey{}, emitter)
+}
+
+func withContinuationCheckpoint(ctx context.Context, checkpoint *continuationCheckpoint) context.Context {
+	if checkpoint == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, continuationCheckpointCtxKey{}, checkpoint)
+}
+
+func continuationCheckpointFromContext(ctx context.Context) (*continuationCheckpoint, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	checkpoint, ok := ctx.Value(continuationCheckpointCtxKey{}).(*continuationCheckpoint)
+	return checkpoint, ok && checkpoint != nil
+}
+
+func recordContinuationToolObservation(ctx context.Context, observation aitypes.ToolObservation) {
+	checkpoint, ok := continuationCheckpointFromContext(ctx)
+	if !ok {
+		return
+	}
+	checkpoint.mu.Lock()
+	defer checkpoint.mu.Unlock()
+	observation.Tool = truncateContinuationField(strings.TrimSpace(observation.Tool))
+	observation.Status = truncateContinuationField(strings.TrimSpace(observation.Status))
+	observation.Summary = truncateContinuationField(strings.TrimSpace(observation.Summary))
+	observation.Error = truncateContinuationField(strings.TrimSpace(observation.Error))
+	observation.Inputs = truncateContinuationFields(observation.Inputs)
+	observation.Outputs = truncateContinuationFields(observation.Outputs)
+	observation.FilesRead = truncateContinuationFields(observation.FilesRead)
+	observation.FilesModified = truncateContinuationFields(observation.FilesModified)
+	observation.DirectoriesListed = truncateContinuationFields(observation.DirectoriesListed)
+	for i := range observation.SearchesRun {
+		observation.SearchesRun[i].Query = truncateContinuationField(strings.TrimSpace(observation.SearchesRun[i].Query))
+		observation.SearchesRun[i].FileFilter = truncateContinuationField(strings.TrimSpace(observation.SearchesRun[i].FileFilter))
+		observation.SearchesRun[i].TopPaths = truncateContinuationFields(observation.SearchesRun[i].TopPaths)
+	}
+	for i := range observation.CommandsRun {
+		observation.CommandsRun[i].Command = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Command))
+		observation.CommandsRun[i].Status = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Status))
+		observation.CommandsRun[i].Summary = truncateContinuationField(strings.TrimSpace(observation.CommandsRun[i].Summary))
+	}
+	checkpoint.toolObservations = append(checkpoint.toolObservations, observation)
+}
+
+func (c *continuationCheckpoint) setVisibleOutput(output string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.visibleOutput = truncateContinuationField(strings.TrimSpace(output))
+}
+
+func (c *continuationCheckpoint) snapshot() continuationCheckpoint {
+	if c == nil {
+		return continuationCheckpoint{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return continuationCheckpoint{
+		visibleOutput:    c.visibleOutput,
+		toolObservations: append([]aitypes.ToolObservation(nil), c.toolObservations...),
+	}
 }
 
 func emitAIStreamToolProgress(ctx context.Context, text string) {
 	if text == "" || ctx == nil {
 		return
 	}
-	v := ctx.Value(aiStreamCallbackCtxKey{})
-	fn, ok := v.(func(string))
-	if !ok || fn == nil {
-		return
+	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
+		emitter.emitText(text)
 	}
-	fn(text)
+}
+
+// EmitAIStreamToolProgress returns the current run's panel and log emitter.
+func EmitAIStreamToolProgress(ctx context.Context) func(string) {
+	return func(text string) {
+		emitAIStreamToolProgress(ctx, text)
+	}
 }
 
 func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
-	tools := make([]einoTool.BaseTool, 0)
+	einoTools := make([]einoTool.BaseTool, 0)
 	usedNames := make(map[string]struct{})
 
-	for _, tool := range r.agent._tools {
-		if !tool.Enabled() {
+	selectedTools := r.tools
+	if selectedTools == nil {
+		r.agent.toolMu.RLock()
+		selectedTools = append([]aitypes.Tool(nil), r.agent._tools...)
+		r.agent.toolMu.RUnlock()
+	}
+	for _, tool := range selectedTools {
+		if r.agent.ToolState(tool.Name()) == ToolStateDisabled {
 			continue
 		}
 
-		einoTool, err := newEinoAgentTool(tool)
+		einoTool, err := newEinoAgentTool(r, tool)
 		if err != nil {
 			return compose.ToolsNodeConfig{}, err
 		}
@@ -155,10 +445,10 @@ func (r *einoRuntime) toolsConfig() (compose.ToolsNodeConfig, error) {
 		info.Name = uniqueName
 		usedNames[uniqueName] = struct{}{}
 
-		tools = append(tools, einoTool)
+		einoTools = append(einoTools, einoTool)
 	}
 
-	return compose.ToolsNodeConfig{Tools: tools}, nil
+	return compose.ToolsNodeConfig{Tools: einoTools}, nil
 }
 
 func sanitizeToolName(name string) string {
@@ -218,7 +508,7 @@ func newEinoRuntime(agent *Agent) (*einoRuntime, error) {
 }
 
 func (r *einoRuntime) init() error {
-	switch r.agent.ServiceName() {
+	switch r.agent.ProviderName() {
 	case LLM_OPENAI:
 		return r.initOpenAI()
 	case LLM_ANTHROPIC:
@@ -237,19 +527,22 @@ func (r *einoRuntime) initOpenAI() error {
 	}
 
 	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
-		APIKey:  os.Getenv("OPENAI_API_KEY"),
+		APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
 		Model:   r.agent.ModelName(),
-		BaseURL: os.Getenv("OPENAI_BASE_URL"),
-		ByAzure: strings.EqualFold(strings.TrimSpace(os.Getenv("OPENAI_BY_AZURE")), "true"),
+		BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
+		ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
 	})
 	if err != nil {
 		return err
 	}
 
+	// OpenAI-compatible proxies (OpenRouter et al) often emit content or reasoning
+	// chunks before tool_calls, which the default first-chunk checker would miss.
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
-		ToolCallingModel: chatModel,
-		ToolsConfig:      toolsConfig,
-		MaxStep:          r.agent.MaxIterations(),
+		ToolCallingModel:      chatModel,
+		ToolsConfig:           toolsConfig,
+		MaxStep:               r.agent.MaxIterations(),
+		StreamToolCallChecker: streamToolCallCheckerAllChunks,
 	})
 	if err != nil {
 		return err
@@ -265,16 +558,24 @@ func (r *einoRuntime) initAnthropic() error {
 	}
 
 	var baseURL *string
-	rawBaseURL := strings.TrimSpace(os.Getenv("CLAUDE_BASE_URL"))
+	rawBaseURL := strings.TrimSpace(r.agent.EnvironmentValue("CLAUDE_BASE_URL"))
 	if rawBaseURL != "" {
 		baseURL = &rawBaseURL
 	}
 
 	chatModel, err := claude.NewChatModel(context.Background(), &claude.Config{
-		APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
 		BaseURL:   baseURL,
 		Model:     r.agent.ModelName(),
-		MaxTokens: 3000,
+		MaxTokens: einoAnthropicMaxTokens,
+		ThinkingConfig: &anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		},
+		AdditionalRequestFields: map[string]any{
+			"output_config": map[string]any{
+				"effort": "high",
+			},
+		},
 	})
 	if err != nil {
 		return err
@@ -299,7 +600,7 @@ func (r *einoRuntime) initOllama() error {
 		return err
 	}
 
-	baseURL := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	baseURL := strings.TrimSpace(r.agent.EnvironmentValue("OLLAMA_HOST"))
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -373,51 +674,349 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 		}
 	}
 
-	messages = append(messages, currentMessages...)
+	// Anthropic requires system messages to precede all user and assistant messages.
+	// Prompt builders place the system message before the current user message,
+	// but restored history means it would otherwise be inserted mid-conversation.
+	systemMessages := make([]*schema.Message, 0, len(currentMessages))
+	for _, message := range currentMessages {
+		if message != nil && message.Role == schema.System {
+			systemMessages = append(systemMessages, message)
+		}
+	}
+	messages = append(systemMessages, messages...)
+	for _, message := range currentMessages {
+		if message == nil || message.Role == schema.System {
+			continue
+		}
+		messages = append(messages, message)
+	}
 	return messages
 }
 
 func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
+	var response strings.Builder
+	continuationMessages := append([]*schema.Message(nil), messages...)
+
+	// Tool permissions are scoped to the user prompt, so continuations inherit them.
+	r.agent.ResetToolPermissions()
+
+	// Continuation-boundary messages (progress markers, the max-continuation
+	// question) are emitted from this loop, not from inside
+	// runLLMWithMessageStream, so this ctx needs its own stream callback too -
+	// otherwise they're silently dropped and RequestUserQuestion hangs forever
+	// waiting on a choice the user was never shown.
+	ctx = withAIStreamCallback(ctx, &aiStreamEmitter{fn: streamCallback})
+
+	for continuation := 0; ; continuation++ {
+		log.Printf("[debug] Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations)
+		checkpoint := &continuationCheckpoint{}
+		windowCtx := withContinuationCheckpoint(ctx, checkpoint)
+		result, err := r.runBoundedWindow(windowCtx, continuationMessages, streamCallback)
+		checkpoint.setVisibleOutput(result)
+		response.WriteString(result)
+		if err == nil || !isMaxStepError(err) {
+			return response.String(), err
+		}
+
+		continuationSummary := formatContinuationCheckpointMessage(checkpoint)
+		nextContinuation := continuation + 1
+
+		if nextContinuation >= config.Config.Ai.MaxContinuations {
+			choice, choiceErr := RequestUserQuestion(ctx,
+				fmt.Sprintf("The agent has reached the maximum number of continuations (%d). What should happen next?", config.Config.Ai.MaxContinuations),
+				[]string{"continue", "finish up"},
+			)
+			if choiceErr != nil {
+				return response.String(), choiceErr
+			}
+			if strings.EqualFold(strings.TrimSpace(choice), "finish up") {
+				emitAIStreamToolProgress(ctx, fmt.Sprintf("\n\n**Continuation summary**\n\n%s\n\n", continuationSummary))
+				return response.String(), nil
+			}
+			// The user explicitly granted another continuation window. Reset the
+			// bounded counter so the same decision is available again later.
+			continuation = -1
+			nextContinuation = 1
+		}
+
+		emitAIStreamToolProgress(ctx, fmt.Sprintf(
+			"\n\n**Continuing after max steps (%d/%d)**\n\n",
+			nextContinuation, config.Config.Ai.MaxContinuations,
+		))
+		continuationMessages = append(continuationMessages, schema.UserMessage(continuationSummary))
+	}
+}
+
+func (r *einoRuntime) runBoundedWindow(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
+	if r.boundedWindowRunner != nil {
+		return r.boundedWindowRunner(ctx, messages, streamCallback)
+	}
+	return r.runLLMWithMessageStream(ctx, messages, streamCallback)
+}
+
+func formatContinuationCheckpointMessage(checkpoint *continuationCheckpoint) string {
+	snapshot := checkpoint.snapshot()
+	var b strings.Builder
+	b.WriteString("The previous agent run reached its tool-step limit. Continue the original task from the current state. Do not repeat completed actions; verify existing work before taking the next action.\n")
+	b.WriteString("\n## Continuation checkpoint\n")
+
+	if len(snapshot.toolObservations) > 0 {
+		b.WriteString("\n### Tool observations\n")
+		for _, observation := range snapshot.toolObservations {
+			name := observation.Tool
+			if name == "" {
+				name = "unknown"
+			}
+			b.WriteString("\n- Tool: `")
+			b.WriteString(name)
+			b.WriteString("`")
+			if observation.Status != "" {
+				b.WriteString("\n  Status: ")
+				b.WriteString(observation.Status)
+			}
+			if observation.Summary != "" {
+				b.WriteString("\n  Summary: ")
+				b.WriteString(observation.Summary)
+			}
+			if len(observation.Inputs) > 0 {
+				b.WriteString("\n  Inputs: ")
+				b.WriteString(strings.Join(observation.Inputs, ", "))
+			}
+			if len(observation.Outputs) > 0 {
+				b.WriteString("\n  Outputs: ")
+				b.WriteString(strings.Join(observation.Outputs, ", "))
+			}
+			if len(observation.FilesRead) > 0 {
+				b.WriteString("\n  Files read: ")
+				b.WriteString(strings.Join(observation.FilesRead, ", "))
+			}
+			if len(observation.FilesModified) > 0 {
+				b.WriteString("\n  Files modified: ")
+				b.WriteString(strings.Join(observation.FilesModified, ", "))
+			}
+			if len(observation.DirectoriesListed) > 0 {
+				b.WriteString("\n  Directories listed: ")
+				b.WriteString(strings.Join(observation.DirectoriesListed, ", "))
+			}
+			if len(observation.Counts) > 0 {
+				b.WriteString("\n  Counts: ")
+				keys := make([]string, 0, len(observation.Counts))
+				for key := range observation.Counts {
+					keys = append(keys, key)
+				}
+				sort.Strings(keys)
+				first := true
+				for _, key := range keys {
+					if !first {
+						b.WriteString(", ")
+					}
+					first = false
+					b.WriteString(fmt.Sprintf("%s=%d", key, observation.Counts[key]))
+				}
+			}
+			for _, search := range observation.SearchesRun {
+				b.WriteString("\n  Search: ")
+				b.WriteString(search.Query)
+				if search.FileFilter != "" {
+					b.WriteString(" (filter: ")
+					b.WriteString(search.FileFilter)
+					b.WriteString(")")
+				}
+				b.WriteString(fmt.Sprintf(" -> %d result(s)", search.ResultCount))
+				if len(search.TopPaths) > 0 {
+					b.WriteString("; top paths: ")
+					b.WriteString(strings.Join(search.TopPaths, ", "))
+				}
+			}
+			for _, command := range observation.CommandsRun {
+				b.WriteString("\n  Command: ")
+				b.WriteString(command.Command)
+				if command.Status != "" {
+					b.WriteString(" [")
+					b.WriteString(command.Status)
+					b.WriteString("]")
+				}
+				if command.ExitCode != nil {
+					b.WriteString(fmt.Sprintf(" exit=%d", *command.ExitCode))
+				}
+				if command.Summary != "" {
+					b.WriteString(" - ")
+					b.WriteString(command.Summary)
+				}
+			}
+			if observation.Error != "" {
+				b.WriteString("\n  Error: ")
+				b.WriteString(observation.Error)
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	if snapshot.visibleOutput != "" {
+		b.WriteString("\n### Visible assistant output\n\n")
+		b.WriteString(snapshot.visibleOutput)
+		b.WriteByte('\n')
+	}
+	if len(snapshot.toolObservations) == 0 && snapshot.visibleOutput == "" {
+		b.WriteString("\nNo visible output or tool observations were captured from the exhausted window.\n")
+	}
+
+	return compactContinuationMessage(b.String())
+}
+
+func truncateContinuationField(value string) string {
+	if len(value) <= continuationCheckpointMaxFieldChars {
+		return value
+	}
+	return value[:continuationCheckpointMaxFieldChars] + "\n[truncated for continuation]"
+}
+
+func truncateContinuationFields(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, truncateContinuationField(value))
+	}
+	return out
+}
+
+func compactContinuationMessage(value string) string {
+	if len(value) <= continuationCheckpointMaxTotalChars {
+		return value
+	}
+	return value[:continuationCheckpointMaxTotalChars] + "\n\n[continuation checkpoint truncated]"
+}
+
+func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	if r.agentReact == nil {
 		if err := r.init(); err != nil {
 			return "", err
 		}
 	}
 
-	ctx = withAIStreamCallback(ctx, streamCallback)
+	emitter := &aiStreamEmitter{fn: streamCallback}
+	ctx = withAIStreamCallback(ctx, emitter)
 
 	history, err := sessiondb.ActiveSessionEntries(r.agent.Workspace(), einoMaxHistoryTurns)
 	if err != nil {
 		return "", err
 	}
 
-	stream, err := r.agentReact.Stream(ctx, buildEinoConversationMessages(history, messages))
+	// The react agent's stream branch consumes intermediate model turns to detect tool calls,
+	// so reasoning content emitted before tool calls never reaches the outer stream. Hook a
+	// per-model-node callback to observe every turn's stream and forward reasoning to the emitter.
+	reasoningWait := &sync.WaitGroup{}
+	modelHandler := &einoCBUtils.ModelCallbackHandler{
+		OnEndWithStreamOutput: func(cbCtx context.Context, _ *callbacks.RunInfo, stream *schema.StreamReader[*einoModel.CallbackOutput]) context.Context {
+			reasoningWait.Add(1)
+			go func() {
+				defer reasoningWait.Done()
+				drainReasoningStream(stream, emitter)
+				emitter.flush()
+			}()
+			return cbCtx
+		},
+	}
+	cbHandler := einoCBUtils.NewHandlerHelper().ChatModel(modelHandler).Handler()
+
+	stream, err := r.agentReact.Stream(ctx,
+		buildEinoConversationMessages(history, messages),
+		einoAgent.WithComposeOptions(compose.WithCallbacks(cbHandler)),
+	)
 	if err != nil {
 		return "", err
 	}
 	defer stream.Close()
 
+	// Reasoning is streamed to the frontend and log via the callback above; the outer loop only
+	// accumulates Content into the returned string used for conversation history.
 	var response strings.Builder
+	var chunkCount, contentChunks, contentBytes int
+	streamStart := time.Now()
+	var firstContentAt, lastContentAt time.Time
 	for {
 		msg, recvErr := stream.Recv()
 		if recvErr == io.EOF {
 			break
 		}
 		if recvErr != nil {
+			reasoningWait.Wait()
+			emitter.flush()
 			return response.String(), recvErr
 		}
 
-		if msg == nil || msg.Content == "" {
+		if msg == nil {
 			continue
 		}
+		chunkCount++
 
-		response.WriteString(msg.Content)
-		if streamCallback != nil {
-			streamCallback(msg.Content)
+		if msg.Content != "" {
+			contentChunks++
+			contentBytes += len(msg.Content)
+			if firstContentAt.IsZero() {
+				firstContentAt = time.Now()
+			}
+			lastContentAt = time.Now()
+			response.WriteString(msg.Content)
+			emitter.emitText(msg.Content)
 		}
 	}
+	reasoningWait.Wait()
+	emitter.flush()
+
+	spread := time.Duration(0)
+	if !firstContentAt.IsZero() && !lastContentAt.IsZero() {
+		spread = lastContentAt.Sub(firstContentAt)
+	}
+	log.Printf(
+		"[debug] AI outer stream drained: chunks=%d content_chunks=%d content_bytes=%d ttfb=%s content_spread=%s total=%s",
+		chunkCount, contentChunks, contentBytes,
+		firstContentAt.Sub(streamStart).Round(time.Millisecond),
+		spread.Round(time.Millisecond),
+		time.Since(streamStart).Round(time.Millisecond),
+	)
 
 	return response.String(), nil
+}
+
+func isMaxStepError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "exceeds max steps")
+}
+
+func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput], emitter *aiStreamEmitter) {
+	defer stream.Close()
+	start := time.Now()
+	var reasoningChunks, contentChunks int
+	var reasoningBytes, contentBytes int
+	for {
+		out, err := stream.Recv()
+		if err == io.EOF {
+			log.Printf(
+				"[debug] AI model-turn stream drained: reasoning_chunks=%d reasoning_bytes=%d content_chunks=%d content_bytes=%d elapsed=%s",
+				reasoningChunks, reasoningBytes, contentChunks, contentBytes,
+				time.Since(start).Round(time.Millisecond),
+			)
+			return
+		}
+		if err != nil {
+			return
+		}
+		if out == nil || out.Message == nil {
+			continue
+		}
+		if out.Message.ReasoningContent != "" {
+			reasoningChunks++
+			reasoningBytes += len(out.Message.ReasoningContent)
+			emitter.emitReasoning(out.Message.ReasoningContent)
+		}
+		if out.Message.Content != "" {
+			contentChunks++
+			contentBytes += len(out.Message.Content)
+		}
+	}
 }
 
 func (r *einoRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {

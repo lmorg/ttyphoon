@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/debug"
@@ -15,19 +16,19 @@ import (
 
 func startServerCmdLine(cfgPath string, agent *Agent, envvars []string, server string, svr mcp_config.ServerT) error {
 	debug.Log(envvars)
-	log.Printf("MCP server %s: %s %v", server, svr.Command, svr.Args)
+	log.Printf("[info] MCP server %s: %s %v", server, svr.Command, svr.Args)
 
 	c, err := mcp_client.ConnectCmdLine(&svr.Override, envvars, svr.Command, svr.Args...)
 	if err != nil {
 		return err
 	}
 
-	return startServer(cfgPath, agent, server, c)
+	return startServer(cfgPath, agent, server, svr, c)
 }
 
 func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config.ServerT) error {
 	serverURL := svr.Url
-	log.Printf("MCP server %s: %s", server, serverURL)
+	log.Printf("[info] MCP server %s: %s", server, serverURL)
 	hooks := mcp_client.OAuthUIHooks{
 		OpenBrowser: func(authURL string) {
 			rctx := agent.Renderer().GetWindowContext()
@@ -54,7 +55,7 @@ func startServerHttp(cfgPath string, agent *Agent, server string, svr mcp_config
 			agent.Renderer().DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("MCP server %s requires OAuth. Starting browser authentication...", server))
 		},
 		func(c *mcp_client.Client) error {
-			return startServer(cfgPath, agent, server, c)
+			return startServer(cfgPath, agent, server, svr, c)
 		},
 	)
 }
@@ -79,19 +80,19 @@ func promptString(agent *Agent, prompt string) (string, error) {
 	}
 }
 
-func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Client) error {
+func startServer(cfgPath string, agent *Agent, server string, svr mcp_config.ServerT, c *mcp_client.Client) error {
 	err := c.ListTools()
 	if err != nil {
 		return err
 	}
 
-	agent.McpServerAdd(server, c)
+	agent.McpServerAdd(server, cfgPath, c)
 
 	toolNames := make([]string, len(c.Tools.Tools))
 	for i := range c.Tools.Tools {
 		toolNames[i] = c.Tools.Tools[i].Name
 	}
-	log.Printf("MCP server %s: %d tools advertised: %s", server, len(toolNames), strings.Join(toolNames, ", "))
+	log.Printf("[debug] MCP server %s: %d tools advertised: %s", server, len(toolNames), strings.Join(toolNames, ", "))
 
 	for i := range c.Tools.Tools {
 		tool := c.Tools.Tools[i]
@@ -112,6 +113,10 @@ func startServer(cfgPath string, agent *Agent, server string, c *mcp_client.Clie
 				tool.Description,
 				string(jsonSchema),
 			),
+			permissions: aitypes.DefaultPermissions{
+				Invocation: svr.DefaultPermissions.Invocation,
+				Subagents:  svr.DefaultPermissions.Subagents,
+			},
 		})
 		if err != nil {
 			return err

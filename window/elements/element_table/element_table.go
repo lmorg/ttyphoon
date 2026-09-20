@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"runtime"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/elements/element_table/tablecore"
 )
 
 type elementType int
@@ -28,7 +28,6 @@ type ElementTable struct {
 	top        []rune   // rendered headings
 	width      []int    // columns
 	boundaries []int32  // column lines
-	isNumber   []bool   // columns
 
 	//parameters parametersT
 
@@ -37,12 +36,10 @@ type ElementTable struct {
 	lines  int32
 	notify types.Notification
 
+	// Sort and filter semantics live in core so the terminal and Notes cannot
+	// drift apart; db is retained only because this element owns its lifetime.
 	db   *sql.DB
-	dbTx *sql.Tx
-
-	filter       string
-	orderByIndex int  // row
-	orderDesc    bool // ASC or DESC
+	core *tablecore.Table
 
 	renderOffset int32 // negative value
 	limitOffset  int32
@@ -72,10 +69,11 @@ func newTable(renderer types.Renderer, tile types.Tile, elType elementType) *Ele
 
 	el.notify = renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf(notifyLoading, el.lines), func() {})
 
-	err := el.createDb()
+	db, err := tablecore.NewMemoryDB()
 	if err != nil {
 		panic(err)
 	}
+	el.db = db
 
 	// close DB upon deallocation and garbage collection
 	runtime.AddCleanup(el, func(db *sql.DB) { db.Close() }, el.db)
@@ -138,11 +136,6 @@ func (el *ElementTable) Generate(apc *types.ApcSlice) error {
 		}
 	}
 
-	err = el.createTable(headings)
-	if err != nil {
-		return err
-	}
-
 	n := len(headings)
 
 	el.headings = make([][]rune, n)
@@ -150,26 +143,10 @@ func (el *ElementTable) Generate(apc *types.ApcSlice) error {
 		el.headings[i] = []rune(headings[i])
 	}
 
-	// figure out if number
-	el.isNumber = make([]bool, n)
-	for col := 0; col < n && col < len(recs[firstRecord]); col++ {
-		_, e := strconv.ParseFloat(recs[firstRecord][col], 64)
-		el.isNumber[col] = e == nil // if no error, then it's probably a number
-	}
-
-	for row := firstRecord; row < len(recs); row++ {
-		if len(recs[row]) > n {
-			recs[row][n-1] = strings.Join(recs[row][n-1:], " ")
-			recs[row] = recs[row][:n]
-		}
-		err = el.insertRecords(recs[row])
-		if err != nil {
-			return err
-		}
-	}
-
-	if el.dbTx.Commit() != nil {
-		return fmt.Errorf("cannot commit sqlite3 transaction: %v", err)
+	el.name = fmt.Sprintf("term_%d", time.Now().UnixMicro())
+	el.core, err = tablecore.New(el.db, el.name, headings, recs[firstRecord:])
+	if err != nil {
+		return err
 	}
 
 	el.size = *el.tile.GetTerm().GetSize()

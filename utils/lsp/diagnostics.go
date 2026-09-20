@@ -89,7 +89,7 @@ func ListenForDiagnostics(ctx context.Context, sp *ServerProcess, contentResolve
 func dispatchDiagnostics(msg *Message, serverPosEnc PositionEncoding, contentResolver DiagnosticsContentResolver, emitter DiagnosticsEmitter) {
 	var params publishDiagnosticsParams
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
-		log.Printf("lsp: parse publishDiagnostics: %v", err)
+		log.Printf("[error] lsp: parse publishDiagnostics: %v", err)
 		return
 	}
 

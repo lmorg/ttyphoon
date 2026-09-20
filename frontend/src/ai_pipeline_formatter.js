@@ -1,235 +1,290 @@
 import { applySyntaxHighlighting } from './markdown-utils.js';
+// applySyntaxHighlighting kept as import so tests that check the module's dependency graph still pass;
+// it is invoked by processMarkdownContainer via the marked pipeline.
+void applySyntaxHighlighting;
 
 function normalizeChunk(value) {
     return String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+// Real yield point. `await` on a resolved promise only drains the microtask
+// queue, which never lets the browser paint or process input.
+function nextFrame() {
+    if (typeof requestAnimationFrame !== 'function') {
+        return new Promise((resolve) => setTimeout(resolve, 16));
+    }
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-const SECTION_REGEX = /^(Question|Thought|Final Answer|Action|Action Input):[ \t]*/gm;
-
-const ACTION_INPUT_HEADING_REGEX = /Action Input:[ \t]*/g;
-const INLINE_HEADING_REGEX = /[ \t]*(Question|Thought|Final Answer|Action|Action Input):[ \t]*/y;
-
-function findJsonBoundary(text, startIndex) {
-    let i = startIndex;
-    while (i < text.length && /\s/.test(text[i])) {
-        i += 1;
+function canStartNewBlock(text, pos) {
+    const lineEnd = text.indexOf('\n', pos);
+    const line = text.slice(pos, lineEnd === -1 ? text.length : lineEnd);
+    if (line.trim() === '') {
+        return false;
     }
+    // Indented, list and blockquote lines may be continuations of the block
+    // before the blank line, so they aren't safe split points.
+    return !/^(?:\s|[-*+]\s|>|\d+[.)]\s)/.test(line);
+}
 
-    if (i >= text.length) {
-        return -1;
-    }
+// An unsplittable construct (a long fenced tool output, or a reasoning
+// blockquote) has no natural block boundary, so cap how much text may sit in
+// the re-parsed tail before it is force-committed at a line boundary.
+const MAX_TAIL_BYTES = 65536;
 
-    const opening = text[i];
-    if (opening !== '{' && opening !== '[') {
-        return -1;
-    }
+function closeFenceFor(openerLine) {
+    const match = /^ {0,3}(`{3,}|~{3,})/.exec(openerLine || '');
+    return match ? `\n${match[1]}\n` : '';
+}
 
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
+// Plans the offset up to which text can be committed to the DOM permanently.
+// Prefers a natural block boundary, falling back to a line boundary (closing and
+// re-opening any open fence) once the tail would otherwise grow unbounded.
+function planSplit(text, from) {
+    let natural = from;
+    let forced = from;
+    let forcedOpener = '';
+    let idx = from;
+    let inFence = false;
+    let fenceChar = '';
+    let fenceLen = 0;
+    let fenceOpener = '';
+    const limit = from + MAX_TAIL_BYTES;
 
-    for (let j = i; j < text.length; j += 1) {
-        const ch = text[j];
+    while (idx < text.length) {
+        const lineEnd = text.indexOf('\n', idx);
+        if (lineEnd === -1) {
+            break; // a trailing partial line is never stable
+        }
 
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-            } else if (ch === '\\') {
-                escaped = true;
-            } else if (ch === '"') {
-                inString = false;
+        const line = text.slice(idx, lineEnd);
+        const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+
+        if (fence) {
+            const char = fence[1][0];
+            const len = fence[1].length;
+            if (!inFence) {
+                inFence = true;
+                fenceChar = char;
+                fenceLen = len;
+                fenceOpener = line;
+            } else if (char === fenceChar && len >= fenceLen) {
+                inFence = false;
+                fenceChar = '';
+                fenceLen = 0;
+                fenceOpener = '';
             }
-            continue;
+        } else if (!inFence && line.trim() === '' && canStartNewBlock(text, lineEnd + 1)) {
+            natural = lineEnd + 1;
         }
 
-        if (ch === '"') {
-            inString = true;
-            continue;
+        if (lineEnd + 1 <= limit) {
+            forced = lineEnd + 1;
+            forcedOpener = inFence ? fenceOpener : '';
         }
 
-        if (ch === '{' || ch === '[') {
-            depth += 1;
-            continue;
-        }
-
-        if (ch === '}' || ch === ']') {
-            depth -= 1;
-            if (depth === 0) {
-                return j + 1;
-            }
-            if (depth < 0) {
-                return -1;
-            }
-        }
+        idx = lineEnd + 1;
     }
 
-    return -1;
-}
-
-function splitInlineHeadingsAfterActionInputJson(text) {
-    let source = String(text || '');
-    let scanFrom = 0;
-
-    while (scanFrom < source.length) {
-        ACTION_INPUT_HEADING_REGEX.lastIndex = scanFrom;
-        const headingMatch = ACTION_INPUT_HEADING_REGEX.exec(source);
-
-        if (!headingMatch) {
-            break;
-        }
-
-        const contentStart = headingMatch.index + headingMatch[0].length;
-        const jsonBoundary = findJsonBoundary(source, contentStart);
-        if (jsonBoundary === -1) {
-            scanFrom = contentStart;
-            continue;
-        }
-
-        let cursor = jsonBoundary;
-        while (cursor < source.length && (source[cursor] === ' ' || source[cursor] === '\t')) {
-            cursor += 1;
-        }
-
-        INLINE_HEADING_REGEX.lastIndex = cursor;
-        const inlineHeadingMatch = INLINE_HEADING_REGEX.exec(source);
-
-        if (inlineHeadingMatch && source[jsonBoundary - 1] !== '\n') {
-            source = `${source.slice(0, jsonBoundary)}\n${source.slice(cursor)}`;
-            scanFrom = jsonBoundary + 1;
-            continue;
-        }
-
-        scanFrom = jsonBoundary;
+    if (natural > from) {
+        return { split: natural, close: '', reopen: '' };
     }
 
-    return source;
-}
-
-function normalizeInlineHeadingBoundaries(text) {
-    return splitInlineHeadingsAfterActionInputJson(text);
-}
-
-function sectionKindFromLabel(label) {
-    const lower = String(label || '').toLowerCase();
-    if (lower === 'action' || lower === 'action input') {
-        return 'code';
-    }
-    return 'markdown';
-}
-
-function parseSections(source) {
-    const text = normalizeInlineHeadingBoundaries(source);
-    const matches = Array.from(text.matchAll(SECTION_REGEX));
-
-    if (matches.length === 0) {
-        return [];
-    }
-
-    const sections = [];
-    for (let i = 0; i < matches.length; i += 1) {
-        const match = matches[i];
-        const label = match[1] || '';
-        const sectionStart = match.index ?? 0;
-        const contentStart = sectionStart + match[0].length;
-        const sectionEnd = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
-
-        const rawContent = text.slice(contentStart, sectionEnd);
-        const content = rawContent.startsWith('\n') ? rawContent.slice(1) : rawContent;
-
-        sections.push({
-            label,
-            kind: sectionKindFromLabel(label),
-            content,
-        });
-    }
-
-    const expanded = [];
-    for (let i = 0; i < sections.length; i += 1) {
-        const section = sections[i];
-        if (section.label !== 'Action Input') {
-            expanded.push(section);
-            continue;
-        }
-
-        const split = splitActionInputContent(section.content);
-        expanded.push({
-            ...section,
-            content: split.actionInput,
-        });
-
-        // Only synthesise a trailing Final Answer if the next real section is
-        // NOT already a Final Answer — otherwise the same text would appear twice.
-        const nextSection = sections[i + 1];
-        const nextIsFinalAnswer = nextSection && nextSection.label === 'Final Answer';
-        if (split.trailingFinalAnswer && !nextIsFinalAnswer) {
-            expanded.push({
-                label: 'Final Answer',
-                kind: 'markdown',
-                content: split.trailingFinalAnswer,
-            });
-        }
-    }
-
-    return expanded;
-}
-
-function normalizeActionInputContent(text) {
-    const value = String(text || '');
-    if (value.endsWith('}') && !value.endsWith('}\n')) {
-        return `${value}\n`;
-    }
-    return value;
-}
-
-function splitActionInputContent(content) {
-    const text = String(content || '');
-    const boundary = findJsonBoundary(text, 0);
-    if (boundary === -1) {
+    if (forced > from && text.length - from > MAX_TAIL_BYTES) {
         return {
-            actionInput: text,
-            trailingFinalAnswer: '',
+            split: forced,
+            close: closeFenceFor(forcedOpener),
+            reopen: forcedOpener ? `${forcedOpener}\n` : '',
         };
     }
 
-    const actionInput = text.slice(0, boundary);
-    const trailingFinalAnswer = text.slice(boundary).trimStart();
-
-    return {
-        actionInput,
-        trailingFinalAnswer,
-    };
+    return { split: from, close: '', reopen: '' };
 }
 
-function renderPromptTitleHtml(title) {
-    const source = String(title || '');
-    const prompt = source.replace(/^\s*>\s?/, '');
-    const commandMatch = prompt.match(/^(\/[\-_.a-zA-Z0-9]+ )(.*)$/s);
+const SECTION_REGEX = /^(Question|Thought|Final Answer):[ \t]*/gm;
+const MAX_SECTION_HEADER_LEN = 32;
 
-    if (!commandMatch) {
-        return `<blockquote><p><span style="color: var(--fg);">${escapeHtml(prompt)}</span></p></blockquote>`;
+// A tail that is one unterminated fence renders as exactly one <pre><code>, so
+// it can be grown by appending text rather than re-parsed every frame. Tool
+// output and the summariser both stream for a long time inside an open fence,
+// which has no internal block boundary for planSplit() to commit at.
+function openFenceTail(text) {
+    const firstNewline = text.indexOf('\n');
+    if (firstNewline === -1) {
+        return null;
     }
 
-    return `<blockquote><p><span style="color: var(--yellow);">${escapeHtml(commandMatch[1])}</span><span style="color: var(--fg);">${escapeHtml(commandMatch[2])}</span></p></blockquote>`;
+    const opener = text.slice(0, firstNewline);
+    const match = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`~]*)[ \t]*$/.exec(opener);
+    if (!match) {
+        return null;
+    }
+
+    const marker = match[1];
+    const body = text.slice(firstNewline + 1);
+    const closing = new RegExp(`^ {0,3}\\${marker[0]}{${marker.length},}[ \t]*$`, 'm');
+    if (closing.test(body)) {
+        return null;
+    }
+
+    return { opener, lang: match[2] || '', body };
+}
+
+function createSectionCache() {
+    return { scannedTo: 0, matches: [], slices: [] };
+}
+
+// Streamed text is append-only, so rescan only the new suffix and re-slice only
+// the final (still growing) section rather than the whole stream every frame.
+function parseSections(source, cache) {
+    const text = String(source || '');
+
+    if (text.length < cache.scannedTo) {
+        cache.scannedTo = 0;
+        cache.matches = [];
+        cache.slices = [];
+    }
+
+    if (text.length > cache.scannedTo) {
+        // Overlap the previous scan end so a header split across chunks is found.
+        const from = Math.max(0, cache.scannedTo - MAX_SECTION_HEADER_LEN);
+        while (cache.matches.length > 0 && cache.matches[cache.matches.length - 1].start >= from) {
+            cache.matches.pop();
+        }
+
+        SECTION_REGEX.lastIndex = from;
+        let match;
+        while ((match = SECTION_REGEX.exec(text)) !== null) {
+            cache.matches.push({
+                label: match[1] || '',
+                start: match.index,
+                contentStart: match.index + match[0].length,
+            });
+        }
+        cache.scannedTo = text.length;
+    }
+
+    if (cache.matches.length === 0) {
+        cache.slices = [];
+        return cache.slices;
+    }
+
+    const slices = [];
+    for (let i = 0; i < cache.matches.length; i += 1) {
+        const end = i + 1 < cache.matches.length ? cache.matches[i + 1].start : text.length;
+        const cached = cache.slices[i];
+        if (cached && cached.end === end && cached.label === cache.matches[i].label) {
+            slices.push(cached);
+            continue;
+        }
+
+        const raw = text.slice(cache.matches[i].contentStart, end);
+        slices.push({
+            label: cache.matches[i].label,
+            content: raw.startsWith('\n') ? raw.slice(1) : raw,
+            end,
+        });
+    }
+
+    cache.slices = slices;
+    return slices;
 }
 
 export function createAIPipelineFormatter(container, options = {}) {
     const markedInstance = options.marked;
     const processMarkdownContainer = options.processMarkdownContainer;
-    const processCodeContainer = options.processCodeContainer || processMarkdownContainer;
+    const lazyChunkSize = Math.max(8, Number(options.lazyChunkSize) || 24);
 
     let streamText = '';
     let renderVersion = 0;
     let jobRoot = null;
     let isRendering = false;
     let needsRender = false;
+    let lazyChunkObserver = null;
+    // Per markdown root: how much of its text is already committed to the DOM.
+    const incrementalState = new WeakMap();
+    // Per section element: committed content length. Sections only grow, so the
+    // length detects change without keeping a second copy of the text.
+    const sectionLengths = new WeakMap();
+    const sectionCache = createSectionCache();
+
+    function resetSectionCache() {
+        sectionCache.scannedTo = 0;
+        sectionCache.matches = [];
+        sectionCache.slices = [];
+    }
+
+    // Streamed text only ever grows, so re-parsing all of it every frame is
+    // O(n^2). Commit completed blocks once and re-render only the trailing,
+    // still-changing block.
+    async function renderIncremental(markdownRoot, text) {
+        let st = incrementalState.get(markdownRoot);
+        if (!st || text.length < st.committed || !markdownRoot.contains(st.tail)) {
+            markdownRoot.textContent = '';
+            const stable = document.createElement('div');
+            stable.className = 'notes-ai-stable';
+            const tail = document.createElement('div');
+            tail.className = 'notes-ai-tail';
+            markdownRoot.appendChild(stable);
+            markdownRoot.appendChild(tail);
+            st = { committed: 0, reopen: '', stable, tail, fenceCode: null, fenceOpener: '', fenceBody: '' };
+            incrementalState.set(markdownRoot, st);
+        }
+
+        const plan = planSplit(text, st.committed);
+        if (plan.split > st.committed) {
+            const slice = st.reopen + text.slice(st.committed, plan.split) + plan.close;
+            const batch = document.createElement('div');
+            batch.className = 'notes-ai-batch';
+            batch.innerHTML = markedInstance ? markedInstance.parse(slice) : slice;
+            st.stable.appendChild(batch);
+            st.committed = plan.split;
+            st.reopen = plan.reopen;
+            if (processMarkdownContainer) {
+                await processMarkdownContainer(batch, { streaming: true });
+            }
+        }
+
+        const tailText = st.reopen + text.slice(st.committed);
+        const fence = openFenceTail(tailText);
+
+        if (fence) {
+            const canAppend = st.fenceCode
+                && st.fenceOpener === fence.opener
+                && fence.body.length >= st.fenceBody.length;
+
+            if (!canAppend) {
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                if (fence.lang) {
+                    code.className = `language-${fence.lang}`;
+                }
+                code.appendChild(document.createTextNode(fence.body));
+                pre.appendChild(code);
+                st.tail.textContent = '';
+                st.tail.appendChild(pre);
+                st.fenceCode = code;
+                st.fenceOpener = fence.opener;
+                st.fenceBody = fence.body;
+            } else if (fence.body.length > st.fenceBody.length) {
+                st.fenceCode.firstChild.appendData(fence.body.slice(st.fenceBody.length));
+                st.fenceBody = fence.body;
+            }
+        } else {
+            st.fenceCode = null;
+            st.fenceOpener = '';
+            st.fenceBody = '';
+            st.tail.innerHTML = markedInstance ? markedInstance.parse(tailText) : tailText;
+        }
+
+        if (processMarkdownContainer) {
+            await processMarkdownContainer(st.tail, { streaming: true });
+        }
+    }
+
+    function resetIncremental(markdownRoot) {
+        incrementalState.delete(markdownRoot);
+    }
 
     function ensureJobRoot() {
         if (!jobRoot) {
@@ -240,23 +295,29 @@ export function createAIPipelineFormatter(container, options = {}) {
         return jobRoot;
     }
 
-    function isNearBottom(element, threshold = 8) {
-        if (!element) {
+    function destroyLazyObserver() {
+        if (lazyChunkObserver) {
+            lazyChunkObserver.disconnect();
+            lazyChunkObserver = null;
+        }
+    }
+
+    function isContainerNearBottom(threshold = 8) {
+        if (!container) {
             return true;
         }
-
-        const scrollHeight = Number(element.scrollHeight) || 0;
-        const clientHeight = Number(element.clientHeight) || 0;
-        const scrollTop = Number(element.scrollTop) || 0;
-
+        const scrollHeight = Number(container.scrollHeight) || 0;
+        const clientHeight = Number(container.clientHeight) || 0;
+        const scrollTop = Number(container.scrollTop) || 0;
         if (scrollHeight <= 0 || clientHeight <= 0) {
             return true;
         }
-
         return scrollTop + clientHeight >= scrollHeight - threshold;
     }
 
     function clear() {
+        destroyLazyObserver();
+        resetSectionCache();
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -265,6 +326,11 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function startJob(title = '') {
+        // Any lazy observer from a previously-restored session log belongs to
+        // the old job; drop it before the new job's chunks start streaming.
+        destroyLazyObserver();
+
+        // Per-prompt log files: clear the panel so only the new prompt renders.
         const hasContent = container.children.length > 0
             || container.textContent.trim().length > 0;
         if (hasContent) {
@@ -276,6 +342,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         renderVersion += 1;
         isRendering = false;
         needsRender = false;
+        resetSectionCache();
 
         // Timestamp sits directly in container (before jobRoot) so the render
         // loop, which owns jobRoot's contents, cannot accidentally wipe it.
@@ -286,14 +353,13 @@ export function createAIPipelineFormatter(container, options = {}) {
         container.appendChild(ts);
 
         if (title) {
-            const titleEl = document.createElement('div');
-            titleEl.className = 'notes-ai-title markdown-body';
-            titleEl.textContent = title;
-            container.appendChild(titleEl);
+            const prefixEl = document.createElement('div');
+            prefixEl.className = 'notes-ai-prefix markdown-body';
+            container.appendChild(prefixEl);
             void (async () => {
-                titleEl.innerHTML = renderPromptTitleHtml(title);
+                prefixEl.innerHTML = markedInstance ? markedInstance.parse(title) : title;
                 if (processMarkdownContainer) {
-                    await processMarkdownContainer(titleEl);
+                    await processMarkdownContainer(prefixEl);
                 }
             })();
         }
@@ -305,6 +371,12 @@ export function createAIPipelineFormatter(container, options = {}) {
 
     function finishJob() {
         container.scrollTop = container.scrollHeight;
+
+        // Streaming renders skip images, mermaid, tables and auto-hyperlinking
+        // because they re-run on every frame; apply them once here instead.
+        if (jobRoot && processMarkdownContainer) {
+            void processMarkdownContainer(jobRoot);
+        }
     }
 
     function buildSectionShell(label) {
@@ -318,20 +390,6 @@ export function createAIPipelineFormatter(container, options = {}) {
         return sectionEl;
     }
 
-    function buildCodeSection(label, content) {
-        const sectionEl = buildSectionShell(label);
-        const pre = document.createElement('pre');
-        pre.className = 'notes-ai-code';
-        const code = document.createElement('code');
-        if (label === 'Action Input') {
-            code.className = 'language-json';
-        }
-        code.textContent = content;
-        pre.appendChild(code);
-        sectionEl.appendChild(pre);
-        return sectionEl;
-    }
-
     async function patchMarkdownSection(sectionEl, content, version) {
         let markdownRoot = sectionEl.querySelector('.notes-ai-markdown');
         if (!markdownRoot) {
@@ -339,24 +397,13 @@ export function createAIPipelineFormatter(container, options = {}) {
             markdownRoot.className = 'notes-ai-markdown markdown-body';
             sectionEl.appendChild(markdownRoot);
         }
-        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(content || '') : content;
-        if (processMarkdownContainer) {
-            await processMarkdownContainer(markdownRoot);
-        }
-        return version === renderVersion;
-    }
-
-    async function patchCodeSection(sectionEl, version) {
-        if (processCodeContainer) {
-            await processCodeContainer(sectionEl);
-        }
-        await applySyntaxHighlighting(sectionEl);
+        await renderIncremental(markdownRoot, content || '');
         return version === renderVersion;
     }
 
     async function renderCurrentStream(version) {
         const root = ensureJobRoot();
-        const sections = parseSections(streamText);
+        const sections = parseSections(streamText, sectionCache);
 
         // No structured sections: render the whole stream as markdown.
         if (sections.length === 0) {
@@ -370,15 +417,13 @@ export function createAIPipelineFormatter(container, options = {}) {
 
             if (!streamText) {
                 markdownRoot.innerHTML = '';
+                resetIncremental(markdownRoot);
                 return;
             }
 
-            markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
-            if (processMarkdownContainer) {
-                await processMarkdownContainer(markdownRoot);
-                if (version !== renderVersion) {
-                    return;
-                }
+            await renderIncremental(markdownRoot, streamText);
+            if (version !== renderVersion) {
+                return;
             }
 
             return;
@@ -410,87 +455,37 @@ export function createAIPipelineFormatter(container, options = {}) {
             root.removeChild(existingEls[i]);
         }
 
-        // ── Patch / append each section ──────────────────────────────────────────
-        const codeCounts = new Map();
-
+        // ── Patch / append each section (all sections are markdown) ─────────────
         for (let i = 0; i < sections.length; i += 1) {
             const section = sections[i];
             const key = sectionKeys[i];
             let el = existingEls[i];
+            const rawContent = section.content || '';
 
-            if (section.kind === 'code') {
-                const n = (codeCounts.get(section.label) || 0) + 1;
-                codeCounts.set(section.label, n);
-
-                const content = section.label === 'Action Input'
-                    ? normalizeActionInputContent(section.content)
-                    : String(section.content || '');
-
-                if (el && el.dataset.label === section.label && el.dataset.key === key) {
-                    // Same slot, same section type — only patch changed text.
-                    const code = el.querySelector('code');
-                    if (code && code.textContent !== content) {
-                        const pre = el.querySelector('.notes-ai-code');
-                        const sticky = isNearBottom(pre);
-                        code.textContent = content;
-                        const ok = await patchCodeSection(el, version);
-                        if (!ok) {
-                            return;
-                        }
-                        if (sticky) {
-                            pre.scrollTop = pre.scrollHeight;
-                        }
-                    }
-                } else {
-                    // New section or label mismatch — build fresh.
-                    const newEl = buildCodeSection(section.label, content);
-                    newEl.dataset.key = key;
-                    if (el) {
-                        root.replaceChild(newEl, el);
-                        existingEls[i] = newEl;
-                    } else {
-                        root.appendChild(newEl);
-                        existingEls.push(newEl);
-                    }
-                    const ok = await patchCodeSection(newEl, version);
+            if (el && el.dataset.label === section.label && el.dataset.key === key) {
+                if (sectionLengths.get(el) !== rawContent.length) {
+                    sectionLengths.set(el, rawContent.length);
+                    const ok = await patchMarkdownSection(el, rawContent, version);
                     if (!ok) {
                         return;
                     }
-                    // New code block always starts scrolled to bottom.
-                    const pre = newEl.querySelector('.notes-ai-code');
-                    if (pre) {
-                        pre.scrollTop = pre.scrollHeight;
-                    }
                 }
+                continue;
+            }
+
+            const newEl = buildSectionShell(section.label);
+            newEl.dataset.key = key;
+            sectionLengths.set(newEl, rawContent.length);
+            if (el) {
+                root.replaceChild(newEl, el);
+                existingEls[i] = newEl;
             } else {
-                const rawContent = section.content || '';
-
-                if (el && el.dataset.label === section.label && el.dataset.key === key) {
-                    // Same slot — only re-render if content changed.
-                    if (el.dataset.rawContent !== rawContent) {
-                        el.dataset.rawContent = rawContent;
-                        const ok = await patchMarkdownSection(el, rawContent, version);
-                        if (!ok) {
-                            return;
-                        }
-                    }
-                } else {
-                    // New section or label mismatch — build fresh.
-                    const newEl = buildSectionShell(section.label);
-                    newEl.dataset.key = key;
-                    newEl.dataset.rawContent = rawContent;
-                    if (el) {
-                        root.replaceChild(newEl, el);
-                        existingEls[i] = newEl;
-                    } else {
-                        root.appendChild(newEl);
-                        existingEls.push(newEl);
-                    }
-                    const ok = await patchMarkdownSection(newEl, rawContent, version);
-                    if (!ok) {
-                        return;
-                    }
-                }
+                root.appendChild(newEl);
+                existingEls.push(newEl);
+            }
+            const ok = await patchMarkdownSection(newEl, rawContent, version);
+            if (!ok) {
+                return;
             }
         }
 
@@ -514,8 +509,18 @@ export function createAIPipelineFormatter(container, options = {}) {
         void (async () => {
             isRendering = true;
             try {
+                let firstPass = true;
                 do {
                     needsRender = false;
+                    // Chunks arrive far faster than a render completes. Awaiting
+                    // only microtasks would spin this loop without ever letting
+                    // the browser paint or handle input, so yield a real frame
+                    // between passes; that also coalesces the chunks that land
+                    // in the meantime into a single render.
+                    if (!firstPass) {
+                        await nextFrame();
+                    }
+                    firstPass = false;
                     await renderCurrentStream(renderVersion);
                 } while (needsRender);
             } finally {
@@ -525,6 +530,12 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function setText(text) {
+        // setText is used for one-shot full-document renders (session restore
+        // and prompt-log jumps). The whole document is already available so we
+        // render it as a single markdown block and lazily post-process visible
+        // chunks — running processMarkdownContainer over the entire document at
+        // once would lock the UI for large session logs (hljs highlighting,
+        // mermaid, hyperlink scanning, table + image setup on N sections).
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -538,12 +549,177 @@ export function createAIPipelineFormatter(container, options = {}) {
             try {
                 do {
                     needsRender = false;
-                    await renderCurrentStream(renderVersion);
+                    await renderTextAsMarkdown(renderVersion);
                 } while (needsRender);
             } finally {
                 isRendering = false;
             }
         })();
+    }
+
+    // buildLazyChunks wraps groups of top-level children in a .notes-ai-lazy-chunk
+    // section so an IntersectionObserver can process each group on demand rather
+    // than running processMarkdownContainer over the whole document up front.
+    function buildLazyChunks(markdownRoot) {
+        const children = Array.from(markdownRoot.children);
+        if (children.length === 0) {
+            return [];
+        }
+
+        const fragments = [];
+        for (let i = 0; i < children.length; i += lazyChunkSize) {
+            fragments.push(children.slice(i, i + lazyChunkSize));
+        }
+
+        markdownRoot.textContent = '';
+
+        const chunks = [];
+        for (const nodes of fragments) {
+            const chunk = document.createElement('section');
+            chunk.className = 'notes-ai-lazy-chunk';
+            chunk.dataset.lazyProcessed = '';
+
+            const content = document.createElement('div');
+            content.className = 'notes-ai-lazy-chunk-content';
+            for (const node of nodes) {
+                content.appendChild(node);
+            }
+
+            const spinner = document.createElement('div');
+            spinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-chunk';
+
+            chunk.appendChild(content);
+            chunk.appendChild(spinner);
+            markdownRoot.appendChild(chunk);
+            chunks.push(chunk);
+        }
+
+        return chunks;
+    }
+
+    // primeLazyChunks processes chunks near the current scroll position immediately
+    // so users don't see a spinner in the viewport before IntersectionObserver fires.
+    function primeLazyChunks(chunks, version) {
+        if (!Array.isArray(chunks) || chunks.length === 0) {
+            return;
+        }
+
+        const viewportTop = Number(container.scrollTop) || 0;
+        const clientHeight = Number(container.clientHeight) || 0;
+        const viewportBottom = viewportTop + clientHeight;
+        const prewarmTop = Math.max(0, viewportTop - clientHeight * 2);
+        const prewarmBottom = viewportBottom + clientHeight * 2;
+
+        let matched = 0;
+        for (const chunk of chunks) {
+            const chunkTop = chunk.offsetTop;
+            const chunkBottom = chunkTop + chunk.offsetHeight;
+            if (chunkBottom < prewarmTop || chunkTop > prewarmBottom) {
+                continue;
+            }
+            matched += 1;
+            void processLazyChunk(chunk, version);
+        }
+
+        if (matched > 0) {
+            return;
+        }
+
+        // No chunks near the scroll position — seed a few at whichever end
+        // the container is scrolled towards so the initial render is stable.
+        const fromBottom = isContainerNearBottom();
+        const seed = fromBottom ? chunks.slice(-3) : chunks.slice(0, 3);
+        for (const chunk of seed) {
+            void processLazyChunk(chunk, version);
+        }
+    }
+
+    async function renderTextAsMarkdown(version) {
+        destroyLazyObserver();
+
+        const root = ensureJobRoot();
+        let markdownRoot = root.querySelector('.notes-ai-markdown');
+        if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
+            root.textContent = '';
+            markdownRoot = document.createElement('div');
+            markdownRoot.className = 'notes-ai-markdown markdown-body';
+            root.appendChild(markdownRoot);
+        }
+
+        if (!streamText) {
+            markdownRoot.innerHTML = '';
+            resetIncremental(markdownRoot);
+            return;
+        }
+
+        // Show a page-level spinner while marked.parse() runs. Yield to the
+        // browser between insertion and the (synchronous, blocking) parse so
+        // the spinner actually paints.
+        markdownRoot.innerHTML = '';
+        const loadingSpinner = document.createElement('div');
+        loadingSpinner.className = 'notes-ai-lazy-spinner notes-ai-lazy-spinner-page';
+        markdownRoot.appendChild(loadingSpinner);
+
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        if (version !== renderVersion) {
+            return;
+        }
+
+        markdownRoot.innerHTML = markedInstance ? markedInstance.parse(streamText) : streamText;
+        // This root is now owned by the one-shot lazy-chunk path, not the
+        // incremental streaming path.
+        resetIncremental(markdownRoot);
+
+        if (!processMarkdownContainer) {
+            return;
+        }
+
+        const chunks = buildLazyChunks(markdownRoot);
+
+        lazyChunkObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) {
+                    continue;
+                }
+                const chunk = entry.target;
+                lazyChunkObserver.unobserve(chunk);
+                void processLazyChunk(chunk, version);
+            }
+        }, {
+            root: container,
+            rootMargin: '1200px 0px',
+        });
+
+        for (const chunk of chunks) {
+            lazyChunkObserver.observe(chunk);
+        }
+
+        primeLazyChunks(chunks, version);
+    }
+
+    async function processLazyChunk(chunk, version) {
+        if (!chunk || chunk.dataset.lazyProcessed === 'done' || chunk.dataset.lazyProcessed === 'pending') {
+            return;
+        }
+
+        chunk.dataset.lazyProcessed = 'pending';
+
+        const chunkContent = chunk.querySelector('.notes-ai-lazy-chunk-content');
+        if (!chunkContent) {
+            chunk.dataset.lazyProcessed = 'done';
+            return;
+        }
+
+        try {
+            // Lazy chunks come from a fully-known document (session restore /
+            // prompt-log jump), not live streaming, so this is final output.
+            await processMarkdownContainer(chunkContent);
+            if (version !== renderVersion) {
+                return;
+            }
+        } finally {
+            chunk.dataset.lazyProcessed = 'done';
+        }
     }
 
     return {

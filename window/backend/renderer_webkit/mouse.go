@@ -2,6 +2,21 @@ package rendererwebkit
 
 import "github.com/lmorg/ttyphoon/types"
 
+// activatePane tells tmux which pane we've switched to and updates the app title
+func (wr *webkitRender) activatePane(tile types.Tile) {
+	wr.setWindowTitleFromTile(tile)
+
+	if wr.tmux == nil {
+		return
+	}
+
+	go func() {
+		if err := wr.tmux.SelectPane(tile.Id()); err != nil {
+			wr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+	}()
+}
+
 func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.MouseButtonT, clicks uint8, state types.ButtonStateT) {
 	defer wr.TriggerRedraw()
 
@@ -16,6 +31,9 @@ func (wr *webkitRender) HandleMouseButton(cellX, cellY int32, button types.Mouse
 
 	tile.GetTerm().SetFocus(true)
 	if wr.termWin != nil {
+		if wr.termWin.Active != tile {
+			wr.activatePane(tile)
+		}
 		wr.termWin.Active = tile
 	}
 

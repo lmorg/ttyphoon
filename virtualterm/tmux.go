@@ -24,5 +24,5 @@ func (term *Term) tmuxRenameWindow() {
 		title = append(title, r)
 	}
 
-	term.renderer.SetWindowTitle(string(title))
+	term.setTitle(string(title))
 }

@@ -1,6 +1,7 @@
 package element_table
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -55,7 +56,7 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 						start = el.boundaries[i-1]
 					}
 					cell := string(el.table[pos.Y-1][start:el.boundaries[i]])
-					clipboard.Write(clipboard.FmtText, []byte(strings.TrimSpace(cell)))
+					clipboard.Write(context.Background(), clipboard.FmtText, []byte(strings.TrimSpace(cell)))
 					el.renderer.DisplayNotification(types.NOTIFY_INFO, "Cell copied to clipboard")
 					return
 				}
@@ -64,10 +65,13 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 			return
 
 		case 2:
-			el.renderer.DisplayInputBox(fmt.Sprintf("SELECT * FROM '%s' WHERE ... (empty query to reset view)", el.name), el.filter, func(v *types.InputBoxCallbackResultT) {
+			el.renderer.DisplayInputBox(fmt.Sprintf("SELECT * FROM '%s' WHERE ... (empty query to reset view)", el.name), el.core.Filter(), func(v *types.InputBoxCallbackResultT) {
+				if err := el.core.SetFilter(v.String()); err != nil {
+					el.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot filter table: "+err.Error())
+					return
+				}
 				el.renderOffset = 0
 				el.limitOffset = 0
-				el.filter = v.String()
 				err := el.runQuery()
 				if err != nil {
 					el.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot sort table: "+err.Error())
@@ -93,15 +97,10 @@ func (el *ElementTable) MouseClick(_pos *types.XY, button types.MouseButtonT, cl
 
 	switch button {
 	case 1:
-		if el.orderByIndex == column {
-			el.orderDesc = !el.orderDesc
-		} else {
-			el.orderByIndex = column
-			el.orderDesc = false
-		}
+		el.core.ToggleSort(column)
 
-	case 3:
-		el.orderByIndex = 0
+	case 2, 3:
+		el.core.ClearSort()
 	}
 
 	err := el.runQuery()
@@ -160,7 +159,7 @@ func (el *ElementTable) MouseMotion(_pos *types.XY, move *types.XY, callback typ
 	switch {
 	case pos.Y == 0:
 		cursor.Hand()
-		el.renderer.StatusBarText("[Left Click] Sort row (ASC|DESC)  |  [Right Click] Remove sort  |  [Ctrl+Scroll] Scroll table")
+		el.renderer.StatusBarText("[Left Click] Sort row (ASC|DESC)  |  [Middle/Right Click] Remove sort  |  [Ctrl+Scroll] Scroll table")
 
 	case int(pos.Y) <= len(el.table):
 		el.renderer.StatusBarText("[Click] Copy cell text to clipboard  |  [2x Click] Filter table (SQL)  |  [Ctrl+Scroll] Scroll table")

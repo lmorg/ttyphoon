@@ -62,11 +62,11 @@ parsed:
 	switch stack[0] {
 	case "0":
 		// Change icon and window title
-		term.renderer.SetWindowTitle(stack[1])
+		term.setTitle(stack[1])
 
 	case "2":
 		// Change window title
-		term.renderer.SetWindowTitle(stack[1])
+		term.setTitle(stack[1])
 
 	case "4":
 		// Change Color Number c to the color specified by spec.

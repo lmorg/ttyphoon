@@ -23,7 +23,6 @@ func init() {
 
 		b, err := embedFs.ReadFile(name)
 		if err != nil {
-			// not a bug in murex
 			panic(err)
 		}
 

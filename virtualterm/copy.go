@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"context"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/types"
@@ -172,7 +173,7 @@ func (term *Term) copyOutputBlock(absBlockPos [2]int) []byte {
 }
 
 func (term *Term) copyOutputBlockToClipboard(absBlockPos [2]int) {
-	clipboard.Write(clipboard.FmtText, term.copyOutputBlock(absBlockPos))
+	clipboard.Write(context.Background(), clipboard.FmtText, term.copyOutputBlock(absBlockPos))
 }
 
 func (term *Term) getCmdLine(absPos int) []rune {

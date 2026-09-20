@@ -15,38 +15,41 @@ import (
 	"github.com/lmorg/ttyphoon/ai/prompts"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func ExplainCmdOutput(agt *agent.Agent) {
-	fn := func(v *types.InputBoxCallbackResultT) {
-		if agt.Meta == nil {
-			agt.Meta = &aitypes.Meta{}
-		}
-		agt.Meta.Variables = v.Variables
-
-		query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
-		query = strings.TrimSpace(query)
-		askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
-	}
-
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:       "Explain output",
 			Placeholder: "Optional",
 			Multiline:   true,
-			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
+			Variables: []types.InputBoxWTVariables{
+				agt.ListModelsInputVariable(),
+				SaveMarkdownToggle(false),
+			},
 		},
-		OkFunc: fn,
+
+		OkFunc: func(v *types.InputBoxCallbackResultT) {
+			if agt.Meta == nil {
+				agt.Meta = &aitypes.Meta{}
+			}
+			agt.Meta.Variables = v.Variables
+
+			agt.SetModelFromInputVariable(v.Variables)
+
+			query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
+			query = strings.TrimSpace(query)
+			askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
+		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
-
-	//agt.Renderer().DisplayInputBox("(Optional) Add to prompt", "", fn, nil)
 }
 
-func ExplainDoc(agt *agent.Agent, filename, contents string) {
+func ExplainDoc(agt *agent.Agent, filename, contents string, images []aitypes.ImageAttachment) {
 	tile := agt.Renderer().ActiveTile()
 	if tile == nil {
 		return
@@ -62,11 +65,15 @@ func ExplainDoc(agt *agent.Agent, filename, contents string) {
 			Title:       "Ask AI about " + filename,
 			Placeholder: "Optional",
 			Multiline:   true,
-			Variables:   []types.InputBoxWTVariables{SaveMarkdownToggle(false)},
+			Variables: []types.InputBoxWTVariables{
+				agt.ListModelsInputVariable(),
+				SaveMarkdownToggle(false),
+			},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
-			askAI(agt, prompts.GetExplainDocMessages(agt, v.String()), v.String())
+			agt.SetModelFromInputVariable(v.Variables)
+			askAI(agt, prompts.GetExplainDocMessagesWithImages(agt, v.String(), images), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -130,7 +137,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 			}()
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 
@@ -146,14 +153,14 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
-
-		} else {
-			if storeErr := sessiondb.AppendActiveSessionEntry(agt.Workspace(), query, agt.Meta.CmdLine, agt.Meta.OutputBlock, result); storeErr != nil {
-				agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
-			}
 		}
 
-		emitAIFinalResponse(agt, result)
+		_, promptID, storeErr := sessiondb.AppendActiveSessionEntry(agt.Workspace(), query, agt.Meta.CmdLine, agt.Meta.OutputBlock, result)
+		if storeErr != nil {
+			agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
+		}
+
+		emitAIFinalResponse(agt, result, promptID)
 		finishAIJob(agt)
 
 		endTime := time.Now()
@@ -219,11 +226,12 @@ func emitAIResponseChunk(agt *agent.Agent, chunk string) {
 	}, sessiondb.SESSION_LOG_APPEND_CHUNK, chunk)
 }
 
-func emitAIFinalResponse(agt *agent.Agent, output string) {
+func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64) {
 	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
 		Workspace:       agt.Workspace(),
 		CommandLine:     agt.Meta.CmdLine,
 		OutputBlock:     agt.Meta.OutputBlock,
+		PromptID:        promptID,
 		WorkspaceActive: agt.IsWorkspaceActive(),
 		Emit: func(event string, payload any) {
 			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
@@ -271,16 +279,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 			}
 			agt.Meta.Variables = v.Variables
 
-			if raw, ok := v.Variables["model"]; ok {
-				selectedModel := strings.TrimSpace(fmt.Sprint(raw))
-				if selectedModel != "" {
-					err := agt.SetServiceModelFromSelection(selectedModel)
-					if err != nil {
-						agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
-						return
-					}
-				}
-			}
+			agt.SetModelFromInputVariable(v.Variables)
 
 			var selectedTools string
 			raw, ok := v.Variables["tools"]
