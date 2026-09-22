@@ -206,6 +206,7 @@ func (h *aiStreamBlockHandle) Append(delta string) {
 	h.block.Content += delta
 	h.pending += delta
 	event := h.block
+	event.Content = ""
 	event.Delta = delta
 	h.writer.emitBlock(event)
 	if h.timer == nil {
@@ -232,6 +233,7 @@ func (h *aiStreamBlockHandle) Close() {
 	h.mu.Unlock()
 	if err := sessiondb.AppendStreamBlock(h.writer.workspace, h.block.SessionID, h.block.RunID, h.block.BlockID, pending, "closed", streamBlockNow()); err == nil {
 		event := h.block
+		event.Content = ""
 		event.Status = "closed"
 		h.writer.emitBlock(event)
 	}

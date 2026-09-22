@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -56,6 +58,11 @@ func (r *einoRuntime) newStreamBlockWriter() *aiStreamBlockWriter {
 }
 
 const einoMaxHistoryTurns = 8
+
+const (
+	maxTransientStreamRetries = 2
+	transientStreamRetryDelay = 250 * time.Millisecond
+)
 
 // Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
 const einoAnthropicMaxTokens = 8192
@@ -840,6 +847,7 @@ func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []
 func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	var response strings.Builder
 	continuationMessages := append([]*schema.Message(nil), messages...)
+	transientRetries := 0
 
 	// Tool permissions are scoped to the user prompt, so continuations inherit them.
 	r.agent.ResetToolPermissions()
@@ -858,6 +866,22 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		result, err := r.runBoundedWindow(windowCtx, continuationMessages, streamCallback)
 		checkpoint.setVisibleOutput(result)
 		response.WriteString(result)
+		if isTransientStreamError(err) && ctx.Err() == nil && transientRetries < maxTransientStreamRetries {
+			transientRetries++
+			if waitErr := waitForTransientStreamRetry(ctx); waitErr != nil {
+				return response.String(), waitErr
+			}
+			retrySummary := formatContinuationCheckpointMessage(checkpoint)
+			emitAIStreamToolProgress(ctx, fmt.Sprintf(
+				"\n\n**Retrying interrupted model stream (%d/%d)**\n\n",
+				transientRetries, maxTransientStreamRetries,
+			))
+			continuationMessages = append(continuationMessages, schema.UserMessage(retrySummary))
+			continue
+		}
+		if err == nil {
+			transientRetries = 0
+		}
 		if err == nil || !isMaxStepError(err) {
 			return response.String(), err
 		}
@@ -1092,7 +1116,9 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 		if recvErr != nil {
 			reasoningWait.Wait()
 			emitter.flush()
-			emitter.blocks.CloseAll()
+			if emitter.blocks != nil {
+				emitter.blocks.CloseAll()
+			}
 			return response.String(), recvErr
 		}
 
@@ -1114,7 +1140,9 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 	}
 	reasoningWait.Wait()
 	emitter.flush()
-	emitter.blocks.CloseAll()
+	if emitter.blocks != nil {
+		emitter.blocks.CloseAll()
+	}
 
 	spread := time.Duration(0)
 	if !firstContentAt.IsZero() && !lastContentAt.IsZero() {
@@ -1133,6 +1161,43 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 
 func isMaxStepError(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "exceeds max steps")
+}
+
+func isTransientStreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"failed to receive stream chunk",
+		"connection reset by peer",
+		"connection closed",
+		"broken pipe",
+		"unexpected eof",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func waitForTransientStreamRetry(ctx context.Context) error {
+	timer := time.NewTimer(transientStreamRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func drainReasoningStream(stream *schema.StreamReader[*einoModel.CallbackOutput], emitter *aiStreamEmitter) {

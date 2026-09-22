@@ -474,12 +474,11 @@ export function createAIPipelineFormatter(container, options = {}) {
         if (delta) {
             entry.text += delta;
         }
-        // Every event carries the full accumulated content, so a snapshot that is
-        // at least as long as what we have heals any delta we missed.
+        // Historical/live-restore hydration supplies an explicit snapshot;
+        // normal live delta events intentionally leave content empty.
         if (block?.content && String(block.content).length >= entry.text.length) {
             entry.text = String(block.content);
         }
-
         const text = entry.kind === 'thinking'
             ? `\n> **Thinking:** ${entry.text.replace(/\n/g, '\n> ')}`
             : entry.text;

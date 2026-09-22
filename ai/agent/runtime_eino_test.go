@@ -857,6 +857,54 @@ func TestEinoRuntimeContinuationAppendsPreviousWindowOutput(t *testing.T) {
 	}
 }
 
+func TestIsTransientStreamError(t *testing.T) {
+	for _, err := range []error{
+		errors.New("failed to receive stream chunk: read tcp: connection reset by peer"),
+		errors.New("unexpected EOF while reading model stream"),
+	} {
+		if !isTransientStreamError(err) {
+			t.Fatalf("isTransientStreamError(%q) = false, want true", err)
+		}
+	}
+	if isTransientStreamError(errors.New("tool permission denied")) {
+		t.Fatal("isTransientStreamError() = true for a non-transport error")
+	}
+}
+
+func TestEinoRuntimeRetriesTransientStreamWithCheckpoint(t *testing.T) {
+	var calls int
+	var retryMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			return "partial", errors.New("failed to receive stream chunk: connection reset by peer")
+		}
+		retryMessages = append([]*schema.Message(nil), messages...)
+		return "recovered", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partialrecovered" {
+		t.Fatalf("result = %q, want partialrecovered", result)
+	}
+	if calls != 2 {
+		t.Fatalf("bounded window calls = %d, want 2", calls)
+	}
+	if len(retryMessages) != 2 || !strings.Contains(retryMessages[1].Content, "Continuation checkpoint") {
+		t.Fatalf("retry messages = %+v, want checkpoint continuation", retryMessages)
+	}
+	if !strings.Contains(streamed.String(), "Retrying interrupted model stream (1/2)") {
+		t.Fatalf("streamed output = %q, want retry progress marker", streamed.String())
+	}
+}
+
 func TestEinoRuntimeContinuationAsksUserAtConfiguredBoundary(t *testing.T) {
 	restore := setMaxContinuationsForTest(t, 1)
 	defer restore()

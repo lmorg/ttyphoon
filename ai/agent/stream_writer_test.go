@@ -145,4 +145,9 @@ func TestAIStreamBlockWriter_SplitsThinkingAroundToolBlock(t *testing.T) {
 	if !closedBeforeTool {
 		t.Fatalf("events = %+v, want thinking close before tool block", events)
 	}
+	for _, event := range events {
+		if event.Delta != "" && event.Content != "" {
+			t.Fatalf("live delta event copied full content: %+v", event)
+		}
+	}
 }

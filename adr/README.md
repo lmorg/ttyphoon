@@ -51,6 +51,9 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0037](0037-ai-stream-is-addressable-blocks-in-sqlite.md) | The AI stream is a set of addressable blocks persisted in sqlite | AI panel |
 | [0038](0038-typed-stream-blocks-must-honour-panel-scope.md) | Typed stream blocks must honour workspace and prompt scope | AI panel |
 | [0039](0039-remove-legacy-markdown-compatibility-layer.md) | Scheduled removal of the legacy markdown compatibility layer | AI panel |
+| [0040](0040-transient-model-stream-disconnects-use-checkpoint-retry.md) | Transient model stream disconnects use checkpoint retry | AI runtime |
+| [0041](0041-rerun-failed-ai-prompts-from-persisted-checkpoints.md) | Rerun failed AI prompts from persisted checkpoints | AI runtime |
+| [0042](0042-large-ai-stream-footprint-and-ui-responsiveness.md) | Large AI streams must preserve UI responsiveness | AI panel |
 
 ## Recurring themes
 
@@ -73,6 +76,17 @@ suppression predicate, reintroduces every bug the predicate existed to prevent.
 **Date-stamp compatibility layers when you add them.** A shim kept for one
 reason spreads across every layer it touches, and none of those layers records
 why it is still there. (0039)
+
+**Retry transport failures through state, never by replaying side effects.** A
+provider stream can fail after tools have already run; retry the checkpoint,
+not the original request. (0040)
+
+**Rerun failures as new linked requests, never as tool replay.** Preserve the
+failed audit trail and let the model verify state before taking side effects.
+(0041)
+
+**Bound the UI by frames, not tokens.** Large streams must coalesce rendering
+and transport work without dropping durable output. (0042)
 
 **Give each writer its own addressable sink.** Serialising writes onto one
 append-only buffer orders the bytes but not the logical blocks; the fix is to

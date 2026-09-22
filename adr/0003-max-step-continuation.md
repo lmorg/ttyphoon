@@ -4,7 +4,8 @@ Date: 2026-09-06
 
 ## Status
 
-Accepted
+Accepted. Transient model stream disconnect recovery is specified separately in
+ADR 0040 and reuses this record's checkpoint continuation mechanism.
 
 ## Context
 
