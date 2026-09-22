@@ -4,7 +4,9 @@ Date: 2026-09-06
 
 ## Status
 
-Accepted
+Superseded by 0037. Buffering mitigated interleaving for sub-agents only; 0037
+gives every concurrent producer its own addressable block, so sub-agents stream
+live again. The analysis below remains the definitive diagnosis of the defect.
 
 ## Context
 

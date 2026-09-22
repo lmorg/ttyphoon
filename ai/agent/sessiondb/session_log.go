@@ -21,9 +21,9 @@ const (
 )
 
 // SessionLogContext is passed to WriteToSessionLog for every state transition.
-// PromptID is only meaningful on SESSION_LOG_FINALIZE_JOB: it's the id assigned
-// by the sessions DB after the LLM call returned, and is used to rename the
-// pending markdown file to its final per-prompt name.
+// PromptID is only meaningful on SESSION_LOG_FINALIZE_JOB: it is the id assigned
+// by the sessions DB after the LLM call returns and used to finalize SQLite
+// stream rows.
 type SessionLogContext struct {
 	Workspace       string
 	Query           string
@@ -50,9 +50,8 @@ type AIJobFinish struct {
 	FinalSequence int64  `json:"finalSequence"`
 }
 
-// sessionLogState tracks the currently-streaming prompt for a workspace so
-// chunks are written to disk in order and the pending file can be renamed on
-// finalize.
+// sessionLogState tracks the currently-streaming prompt for compatibility
+// events; durable content is stored in SQLite stream blocks.
 type sessionLogState struct {
 	workspace   string
 	sessionID   int64
@@ -97,9 +96,9 @@ func SetPanelView(workspace string, live bool) {
 	panelView.byWorkspace[ws] = live
 }
 
-// panelShowsLive defaults to true so a workspace the frontend has never reported
+// PanelShowsLive defaults to true so a workspace the frontend has never reported
 // on still streams to the panel.
-func panelShowsLive(workspace string) bool {
+func PanelShowsLive(workspace string) bool {
 	ws := normalizeWorkspaceName(workspace)
 	panelView.Lock()
 	defer panelView.Unlock()
@@ -117,7 +116,7 @@ func (ctx SessionLogContext) emitLifecycle() bool {
 
 // emitContent reports whether streamed output should reach the panel.
 func (ctx SessionLogContext) emitContent() bool {
-	return ctx.emitLifecycle() && panelShowsLive(ctx.Workspace)
+	return ctx.emitLifecycle() && PanelShowsLive(ctx.Workspace)
 }
 
 func sessionLogDir() (string, error) {
@@ -304,14 +303,9 @@ func ensureRequestOpenLocked(state *sessionLogState, ctx SessionLogContext, now 
 	if state == nil || state.requestOpen {
 		return ""
 	}
-	// Fresh pending file — overwrite anything left behind from an interrupted run.
-	if err := writePromptLogHeader(state.pendingPath, state.workspace, state.sessionID, now); err != nil {
-		return ""
-	}
 	state.streamed.Reset()
 	state.requestOpen = true
 	prefix := buildSessionLogRequestPrefix(ctx.Query, ctx.CommandLine, ctx.OutputBlock, now)
-	_ = appendSessionLog(state.pendingPath, prefix)
 	return prefix
 }
 
@@ -328,15 +322,9 @@ func activeSessionLogStateLocked(workspace string) (*sessionLogState, error) {
 		return state, nil
 	}
 
-	pendingPath, err := sessionLogPendingPath(ws, sessionID)
-	if err != nil {
-		return nil, err
-	}
-
 	state = &sessionLogState{
-		workspace:   ws,
-		sessionID:   sessionID,
-		pendingPath: pendingPath,
+		workspace: ws,
+		sessionID: sessionID,
 	}
 	aiSessionLogStore.byWorkspace[ws] = state
 	return state, nil
@@ -351,28 +339,25 @@ func GetSessionLog(workspace string) string {
 	if err != nil || sessionID <= 0 {
 		return ""
 	}
-	metas := listPromptLogMetas(ws, sessionID)
-	if len(metas) == 0 {
-		return ""
+	metas := listPromptLogMetasMerged(ws, sessionID)
+	if len(metas) > 0 {
+		content, contentErr := GetStreamPromptContent(ws, sessionID, metas[len(metas)-1].PromptID)
+		if contentErr == nil {
+			return content
+		}
 	}
-	return GetPromptLog(ws, sessionID, metas[len(metas)-1].PromptID)
+	if len(metas) > 0 {
+		return GetPromptLog(ws, sessionID, metas[len(metas)-1].PromptID)
+	}
+	return ""
 }
 
-// ActiveStreamSnapshot lets the frontend resync its ordered stream cursor when
-// the panel switches back to live: chunks generated while it was showing a
-// historical prompt were never emitted, so RunID/Sequence would otherwise
-// desync from the run's actual next-chunk sequence and the panel would stall.
-type ActiveStreamSnapshot struct {
-	Active   bool   `json:"active"`
-	RunID    uint64 `json:"runId"`
-	Sequence uint64 `json:"sequence"`
-	Text     string `json:"text"`
+type ActiveStreamIdentity struct {
+	SessionID int64
+	RunID     uint64
 }
 
-// GetActiveStreamSnapshot returns the in-progress request's accumulated text
-// and next sequence number for the given workspace, or Active=false when no
-// request is currently open.
-func GetActiveStreamSnapshot(workspace string) ActiveStreamSnapshot {
+func GetActiveStreamIdentity(workspace string) ActiveStreamIdentity {
 	ws := normalizeWorkspaceName(workspace)
 
 	aiSessionLogStore.Lock()
@@ -380,20 +365,21 @@ func GetActiveStreamSnapshot(workspace string) ActiveStreamSnapshot {
 
 	state := aiSessionLogStore.byWorkspace[ws]
 	if state == nil || !state.requestOpen {
-		return ActiveStreamSnapshot{}
+		return ActiveStreamIdentity{}
 	}
 
-	return ActiveStreamSnapshot{
-		Active:   true,
-		RunID:    state.runID,
-		Sequence: state.sequence,
-		Text:     state.streamed.String(),
+	return ActiveStreamIdentity{
+		SessionID: state.sessionID,
+		RunID:     state.runID,
 	}
 }
 
 // GetPromptLog returns the markdown for a specific prompt within a session.
 // Returns an empty string when the file is missing.
 func GetPromptLog(workspace string, sessionID, promptID int64) string {
+	if content, err := GetStreamPromptContent(workspace, sessionID, promptID); err == nil {
+		return content
+	}
 	path, err := sessionLogPromptPath(workspace, sessionID, promptID)
 	if err != nil {
 		return ""
@@ -501,7 +487,30 @@ func ListPromptLogs(workspace string) []PromptLogMeta {
 	if err != nil || sessionID <= 0 {
 		return nil
 	}
-	return listPromptLogMetas(ws, sessionID)
+	return listPromptLogMetasMerged(ws, sessionID)
+}
+
+func listPromptLogMetasMerged(workspace string, sessionID int64) []PromptLogMeta {
+	merged := make(map[int64]PromptLogMeta)
+	for _, meta := range listPromptLogMetas(workspace, sessionID) {
+		merged[meta.PromptID] = meta
+	}
+	if metas, err := ListStreamPromptMetas(workspace, sessionID); err == nil {
+		for _, meta := range metas {
+			merged[meta.PromptID] = meta
+		}
+	}
+
+	result := make([]PromptLogMeta, 0, len(merged))
+	for _, meta := range merged {
+		result = append(result, meta)
+	}
+	for i := 1; i < len(result); i++ {
+		for j := i; j > 0 && result[j-1].PromptID > result[j].PromptID; j-- {
+			result[j-1], result[j] = result[j], result[j-1]
+		}
+	}
+	return result
 }
 
 // ClearActiveSessionLog removes every per-prompt log file (plus any pending
@@ -525,6 +534,9 @@ func ClearSessionLog(workspace string, sessionID int64) error {
 	if state := aiSessionLogStore.byWorkspace[ws]; state != nil && state.sessionID == sessionID {
 		state.streamed.Reset()
 		delete(aiSessionLogStore.byWorkspace, ws)
+	}
+	if err := deleteStreamSession(ws, sessionID); err != nil {
+		return err
 	}
 
 	glob, err := sessionLogPromptFilesGlob(workspace, sessionID)
@@ -556,6 +568,9 @@ func DeleteSessionLog(workspace string, sessionID int64) error {
 // DeletePromptLog removes a single per-prompt log file, leaving the rest of the
 // session's log untouched.
 func DeletePromptLog(workspace string, sessionID, promptID int64) error {
+	if err := deleteStreamPrompt(workspace, sessionID, promptID); err != nil {
+		return err
+	}
 	path, err := sessionLogPromptPath(workspace, sessionID, promptID)
 	if err != nil {
 		return err
@@ -566,26 +581,15 @@ func DeletePromptLog(workspace string, sessionID, promptID int64) error {
 	return nil
 }
 
-// finalizePromptLogLocked appends the closing suffix to the pending file and
-// renames it to its per-prompt destination. When promptID is 0 (unknown, e.g.
-// a race), the pending file is left in place for the next run to overwrite.
+// finalizePromptLogLocked closes the in-memory compatibility state. Durable
+// stream rows are finalized separately in SQLite.
 func finalizePromptLogLocked(state *sessionLogState, suffix string, promptID int64) {
-	if state == nil || state.pendingPath == "" {
+	if state == nil {
 		return
 	}
-	_ = appendSessionLog(state.pendingPath, suffix)
 	state.streamed.Reset()
 	state.requestOpen = false
 
-	if promptID <= 0 {
-		return
-	}
-	finalPath, err := sessionLogPromptPath(state.workspace, state.sessionID, promptID)
-	if err != nil {
-		return
-	}
-	// Rename atomically overwrites any earlier file with the same promptID.
-	_ = os.Rename(state.pendingPath, finalPath)
 }
 
 func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
@@ -596,20 +600,23 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		now := time.Now()
 		var prefix string
 		var runID uint64
+		var sessionID int64
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
-			// Discard any pending file left over from an interrupted job.
 			if ref.requestOpen {
 				ref.streamed.Reset()
 				ref.requestOpen = false
-				_ = os.Remove(ref.pendingPath)
 			}
 			ref.runID = aiSessionLogRunID.Add(1)
 			ref.sequence = 0
 			runID = ref.runID
+			sessionID = ref.sessionID
 			prefix = ensureRequestOpenLocked(ref, ctx, now)
 		}
 		aiSessionLogStore.Unlock()
+		if runID > 0 && sessionID > 0 {
+			_ = CreateStreamPrompt(workspace, sessionID, 0, runID, summarizeRequestHeading(ctx.Query), formatSessionLogTimestamp(now))
+		}
 
 		if ctx.emitLifecycle() {
 			ctx.Emit("aiJobStart", AIJobStart{RunID: runID, Title: prefix})
@@ -627,7 +634,6 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
 			ref.streamed.WriteString(payload)
-			_ = appendSessionLog(ref.pendingPath, payload)
 			chunk = AIStreamChunk{RunID: ref.runID, Sequence: ref.sequence, Text: payload}
 			ref.sequence++
 			streaming = true
@@ -644,9 +650,13 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		streamedEmpty := true
 		var chunk AIStreamChunk
 		streaming := false
+		var sessionID int64
+		var runID uint64
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
+			sessionID = ref.sessionID
+			runID = ref.runID
 			streamedEmpty = strings.TrimSpace(ref.streamed.String()) == ""
 			suffix = buildSessionLogFinalizeSuffix(ref.streamed.String(), payload, now)
 			finalizePromptLogLocked(ref, suffix, ctx.PromptID)
@@ -657,6 +667,9 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 			}
 		}
 		aiSessionLogStore.Unlock()
+		if sessionID > 0 && runID > 0 && ctx.PromptID > 0 {
+			_ = FinalizeStreamPrompt(workspace, sessionID, runID, ctx.PromptID, formatSessionLogTimestamp(now))
+		}
 
 		if streaming && ctx.emitContent() {
 			ctx.Emit("aiResponseStream", chunk)

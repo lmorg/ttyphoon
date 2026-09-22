@@ -2204,21 +2204,6 @@ func (a *WApp) GetAISessionCache(workspace string) string {
 	return sessiondb.GetSessionLog(workspace)
 }
 
-// GetAIActiveStreamSnapshot returns the currently in-progress request's
-// accumulated text and next sequence number, so the frontend can resync its
-// ordered stream cursor after switching the panel back to live output.
-func (a *WApp) GetAIActiveStreamSnapshot(workspace string) sessiondb.ActiveStreamSnapshot {
-	if strings.TrimSpace(workspace) == "" {
-		agt, ok := a.activeAgent()
-		if !ok {
-			return sessiondb.ActiveStreamSnapshot{}
-		}
-		workspace = agt.Workspace()
-	}
-
-	return sessiondb.GetActiveStreamSnapshot(workspace)
-}
-
 // ListAIPromptLogs returns metadata for every per-prompt log file in the active
 // AI session for the current workspace. Ordered chronologically (oldest first).
 func (a *WApp) ListAIPromptLogs() []sessiondb.PromptLogMeta {
@@ -2237,6 +2222,50 @@ func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
 		return ""
 	}
 	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
+}
+
+func (a *WApp) ListAIStreamBlocks(sessionID, promptID int64) []sessiondb.StreamBlockMeta {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return nil
+	}
+	blocks, err := sessiondb.ListStreamBlockMeta(agt.Workspace(), sessionID, promptID)
+	if err != nil {
+		log.Printf("[debug] ai list stream blocks: %v", err)
+		return nil
+	}
+	return blocks
+}
+
+// ListAILiveStreamBlocks returns the blocks backing the panel's live view: the
+// in-flight run when one is open, otherwise the newest finalized prompt.
+func (a *WApp) ListAILiveStreamBlocks(workspace string) []sessiondb.StreamBlockMeta {
+	if strings.TrimSpace(workspace) == "" {
+		agt, ok := a.activeAgent()
+		if !ok {
+			return nil
+		}
+		workspace = agt.Workspace()
+	}
+	blocks, err := sessiondb.ListLiveStreamBlockMeta(workspace)
+	if err != nil {
+		log.Printf("[debug] ai list live stream blocks: %v", err)
+		return nil
+	}
+	return blocks
+}
+
+func (a *WApp) GetAIStreamBlockContent(sessionID, promptID int64, blockID string) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+	content, err := sessiondb.GetStreamBlockContent(agt.Workspace(), sessionID, promptID, blockID)
+	if err != nil {
+		log.Printf("[debug] ai get stream block %q: %v", blockID, err)
+		return ""
+	}
+	return content
 }
 
 func (a *WApp) GetNotesColumnWidths(filename, view string, headings []string, wrapped bool) []float64 {

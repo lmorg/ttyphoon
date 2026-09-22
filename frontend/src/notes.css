@@ -1745,9 +1745,9 @@ body {
 
 #notes-ai-output {
     flex: 1;
-    padding: 12px;
+    padding: 4px;
     font-size: var(--notes-font-size);
-    line-height: 1.5;
+    line-height: 1.1;
     overflow-x: hidden;
     overflow-y: auto;
     white-space: normal;
@@ -1799,12 +1799,12 @@ body {
 }
 
 #notes-ai-output .notes-ai-heading {
-    margin: 0 0 8px;
+    margin: 10px 0 4px 0;
     font-size: 1.05em;
     line-height: 1.3;
     color: var(--accent);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    padding-bottom: 4px;
+    /*border-bottom: 1px solid rgba(255, 255, 255, 0.12);*/
+    /*padding-bottom: 4px;*/
 }
 
 #notes-ai-output .notes-ai-markdown {
@@ -1820,11 +1820,9 @@ body {
 }
 
 #notes-ai-output .notes-ai-code {
-    margin: 0;
-    padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 4px;
-    /*background: rgba(0, 0, 0, 0.24);*/
+    margin: 4px 0;
+    padding: 10px 0 10px 10px;
+    background: var(--darken-background-overlay);
     white-space: pre-wrap;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1837,6 +1835,8 @@ body {
     white-space: inherit;
     overflow-wrap: inherit;
     word-break: inherit;
+    font-size: var(--notes-font-size-minus-2);
+    
 }
 
 #notes-ai-output .notes-ai-markdown pre {
@@ -1847,6 +1847,26 @@ body {
 #notes-ai-output .notes-ai-markdown blockquote {
     max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
     overflow-y: auto;
+    background: var(--darken-background-overlay);
+    padding: 0 10px;
+    margin: 4px 0;
+}
+
+/* Transcripts recorded before block storage, flagged so they are not mistaken
+   for current output. */
+#notes-ai-output .notes-ai-legacy {
+    border-left: 2px solid rgba(var(--fg-rgb), 0.25);
+    padding-left: 10px;
+}
+
+#notes-ai-output .notes-ai-legacy::before {
+    content: 'Legacy transcript';
+    display: block;
+    margin-bottom: 8px;
+    font-size: var(--notes-font-size-minus-2);
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .notes-copy-block {
@@ -3548,9 +3568,7 @@ body {
     display: none;
 }
 
-#notes-lsp-tooltip:hover {
-    opacity: 1;
-}
+#notes-lsp-tooltip:hover { opacity: 1; }
 
 #notes-lsp-hover-tooltip {
     position: fixed;
@@ -3574,9 +3592,7 @@ body {
     display: none;
 }
 
-#notes-lsp-hover-tooltip:hover {
-    opacity: 1;
-}
+#notes-lsp-hover-tooltip:hover { opacity: 1; }
 
 #notes-lsp-hover-tooltip :where(p, ul, ol, pre, blockquote, table) {
     margin-top: 0.4em;
@@ -3591,13 +3607,9 @@ body {
     font-family: var(--terminal-menu-font, var(--font-family));
 }
 
-#notes-lsp-hover-tooltip> :first-child {
-    margin-top: 0;
-}
+#notes-lsp-hover-tooltip > :first-child { margin-top: 0; }
 
-#notes-lsp-hover-tooltip> :last-child {
-    margin-bottom: 0;
-}
+#notes-lsp-hover-tooltip > :last-child { margin-bottom: 0; }
 
 #notes-lsp-completion {
     --notes-lsp-completion-visible-rows: 12;
@@ -3622,9 +3634,7 @@ body {
     display: none;
 }
 
-#notes-lsp-completion:hover {
-    opacity: 1;
-}
+#notes-lsp-completion:hover { opacity: 1; }
 
 .notes-lsp-completion-item {
     align-items: center;

@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const { getCustomRegexpMock } = vi.hoisted(() => ({
+    getCustomRegexpMock: vi.fn(() => Promise.resolve([])),
+}));
+
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetImage: vi.fn(() => Promise.resolve('')),
-    GetCustomRegexp: vi.fn(() => Promise.resolve([])),
+    GetCustomRegexp: getCustomRegexpMock,
     HyperlinkOpenWithDefault: vi.fn(() => Promise.resolve()),
 }));
 
@@ -17,7 +21,7 @@ vi.mock('mermaid', () => ({
     },
 }));
 
-import { applyMarkdownImageAltSizing, parseMarkdownImageAltSizing } from './markdown-utils.js';
+import { applyMarkdownImageAltSizing, autoHyperlink, parseMarkdownImageAltSizing } from './markdown-utils.js';
 
 describe('markdown image alt sizing', () => {
     it('keeps alt text unchanged when no colon is present', () => {
@@ -92,5 +96,44 @@ describe('markdown image alt sizing', () => {
         expect(invalid.alt).toBe('example:abc');
         expect(invalid.style.maxWidth).toBe('none');
         expect(invalid.style.maxHeight).toBe('none');
+    });
+});
+
+describe('custom markdown hyperlinks', () => {
+    it('rewrites matching text to a ttyphoon URL', async () => {
+        getCustomRegexpMock.mockResolvedValueOnce([{
+            pattern: '(HAP-[0-9]+)',
+            link: 'ttyphoon://ai?prompt=$1&tools=jira',
+        }]);
+        const container = document.createElement('div');
+        container.textContent = 'Review HAP-13379 now';
+
+        await autoHyperlink(container);
+
+        const link = container.querySelector('a');
+        expect(link).not.toBeNull();
+        expect(link?.textContent).toBe('HAP-13379');
+        expect(link?.getAttribute('href')).toBe('ttyphoon://ai?prompt=HAP-13379&tools=jira');
+    });
+
+    it('retries when the initial custom-regex lookup is empty', async () => {
+        const callsBefore = getCustomRegexpMock.mock.calls.length;
+        getCustomRegexpMock
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([{
+                pattern: '(HAP-[0-9]+)',
+                link: 'ttyphoon://ai?prompt=$1',
+            }]);
+
+        const first = document.createElement('div');
+        first.textContent = 'HAP-1';
+        await autoHyperlink(first);
+        expect(first.querySelector('a')).toBeNull();
+
+        const second = document.createElement('div');
+        second.textContent = 'HAP-2';
+        await autoHyperlink(second);
+        expect(second.querySelector('a')?.getAttribute('href')).toBe('ttyphoon://ai?prompt=HAP-2');
+        expect(getCustomRegexpMock).toHaveBeenCalledTimes(callsBefore + 2);
     });
 });

@@ -471,23 +471,8 @@ export function processLinks(container, options = {}) {
     });
 }
 
-/**
- * Apply custom regex hyperlinking to text nodes in the container
- * @param {HTMLElement} container - The container element to process
- */
-let cachedCustomRegexpsPromise = null;
-
-// Custom hyperlink regexps only change via config reload (app restart), so the
-// Go IPC round-trip only needs to happen once rather than on every render —
-// this is called on every streamed chunk in the AI panel.
 function getCachedCustomRegexps() {
-    if (!cachedCustomRegexpsPromise) {
-        cachedCustomRegexpsPromise = Promise.resolve(GetCustomRegexp?.() || []).catch((err) => {
-            cachedCustomRegexpsPromise = null;
-            throw err;
-        });
-    }
-    return cachedCustomRegexpsPromise;
+    return Promise.resolve(GetCustomRegexp?.() || []);
 }
 
 export async function autoHyperlink(container) {

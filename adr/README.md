@@ -6,6 +6,8 @@ on them rather than rediscover them.
 Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 **Reference**.
 
+`0000-high-level-project-context.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
+
 ## Index
 
 | # | Title | Area |
@@ -45,7 +47,10 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0033](0033-ai-settings-ordering-is-not-uniform.md) | AI Settings ordering is deliberately not uniform | AI panel |
 | [0034](0034-pin-to-viewport-toolbars-avoid-sticky.md) | Pin-to-viewport toolbars use scroll-synced transform, not `sticky` | Frontend |
 | [0035](0035-ai-output-explicit-follow-mode.md) | AI output uses explicit follow mode | AI panel |
-| [0036](0036-multiple-notes-surfaces-with-shared-workspace-services.md) | Multiple Notes surfaces with shared workspace services | Notes |
+| [0036](0036-multiple-notes-surfaces-with-shared-workspace-services.md) | (design reverted) Multiple Notes surfaces with shared workspace services | Notes |
+| [0037](0037-ai-stream-is-addressable-blocks-in-sqlite.md) | The AI stream is a set of addressable blocks persisted in sqlite | AI panel |
+| [0038](0038-typed-stream-blocks-must-honour-panel-scope.md) | Typed stream blocks must honour workspace and prompt scope | AI panel |
+| [0039](0039-remove-legacy-markdown-compatibility-layer.md) | Scheduled removal of the legacy markdown compatibility layer | AI panel |
 
 ## Recurring themes
 
@@ -53,12 +58,25 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 disabled should inform the model and let the run continue. Only cancellation and
 timeout should end it. (0001, 0002)
 
-**Persistence and presentation are separate concerns.** Markdown is always
+**Persistence and presentation are separate concerns.** The transcript is always
 written; emitting to the panel is conditional on what the user is actually
-looking at. (0005)
+looking at. (0005, 0037)
 
 **Mutex-safe is not the same as correctly serialised.** Garbled output usually
-means several logical writers share one sink, not a data race. (0006, 0010)
+means several logical writers share one sink, not a data race. (0006, 0010, 0037)
+
+**A new transport must inherit the old transport's gating.** Adding a second
+emit path beside an existing one, without routing it through the same
+suppression predicate, reintroduces every bug the predicate existed to prevent.
+(0038)
+
+**Date-stamp compatibility layers when you add them.** A shim kept for one
+reason spreads across every layer it touches, and none of those layers records
+why it is still there. (0039)
+
+**Give each writer its own addressable sink.** Serialising writes onto one
+append-only buffer orders the bytes but not the logical blocks; the fix is to
+stop sharing the sink, not to add another lock. (0037)
 
 **Prefer `Unknown` to a plausible guess.** Displayed values are used to reason
 about failures; a wrong one is worse than an absent one. (0011)

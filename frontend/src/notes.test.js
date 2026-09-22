@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as swaggerUtils from './swagger-utils.js';
 import { renderJsonViewer } from './json-viewer.js';
+import { marked } from 'marked';
 
 const notesCss = readFileSync('./src/notes.css', 'utf8');
 
@@ -52,9 +53,11 @@ const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
 const askAIImageMock = vi.fn(() => Promise.resolve());
 const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
-const getAIActiveStreamSnapshotMock = vi.fn(() => Promise.resolve({ active: false, runId: 0, sequence: 0, text: '' }));
 const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
 const getAIPromptLogMock = vi.fn(() => Promise.resolve(''));
+const listAILiveStreamBlocksMock = vi.fn(() => Promise.resolve([]));
+const listAIStreamBlocksMock = vi.fn(() => Promise.resolve([]));
+const getAIStreamBlockContentMock = vi.fn(() => Promise.resolve(''));
 const getAISessionManagementMock = vi.fn(() => Promise.resolve({ activeSessionId: 0, sessions: [], history: [] }));
 const createAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
 const setActiveAISessionMock = vi.fn(() => Promise.resolve({ activeSessionId: 1, sessions: [], history: [] }));
@@ -180,9 +183,11 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     AskAI: askAIMock,
     AskAIImage: askAIImageMock,
     GetAISessionCache: getAISessionCacheMock,
-    GetAIActiveStreamSnapshot: getAIActiveStreamSnapshotMock,
     ListAIPromptLogs: listAIPromptLogsMock,
     GetAIPromptLog: getAIPromptLogMock,
+    ListAILiveStreamBlocks: listAILiveStreamBlocksMock,
+    ListAIStreamBlocks: listAIStreamBlocksMock,
+    GetAIStreamBlockContent: getAIStreamBlockContentMock,
     GetAISessionManagement: getAISessionManagementMock,
     CreateAISession: createAISessionMock,
     SetActiveAISession: setActiveAISessionMock,
@@ -458,6 +463,16 @@ describe('notes rendering', () => {
         setProjectCacheMock.mockReset();
         getDocumentCacheMock.mockReset();
         setDocumentCacheMock.mockReset();
+        listAIPromptLogsMock.mockReset();
+        listAIPromptLogsMock.mockResolvedValue([]);
+        getAIPromptLogMock.mockReset();
+        getAIPromptLogMock.mockResolvedValue('');
+        listAILiveStreamBlocksMock.mockReset();
+        listAILiveStreamBlocksMock.mockResolvedValue([]);
+        listAIStreamBlocksMock.mockReset();
+        listAIStreamBlocksMock.mockResolvedValue([]);
+        getAIStreamBlockContentMock.mockReset();
+        getAIStreamBlockContentMock.mockResolvedValue('');
         getHyperlinkMenuActionsMock.mockReset();
         runHyperlinkMenuActionMock.mockReset();
         displayHyperlinkMenuMock.mockReset();
@@ -2660,6 +2675,39 @@ describe('notes rendering', () => {
         expect(showLocalMenuMock).not.toHaveBeenCalled();
     });
 
+    it('drops live stream blocks emitted for a different workspace', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+        getCurrentGroupNameMock.mockResolvedValue('alpha');
+
+        await importNotesModule();
+
+        getEventHandler('aiJobStart')({ runId: 7, title: '' });
+        await flushPromises();
+
+        const blockHandler = getEventHandler('aiStreamBlock');
+        expect(typeof blockHandler).toBe('function');
+
+        blockHandler({
+            runId: 7, blockId: 'other-1', kind: 'tool-output',
+            workspace: 'beta', delta: 'from other workspace', status: 'open',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        expect(aiOutput.querySelector('[data-block-id="other-1"]')).toBeNull();
+
+        blockHandler({
+            runId: 7, blockId: 'mine-1', kind: 'tool-output',
+            workspace: 'alpha', delta: 'from this workspace', status: 'open',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        expect(aiOutput.querySelector('[data-block-id="mine-1"]')).not.toBeNull();
+    });
+
     it('switches to AI tools tab when AI response stream starts', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
@@ -2741,7 +2789,7 @@ describe('notes rendering', () => {
         expect(actionInputText).toContain('"k11": 11');
     });
 
-    it('orders delayed AI stream chunks before finalizing the job', async () => {
+    it('delivers legacy stream chunks directly without a global cursor', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
 
@@ -2758,7 +2806,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await new Promise(resolve => setTimeout(resolve, 20));
 
-        expect(document.getElementById('notes-ai-output').textContent).toContain('first second');
+        expect(document.getElementById('notes-ai-output').textContent).toContain('secondfirst ');
     });
 
     it('grows a still-open fence by appending rather than re-rendering', async () => {
@@ -2984,6 +3032,244 @@ describe('notes rendering', () => {
         // Timestamp should still be present after finishJob
         ts = wrapper.querySelector('.notes-ai-timestamp');
         expect(ts).not.toBeNull();
+    });
+
+    it('renders typed stream blocks into isolated roots', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'tool-1', kind: 'tool-output', delta: '<b>one</b>', status: 'open' });
+        fmt.appendBlock({ blockId: 'tool-2', kind: 'tool-output', delta: '<b>two</b>', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        const blocks = wrapper.querySelectorAll('[data-block-id]');
+        expect(blocks).toHaveLength(2);
+        expect(blocks[0].classList.contains('notes-ai-markdown')).toBe(true);
+        expect(blocks[1].classList.contains('notes-ai-markdown')).toBe(true);
+        expect(blocks[0].querySelector('pre').className).toBe('notes-ai-code');
+        expect(blocks[1].querySelector('pre').className).toBe('notes-ai-code');
+        expect(blocks[0].querySelector('code').textContent).toBe('<b>one</b>');
+        expect(blocks[1].querySelector('code').textContent).toBe('<b>two</b>');
+        expect(blocks[0].querySelector('b')).toBeNull();
+        expect(blocks[1].querySelector('b')).toBeNull();
+    });
+
+    it('renders a heading before labelled tool-call input', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'call', kind: 'tool-call', label: 'name.of.tool', delta: '{"input":true}', status: 'open' });
+        await flushPromises();
+
+        const block = wrapper.querySelector('[data-block-id="call"]');
+        expect(block?.querySelector('.notes-ai-heading')?.textContent).toBe('Tool call: `name.of.tool`');
+        expect(block?.querySelector('pre')?.textContent).toBe('{"input":true}');
+    });
+
+    it('pins typed code and thinking blocks to the bottom as they grow', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper, { marked });
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'code-scroll', kind: 'tool-output', delta: 'output', status: 'open' });
+        fmt.appendBlock({ blockId: 'thinking-scroll', kind: 'thinking', delta: 'thinking', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        const code = wrapper.querySelector('[data-block-id="code-scroll"] pre');
+        const initialQuote = wrapper.querySelector('[data-block-id="thinking-scroll"] blockquote');
+        const scrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight');
+        Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => 240 });
+        code.scrollTop = 0;
+        initialQuote.scrollTop = 0;
+
+        fmt.appendBlock({ blockId: 'code-scroll', kind: 'tool-output', delta: '\nmore output', status: 'open' });
+        fmt.appendBlock({ blockId: 'thinking-scroll', kind: 'thinking', delta: '\nmore thinking', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(code.scrollTop).toBe(240);
+        const currentQuote = wrapper.querySelector('[data-block-id="thinking-scroll"] blockquote');
+        expect(currentQuote.scrollTop).toBe(240);
+        if (scrollHeight) {
+            Object.defineProperty(Element.prototype, 'scrollHeight', scrollHeight);
+        } else {
+            delete Element.prototype.scrollHeight;
+        }
+    });
+
+    it('uses the shared five-line AI code styling for tool input and output', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        wrapper.id = 'notes-ai-output';
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'input', kind: 'tool-call', delta: '{"path":"main.go"}', status: 'open' });
+        fmt.appendBlock({ blockId: 'output', kind: 'tool-output', delta: 'line 1\nline 2', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        const codeBlocks = wrapper.querySelectorAll('.notes-ai-code');
+        expect(codeBlocks).toHaveLength(2);
+        expect(getNotesRenderedStyles()).toContain('--notes-ai-code-max-lines: 5;');
+        expect(getNotesRenderedStyles()).toContain('max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);');
+    });
+
+    it('renders typed thinking as the legacy AI blockquote structure', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper, { marked });
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'thinking-1', kind: 'thinking', delta: 'first thought\nsecond thought', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        const block = wrapper.querySelector('[data-block-id="thinking-1"]');
+        expect(block?.querySelector('.notes-ai-markdown')).not.toBeNull();
+        expect(block?.querySelector('blockquote')).not.toBeNull();
+        expect(block?.querySelector('blockquote strong')?.textContent).toBe('Thinking:');
+        expect(block?.querySelector('blockquote')?.textContent).toContain('first thought');
+        expect(block?.querySelector('blockquote')?.textContent).toContain('second thought');
+    });
+
+    it('attaches child blocks under their parent even when events arrive first', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'child', parentId: 'parent', kind: 'subagent', delta: 'child output', status: 'open' });
+        fmt.appendBlock({ blockId: 'parent', parentId: '', kind: 'subagent', delta: 'parent output', status: 'open' });
+        await flushPromises();
+        await flushPromises();
+
+        const parent = wrapper.querySelector('[data-block-id="parent"]');
+        const child = wrapper.querySelector('[data-block-id="child"]');
+        expect(parent).not.toBeNull();
+        expect(child).not.toBeNull();
+        expect(parent.querySelector('.notes-ai-stream-block-children').contains(child)).toBe(true);
+    });
+
+    it('hydrates historical blocks lazily as they intersect the viewport', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const originalObserver = globalThis.IntersectionObserver;
+        let observer;
+        globalThis.IntersectionObserver = class {
+            constructor(callback) {
+                this.callback = callback;
+                this.observed = new Set();
+                observer = this;
+            }
+
+            observe(element) {
+                this.observed.add(element);
+            }
+
+            unobserve(element) {
+                this.observed.delete(element);
+            }
+
+            disconnect() {
+                this.observed.clear();
+            }
+        };
+
+        try {
+            const wrapper = document.createElement('div');
+            const loadContent = vi.fn((block) => Promise.resolve(`content-${block.blockId}`));
+            const fmt = createAIPipelineFormatter(wrapper);
+            const blocks = Array.from({ length: 5 }, (_, index) => ({
+                blockId: `history-${index}`,
+                kind: 'tool-output',
+                status: 'closed',
+                size: 10,
+            }));
+
+            fmt.setBlocks(blocks, loadContent);
+            await flushPromises();
+            await flushPromises();
+
+            expect(loadContent).toHaveBeenCalledTimes(3);
+            expect(wrapper.querySelector('[data-block-id="history-4"] code').textContent).toBe('');
+
+            const lastShell = wrapper.querySelector('[data-block-id="history-4"]');
+            observer.callback([{ target: lastShell, isIntersecting: true }]);
+            await flushPromises();
+            await flushPromises();
+
+            expect(loadContent).toHaveBeenCalledTimes(4);
+            expect(lastShell.querySelector('code').textContent).toBe('content-history-4');
+
+            observer.callback([{ target: lastShell, isIntersecting: true }]);
+            await flushPromises();
+            expect(loadContent).toHaveBeenCalledTimes(4);
+        } finally {
+            globalThis.IntersectionObserver = originalObserver;
+        }
+    });
+
+    it('flags legacy transcripts and clears the flag for block renders', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper, { marked });
+        // renderTextAsMarkdown yields on requestAnimationFrame, which jsdom backs
+        // with a real timer.
+        const settle = async () => {
+            for (let i = 0; i < 4; i += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+        };
+
+        fmt.setText('# legacy output', { legacy: true });
+        await settle();
+        expect(wrapper.querySelector('.notes-ai-job.notes-ai-legacy')).not.toBeNull();
+
+        fmt.setBlocks(
+            [{ blockId: 'b1', kind: 'text', status: 'closed', sessionId: 1, promptId: 2, runId: 3 }],
+            () => Promise.resolve('current output'),
+        );
+        await settle();
+        expect(wrapper.querySelector('.notes-ai-legacy')).toBeNull();
+
+        const styles = getNotesRenderedStyles();
+        expect(styles).toContain('#notes-ai-output .notes-ai-legacy::before {');
+        expect(styles).toContain("content: 'Legacy transcript';");
+    });
+
+    it('restores the live view as structured blocks rather than one flat lump', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper, { marked });
+
+        const content = {
+            'r-1': 'reasoning text',
+            'r-2': 'raw tool output',
+        };
+        const loadContent = vi.fn((block) => Promise.resolve(content[block.blockId]));
+
+        fmt.setBlocks([
+            { blockId: 'r-1', kind: 'thinking', status: 'closed', runId: 7, sessionId: 1, promptId: 0 },
+            { blockId: 'r-2', kind: 'tool-output', status: 'open', runId: 7, sessionId: 1, promptId: 0 },
+        ], loadContent);
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        // An in-flight block must hydrate without waiting to be scrolled into view.
+        expect(loadContent).toHaveBeenCalledWith(expect.objectContaining({ blockId: 'r-2' }));
+
+        const thinking = wrapper.querySelector('[data-block-id="r-1"]');
+        const toolOutput = wrapper.querySelector('[data-block-id="r-2"]');
+        expect(thinking?.querySelector('blockquote')?.textContent).toContain('reasoning text');
+        expect(toolOutput?.querySelector('pre.notes-ai-code')?.textContent).toBe('raw tool output');
     });
 
     it('renders job prefix as markdown after the timestamp when provided', async () => {

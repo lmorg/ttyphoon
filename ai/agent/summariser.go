@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/ai/subagent"
 )
 
@@ -22,15 +23,31 @@ var summariserSystemPrompt string
 // Called by einoAgentTool.InvokableRun when the raw output would push the main
 // agent's conversation over its context budget.
 func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInput, rawOutput string) (string, error) {
+	streamBlock := OpenAIStreamBlock(ctx, sessiondb.StreamBlockSummary, "")
+	if streamBlock != nil {
+		defer func() {
+			EmitAIStreamLegacy(ctx, summariserStreamCloseMarkdown())
+			streamBlock.Close()
+		}()
+	}
+	emitStream := EmitAIStreamToolProgress(ctx)
+	streamPrefix := summariserStreamOpenMarkdown()
+	streamSuffix := summariserStreamCloseMarkdown()
+	if streamBlock != nil {
+		EmitAIStreamLegacy(ctx, summariserStreamOpenMarkdown())
+		emitStream = streamBlock.Emit
+		streamPrefix = ""
+		streamSuffix = ""
+	}
 	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), r.agent.EnvironmentValue).Run(ctx, subagent.Request{
 		SystemPrompt: summariserSystemPrompt,
 		Prompt: fmt.Sprintf(
 			"Tool name: %s\nTool input arguments (JSON):\n%s\n\nTool raw output:\n%s",
 			toolName, toolInput, rawOutput,
 		),
-		EmitStream:   EmitAIStreamToolProgress(ctx),
-		StreamPrefix: summariserStreamOpenMarkdown(),
-		StreamSuffix: summariserStreamCloseMarkdown(),
+		EmitStream:   emitStream,
+		StreamPrefix: streamPrefix,
+		StreamSuffix: streamSuffix,
 		FormatStreamChunk: func(text string) string {
 			return text
 		},

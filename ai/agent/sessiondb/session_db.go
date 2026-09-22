@@ -178,6 +178,9 @@ func DeleteSession(workspace string, tableID int64, limit int) (FrontendStateT, 
 	if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, quotedSessionTable(tableID))); err != nil {
 		return FrontendStateT{}, fmt.Errorf("cannot drop session table %d: %w", tableID, err)
 	}
+	if err := deleteStreamSessionTx(tx, tableID); err != nil {
+		return FrontendStateT{}, err
+	}
 
 	if _, err := tx.Exec(`DELETE FROM sessions_meta WHERE tableId = ?`, tableID); err != nil {
 		return FrontendStateT{}, fmt.Errorf("cannot delete session metadata %d: %w", tableID, err)
@@ -267,6 +270,9 @@ func ClearActiveSession(workspace string, limit int) (FrontendStateT, error) {
 	if _, err := tx.Exec(fmt.Sprintf(`DELETE FROM %s`, quotedSessionTable(activeID))); err != nil {
 		return FrontendStateT{}, fmt.Errorf("cannot clear active session history: %w", err)
 	}
+	if err := deleteStreamSessionTx(tx, activeID); err != nil {
+		return FrontendStateT{}, err
+	}
 
 	if _, err := tx.Exec(`UPDATE sessions_meta SET updated = ?, entryCount = 0 WHERE tableId = ?`, nowString(), activeID); err != nil {
 		return FrontendStateT{}, fmt.Errorf("cannot update active session timestamp: %w", err)
@@ -314,6 +320,9 @@ func DeleteActiveSessionEntry(workspace string, entryID int64, limit int) (Front
 	}
 
 	if affected, _ := res.RowsAffected(); affected > 0 {
+		if err := deleteStreamPromptTx(tx, activeID, entryID); err != nil {
+			return FrontendStateT{}, err
+		}
 		if _, err := tx.Exec(`UPDATE sessions_meta SET updated = ?, entryCount = MAX(entryCount - 1, 0) WHERE tableId = ?`, nowString(), activeID); err != nil {
 			return FrontendStateT{}, fmt.Errorf("cannot update active session metadata: %w", err)
 		}
@@ -607,6 +616,9 @@ func openDB(workspace string) (*sql.DB, error) {
 
 func initDB(db *sql.DB) error {
 	_, err := db.Exec(`
+		PRAGMA busy_timeout = 5000;
+		PRAGMA journal_mode = WAL;
+
 		CREATE TABLE IF NOT EXISTS sessions_meta (
 			tableId INTEGER PRIMARY KEY AUTOINCREMENT,
 			summary TEXT NOT NULL,
@@ -621,7 +633,89 @@ func initDB(db *sql.DB) error {
 		return fmt.Errorf("cannot initialize session metadata table: %w", err)
 	}
 
-	return migrateEntryCountColumn(db)
+	if err := migrateEntryCountColumn(db); err != nil {
+		return err
+	}
+
+	if err := initStreamTables(db); err != nil {
+		return err
+	}
+	if err := migrateStreamBlockLabelColumn(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateStreamBlockLabelColumn(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(stream_blocks)`)
+	if err != nil {
+		return fmt.Errorf("cannot inspect stream block schema: %w", err)
+	}
+	defer rows.Close()
+	hasLabel := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, ctype string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("cannot read stream block schema: %w", err)
+		}
+		if name == "label" {
+			hasLabel = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if hasLabel {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE stream_blocks ADD COLUMN label TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("cannot add stream block label column: %w", err)
+	}
+	return nil
+}
+
+func initStreamTables(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS stream_prompts (
+			sessionId INTEGER NOT NULL,
+			promptId INTEGER NOT NULL,
+			runId INTEGER NOT NULL,
+			heading TEXT NOT NULL,
+			started TEXT NOT NULL,
+			finished TEXT NOT NULL DEFAULT '',
+			blockCount INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (sessionId, promptId)
+		);
+
+		CREATE TABLE IF NOT EXISTS stream_blocks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sessionId INTEGER NOT NULL,
+			promptId INTEGER NOT NULL DEFAULT 0,
+			runId INTEGER NOT NULL,
+			blockId TEXT NOT NULL,
+			parentId TEXT NOT NULL DEFAULT '',
+			kind TEXT NOT NULL,
+			ordinal INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'open',
+			content TEXT NOT NULL DEFAULT '',
+			created TEXT NOT NULL,
+			updated TEXT NOT NULL,
+			UNIQUE (sessionId, runId, blockId)
+		);
+
+		CREATE INDEX IF NOT EXISTS stream_blocks_prompt_idx
+			ON stream_blocks(sessionId, promptId, ordinal);
+		CREATE INDEX IF NOT EXISTS stream_blocks_parent_idx
+			ON stream_blocks(sessionId, runId, parentId, ordinal);
+	`)
+	if err != nil {
+		return fmt.Errorf("cannot initialize AI stream tables: %w", err)
+	}
+
+	return nil
 }
 
 // migrateEntryCountColumn adds entryCount to a sessions_meta table created before

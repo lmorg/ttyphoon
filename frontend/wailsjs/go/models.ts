@@ -754,24 +754,6 @@ export namespace notes {
 
 export namespace sessiondb {
 	
-	export class ActiveStreamSnapshot {
-	    active: boolean;
-	    runId: number;
-	    sequence: number;
-	    text: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new ActiveStreamSnapshot(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.active = source["active"];
-	        this.runId = source["runId"];
-	        this.sequence = source["sequence"];
-	        this.text = source["text"];
-	    }
-	}
 	export class FrontendHistoryItemT {
 	    id: number;
 	    prompt: string;
@@ -866,6 +848,36 @@ export namespace sessiondb {
 	        this.promptId = source["promptId"];
 	        this.heading = source["heading"];
 	        this.sizeBytes = source["sizeBytes"];
+	    }
+	}
+	export class StreamBlockMeta {
+	    sessionId: number;
+	    promptId: number;
+	    runId: number;
+	    blockId: string;
+	    parentId: string;
+	    kind: string;
+	    label: string;
+	    ordinal: number;
+	    status: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StreamBlockMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.promptId = source["promptId"];
+	        this.runId = source["runId"];
+	        this.blockId = source["blockId"];
+	        this.parentId = source["parentId"];
+	        this.kind = source["kind"];
+	        this.label = source["label"];
+	        this.ordinal = source["ordinal"];
+	        this.status = source["status"];
+	        this.size = source["size"];
 	    }
 	}
 

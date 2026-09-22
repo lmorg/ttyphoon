@@ -12,10 +12,10 @@ import {
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
     GetAISessionCache,
-    GetAIActiveStreamSnapshot,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
+    ListAIStreamBlocks, GetAIStreamBlockContent, ListAILiveStreamBlocks,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
@@ -887,7 +887,6 @@ const state = {
     markdownTableWordWrapMode: true,  // track table word wrap mode for View/Run modes
     aiModelSelections: [],
     aiCurrentModelSelection: '',
-    aiSessionCache: '',
     // Whether the panel is following live output or showing a historical prompt.
     aiPanelLive: true,
     // AI logs are loaded lazily: on workspace switch we mark them pending and
@@ -935,8 +934,6 @@ let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
 let aiPromptJumpRefreshDeadline = 0;
 const AI_PROMPT_JUMP_REFRESH_MAX_DELAY_MS = 500;
-let aiStreamGapRecoveryTimer = null;
-const AI_STREAM_GAP_RECOVERY_MS = 400;
 let aiPromptJumpObserver = null;
 let aiBottomScrollRetryTimers = [];
 let aiBottomChaseHandle = 0;
@@ -11241,14 +11238,26 @@ async function jumpToAIPromptTarget(target) {
 
     if (target.source === 'backend' && target.sessionId > 0 && target.promptId > 0) {
         try {
-            const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
             // Showing history: suspend live emits so a running agent can't append here.
             setAIPanelLive(false);
-            aiPipelineFormatter.clear();
-            if (markdown) {
-                setAIFinalOutput(String(markdown), { forceBottom: true });
+            aiActiveRunId = null;
+            aiBlockStreamRunId = null;
+            const blocks = typeof ListAIStreamBlocks === 'function'
+                ? await ListAIStreamBlocks(target.sessionId, target.promptId)
+                : [];
+            if (Array.isArray(blocks) && blocks.length > 0 && typeof GetAIStreamBlockContent === 'function') {
+                aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
+                    target.sessionId,
+                    target.promptId,
+                    String(block?.blockId || ''),
+                ));
+            } else {
+                const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
+                aiPipelineFormatter.clear();
+                if (markdown) {
+                    setAIFinalOutput(String(markdown), { forceBottom: true, legacy: true });
+                }
             }
-            state.aiSessionCache = String(markdown || '');
         } catch (err) {
             console.error('Failed to load AI prompt log:', err);
         }
@@ -11961,6 +11970,47 @@ function createTableInsertMenuItems(table, target, tableIndex) {
 function initAIOutputContextMenu(container) {
     if (!container) {
         return;
+    }
+
+    if (container.dataset.notesLinkHoverBound !== 'true') {
+        container.dataset.notesLinkHoverBound = 'true';
+        container.addEventListener('mouseover', (e) => {
+            const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (anchor && container.contains(anchor)) {
+                showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
+            }
+        });
+        container.addEventListener('mousemove', (e) => {
+            const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (anchor && container.contains(anchor)) {
+                const href = String(anchor.href || anchor.getAttribute('href') || '').trim();
+                const displayHref = formatHyperlinkHoverHref(href);
+                if (displayHref && hyperlinkHoverTooltipEl.dataset.href !== displayHref) {
+                    showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
+                } else {
+                    positionHyperlinkHoverTooltip(e.clientX, e.clientY);
+                }
+                return;
+            }
+            hideHyperlinkHoverTooltip();
+        });
+        container.addEventListener('mouseout', (e) => {
+            const leavingAnchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
+            if (!leavingAnchor || !container.contains(leavingAnchor)) {
+                return;
+            }
+            const related = e.relatedTarget;
+            if (related instanceof Element) {
+                const nextAnchor = related.closest('a[href]');
+                if (nextAnchor && container.contains(nextAnchor)) {
+                    return;
+                }
+            }
+            hideHyperlinkHoverTooltip();
+        });
+        container.addEventListener('mousedown', () => {
+            hideHyperlinkHoverTooltip();
+        });
     }
 
     initRenderedBlockCopyButtons(container);
@@ -12770,12 +12820,8 @@ function startAIJob(title) {
     });
 }
 
-const aiStreamOrder = {
-    runId: null,
-    nextSequence: 0,
-    pending: new Map(),
-    finalSequence: null,
-};
+let aiActiveRunId = null;
+let aiBlockStreamRunId = null;
 
 // Tells Go whether the panel is following live output; guarded so stale
 // generated bindings can't throw.
@@ -12791,101 +12837,14 @@ function setAIPanelLive(live) {
     updateAIPromptJumpAvailability();
 }
 
-function startOrderedAIJob(payload) {
+function startAIStreamJob(payload) {
     // A new job always follows live output, whichever surface triggered it.
     setAIPanelLive(true);
 
     const runId = Number(payload?.runId);
-    if (!Number.isSafeInteger(runId) || runId < 1) {
-        startAIJob(payload);
-        return;
-    }
-    aiStreamOrder.runId = runId;
-    aiStreamOrder.nextSequence = 0;
-    aiStreamOrder.pending.clear();
-    aiStreamOrder.finalSequence = null;
-    clearAIStreamGapRecovery();
-    startAIJob(payload.title);
-}
-
-function flushOrderedAIStream() {
-    while (aiStreamOrder.pending.has(aiStreamOrder.nextSequence)) {
-        appendAIText(aiStreamOrder.pending.get(aiStreamOrder.nextSequence));
-        aiStreamOrder.pending.delete(aiStreamOrder.nextSequence);
-        aiStreamOrder.nextSequence++;
-    }
-    if (aiStreamOrder.finalSequence !== null && aiStreamOrder.nextSequence > aiStreamOrder.finalSequence) {
-        aiStreamOrder.finalSequence = null;
-        finishAIJob();
-    }
-    if (aiStreamOrder.pending.size > 0) {
-        scheduleAIStreamGapRecovery();
-    } else {
-        clearAIStreamGapRecovery();
-    }
-}
-
-function clearAIStreamGapRecovery() {
-    if (aiStreamGapRecoveryTimer) {
-        clearTimeout(aiStreamGapRecoveryTimer);
-        aiStreamGapRecoveryTimer = null;
-    }
-}
-
-// Switching workspace mid-run can drop the chunk emitted between reading the
-// backend snapshot and applying it, leaving a permanent hole the cursor can
-// never pass. Rebuilding from the snapshot is the only way to close it.
-function scheduleAIStreamGapRecovery() {
-    if (aiStreamGapRecoveryTimer) {
-        return;
-    }
-
-    aiStreamGapRecoveryTimer = setTimeout(() => {
-        aiStreamGapRecoveryTimer = null;
-        if (aiStreamOrder.pending.size === 0) {
-            return;
-        }
-        void applyActiveStreamSnapshot(state.currentWorkspaceName);
-    }, AI_STREAM_GAP_RECOVERY_MS);
-}
-
-function appendOrderedAIStream(payload) {
-    if (!payload || typeof payload !== 'object') {
-        const text = String(payload ?? '');
-        if (text) appendAIText(text);
-        return;
-    }
-    const runId = Number(payload.runId);
-    const sequence = Number(payload.sequence);
-    const text = String(payload.text ?? '');
-    if (runId !== aiStreamOrder.runId || !Number.isSafeInteger(sequence) || sequence < aiStreamOrder.nextSequence || !text) {
-        return;
-    }
-    aiStreamOrder.pending.set(sequence, text);
-    flushOrderedAIStream();
-}
-
-function finishOrderedAIJob(payload) {
-    const runId = Number(payload?.runId);
-    const finalSequence = Number(payload?.finalSequence);
-    if (runId !== aiStreamOrder.runId || !Number.isInteger(finalSequence)) {
-        finishAIJob();
-        return;
-    }
-    aiStreamOrder.finalSequence = finalSequence;
-    flushOrderedAIStream();
-    // Suppressed chunks mean the cursor can never reach finalSequence, so the
-    // flush above won't finish the job; refresh anyway or the completed prompt
-    // never shows up in the dropdown.
-    if (aiStreamOrder.finalSequence !== null) {
-        aiStreamOrder.finalSequence = null;
-        void refreshAIPromptJumpFromBackend();
-    }
-}
-
-function finishAIJob() {
-    aiPipelineFormatter.finishJob();
-    // Newly-finalized prompt log is now on disk; refresh the dropdown.
+    aiActiveRunId = Number.isSafeInteger(runId) && runId > 0 ? runId : null;
+    aiBlockStreamRunId = null;
+    startAIJob(payload?.title ?? payload);
     void refreshAIPromptJumpFromBackend();
 }
 
@@ -12902,10 +12861,15 @@ function appendAIText(text) {
     }
 }
 
+function finishAIJob() {
+    aiPipelineFormatter.finishJob();
+    void refreshAIPromptJumpFromBackend();
+}
+
 function setAIFinalOutput(text, options = {}) {
     const forceBottom = options.forceBottom === true;
     const shouldStick = forceBottom || state.aiStickToBottom;
-    aiPipelineFormatter.setText(String(text || ''));
+    aiPipelineFormatter.setText(String(text || ''), { legacy: options.legacy === true });
     scheduleAIPromptJumpRefresh();
     if (shouldStick) {
         requestAIScrollToBottom();
@@ -13023,58 +12987,53 @@ function scrollAIOutputToBottom() {
     aiBottomChaseHandle = requestAnimationFrame(chaseBottom);
 }
 
-// Chunks are dropped, not queued, while the panel is off-live or its workspace
-// is inactive, so the ordered cursor must be resynced from the backend or the
-// panel stalls forever waiting on sequences that were never delivered.
-// Returns true when an in-progress run was restored into the panel.
-async function applyActiveStreamSnapshot(workspaceName) {
-    if (!state.aiPanelLive || typeof GetAIActiveStreamSnapshot !== 'function') {
+// Blocks are stored without framing, so the live view must be rebuilt from the
+// block index; concatenating their content would lose every fence and quote.
+async function restoreAILiveBlocks(workspaceName) {
+    if (typeof ListAILiveStreamBlocks !== 'function' || typeof GetAIStreamBlockContent !== 'function') {
         return false;
     }
 
-    let snapshot = null;
+    let blocks = [];
     try {
-        snapshot = await GetAIActiveStreamSnapshot(String(workspaceName || ''));
+        blocks = await ListAILiveStreamBlocks(String(workspaceName || ''));
     } catch (err) {
-        console.error('Failed to load AI active stream snapshot:', err);
+        console.error('Failed to load live AI stream blocks:', err);
         return false;
     }
 
-    if (!snapshot?.active) {
+    if (!Array.isArray(blocks) || blocks.length === 0) {
         return false;
     }
 
-    aiStreamOrder.runId = Number(snapshot.runId) || null;
-    aiStreamOrder.nextSequence = Number(snapshot.sequence) || 0;
-    aiStreamOrder.pending.clear();
-    aiStreamOrder.finalSequence = null;
-    clearAIStreamGapRecovery();
+    aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
+        Number(block?.sessionId) || 0,
+        Number(block?.promptId) || 0,
+        String(block?.blockId || ''),
+    ));
 
-    state.aiSessionCache = String(snapshot.text || '');
-    aiPipelineFormatter.clear();
-    aiPipelineFormatter.startJob('');
-    aiPipelineFormatter.appendChunk(state.aiSessionCache);
-    requestAnimationFrame(() => {
-        scrollAIOutputToBottom();
-    });
+    // Adopt the restored run so a still-running agent streams into this view
+    // rather than being dropped as a stale run.
+    const runId = Number(blocks[blocks.length - 1]?.runId) || 0;
+    aiActiveRunId = runId > 0 ? runId : null;
+    aiBlockStreamRunId = aiActiveRunId;
+    requestAIScrollToBottom();
     return true;
 }
 
 async function loadAISessionCache(workspaceName) {
     try {
-        // A live run outranks the on-disk log: its output is still in the pending
-        // file, which GetAISessionCache deliberately skips.
-        const restored = await applyActiveStreamSnapshot(workspaceName);
+        const restored = await restoreAILiveBlocks(workspaceName);
 
         if (!restored) {
-            const cache = await GetAISessionCache(String(workspaceName || ''));
-            state.aiSessionCache = String(cache || '');
-            // The session log file on disk is the source of truth for the panel.
+            // Reaching here means the workspace has no blocks at all, so whatever
+            // the session log returns predates block storage.
+            const cache = String(await GetAISessionCache(String(workspaceName || '')) || '');
             // Fully reset the panel before rendering so content from a previously
             // active workspace cannot persist across a workspace (tmux tab) switch.
             aiPipelineFormatter.clear();
-            if (state.aiSessionCache) {
-                setAIFinalOutput(state.aiSessionCache, { forceBottom: true });
+            if (cache) {
+                setAIFinalOutput(cache, { forceBottom: true, legacy: true });
             }
         }
 
@@ -13096,8 +13055,11 @@ async function loadAISessionCache(workspaceName) {
 function markAISessionCachePending(workspaceName) {
     state.aiSessionCachePending = true;
     state.aiSessionCachePendingWorkspace = String(workspaceName || '');
-    state.aiSessionCache = '';
     aiPipelineFormatter.clear();
+    // The run being left belongs to the old workspace; restoring the new one
+    // re-adopts whichever run is live there.
+    aiActiveRunId = null;
+    aiBlockStreamRunId = null;
     // A workspace switch resets the panel, so stop showing a stale historical
     // prompt from the workspace being left.
     setAIPanelLive(true);
@@ -13133,7 +13095,7 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
 
 // Event emitted by Go when an AI job begins (before first chunk)
 EventsOn("aiJobStart", (title) => {
-    startOrderedAIJob(title);
+    startAIStreamJob(title);
     setToolsTab('ai');
     if (elements.toolsPanel.dataset.collapsed === 'true') {
         toggleToolsPanel();
@@ -13142,7 +13104,28 @@ EventsOn("aiJobStart", (title) => {
 
 // Event emitted by Go when an AI job finishes
 EventsOn("aiJobFinish", (payload) => {
-    finishOrderedAIJob(payload);
+    finishAIJob();
+});
+
+EventsOn("aiStreamBlock", (payload) => {
+    const runId = Number(payload?.runId);
+    if (runId !== aiActiveRunId || !payload?.blockId) {
+        return;
+    }
+    // Backend gating is authoritative; this also covers blocks emitted in the
+    // window between a workspace switch and the SetAIPanelLive round-trip.
+    const blockWorkspace = String(payload?.workspace ?? '').trim();
+    const panelWorkspace = String(state.currentWorkspaceName || '').trim();
+    if (blockWorkspace && panelWorkspace && blockWorkspace !== panelWorkspace) {
+        return;
+    }
+    aiBlockStreamRunId = runId;
+    aiPipelineFormatter.appendBlock(payload);
+    if (state.aiStickToBottom) {
+        scrollAIOutputToBottom();
+    } else {
+        scheduleAIScrollButtonUpdate();
+    }
 });
 
 EventsOn("aiToolStateChanged", (payload) => {
@@ -13243,7 +13226,13 @@ document.addEventListener('ttyphoon-ai-user-question', async (e) => {
 
 // Event listener for streaming AI responses
 EventsOn("aiResponseStream", (chunk) => {
-    appendOrderedAIStream(chunk);
+    if (aiBlockStreamRunId !== null && typeof chunk === 'object' && Number(chunk?.runId) === aiBlockStreamRunId) {
+        return;
+    }
+    const text = typeof chunk === 'object' ? String(chunk?.text ?? '') : String(chunk ?? '');
+    if (text) {
+        appendAIText(text);
+    }
 });
 
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.

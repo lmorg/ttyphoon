@@ -1,6 +1,9 @@
 package sessiondb
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func resetPanelView(t *testing.T, workspaces ...string) {
 	t.Helper()
@@ -37,6 +40,49 @@ func TestEmitGating_LifecycleSurvivesHistoricalView(t *testing.T) {
 	SetPanelView("alpha", true)
 	if !ctx.emitLifecycle() || !ctx.emitContent() {
 		t.Fatal("live output should emit both lifecycle and content")
+	}
+}
+
+// PanelShowsLive is exported because the typed block transport gates on it
+// directly, without going through a SessionLogContext.
+func TestPanelShowsLive_TracksPerWorkspaceView(t *testing.T) {
+	resetPanelView(t, "alpha", "beta")
+
+	if !PanelShowsLive("workspace-never-reported") {
+		t.Fatal("PanelShowsLive() = false for an unreported workspace, want true")
+	}
+
+	SetPanelView("alpha", false)
+	SetPanelView("beta", true)
+
+	if PanelShowsLive("alpha") {
+		t.Fatal("PanelShowsLive(alpha) = true while showing history, want false")
+	}
+	if !PanelShowsLive("beta") {
+		t.Fatal("PanelShowsLive(beta) = false while live, want true")
+	}
+}
+
+func TestWriteToSessionLog_DoesNotCreateMarkdownFile(t *testing.T) {
+	workspace := "stream-only-log-test"
+	path, err := dbPath(workspace)
+	if err != nil {
+		t.Fatalf("dbPath: %v", err)
+	}
+	pendingPath, err := sessionLogPendingPath(workspace, 1)
+	if err != nil {
+		t.Fatalf("sessionLogPendingPath: %v", err)
+	}
+	_ = os.Remove(path)
+	_ = os.Remove(pendingPath)
+	t.Cleanup(func() {
+		_ = os.Remove(path)
+		_ = os.Remove(pendingPath)
+	})
+
+	WriteToSessionLog(SessionLogContext{Workspace: workspace, Query: "query"}, SESSION_LOG_START_JOB, "")
+	if _, err := os.Stat(pendingPath); !os.IsNotExist(err) {
+		t.Fatalf("pending markdown file exists after start: %v", err)
 	}
 }
 

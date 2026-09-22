@@ -10,6 +10,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/ai/subagent"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -148,6 +149,11 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 				Name:         request.Name,
 				Prompt:       request.Prompt,
 				SystemPrompt: t.systemPrompt(),
+				StreamPrefix: "",
+				StreamSuffix: "",
+				FormatStreamChunk: func(text string) string {
+					return text
+				},
 				EmitStream: func(chunk string) {
 					blockMu.Lock()
 					block.WriteString(chunk)
@@ -167,7 +173,8 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 			buffered := block.String()
 			blockMu.Unlock()
 			if buffered != "" && emitToPanel != nil {
-				emitToPanel(buffered)
+				legacy := fmt.Sprintf("\n> **Sub-agent %s:** %s\n\n", request.Name, strings.ReplaceAll(buffered, "\n", "\n> "))
+				agent.EmitAIStreamBlockWithLegacy(ctx, sessiondb.StreamBlockSubagent, buffered, legacy)
 			}
 		})
 	}

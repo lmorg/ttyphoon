@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 )
 
 var userQuestionRequests = struct {
@@ -44,7 +46,8 @@ func RequestUserQuestion(ctx context.Context, question string, choices []string)
 	}
 
 	requestID, decisionCh := newUserQuestionRequest()
-	emitAIStreamToolProgress(ctx, formatUserQuestionRequestMarkdown(question, requestID, choices))
+	questionMarkdown := formatUserQuestionRequestMarkdown(question, requestID, choices)
+	emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, questionMarkdown, questionMarkdown)
 
 	select {
 	case answer := <-decisionCh:

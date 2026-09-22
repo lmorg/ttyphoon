@@ -51,8 +51,6 @@ export function FormatCodeFile(arg1:string,arg2:string):Promise<void>;
 
 export function FormatNotesContent(arg1:string,arg2:string,arg3:string):Promise<jupyter.FormatCodeReturnT>;
 
-export function GetAIActiveStreamSnapshot(arg1:string):Promise<sessiondb.ActiveStreamSnapshot>;
-
 export function GetAIExecutionLimits():Promise<Record<string, any>>;
 
 export function GetAIMcpServers():Promise<Array<Record<string, any>>>;
@@ -62,6 +60,8 @@ export function GetAIPromptLog(arg1:number,arg2:number):Promise<string>;
 export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
+
+export function GetAIStreamBlockContent(arg1:number,arg2:number,arg3:string):Promise<string>;
 
 export function GetAIToolsList():Promise<Array<Record<string, any>>>;
 
@@ -111,9 +111,13 @@ export function GetWindowStyle():Promise<main.WindowStyleT>;
 
 export function HyperlinkOpenWithDefault(arg1:string):Promise<void>;
 
+export function ListAILiveStreamBlocks(arg1:string):Promise<Array<sessiondb.StreamBlockMeta>>;
+
 export function ListAIModelSelections():Promise<Array<string>>;
 
 export function ListAIPromptLogs():Promise<Array<sessiondb.PromptLogMeta>>;
+
+export function ListAIStreamBlocks(arg1:number,arg2:number):Promise<Array<sessiondb.StreamBlockMeta>>;
 
 export function ListFiles():Promise<Array<string>>;
 

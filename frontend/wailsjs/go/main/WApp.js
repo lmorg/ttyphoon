@@ -86,10 +86,6 @@ export function FormatNotesContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['FormatNotesContent'](arg1, arg2, arg3);
 }
 
-export function GetAIActiveStreamSnapshot(arg1) {
-  return window['go']['main']['WApp']['GetAIActiveStreamSnapshot'](arg1);
-}
-
 export function GetAIExecutionLimits() {
   return window['go']['main']['WApp']['GetAIExecutionLimits']();
 }
@@ -108,6 +104,10 @@ export function GetAISessionCache(arg1) {
 
 export function GetAISessionManagement() {
   return window['go']['main']['WApp']['GetAISessionManagement']();
+}
+
+export function GetAIStreamBlockContent(arg1, arg2, arg3) {
+  return window['go']['main']['WApp']['GetAIStreamBlockContent'](arg1, arg2, arg3);
 }
 
 export function GetAIToolsList() {
@@ -206,12 +206,20 @@ export function HyperlinkOpenWithDefault(arg1) {
   return window['go']['main']['WApp']['HyperlinkOpenWithDefault'](arg1);
 }
 
+export function ListAILiveStreamBlocks(arg1) {
+  return window['go']['main']['WApp']['ListAILiveStreamBlocks'](arg1);
+}
+
 export function ListAIModelSelections() {
   return window['go']['main']['WApp']['ListAIModelSelections']();
 }
 
 export function ListAIPromptLogs() {
   return window['go']['main']['WApp']['ListAIPromptLogs']();
+}
+
+export function ListAIStreamBlocks(arg1, arg2) {
+  return window['go']['main']['WApp']['ListAIStreamBlocks'](arg1, arg2);
 }
 
 export function ListFiles() {

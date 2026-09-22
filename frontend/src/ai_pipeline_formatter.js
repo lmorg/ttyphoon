@@ -201,6 +201,9 @@ export function createAIPipelineFormatter(container, options = {}) {
     let isRendering = false;
     let needsRender = false;
     let lazyChunkObserver = null;
+    let legacyRender = false;
+    const streamBlocks = new Map();
+    const pendingBlockChildren = new Map();
     // Per markdown root: how much of its text is already committed to the DOM.
     const incrementalState = new WeakMap();
     // Per section element: committed content length. Sections only grow, so the
@@ -318,6 +321,9 @@ export function createAIPipelineFormatter(container, options = {}) {
     function clear() {
         destroyLazyObserver();
         resetSectionCache();
+        streamBlocks.clear();
+        pendingBlockChildren.clear();
+        legacyRender = false;
         streamText = '';
         jobRoot = null;
         isRendering = false;
@@ -376,6 +382,126 @@ export function createAIPipelineFormatter(container, options = {}) {
         // because they re-run on every frame; apply them once here instead.
         if (jobRoot && processMarkdownContainer) {
             void processMarkdownContainer(jobRoot);
+        }
+    }
+
+    function isRawBlock(kind) {
+        return ['tool-call', 'tool-output', 'tool-error', 'tool-summary', 'notice'].includes(String(kind || ''));
+    }
+
+    function openBlock(block) {
+        const blockId = String(block?.blockId || '');
+        if (!blockId) {
+            return null;
+        }
+        const existing = streamBlocks.get(blockId);
+        if (existing) {
+            return existing;
+        }
+
+        const root = ensureJobRoot();
+        const wrapper = document.createElement('div');
+        const kind = String(block?.kind || 'text');
+        const parentId = String(block?.parentId || '');
+        wrapper.dataset.blockId = blockId;
+        wrapper.dataset.parentId = parentId;
+
+        let contentRoot;
+        if (isRawBlock(kind)) {
+            wrapper.classList.add('notes-ai-markdown', 'markdown-body');
+            if (kind === 'tool-call' && block?.label) {
+                const heading = document.createElement('h3');
+                heading.className = 'notes-ai-heading';
+                heading.textContent = `Tool call: \`${String(block.label)}\``;
+                wrapper.appendChild(heading);
+            }
+            const pre = document.createElement('pre');
+            pre.className = 'notes-ai-code';
+            const code = document.createElement('code');
+            pre.appendChild(code);
+            wrapper.appendChild(pre);
+            contentRoot = code;
+        } else {
+            contentRoot = document.createElement('div');
+            contentRoot.className = 'notes-ai-markdown markdown-body';
+            wrapper.appendChild(contentRoot);
+        }
+        const children = document.createElement('div');
+        children.className = 'notes-ai-stream-block-children';
+        wrapper.appendChild(children);
+
+        const parent = parentId ? streamBlocks.get(parentId) : null;
+        if (parent?.children) {
+            parent.children.appendChild(wrapper);
+        } else if (parentId) {
+            const waiting = pendingBlockChildren.get(parentId) || [];
+            waiting.push(wrapper);
+            pendingBlockChildren.set(parentId, waiting);
+        } else {
+            root.appendChild(wrapper);
+        }
+
+        const entry = {
+            kind,
+            text: '',
+            root: contentRoot,
+            wrapper,
+            children,
+            parentId,
+            raw: isRawBlock(kind),
+            queue: Promise.resolve(),
+        };
+        streamBlocks.set(blockId, entry);
+
+        const waiting = pendingBlockChildren.get(blockId);
+        if (waiting) {
+            waiting.forEach((child) => children.appendChild(child));
+            pendingBlockChildren.delete(blockId);
+        }
+        return entry;
+    }
+
+    function appendBlock(block) {
+        const blockId = String(block?.blockId || '');
+        if (!blockId) {
+            return;
+        }
+        const entry = openBlock(block);
+        if (!entry) {
+            return;
+        }
+        const delta = String(block?.delta ?? '');
+        if (delta) {
+            entry.text += delta;
+        }
+        // Every event carries the full accumulated content, so a snapshot that is
+        // at least as long as what we have heals any delta we missed.
+        if (block?.content && String(block.content).length >= entry.text.length) {
+            entry.text = String(block.content);
+        }
+
+        const text = entry.kind === 'thinking'
+            ? `\n> **Thinking:** ${entry.text.replace(/\n/g, '\n> ')}`
+            : entry.text;
+        entry.queue = entry.queue.then(async () => {
+            if (entry.raw) {
+                entry.root.textContent = text;
+                pinBlockToBottom(entry.root.parentElement);
+                return;
+            }
+            await renderIncremental(entry.root, text);
+            if (entry.kind === 'thinking') {
+                pinBlockToBottom(entry.root.querySelector('blockquote'));
+            }
+            if (block?.status === 'closed' && processMarkdownContainer) {
+                await processMarkdownContainer(entry.root);
+            }
+        }).catch(() => {});
+    }
+
+    function pinBlockToBottom(block) {
+        if (block) {
+            block.scrollTop = block.scrollHeight;
         }
     }
 
@@ -529,13 +655,14 @@ export function createAIPipelineFormatter(container, options = {}) {
         })();
     }
 
-    function setText(text) {
+    function setText(text, options = {}) {
         // setText is used for one-shot full-document renders (session restore
         // and prompt-log jumps). The whole document is already available so we
         // render it as a single markdown block and lazily post-process visible
         // chunks — running processMarkdownContainer over the entire document at
         // once would lock the UI for large session logs (hljs highlighting,
         // mermaid, hyperlink scanning, table + image setup on N sections).
+        legacyRender = options.legacy === true;
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -638,6 +765,9 @@ export function createAIPipelineFormatter(container, options = {}) {
         destroyLazyObserver();
 
         const root = ensureJobRoot();
+        // Marked with a class rather than a child node: the reset below keys off
+        // childElementCount, so an extra element would force a rebuild each pass.
+        root.classList.toggle('notes-ai-legacy', legacyRender);
         let markdownRoot = root.querySelector('.notes-ai-markdown');
         if (!markdownRoot || root.childElementCount !== 1 || root.firstElementChild !== markdownRoot) {
             root.textContent = '';
@@ -722,11 +852,85 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
     }
 
+    function setBlocks(blocks, loadContent) {
+        destroyLazyObserver();
+        streamBlocks.clear();
+        legacyRender = false;
+        container.textContent = '';
+        streamText = '';
+        renderVersion += 1;
+        jobRoot = document.createElement('div');
+        jobRoot.className = 'notes-ai-job';
+        container.appendChild(jobRoot);
+
+        const entries = Array.isArray(blocks) ? blocks : [];
+        const shells = entries.map((block) => {
+            const entry = openBlock(block);
+            if (entry) {
+                entry.root.dataset.blockLoaded = 'false';
+                entry.root.textContent = '';
+            }
+            return { block, entry };
+        }).filter((item) => item.entry);
+
+        const load = async (item) => {
+            if (!item.entry || item.entry.root.dataset.blockLoaded === 'pending'
+                || item.entry.root.dataset.blockLoaded === 'true') {
+                return;
+            }
+            item.entry.root.dataset.blockLoaded = 'pending';
+            try {
+                const content = await loadContent(item.block);
+                appendBlock({
+                    ...item.block,
+                    content: String(content || ''),
+                    delta: '',
+                });
+                item.entry.root.dataset.blockLoaded = 'true';
+            } catch (err) {
+                item.entry.root.dataset.blockLoaded = 'error';
+            }
+        };
+
+        if (typeof IntersectionObserver !== 'function') {
+            shells.forEach((item) => { void load(item); });
+            return;
+        }
+
+        // A still-open block can receive live deltas, so it must not wait for scroll.
+        const openShells = shells.filter((item) => String(item.block?.status || '') === 'open');
+        openShells.forEach((item) => { void load(item); });
+
+        lazyChunkObserver = new IntersectionObserver((observed) => {
+            for (const item of observed) {
+                if (!item.isIntersecting) {
+                    continue;
+                }
+                lazyChunkObserver.unobserve(item.target);
+                const shell = shells.find((candidate) => candidate.entry.root.closest('[data-block-id]') === item.target);
+                if (shell) {
+                    void load(shell);
+                }
+            }
+        }, { root: container, rootMargin: '1200px 0px' });
+
+        shells.forEach((item) => {
+            const wrapper = item.entry.root.closest('[data-block-id]');
+            if (wrapper) {
+                lazyChunkObserver.observe(wrapper);
+            }
+        });
+        shells.slice(0, 3).forEach((item) => { void load(item); });
+    }
+
     return {
         clear,
         startJob,
         finishJob,
         appendChunk,
+        openBlock,
+        appendBlock,
+        setBlocks,
         setText,
     };
 }

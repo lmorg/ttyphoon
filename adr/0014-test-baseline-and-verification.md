@@ -4,8 +4,8 @@ Date: 2026-09-06
 
 ## Status
 
-Accepted. Updated 2026-09-06 — the two originally-recorded `ai/...` failures have
-been fixed; see *Resolved* below.
+Accepted. Updated 2026-09-21 — the previously recorded Go and frontend baseline
+failures are resolved; the full verification commands pass.
 
 ## Context
 
@@ -21,9 +21,7 @@ failures are fixed.
 
 ### Current known failure
 
-`utils/runewidth` — `TestStringWidth/flag`: `StringWidth("🇬🇧") = 2, want 1`.
-A regional-indicator flag emoji (two code points) is measured as two cells rather
-than one. Unrelated to the AI subsystem; affects terminal glyph width.
+None.
 
 ### Resolved
 
@@ -52,7 +50,7 @@ go test ./ai/agent -count=1 -race      # concurrency-sensitive packages
 go test ./ai/agent -run '^$'           # compile/type-check only, runs nothing
 
 cd frontend
-npm test -- --run src/notes.test.js --reporter=dot   # 98 tests
+npm test -- --run src/notes.test.js --reporter=dot   # 114 tests
 node --check src/notes.js                            # syntax only
 ```
 

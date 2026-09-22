@@ -8,10 +8,13 @@ recolour, extend or otherwise modify an image that already exists.
 The input for this tool MUST be a JSON object:
 
 ```json
-{
-  "prompt": "a watercolour painting of a lighthouse at dusk",
-  "size": "1024x1024",
-  "quality": "high"
+{ 
+  "input": {
+    "prompt": "a watercolour painting of a lighthouse at dusk",
+    "size": "1024x1024",
+    "quality": "high",
+    "file": "/path/to/file.png"
+  }
 }
 ```
 

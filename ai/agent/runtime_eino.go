@@ -29,6 +29,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type einoRuntime struct {
@@ -36,6 +37,22 @@ type einoRuntime struct {
 	agentReact          *react.Agent
 	tools               []aitypes.Tool
 	boundedWindowRunner func(context.Context, []*schema.Message, func(string)) (string, error)
+}
+
+func (r *einoRuntime) newStreamBlockWriter() *aiStreamBlockWriter {
+	if r == nil || r.agent == nil || r.agent.Renderer() == nil {
+		return nil
+	}
+	workspace := r.agent.Workspace()
+	return newAIStreamBlockWriter(workspace, func(block sessiondb.AIStreamBlock) {
+		// Blocks are persisted before they are emitted, so suppressing a hidden
+		// workspace or a historical view loses nothing: returning to the view
+		// rebuilds it from sqlite.
+		if !r.agent.IsWorkspaceActive() || !sessiondb.PanelShowsLive(workspace) {
+			return
+		}
+		runtime.EventsEmit(r.agent.Renderer().GetWindowContext(), "aiStreamBlock", block)
+	})
 }
 
 const einoMaxHistoryTurns = 8
@@ -48,6 +65,7 @@ var toolSummariserExclusions = map[string]struct{}{
 }
 
 type aiStreamCallbackCtxKey struct{}
+type aiStreamBlockParentCtxKey struct{}
 type continuationCheckpointCtxKey struct{}
 
 const (
@@ -114,10 +132,11 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	emitAIStreamToolProgress(ctx, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON))
+	toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON), t.delegate.Name())
+	ctx = withAIStreamBlockParent(ctx, toolCallID)
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
-			emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error(), formatToolErrorMarkdown(err))
 			recordContinuationToolObservation(ctx, t.toolObservation(argumentsInJSON, "", err))
 			if errors.Is(err, ErrToolPermissionRefused) {
 				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
@@ -133,7 +152,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 	output, err := t.delegate.Call(ctx, toolInput)
 	if err != nil {
-		emitAIStreamToolProgress(ctx, formatToolErrorMarkdown(err))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error(), formatToolErrorMarkdown(err))
 		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, err))
 		return output, err
 	}
@@ -150,17 +169,17 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 	// When summarising, the streamed summary replaces the raw output in the UI + log.
 	if output != "" && !summarising && !streamedOutput {
-		emitAIStreamToolProgress(ctx, formatToolOutputMarkdown(output))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolOutput, output, formatToolOutputMarkdown(output))
 	}
 
 	if summarising {
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
-			emitAIStreamToolProgress(ctx, formatToolSummaryFailureMarkdown(len(output), sErr))
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, sErr.Error(), formatToolSummaryFailureMarkdown(len(output), sErr))
 			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
 			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
 		}
-		emitAIStreamToolProgress(ctx, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, summary, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
 		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, summary, nil))
 		return summary, nil
 	}
@@ -263,6 +282,7 @@ func unwrapToolInput(argumentsInJSON string) string {
 type aiStreamEmitter struct {
 	mu         sync.Mutex
 	fn         func(string)
+	blocks     *aiStreamBlockWriter
 	inThinking bool
 	pending    strings.Builder
 	lastEmit   time.Time
@@ -300,6 +320,25 @@ func (e *aiStreamEmitter) emitText(text string) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.blocks != nil {
+		if e.inThinking {
+			e.blocks.CloseCurrentThinking()
+		}
+		e.blocks.AppendText(text)
+	}
+	e.emitLegacyTextLocked(text)
+}
+
+func (e *aiStreamEmitter) emitLegacyText(text string) {
+	if e == nil || e.fn == nil || text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.emitLegacyTextLocked(text)
+}
+
+func (e *aiStreamEmitter) emitLegacyTextLocked(text string) {
 	e.flushLocked()
 	if e.inThinking {
 		e.fn("\n\n")
@@ -315,6 +354,9 @@ func (e *aiStreamEmitter) emitReasoning(text string) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.blocks != nil {
+		e.blocks.AppendThinking(text)
+	}
 	if !e.inThinking {
 		e.pending.WriteString("\n> **Thinking:** ")
 		e.inThinking = true
@@ -405,7 +447,109 @@ func emitAIStreamToolProgress(ctx context.Context, text string) {
 		return
 	}
 	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
-		emitter.emitText(text)
+		if emitter.blocks != nil {
+			emitter.blocks.AppendNotice(text)
+		}
+		emitter.emitLegacyText(text)
+	}
+}
+
+func emitAIStreamToolBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) {
+	emitAIStreamToolBlockID(ctx, kind, content, legacy)
+}
+
+func emitAIStreamToolBlockID(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) string {
+	return emitAIStreamToolBlockIDWithLabel(ctx, kind, content, legacy, "")
+}
+
+func emitAIStreamToolBlockIDWithLabel(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy, label string) string {
+	if ctx == nil || legacy == "" {
+		return ""
+	}
+	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
+	if !ok || emitter == nil {
+		return ""
+	}
+	blockID := ""
+	if emitter.blocks != nil {
+		blockID = emitter.blocks.AppendStandaloneWithLabel(kind, content, aiStreamBlockParent(ctx), label)
+	}
+	emitter.emitLegacyText(legacy)
+	return blockID
+}
+
+func EmitAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content string) {
+	EmitAIStreamBlockWithLegacy(ctx, kind, content, content)
+}
+
+func EmitAIStreamBlockWithLegacy(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) {
+	if ctx == nil || content == "" {
+		return
+	}
+	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
+	if !ok || emitter == nil {
+		return
+	}
+	if emitter.blocks != nil {
+		emitter.blocks.AppendStandalone(kind, content, aiStreamBlockParent(ctx))
+	}
+	emitter.emitLegacyText(legacy)
+}
+
+func withAIStreamBlockParent(ctx context.Context, parentID string) context.Context {
+	if ctx == nil || parentID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, aiStreamBlockParentCtxKey{}, parentID)
+}
+
+func aiStreamBlockParent(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	parentID, _ := ctx.Value(aiStreamBlockParentCtxKey{}).(string)
+	return parentID
+}
+
+type AIStreamBlockEmitter struct {
+	emitter *aiStreamEmitter
+	block   *aiStreamBlockHandle
+}
+
+func OpenAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID string) *AIStreamBlockEmitter {
+	if ctx == nil {
+		return nil
+	}
+	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
+	if !ok || emitter == nil || emitter.blocks == nil {
+		return nil
+	}
+	return &AIStreamBlockEmitter{emitter: emitter, block: emitter.blocks.Open(kind, parentID)}
+}
+
+func (e *AIStreamBlockEmitter) Emit(text string) {
+	if e == nil || e.block == nil || text == "" {
+		return
+	}
+	e.block.Append(text)
+	if e.emitter != nil {
+		e.emitter.emitLegacyText(text)
+	}
+}
+
+func EmitAIStreamLegacy(ctx context.Context, text string) {
+	if ctx == nil || text == "" {
+		return
+	}
+	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
+	if ok && emitter != nil {
+		emitter.emitLegacyText(text)
+	}
+}
+
+func (e *AIStreamBlockEmitter) Close() {
+	if e != nil && e.block != nil {
+		e.block.Close()
 	}
 }
 
@@ -705,7 +849,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	// runLLMWithMessageStream, so this ctx needs its own stream callback too -
 	// otherwise they're silently dropped and RequestUserQuestion hangs forever
 	// waiting on a choice the user was never shown.
-	ctx = withAIStreamCallback(ctx, &aiStreamEmitter{fn: streamCallback})
+	ctx = withAIStreamCallback(ctx, &aiStreamEmitter{fn: streamCallback, blocks: r.newStreamBlockWriter()})
 
 	for continuation := 0; ; continuation++ {
 		log.Printf("[debug] Continuation %d of %d", continuation+1, config.Config.Ai.MaxContinuations)
@@ -897,7 +1041,10 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 	}
 
-	emitter := &aiStreamEmitter{fn: streamCallback}
+	emitter := &aiStreamEmitter{fn: streamCallback, blocks: r.newStreamBlockWriter()}
+	if emitter.blocks != nil {
+		defer emitter.blocks.CloseAll()
+	}
 	ctx = withAIStreamCallback(ctx, emitter)
 
 	history, err := sessiondb.ActiveSessionEntries(r.agent.Workspace(), einoMaxHistoryTurns)
@@ -945,6 +1092,7 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 		if recvErr != nil {
 			reasoningWait.Wait()
 			emitter.flush()
+			emitter.blocks.CloseAll()
 			return response.String(), recvErr
 		}
 
@@ -966,6 +1114,7 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 	}
 	reasoningWait.Wait()
 	emitter.flush()
+	emitter.blocks.CloseAll()
 
 	spread := time.Duration(0)
 	if !firstContentAt.IsZero() && !lastContentAt.IsZero() {

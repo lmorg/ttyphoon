@@ -4,7 +4,11 @@ Date: 2026-09-06
 
 ## Status
 
-Accepted
+Accepted. Amended by 0037: the live/history gate stays, but the markdown file is
+replaced by sqlite-backed blocks and the snapshot / gap-recovery resync this
+record describes is removed. Amended again by 0038: 0037's `aiStreamBlock`
+transport initially bypassed this gating entirely; 0038 routes it through the
+same workspace and panel-view predicate.
 
 ## Context
 

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/notes"
@@ -259,7 +260,8 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 		agt.toolPermissionMu.Unlock()
 
 		reqID, decisionCh := newWritePermissionRequest()
-		emitAIStreamToolProgress(ctx, formatToolPermissionRequestMarkdown(toolName, reqID))
+		permissionMarkdown := formatToolPermissionRequestMarkdown(toolName, reqID)
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, permissionMarkdown, permissionMarkdown)
 
 		var decision string
 		select {
