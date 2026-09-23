@@ -16,6 +16,7 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	sbh "github.com/lmorg/ttyphoon/utils/scrollback_history"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
 
 /*
@@ -97,8 +98,10 @@ type Term struct {
 	_charSetG      [4]map[rune]rune
 
 	// misc CSI configs
-	_windowTitleStack []string
-	_noAutoLineWrap   bool // No Auto-Wrap Mode (DECAWM), VT100.
+	_windowTitleStack           []string
+	_noAutoLineWrap             bool // No Auto-Wrap Mode (DECAWM), VT100.
+	_synchronizedUpdateDeadline time.Time
+	_pointerCursorCSS           string
 
 	// cache
 	_mousePosRenderer types.FuncMutex
@@ -179,6 +182,7 @@ func NewRowBlockMeta(term *Term) *types.BlockMeta {
 
 func (term *Term) reset(size *types.XY) {
 	term.size = size
+	term._synchronizedUpdateDeadline = time.Time{}
 	term.resizePty()
 	term._curPos = types.XY{}
 	term._blockMeta = NewRowBlockMeta(term)
@@ -371,16 +375,24 @@ func (term *Term) updateScrollback() {
 }
 
 func (term *Term) SetFocus(state bool) {
+	term._mutex.Lock()
 	term._isFocused = state
+	pointerCursor := pointerCursorCSS([]string{term._pointerCursorCSS})
+	term._mutex.Unlock()
+
 	//term._slowBlinkState = true
 	term.renderer.SetBlinkState(true)
 
 	if state {
+		cursor.ActivateBase(pointerCursor)
 		term.renderer.RefreshNotes()
 	}
 }
 
 func (term *Term) IsFocused() bool {
+	term._mutex.Lock()
+	defer term._mutex.Unlock()
+
 	return term._isFocused
 }
 

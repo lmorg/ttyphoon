@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
@@ -18,7 +19,12 @@ import (
 	- ChatGPT (when the documentation above was unclear)
 */
 
-func (term *Term) parseCsiCodes() {
+var (
+	errCsiSequenceRestart = errors.New("CSI sequence restart")
+	errCsiSequenceCancel  = errors.New("CSI sequence cancel")
+)
+
+func (term *Term) parseCsiCodes() bool {
 	var (
 		r       rune
 		err     error
@@ -31,9 +37,15 @@ func (term *Term) parseCsiCodes() {
 	for {
 		r, err = term.Pty.Read()
 		if err != nil {
-			return
+			return false
 		}
 		cache = append(cache, r)
+		switch r {
+		case codes.AsciiEscape:
+			return true
+		case codes.AsciiCtrlX, codes.AsciiCtrlZ:
+			return false
+		}
 		if r >= '0' && '9' >= r {
 			multiplyN(n, r)
 			continue
@@ -407,26 +419,34 @@ func (term *Term) parseCsiCodes() {
 		case '?': // private codes
 			code, err := term.parseCsiExtendedCodes()
 			if err != nil {
-				return
+				return errors.Is(err, errCsiSequenceRestart)
 			}
 			lookupPrivateCsi(term, code)
-			return
+			return false
 
 		case '>': // secondary codes
 			code, err := term.parseCsiExtendedCodes()
 			if err != nil {
-				return
+				return errors.Is(err, errCsiSequenceRestart)
 			}
-			log.Printf("[debug] term: Secondary CSI code ignored: '%s%s'", string(cache), string(code))
-			return
+			lookupSecondaryCsi(code)
+			return false
+
+		case '<': // kitty keyboard protocol pop
+			code, err := term.parseCsiExtendedCodes()
+			if err != nil {
+				return errors.Is(err, errCsiSequenceRestart)
+			}
+			lookupSecondaryCsi(code)
+			return false
 
 		case '=': // tertiary codes
 			code, err := term.parseCsiExtendedCodes()
 			if err != nil {
-				return
+				return errors.Is(err, errCsiSequenceRestart)
 			}
 			lookupTertiaryCsi(term, code)
-			return
+			return false
 
 		case ':', ';':
 			stack = append(stack, -1)
@@ -437,10 +457,10 @@ func (term *Term) parseCsiCodes() {
 			if !isCsiTerminator(r) {
 				code, err := term.parseCsiExtendedCodes()
 				if err != nil {
-					return
+					return errors.Is(err, errCsiSequenceRestart)
 				}
 				log.Printf("[warn] term: Unknown extended CSI code %s: %v [string: %s]", string(r), append(cache, code...), string(cache)+string(code))
-				return
+				return false
 			}
 		}
 
@@ -448,7 +468,7 @@ func (term *Term) parseCsiCodes() {
 			if unknown {
 				log.Printf("[warn] term: Unknown CSI code %s: %v [string: %s]", string(r), cache, string(cache))
 			}
-			return
+			return false
 		}
 	}
 }
@@ -464,6 +484,12 @@ func (term *Term) parseCsiExtendedCodes() ([]rune, error) {
 		r, err = term.Pty.Read()
 		if err != nil {
 			return nil, err
+		}
+		switch r {
+		case codes.AsciiEscape:
+			return nil, errCsiSequenceRestart
+		case codes.AsciiCtrlX, codes.AsciiCtrlZ:
+			return nil, errCsiSequenceCancel
 		}
 		code = append(code, r)
 		if isCsiTerminator(r) {

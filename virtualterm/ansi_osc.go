@@ -88,11 +88,15 @@ parsed:
 		// Change VT100 text background color to Pt.
 		term.osc1xColorFgBG(11, stack[1:], terminator)
 
+	case "22":
+		// Change pointer cursor shape to Pt.
+		term.osc22SetPointerCursor(stack[1:])
+
 	case "1337":
 		// iTerm2 proprietary escape codes
 		term.osc1337iTerm2(stack[1:])
 
 	default:
-		log.Printf("WARNING: Unknown OSC code %s: %s", stack[0], string(text[:len(text)-1]))
+		log.Printf("WARNING: Unknown OSC code %s: %s", stack[0], string(text))
 	}
 }

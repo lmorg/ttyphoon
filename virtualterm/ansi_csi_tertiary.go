@@ -35,6 +35,10 @@ func lookupTertiaryCsi(_ *Term, code []rune) {
 			log.Printf("[warn] term: Tertiary CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), param)
 		}
 
+	case 'u':
+		// Kitty keyboard protocol set-flags request. Keep legacy keyboard
+		// encoding and do not advertise support until all flags can be honoured.
+
 	default:
 		log.Printf("[warn] term: Tertiary CSI code not implemented: %s (%s)", string(r), string(code))
 	}

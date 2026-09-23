@@ -151,6 +151,9 @@ type Tmux struct {
 	limiter    sync.Mutex
 	readerDead atomic.Bool
 	prefixTtl  time.Time
+
+	pendingPaneOutputMu sync.Mutex
+	pendingPaneOutput   map[string][][]byte
 }
 
 type tmuxResponseT struct {
@@ -166,10 +169,11 @@ const (
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	debug.Log(startCommand)
 	tmux := &Tmux{
-		resp:     make(chan *tmuxResponseT, 1),
-		wins:     newWindowMap(),
-		panes:    newPaneMap(),
-		renderer: renderer,
+		resp:              make(chan *tmuxResponseT, 1),
+		wins:              newWindowMap(),
+		panes:             newPaneMap(),
+		renderer:          renderer,
+		pendingPaneOutput: make(map[string][][]byte),
 	}
 
 	var err error
@@ -282,28 +286,65 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 
 func _respOutput(tmux *Tmux, b []byte) {
 	params := bytes.SplitN(b, []byte{' '}, 3)
-	paneId := string(params[1])
-	if pane := tmux.panes.Get(paneId); pane != nil {
-		pane.buf.Write(octal.Unescape([]byte(params[2])))
+	if len(params) != 3 {
+		debug.Log(fmt.Sprintf("invalid tmux output notification: %q", b))
 		return
 	}
 
-	msg := make([]byte, len(params[2]))
-	copy(msg, params[2])
+	paneId := string(params[1])
+	chunk := octal.Unescape(params[2])
+	if !tmux.queuePaneOutput(paneId, chunk) {
+		return
+	}
 
 	go func() {
 		err := tmux.updatePaneInfo(paneId)
-		if err != nil {
-			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-			return
-		}
 		pane := tmux.panes.Get(paneId)
-		if pane == nil {
-			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "pane not found: "+paneId)
-			return
+		if err == nil && pane == nil {
+			err = fmt.Errorf("pane not found: %s", paneId)
 		}
-		pane.buf.Write(octal.Unescape(msg))
+
+		tmux.finishPendingPaneOutput(paneId, pane, err)
 	}()
+}
+
+func (tmux *Tmux) queuePaneOutput(paneId string, chunk []byte) bool {
+	tmux.pendingPaneOutputMu.Lock()
+	defer tmux.pendingPaneOutputMu.Unlock()
+
+	if tmux.pendingPaneOutput == nil {
+		tmux.pendingPaneOutput = make(map[string][][]byte)
+	}
+
+	chunk = bytes.Clone(chunk)
+	if pending, ok := tmux.pendingPaneOutput[paneId]; ok {
+		tmux.pendingPaneOutput[paneId] = append(pending, chunk)
+		return false
+	}
+
+	if pane := tmux.panes.Get(paneId); pane != nil {
+		pane.buf.Write(chunk)
+		return false
+	}
+
+	tmux.pendingPaneOutput[paneId] = [][]byte{chunk}
+	return true
+}
+
+func (tmux *Tmux) finishPendingPaneOutput(paneId string, pane *PaneT, initErr error) {
+	tmux.pendingPaneOutputMu.Lock()
+	pending := tmux.pendingPaneOutput[paneId]
+	if initErr == nil && pane != nil {
+		for _, chunk := range pending {
+			pane.buf.Write(chunk)
+		}
+	}
+	delete(tmux.pendingPaneOutput, paneId)
+	tmux.pendingPaneOutputMu.Unlock()
+
+	if initErr != nil && tmux.renderer != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, initErr.Error())
+	}
 }
 
 func _respExtendedOutput(tmux *Tmux, b []byte) {

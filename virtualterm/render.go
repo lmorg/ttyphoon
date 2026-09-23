@@ -1,6 +1,8 @@
 package virtualterm
 
 import (
+	"time"
+
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -19,10 +21,14 @@ func (term *Term) Render() bool {
 	}
 	term._ssLargeBuf.Store(0)
 
-	term.renderer.DrawFrame(term.tile)
-
 	term._mutex.Lock()
 	defer term._mutex.Unlock()
+
+	if term.synchronizedUpdateActive(time.Now()) {
+		return false
+	}
+
+	term.renderer.DrawFrame(term.tile)
 
 	screen := term.visibleScreen()
 

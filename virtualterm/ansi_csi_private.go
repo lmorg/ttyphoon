@@ -4,6 +4,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/debug"
@@ -134,6 +135,9 @@ func lookupPrivateCsi(term *Term, code []rune) {
 				// Set bracketed paste mode
 				log.Printf("TODO: Set bracketed paste mode")
 
+			case 2026:
+				term.beginSynchronizedUpdate(time.Now())
+
 			default:
 				log.Printf("Private CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), p)
 			}
@@ -239,12 +243,45 @@ func lookupPrivateCsi(term *Term, code []rune) {
 				// Reset bracketed paste mode
 				log.Printf("TODO: Reset bracketed paste mode")
 
+			case 2026:
+				term.endSynchronizedUpdate()
+
 			default:
 				log.Printf("Private CSI parameter not implemented in %s: %v [param: %s]", string(r), string(code), p)
 			}
 		}
 
+	case 'p':
+		term.csiPrivateModeReport(param)
+
+	case 'u':
+		// Kitty keyboard protocol query/response. Ttyphoon does not advertise
+		// support until its key encoder can honour the requested flags.
+
 	default:
 		log.Printf("Private CSI code not implemented: %s (%s)", string(r), string(code))
 	}
+}
+
+func (term *Term) csiPrivateModeReport(param string) {
+	if !strings.HasSuffix(param, "$") {
+		log.Printf("Private CSI DECRQM parameter not valid: %s", param)
+		return
+	}
+
+	mode, err := strconv.Atoi(strings.TrimSuffix(param, "$"))
+	if err != nil {
+		log.Printf("Private CSI DECRQM parameter not valid: %s", param)
+		return
+	}
+
+	state := 0
+	if mode == 2026 {
+		state = 2
+		if term.synchronizedUpdateActive(time.Now()) {
+			state = 1
+		}
+	}
+
+	term.csiCallback("?%d;%d$y", mode, state)
 }
