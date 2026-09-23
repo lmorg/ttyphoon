@@ -203,7 +203,7 @@ type ColoursT struct {
 func NewWindowStyle() *WindowStyleT {
 	fontFamily := config.Config.TypeFace.FontName
 	if fontFamily == "" {
-		fontFamily = "Fira Code"
+		fontFamily = types.DefaultMono
 	}
 	return &WindowStyleT{
 		Colours: &ColoursT{
@@ -2366,10 +2366,18 @@ func (a *WApp) SaveFile(filename, contents, projectPath string) error {
 		absPath = a.filePathWithProject(filename, projectPath)
 	}
 
+	dir := filepath.Dir(absPath)
+	_, statErr := os.Stat(dir)
+	created := os.IsNotExist(statErr)
+	err := os.MkdirAll(dir, 0777)
+	if err != nil {
+		return err
+	}
+
 	watcher.NoteWrite(absPath, []byte(contents))
 
-	_, statErr := os.Stat(absPath)
-	created := os.IsNotExist(statErr)
+	_, statErr = os.Stat(absPath)
+	created = os.IsNotExist(statErr)
 
 	if err := os.WriteFile(absPath, []byte(contents), 0644); err != nil {
 		return err

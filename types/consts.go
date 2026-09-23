@@ -16,3 +16,5 @@ const (
 	BUTTON_PRESSED  ButtonStateT = 1
 	BUTTON_RELEASED ButtonStateT = 0
 )
+
+const DefaultMono = "Fira Code" //"Hasklug"

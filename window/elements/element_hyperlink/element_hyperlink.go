@@ -70,6 +70,10 @@ func (el *ElementHyperlink) Size() *types.XY {
 // Draw:
 // pos: Position to draw element
 func (el *ElementHyperlink) Draw(termPos *types.XY) {
+	if el.tile == nil {
+		return
+	}
+
 	el.pos = termPos
 	el.sgr = el.tile.GetTerm().GetCellSgr(el.pos)
 

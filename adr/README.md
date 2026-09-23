@@ -54,6 +54,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0040](0040-transient-model-stream-disconnects-use-checkpoint-retry.md) | Transient model stream disconnects use checkpoint retry | AI runtime |
 | [0041](0041-rerun-failed-ai-prompts-from-persisted-checkpoints.md) | Rerun failed AI prompts from persisted checkpoints | AI runtime |
 | [0042](0042-large-ai-stream-footprint-and-ui-responsiveness.md) | Large AI streams must preserve UI responsiveness | AI panel |
+| [0043](0043-adjusted-terminal-cells-centre-glyphs.md) | Adjusted terminal cells centre glyphs | Terminal |
 
 ## Recurring themes
 

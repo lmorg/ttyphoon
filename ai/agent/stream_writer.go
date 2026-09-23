@@ -203,7 +203,6 @@ func (h *aiStreamBlockHandle) Append(delta string) {
 	if h.closed {
 		return
 	}
-	h.block.Content += delta
 	h.pending += delta
 	event := h.block
 	event.Content = ""

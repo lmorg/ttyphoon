@@ -15,6 +15,26 @@ function createMockContext() {
 }
 
 describe('createFontController', () => {
+    it.each([
+        [0, 0],
+        [3, 2],
+        [4, 2],
+        [-3, -1],
+    ])('centres glyphs for a cell-height adjustment of %i', async (adjustCellHeight, expectedOffsetY) => {
+        const ctx = createMockContext();
+        const controller = createFontController(ctx);
+        const windowStyle = {
+            fontFamily: 'monospace',
+            fontSize: 15,
+            adjustCellWidth: 0,
+            adjustCellHeight,
+        };
+
+        await controller.loadGlyphSizeFromGo(windowStyle);
+
+        expect(controller.getGlyphOffset()).toEqual({ x: 0, y: expectedOffsetY });
+    });
+
     it('invalidates cached glyph metrics when the configured font changes', async () => {
         const ctx = createMockContext();
         const controller = createFontController(ctx);

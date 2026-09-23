@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -71,8 +72,10 @@ func (term *Term) parseCsiCodes() {
 		case 'c':
 			// Send Device Attributes (Primary DA).
 			// send reply: "\0x1B[?1;" + https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
-			reply := append(codes.Csi, []byte("?65;1;6;15;17;22;28;29c")...)
-			term.Reply(reply)
+			if !config.Config.Tmux.Enabled {
+				reply := append(codes.Csi, []byte("?65;1;6;15;17;22;28;29c")...)
+				term.Reply(reply)
+			}
 
 		case 'C':
 			// Cursor Forward Ps Times (default = 1) (CUF).

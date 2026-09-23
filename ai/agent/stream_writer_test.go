@@ -64,6 +64,9 @@ func TestAIStreamBlockWriter_ConcurrentParentedBlocks(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if parent.block.Content != "" || child.block.Content != "" {
+		t.Fatalf("writer retained accumulated content: parent=%d child=%d", len(parent.block.Content), len(child.block.Content))
+	}
 	parent.Close()
 	child.Close()
 

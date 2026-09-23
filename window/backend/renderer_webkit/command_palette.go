@@ -96,6 +96,19 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		})
 	}
 
+	// Workspaces
+
+	if len(config.Config.Workspaces.Terminals) > 0 {
+		menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
+	}
+	for name := range config.Config.Workspaces.Terminals {
+		menu = append(menu, types.MenuItem{
+			Title: "Start workspace: " + name,
+			Fn:    func() { wr.tmux.WorkspaceStart(name) },
+			Icon:  0xf5fc,
+		})
+	}
+
 	// AI skills:
 
 	skills := skills.ReadSkills()
@@ -162,6 +175,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 	}...)
 
 	// Edit Files
+
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
 	timeout, _ := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	files := notes.ListFiles(timeout, wr).Files

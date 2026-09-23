@@ -938,6 +938,7 @@ let aiPromptJumpObserver = null;
 let aiBottomScrollRetryTimers = [];
 let aiBottomChaseHandle = 0;
 let aiBottomChaseUntil = 0;
+let aiStreamScrollHandle = 0;
 let aiScrollButtonHandle = 0;
 
 function nowMs() {
@@ -12518,8 +12519,8 @@ async function createNewFile() {
         closeNewFilePrompt();
         setStatus(`Created ${fileName}`, false);
     } catch (err) {
-        notifyTerminal(`Failed to create ${fileName}`, 'error');
-        console.error(err);
+        notifyTerminal(`Failed to create ${fileName}: ${err}`, 'error');
+        //console.error(err);
     }
 }
 
@@ -12538,8 +12539,8 @@ async function createAndOpenFile(filename, contents) {
         setViewMode('viewer');
         setStatus(`Created ${fileName}`, false);
     } catch (err) {
-        notifyTerminal(`Failed to create ${fileName}`, 'error');
-        console.error(err);
+        notifyTerminal(`Failed to create ${fileName}: ${err}`, 'error');
+        //console.error(err);
     }
 }
 
@@ -12855,7 +12856,7 @@ function appendAIText(text) {
     // container here — this runs once per streamed chunk and each measurement
     // forces a synchronous layout.
     if (state.aiStickToBottom) {
-        scrollAIOutputToBottom();
+        scheduleAIStreamScrollToBottom();
     } else {
         scheduleAIScrollButtonUpdate();
     }
@@ -12917,7 +12918,24 @@ function clearAIBottomScrollRetries() {
         cancelAnimationFrame(aiBottomChaseHandle);
         aiBottomChaseHandle = 0;
     }
+    if (aiStreamScrollHandle) {
+        cancelAnimationFrame(aiStreamScrollHandle);
+        aiStreamScrollHandle = 0;
+    }
     aiBottomChaseUntil = 0;
+}
+
+function scheduleAIStreamScrollToBottom() {
+    if (!elements.aiOutput || !state.aiStickToBottom || aiStreamScrollHandle) {
+        return;
+    }
+    aiStreamScrollHandle = requestAnimationFrame(() => {
+        aiStreamScrollHandle = 0;
+        if (!elements.aiOutput || !state.aiStickToBottom) {
+            return;
+        }
+        elements.aiOutput.scrollTop = elements.aiOutput.scrollHeight;
+    });
 }
 
 function requestAIScrollToBottom() {
@@ -13122,7 +13140,7 @@ EventsOn("aiStreamBlock", (payload) => {
     aiBlockStreamRunId = runId;
     aiPipelineFormatter.appendBlock(payload);
     if (state.aiStickToBottom) {
-        scrollAIOutputToBottom();
+        scheduleAIStreamScrollToBottom();
     } else {
         scheduleAIScrollButtonUpdate();
     }

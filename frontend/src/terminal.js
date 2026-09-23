@@ -709,6 +709,7 @@ function drawCell(cmd) {
     }
 
     const { cellWidth, cellHeight } = font.getCellSize();
+    const { y: glyphOffsetY } = font.getGlyphOffset();
 
     const xCell = Number.isFinite(cmd.x) ? cmd.x : 0;
     const yCell = Number.isFinite(cmd.y) ? cmd.y : 0;
@@ -716,6 +717,7 @@ function drawCell(cmd) {
 
     const x = xCell * cellWidth;
     const y = yCell * cellHeight;
+    const glyphY = y + glyphOffsetY;
     const width = widthCells * cellWidth;
 
     if (cmd.bg) {
@@ -733,6 +735,11 @@ function drawCell(cmd) {
     const textColour = offCtx.fillStyle;
 
     if (cmd.char) {
+        offCtx.save();
+        offCtx.beginPath();
+        offCtx.rect(x, y, width, cellHeight);
+        offCtx.clip();
+
         if (cmd.searchResult) {
             const wsr = windowStyle?.colors?.searchResult;
             const outline = wsr
@@ -746,19 +753,20 @@ function drawCell(cmd) {
             
             offCtx.lineWidth = 1;
             offCtx.strokeStyle = outline;
-            offCtx.strokeText(cmd.char, x, y);
+            offCtx.strokeText(cmd.char, x, glyphY);
                 
             offCtx.shadowColor = outline;
             offCtx.shadowBlur = 6;
             offCtx.fillStyle = fill;
         }
-        offCtx.fillText(cmd.char, x, y);
+        offCtx.fillText(cmd.char, x, glyphY);
         if (cmd.searchResult) {
             offCtx.shadowColor = 'transparent';
             offCtx.shadowBlur = 0;
             offCtx.lineWidth = 0;
             offCtx.strokeStyle = 'transparent';
         }
+        offCtx.restore();
     }
 
     if (cmd.underlineStyle && cmd.underlineStyle > 0) {

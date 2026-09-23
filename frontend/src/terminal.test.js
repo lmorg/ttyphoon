@@ -70,6 +70,7 @@ vi.mock('./font', () => ({
         loadGlyphSizeFromGo: vi.fn(async () => {}),
         applyCellStyle: fontApplyCellStyleMock,
         getCellSize: () => ({ cellWidth: 10, cellHeight: 20 }),
+        getGlyphOffset: () => ({ x: 0, y: 2 }),
     }),
 }));
 
@@ -116,6 +117,8 @@ function makeContext2d() {
         save: vi.fn(),
         restore: vi.fn(),
         beginPath: vi.fn(),
+        rect: vi.fn(),
+        clip: vi.fn(),
         moveTo: vi.fn(),
         lineTo: vi.fn(),
         stroke: vi.fn(function trackStroke() {
@@ -185,6 +188,41 @@ describe('terminal compact redraw decoder', () => {
         }
 
         window.Image = MockImage;
+    });
+
+    it('vertically centres glyphs within adjusted cells', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.fillText.mockClear();
+
+        redraw([
+            [1, 2, 3, 1, 'X', 0, 0xFFFFFF, 0x000000],
+        ]);
+
+        expect(latestOffscreenCtx.fillText).toHaveBeenCalledWith('X', 20, 62);
+    });
+
+    it('clips glyphs to their allocated cells before drawing', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.rect.mockClear();
+        latestOffscreenCtx.clip.mockClear();
+        latestOffscreenCtx.fillText.mockClear();
+
+        redraw([
+            [1, 2, 3, 2, 'XX', 0, 0xFFFFFF, 0x000000],
+        ]);
+
+        expect(latestOffscreenCtx.rect).toHaveBeenCalledWith(20, 60, 20, 20);
+        expect(latestOffscreenCtx.clip).toHaveBeenCalledTimes(1);
+        expect(latestOffscreenCtx.rect.mock.invocationCallOrder[0])
+            .toBeLessThan(latestOffscreenCtx.fillText.mock.invocationCallOrder[0]);
     });
 
     it('decodes compact cell flags and packed colours from terminalRedraw', async () => {

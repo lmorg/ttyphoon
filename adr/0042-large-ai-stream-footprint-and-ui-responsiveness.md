@@ -2,8 +2,9 @@
 
 ## Status
 
-In progress. Step 2 (delta-only live block events) is implemented; steps 1 and
-3-7 remain outstanding.
+In progress. Delta-only events, frame-coalesced block rendering and direct typed
+delegate streaming, and live-panel scroll coalescing are implemented.
+Raw/thinking DOM specialization and SQLite connection reuse remain outstanding.
 
 ## Context
 
@@ -92,6 +93,25 @@ Keep the full accumulated text only for markdown parsing state or recovery, and
 consider a bounded render cadence for very large blocks (for example one frame
 or 50ms, whichever is later).
 
+Implemented. Each block now has one active render loop and a `needsRender` flag.
+Bursts collapse into one follow-up render after `nextFrame()` rather than one
+promise closure per event. A synthetic 1,000-update reasoning burst verifies
+that markdown parse count remains frame-bounded.
+
+### B1. Stream delegate output directly into typed blocks
+
+Implemented after delegate was identified as the worst multiplier. Previously
+each parallel sub-agent accumulated a `strings.Builder`, copied it to a string,
+created a second full quoted legacy string, then emitted one giant typed delta.
+It now opens its own typed `subagent` block and streams into it on the sub-agent
+client's existing interval. Buffering remains only as a compatibility fallback
+when no typed block writer exists.
+
+Typed sub-agent streams explicitly disable the legacy prefix/suffix framing;
+the client still flushes pending content on return. The backend block handle no
+longer retains a second accumulated `Content` copy in addition to its pending
+SQLite batch.
+
 ### C. Make raw blocks cheap
 
 Tool input/output/error/summary blocks are raw `<pre><code>` content. Append
@@ -113,6 +133,12 @@ Coalesce `scrollAIOutputToBottom()` calls with the same frame scheduler used by
 block updates. Do not start or extend a separate chase for every block event.
 Keep explicit follow mode: if the user is reading history, do not force the panel
 back to the bottom.
+
+Implemented. Live legacy and typed block handlers call
+`scheduleAIStreamScrollToBottom`, which permits one `scrollHeight`/`scrollTop`
+operation per animation frame regardless of event count. The longer bottom
+chase remains reserved for one-shot restores and asynchronous lazy-layout
+expansion. A 50-event burst regression verifies one panel scroll write.
 
 ### F. Keep the SQLite connection hot during a run
 

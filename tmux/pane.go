@@ -142,7 +142,7 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 
 type paneInfo struct {
 	Id        string `tmux:"pane_id"`
-	Title     string `tmux:"pane_title"`
+	Title     string //`tmux:"pane_title"`
 	Width     int    `tmux:"pane_width"`
 	Height    int    `tmux:"pane_height"`
 	PosLeft   int    `tmux:"pane_left"`

@@ -3,7 +3,7 @@ package types
 type NotificationType int
 
 const (
-	NOTIFY_DEBUG = iota
+	NOTIFY_DEBUG NotificationType = iota
 	NOTIFY_INFO
 	NOTIFY_WARN
 	NOTIFY_ERROR

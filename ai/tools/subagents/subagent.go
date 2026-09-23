@@ -139,22 +139,30 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 				return
 			}
 
-			// Sub-agents run in parallel but the panel is one linear stream, so
-			// buffer each job and emit it as a single contiguous block.
+			streamBlock := agent.OpenAITypedStreamBlock(ctx, sessiondb.StreamBlockSubagent, request.Name)
+			if streamBlock != nil {
+				defer streamBlock.Close()
+			}
+
+			// Buffer only for an older/non-streaming runtime. Typed blocks give
+			// each parallel sub-agent an independent destination.
 			var (
 				block   strings.Builder
 				blockMu sync.Mutex
 			)
 			subagentRequest := subagent.Request{
-				Name:         request.Name,
-				Prompt:       request.Prompt,
-				SystemPrompt: t.systemPrompt(),
-				StreamPrefix: "",
-				StreamSuffix: "",
+				Name:                 request.Name,
+				Prompt:               request.Prompt,
+				SystemPrompt:         t.systemPrompt(),
+				DisableStreamFraming: streamBlock != nil,
 				FormatStreamChunk: func(text string) string {
 					return text
 				},
 				EmitStream: func(chunk string) {
+					if streamBlock != nil {
+						streamBlock.Emit(chunk)
+						return
+					}
 					blockMu.Lock()
 					block.WriteString(chunk)
 					blockMu.Unlock()
@@ -172,7 +180,7 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 			blockMu.Lock()
 			buffered := block.String()
 			blockMu.Unlock()
-			if buffered != "" && emitToPanel != nil {
+			if streamBlock == nil && buffered != "" && emitToPanel != nil {
 				legacy := fmt.Sprintf("\n> **Sub-agent %s:** %s\n\n", request.Name, strings.ReplaceAll(buffered, "\n", "\n> "))
 				agent.EmitAIStreamBlockWithLegacy(ctx, sessiondb.StreamBlockSubagent, buffered, legacy)
 			}

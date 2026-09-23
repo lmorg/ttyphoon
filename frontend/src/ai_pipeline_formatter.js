@@ -449,7 +449,9 @@ export function createAIPipelineFormatter(container, options = {}) {
             children,
             parentId,
             raw: isRawBlock(kind),
-            queue: Promise.resolve(),
+            rendering: false,
+            needsRender: false,
+            closed: false,
         };
         streamBlocks.set(blockId, entry);
 
@@ -479,23 +481,50 @@ export function createAIPipelineFormatter(container, options = {}) {
         if (block?.content && String(block.content).length >= entry.text.length) {
             entry.text = String(block.content);
         }
-        const text = entry.kind === 'thinking'
-            ? `\n> **Thinking:** ${entry.text.replace(/\n/g, '\n> ')}`
-            : entry.text;
-        entry.queue = entry.queue.then(async () => {
-            if (entry.raw) {
-                entry.root.textContent = text;
-                pinBlockToBottom(entry.root.parentElement);
-                return;
+        entry.closed = entry.closed || block?.status === 'closed';
+        entry.needsRender = true;
+        scheduleBlockRender(entry);
+    }
+
+    function scheduleBlockRender(entry) {
+        if (!entry || entry.rendering) {
+            return;
+        }
+        entry.rendering = true;
+        void (async () => {
+            let firstPass = true;
+            try {
+                do {
+                    entry.needsRender = false;
+                    if (!firstPass) {
+                        await nextFrame();
+                    }
+                    firstPass = false;
+
+                    const text = entry.kind === 'thinking'
+                        ? `\n> **Thinking:** ${entry.text.replace(/\n/g, '\n> ')}`
+                        : entry.text;
+                    if (entry.raw) {
+                        entry.root.textContent = text;
+                        pinBlockToBottom(entry.root.parentElement);
+                    } else {
+                        await renderIncremental(entry.root, text);
+                        if (entry.kind === 'thinking') {
+                            pinBlockToBottom(entry.root.querySelector('blockquote'));
+                        }
+                    }
+                } while (entry.needsRender);
+
+                if (entry.closed && processMarkdownContainer) {
+                    await processMarkdownContainer(entry.root);
+                }
+            } finally {
+                entry.rendering = false;
+                if (entry.needsRender) {
+                    scheduleBlockRender(entry);
+                }
             }
-            await renderIncremental(entry.root, text);
-            if (entry.kind === 'thinking') {
-                pinBlockToBottom(entry.root.querySelector('blockquote'));
-            }
-            if (block?.status === 'closed' && processMarkdownContainer) {
-                await processMarkdownContainer(entry.root);
-            }
-        }).catch(() => {});
+        })().catch(() => {});
     }
 
     function pinBlockToBottom(block) {

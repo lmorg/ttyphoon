@@ -17,6 +17,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
+	"github.com/lmorg/ttyphoon/utils/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -199,6 +200,8 @@ type configT struct {
 	} `yaml:"TypeFace"`
 
 	Ai AiT `yaml:"AI"`
+
+	Workspaces *workspace.WorkspaceT `yaml:"Workspaces"`
 }
 
 type LanguagesT map[string]*LanguageOptionsT

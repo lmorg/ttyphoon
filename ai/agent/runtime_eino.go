@@ -519,11 +519,21 @@ func aiStreamBlockParent(ctx context.Context) string {
 }
 
 type AIStreamBlockEmitter struct {
-	emitter *aiStreamEmitter
-	block   *aiStreamBlockHandle
+	emitter      *aiStreamEmitter
+	block        *aiStreamBlockHandle
+	mirrorLegacy bool
 }
 
 func OpenAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID string) *AIStreamBlockEmitter {
+	return openAIStreamBlock(ctx, kind, parentID, "", true)
+}
+
+// OpenAITypedStreamBlock streams only on the addressable block transport.
+func OpenAITypedStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, label string) *AIStreamBlockEmitter {
+	return openAIStreamBlock(ctx, kind, aiStreamBlockParent(ctx), label, false)
+}
+
+func openAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID, label string, mirrorLegacy bool) *AIStreamBlockEmitter {
 	if ctx == nil {
 		return nil
 	}
@@ -531,7 +541,14 @@ func OpenAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, pare
 	if !ok || emitter == nil || emitter.blocks == nil {
 		return nil
 	}
-	return &AIStreamBlockEmitter{emitter: emitter, block: emitter.blocks.Open(kind, parentID)}
+	if parentID == "" {
+		parentID = aiStreamBlockParent(ctx)
+	}
+	return &AIStreamBlockEmitter{
+		emitter:      emitter,
+		block:        emitter.blocks.OpenWithLabel(kind, parentID, label),
+		mirrorLegacy: mirrorLegacy,
+	}
 }
 
 func (e *AIStreamBlockEmitter) Emit(text string) {
@@ -539,7 +556,7 @@ func (e *AIStreamBlockEmitter) Emit(text string) {
 		return
 	}
 	e.block.Append(text)
-	if e.emitter != nil {
+	if e.mirrorLegacy && e.emitter != nil {
 		e.emitter.emitLegacyText(text)
 	}
 }

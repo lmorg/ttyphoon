@@ -5,6 +5,7 @@ export function createFontController(offCtx) {
     let fontFamily = '';
     let adjustCellWidth = 0;
     let adjustCellHeight = 0;
+    let glyphOffsetY = 0;
 
     try {
         fontFamily = getComputedStyle(document.documentElement).getPropertyValue('--terminal-menu-font').trim()
@@ -77,6 +78,7 @@ export function createFontController(offCtx) {
 
         cellWidth = Math.max(1, measuredWidth + adjustCellWidth);
         cellHeight = Math.max(1, measuredHeight + adjustCellHeight);
+        glyphOffsetY = Math.ceil((cellHeight - measuredHeight) / 2);
     }
 
     async function loadGlyphSizeFromGo(windowStyle) {
@@ -138,10 +140,15 @@ export function createFontController(offCtx) {
         return { cellWidth, cellHeight };
     }
 
+    function getGlyphOffset() {
+        return { x: 0, y: glyphOffsetY };
+    }
+
     return {
         applyConfiguredFontFromWindowStyle,
         loadGlyphSizeFromGo,
         applyCellStyle,
         getCellSize,
+        getGlyphOffset,
     };
 }

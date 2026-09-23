@@ -2708,6 +2708,40 @@ describe('notes rendering', () => {
         expect(aiOutput.querySelector('[data-block-id="mine-1"]')).not.toBeNull();
     });
 
+    it('coalesces bursty live stream scrolling into one frame', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
+
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        let scrollWrites = 0;
+        Object.defineProperty(aiOutput, 'scrollHeight', { configurable: true, get: () => 1000 });
+        Object.defineProperty(aiOutput, 'scrollTop', {
+            configurable: true,
+            get: () => 1000,
+            set: () => { scrollWrites += 1; },
+        });
+
+        getEventHandler('aiJobStart')({ runId: 77, title: '' });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        scrollWrites = 0;
+
+        const blockHandler = getEventHandler('aiStreamBlock');
+        for (let index = 0; index < 50; index += 1) {
+            blockHandler({
+                runId: 77,
+                blockId: `burst-${index}`,
+                kind: 'tool-output',
+                delta: 'output',
+                status: 'open',
+            });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+
+        expect(scrollWrites).toBe(1);
+    });
+
     it('switches to AI tools tab when AI response stream starts', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
@@ -3102,6 +3136,32 @@ describe('notes rendering', () => {
         } else {
             delete Element.prototype.scrollHeight;
         }
+    });
+
+    it('coalesces a large burst of thinking updates into frame-bounded renders', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const markedMock = {
+            parse: vi.fn((text) => `<blockquote>${String(text)}</blockquote>`),
+        };
+        const fmt = createAIPipelineFormatter(wrapper, { marked: markedMock });
+
+        fmt.startJob();
+        for (let index = 0; index < 1000; index += 1) {
+            fmt.appendBlock({
+                blockId: 'large-thinking',
+                kind: 'thinking',
+                delta: `chunk-${index}\n`,
+                status: 'open',
+            });
+        }
+
+        for (let index = 0; index < 8; index += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        expect(markedMock.parse.mock.calls.length).toBeLessThan(10);
+        expect(wrapper.textContent).toContain('chunk-999');
     });
 
     it('uses the shared five-line AI code styling for tool input and output', async () => {

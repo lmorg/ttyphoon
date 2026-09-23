@@ -289,6 +289,10 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		}
 	}
 
+	if !term.IsAltBuf() {
+		return
+	}
+
 	screen := term.visibleScreen()
 
 	if pos.X < 0 {
@@ -338,6 +342,10 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 }
 
 func (term *Term) MouseHover(pos *types.XY) {
+	if term.IsAltBuf() {
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			term.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Panic: %v", r))

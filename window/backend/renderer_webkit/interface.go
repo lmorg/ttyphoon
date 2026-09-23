@@ -96,7 +96,7 @@ func (wr *webkitRender) EmitStyleUpdate() {
 
 	fontFamily := config.Config.TypeFace.FontName
 	if fontFamily == "" {
-		fontFamily = "Fira Code"
+		fontFamily = types.DefaultMono
 	}
 
 	style := struct {

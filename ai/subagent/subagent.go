@@ -65,14 +65,15 @@ func New(provider, modelName string, environmentValue func(string) string) *Clie
 }
 
 type Request struct {
-	Name              string
-	SystemPrompt      string
-	Prompt            string
-	EmitStream        func(string)
-	StreamPrefix      string
-	StreamSuffix      string
-	FormatStreamChunk func(string) string
-	RunWithTools      func(ctx context.Context, systemPrompt, prompt string, emit func(string)) (string, error)
+	Name                 string
+	SystemPrompt         string
+	Prompt               string
+	EmitStream           func(string)
+	StreamPrefix         string
+	StreamSuffix         string
+	FormatStreamChunk    func(string) string
+	DisableStreamFraming bool
+	RunWithTools         func(ctx context.Context, systemPrompt, prompt string, emit func(string)) (string, error)
 }
 
 func (c *Client) Run(ctx context.Context, request Request) (string, error) {
@@ -105,17 +106,19 @@ func (c *Client) Run(ctx context.Context, request Request) (string, error) {
 		flushLocked()
 	}
 	if request.EmitStream != nil {
-		prefix := request.StreamPrefix
-		if prefix == "" {
-			prefix = fmt.Sprintf("\n> **Sub-agent %s:** ", request.Name)
-		}
-		suffix := request.StreamSuffix
-		if suffix == "" {
-			suffix = "\n\n"
-		}
-		request.EmitStream(prefix)
-		defer request.EmitStream(suffix)
 		defer flush()
+		if !request.DisableStreamFraming {
+			prefix := request.StreamPrefix
+			if prefix == "" {
+				prefix = fmt.Sprintf("\n> **Sub-agent %s:** ", request.Name)
+			}
+			suffix := request.StreamSuffix
+			if suffix == "" {
+				suffix = "\n\n"
+			}
+			request.EmitStream(prefix)
+			defer request.EmitStream(suffix)
+		}
 	}
 	emitChunk := func(text string) {
 		if text == "" {

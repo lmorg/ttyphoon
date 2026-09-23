@@ -45,9 +45,10 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 			"Tool name: %s\nTool input arguments (JSON):\n%s\n\nTool raw output:\n%s",
 			toolName, toolInput, rawOutput,
 		),
-		EmitStream:   emitStream,
-		StreamPrefix: streamPrefix,
-		StreamSuffix: streamSuffix,
+		EmitStream:           emitStream,
+		StreamPrefix:         streamPrefix,
+		StreamSuffix:         streamSuffix,
+		DisableStreamFraming: streamBlock != nil,
 		FormatStreamChunk: func(text string) string {
 			return text
 		},
