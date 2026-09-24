@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -59,6 +60,7 @@ var wailsAssets embed.FS
 type WApp struct {
 	ctx             context.Context
 	mdBaseDir       string
+	mdBaseDirMu     sync.RWMutex
 	projRoot        string
 	groupName       string
 	usrNotesDir     string
@@ -848,7 +850,7 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 		return GetFileReturnT{Error: err.Error()}
 	}
 
-	a.mdBaseDir = filepath.Dir(filename)
+	a.setMarkdownBaseDir(filepath.Dir(filename))
 	watcher.Watch(filename)
 	err = notes.RecentListAdd(a.projRoot, requestedFilename)
 	if err != nil {
@@ -865,6 +867,101 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 
 var rxExtension = regexp.MustCompile(`.[a-zA-Z0-9]+$`)
 
+// notesAssetURLPath serves Notes images to the webview directly. Returning them
+// as base64 over the JS bridge put the whole file on the main thread.
+const notesAssetURLPath = "/__asset"
+
+var notesAssetExtensions = map[string]bool{
+	".apng": true, ".avif": true, ".bmp": true, ".gif": true, ".ico": true,
+	".jpeg": true, ".jpg": true, ".png": true, ".svg": true, ".tif": true,
+	".tiff": true, ".webp": true,
+}
+
+func (a *WApp) setMarkdownBaseDir(dir string) {
+	a.mdBaseDirMu.Lock()
+	a.mdBaseDir = dir
+	a.mdBaseDirMu.Unlock()
+}
+
+func (a *WApp) markdownBaseDir() string {
+	a.mdBaseDirMu.RLock()
+	defer a.mdBaseDirMu.RUnlock()
+	return a.mdBaseDir
+}
+
+func (a *WApp) documentsTtyphoonDir() string {
+	return filepath.Join(a.homeDir, "Documents", "ttyphoon")
+}
+
+func (a *WApp) notesAssetHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		resolved, err := a.resolveNotesAsset(r.URL.Query().Get("path"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Revalidate rather than cache: an edited image keeps the same URL.
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, resolved)
+	})
+}
+
+// resolveNotesAsset confines requests to directories Notes owns, so a crafted
+// markdown link cannot walk out and read arbitrary files.
+func (a *WApp) resolveNotesAsset(requested string) (string, error) {
+	if requested == "" {
+		return "", errors.New("empty asset path")
+	}
+
+	if !notesAssetExtensions[strings.ToLower(filepath.Ext(requested))] {
+		return "", errors.New("unsupported asset type")
+	}
+
+	baseDir := a.markdownBaseDir()
+	candidate := requested
+	if !filepath.IsAbs(candidate) {
+		candidate = filepath.Join(baseDir, candidate)
+	}
+	candidate = resolveSymlinks(filepath.Clean(candidate))
+
+	info, err := os.Stat(candidate)
+	if err != nil || info.IsDir() {
+		return "", errors.New("asset not found")
+	}
+
+	for _, root := range []string{baseDir, a.projRoot, a.usrNotesDir, a.globalNotes, a.documentsTtyphoonDir()} {
+		if root == "" {
+			continue
+		}
+		if pathWithinRoot(resolveSymlinks(filepath.Clean(root)), candidate) {
+			return candidate, nil
+		}
+	}
+
+	return "", errors.New("asset outside permitted directories")
+}
+
+func resolveSymlinks(path string) string {
+	if actual, err := filepath.EvalSymlinks(path); err == nil {
+		return actual
+	}
+	return path
+}
+
+func pathWithinRoot(root, target string) bool {
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // resolveMarkdownAssetPath mirrors how the Notes viewer locates relative asset
 // paths: absolute-from-root first, falling back to the current document's directory.
 func (a *WApp) resolveMarkdownAssetPath(path string) string {
@@ -873,7 +970,7 @@ func (a *WApp) resolveMarkdownAssetPath(path string) string {
 		resolvedPath = string(filepath.Separator) + strings.TrimLeft(resolvedPath, string(filepath.Separator))
 	}
 	if _, err := os.Stat(resolvedPath); err != nil {
-		resolvedPath = filepath.Join(a.mdBaseDir, strings.TrimLeft(path, "/\\"))
+		resolvedPath = filepath.Join(a.markdownBaseDir(), strings.TrimLeft(path, "/\\"))
 	}
 	return resolvedPath
 }
@@ -3094,7 +3191,8 @@ func startWails() {
 		HideWindowOnClose: true,
 		WindowStartState:  options.Maximised,
 		AssetServer: &assetserver.Options{
-			Assets: wailsAssets,
+			Assets:  wailsAssets,
+			Handler: wapp.notesAssetHandler(),
 		},
 		BackgroundColour: &options.RGBA{
 			R: types.SGR_DEFAULT.Bg.Red,

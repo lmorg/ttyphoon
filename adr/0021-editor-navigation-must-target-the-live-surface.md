@@ -69,6 +69,14 @@ fails.
   `loadFile` → Monaco-remount race.
 - New navigation entry points should call `jumpEditorToOffset` rather than
   touching `elements.editor`.
+- Programmatic insertions, including Markdown emitted for clipboard images,
+  must use `insertTextInMainEditor` so Monaco updates its model and emits the
+  input event that refreshes the rendered preview.
+- Clipboard images cannot rely on a DOM `paste` listener alone: Monaco may
+  consume Cmd/Ctrl+V before that event is delivered. Its adapter intercepts the
+  primary-paste keydown in the capture phase for Markdown documents, prevents
+  Monaco's native paste, and routes to the same Go-backed clipboard handler as
+  the custom Paste menu.
 - Direct `elements.editor` selection/scroll writes are now limited to the
   low-level helpers (`setMainEditorSelectionRange`), the fallback branch, and
   full-document resets.

@@ -1,5 +1,5 @@
 import {
-    GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile, GetImage,
+    GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile,
     NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
     ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
@@ -383,7 +383,7 @@ hljs.registerLanguage('xl', xl);
 hljs.registerLanguage('xquery', xquery);
 hljs.registerLanguage('zephir', zephir);
 
-import { configureMarked, processMarkdownContainer, enableFullscreenImages, processLinks } from './markdown-utils.js';
+import { configureMarked, processMarkdownContainer, enableFullscreenImages, processLinks, notesAssetURL } from './markdown-utils.js';
 import { getScrollbarStyles, getMarkdownContentStyles, getHighlightJsTheme, getCheckboxStyles, getMarkdownBaseTextSizeStyles, getSwaggerUIStyles, DARKEN_BACKGROUND_OVERLAY } from './style-utils.js';
 import { 
     isStructuredDataFile, hasSwaggerKey, parseSwaggerSpec, generateRequestBuilderHTML, generateResponseHTML,
@@ -1128,6 +1128,13 @@ async function createMonacoMainEditor() {
         },
         onPaste: (event) => {
             handleEditorImagePaste(event);
+        },
+        onPrimaryPaste: () => {
+            if (state.viewMode !== 'editor' || state.currentFileType !== 'markdown') {
+                return false;
+            }
+            void pasteFromGoClipboard(elements.editor, true);
+            return true;
         },
         onContextMenu: (event) => {
             openMainEditorContextMenu(event);
@@ -8886,16 +8893,14 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('image');
 
             // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
-            // GetFile does. GetImage expects a path without a leading separator
-            // (it prepends one itself), so strip it after resolution.
+            // GetFile does. The asset handler then streams the file to the webview
+            // rather than marshalling it through the bridge as base64.
             const resolvedPath = await ResolveFilePath(file);
             state.currentFileUri = filePathToUri(resolvedPath || file);
-            const imageData = await GetImage(resolvedPath.replace(/^[/\\]+/, ''));
-            if (imageData.startsWith('error:')) {
-                notifyTerminal(`Failed to load image: ${imageData}`, 'error');
-                return;
-            }
-            elements.imageViewImg.src = imageData;
+            elements.imageViewImg.onerror = () => {
+                notifyTerminal(`Failed to load image: ${fileName}`, 'error');
+            };
+            elements.imageViewImg.src = notesAssetURL(resolvedPath || file);
             elements.imageViewImg.dataset.originalFilename = fileName;
             enableFullscreenImages(elements.imageViewWrap);
             enableImageContextMenus(elements.imageViewWrap);
@@ -10631,24 +10636,23 @@ function enableImageContextMenus(container) {
             // Use the original filename from the data attribute if available
             let filename = img.dataset.originalFilename || img.alt || 'Image';
             
-            // For relative image paths (from note markdown images), convert to dataURL
-            let dataURLToCopy = src;
-            if (src.startsWith('file://') || (!src.startsWith('data:') && !src.startsWith('http'))) {
-                // It's a file path, we need to fetch and convert to dataURL
-                try {
-                    const response = await fetch(src);
-                    const blob = await response.blob();
-                    dataURLToCopy = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.readAsDataURL(blob);
-                    });
-                } catch (err) {
-                    console.error('Failed to load image for clipboard:', err);
-                    return;
+            // Images are served by the Go asset handler, so the bytes aren't in
+            // hand. Fetch them only once an action needs them, otherwise every
+            // right-click would pull the whole file for a menu that may be dismissed.
+            const resolveDataURL = async () => {
+                if (src.startsWith('data:')) {
+                    return src;
                 }
-            }
-            
+                const response = await fetch(src);
+                const blob = await response.blob();
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
             showLocalMenu({
                 title: filename,
                 options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...'],
@@ -10656,7 +10660,16 @@ function enableImageContextMenus(container) {
                 y: e.clientY,
                 showNextToMouseCursor: true,
                 icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI],
-                onSelect: (index) => {
+                onSelect: async (index) => {
+                    let dataURLToCopy;
+                    try {
+                        dataURLToCopy = await resolveDataURL();
+                    } catch (err) {
+                        console.error('Failed to load image:', err);
+                        notifyTerminal(`Failed to load image: ${filename}`, 'error');
+                        return;
+                    }
+
                     if (index === 0) {
                         TerminalCopyImageDataURL(dataURLToCopy).catch(() => {
                             notifyTerminal('Failed to copy image to clipboard', 'error');
@@ -14015,17 +14028,7 @@ async function savePastedImageDataUrl(dataUrl, mimeType) {
 
         const alt = String(epoch);
         const markdownImage = `![${alt}](${paths.imageFileName})`;
-        const start = elements.editor.selectionStart;
-        const end = elements.editor.selectionEnd;
-        const value = elements.editor.value;
-
-        elements.editor.value = value.slice(0, start) + markdownImage + value.slice(end);
-        elements.editor.selectionStart = start + markdownImage.length;
-        elements.editor.selectionEnd = start + markdownImage.length;
-
-        setDirty(true);
-        scheduleRender();
-        scheduleAutoSave();
+        insertTextInMainEditor(markdownImage);
         notifyTerminal(`Saved image ${paths.imageFileName}`, 'info');
     } catch (err) {
         notifyTerminal('Failed to save pasted image', 'error');

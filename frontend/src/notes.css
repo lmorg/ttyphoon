@@ -1850,6 +1850,7 @@ body {
     background: var(--darken-background-overlay);
     padding: 0 10px;
     margin: 4px 0;
+    font-size: var(--notes-font-size-minus-2);
 }
 
 #notes-ai-output .notes-ai-thinking-content {

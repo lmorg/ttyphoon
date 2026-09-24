@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { getCustomRegexpMock } = vi.hoisted(() => ({
+const { getCustomRegexpMock, getImageMock } = vi.hoisted(() => ({
     getCustomRegexpMock: vi.fn(() => Promise.resolve([])),
+    getImageMock: vi.fn(() => Promise.resolve('')),
 }));
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
-    GetImage: vi.fn(() => Promise.resolve('')),
+    GetImage: getImageMock,
     GetCustomRegexp: getCustomRegexpMock,
     HyperlinkOpenWithDefault: vi.fn(() => Promise.resolve()),
 }));
@@ -21,7 +22,58 @@ vi.mock('mermaid', () => ({
     },
 }));
 
-import { applyMarkdownImageAltSizing, autoHyperlink, parseMarkdownImageAltSizing } from './markdown-utils.js';
+import { applyMarkdownImageAltSizing, autoHyperlink, notesAssetURL, parseMarkdownImageAltSizing, processWailsImages } from './markdown-utils.js';
+
+describe('wails image asset rewriting', () => {
+    const containerWith = (src) => {
+        const container = document.createElement('div');
+        container.innerHTML = `<img src="${src}">`;
+        return container;
+    };
+
+    it('rewrites wails image urls onto the asset endpoint without touching the bridge', () => {
+        const container = containerWith('wails://wails/images/diagram.png');
+
+        processWailsImages(container);
+
+        const img = container.querySelector('img');
+        expect(img.getAttribute('src')).toBe('/__asset?path=images%2Fdiagram.png');
+        expect(img.dataset.originalFilename).toBe('diagram.png');
+        expect(getImageMock).not.toHaveBeenCalled();
+    });
+
+    it('decodes percent escapes so the handler receives the real filename', () => {
+        const container = containerWith('wails://wails/my%20diagram.png');
+
+        processWailsImages(container);
+
+        expect(container.querySelector('img').getAttribute('src'))
+            .toBe('/__asset?path=my%20diagram.png');
+        expect(container.querySelector('img').dataset.originalFilename).toBe('my diagram.png');
+    });
+
+    it('is idempotent so repeated passes do not double-encode the path', () => {
+        const container = containerWith('wails://wails.localhost:34115/images/diagram.png');
+
+        processWailsImages(container);
+        const first = container.querySelector('img').getAttribute('src');
+        processWailsImages(container);
+
+        expect(container.querySelector('img').getAttribute('src')).toBe(first);
+    });
+
+    it('leaves non-wails sources alone', () => {
+        const container = containerWith('https://example.com/diagram.png');
+
+        processWailsImages(container);
+
+        expect(container.querySelector('img').getAttribute('src')).toBe('https://example.com/diagram.png');
+    });
+
+    it('encodes paths that would otherwise break the query string', () => {
+        expect(notesAssetURL('a b/c&d.png')).toBe('/__asset?path=a%20b%2Fc%26d.png');
+    });
+});
 
 describe('markdown image alt sizing', () => {
     it('keeps alt text unchanged when no colon is present', () => {
@@ -68,33 +120,33 @@ describe('markdown image alt sizing', () => {
 
         const original = container.querySelector('#img-original');
         expect(original.alt).toBe('example');
-        expect(original.style.maxWidth).toBe('none');
+        expect(original.style.maxWidth).toBe('100%');
         expect(original.style.maxHeight).toBe('none');
         expect(original.style.width).toBe('auto');
         expect(original.style.height).toBe('auto');
 
         const percent = container.querySelector('#img-percent');
         expect(percent.alt).toBe('example');
-        expect(percent.style.maxWidth).toBe('20vw');
+        expect(percent.style.maxWidth).toBe('min(100%, 20vw)');
         expect(percent.style.maxHeight).toBe('20vh');
         expect(percent.style.width).toBe('auto');
         expect(percent.style.height).toBe('auto');
 
         const px = container.querySelector('#img-px');
         expect(px.alt).toBe('example');
-        expect(px.style.maxWidth).toBe('20px');
+        expect(px.style.maxWidth).toBe('min(100%, 20px)');
         expect(px.style.maxHeight).toBe('20px');
         expect(px.style.width).toBe('auto');
         expect(px.style.height).toBe('auto');
 
         const emptyAlt = container.querySelector('#img-empty-alt');
         expect(emptyAlt.alt).toBe('');
-        expect(emptyAlt.style.maxWidth).toBe('30vw');
+        expect(emptyAlt.style.maxWidth).toBe('min(100%, 30vw)');
         expect(emptyAlt.style.maxHeight).toBe('30vh');
 
         const invalid = container.querySelector('#img-invalid');
         expect(invalid.alt).toBe('example:abc');
-        expect(invalid.style.maxWidth).toBe('none');
+        expect(invalid.style.maxWidth).toBe('100%');
         expect(invalid.style.maxHeight).toBe('none');
     });
 });

@@ -2,7 +2,7 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetImage, GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
+import { GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -169,30 +169,42 @@ export async function applySyntaxHighlighting(container) {
     });
 }
 
+const NOTES_ASSET_ENDPOINT = '/__asset';
+
+export function notesAssetURL(path) {
+    return `${NOTES_ASSET_ENDPOINT}?path=${encodeURIComponent(path)}`;
+}
+
 /**
- * Process all images in a container, replacing Wails URLs with actual image data
+ * Point images at the Go asset handler so the webview streams them itself.
+ * Reading them back as base64 over the bridge put whole files on the main thread.
  * @param {HTMLElement} container - The container element to search for images
  */
-export async function processWailsImages(container) {
+export function processWailsImages(container) {
     const images = container.querySelectorAll('img');
-    
+
     for (const img of images) {
-        if (img.src.match(rxWailsUrl)) {
-            const path = img.src.replace(rxWailsUrl, '');
-            // Extract filename from path and store as data attribute
-            const filename = path.split('/').pop() || 'Image';
-            img.dataset.originalFilename = filename;
-            try {
-                const imageData = await GetImage(path);
-                if (!imageData.match(/^error: /)) {
-                    img.src = imageData;
-                } else {
-                    console.error('Error loading image:', imageData);
-                }
-            } catch (err) {
-                console.error('Error getting image:', err);
-            }
+        if (img.dataset.assetResolved === 'true' || !rxWailsUrl.test(img.src)) {
+            continue;
         }
+
+        const raw = img.src.replace(rxWailsUrl, '');
+        img.dataset.assetResolved = 'true';
+
+        // Already rewritten on an earlier pass over the same nodes.
+        if (raw.startsWith(NOTES_ASSET_ENDPOINT.slice(1))) {
+            continue;
+        }
+
+        let path = raw;
+        try {
+            path = decodeURIComponent(raw);
+        } catch {
+            // Malformed percent-escapes: keep the literal value.
+        }
+
+        img.dataset.originalFilename = path.split('/').pop() || 'Image';
+        img.src = notesAssetURL(path);
     }
 }
 
@@ -261,18 +273,18 @@ export function applyMarkdownImageAltSizing(container) {
         img.style.height = 'auto';
 
         if (!sizing) {
-            img.style.maxWidth = 'none';
+            img.style.maxWidth = '100%';
             img.style.maxHeight = 'none';
             return;
         }
 
         if (sizing.unit === '%') {
-            img.style.maxWidth = `${sizing.value}vw`;
+            img.style.maxWidth = `min(100%, ${sizing.value}vw)`;
             img.style.maxHeight = `${sizing.value}vh`;
             return;
         }
 
-        img.style.maxWidth = `${sizing.value}px`;
+        img.style.maxWidth = `min(100%, ${sizing.value}px)`;
         img.style.maxHeight = `${sizing.value}px`;
     });
 }
@@ -571,7 +583,7 @@ export async function processMarkdownContainer(container, options = {}) {
     if (options.syntaxHighlighting !== false) {
         await applySyntaxHighlighting(container);
     }
-    await processWailsImages(container);
+    processWailsImages(container);
     applyMarkdownImageAltSizing(container);
     enableFullscreenImages(container);
     processLinks(container, { enableBookmarks: true });

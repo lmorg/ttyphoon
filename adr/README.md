@@ -57,6 +57,8 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0043](0043-adjusted-terminal-cells-centre-glyphs.md) | Adjusted terminal cells centre glyphs | Terminal |
 | [0044](0044-ansi-parser-recovery-and-synchronized-output.md) | ANSI parser recovery and synchronized output | Terminal |
 | [0045](0045-bundled-terminal-fonts-load-through-css.md) | Bundled terminal fonts load through CSS | Terminal |
+| [0046](0046-markdown-images-are-container-capped.md) | Markdown images are container-capped | Notes |
+| [0047](0047-notes-images-are-streamed-by-the-asset-server.md) | Notes images are streamed by the asset server | Notes |
 
 ## Recurring themes
 

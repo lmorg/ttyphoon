@@ -67,8 +67,31 @@ func TestAIStreamBlockWriter_ConcurrentParentedBlocks(t *testing.T) {
 	if parent.block.Content != "" || child.block.Content != "" {
 		t.Fatalf("writer retained accumulated content: parent=%d child=%d", len(parent.block.Content), len(child.block.Content))
 	}
+	eventsMu.Lock()
+	for _, event := range events {
+		if event.Delta != "" {
+			eventsMu.Unlock()
+			t.Fatalf("Append emitted an unbatched live delta: %+v", event)
+		}
+	}
+	eventsMu.Unlock()
 	parent.Close()
 	child.Close()
+
+	eventsMu.Lock()
+	deltas := map[string]string{}
+	for _, event := range events {
+		if event.Delta != "" {
+			deltas[event.BlockID] += event.Delta
+		}
+	}
+	eventsMu.Unlock()
+	if deltas[parent.block.BlockID] != strings.Repeat("parent ", 20) {
+		t.Fatalf("parent emitted delta = %q, want 20 parent chunks", deltas[parent.block.BlockID])
+	}
+	if deltas[child.block.BlockID] != strings.Repeat("child ", 20) {
+		t.Fatalf("child emitted delta = %q, want 20 child chunks", deltas[child.block.BlockID])
+	}
 
 	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 99, 42, "finish"); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)

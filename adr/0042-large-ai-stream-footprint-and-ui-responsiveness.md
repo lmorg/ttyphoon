@@ -58,6 +58,14 @@ Block flushes are batched at 250ms, which is better than one row per token, but
 SQLite handle for each flush. This can contend with history reads and prompt
 management during a long run.
 
+The timer previously did **not** gate IPC: `Append` immediately emitted one
+`aiStreamBlock` event per provider delta and merely deferred the SQLite write.
+Fast streams could therefore fill Wails' main-thread IPC path even while the
+database was batched. The persisted flush now emits the accumulated delta only
+after a successful write; `Close` emits its final unflushed delta together with
+the closed status. This bounds the usual live-event rate to four per second per
+open block without dropping content.
+
 ## Decision
 
 Optimize in this order, keeping block ownership and persistence semantics intact.

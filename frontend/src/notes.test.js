@@ -663,6 +663,49 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
     });
 
+    it('inserts clipboard images through the active editor surface', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
+        getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
+        getClipboardDataMock.mockResolvedValue({ text: '', image: 'aW1hZ2U=' });
+        const originalExecCommand = document.execCommand;
+        document.execCommand = vi.fn((_command, _showUi, text) => {
+            const editor = document.activeElement;
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
+            editor.selectionStart = start + text.length;
+            editor.selectionEnd = editor.selectionStart;
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+        });
+
+        try {
+            await importNotesModule();
+            document.querySelector('[data-file="$NOTES/todo.md"]').click();
+            await flushPromises();
+            await flushPromises();
+
+            document.getElementById('notes-tab-editor').click();
+            const editor = document.getElementById('notes-editor');
+            editor.selectionStart = editor.value.length;
+            editor.selectionEnd = editor.value.length;
+            editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+            const menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+            menu.onSelect(menu.options.indexOf('Paste'));
+            await flushPromises();
+            await flushPromises();
+
+            expect(saveBinaryFileMock).toHaveBeenCalledWith(
+                expect.stringMatching(/^\$NOTES\/todo\.md\.d\/\d+\.png$/),
+                'aW1hZ2U=',
+            );
+            expect(editor.value).toMatch(/!\[\d+\]\(todo\.md\.d\/\d+\.png\)$/);
+        } finally {
+            document.execCommand = originalExecCommand;
+        }
+    });
+
     it('reveals the Frontmatter tab and caption for documents with YAML frontmatter', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/post.md']);
         getFileMock.mockResolvedValue({

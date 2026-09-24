@@ -144,7 +144,7 @@ export async function showMarkdownModal(markdownContent) {
     body.innerHTML = marked.parse(markdownContent);
     await renderMermaidDiagrams(body);
     await applySyntaxHighlighting(body);
-    await processWailsImages(body);
+    processWailsImages(body);
     wrapTablesForHorizontalScroll(body);
     applyTableWordWrapMode(body);
     enhanceCodeBlocks(body);

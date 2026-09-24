@@ -994,12 +994,34 @@ export async function createMonacoAdapter(container, options = {}) {
     const onPasteHandler = typeof options.onPaste === 'function'
         ? (event) => options.onPaste(event)
         : null;
+    const onPrimaryPasteHandler = typeof options.onPrimaryPaste === 'function'
+        ? (event) => {
+            const key = String(event?.key || '').toLowerCase();
+            const isPrimaryPaste = key === 'v'
+                && (event.ctrlKey === true || event.metaKey === true)
+                && event.altKey !== true;
+            if (!isPrimaryPaste || options.onPrimaryPaste(event) !== true) {
+                return;
+            }
+
+            // Prevent Monaco from consuming Cmd/Ctrl+V before Notes reads the
+            // native clipboard through its Go-backed paste path.
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+        : null;
     const onContextMenuHandler = typeof options.onContextMenu === 'function'
         ? (event) => options.onContextMenu(event)
         : null;
 
+    if (domNode && onPrimaryPasteHandler) {
+        domNode.addEventListener('keydown', onPrimaryPasteHandler, true);
+    }
+
     if (domNode && onPasteHandler) {
-        domNode.addEventListener('paste', onPasteHandler);
+        // Monaco consumes keyboard paste before bubble listeners run. Capture so
+        // Notes can divert image clipboard data into its Markdown asset path.
+        domNode.addEventListener('paste', onPasteHandler, true);
     }
 
     if (domNode && onContextMenuHandler) {
@@ -1623,8 +1645,11 @@ export async function createMonacoAdapter(container, options = {}) {
                 disposable?.dispose?.();
             }
             setTyposDecorations([]);
+            if (domNode && onPrimaryPasteHandler) {
+                domNode.removeEventListener('keydown', onPrimaryPasteHandler, true);
+            }
             if (domNode && onPasteHandler) {
-                domNode.removeEventListener('paste', onPasteHandler);
+                domNode.removeEventListener('paste', onPasteHandler, true);
             }
             if (domNode && onContextMenuHandler) {
                 domNode.removeEventListener('contextmenu', onContextMenuHandler);
