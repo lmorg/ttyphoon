@@ -56,6 +56,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0042](0042-large-ai-stream-footprint-and-ui-responsiveness.md) | Large AI streams must preserve UI responsiveness | AI panel |
 | [0043](0043-adjusted-terminal-cells-centre-glyphs.md) | Adjusted terminal cells centre glyphs | Terminal |
 | [0044](0044-ansi-parser-recovery-and-synchronized-output.md) | ANSI parser recovery and synchronized output | Terminal |
+| [0045](0045-bundled-terminal-fonts-load-through-css.md) | Bundled terminal fonts load through CSS | Terminal |
 
 ## Recurring themes
 

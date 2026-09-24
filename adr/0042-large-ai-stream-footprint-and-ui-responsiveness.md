@@ -2,9 +2,10 @@
 
 ## Status
 
-In progress. Delta-only events, frame-coalesced block rendering and direct typed
-delegate streaming, and live-panel scroll coalescing are implemented.
-Raw/thinking DOM specialization and SQLite connection reuse remain outstanding.
+In progress. Delta-only events, frame-coalesced block rendering, direct typed
+delegate streaming, live-panel scroll coalescing, and thinking DOM
+specialization are implemented. Raw-block specialization and SQLite connection
+reuse remain outstanding.
 
 ## Context
 
@@ -121,11 +122,39 @@ boundary, not per event.
 
 ### D. Make thinking rendering structurally incremental
 
-The typed thinking block currently regenerates the full `> **Thinking:** ...`
-markdown string every update. Keep the `<blockquote>` and its text node stable;
-append only the new reasoning text, preserving the old quote DOM and avoiding
-reparse of the accumulated blockquote. Run full markdown processing only on
-close.
+Implemented. Typed thinking blocks create one stable `<blockquote>`, a fixed
+`Thinking:` label, and one text node. Streaming appends only the new delta with
+`Text.appendData`; snapshots replace that text node's data without rebuilding
+the quote.
+
+Thinking content remains plain text for its entire lifetime, including close and
+SQLite hydration. Marked and full markdown post-processing are never invoked for
+thinking blocks, so nested `> ` markers and other markdown syntax remain literal
+and cannot create deeply nested DOM. Final-answer `text` blocks continue through
+the incremental Marked pipeline.
+
+Regression tests verify zero Marked calls for large live bursts, closed thinking
+blocks, and restored thinking blocks; stable blockquote identity across updates;
+and continued Markdown parsing for final text blocks.
+
+Final-answer `text` blocks also remain append-only plain text while their status
+is `open`. The formatter keeps one text node and appends deltas without invoking
+Marked. When the backend closes the block, the accumulated final response enters
+the incremental Markdown pipeline once. Restored text blocks are already closed,
+so they continue to render directly as Markdown.
+
+This distinction is load-bearing: making thinking structural removed reasoning
+reparses, but an answer containing nested blockquotes could still reproduce the
+same main-thread lock while its `text` block streamed. No token-streaming path
+now invokes Marked for thinking or final-answer content.
+
+The live legacy mirror was also removed after it was found to retain a second
+formatter and transport path alongside typed blocks. `aiStreamBlock` is now the
+only live panel event: the panel no longer supplies a legacy callback, the
+backend does not emit `aiResponseStream`, and the frontend does not register its
+listener. Typed tool/subagent helpers no longer build duplicate fenced or quoted
+strings before discarding them. Old markdown files are still supported only by
+the one-shot historical restore path.
 
 ### E. Reduce main-panel layout work
 

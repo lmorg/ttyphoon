@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed. Earliest execution ~2027-03 (six months after 0038).
+Partially implemented 2026-09-23. The live `aiResponseStream` mirror and its
+eager markdown framing are removed. Legacy on-disk transcript readers and the
+one-shot legacy renderer remain scheduled for later removal.
 
 Completes 0037. Supersedes the compatibility clauses of 0037 and 0038 D.
 
@@ -89,6 +91,13 @@ Then drop the now-unused `os`, `path/filepath`, `regexp` and `app` imports.
 
 #### 2. The `aiResponseStream` transport
 
+Implemented ahead of the remaining compatibility deletion because duplicate
+live transport caused severe UI and CPU pressure. The panel now supplies no
+legacy stream callback, the backend emits no `aiResponseStream` events, and the
+frontend registers no listener. `aiStreamBlock` is the sole live panel
+transport. Callback-only runtime consumers remain supported when no typed block
+writer exists; they do not feed the panel.
+
 - `AIStreamChunk`; the `SESSION_LOG_APPEND_CHUNK` state and its emit; the
   `streamed` and `sequence` fields of `sessionLogState`; `AIJobFinish.FinalSequence`.
 - `ai/ui.go` — `emitAIResponseChunk`, and the `streamCallback` argument threaded
@@ -98,6 +107,11 @@ Then drop the now-unused `os`, `path/filepath`, `regexp` and `app` imports.
   `aiBlockStreamRunId` and every assignment to it, `appendAIText`.
 
 #### 3. Markdown framing helpers — `ai/agent/runtime_eino.go`
+
+Partially implemented with the live transport removal. Typed tool, summary,
+question, subagent, thinking and text blocks no longer construct or emit legacy
+fences/blockquotes. The generic callback fallback remains for non-panel runtime
+consumers until the public callback API is separately retired.
 
 Delete: `formatToolCallMarkdown`, `formatToolOutputMarkdown`,
 `formatToolErrorMarkdown`, `formatToolSummaryNoticeMarkdown`,
