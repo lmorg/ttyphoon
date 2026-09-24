@@ -1852,6 +1852,18 @@ body {
     margin: 4px 0;
 }
 
+#notes-ai-output .notes-ai-thinking-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+#notes-ai-output .notes-ai-streaming-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 /* Transcripts recorded before block storage, flagged so they are not mistaken
    for current output. */
 #notes-ai-output .notes-ai-legacy {

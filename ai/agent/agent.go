@@ -261,7 +261,7 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 
 		reqID, decisionCh := newWritePermissionRequest()
 		permissionMarkdown := formatToolPermissionRequestMarkdown(toolName, reqID)
-		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, permissionMarkdown, permissionMarkdown)
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, permissionMarkdown)
 
 		var decision string
 		select {

@@ -47,7 +47,7 @@ func RequestUserQuestion(ctx context.Context, question string, choices []string)
 
 	requestID, decisionCh := newUserQuestionRequest()
 	questionMarkdown := formatUserQuestionRequestMarkdown(question, requestID, choices)
-	emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, questionMarkdown, questionMarkdown)
+	emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, questionMarkdown)
 
 	select {
 	case answer := <-decisionCh:

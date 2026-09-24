@@ -2473,7 +2473,14 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        getEventHandler('aiResponseStream')('\n![diagram.png](data:image/png;base64,AAAA)\n');
+        getEventHandler('aiJobStart')({ runId: 701, title: '' });
+        getEventHandler('aiStreamBlock')({
+            runId: 701,
+            blockId: 'image-question',
+            kind: 'text',
+            delta: '\n![diagram.png](data:image/png;base64,AAAA)\n',
+            status: 'closed',
+        });
         await flushPromises();
         getEventHandler('aiJobFinish')();
         await flushPromises();
@@ -2708,6 +2715,13 @@ describe('notes rendering', () => {
         expect(aiOutput.querySelector('[data-block-id="mine-1"]')).not.toBeNull();
     });
 
+    it('does not register the retired legacy AI stream transport', async () => {
+        await importNotesModule();
+
+        expect(getEventHandler('aiResponseStream')).toBeNull();
+        expect(typeof getEventHandler('aiStreamBlock')).toBe('function');
+    });
+
     it('coalesces bursty live stream scrolling into one frame', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
@@ -2774,184 +2788,6 @@ describe('notes rendering', () => {
         expect(toolsPanel.dataset.collapsed).toBe('false');
     });
 
-    it('formats pipelined AI output sections and renders action input as a markdown code block', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
-
-        const actionInputLines = Array.from({ length: 12 }, (_, i) => `  \"k${i}\": ${i}`).join(',\n');
-        const payload = [
-            'Question: **What is this?**',
-            '',
-            'Thought: We can use markdown here.',
-            '',
-            '## Action',
-            '',
-            'run-command',
-            '',
-            '## Action Input',
-            '',
-            '```',
-            '{',
-            actionInputLines,
-            '}',
-            '```',
-            '',
-            'Final Answer: Done.',
-        ].join('\n');
-
-        aiResponseHandler(payload);
-        await flushPromises();
-        await flushPromises();
-
-        const headings = Array.from(aiOutput.querySelectorAll('.notes-ai-heading')).map((el) => el.textContent);
-        expect(headings).toEqual(['Question', 'Thought', 'Final Answer']);
-
-        expect(aiOutput.querySelector('.notes-ai-markdown strong')?.textContent).toBe('What is this?');
-
-        // Action, Action Input and Action Output are rendered as markdown headings and code blocks
-        const codeBlock = aiOutput.querySelector('pre code');
-        expect(codeBlock).not.toBeNull();
-
-        const actionInputText = codeBlock?.textContent || '';
-        expect(actionInputText).toContain('"k0": 0');
-        expect(actionInputText).toContain('"k11": 11');
-    });
-
-    it('delivers legacy stream chunks directly without a global cursor', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiStartHandler = getEventHandler('aiJobStart');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        const aiFinishHandler = getEventHandler('aiJobFinish');
-        aiStartHandler({ runId: 42, title: '' });
-        aiResponseHandler({ runId: 42, sequence: 1, text: 'second' });
-        aiFinishHandler({ runId: 42, finalSequence: 1 });
-        aiResponseHandler({ runId: 42, sequence: 0, text: 'first ' });
-        await flushPromises();
-        await flushPromises();
-        await new Promise(resolve => setTimeout(resolve, 20));
-
-        expect(document.getElementById('notes-ai-output').textContent).toContain('secondfirst ');
-    });
-
-    it('grows a still-open fence by appending rather than re-rendering', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-
-        // Mirrors the summariser: a heading, then a fence left open while tokens
-        // stream in one at a time.
-        aiResponseHandler('**Summarising tool output:**\n\n~~~~\n');
-        await flushPromises();
-        await flushPromises();
-
-        aiResponseHandler('summary line one\n');
-        await flushPromises();
-        await flushPromises();
-
-        aiResponseHandler('summary line two\n');
-        await flushPromises();
-        await flushPromises();
-
-        const code = aiOutput.querySelector('.notes-ai-tail pre code');
-        expect(code).not.toBeNull();
-        expect(code.textContent).toContain('summary line one');
-        expect(code.textContent).toContain('summary line two');
-
-        aiResponseHandler('~~~~\n\nDone.\n');
-        await flushPromises();
-        await flushPromises();
-
-        const text = aiOutput.textContent || '';
-        expect(text).toContain('summary line one');
-        expect(text).toContain('summary line two');
-        expect(text).toContain('Done.');
-        // Appending must not leave a duplicate copy behind once the fence closes.
-        expect(text.split('summary line one').length - 1).toBe(1);
-    });
-
-    it('commits an oversized unsplittable fence instead of re-parsing it forever', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-
-        // A fence with no blank line inside it has no natural split point, so it
-        // must be force-committed once it exceeds the tail cap.
-        const bulk = Array.from({ length: 6000 }, (_, i) => `tool output line ${i}`).join('\n');
-        aiResponseHandler(`~~~~\n${bulk}\n`);
-        await flushPromises();
-        await flushPromises();
-
-        const committed = aiOutput.querySelectorAll('.notes-ai-batch');
-        expect(committed.length).toBeGreaterThan(0);
-
-        aiResponseHandler('final line\n~~~~\n\nDone.\n');
-        await flushPromises();
-        await flushPromises();
-
-        const text = aiOutput.textContent || '';
-        expect(text).toContain('tool output line 0');
-        expect(text).toContain('tool output line 5999');
-        expect(text).toContain('final line');
-        expect(text).toContain('Done.');
-
-        // The reopened fence must still render as code, not as escaped markup.
-        expect(aiOutput.querySelectorAll('pre').length).toBeGreaterThan(0);
-    });
-
-    it('renders streamed markdown incrementally without splitting fenced blocks', async () => {
-        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
-        getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
-
-        await importNotesModule();
-
-        const aiOutput = document.getElementById('notes-ai-output');
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-
-        // Commit a stable block, then stream a fence in across several chunks.
-        aiResponseHandler('First paragraph.\n\nSecond paragraph.\n\n');
-        await flushPromises();
-        await flushPromises();
-
-        aiResponseHandler('~~~~\ntool output line 1\n');
-        await flushPromises();
-        await flushPromises();
-
-        // Mid-fence: the blank line inside must not become a commit point.
-        aiResponseHandler('\nline after blank\n~~~~\n\nDone.\n');
-        await flushPromises();
-        await flushPromises();
-
-        const codeBlocks = aiOutput.querySelectorAll('pre');
-        expect(codeBlocks.length).toBe(1);
-
-        const codeText = codeBlocks[0].textContent || '';
-        expect(codeText).toContain('tool output line 1');
-        expect(codeText).toContain('line after blank');
-
-        const text = aiOutput.textContent || '';
-        expect(text).toContain('First paragraph.');
-        expect(text).toContain('Second paragraph.');
-        expect(text).toContain('Done.');
-    });
-
     it('reuses markdown processing pipeline for AI sections', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
@@ -2962,22 +2798,32 @@ describe('notes rendering', () => {
         vi.mocked(markdownUtils.processMarkdownContainer).mockClear();
         vi.mocked(markdownUtils.processLinks).mockClear();
 
-        const aiResponseHandler = getEventHandler('aiResponseStream');
-        expect(typeof aiResponseHandler).toBe('function');
+        const aiStartHandler = getEventHandler('aiJobStart');
+        const aiBlockHandler = getEventHandler('aiStreamBlock');
+        expect(typeof aiBlockHandler).toBe('function');
 
-        aiResponseHandler('\n## Action\n\nsearch\n\n## Action Input\n\n```\n{"a": 1}\n```\n');
+        aiStartHandler({ runId: 702, title: '' });
+        aiBlockHandler({
+            runId: 702,
+            blockId: 'markdown-processing',
+            kind: 'text',
+            delta: '\n## Action\n\nsearch\n\n## Action Input\n\n```\n{"a": 1}\n```\n',
+            status: 'open',
+        });
         await flushPromises();
         await flushPromises();
 
-        // Streaming uses the cheap pass only; the full pipeline is deferred so
-        // it isn't re-run and discarded on every chunk.
-        expect(markdownUtils.processLinks).toHaveBeenCalled();
+        // Open final text is append-only plain text; no Markdown work runs.
+        expect(markdownUtils.processLinks).not.toHaveBeenCalled();
         expect(markdownUtils.processMarkdownContainer).not.toHaveBeenCalled();
 
-        const aiFinishHandler = getEventHandler('aiJobFinish');
-        expect(typeof aiFinishHandler).toBe('function');
-
-        aiFinishHandler();
+        aiBlockHandler({
+            runId: 702,
+            blockId: 'markdown-processing',
+            kind: 'text',
+            delta: '',
+            status: 'closed',
+        });
         await flushPromises();
         await flushPromises();
 
@@ -3016,7 +2862,14 @@ describe('notes rendering', () => {
 
         await importNotesModule();
 
-        getEventHandler('aiResponseStream')('\n![diagram](diagram.png)\n');
+        getEventHandler('aiJobStart')({ runId: 703, title: '' });
+        getEventHandler('aiStreamBlock')({
+            runId: 703,
+            blockId: 'image-menu',
+            kind: 'text',
+            delta: '\n![diagram](diagram.png)\n',
+            status: 'closed',
+        });
         await flushPromises();
         getEventHandler('aiJobFinish')();
         await flushPromises();
@@ -3138,7 +2991,7 @@ describe('notes rendering', () => {
         }
     });
 
-    it('coalesces a large burst of thinking updates into frame-bounded renders', async () => {
+    it('streams large thinking blocks without invoking markdown', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const markedMock = {
@@ -3160,8 +3013,90 @@ describe('notes rendering', () => {
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
-        expect(markedMock.parse.mock.calls.length).toBeLessThan(10);
+        expect(markedMock.parse).not.toHaveBeenCalled();
         expect(wrapper.textContent).toContain('chunk-999');
+    });
+
+    it('keeps thinking blockquote DOM stable and skips markdown after close', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const markedMock = { parse: vi.fn((text) => `<p>${String(text)}</p>`) };
+        const processMarkdownContainer = vi.fn(async () => {});
+        const fmt = createAIPipelineFormatter(wrapper, {
+            marked: markedMock,
+            processMarkdownContainer,
+        });
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'thinking-stable', kind: 'thinking', delta: 'start', status: 'open' });
+        await flushPromises();
+        const initialQuote = wrapper.querySelector('[data-block-id="thinking-stable"] blockquote');
+
+        fmt.appendBlock({
+            blockId: 'thinking-stable',
+            kind: 'thinking',
+            delta: '\n> nested **markdown** stays literal',
+            status: 'closed',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        const currentQuote = wrapper.querySelector('[data-block-id="thinking-stable"] blockquote');
+        expect(currentQuote).toBe(initialQuote);
+        expect(currentQuote?.textContent).toContain('> nested **markdown** stays literal');
+        expect(markedMock.parse).not.toHaveBeenCalled();
+        expect(processMarkdownContainer).not.toHaveBeenCalled();
+    });
+
+    it('continues to render final text blocks as markdown', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const markedMock = { parse: vi.fn((text) => `<p>${String(text)}</p>`) };
+        const fmt = createAIPipelineFormatter(wrapper, { marked: markedMock });
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'final-text', kind: 'text', delta: '**final**', status: 'closed' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(markedMock.parse).toHaveBeenCalled();
+        expect(wrapper.textContent).toContain('**final**');
+    });
+
+    it('defers final-answer markdown until the text block closes', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const markedMock = { parse: vi.fn((text) => `<p>${String(text)}</p>`) };
+        const fmt = createAIPipelineFormatter(wrapper, { marked: markedMock });
+
+        fmt.startJob();
+        fmt.appendBlock({
+            blockId: 'streaming-final',
+            kind: 'text',
+            delta: '> nested\n> > quote\n',
+            status: 'open',
+        });
+        await flushPromises();
+        const initialText = wrapper.querySelector('[data-block-id="streaming-final"] .notes-ai-streaming-text');
+
+        fmt.appendBlock({
+            blockId: 'streaming-final',
+            kind: 'text',
+            delta: '> > > deeper',
+            status: 'open',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        expect(markedMock.parse).not.toHaveBeenCalled();
+        expect(wrapper.querySelector('[data-block-id="streaming-final"] .notes-ai-streaming-text')).toBe(initialText);
+        expect(initialText?.textContent).toContain('> > > deeper');
+
+        fmt.appendBlock({ blockId: 'streaming-final', kind: 'text', delta: '', status: 'closed' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(markedMock.parse).toHaveBeenCalledTimes(1);
     });
 
     it('uses the shared five-line AI code styling for tool input and output', async () => {
@@ -3307,7 +3242,8 @@ describe('notes rendering', () => {
     it('restores the live view as structured blocks rather than one flat lump', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
-        const fmt = createAIPipelineFormatter(wrapper, { marked });
+        const markedMock = { parse: vi.fn((text) => `<p>${String(text)}</p>`) };
+        const fmt = createAIPipelineFormatter(wrapper, { marked: markedMock });
 
         const content = {
             'r-1': 'reasoning text',
@@ -3330,6 +3266,7 @@ describe('notes rendering', () => {
         const toolOutput = wrapper.querySelector('[data-block-id="r-2"]');
         expect(thinking?.querySelector('blockquote')?.textContent).toContain('reasoning text');
         expect(toolOutput?.querySelector('pre.notes-ai-code')?.textContent).toBe('raw tool output');
+        expect(markedMock.parse).not.toHaveBeenCalled();
     });
 
     it('renders job prefix as markdown after the timestamp when provided', async () => {

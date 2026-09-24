@@ -90,31 +90,12 @@ export function createFontController(offCtx) {
         // defaults while the custom font is still loading asynchronously.
         configureFontMetricsFallback(windowStyle);
 
-        // Load the configured font with OpenType ligature features enabled
-        // (liga = standard ligatures, calt = contextual alternates).
-        // Using the FontFace API lets us attach feature settings that canvas
-        // will honour when calling fillText — unlike CSS font-feature-settings
-        // which canvas does not observe.  If the font is already loaded by a
-        // prior @font-face rule the browser deduplicates and this is a no-op.
-        // FontFace() requires a bare family name, not a CSS font-family list.
-        // Strip surrounding quotes and any fallback families so that e.g.
-        // '"Fira Code", monospace' becomes 'Fira Code'.
-        const primaryFamily = fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
-
+        // Resolve the configured family through CSS so a bundled @font-face is
+        // preferred over a same-named font installed on the host.
         try {
-            const face = new FontFace(primaryFamily, `local("${primaryFamily}")`, {
-                featureSettings: '"liga" 1, "calt" 1',
-            });
-            await face.load();
-            document.fonts.add(face);
+            await document.fonts.load(`${fontSize}px ${fontFamily}`, 'M');
         } catch {
-            // If the FontFace API fails (e.g. font not installed locally),
-            // fall back to waiting for the CSS-declared face to be ready.
-            try {
-                await document.fonts.load(`${fontSize}px ${fontFamily}`);
-            } catch {
-                // non-fatal — proceed with whatever font is available
-            }
+            // Non-fatal: canvas will use the configured fallback family.
         }
 
         // Re-measure now that the actual font is loaded for accurate metrics.

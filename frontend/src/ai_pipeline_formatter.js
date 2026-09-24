@@ -452,6 +452,10 @@ export function createAIPipelineFormatter(container, options = {}) {
             rendering: false,
             needsRender: false,
             closed: false,
+            thinkingState: null,
+            thinkingNeedsReset: false,
+            streamingTextState: null,
+            streamingTextNeedsReset: false,
         };
         streamBlocks.set(blockId, entry);
 
@@ -480,10 +484,71 @@ export function createAIPipelineFormatter(container, options = {}) {
         // normal live delta events intentionally leave content empty.
         if (block?.content && String(block.content).length >= entry.text.length) {
             entry.text = String(block.content);
+            entry.thinkingNeedsReset = true;
+            entry.streamingTextNeedsReset = true;
         }
         entry.closed = entry.closed || block?.status === 'closed';
         entry.needsRender = true;
         scheduleBlockRender(entry);
+    }
+
+    function renderThinkingBlock(entry) {
+        let state = entry.thinkingState;
+        if (!state || !entry.root.contains(state.blockquote)) {
+            entry.root.textContent = '';
+            const blockquote = document.createElement('blockquote');
+            blockquote.className = 'notes-ai-thinking';
+            const paragraph = document.createElement('p');
+            const label = document.createElement('strong');
+            label.textContent = 'Thinking:';
+            const content = document.createElement('span');
+            content.className = 'notes-ai-thinking-content';
+            const contentNode = document.createTextNode('');
+            content.appendChild(contentNode);
+            paragraph.appendChild(label);
+            paragraph.appendChild(document.createTextNode(' '));
+            paragraph.appendChild(content);
+            blockquote.appendChild(paragraph);
+            entry.root.appendChild(blockquote);
+            state = { blockquote, contentNode, renderedLength: 0 };
+            entry.thinkingState = state;
+            entry.thinkingNeedsReset = true;
+        }
+
+        if (entry.thinkingNeedsReset || entry.text.length < state.renderedLength) {
+            state.contentNode.data = entry.text;
+            state.renderedLength = entry.text.length;
+            entry.thinkingNeedsReset = false;
+        } else if (entry.text.length > state.renderedLength) {
+            state.contentNode.appendData(entry.text.slice(state.renderedLength));
+            state.renderedLength = entry.text.length;
+        }
+
+        pinBlockToBottom(state.blockquote);
+    }
+
+    function renderStreamingTextBlock(entry) {
+        let state = entry.streamingTextState;
+        if (!state || !entry.root.contains(state.contentNode)) {
+            entry.root.textContent = '';
+            const content = document.createElement('div');
+            content.className = 'notes-ai-streaming-text';
+            const contentNode = document.createTextNode('');
+            content.appendChild(contentNode);
+            entry.root.appendChild(content);
+            state = { contentNode, renderedLength: 0 };
+            entry.streamingTextState = state;
+            entry.streamingTextNeedsReset = true;
+        }
+
+        if (entry.streamingTextNeedsReset || entry.text.length < state.renderedLength) {
+            state.contentNode.data = entry.text;
+            state.renderedLength = entry.text.length;
+            entry.streamingTextNeedsReset = false;
+        } else if (entry.text.length > state.renderedLength) {
+            state.contentNode.appendData(entry.text.slice(state.renderedLength));
+            state.renderedLength = entry.text.length;
+        }
     }
 
     function scheduleBlockRender(entry) {
@@ -501,21 +566,19 @@ export function createAIPipelineFormatter(container, options = {}) {
                     }
                     firstPass = false;
 
-                    const text = entry.kind === 'thinking'
-                        ? `\n> **Thinking:** ${entry.text.replace(/\n/g, '\n> ')}`
-                        : entry.text;
-                    if (entry.raw) {
-                        entry.root.textContent = text;
+                    if (entry.kind === 'thinking') {
+                        renderThinkingBlock(entry);
+                    } else if (entry.raw) {
+                        entry.root.textContent = entry.text;
                         pinBlockToBottom(entry.root.parentElement);
+                    } else if (entry.kind === 'text' && !entry.closed) {
+                        renderStreamingTextBlock(entry);
                     } else {
-                        await renderIncremental(entry.root, text);
-                        if (entry.kind === 'thinking') {
-                            pinBlockToBottom(entry.root.querySelector('blockquote'));
-                        }
+                        await renderIncremental(entry.root, entry.text);
                     }
                 } while (entry.needsRender);
 
-                if (entry.closed && processMarkdownContainer) {
+                if (entry.closed && entry.kind !== 'thinking' && processMarkdownContainer) {
                     await processMarkdownContainer(entry.root);
                 }
             } finally {

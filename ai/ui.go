@@ -143,12 +143,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 
 		startAIJob(agt, query)
 
-		result, err := agt.RunLLMWithMessageStream(ctx, promptMessages, func(chunk string) {
-			if chunk == "" {
-				return
-			}
-			emitAIResponseChunk(agt, chunk)
-		})
+		result, err := agt.RunLLMWithMessageStream(ctx, promptMessages, nil)
 		sticky.Close()
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
@@ -212,18 +207,6 @@ func startAIJob(agt *agent.Agent, title string) {
 			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
 		},
 	}, sessiondb.SESSION_LOG_START_JOB, title)
-}
-
-func emitAIResponseChunk(agt *agent.Agent, chunk string) {
-	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
-		Workspace:       agt.Workspace(),
-		CommandLine:     agt.Meta.CmdLine,
-		OutputBlock:     agt.Meta.OutputBlock,
-		WorkspaceActive: agt.IsWorkspaceActive(),
-		Emit: func(event string, payload any) {
-			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
-		},
-	}, sessiondb.SESSION_LOG_APPEND_CHUNK, chunk)
 }
 
 func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64) {

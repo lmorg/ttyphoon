@@ -15,7 +15,6 @@ import (
 
 const (
 	SESSION_LOG_START_JOB = iota + 1
-	SESSION_LOG_APPEND_CHUNK
 	SESSION_LOG_FINALIZE_JOB
 	SESSION_LOG_FINISH_JOB
 )
@@ -34,20 +33,13 @@ type SessionLogContext struct {
 	Emit            func(event string, payload any)
 }
 
-type AIStreamChunk struct {
-	RunID    uint64 `json:"runId"`
-	Sequence uint64 `json:"sequence"`
-	Text     string `json:"text"`
-}
-
 type AIJobStart struct {
 	RunID uint64 `json:"runId"`
 	Title string `json:"title"`
 }
 
 type AIJobFinish struct {
-	RunID         uint64 `json:"runId"`
-	FinalSequence int64  `json:"finalSequence"`
+	RunID uint64 `json:"runId"`
 }
 
 // sessionLogState tracks the currently-streaming prompt for compatibility
@@ -59,7 +51,6 @@ type sessionLogState struct {
 	streamed    strings.Builder
 	requestOpen bool
 	runID       uint64
-	sequence    uint64
 }
 
 var aiSessionLogRunID atomic.Uint64
@@ -608,7 +599,6 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 				ref.requestOpen = false
 			}
 			ref.runID = aiSessionLogRunID.Add(1)
-			ref.sequence = 0
 			runID = ref.runID
 			sessionID = ref.sessionID
 			prefix = ensureRequestOpenLocked(ref, ctx, now)
@@ -622,34 +612,9 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 			ctx.Emit("aiJobStart", AIJobStart{RunID: runID, Title: prefix})
 		}
 
-	case SESSION_LOG_APPEND_CHUNK:
-		if payload == "" {
-			return
-		}
-
-		now := time.Now()
-		var chunk AIStreamChunk
-		streaming := false
-		aiSessionLogStore.Lock()
-		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
-			ensureRequestOpenLocked(ref, ctx, now)
-			ref.streamed.WriteString(payload)
-			chunk = AIStreamChunk{RunID: ref.runID, Sequence: ref.sequence, Text: payload}
-			ref.sequence++
-			streaming = true
-		}
-		aiSessionLogStore.Unlock()
-
-		if streaming && ctx.emitContent() {
-			ctx.Emit("aiResponseStream", chunk)
-		}
-
 	case SESSION_LOG_FINALIZE_JOB:
 		now := time.Now()
 		var suffix string
-		streamedEmpty := true
-		var chunk AIStreamChunk
-		streaming := false
 		var sessionID int64
 		var runID uint64
 		aiSessionLogStore.Lock()
@@ -657,22 +622,12 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 			ensureRequestOpenLocked(ref, ctx, now)
 			sessionID = ref.sessionID
 			runID = ref.runID
-			streamedEmpty = strings.TrimSpace(ref.streamed.String()) == ""
 			suffix = buildSessionLogFinalizeSuffix(ref.streamed.String(), payload, now)
 			finalizePromptLogLocked(ref, suffix, ctx.PromptID)
-			if streamedEmpty && suffix != "" {
-				chunk = AIStreamChunk{RunID: ref.runID, Sequence: ref.sequence, Text: suffix}
-				ref.sequence++
-				streaming = true
-			}
 		}
 		aiSessionLogStore.Unlock()
 		if sessionID > 0 && runID > 0 && ctx.PromptID > 0 {
 			_ = FinalizeStreamPrompt(workspace, sessionID, runID, ctx.PromptID, formatSessionLogTimestamp(now))
-		}
-
-		if streaming && ctx.emitContent() {
-			ctx.Emit("aiResponseStream", chunk)
 		}
 
 	case SESSION_LOG_FINISH_JOB:
@@ -680,10 +635,7 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		streaming := false
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
-			finish = AIJobFinish{RunID: ref.runID, FinalSequence: -1}
-			if ref.sequence > 0 {
-				finish.FinalSequence = int64(ref.sequence - 1)
-			}
+			finish = AIJobFinish{RunID: ref.runID}
 			streaming = true
 		}
 		aiSessionLogStore.Unlock()

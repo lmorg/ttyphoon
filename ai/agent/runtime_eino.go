@@ -139,11 +139,11 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, formatToolCallMarkdown(t.delegate.Name(), argumentsInJSON), t.delegate.Name())
+	toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, t.delegate.Name())
 	ctx = withAIStreamBlockParent(ctx, toolCallID)
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
-			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error(), formatToolErrorMarkdown(err))
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
 			recordContinuationToolObservation(ctx, t.toolObservation(argumentsInJSON, "", err))
 			if errors.Is(err, ErrToolPermissionRefused) {
 				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
@@ -159,7 +159,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 	output, err := t.delegate.Call(ctx, toolInput)
 	if err != nil {
-		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error(), formatToolErrorMarkdown(err))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
 		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, err))
 		return output, err
 	}
@@ -176,17 +176,17 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 
 	// When summarising, the streamed summary replaces the raw output in the UI + log.
 	if output != "" && !summarising && !streamedOutput {
-		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolOutput, output, formatToolOutputMarkdown(output))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolOutput, output)
 	}
 
 	if summarising {
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
-			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, sErr.Error(), formatToolSummaryFailureMarkdown(len(output), sErr))
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, sErr.Error())
 			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
 			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
 		}
-		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, summary, formatToolSummaryNoticeMarkdown(len(output), len(summary)))
+		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, summary)
 		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, summary, nil))
 		return summary, nil
 	}
@@ -215,38 +215,6 @@ func (t *einoAgentTool) toolObservation(input, output string, err error) aitypes
 		observation.Error = err.Error()
 	}
 	return observation
-}
-
-// Tool progress is emitted as real markdown with ~~~~ tilde fences (rather than
-// ``` triple-backticks) so tool arguments or outputs that themselves contain
-// ``` blocks don't prematurely close the fence and leak into the surrounding UI.
-
-func formatToolCallMarkdown(name, argumentsInJSON string) string {
-	return fmt.Sprintf("\n\n**Tool call:** `%s`\n\n~~~~json\n%s\n~~~~\n\n", name, argumentsInJSON)
-}
-
-func formatToolOutputMarkdown(output string) string {
-	return fmt.Sprintf("**Tool output:**\n\n~~~~\n%s\n~~~~\n\n", output)
-}
-
-func formatToolErrorMarkdown(err error) string {
-	return fmt.Sprintf("**Tool error:**\n\n~~~~\n%s\n~~~~\n\n", err.Error())
-}
-
-func summariserStreamOpenMarkdown() string {
-	return "**Summaring tool output:**\n\n~~~~\n"
-}
-
-func summariserStreamCloseMarkdown() string {
-	return "\n~~~~\n\n"
-}
-
-func formatToolSummaryNoticeMarkdown(rawLen, summaryLen int) string {
-	return fmt.Sprintf("_Output summarised for main agent (%d \u2192 %d chars)._\n\n", rawLen, summaryLen)
-}
-
-func formatToolSummaryFailureMarkdown(rawLen int, err error) string {
-	return fmt.Sprintf("_Output was %d chars; summariser failed and the main agent received a placeholder instead: %s_\n\n", rawLen, err.Error())
 }
 
 func unwrapToolInput(argumentsInJSON string) string {
@@ -322,18 +290,19 @@ func (e *aiStreamEmitter) flush() {
 }
 
 func (e *aiStreamEmitter) emitText(text string) {
-	if e == nil || e.fn == nil || text == "" {
+	if e == nil || text == "" {
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.blocks != nil {
-		if e.inThinking {
-			e.blocks.CloseCurrentThinking()
-		}
+		e.blocks.CloseCurrentThinking()
 		e.blocks.AppendText(text)
+		return
 	}
-	e.emitLegacyTextLocked(text)
+	if e.fn != nil {
+		e.emitLegacyTextLocked(text)
+	}
 }
 
 func (e *aiStreamEmitter) emitLegacyText(text string) {
@@ -356,13 +325,17 @@ func (e *aiStreamEmitter) emitLegacyTextLocked(text string) {
 }
 
 func (e *aiStreamEmitter) emitReasoning(text string) {
-	if e == nil || e.fn == nil || text == "" {
+	if e == nil || text == "" {
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.blocks != nil {
 		e.blocks.AppendThinking(text)
+		return
+	}
+	if e.fn == nil {
+		return
 	}
 	if !e.inThinking {
 		e.pending.WriteString("\n> **Thinking:** ")
@@ -456,21 +429,22 @@ func emitAIStreamToolProgress(ctx context.Context, text string) {
 	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
 		if emitter.blocks != nil {
 			emitter.blocks.AppendNotice(text)
+			return
 		}
 		emitter.emitLegacyText(text)
 	}
 }
 
-func emitAIStreamToolBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) {
-	emitAIStreamToolBlockID(ctx, kind, content, legacy)
+func emitAIStreamToolBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content string) {
+	emitAIStreamToolBlockID(ctx, kind, content)
 }
 
-func emitAIStreamToolBlockID(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) string {
-	return emitAIStreamToolBlockIDWithLabel(ctx, kind, content, legacy, "")
+func emitAIStreamToolBlockID(ctx context.Context, kind sessiondb.StreamBlockKind, content string) string {
+	return emitAIStreamToolBlockIDWithLabel(ctx, kind, content, "")
 }
 
-func emitAIStreamToolBlockIDWithLabel(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy, label string) string {
-	if ctx == nil || legacy == "" {
+func emitAIStreamToolBlockIDWithLabel(ctx context.Context, kind sessiondb.StreamBlockKind, content, label string) string {
+	if ctx == nil || content == "" {
 		return ""
 	}
 	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
@@ -480,16 +454,13 @@ func emitAIStreamToolBlockIDWithLabel(ctx context.Context, kind sessiondb.Stream
 	blockID := ""
 	if emitter.blocks != nil {
 		blockID = emitter.blocks.AppendStandaloneWithLabel(kind, content, aiStreamBlockParent(ctx), label)
+	} else {
+		emitter.emitLegacyText(content)
 	}
-	emitter.emitLegacyText(legacy)
 	return blockID
 }
 
 func EmitAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content string) {
-	EmitAIStreamBlockWithLegacy(ctx, kind, content, content)
-}
-
-func EmitAIStreamBlockWithLegacy(ctx context.Context, kind sessiondb.StreamBlockKind, content, legacy string) {
 	if ctx == nil || content == "" {
 		return
 	}
@@ -499,8 +470,9 @@ func EmitAIStreamBlockWithLegacy(ctx context.Context, kind sessiondb.StreamBlock
 	}
 	if emitter.blocks != nil {
 		emitter.blocks.AppendStandalone(kind, content, aiStreamBlockParent(ctx))
+	} else {
+		emitter.emitLegacyText(content)
 	}
-	emitter.emitLegacyText(legacy)
 }
 
 func withAIStreamBlockParent(ctx context.Context, parentID string) context.Context {
@@ -519,21 +491,19 @@ func aiStreamBlockParent(ctx context.Context) string {
 }
 
 type AIStreamBlockEmitter struct {
-	emitter      *aiStreamEmitter
-	block        *aiStreamBlockHandle
-	mirrorLegacy bool
+	block *aiStreamBlockHandle
 }
 
 func OpenAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID string) *AIStreamBlockEmitter {
-	return openAIStreamBlock(ctx, kind, parentID, "", true)
+	return openAIStreamBlock(ctx, kind, parentID, "")
 }
 
 // OpenAITypedStreamBlock streams only on the addressable block transport.
 func OpenAITypedStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, label string) *AIStreamBlockEmitter {
-	return openAIStreamBlock(ctx, kind, aiStreamBlockParent(ctx), label, false)
+	return openAIStreamBlock(ctx, kind, aiStreamBlockParent(ctx), label)
 }
 
-func openAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID, label string, mirrorLegacy bool) *AIStreamBlockEmitter {
+func openAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, parentID, label string) *AIStreamBlockEmitter {
 	if ctx == nil {
 		return nil
 	}
@@ -545,9 +515,7 @@ func openAIStreamBlock(ctx context.Context, kind sessiondb.StreamBlockKind, pare
 		parentID = aiStreamBlockParent(ctx)
 	}
 	return &AIStreamBlockEmitter{
-		emitter:      emitter,
-		block:        emitter.blocks.OpenWithLabel(kind, parentID, label),
-		mirrorLegacy: mirrorLegacy,
+		block: emitter.blocks.OpenWithLabel(kind, parentID, label),
 	}
 }
 
@@ -556,19 +524,6 @@ func (e *AIStreamBlockEmitter) Emit(text string) {
 		return
 	}
 	e.block.Append(text)
-	if e.mirrorLegacy && e.emitter != nil {
-		e.emitter.emitLegacyText(text)
-	}
-}
-
-func EmitAIStreamLegacy(ctx context.Context, text string) {
-	if ctx == nil || text == "" {
-		return
-	}
-	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
-	if ok && emitter != nil {
-		emitter.emitLegacyText(text)
-	}
 }
 
 func (e *AIStreamBlockEmitter) Close() {

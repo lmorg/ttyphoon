@@ -25,19 +25,11 @@ var summariserSystemPrompt string
 func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInput, rawOutput string) (string, error) {
 	streamBlock := OpenAIStreamBlock(ctx, sessiondb.StreamBlockSummary, "")
 	if streamBlock != nil {
-		defer func() {
-			EmitAIStreamLegacy(ctx, summariserStreamCloseMarkdown())
-			streamBlock.Close()
-		}()
+		defer streamBlock.Close()
 	}
 	emitStream := EmitAIStreamToolProgress(ctx)
-	streamPrefix := summariserStreamOpenMarkdown()
-	streamSuffix := summariserStreamCloseMarkdown()
 	if streamBlock != nil {
-		EmitAIStreamLegacy(ctx, summariserStreamOpenMarkdown())
 		emitStream = streamBlock.Emit
-		streamPrefix = ""
-		streamSuffix = ""
 	}
 	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), r.agent.EnvironmentValue).Run(ctx, subagent.Request{
 		SystemPrompt: summariserSystemPrompt,
@@ -46,9 +38,7 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 			toolName, toolInput, rawOutput,
 		),
 		EmitStream:           emitStream,
-		StreamPrefix:         streamPrefix,
-		StreamSuffix:         streamSuffix,
-		DisableStreamFraming: streamBlock != nil,
+		DisableStreamFraming: true,
 		FormatStreamChunk: func(text string) string {
 			return text
 		},

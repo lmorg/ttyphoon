@@ -350,22 +350,6 @@ func TestEmitAIStreamToolProgress_NoCallbackNoPanic(t *testing.T) {
 	emitAIStreamToolProgress(context.Background(), "")
 }
 
-func TestFormatToolCallMarkdown_UsesTildeFences(t *testing.T) {
-	got := formatToolCallMarkdown("mcp_atlassian_search", `{"query":"abc"}`)
-	want := "\n\n**Tool call:** `mcp_atlassian_search`\n\n~~~~json\n{\"query\":\"abc\"}\n~~~~\n\n"
-	if got != want {
-		t.Fatalf("formatToolCallMarkdown = %q, want %q", got, want)
-	}
-}
-
-func TestFormatToolOutputMarkdown_UsesTildeFences(t *testing.T) {
-	got := formatToolOutputMarkdown("some text with ``` inside")
-	want := "**Tool output:**\n\n~~~~\nsome text with ``` inside\n~~~~\n\n"
-	if got != want {
-		t.Fatalf("formatToolOutputMarkdown = %q, want %q", got, want)
-	}
-}
-
 func TestBuildEinoConversationMessages_AppendsHistoryThenPrompt(t *testing.T) {
 	history := []sessiondb.Entry{
 		{Prompt: "first question", LLMResponse: "first answer"},

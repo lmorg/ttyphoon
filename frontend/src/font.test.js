@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFontController } from './font.js';
 
@@ -15,6 +15,33 @@ function createMockContext() {
 }
 
 describe('createFontController', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('loads the configured family through the document font set', async () => {
+        const load = vi.fn(async () => []);
+        const FontFace = vi.fn(() => {
+            throw new Error('local FontFace should not be constructed');
+        });
+        vi.stubGlobal('FontFace', FontFace);
+        Object.defineProperty(document, 'fonts', {
+            configurable: true,
+            value: { load },
+        });
+
+        const controller = createFontController(createMockContext());
+        await controller.loadGlyphSizeFromGo({
+            fontFamily: '"Fira Code", monospace',
+            fontSize: 15,
+            adjustCellWidth: 0,
+            adjustCellHeight: 0,
+        });
+
+        expect(load).toHaveBeenCalledWith('15px "Fira Code", monospace', 'M');
+        expect(FontFace).not.toHaveBeenCalled();
+    });
+
     it.each([
         [0, 0],
         [3, 2],

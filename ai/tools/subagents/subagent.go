@@ -181,8 +181,7 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 			buffered := block.String()
 			blockMu.Unlock()
 			if streamBlock == nil && buffered != "" && emitToPanel != nil {
-				legacy := fmt.Sprintf("\n> **Sub-agent %s:** %s\n\n", request.Name, strings.ReplaceAll(buffered, "\n", "\n> "))
-				agent.EmitAIStreamBlockWithLegacy(ctx, sessiondb.StreamBlockSubagent, buffered, legacy)
+				agent.EmitAIStreamBlock(ctx, sessiondb.StreamBlockSubagent, buffered)
 			}
 		})
 	}

@@ -11242,7 +11242,6 @@ async function jumpToAIPromptTarget(target) {
             // Showing history: suspend live emits so a running agent can't append here.
             setAIPanelLive(false);
             aiActiveRunId = null;
-            aiBlockStreamRunId = null;
             const blocks = typeof ListAIStreamBlocks === 'function'
                 ? await ListAIStreamBlocks(target.sessionId, target.promptId)
                 : [];
@@ -12822,7 +12821,6 @@ function startAIJob(title) {
 }
 
 let aiActiveRunId = null;
-let aiBlockStreamRunId = null;
 
 // Tells Go whether the panel is following live output; guarded so stale
 // generated bindings can't throw.
@@ -12844,22 +12842,8 @@ function startAIStreamJob(payload) {
 
     const runId = Number(payload?.runId);
     aiActiveRunId = Number.isSafeInteger(runId) && runId > 0 ? runId : null;
-    aiBlockStreamRunId = null;
     startAIJob(payload?.title ?? payload);
     void refreshAIPromptJumpFromBackend();
-}
-
-function appendAIText(text) {
-    aiPipelineFormatter.appendChunk(text);
-    scheduleAIPromptJumpRefresh();
-    // The scroll listener keeps aiStickToBottom current, so don't re-measure the
-    // container here — this runs once per streamed chunk and each measurement
-    // forces a synchronous layout.
-    if (state.aiStickToBottom) {
-        scheduleAIStreamScrollToBottom();
-    } else {
-        scheduleAIScrollButtonUpdate();
-    }
 }
 
 function finishAIJob() {
@@ -13034,7 +13018,6 @@ async function restoreAILiveBlocks(workspaceName) {
     // rather than being dropped as a stale run.
     const runId = Number(blocks[blocks.length - 1]?.runId) || 0;
     aiActiveRunId = runId > 0 ? runId : null;
-    aiBlockStreamRunId = aiActiveRunId;
     requestAIScrollToBottom();
     return true;
 }
@@ -13077,7 +13060,6 @@ function markAISessionCachePending(workspaceName) {
     // The run being left belongs to the old workspace; restoring the new one
     // re-adopts whichever run is live there.
     aiActiveRunId = null;
-    aiBlockStreamRunId = null;
     // A workspace switch resets the panel, so stop showing a stale historical
     // prompt from the workspace being left.
     setAIPanelLive(true);
@@ -13137,7 +13119,6 @@ EventsOn("aiStreamBlock", (payload) => {
     if (blockWorkspace && panelWorkspace && blockWorkspace !== panelWorkspace) {
         return;
     }
-    aiBlockStreamRunId = runId;
     aiPipelineFormatter.appendBlock(payload);
     if (state.aiStickToBottom) {
         scheduleAIStreamScrollToBottom();
@@ -13239,17 +13220,6 @@ document.addEventListener('ttyphoon-ai-user-question', async (e) => {
     } catch (err) {
         notifyTerminal('Failed to resolve user question', 'error');
         console.error(err);
-    }
-});
-
-// Event listener for streaming AI responses
-EventsOn("aiResponseStream", (chunk) => {
-    if (aiBlockStreamRunId !== null && typeof chunk === 'object' && Number(chunk?.runId) === aiBlockStreamRunId) {
-        return;
-    }
-    const text = typeof chunk === 'object' ? String(chunk?.text ?? '') : String(chunk ?? '');
-    if (text) {
-        appendAIText(text);
     }
 });
 
