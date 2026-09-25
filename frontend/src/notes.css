@@ -1810,6 +1810,7 @@ body {
 #notes-ai-output .notes-ai-markdown {
     margin: 0;
     font-size: inherit;
+    line-height: 1.5;
 }
 
 /* Incremental streaming wrappers must not affect layout or margin collapsing. */
@@ -1836,12 +1837,14 @@ body {
     overflow-wrap: inherit;
     word-break: inherit;
     font-size: var(--notes-font-size-minus-2);
+    line-height: 1;
     
 }
 
 #notes-ai-output .notes-ai-markdown pre {
     max-height: calc(1.5em * var(--notes-ai-code-max-lines) + 16px);
     overflow-y: auto;
+    line-height: 1;
 }
 
 #notes-ai-output .notes-ai-markdown blockquote {
@@ -1851,6 +1854,7 @@ body {
     padding: 0 10px;
     margin: 4px 0;
     font-size: var(--notes-font-size-minus-2);
+    line-height: 1;
 }
 
 #notes-ai-output .notes-ai-thinking-content {

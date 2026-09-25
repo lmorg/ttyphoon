@@ -324,8 +324,8 @@ ticked but not working as expected, then please raise an issue in Github.
     - [ ] glitch free (some bugs still exist)
   - [x] tmux support for modifiers
 - Mouse tracking
-  - [ ] common: can run most CLI applications
-  - [ ] broad: can run older or more complicated CLI applications
+  - [x] common: can run most CLI applications
+  - [x] broad: can run older or more complicated CLI applications
   - [ ] complete: xterm compatible
 
 #### VT52 mode

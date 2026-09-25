@@ -289,9 +289,9 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		}
 	}
 
-	if !term.IsAltBuf() {
+	/*if term.IsAltBuf() {
 		return
-	}
+	}*/
 
 	screen := term.visibleScreen()
 
