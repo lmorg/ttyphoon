@@ -8,7 +8,7 @@ import {
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
-    SaveImageDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
+    SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
     GetAISessionCache,
@@ -10851,6 +10851,51 @@ function getRenderedCodeBlockText(container, eventTarget) {
     return String((preCode ? preCode.textContent : pre.textContent) || '');
 }
 
+function getRenderedCodeBlockLanguage(container, eventTarget) {
+    if (!(eventTarget instanceof Element) || !container || !container.contains(eventTarget)) {
+        return '';
+    }
+
+    const codeEl = eventTarget.closest('pre code');
+    if (!codeEl || !container.contains(codeEl)) {
+        return '';
+    }
+
+    const languageClass = Array.from(codeEl.classList).find((name) => name.startsWith('language-'));
+    return languageClass ? languageClass.slice('language-'.length).toLowerCase() : '';
+}
+
+function codeBlockFilename(language) {
+    const extensions = {
+        'c++': 'cpp', csharp: 'cs', 'f#': 'fs', golang: 'go', javascript: 'js',
+        markdown: 'md', plaintext: 'txt', powershell: 'ps1', shell: 'sh', text: 'txt',
+        typescript: 'ts', yaml: 'yaml', yml: 'yaml',
+    };
+    const normalized = String(language || '').trim().toLowerCase();
+    const extension = extensions[normalized] || (normalized && /^[a-z0-9]+$/.test(normalized) ? normalized : 'txt');
+    return `code-block.${extension}`;
+}
+
+function createSaveCodeBlockMenuItem(code, language) {
+    return {
+        title: 'Save code...',
+        icon: 0xf0c7,
+        onSelect: async () => {
+            try {
+                const path = await SaveCodeDialog(codeBlockFilename(language));
+                if (!path) {
+                    return;
+                }
+                await SaveFile(path, code, '');
+                notifyTerminal(`Saved code block ${path}`, 'info');
+            } catch (err) {
+                console.error('Failed to save code block:', err);
+                notifyTerminal('Failed to save code block', 'error');
+            }
+        },
+    };
+}
+
 function createCopyMenuItem(getText, title = 'Copy') {
     return {
         title,
@@ -12046,6 +12091,10 @@ function initAIOutputContextMenu(container) {
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
         const codeBlockText = getRenderedCodeBlockText(container, e.target);
+        const codeBlockLanguage = getRenderedCodeBlockLanguage(container, e.target);
+        const aiBlock = e.target instanceof Element ? e.target.closest('[data-block-kind]') : null;
+        const isFinalAIResponse = aiBlock?.dataset.blockKind === 'text'
+            && aiBlock?.dataset.blockStatus === 'closed';
         const tableItems = table && container.contains(table)
             ? [...createTableCopyMenuItems(table), createTableFilterMenuItem(table), { title: '-' }]
             : [];
@@ -12073,9 +12122,13 @@ function initAIOutputContextMenu(container) {
                 createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
                 { title: '-' },
             ];
+        const codeSaveItems = codeBlockText && isFinalAIResponse
+            ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
+            : [];
 
         const menuItems = [
             ...copyItems,
+            ...codeSaveItems,
             ...tableItems,
             ...wordWrapItems,
         ];
@@ -12207,6 +12260,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
 
         const table = e.target instanceof Element ? e.target.closest('table') : null;
         const codeBlockText = getRenderedCodeBlockText(container, e.target);
+        const codeBlockLanguage = getRenderedCodeBlockLanguage(container, e.target);
         const isRunMode = state.viewMode === 'jupyter';
         const tableIndex = table ? Array.from(container.querySelectorAll('table')).indexOf(table) : -1;
         const tableItems = table && container.contains(table)
@@ -12237,9 +12291,13 @@ function initRenderedNotesContextMenu(container, viewMode) {
                 createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
                 { title: '-' },
             ];
+        const codeSaveItems = codeBlockText && viewMode === 'viewer'
+            ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
+            : [];
 
         const allMenuItems = [
             ...copyItems,
+            ...codeSaveItems,
             ...tableItems,
             ...wordWrapItems,
             ...insertItems,

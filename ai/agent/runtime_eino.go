@@ -31,6 +31,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -264,7 +265,7 @@ type aiStreamEmitter struct {
 	flushTimer *time.Timer
 }
 
-const aiStreamEmitInterval = 100 * time.Millisecond
+const aiStreamEmitInterval = types.AI_EMIT_INTERVAL * time.Millisecond
 
 func (e *aiStreamEmitter) flushLocked() {
 	if e.flushTimer != nil {

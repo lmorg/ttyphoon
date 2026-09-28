@@ -442,6 +442,10 @@ export function SaveBinaryFile(arg1, arg2) {
   return window['go']['main']['WApp']['SaveBinaryFile'](arg1, arg2);
 }
 
+export function SaveCodeDialog(arg1) {
+  return window['go']['main']['WApp']['SaveCodeDialog'](arg1);
+}
+
 export function SaveFile(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['SaveFile'](arg1, arg2, arg3);
 }

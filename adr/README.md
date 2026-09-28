@@ -59,6 +59,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0045](0045-bundled-terminal-fonts-load-through-css.md) | Bundled terminal fonts load through CSS | Terminal |
 | [0046](0046-markdown-images-are-container-capped.md) | Markdown images are container-capped | Notes |
 | [0047](0047-notes-images-are-streamed-by-the-asset-server.md) | Notes images are streamed by the asset server | Notes |
+| [0048](0048-save-rendered-code-blocks.md) | Save rendered code blocks to disk | Notes |
 
 ## Recurring themes
 

@@ -18,3 +18,5 @@ const (
 )
 
 const DefaultMono = "Fira Code" //"Hasklug"
+
+const AI_EMIT_INTERVAL = 250

@@ -47,6 +47,7 @@ const getLanguageDescriptionsMock = vi.fn(() => Promise.resolve([]));
 const getAllLanguageDescriptionsMock = vi.fn(() => Promise.resolve([]));
 const terminalCopyImageDataURLMock = vi.fn(() => Promise.resolve(''));
 const saveImageDialogMock = vi.fn(() => Promise.resolve(''));
+const saveCodeDialogMock = vi.fn(() => Promise.resolve('/project/code-block.js'));
 const windowPrintMock = vi.fn(() => Promise.resolve());
 const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }));
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
@@ -177,6 +178,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetAllLanguageDescriptions: getAllLanguageDescriptionsMock,
     TerminalCopyImageDataURL: terminalCopyImageDataURLMock,
     SaveImageDialog: saveImageDialogMock,
+    SaveCodeDialog: saveCodeDialogMock,
     WindowPrint: windowPrintMock,
     GetClipboardData: getClipboardDataMock,
     SwaggerRequest: swaggerRequestMock,
@@ -418,6 +420,7 @@ describe('notes rendering', () => {
         getAllLanguageDescriptionsMock.mockClear();
         terminalCopyImageDataURLMock.mockClear();
         saveImageDialogMock.mockClear();
+        saveCodeDialogMock.mockClear();
         windowPrintMock.mockClear();
         getClipboardDataMock.mockClear();
         swaggerRequestMock.mockClear();
@@ -2583,6 +2586,14 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(clipboardSetTextMock).toHaveBeenCalledWith('const x = 1;\nconst y = 2;\n');
+
+        const saveCodeIndex = menuConfig.options.findIndex((option) => option === 'Save code...');
+        expect(saveCodeIndex).toBeGreaterThanOrEqual(0);
+        menuConfig.onSelect(saveCodeIndex);
+        await flushPromises();
+
+        expect(saveCodeDialogMock).toHaveBeenCalledWith('code-block.txt');
+        expect(saveFileMock).toHaveBeenCalledWith('/project/code-block.js', 'const x = 1;\nconst y = 2;\n', '');
     });
 
     it('shows a hover copy button for code and quote blocks in View and AI output', async () => {
@@ -2797,6 +2808,29 @@ describe('notes rendering', () => {
         await new Promise((resolve) => setTimeout(resolve, 25));
 
         expect(scrollWrites).toBe(1);
+    });
+
+    it('offers code saving for final AI responses but not tool output', async () => {
+        await importNotesModule();
+
+        const aiOutput = document.getElementById('notes-ai-output');
+        const tool = document.createElement('div');
+        tool.dataset.blockKind = 'tool-output';
+        tool.dataset.blockStatus = 'closed';
+        tool.innerHTML = '<pre><code class="language-sh">echo tool</code></pre>';
+        const final = document.createElement('div');
+        final.dataset.blockKind = 'text';
+        final.dataset.blockStatus = 'closed';
+        final.innerHTML = '<pre><code class="language-python">print(42)</code></pre>';
+        aiOutput.append(tool, final);
+
+        showLocalMenuMock.mockClear();
+        tool.querySelector('code').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        expect(showLocalMenuMock.mock.calls[0][0].options).not.toContain('Save code...');
+
+        showLocalMenuMock.mockClear();
+        final.querySelector('code').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        expect(showLocalMenuMock.mock.calls[0][0].options).toContain('Save code...');
     });
 
     it('switches to AI tools tab when AI response stream starts', async () => {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/types"
 )
 
 type aiStreamBlockWriter struct {
@@ -31,7 +32,7 @@ type aiStreamBlockHandle struct {
 	timer   *time.Timer
 }
 
-const streamBlockFlushInterval = 250 * time.Millisecond
+const streamBlockFlushInterval = types.AI_EMIT_INTERVAL * time.Millisecond
 
 func newAIStreamBlockWriter(workspace string, emit func(sessiondb.AIStreamBlock)) *aiStreamBlockWriter {
 	identity := sessiondb.GetActiveStreamIdentity(workspace)

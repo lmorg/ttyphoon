@@ -15,9 +15,10 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/lmorg/ttyphoon/types"
 )
 
-const EmitInterval = 250 * time.Millisecond
+const EmitInterval = types.AI_EMIT_INTERVAL * time.Millisecond
 
 const (
 	ProviderOpenAI    = "openai"

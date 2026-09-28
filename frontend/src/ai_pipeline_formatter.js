@@ -405,6 +405,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         const parentId = String(block?.parentId || '');
         wrapper.dataset.blockId = blockId;
         wrapper.dataset.parentId = parentId;
+        wrapper.dataset.blockKind = kind;
 
         let contentRoot;
         if (isRawBlock(kind)) {
@@ -488,6 +489,7 @@ export function createAIPipelineFormatter(container, options = {}) {
             entry.streamingTextNeedsReset = true;
         }
         entry.closed = entry.closed || block?.status === 'closed';
+        entry.wrapper.dataset.blockStatus = entry.closed ? 'closed' : 'open';
         entry.needsRender = true;
         scheduleBlockRender(entry);
     }

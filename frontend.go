@@ -2518,6 +2518,22 @@ func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
 	return path, nil
 }
 
+func (a *WApp) SaveCodeDialog(defaultFilename string) (string, error) {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:            "Save Code Block",
+		DefaultDirectory: a.projRoot,
+		DefaultFilename:  defaultFilename,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Code files", Pattern: "*.txt;*.md;*.go;*.js;*.ts;*.py;*.sh;*.json;*.yaml;*.yml;*.html;*.css"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
+
 func (a *WApp) WindowPrint() {
 	runtime.WindowPrint(a.ctx)
 }

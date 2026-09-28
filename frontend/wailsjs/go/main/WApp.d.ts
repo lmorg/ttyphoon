@@ -229,6 +229,8 @@ export function RunNote(arg1:string,arg2:string,arg3:string,arg4:string):Promise
 
 export function SaveBinaryFile(arg1:string,arg2:string):Promise<void>;
 
+export function SaveCodeDialog(arg1:string):Promise<string>;
+
 export function SaveFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveImageDialog(arg1:string):Promise<string>;
