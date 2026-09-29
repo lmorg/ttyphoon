@@ -22,7 +22,7 @@ file-backed Markdown reference that can be loaded by the Notes image renderer.
 `AskAIImage` is a dedicated Wails entry point. It:
 
 1. validates the incoming data URL;
-2. decodes and saves the image under `~/ttyphoon/.images/` with a unique
+2. decodes and saves the image under `~/Documents/ttyphoon/.images/` with a unique
    `uploaded-image-<timestamp>.<extension>` name;
 3. passes the original decoded image data to `ai.ExplainDoc` as an
    `ImageAttachment` for the model;
@@ -63,7 +63,7 @@ was already persisted before this fix.
 - The model receives a real multimodal image upload.
 - The user sees the uploaded image immediately after the attachment metadata.
 - Session logs remain compact and renderable instead of containing base64 blobs.
-- Uploaded images are retained in `~/ttyphoon/.images/`; automatic cleanup is a
+- Uploaded images are retained in `~/Documents/ttyphoon/.images/`; automatic cleanup is a
    separate lifecycle concern and is not part of this decision.
 - The image display path is absolute and file-backed, so historical prompt logs
   can render it after the current request completes.

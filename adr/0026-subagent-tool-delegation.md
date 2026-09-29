@@ -53,10 +53,10 @@ Design points:
   whole point of the `delegate` vs `report` distinction — would have been
   dropped. Widened to `(ctx, systemPrompt, prompt, emit)` across the interface,
   the `RunWithTools` field, and the call site.
-- **Tool progress routes to the sub-agent's emitter.** `withAIStreamCallback`
-  binds the run's emitter into the context, so `einoAgentTool.InvokableRun`
-  writes tool calls into the sub-agent's own buffered block rather than
-  interleaving into the parent stream (preserving ADR 0006).
+- **Tool progress stays inside the sub-agent's typed block tree.** The nested
+  runtime shares the parent run's typed writer, with the sub-agent block as its
+  parent. Tool calls, outputs, errors, summaries and notices therefore remain
+  addressable child blocks instead of being flattened into callback text.
 - **No permission stalls.** Delegable tools are `ToolStateAlways` by
   construction (ADR 0002 update), and `RequestToolPermission` returns nil
   immediately for that state, so a sub-agent can never block on a prompt no one

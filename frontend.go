@@ -890,7 +890,7 @@ func (a *WApp) markdownBaseDir() string {
 }
 
 func (a *WApp) documentsTtyphoonDir() string {
-	return filepath.Join(a.homeDir, "Documents", "ttyphoon")
+	return filepath.Join(a.homeDir, "Documents", app.DirName)
 }
 
 func (a *WApp) notesAssetHandler() http.Handler {
@@ -3123,7 +3123,7 @@ func saveAIImageUpload(mimeType, encoded string) (string, error) {
 		return "", err
 	}
 
-	dir := filepath.Join(home, app.DirName, ".images")
+	dir := aiImagesDir(home)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -3132,6 +3132,10 @@ func saveAIImageUpload(mimeType, encoded string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func aiImagesDir(home string) string {
+	return filepath.Join(home, "Documents", app.DirName, ".images")
 }
 
 // --------------------

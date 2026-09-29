@@ -122,7 +122,7 @@ and delete the static markdown log.
 
 | Field | Meaning |
 |---|---|
-| `BlockID` | `"{runID}-{n}"` — unique, sortable, cheap, greppable in logs. A UUID is not required. |
+| `BlockID` | SQLite-assigned `stream_blocks.id`, serialized as a decimal string. |
 | `ParentID` | Empty, or the owning block (a sub-agent's children, a summary under its tool call). |
 | `Kind` | `request`, `text`, `thinking`, `tool-call`, `tool-output`, `tool-error`, `tool-summary`, `subagent`, `notice`, `question`. |
 | `Ordinal` | Monotonic position within the prompt, allocated under the run lock. |
@@ -132,6 +132,12 @@ and delete the static markdown log.
 
 The invariant that makes concurrency safe is **one writer per block**. A block
 is opened at the point a logical unit begins and closed when it ends:
+
+The block writer itself is scoped to the full run and reused across bounded
+model windows and continuations. SQLite allocates the persistent `RunID` and
+the `BlockID`; the run sequence is seeded above IDs already present in older
+databases, and each block ID comes from the `stream_blocks.id` primary key. This
+avoids collisions when an app process or model window restarts its local state.
 
 - `einoAgentTool.InvokableRun` opens a `tool-call` block, and a `tool-output`
   child. Parallel tool calls own disjoint blocks, so they cannot interleave.

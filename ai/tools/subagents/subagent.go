@@ -140,8 +140,10 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 			}
 
 			streamBlock := agent.OpenAITypedStreamBlock(ctx, sessiondb.StreamBlockSubagent, request.Name)
+			subagentCtx := ctx
 			if streamBlock != nil {
 				defer streamBlock.Close()
+				subagentCtx = streamBlock.ChildContext(ctx)
 			}
 
 			// Buffer only for an older/non-streaming runtime. Typed blocks give
@@ -174,7 +176,7 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 				subagentRequest.RunWithTools = runner.RunSubagentWithTools
 			}
 
-			s, err := subagent.New(configured.ProviderName(), configured.ModelName(), configured.EnvironmentValue).Run(ctx, subagentRequest)
+			s, err := subagent.New(configured.ProviderName(), configured.ModelName(), configured.EnvironmentValue).Run(subagentCtx, subagentRequest)
 			resp.store(i, request.Name, s, err)
 
 			blockMu.Lock()

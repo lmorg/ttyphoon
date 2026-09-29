@@ -2,12 +2,12 @@ package sessiondb
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
@@ -52,8 +52,6 @@ type sessionLogState struct {
 	requestOpen bool
 	runID       uint64
 }
-
-var aiSessionLogRunID atomic.Uint64
 
 var aiSessionLogStore = struct {
 	sync.Mutex
@@ -594,14 +592,21 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		var sessionID int64
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
-			if ref.requestOpen {
-				ref.streamed.Reset()
-				ref.requestOpen = false
-			}
-			ref.runID = aiSessionLogRunID.Add(1)
-			runID = ref.runID
 			sessionID = ref.sessionID
-			prefix = ensureRequestOpenLocked(ref, ctx, now)
+			if sessionID > 0 {
+				allocatedRunID, allocErr := AllocateStreamRunID(workspace, formatSessionLogTimestamp(now))
+				if allocErr != nil {
+					log.Printf("cannot allocate AI stream run ID for workspace %q: %v", workspace, allocErr)
+				} else {
+					if ref.requestOpen {
+						ref.streamed.Reset()
+						ref.requestOpen = false
+					}
+					ref.runID = allocatedRunID
+					runID = ref.runID
+					prefix = ensureRequestOpenLocked(ref, ctx, now)
+				}
+			}
 		}
 		aiSessionLogStore.Unlock()
 		if runID > 0 && sessionID > 0 {

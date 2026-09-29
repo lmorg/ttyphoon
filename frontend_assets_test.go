@@ -48,7 +48,10 @@ func TestResolveNotesAssetAllowsFilesUnderDocumentsTtyphoon(t *testing.T) {
 	if err := os.MkdirAll(documentsDir, 0o700); err != nil {
 		t.Fatalf("unable to create Documents/ttyphoon: %v", err)
 	}
-	imagePath := filepath.Join(documentsDir, "reference.png")
+	imagePath := filepath.Join(documentsDir, ".images", "generated-image.png")
+	if err := os.MkdirAll(filepath.Dir(imagePath), 0o700); err != nil {
+		t.Fatalf("unable to create Documents/ttyphoon/.images: %v", err)
+	}
 	if err := os.WriteFile(imagePath, []byte("not-really-a-png"), 0o600); err != nil {
 		t.Fatalf("unable to seed Documents asset: %v", err)
 	}
@@ -59,6 +62,14 @@ func TestResolveNotesAssetAllowsFilesUnderDocumentsTtyphoon(t *testing.T) {
 	}
 	if !pathWithinRoot(resolveSymlinks(documentsDir), resolved) {
 		t.Fatalf("resolveNotesAsset(%q) escaped Documents/ttyphoon: %s", imagePath, resolved)
+	}
+}
+
+func TestAIImagesDirUsesDocumentsTtyphoon(t *testing.T) {
+	home := filepath.Join(string(filepath.Separator), "home", "user")
+	want := filepath.Join(home, "Documents", "ttyphoon", ".images")
+	if got := aiImagesDir(home); got != want {
+		t.Fatalf("aiImagesDir(%q) = %q, want %q", home, got, want)
 	}
 }
 

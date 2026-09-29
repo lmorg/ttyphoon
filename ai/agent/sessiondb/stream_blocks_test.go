@@ -55,3 +55,49 @@ func TestStreamBlockLifecycle(t *testing.T) {
 		t.Fatalf("prompt=%d blockPrompt=%d content=%q status=%q", promptID, blockPromptID, content, status)
 	}
 }
+
+func TestDatabaseAllocatesPersistentRunAndBlockIDs(t *testing.T) {
+	workspace := "stream-database-owned-id-test"
+	state, err := CreateSession(workspace, "", 24)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	path, err := dbPath(workspace)
+	if err != nil {
+		t.Fatalf("dbPath: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	if err := CreateStreamPrompt(workspace, state.ActiveSessionID, 0, 7, "existing", "start"); err != nil {
+		t.Fatalf("CreateStreamPrompt: %v", err)
+	}
+	firstRunID, err := AllocateStreamRunID(workspace, "next")
+	if err != nil {
+		t.Fatalf("AllocateStreamRunID first: %v", err)
+	}
+	secondRunID, err := AllocateStreamRunID(workspace, "later")
+	if err != nil {
+		t.Fatalf("AllocateStreamRunID second: %v", err)
+	}
+	if firstRunID <= 7 || secondRunID <= firstRunID {
+		t.Fatalf("allocated run ids = %d, %d; want increasing IDs above existing run 7", firstRunID, secondRunID)
+	}
+
+	block := AIStreamBlock{
+		SessionID: state.ActiveSessionID,
+		RunID:     firstRunID,
+		Kind:      StreamBlockToolCall,
+		Status:    "open",
+	}
+	firstBlockID, err := CreateStreamBlockWithDatabaseID(workspace, block, "start")
+	if err != nil {
+		t.Fatalf("CreateStreamBlockWithDatabaseID first: %v", err)
+	}
+	secondBlockID, err := CreateStreamBlockWithDatabaseID(workspace, block, "start")
+	if err != nil {
+		t.Fatalf("CreateStreamBlockWithDatabaseID second: %v", err)
+	}
+	if firstBlockID == "" || secondBlockID == "" || firstBlockID == secondBlockID {
+		t.Fatalf("allocated block ids = %q, %q; want distinct non-empty IDs", firstBlockID, secondBlockID)
+	}
+}

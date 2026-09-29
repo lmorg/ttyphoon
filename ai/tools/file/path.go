@@ -17,7 +17,7 @@ func resolveWorkspacePath(agt aitypes.Agent, name string) (string, error) {
 
 // resolveAnyPath resolves name to an absolute path without the project-root
 // restriction, for read-only tools that need to browse outside the workspace
-// (e.g. the images this agent itself generates under ~/<app>/.images).
+// (e.g. the images this agent itself generates under ~/Documents/<app>/.images).
 func resolveAnyPath(agt aitypes.Agent, name string) (string, error) {
 	return resolvePath(agt, name, false)
 }

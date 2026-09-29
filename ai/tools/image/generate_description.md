@@ -31,7 +31,7 @@ Rules:
 - `file` is optional and should be **omitted** in almost every case. Only set it
   if the user has explicitly asked for the image to be saved at a particular
   name or path. Do not invent a filename. When omitted, the image is saved to a
-  timestamped `.png` under `~/ttyphoon/.images/` automatically.
+  timestamped `.png` under `~/Documents/ttyphoon/.images/` automatically.
 - When the user does specify `file`, it is relative to the working directory and
   must stay within it. Any parent directories are created for you. An existing
   file will NOT be overwritten; the call fails instead.
@@ -44,5 +44,5 @@ generate one image per request unless the user explicitly asks for variations.
 
 On success the tool returns the path the image was written to. Reference that
 exact path in your reply as markdown, for example
-`![lighthouse](/home/user/ttyphoon/.images/generated-image-20260826-140301.png)`,
+`![lighthouse](/home/user/Documents/ttyphoon/.images/generated-image-20260826-140301.png)`,
 so the user can see it inline.

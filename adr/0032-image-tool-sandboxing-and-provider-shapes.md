@@ -21,7 +21,7 @@ real:
    endpoint itself is the wrong shape for that provider.
 
 2. **The model can't browse where it already writes.** `generateImage` writes
-   to `~/ttyphoon/.images/` by default, deliberately outside the project root
+  to `~/Documents/ttyphoon/.images/` by default, deliberately outside the project root
    so generated images don't clutter the user's workspace (see ADR 0029). But
    `readDirectory`, like every other file tool, rejected any path outside the
    project root. The model had no way to list what it had already generated in
@@ -41,7 +41,7 @@ provider should surface as an error, not be silently retried with a different
 request shape.
 
 **`resolveInputImagePath` trusts two roots, not one.** An `inputImage` must
-resolve inside the project root *or* inside `~/<app>/.images` - the same
+resolve inside the project root *or* inside `~/Documents/<app>/.images` - the same
 directory `generateImage` itself writes to. This mirrors the boundary already
 used for output paths (ADR 0029's default path), rather than opening the tool
 up to arbitrary absolute paths.
@@ -60,7 +60,7 @@ generated images.
 
 - Editing an existing image works against both OpenAI and OpenRouter, using
   the request shape each one actually implements.
-- `readDirectory` can list `~/ttyphoon/.images` (or any other absolute path)
+- `readDirectory` can list `~/Documents/ttyphoon/.images` (or any other absolute path)
   but cannot read file contents or write/patch outside the workspace - those
   tools kept their existing restriction.
 - Adding a third provider with yet another edit shape means adding another
@@ -74,5 +74,5 @@ generated images.
 - `ai/tools/file/path.go` - `resolveWorkspacePath`, `resolveAnyPath`,
   `resolvePath`
 - `ai/tools/file/directory.go` - `Directory.Call`
-- ADR 0029 (amended in spirit): the `~/ttyphoon/.images` boundary is now
+- ADR 0029 (amended in spirit): the `~/Documents/ttyphoon/.images` boundary is now
   referenced from two places, not just the writer

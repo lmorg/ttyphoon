@@ -19,7 +19,7 @@ func TestInitStreamTablesCreatesSchema(t *testing.T) {
 		t.Fatalf("second initDB: %v", err)
 	}
 
-	for _, table := range []string{"stream_prompts", "stream_blocks"} {
+	for _, table := range []string{"stream_prompts", "stream_run_ids", "stream_blocks"} {
 		var count int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil {
 			t.Fatalf("lookup table %q: %v", table, err)

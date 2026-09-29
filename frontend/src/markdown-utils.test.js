@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { getCustomRegexpMock, getImageMock } = vi.hoisted(() => ({
+const { getCustomRegexpMock, getImageMock, hyperlinkOpenWithDefaultMock } = vi.hoisted(() => ({
     getCustomRegexpMock: vi.fn(() => Promise.resolve([])),
     getImageMock: vi.fn(() => Promise.resolve('')),
+    hyperlinkOpenWithDefaultMock: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetImage: getImageMock,
     GetCustomRegexp: getCustomRegexpMock,
-    HyperlinkOpenWithDefault: vi.fn(() => Promise.resolve()),
+    HyperlinkOpenWithDefault: hyperlinkOpenWithDefaultMock,
 }));
 
 vi.mock('./fullscreen-image-overlay', () => ({
@@ -22,7 +23,7 @@ vi.mock('mermaid', () => ({
     },
 }));
 
-import { applyMarkdownImageAltSizing, autoHyperlink, notesAssetURL, parseMarkdownImageAltSizing, processWailsImages } from './markdown-utils.js';
+import { applyMarkdownImageAltSizing, autoHyperlink, notesAssetURL, parseMarkdownImageAltSizing, processLinks, processWailsImages } from './markdown-utils.js';
 
 describe('wails image asset rewriting', () => {
     const containerWith = (src) => {
@@ -50,6 +51,26 @@ describe('wails image asset rewriting', () => {
         expect(container.querySelector('img').getAttribute('src'))
             .toBe('/__asset?path=my%20diagram.png');
         expect(container.querySelector('img').dataset.originalFilename).toBe('my diagram.png');
+    });
+
+    it('preserves an absolute local image path when the webview resolves it against its Wails origin', () => {
+        const absolutePath = '/Users/laurencemorgan/Documents/ttyphoon/.images/generated-image-20260929-160156.png';
+        const container = containerWith(absolutePath);
+        const img = container.querySelector('img');
+        let resolvedSrc = `wails://wails${absolutePath}`;
+        Object.defineProperty(img, 'src', {
+            configurable: true,
+            get: () => resolvedSrc,
+            set: (value) => {
+                img.setAttribute('src', value);
+                resolvedSrc = `wails://wails${value}`;
+            },
+        });
+
+        processWailsImages(container);
+
+        expect(img.getAttribute('src')).toBe(notesAssetURL(absolutePath));
+        expect(img.dataset.originalFilename).toBe('generated-image-20260929-160156.png');
     });
 
     it('is idempotent so repeated passes do not double-encode the path', () => {
@@ -187,5 +208,25 @@ describe('custom markdown hyperlinks', () => {
         await autoHyperlink(second);
         expect(second.querySelector('a')?.getAttribute('href')).toBe('ttyphoon://ai?prompt=HAP-2');
         expect(getCustomRegexpMock).toHaveBeenCalledTimes(callsBefore + 2);
+    });
+
+    it('opens an auto-hyperlinked external URL once across repeated markdown passes', async () => {
+        hyperlinkOpenWithDefaultMock.mockClear();
+        getCustomRegexpMock.mockResolvedValueOnce([{
+            pattern: '(HAP-[0-9]+)',
+            link: 'https://jira.example/browse/$1',
+        }]);
+        const container = document.createElement('div');
+        container.textContent = 'Review HAP-13379 now';
+
+        await autoHyperlink(container);
+        processLinks(container);
+        processLinks(container);
+
+        const link = container.querySelector('a');
+        link?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(hyperlinkOpenWithDefaultMock).toHaveBeenCalledTimes(1);
+        link?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        expect(hyperlinkOpenWithDefaultMock).toHaveBeenCalledTimes(2);
     });
 });

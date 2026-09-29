@@ -3,6 +3,7 @@ package sessiondb
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -228,6 +229,57 @@ func GetStreamBlockContent(workspace string, sessionID, promptID int64, blockID 
 	return content, err
 }
 
+func AllocateStreamRunID(workspace, started string) (uint64, error) {
+	var runID int64
+	err := withStreamDB(workspace, func(db *sql.DB) error {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("cannot begin stream run allocation: %w", err)
+		}
+		defer tx.Rollback()
+
+		var maxExistingID, maxAllocatedID int64
+		if err := tx.QueryRow(`
+			SELECT COALESCE(MAX(runId), 0)
+			FROM (
+				SELECT runId FROM stream_prompts
+				UNION ALL
+				SELECT runId FROM stream_blocks
+			)
+		`).Scan(&maxExistingID); err != nil {
+			return fmt.Errorf("cannot inspect existing stream run ids: %w", err)
+		}
+		if err := tx.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM stream_run_ids`).Scan(&maxAllocatedID); err != nil {
+			return fmt.Errorf("cannot inspect allocated stream run ids: %w", err)
+		}
+		if maxExistingID > maxAllocatedID {
+			if _, err := tx.Exec(`INSERT INTO stream_run_ids (id, started) VALUES (?, ?)`, maxExistingID, started); err != nil {
+				return fmt.Errorf("cannot seed stream run ids: %w", err)
+			}
+		}
+
+		result, err := tx.Exec(`INSERT INTO stream_run_ids (started) VALUES (?)`, started)
+		if err != nil {
+			return fmt.Errorf("cannot allocate stream run id: %w", err)
+		}
+		runID, err = result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("cannot read allocated stream run id: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("cannot commit stream run allocation: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if runID <= 0 {
+		return 0, fmt.Errorf("allocated stream run id must be positive")
+	}
+	return uint64(runID), nil
+}
+
 func CreateStreamPrompt(workspace string, sessionID int64, promptID int64, runID uint64, heading, started string) error {
 	return withStreamDB(workspace, func(db *sql.DB) error {
 		_, err := db.Exec(`
@@ -264,6 +316,50 @@ func CreateStreamBlock(workspace string, block AIStreamBlock, created string) er
 		}
 		return nil
 	})
+}
+
+func CreateStreamBlockWithDatabaseID(workspace string, block AIStreamBlock, created string) (string, error) {
+	if strings.TrimSpace(string(block.Kind)) == "" {
+		return "", fmt.Errorf("stream block kind is required")
+	}
+	if block.SessionID <= 0 {
+		return "", fmt.Errorf("stream block session id must be positive")
+	}
+
+	var blockID string
+	err := withStreamDB(workspace, func(db *sql.DB) error {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("cannot begin stream block creation: %w", err)
+		}
+		defer tx.Rollback()
+
+		result, err := tx.Exec(`
+			INSERT INTO stream_blocks
+				(sessionId, promptId, runId, blockId, parentId, kind, label, ordinal, status, content, created, updated)
+			VALUES (?, ?, ?, 'pending-' || lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?)
+		`, block.SessionID, block.PromptID, block.RunID, block.ParentID, string(block.Kind), block.Label,
+			block.Ordinal, streamBlockStatus(block.Status), block.Content, created, created)
+		if err != nil {
+			return fmt.Errorf("cannot create stream block: %w", err)
+		}
+		rowID, err := result.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("cannot read stream block id: %w", err)
+		}
+		blockID = strconv.FormatInt(rowID, 10)
+		if _, err := tx.Exec(`UPDATE stream_blocks SET blockId = ? WHERE id = ?`, blockID, rowID); err != nil {
+			return fmt.Errorf("cannot assign database stream block id: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("cannot commit stream block creation: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return blockID, nil
 }
 
 func AppendStreamBlock(workspace string, sessionID int64, runID uint64, blockID, delta, status, updated string) error {

@@ -445,7 +445,7 @@ func defaultImagesDir() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(home, app.DirName, ".images"), nil
+	return filepath.Join(home, "Documents", app.DirName, ".images"), nil
 }
 
 // defaultImagePath is used when the caller doesn't name a file.

@@ -65,11 +65,13 @@ Serve images over the Wails asset server instead of the JS bridge.
   requests rather than a sequential `await` loop.
 - No size cap is needed. Streaming makes large files a bandwidth question rather
   than an allocation spike.
-- **Behavioural change:** images resolving outside the five permitted roots now
+- **Behavioural change:** images resolving outside the six permitted roots now
   return `404` where `GetImage` previously read them from anywhere on disk.
 - Path traversal and non-image reads are rejected on the new endpoint. The legacy
   `GetImage` binding is retained but is no longer on any hot path; its unsound
   `rxExtension` check remains and should be removed with the method.
+- New AI uploads and generated images are written under
+  `~/Documents/ttyphoon/.images`.
 - The context menu costs one fetch per invoked action rather than one per
   right-click. The bytes come from the local asset server, not the bridge.
 

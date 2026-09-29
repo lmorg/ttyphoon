@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
@@ -42,6 +44,14 @@ type fakeRuntime struct {
 
 	resetCalled bool
 }
+
+type retryAfterTestError struct {
+	Response *http.Response
+	err      error
+}
+
+func (e *retryAfterTestError) Error() string { return e.err.Error() }
+func (e *retryAfterTestError) Unwrap() error { return e.err }
 
 func (f *fakeRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*schema.Message, streamCallback func(string)) (string, error) {
 	f.called = true
@@ -852,6 +862,93 @@ func TestIsTransientStreamError(t *testing.T) {
 	}
 	if isTransientStreamError(errors.New("tool permission denied")) {
 		t.Fatal("isTransientStreamError() = true for a non-transport error")
+	}
+}
+
+func TestIsRateLimitError(t *testing.T) {
+	for _, err := range []error{
+		&openai.APIError{HTTPStatusCode: http.StatusTooManyRequests, HTTPStatus: "429 Too Many Requests"},
+		errors.New("[NodeRunError] error, status code: 429, status: 429 Too Many Requests, message: OpenRouter could not verify available credits for this request in time. Retry shortly."),
+	} {
+		if !isRateLimitError(err) {
+			t.Fatalf("isRateLimitError(%q) = false, want true", err)
+		}
+	}
+	if isRateLimitError(errors.New("status code: 503, service unavailable")) {
+		t.Fatal("isRateLimitError() = true for non-rate-limit error")
+	}
+}
+
+func TestRateLimitRetryDelayHonorsRetryAfter(t *testing.T) {
+	now := time.Date(2026, time.September, 28, 22, 0, 0, 0, time.UTC)
+	for name, value := range map[string]string{
+		"seconds": "2.5",
+		"date":    now.Add(3 * time.Second).Format(http.TimeFormat),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := &retryAfterTestError{
+				Response: &http.Response{Header: http.Header{"Retry-After": []string{value}}},
+				err:      errors.New("429 Too Many Requests"),
+			}
+			want := 2500 * time.Millisecond
+			if name == "date" {
+				want = 3 * time.Second
+			}
+			if got := rateLimitRetryDelay(err, 1, now); got != want {
+				t.Fatalf("rateLimitRetryDelay() = %s, want %s", got, want)
+			}
+		})
+	}
+	if got := rateLimitRetryDelay(errors.New("429 Too Many Requests"), 3, now); got != 4*time.Second {
+		t.Fatalf("fallback delay = %s, want 4s", got)
+	}
+	longRetry := &retryAfterTestError{
+		Response: &http.Response{Header: http.Header{"Retry-After": []string{"45"}}},
+		err:      errors.New("429 Too Many Requests"),
+	}
+	if got := rateLimitRetryDelay(longRetry, 3, now); got != 45*time.Second {
+		t.Fatalf("long Retry-After delay = %s, want 45s", got)
+	}
+	millisecondRetry := &retryAfterTestError{
+		Response: &http.Response{Header: http.Header{"Retry-After-Ms": []string{"125"}}},
+		err:      errors.New("429 Too Many Requests"),
+	}
+	if got := rateLimitRetryDelay(millisecondRetry, 1, now); got != 125*time.Millisecond {
+		t.Fatalf("Retry-After-Ms delay = %s, want 125ms", got)
+	}
+}
+
+func TestEinoRuntimeRetriesRateLimitWithCheckpoint(t *testing.T) {
+	var calls int
+	var retryMessages []*schema.Message
+	runtime := &einoRuntime{agent: &Agent{}}
+	runtime.boundedWindowRunner = func(_ context.Context, messages []*schema.Message, _ func(string)) (string, error) {
+		calls++
+		if calls == 1 {
+			return "partial", &retryAfterTestError{
+				Response: &http.Response{Header: http.Header{"Retry-After": []string{"0.001"}}},
+				err:      errors.New("429 Too Many Requests"),
+			}
+		}
+		retryMessages = append([]*schema.Message(nil), messages...)
+		return "recovered", nil
+	}
+
+	var streamed strings.Builder
+	result, err := runtime.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("original task")}, func(chunk string) {
+		streamed.WriteString(chunk)
+	})
+	if err != nil {
+		t.Fatalf("RunLLMWithMessageStream() error = %v", err)
+	}
+	if result != "partialrecovered" || calls != 2 {
+		t.Fatalf("result = %q calls = %d, want partialrecovered and 2", result, calls)
+	}
+	if len(retryMessages) != 2 || !strings.Contains(retryMessages[1].Content, "Continuation checkpoint") {
+		t.Fatalf("retry messages = %+v, want checkpoint continuation", retryMessages)
+	}
+	if !strings.Contains(streamed.String(), "Rate limited; retrying in 1ms (1/3)") {
+		t.Fatalf("streamed output = %q, want rate-limit progress marker", streamed.String())
 	}
 }
 

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -17,7 +16,6 @@ type aiStreamBlockWriter struct {
 
 	mu          sync.Mutex
 	nextOrdinal int64
-	nextID      uint64
 	text        *aiStreamBlockHandle
 	thinking    *aiStreamBlockHandle
 	notice      *aiStreamBlockHandle
@@ -44,7 +42,6 @@ func newAIStreamBlockWriter(workspace string, emit func(sessiondb.AIStreamBlock)
 		sessionID: identity.SessionID,
 		runID:     identity.RunID,
 		emit:      emit,
-		nextID:    1,
 	}
 }
 
@@ -62,24 +59,23 @@ func (w *aiStreamBlockWriter) OpenWithLabel(kind sessiondb.StreamBlockKind, pare
 	w.mu.Lock()
 	ordinal := w.nextOrdinal
 	w.nextOrdinal++
-	blockID := fmt.Sprintf("%d-%d", w.runID, w.nextID)
-	w.nextID++
 	w.mu.Unlock()
 
 	block := sessiondb.AIStreamBlock{
 		SessionID: w.sessionID,
 		RunID:     w.runID,
 		Workspace: w.workspace,
-		BlockID:   blockID,
 		ParentID:  parentID,
 		Kind:      kind,
 		Label:     label,
 		Ordinal:   ordinal,
 		Status:    "open",
 	}
-	if err := sessiondb.CreateStreamBlock(w.workspace, block, streamBlockNow()); err != nil {
+	blockID, err := sessiondb.CreateStreamBlockWithDatabaseID(w.workspace, block, streamBlockNow())
+	if err != nil {
 		return nil
 	}
+	block.BlockID = blockID
 	w.emitBlock(block)
 	return &aiStreamBlockHandle{writer: w, block: block}
 }
@@ -151,6 +147,14 @@ func (w *aiStreamBlockWriter) AppendNotice(text string) {
 	if block != nil {
 		block.Append(text)
 	}
+}
+
+func (w *aiStreamBlockWriter) AppendNoticeForParent(text, parentID string) {
+	if parentID == "" {
+		w.AppendNotice(text)
+		return
+	}
+	w.AppendStandalone(sessiondb.StreamBlockNotice, text, parentID)
 }
 
 func (w *aiStreamBlockWriter) AppendStandalone(kind sessiondb.StreamBlockKind, text, parentID string) string {

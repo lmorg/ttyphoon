@@ -8,7 +8,10 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -63,6 +66,9 @@ const einoMaxHistoryTurns = 8
 const (
 	maxTransientStreamRetries = 2
 	transientStreamRetryDelay = 250 * time.Millisecond
+	maxRateLimitRetries       = 3
+	rateLimitRetryBaseDelay   = time.Second
+	rateLimitRetryMaxDelay    = 30 * time.Second
 )
 
 // Anthropic's output cap; too low truncates tool-call JSON args mid-stream (e.g. large HTML body fields), leaving invalid JSON.
@@ -140,8 +146,15 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
-	toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, t.delegate.Name())
-	ctx = withAIStreamBlockParent(ctx, toolCallID)
+	toolCallBlock := OpenAITypedStreamBlock(ctx, sessiondb.StreamBlockToolCall, t.delegate.Name())
+	if toolCallBlock != nil {
+		toolCallBlock.Emit(argumentsInJSON)
+		ctx = toolCallBlock.ChildContext(ctx)
+		defer toolCallBlock.Close()
+	} else {
+		toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, t.delegate.Name())
+		ctx = withAIStreamBlockParent(ctx, toolCallID)
+	}
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
 			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
@@ -183,7 +196,7 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if summarising {
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
-			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, sErr.Error())
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, sErr.Error())
 			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
 			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
 		}
@@ -429,11 +442,28 @@ func emitAIStreamToolProgress(ctx context.Context, text string) {
 	}
 	if emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter); ok {
 		if emitter.blocks != nil {
-			emitter.blocks.AppendNotice(text)
+			emitter.blocks.AppendNoticeForParent(text, aiStreamBlockParent(ctx))
 			return
 		}
 		emitter.emitLegacyText(text)
 	}
+}
+
+func newChildAIStreamEmitter(ctx context.Context, emit func(string)) *aiStreamEmitter {
+	emitter := &aiStreamEmitter{fn: emit}
+	emitter.blocks = streamBlockWriterFromContext(ctx)
+	return emitter
+}
+
+func streamBlockWriterFromContext(ctx context.Context) *aiStreamBlockWriter {
+	if ctx == nil {
+		return nil
+	}
+	emitter, ok := ctx.Value(aiStreamCallbackCtxKey{}).(*aiStreamEmitter)
+	if !ok || emitter == nil {
+		return nil
+	}
+	return emitter.blocks
 }
 
 func emitAIStreamToolBlock(ctx context.Context, kind sessiondb.StreamBlockKind, content string) {
@@ -531,6 +561,14 @@ func (e *AIStreamBlockEmitter) Close() {
 	if e != nil && e.block != nil {
 		e.block.Close()
 	}
+}
+
+// ChildContext scopes blocks emitted from ctx beneath this block.
+func (e *AIStreamBlockEmitter) ChildContext(ctx context.Context) context.Context {
+	if e == nil || e.block == nil {
+		return ctx
+	}
+	return withAIStreamBlockParent(ctx, e.block.block.BlockID)
 }
 
 // EmitAIStreamToolProgress returns the current run's panel and log emitter.
@@ -821,6 +859,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 	var response strings.Builder
 	continuationMessages := append([]*schema.Message(nil), messages...)
 	transientRetries := 0
+	rateLimitRetries := 0
 
 	// Tool permissions are scoped to the user prompt, so continuations inherit them.
 	r.agent.ResetToolPermissions()
@@ -839,6 +878,20 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		result, err := r.runBoundedWindow(windowCtx, continuationMessages, streamCallback)
 		checkpoint.setVisibleOutput(result)
 		response.WriteString(result)
+		if isRateLimitError(err) && ctx.Err() == nil && rateLimitRetries < maxRateLimitRetries {
+			rateLimitRetries++
+			delay := rateLimitRetryDelay(err, rateLimitRetries, time.Now())
+			emitAIStreamToolProgress(ctx, fmt.Sprintf(
+				"\n\n**Rate limited; retrying in %s (%d/%d)**\n\n",
+				delay.Round(time.Millisecond), rateLimitRetries, maxRateLimitRetries,
+			))
+			if waitErr := waitForRetry(ctx, delay); waitErr != nil {
+				return response.String(), waitErr
+			}
+			retrySummary := formatContinuationCheckpointMessage(checkpoint)
+			continuationMessages = append(continuationMessages, schema.UserMessage(retrySummary))
+			continue
+		}
 		if isTransientStreamError(err) && ctx.Err() == nil && transientRetries < maxTransientStreamRetries {
 			transientRetries++
 			if waitErr := waitForTransientStreamRetry(ctx); waitErr != nil {
@@ -854,6 +907,7 @@ func (r *einoRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 		if err == nil {
 			transientRetries = 0
+			rateLimitRetries = 0
 		}
 		if err == nil || !isMaxStepError(err) {
 			return response.String(), err
@@ -1038,7 +1092,11 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 		}
 	}
 
-	emitter := &aiStreamEmitter{fn: streamCallback, blocks: r.newStreamBlockWriter()}
+	blocks := streamBlockWriterFromContext(ctx)
+	if blocks == nil {
+		blocks = r.newStreamBlockWriter()
+	}
+	emitter := &aiStreamEmitter{fn: streamCallback, blocks: blocks}
 	if emitter.blocks != nil {
 		defer emitter.blocks.CloseAll()
 	}
@@ -1162,8 +1220,78 @@ func isTransientStreamError(err error) bool {
 	return false
 }
 
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) && apiErr.HTTPStatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "status code: 429") ||
+		strings.Contains(message, "429 too many requests") ||
+		strings.Contains(message, "too many requests")
+}
+
+func rateLimitRetryDelay(err error, attempt int, now time.Time) time.Duration {
+	if retryAfter := retryAfterFromError(err, now); retryAfter > 0 {
+		return retryAfter
+	}
+	delay := rateLimitRetryBaseDelay << max(0, attempt-1)
+	return min(delay, rateLimitRetryMaxDelay)
+}
+
+func retryAfterFromError(err error, now time.Time) time.Duration {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		value := reflect.ValueOf(current)
+		if value.Kind() == reflect.Pointer {
+			if value.IsNil() {
+				continue
+			}
+			value = value.Elem()
+		}
+		if value.Kind() != reflect.Struct {
+			continue
+		}
+		response := value.FieldByName("Response")
+		if !response.IsValid() || !response.CanInterface() {
+			continue
+		}
+		httpResponse, ok := response.Interface().(*http.Response)
+		if !ok || httpResponse == nil {
+			continue
+		}
+		if milliseconds, err := strconv.ParseFloat(strings.TrimSpace(httpResponse.Header.Get("Retry-After-Ms")), 64); err == nil && milliseconds > 0 {
+			return time.Duration(milliseconds * float64(time.Millisecond))
+		}
+		if delay := parseRetryAfter(httpResponse.Header.Get("Retry-After"), now); delay > 0 {
+			return delay
+		}
+	}
+	return 0
+}
+
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.ParseFloat(value, 64); err == nil && seconds > 0 {
+		return time.Duration(seconds * float64(time.Second))
+	}
+	if retryAt, err := http.ParseTime(value); err == nil && retryAt.After(now) {
+		return retryAt.Sub(now)
+	}
+	return 0
+}
+
 func waitForTransientStreamRetry(ctx context.Context) error {
-	timer := time.NewTimer(transientStreamRetryDelay)
+	return waitForRetry(ctx, transientStreamRetryDelay)
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
 	case <-timer.C:

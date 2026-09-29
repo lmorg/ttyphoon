@@ -57,7 +57,7 @@ func (r *einoRuntime) runSubagentStream(ctx context.Context, messages []*schema.
 
 	// Routing tool progress through the sub-agent's emitter keeps tool calls
 	// inside its own buffered block rather than the parent's stream.
-	emitter := &aiStreamEmitter{fn: emit}
+	emitter := newChildAIStreamEmitter(ctx, emit)
 	ctx = withAIStreamCallback(ctx, emitter)
 
 	stream, err := r.agentReact.Stream(ctx, messages)
@@ -85,7 +85,13 @@ func (r *einoRuntime) runSubagentStream(ctx context.Context, messages []*schema.
 			continue
 		}
 		response.WriteString(msg.Content)
-		emitter.emitText(msg.Content)
+		if emitter.blocks != nil {
+			if emit != nil {
+				emit(msg.Content)
+			}
+		} else {
+			emitter.emitText(msg.Content)
+		}
 	}
 	emitter.flush()
 

@@ -389,6 +389,57 @@ export function createAIPipelineFormatter(container, options = {}) {
         return ['tool-call', 'tool-output', 'tool-error', 'tool-summary', 'notice'].includes(String(kind || ''));
     }
 
+    function isCollapsedToolOutput(kind) {
+        return kind === 'tool-output' || kind === 'tool-summary';
+    }
+
+    function updateToolOutputStatus(entry) {
+        if (!entry.outputToggle) {
+            return;
+        }
+        const childEntries = Array.from(entry.children.children)
+            .map((child) => streamBlocks.get(child.dataset.blockId))
+            .filter(Boolean);
+        const outputEntries = childEntries
+            .filter((child) => child && isCollapsedToolOutput(child.kind));
+        const hasError = childEntries.some((child) => child.kind === 'tool-error');
+        const summaryInProgress = outputEntries.some((child) => child.kind === 'tool-summary' && !child.closed);
+        const outputComplete = outputEntries.some((child) => child.closed);
+        const toolCallRunning = !entry.closed;
+        const status = hasError ? 'error' : summaryInProgress ? 'summarising' : toolCallRunning ? 'running' : outputComplete || entry.closed ? 'successful' : '';
+        const caption = status === 'error' ? 'Error' : status === 'summarising' ? 'Summarising' : status === 'running' ? 'Running' : status === 'successful' ? 'Successful' : '';
+        entry.outputToggle.hidden = !status;
+        entry.outputToggle.dataset.status = status;
+        entry.outputCheckbox.checked = status === 'successful';
+        entry.outputCaption.textContent = caption;
+        entry.outputSpinner.hidden = status !== 'summarising' && status !== 'running';
+        const expanded = entry.wrapper.dataset.outputExpanded === 'true';
+        entry.outputToggle.setAttribute('aria-expanded', String(expanded));
+        entry.outputCheckbox.setAttribute('aria-label', `${caption}. Click to show or hide tool output.`);
+        entry.outputToggle.title = `${caption}. Click to show or hide tool output.`;
+    }
+
+    function setToolOutputExpanded(entry, expanded) {
+        entry.wrapper.dataset.outputExpanded = expanded ? 'true' : 'false';
+        updateToolOutputStatus(entry);
+        for (const child of entry.children.children) {
+            const childEntry = streamBlocks.get(child.dataset.blockId);
+            if (childEntry && isCollapsedToolOutput(childEntry.kind)) {
+                child.hidden = !expanded;
+            }
+        }
+    }
+
+    function syncToolOutputVisibility(entry) {
+        const parent = streamBlocks.get(entry.parentId);
+        if (parent?.kind === 'tool-call') {
+            if (isCollapsedToolOutput(entry.kind)) {
+                entry.wrapper.hidden = parent.wrapper.dataset.outputExpanded !== 'true';
+            }
+            updateToolOutputStatus(parent);
+        }
+    }
+
     function openBlock(block) {
         const blockId = String(block?.blockId || '');
         if (!blockId) {
@@ -403,25 +454,64 @@ export function createAIPipelineFormatter(container, options = {}) {
         const wrapper = document.createElement('div');
         const kind = String(block?.kind || 'text');
         const parentId = String(block?.parentId || '');
+        let outputToggle = null;
+        let outputCheckbox = null;
+        let outputCaption = null;
+        let outputSpinner = null;
+        let toolCallToggle = null;
+        let toolCallInput = null;
+        const closed = block?.status === 'closed';
         wrapper.dataset.blockId = blockId;
         wrapper.dataset.parentId = parentId;
         wrapper.dataset.blockKind = kind;
+        wrapper.dataset.blockStatus = closed ? 'closed' : 'open';
 
         let contentRoot;
         if (isRawBlock(kind)) {
             wrapper.classList.add('notes-ai-markdown', 'markdown-body');
-            if (kind === 'tool-call' && block?.label) {
+            if (kind === 'tool-call') {
                 const heading = document.createElement('h3');
                 heading.className = 'notes-ai-heading';
-                heading.textContent = `Tool call: \`${String(block.label)}\``;
+                toolCallToggle = document.createElement('button');
+                toolCallToggle.type = 'button';
+                toolCallToggle.className = 'notes-ai-tool-call-toggle';
+                toolCallToggle.appendChild(document.createTextNode('Tool call'));
+                if (block?.label) {
+                    toolCallToggle.appendChild(document.createTextNode(': '));
+                    const toolName = document.createElement('code');
+                    toolName.textContent = String(block.label);
+                    toolCallToggle.appendChild(toolName);
+                }
+                toolCallToggle.setAttribute('aria-expanded', 'false');
+                toolCallToggle.title = 'Show tool call input';
+                heading.appendChild(toolCallToggle);
                 wrapper.appendChild(heading);
             }
             const pre = document.createElement('pre');
             pre.className = 'notes-ai-code';
+            if (kind === 'tool-call') {
+                pre.hidden = true;
+                toolCallInput = pre;
+            }
             const code = document.createElement('code');
             pre.appendChild(code);
             wrapper.appendChild(pre);
             contentRoot = code;
+            if (kind === 'tool-call') {
+                outputToggle = document.createElement('label');
+                outputToggle.className = 'notes-ai-tool-output-toggle markdown-body';
+                outputToggle.hidden = true;
+                outputToggle.setAttribute('aria-expanded', 'false');
+                outputCheckbox = document.createElement('input');
+                outputCheckbox.type = 'checkbox';
+                outputCaption = document.createElement('span');
+                outputCaption.className = 'notes-ai-tool-output-caption';
+                outputSpinner = document.createElement('span');
+                outputSpinner.className = 'notes-ai-tool-output-spinner';
+                outputSpinner.setAttribute('aria-hidden', 'true');
+                outputToggle.append(outputCheckbox, outputCaption, outputSpinner);
+                wrapper.appendChild(outputToggle);
+            }
         } else {
             contentRoot = document.createElement('div');
             contentRoot.className = 'notes-ai-markdown markdown-body';
@@ -450,20 +540,52 @@ export function createAIPipelineFormatter(container, options = {}) {
             children,
             parentId,
             raw: isRawBlock(kind),
+            outputToggle,
+            outputCheckbox,
+            outputCaption,
+            outputSpinner,
+            toolCallToggle,
+            toolCallInput,
             rendering: false,
             needsRender: false,
-            closed: false,
+            closed,
             thinkingState: null,
             thinkingNeedsReset: false,
             streamingTextState: null,
             streamingTextNeedsReset: false,
         };
         streamBlocks.set(blockId, entry);
+        if (outputToggle) {
+            outputCheckbox.addEventListener('click', (event) => {
+                event.preventDefault();
+                setToolOutputExpanded(entry, entry.wrapper.dataset.outputExpanded !== 'true');
+            });
+            setToolOutputExpanded(entry, false);
+        }
+        if (toolCallToggle) {
+            toolCallToggle.addEventListener('click', () => {
+                toolCallInput.hidden = !toolCallInput.hidden;
+                const expanded = !toolCallInput.hidden;
+                toolCallToggle.setAttribute('aria-expanded', String(expanded));
+                toolCallToggle.title = expanded ? 'Hide tool call input' : 'Show tool call input';
+            });
+        }
 
         const waiting = pendingBlockChildren.get(blockId);
         if (waiting) {
             waiting.forEach((child) => children.appendChild(child));
             pendingBlockChildren.delete(blockId);
+        }
+        if (entry.kind === 'tool-call') {
+            updateToolOutputStatus(entry);
+            for (const child of entry.children.children) {
+                const childEntry = streamBlocks.get(child.dataset.blockId);
+                if (childEntry && isCollapsedToolOutput(childEntry.kind)) {
+                    child.hidden = entry.wrapper.dataset.outputExpanded !== 'true';
+                }
+            }
+        } else {
+            syncToolOutputVisibility(entry);
         }
         return entry;
     }
@@ -490,6 +612,10 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
         entry.closed = entry.closed || block?.status === 'closed';
         entry.wrapper.dataset.blockStatus = entry.closed ? 'closed' : 'open';
+        syncToolOutputVisibility(entry);
+        if (entry.kind === 'tool-call') {
+            updateToolOutputStatus(entry);
+        }
         entry.needsRender = true;
         scheduleBlockRender(entry);
     }

@@ -184,11 +184,17 @@ export function processWailsImages(container) {
     const images = container.querySelectorAll('img');
 
     for (const img of images) {
-        if (img.dataset.assetResolved === 'true' || !rxWailsUrl.test(img.src)) {
+        if (img.dataset.assetResolved === 'true') {
             continue;
         }
 
-        const raw = img.src.replace(rxWailsUrl, '');
+        const source = img.getAttribute('src') || img.src;
+        const resolvedSource = img.src;
+        if (!rxWailsUrl.test(source) && !rxWailsUrl.test(resolvedSource)) {
+            continue;
+        }
+
+        const raw = rxWailsUrl.test(source) ? source.replace(rxWailsUrl, '') : source;
         img.dataset.assetResolved = 'true';
 
         // Already rewritten on an earlier pass over the same nodes.
@@ -369,6 +375,10 @@ export function enableFullscreenMermaidDiagrams(container) {
  * @param {HTMLAnchorElement} a - The anchor to wire up
  */
 export function attachHyperlinkOpenHandlers(a) {
+    if (a.dataset.hyperlinkOpenBound === 'true') {
+        return;
+    }
+    a.dataset.hyperlinkOpenBound = 'true';
     a.addEventListener('click', (e) => {
         e.preventDefault();
         HyperlinkOpenWithDefault(a.href);

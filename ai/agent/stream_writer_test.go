@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,6 @@ func TestAIStreamBlockWriter_ConcurrentParentedBlocks(t *testing.T) {
 		workspace: workspace,
 		sessionID: state.ActiveSessionID,
 		runID:     99,
-		nextID:    1,
 		emit: func(block sessiondb.AIStreamBlock) {
 			eventsMu.Lock()
 			events = append(events, block)
@@ -142,7 +142,6 @@ func TestAIStreamBlockWriter_SplitsThinkingAroundToolBlock(t *testing.T) {
 		workspace: workspace,
 		sessionID: state.ActiveSessionID,
 		runID:     100,
-		nextID:    1,
 		emit: func(block sessiondb.AIStreamBlock) {
 			events = append(events, block)
 		},
@@ -175,5 +174,148 @@ func TestAIStreamBlockWriter_SplitsThinkingAroundToolBlock(t *testing.T) {
 		if event.Delta != "" && event.Content != "" {
 			t.Fatalf("live delta event copied full content: %+v", event)
 		}
+	}
+}
+
+func TestStreamBlockWriterFromContextReusesRunWriter(t *testing.T) {
+	writer := &aiStreamBlockWriter{runID: 123}
+	outerContext := withAIStreamCallback(context.Background(), &aiStreamEmitter{blocks: writer})
+
+	firstWindowWriter := streamBlockWriterFromContext(outerContext)
+	secondWindowEmitter := newChildAIStreamEmitter(outerContext, nil)
+	if firstWindowWriter != writer || secondWindowEmitter.blocks != writer {
+		t.Fatal("bounded windows did not reuse the run-scoped stream block writer")
+	}
+}
+
+func TestEinoAgentToolKeepsToolCallBlockOpenUntilReturn(t *testing.T) {
+	workspace := "stream-writer-tool-call-lifecycle-test"
+	state, err := sessiondb.CreateSession(workspace, "", 24)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	path := filepath.Join(home, "Documents", app.DirName, "session."+workspace+".db")
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if err := sessiondb.CreateStreamPrompt(workspace, state.ActiveSessionID, 0, 102, "request", "start"); err != nil {
+		t.Fatalf("CreateStreamPrompt: %v", err)
+	}
+
+	var events []sessiondb.AIStreamBlock
+	writer := &aiStreamBlockWriter{
+		workspace: workspace,
+		sessionID: state.ActiveSessionID,
+		runID:     102,
+		emit: func(block sessiondb.AIStreamBlock) {
+			events = append(events, block)
+		},
+	}
+	ctx := withAIStreamCallback(context.Background(), &aiStreamEmitter{blocks: writer})
+	tool := &einoAgentTool{delegate: &fakeAgentTool{enabled: true}}
+	if _, err := tool.InvokableRun(ctx, `{"path":"main.go"}`); err != nil {
+		t.Fatalf("InvokableRun: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("tool-call events = %d, want open and closed events", len(events))
+	}
+	if events[0].Kind != sessiondb.StreamBlockToolCall || events[0].Status != "open" || events[0].Label != "fake.tool" {
+		t.Fatalf("first event = %+v, want labelled open tool-call block", events[0])
+	}
+	if events[1].BlockID != events[0].BlockID || events[1].Status != "closed" || events[1].Delta != `{"path":"main.go"}` {
+		t.Fatalf("close event = %+v, want matching closed tool-call with input", events[1])
+	}
+}
+
+func TestSubagentToolActivityUsesNestedTypedBlocks(t *testing.T) {
+	workspace := "stream-writer-subagent-children-test"
+	state, err := sessiondb.CreateSession(workspace, "", 24)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	path := filepath.Join(home, "Documents", app.DirName, "session."+workspace+".db")
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	if err := sessiondb.CreateStreamPrompt(workspace, state.ActiveSessionID, 0, 101, "request", "start"); err != nil {
+		t.Fatalf("CreateStreamPrompt: %v", err)
+	}
+	writer := &aiStreamBlockWriter{
+		workspace: workspace,
+		sessionID: state.ActiveSessionID,
+		runID:     101,
+	}
+	subagentBlock := writer.Open(sessiondb.StreamBlockSubagent, "")
+	if subagentBlock == nil {
+		t.Fatal("Open subagent block returned nil")
+	}
+	ctx := withAIStreamCallback(context.Background(), &aiStreamEmitter{blocks: writer})
+	ctx = (&AIStreamBlockEmitter{block: subagentBlock}).ChildContext(ctx)
+	var response strings.Builder
+	emitter := newChildAIStreamEmitter(ctx, func(text string) {
+		response.WriteString(text)
+		subagentBlock.Append(text)
+	})
+	ctx = withAIStreamCallback(ctx, emitter)
+
+	emitter.fn("subagent answer")
+	toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, `{"query":"needle"}`, "grep")
+	if toolCallID == "" {
+		t.Fatal("tool-call block was not emitted")
+	}
+	toolCtx := withAIStreamBlockParent(ctx, toolCallID)
+	emitAIStreamToolBlock(toolCtx, sessiondb.StreamBlockToolOutput, "match")
+	emitAIStreamToolProgress(toolCtx, "searched files")
+	emitAIStreamToolBlock(toolCtx, sessiondb.StreamBlockToolError, "tool failed")
+	summary := OpenAIStreamBlock(toolCtx, sessiondb.StreamBlockSummary, "")
+	if summary == nil {
+		t.Fatal("Open summary block returned nil")
+	}
+	summary.Emit("summary")
+	summary.Close()
+	subagentBlock.Close()
+
+	if response.String() != "subagent answer" {
+		t.Fatalf("subagent response = %q, want callback text", response.String())
+	}
+	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 101, 43, "finish"); err != nil {
+		t.Fatalf("FinalizeStreamPrompt: %v", err)
+	}
+	blocks, err := sessiondb.ListStreamBlockMeta(workspace, state.ActiveSessionID, 43)
+	if err != nil {
+		t.Fatalf("ListStreamBlockMeta: %v", err)
+	}
+	if len(blocks) != 6 {
+		t.Fatalf("blocks = %d, want subagent, tool-call, output, notice, error, and summary", len(blocks))
+	}
+	wantParents := []string{"", blocks[0].BlockID, blocks[1].BlockID, blocks[1].BlockID, blocks[1].BlockID, blocks[1].BlockID}
+	for i, block := range blocks {
+		if block.ParentID != wantParents[i] {
+			t.Fatalf("block %q parent = %q, want %q", block.BlockID, block.ParentID, wantParents[i])
+		}
+	}
+	wantKinds := []sessiondb.StreamBlockKind{
+		sessiondb.StreamBlockToolCall,
+		sessiondb.StreamBlockToolOutput,
+		sessiondb.StreamBlockNotice,
+		sessiondb.StreamBlockToolError,
+		sessiondb.StreamBlockSummary,
+	}
+	for i, kind := range wantKinds {
+		if blocks[i+1].Kind != kind {
+			t.Fatalf("block %d kind = %q, want %q", i+1, blocks[i+1].Kind, kind)
+		}
+	}
+	content, err := sessiondb.GetStreamBlockContent(workspace, state.ActiveSessionID, 43, blocks[0].BlockID)
+	if err != nil {
+		t.Fatalf("GetStreamBlockContent subagent: %v", err)
+	}
+	if content != "subagent answer" {
+		t.Fatalf("subagent block content = %q, want callback text", content)
 	}
 }

@@ -690,6 +690,11 @@ func initStreamTables(db *sql.DB) error {
 			PRIMARY KEY (sessionId, promptId)
 		);
 
+		CREATE TABLE IF NOT EXISTS stream_run_ids (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			started TEXT NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS stream_blocks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			sessionId INTEGER NOT NULL,

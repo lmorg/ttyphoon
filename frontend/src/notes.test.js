@@ -3021,7 +3021,7 @@ describe('notes rendering', () => {
         expect(blocks[1].querySelector('b')).toBeNull();
     });
 
-    it('renders a heading before labelled tool-call input', async () => {
+    it('keeps labelled tool-call input collapsed until its heading is clicked', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
         const fmt = createAIPipelineFormatter(wrapper);
@@ -3031,8 +3031,147 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const block = wrapper.querySelector('[data-block-id="call"]');
-        expect(block?.querySelector('.notes-ai-heading')?.textContent).toBe('Tool call: `name.of.tool`');
-        expect(block?.querySelector('pre')?.textContent).toBe('{"input":true}');
+        const heading = block?.querySelector('.notes-ai-tool-call-toggle');
+        const input = block?.querySelector('pre');
+        const statusToggle = block?.querySelector('.notes-ai-tool-output-toggle');
+        const statusCheckbox = statusToggle?.querySelector('input[type="checkbox"]');
+        const statusSpinner = statusToggle?.querySelector('.notes-ai-tool-output-spinner');
+        expect(heading?.textContent).toBe('Tool call: name.of.tool');
+        expect(heading?.querySelector('code')?.textContent).toBe('name.of.tool');
+        expect(input?.hidden).toBe(true);
+        expect(input?.textContent).toBe('{"input":true}');
+        expect(statusToggle?.dataset.status).toBe('running');
+        expect(statusToggle?.textContent).toBe('Running');
+        expect(statusCheckbox?.checked).toBe(false);
+        expect(statusSpinner?.hidden).toBe(false);
+
+        heading?.click();
+        expect(input?.hidden).toBe(false);
+        expect(heading?.getAttribute('aria-expanded')).toBe('true');
+
+        heading?.click();
+        expect(input?.hidden).toBe(true);
+        expect(heading?.getAttribute('aria-expanded')).toBe('false');
+
+        fmt.appendBlock({ blockId: 'call-without-label', kind: 'tool-call', delta: '{"fallback":true}', status: 'closed' });
+        await flushPromises();
+        const fallback = wrapper.querySelector('[data-block-id="call-without-label"]');
+        expect(fallback?.querySelector('.notes-ai-tool-call-toggle')?.textContent).toBe('Tool call');
+        expect(fallback?.querySelector('pre')?.hidden).toBe(true);
+    });
+
+    it('collapses tool output and summaries, streams expanded summaries, and shows errors', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.appendBlock({ blockId: 'call', kind: 'tool-call', delta: '{"input":true}', status: 'closed' });
+        fmt.appendBlock({ blockId: 'output', parentId: 'call', kind: 'tool-output', delta: 'output', status: 'closed' });
+        await flushPromises();
+
+        const call = wrapper.querySelector('[data-block-id="call"]');
+        const output = wrapper.querySelector('[data-block-id="output"]');
+        const toggle = call?.querySelector('.notes-ai-tool-output-toggle');
+        const checkbox = toggle?.querySelector('input[type="checkbox"]');
+        const spinner = toggle?.querySelector('.notes-ai-tool-output-spinner');
+        expect(output?.hidden).toBe(true);
+        expect(toggle?.hidden).toBe(false);
+        expect(toggle?.classList.contains('markdown-body')).toBe(true);
+        expect(toggle?.dataset.status).toBe('successful');
+        expect(toggle?.textContent).toBe('Successful');
+        expect(checkbox?.checked).toBe(true);
+        expect(spinner?.hidden).toBe(true);
+
+        fmt.appendBlock({ blockId: 'summary', parentId: 'call', kind: 'tool-summary', delta: 'first', status: 'open' });
+        await flushPromises();
+
+        const summary = wrapper.querySelector('[data-block-id="summary"]');
+        expect(call?.querySelector('pre')?.textContent).toBe('{"input":true}');
+        expect(summary?.hidden).toBe(true);
+        expect(toggle?.hidden).toBe(false);
+        expect(toggle?.dataset.status).toBe('summarising');
+        expect(toggle?.textContent).toBe('Summarising');
+        expect(checkbox?.checked).toBe(false);
+        expect(spinner?.hidden).toBe(false);
+        expect(toggle?.lastElementChild).toBe(spinner);
+
+        checkbox?.click();
+        expect(output?.hidden).toBe(false);
+        expect(summary?.hidden).toBe(false);
+        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+
+        fmt.appendBlock({ blockId: 'summary', parentId: 'call', kind: 'tool-summary', delta: ' streamed', status: 'open' });
+        await flushPromises();
+        expect(summary?.querySelector('code')?.textContent).toBe('first streamed');
+
+        fmt.appendBlock({ blockId: 'summary', parentId: 'call', kind: 'tool-summary', delta: '', status: 'closed' });
+        await flushPromises();
+        expect(toggle?.dataset.status).toBe('successful');
+        expect(toggle?.textContent).toBe('Successful');
+        expect(checkbox?.checked).toBe(true);
+        expect(spinner?.hidden).toBe(true);
+
+        fmt.appendBlock({ blockId: 'error', parentId: 'call', kind: 'tool-error', delta: 'visible error', status: 'closed' });
+        await flushPromises();
+        const error = wrapper.querySelector('[data-block-id="error"]');
+        expect(toggle?.dataset.status).toBe('error');
+        expect(toggle?.textContent).toBe('Error');
+        expect(checkbox?.checked).toBe(false);
+        expect(error?.hidden).toBe(false);
+    });
+
+    it('restores completed summary status from block metadata before content hydration', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+
+        fmt.startJob();
+        fmt.openBlock({ blockId: 'call', kind: 'tool-call', status: 'closed' });
+        fmt.openBlock({ blockId: 'summary', parentId: 'call', kind: 'tool-summary', status: 'closed' });
+
+        const call = wrapper.querySelector('[data-block-id="call"]');
+        const summary = wrapper.querySelector('[data-block-id="summary"]');
+        const toggle = call?.querySelector('.notes-ai-tool-output-toggle');
+        const checkbox = toggle?.querySelector('input[type="checkbox"]');
+        expect(summary?.dataset.blockStatus).toBe('closed');
+        expect(summary?.hidden).toBe(true);
+        expect(toggle?.dataset.status).toBe('successful');
+        expect(toggle?.textContent).toBe('Successful');
+        expect(checkbox?.checked).toBe(true);
+    });
+
+    it('restores subagent tool output as nested typed blocks', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper, { marked });
+        const contentByBlock = {
+            subagent: '**Agent result**',
+            call: '{"query":"needle"}',
+            output: 'match in file.go',
+        };
+
+        fmt.setBlocks([
+            { blockId: 'subagent', kind: 'subagent', status: 'closed' },
+            { blockId: 'call', parentId: 'subagent', kind: 'tool-call', label: 'grep', status: 'closed' },
+            { blockId: 'output', parentId: 'call', kind: 'tool-output', status: 'closed' },
+        ], (block) => Promise.resolve(contentByBlock[block.blockId]));
+        await flushPromises();
+        await flushPromises();
+
+        const subagent = wrapper.querySelector('[data-block-id="subagent"]');
+        const call = wrapper.querySelector('[data-block-id="call"]');
+        const output = wrapper.querySelector('[data-block-id="output"]');
+        expect(subagent?.querySelector('strong')?.textContent).toBe('Agent result');
+        expect(subagent?.querySelector('.notes-ai-stream-block-children')?.contains(call)).toBe(true);
+        expect(call?.querySelector('pre')?.hidden).toBe(true);
+        expect(call?.querySelector('pre code')?.textContent).toBe('{"query":"needle"}');
+        expect(call?.querySelector('.notes-ai-stream-block-children')?.contains(output)).toBe(true);
+        expect(output?.hidden).toBe(true);
+        expect(output?.querySelector('code')?.textContent).toBe('match in file.go');
+
+        call?.querySelector('.notes-ai-tool-output-toggle input')?.click();
+        expect(output?.hidden).toBe(false);
     });
 
     it('pins typed code and thinking blocks to the bottom as they grow', async () => {

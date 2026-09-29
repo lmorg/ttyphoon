@@ -39,9 +39,19 @@ The outer `RunLLMWithMessageStream` loop:
    can verify completed work instead of replaying the exact tool sequence.
 6. Emits `Retrying interrupted model stream (n/2)` to the AI panel.
 
-The retry counter resets after a successful bounded window. Non-transport errors
-still return immediately, and max-step errors continue through the existing user
-continuation flow from ADR 0003.
+Rate-limit responses use the same checkpoint continuation rather than failing the
+prompt or replaying completed tool work. HTTP 429 is detected from the OpenAI
+adapter's typed status and conservative message markers (`status code: 429`,
+`429 Too Many Requests`, or `Too Many Requests`) for wrappers such as Eino's
+`NodeRunError`. Rate limits retry at most three times. A provider `Retry-After`
+header, in milliseconds (`Retry-After-Ms`), seconds, or HTTP-date form, is
+honoured exactly when it survives SDK wrapping; otherwise delays use capped
+exponential backoff of 1, 2, then 4 seconds. Waiting remains interruptible by
+the global request context.
+
+The retry counters reset after a successful bounded window. Other non-transport
+errors still return immediately, and max-step errors continue through the
+existing user continuation flow from ADR 0003.
 
 ## Consequences
 
@@ -49,6 +59,10 @@ continuation flow from ADR 0003.
 - Tool side effects are not blindly replayed.
 - A persistent outage still fails after two retries rather than hanging or
   retrying indefinitely.
+- A persistent rate limit fails after three retries. OpenRouter's OpenAI adapter
+  retains status 429 but discards response headers, so it normally uses the
+  exponential fallback; providers that expose their HTTP response use
+  `Retry-After`.
 - The retry delay is included in the global request timeout from ADR 0004.
 - The checkpoint remains a best-effort summary: reasoning and incomplete
   provider scratchpad state are not reconstructed as structured model state.

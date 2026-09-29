@@ -78,7 +78,7 @@ func TestResolveOutputPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("UserHomeDir() error = %v", err)
 		}
-		wantDir := filepath.Join(home, app.DirName, ".images")
+		wantDir := filepath.Join(home, "Documents", app.DirName, ".images")
 		if filepath.Dir(absolute) != wantDir {
 			t.Errorf("directory = %q, want %q", filepath.Dir(absolute), wantDir)
 		}
