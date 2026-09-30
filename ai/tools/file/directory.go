@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"reflect"
 	"slices"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -56,12 +57,30 @@ func (t *Directory) Description() string {
 	return directoryDescription
 }
 
+func (t *Directory) InputType() reflect.Type { return reflect.TypeOf(directoryInputT{}) }
+
 type file struct {
 	Name  string
 	IsDir bool
 }
 
+type directoryInputT struct {
+	Filter string `json:"filter,omitempty"`
+}
+
 func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
+	return t.callFilter(ctx, input)
+}
+
+func (t *Directory) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*directoryInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("readDirectory received an invalid structured input %T", input)
+	}
+	return t.callFilter(ctx, request.Filter)
+}
+
+func (t *Directory) callFilter(ctx context.Context, input string) (response string, err error) {
 	/*pathname, err := resolveWorkspacePath(t.agent, input)
 	if err != nil {
 		return fmt.Sprintf("ERROR: %s\n", err), nil
@@ -122,6 +141,18 @@ func (t *Directory) Call(ctx context.Context, input string) (response string, er
 }
 
 func (t *Directory) Observation(input, output string, err error) aitypes.ToolObservation {
+	return t.observation(input, output, err)
+}
+
+func (t *Directory) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	filter, ok := input.(*string)
+	if !ok || filter == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(*filter, output, err)
+}
+
+func (t *Directory) observation(input, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok", DirectoriesListed: []string{t.agent.ProjectRoot()}}
 	if input != "" {
 		observation.Inputs = []string{input}

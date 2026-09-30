@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -24,6 +25,10 @@ type Subagent struct {
 type requestT struct {
 	Name   string `json:"name"`
 	Prompt string `json:"prompt"`
+}
+
+type subagentInputT struct {
+	Requests []*requestT `json:"requests"`
 }
 
 type configT interface {
@@ -61,8 +66,9 @@ func (t *Subagent) Enabled() bool { return t.enabled }
 func (t *Subagent) Toggle()       { t.enabled = !t.enabled }
 func (t *Subagent) Name() string  { return t.agentType }
 
-func (t *Subagent) Path() string        { return "internal" }
-func (t *Subagent) StreamsOutput() bool { return true }
+func (t *Subagent) Path() string            { return "internal" }
+func (t *Subagent) StreamsOutput() bool     { return true }
+func (t *Subagent) InputType() reflect.Type { return reflect.TypeOf(subagentInputT{}) }
 func (t *Subagent) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
 }
@@ -109,7 +115,18 @@ func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
 	if err := json.Unmarshal([]byte(input), &requests); err != nil {
 		return "call the tool error: input must be valid json with name and prompt", nil
 	}
+	return t.runRequests(ctx, requests)
+}
 
+func (t *Subagent) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*subagentInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("%s received an invalid structured input %T", t.Name(), input)
+	}
+	return t.runRequests(ctx, request.Requests)
+}
+
+func (t *Subagent) runRequests(ctx context.Context, requests []*requestT) (string, error) {
 	var wg sync.WaitGroup
 	resp := newResponsesT(len(requests))
 	emitToPanel := agent.EmitAIStreamToolProgress(ctx)

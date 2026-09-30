@@ -2,11 +2,14 @@ package imagetools
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
@@ -27,6 +30,44 @@ func (a *fakeAgent) RequestWritePermission(context.Context, string) error {
 func (a *fakeAgent) EnvironmentValue(n string) string { return a.env[n] }
 func (a *fakeAgent) ImageGenerationEnvironmentValue(n string) string {
 	return a.env[n]
+}
+
+func TestGenerateImageStructuredInputSchema(t *testing.T) {
+	tool := &GenerateImage{}
+	inputType := tool.InputType()
+	if inputType != reflect.TypeOf(generateImageInputT{}) {
+		t.Fatalf("InputType() = %v, want generateImageInputT", inputType)
+	}
+	schemaJSON, err := json.Marshal(jsonschema.ReflectFromType(inputType))
+	if err != nil {
+		t.Fatalf("marshal input schema: %v", err)
+	}
+	var document struct {
+		Definitions map[string]struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(schemaJSON, &document); err != nil {
+		t.Fatalf("unmarshal input schema: %v", err)
+	}
+	schema, ok := document.Definitions["generateImageInputT"]
+	if !ok {
+		t.Fatalf("input schema missing generateImageInputT definition: %s", schemaJSON)
+	}
+	for _, field := range []string{"prompt", "file", "size", "quality", "inputImage"} {
+		if _, ok := schema.Properties[field]; !ok {
+			t.Errorf("input schema missing %q: %s", field, schemaJSON)
+		}
+	}
+	if !reflect.DeepEqual(schema.Required, []string{"prompt"}) {
+		t.Fatalf("required fields = %v, want [prompt]", schema.Required)
+	}
+
+	result, err := tool.CallStructured(context.Background(), &generateImageInputT{})
+	if err != nil || result != "ERROR: 'prompt' is required" {
+		t.Fatalf("CallStructured() = %q, %v; want prompt validation response", result, err)
+	}
 }
 
 func TestImageEndpoint(t *testing.T) {
@@ -155,6 +196,14 @@ func TestGenerateImageObservationRecordsOutputAndInputImage(t *testing.T) {
 	}
 	if observation.Counts["images"] != 1 {
 		t.Fatalf("images count = %d, want 1", observation.Counts["images"])
+	}
+
+	structured := (&GenerateImage{}).ObservationStructured(&generateImageInputT{
+		Prompt:     "make it brighter",
+		InputImage: "before.png",
+	}, "INFO: image written to 'after.png' (123 bytes).", nil)
+	if strings.Join(structured.Inputs, ",") != "before.png" || structured.Summary != "make it brighter" {
+		t.Fatalf("structured observation = %+v, want typed prompt and input image", structured)
 	}
 }
 

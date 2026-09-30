@@ -1,4 +1,4 @@
-package tools
+package webtools
 
 import (
 	"context"

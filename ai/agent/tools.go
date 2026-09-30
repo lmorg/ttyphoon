@@ -93,30 +93,7 @@ func (agent *Agent) ListTools() []map[string]interface{} {
 	agent.toolMu.RUnlock()
 	tools := make([]map[string]interface{}, len(registeredTools))
 	for i, tool := range registeredTools {
-		schema := map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"input": map[string]any{
-					"type":        "string",
-					"description": "Raw input string for the tool.",
-				},
-			},
-			"required": []string{"input"},
-		}
-
-		if mcp, ok := tool.(*mcpTool); ok && len(mcp.schema) > 0 {
-			var parsed any
-			if err := json.Unmarshal(mcp.schema, &parsed); err == nil {
-				if parsedMap, isMap := parsed.(map[string]any); isMap {
-					schema = parsedMap
-				}
-			}
-		}
-
-		schemaJSON, err := json.MarshalIndent(schema, "", "  ")
-		if err != nil {
-			schemaJSON = []byte("{}")
-		}
+		schemaJSON := toolInputSchemaJSON(tool)
 
 		tools[i] = map[string]interface{}{
 			"name":            tool.Name(),
@@ -128,6 +105,34 @@ func (agent *Agent) ListTools() []map[string]interface{} {
 		}
 	}
 	return tools
+}
+
+func toolInputSchemaJSON(tool aitypes.Tool) []byte {
+	adapter, err := newEinoAgentTool(nil, tool)
+	if err != nil {
+		return marshalToolSchemaError(err)
+	}
+	if adapter.info == nil || adapter.info.ParamsOneOf == nil {
+		return []byte("{}")
+	}
+
+	generatedSchema, err := adapter.info.ParamsOneOf.ToJSONSchema()
+	if err != nil {
+		return marshalToolSchemaError(err)
+	}
+	encoded, err := json.MarshalIndent(generatedSchema, "", "  ")
+	if err != nil {
+		return marshalToolSchemaError(err)
+	}
+	return encoded
+}
+
+func marshalToolSchemaError(err error) []byte {
+	encoded, marshalErr := json.Marshal(map[string]string{"error": err.Error()})
+	if marshalErr != nil {
+		return []byte("{}")
+	}
+	return encoded
 }
 
 func (agent *Agent) SetToolEnabled(toolName string, enabled bool) error {

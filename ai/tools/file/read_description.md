@@ -1,5 +1,10 @@
-- Open a local files for reading and return their contents.
+- Open local files for reading and return their contents.
 - Useful for debugging output that references local files.
-- The output of this tool will conform to the `txtar` specification.
-- Any files that could not be opened will be returned with the contents saying "!!! Cannot open file"
-- The input for this tool MUST be a JSON array of strings. Each array item will be a file you want the contents of.
+- The output of this tool conforms to the `txtar` specification.
+- Files that cannot be opened are returned with contents saying `!!! Cannot open file`.
+- Input is a JSON object with a `files` array of paths. Pass it directly as tool
+  arguments; do not wrap it in an `input` property.
+
+```json
+{"files":["src/main.go","README.md"]}
+```

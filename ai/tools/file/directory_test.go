@@ -99,7 +99,7 @@ func TestDirectoryCallReturnsFilesInProjectRoot(t *testing.T) {
 		},
 	}
 
-	response, err := tool.Call(context.Background(), "")
+	response, err := tool.CallStructured(context.Background(), &directoryInputT{})
 	if err != nil {
 		t.Fatalf("Call() error = %v", err)
 	}

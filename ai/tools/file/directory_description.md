@@ -19,3 +19,6 @@
 All filter matches are case insensitive.
 All filter rules apply to directories too. Configured excluded directories are
 skipped while walking.
+
+The input is a JSON object with an optional `filter` string. Pass `{}` for an
+unfiltered listing, or `{"filter":"*.go"}` to match Go files.

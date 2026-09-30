@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -43,12 +44,25 @@ type askUserInput struct {
 	Choices  []string `json:"choices,omitempty"`
 }
 
+func (t *AskUser) InputType() reflect.Type { return reflect.TypeOf(askUserInput{}) }
+
 func (t *AskUser) Call(ctx context.Context, input string) (string, error) {
 	var req askUserInput
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
 	}
+	return t.ask(ctx, &req)
+}
 
+func (t *AskUser) CallStructured(ctx context.Context, input any) (string, error) {
+	req, ok := input.(*askUserInput)
+	if !ok || req == nil {
+		return "", fmt.Errorf("askUser received an invalid structured input %T", input)
+	}
+	return t.ask(ctx, req)
+}
+
+func (t *AskUser) ask(ctx context.Context, req *askUserInput) (string, error) {
 	question := strings.TrimSpace(req.Question)
 	if question == "" {
 		return "ERROR: 'question' is required", nil

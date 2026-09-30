@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted for legacy string-input native tools. Structured native tools use the
+typed contract in ADR 0051 instead.
 
 ## Context
 

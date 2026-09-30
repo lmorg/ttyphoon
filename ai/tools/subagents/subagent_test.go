@@ -3,6 +3,7 @@ package subagents
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -62,6 +63,36 @@ func TestCallRejectsMalformedInputWithoutTouchingTheAgent(t *testing.T) {
 				t.Fatal("Call returned an empty response")
 			}
 		})
+	}
+}
+
+func TestStructuredCallAcceptsRequestArray(t *testing.T) {
+	tool := &Subagent{agentType: agent.TOOL_DELEGATE}
+	inputType := tool.InputType()
+	if inputType.Kind() != reflect.Struct {
+		t.Fatalf("InputType() = %v, want request object", inputType)
+	}
+	requestsField, ok := inputType.FieldByName("Requests")
+	if !ok || requestsField.Type.Kind() != reflect.Slice || requestsField.Type.Elem().Kind() != reflect.Pointer || requestsField.Type.Elem().Elem().Kind() != reflect.Struct {
+		t.Fatalf("InputType() = %v, want requests array of request objects", inputType)
+	}
+	for _, field := range []string{"Name", "Prompt"} {
+		if _, ok := requestsField.Type.Elem().Elem().FieldByName(field); !ok {
+			t.Errorf("request schema type has no %q field", field)
+		}
+	}
+
+	requests := subagentInputT{Requests: []*requestT{{Name: " ", Prompt: "task"}, {Name: "report", Prompt: " "}}}
+	response, err := tool.CallStructured(context.Background(), &requests)
+	if err != nil {
+		t.Fatalf("CallStructured() error = %v", err)
+	}
+	var decoded responsesT
+	if err := json.Unmarshal([]byte(response), &decoded); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if len(decoded.SubAgents) != len(requests.Requests) {
+		t.Fatalf("responses = %d, want %d", len(decoded.SubAgents), len(requests.Requests))
 	}
 }
 

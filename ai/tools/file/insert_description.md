@@ -5,7 +5,8 @@ unchanged, for example appending an entry to a list, adding an import, or
 appending to the end of a file. Use `patchFile` when you need to replace or
 delete existing text, and `writeFile` only when creating a brand new file.
 
-The input for this tool MUST be a JSON object:
+The input for this tool MUST be a JSON object passed directly as tool
+arguments. Do not wrap it in an `input` property:
 
 ```json
 {

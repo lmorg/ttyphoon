@@ -1,4 +1,4 @@
-package tools
+package datetime
 
 import (
 	"context"
@@ -65,7 +65,7 @@ func (a *dateTimeAmount) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (t *DateTime) InputType() reflect.Type { return reflect.TypeOf(dateTimeInputT{}) }
+func (t *DateTime) InputType() reflect.Type { return reflect.TypeFor[dateTimeInputT]() }
 
 func (t *DateTime) Call(ctx context.Context, input string) (response string, err error) {
 	log.Println("[debug] ai tool: dateTime")

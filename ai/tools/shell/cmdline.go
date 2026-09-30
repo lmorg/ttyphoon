@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -43,13 +44,31 @@ func (t *CommandLine) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
 }
 
+type commandLineInputT struct {
+	Command string `json:"command"`
+}
+
+func (t *CommandLine) InputType() reflect.Type { return reflect.TypeOf(commandLineInputT{}) }
+
 func (t *CommandLine) shellName() string {
 	return t.term.GetEnvVars()["SHELL"]
 }
 
 func (t *CommandLine) Call(ctx context.Context, input string) (string, error) {
 	debug.Log(input)
+	return t.run(input)
+}
 
+func (t *CommandLine) CallStructured(_ context.Context, input any) (string, error) {
+	request, ok := input.(*commandLineInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("commandLine received an invalid structured input %T", input)
+	}
+	debug.Log(request.Command)
+	return t.run(request.Command)
+}
+
+func (t *CommandLine) run(input string) (string, error) {
 	c := make(chan *types.BlockCallbackT, 1)
 
 	t.term.SetCommandCallback(func(cb *types.BlockCallbackT) {
@@ -75,6 +94,18 @@ func (t *CommandLine) Call(ctx context.Context, input string) (string, error) {
 }
 
 func (t *CommandLine) Observation(input, output string, err error) aitypes.ToolObservation {
+	return t.observation(input, output, err)
+}
+
+func (t *CommandLine) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	request, ok := input.(*commandLineInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request.Command, output, err)
+}
+
+func (t *CommandLine) observation(input, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"

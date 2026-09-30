@@ -94,10 +94,10 @@ type continuationCheckpoint struct {
 }
 
 type einoAgentTool struct {
-	runtime          *einoRuntime
-	delegate         aitypes.Tool
-	info             *schema.ToolInfo
-	unwrapInputField bool
+	runtime         *einoRuntime
+	delegate        aitypes.Tool
+	info            *schema.ToolInfo
+	structuredInput reflect.Type
 }
 
 func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
@@ -106,8 +106,8 @@ func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 	}
 
 	var (
-		params           *schema.ParamsOneOf
-		unwrapInputField bool
+		params          *schema.ParamsOneOf
+		structuredInput reflect.Type
 	)
 	if mcp, ok := t.(*mcpTool); ok && len(mcp.schema) > 0 {
 		var js jsonschema.Schema
@@ -115,24 +115,26 @@ func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 			return nil, fmt.Errorf("invalid schema for tool %q: %w", t.Name(), err)
 		}
 		params = schema.NewParamsOneOfByJSONSchema(&js)
+	} else if structured, ok := t.(aitypes.StructuredTool); ok {
+		structuredInput = structured.InputType()
+		if structuredInput == nil {
+			return nil, fmt.Errorf("structured tool %q returned a nil input type", t.Name())
+		}
+		if structuredInput.Kind() == reflect.Pointer {
+			structuredInput = structuredInput.Elem()
+		}
+		if structuredInput.Kind() == reflect.Interface {
+			return nil, fmt.Errorf("structured tool %q input type %s is not a concrete JSON type", t.Name(), structuredInput)
+		}
+		params = schema.NewParamsOneOfByJSONSchema(jsonschema.ReflectFromType(structuredInput))
 	} else {
-		// Anthropic requires an explicit input schema for custom tools.
-		// Non-MCP tools in ttyphoon historically take a single raw string input,
-		// so expose an object schema with one required `input` field.
-		params = schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"input": {
-				Type:     schema.String,
-				Desc:     "Raw input string for the tool.",
-				Required: true,
-			},
-		})
-		unwrapInputField = true
+		return nil, fmt.Errorf("native tool %q must implement StructuredTool", t.Name())
 	}
 
 	return &einoAgentTool{
-		runtime:          r,
-		delegate:         t,
-		unwrapInputField: unwrapInputField,
+		runtime:         r,
+		delegate:        t,
+		structuredInput: structuredInput,
 		info: &schema.ToolInfo{
 			Name:        sanitizeToolName(t.Name()),
 			Desc:        t.Description(),
@@ -155,10 +157,24 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		toolCallID := emitAIStreamToolBlockIDWithLabel(ctx, sessiondb.StreamBlockToolCall, argumentsInJSON, t.delegate.Name())
 		ctx = withAIStreamBlockParent(ctx, toolCallID)
 	}
+
+	var structuredInput any
+	if t.structuredInput != nil {
+		input := reflect.New(t.structuredInput)
+		if err := decodeStructuredToolInput(argumentsInJSON, input.Interface()); err != nil {
+			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
+			recordContinuationToolObservation(ctx, aitypes.ToolObservation{
+				Tool: t.delegate.Name(), Status: "error", Error: err.Error(),
+			})
+			return fmt.Sprintf("invalid structured arguments: %s", err), nil
+		}
+		structuredInput = input.Interface()
+	}
+
 	if t.runtime != nil && t.runtime.agent != nil {
 		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
 			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
-			recordContinuationToolObservation(ctx, t.toolObservation(argumentsInJSON, "", err))
+			recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, "", err))
 			if errors.Is(err, ErrToolPermissionRefused) {
 				return fmt.Sprintf("%s. Do not retry this tool call; continue the task without it, or tell the user what you need.", err), nil
 			}
@@ -166,15 +182,19 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		}
 	}
 
-	toolInput := argumentsInJSON
-	if t.unwrapInputField {
-		toolInput = unwrapToolInput(argumentsInJSON)
+	var (
+		output string
+		err    error
+	)
+	if t.structuredInput != nil {
+		output, err = t.delegate.(aitypes.StructuredTool).CallStructured(ctx, structuredInput)
+	} else {
+		// MCP tools retain their own declared object schema and JSON adapter.
+		output, err = t.delegate.Call(ctx, argumentsInJSON)
 	}
-
-	output, err := t.delegate.Call(ctx, toolInput)
 	if err != nil {
 		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
-		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, err))
+		recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, output, err))
 		return output, err
 	}
 
@@ -197,16 +217,46 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 		summary, sErr := t.runtime.summariseToolOutput(ctx, t.delegate.Name(), argumentsInJSON, output)
 		if sErr != nil {
 			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, sErr.Error())
-			recordContinuationToolObservation(ctx, t.toolObservation(toolInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
+			recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, "", fmt.Errorf("tool output too large, summariser failed: %w", sErr)))
 			return fmt.Sprintf("[tool output too large, summariser failed: %s]", sErr), nil
 		}
 		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockSummary, summary)
-		recordContinuationToolObservation(ctx, t.toolObservation(toolInput, summary, nil))
+		recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, summary, nil))
 		return summary, nil
 	}
 
-	recordContinuationToolObservation(ctx, t.toolObservation(toolInput, output, nil))
+	recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, output, nil))
 	return output, nil
+}
+
+func decodeStructuredToolInput(argumentsInJSON string, input any) error {
+	decoder := json.NewDecoder(strings.NewReader(argumentsInJSON))
+	decoder.UseNumber()
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(input); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values in structured tool arguments")
+		}
+		return err
+	}
+	return nil
+}
+
+func (t *einoAgentTool) toolObservationForInput(rawInput string, structuredInput any, output string, err error) aitypes.ToolObservation {
+	if structuredInput != nil {
+		if provider, ok := t.delegate.(aitypes.StructuredToolObservationProvider); ok {
+			observation := provider.ObservationStructured(structuredInput, output, err)
+			if strings.TrimSpace(observation.Tool) == "" {
+				observation.Tool = t.delegate.Name()
+			}
+			return observation
+		}
+	}
+	return t.toolObservation(rawInput, output, err)
 }
 
 func (t *einoAgentTool) toolObservation(input, output string, err error) aitypes.ToolObservation {
@@ -229,37 +279,6 @@ func (t *einoAgentTool) toolObservation(input, output string, err error) aitypes
 		observation.Error = err.Error()
 	}
 	return observation
-}
-
-func unwrapToolInput(argumentsInJSON string) string {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(argumentsInJSON), &object); err == nil {
-		if input, ok := object["input"]; ok {
-			if len(input) > 0 && string(input) != "null" {
-				var inputString string
-				if err := json.Unmarshal(input, &inputString); err == nil {
-					return inputString
-				}
-				return string(input)
-			}
-			return ""
-		}
-	}
-
-	var plain string
-	if err := json.Unmarshal([]byte(argumentsInJSON), &plain); err == nil {
-		return plain
-	}
-
-	var plainJSON any
-	if err := json.Unmarshal([]byte(argumentsInJSON), &plainJSON); err == nil {
-		encoded, marshalErr := json.Marshal(plainJSON)
-		if marshalErr == nil {
-			return string(encoded)
-		}
-	}
-
-	return argumentsInJSON
 }
 
 // aiStreamEmitter serialises text and reasoning chunks onto a single stream,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -34,9 +35,10 @@ func (t *PatchFile) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *PatchFile) Enabled() bool { return t.enabled }
 func (t *PatchFile) Toggle()       { t.enabled = !t.enabled }
 
-func (t *PatchFile) Name() string        { return "patchFile" }
-func (t *PatchFile) Path() string        { return "internal" }
-func (t *PatchFile) Description() string { return patchFileDescription }
+func (t *PatchFile) Name() string            { return "patchFile" }
+func (t *PatchFile) Path() string            { return "internal" }
+func (t *PatchFile) Description() string     { return patchFileDescription }
+func (t *PatchFile) InputType() reflect.Type { return reflect.TypeOf(patchInputT{}) }
 func (t *PatchFile) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
 }
@@ -58,7 +60,19 @@ func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
 	if err := json.Unmarshal([]byte(input), &patch); err != nil {
 		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
 	}
+	return t.apply(ctx, &patch)
+}
 
+func (t *PatchFile) CallStructured(ctx context.Context, input any) (string, error) {
+	patch, ok := input.(*patchInputT)
+	if !ok || patch == nil {
+		return "", fmt.Errorf("patchFile received an invalid structured input %T", input)
+	}
+	return t.apply(ctx, patch)
+}
+
+func (t *PatchFile) apply(ctx context.Context, patch *patchInputT) (string, error) {
+	debug.Log(patch)
 	if strings.TrimSpace(patch.File) == "" {
 		return "ERROR: 'file' is required", nil
 	}
@@ -109,15 +123,26 @@ func (t *PatchFile) fail(message string) string {
 }
 
 func (t *PatchFile) Observation(input, output string, err error) aitypes.ToolObservation {
+	var patch patchInputT
+	if json.Unmarshal([]byte(input), &patch) != nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Inputs: []string{input}}
+	}
+	return t.observation(&patch, output, err)
+}
+
+func (t *PatchFile) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	patch, ok := input.(*patchInputT)
+	if !ok || patch == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(patch, output, err)
+}
+
+func (t *PatchFile) observation(patch *patchInputT, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"
 		observation.Error = err.Error()
-	}
-	var patch patchInputT
-	if json.Unmarshal([]byte(input), &patch) != nil {
-		observation.Inputs = []string{input}
-		return observation
 	}
 	if patch.File != "" {
 		observation.FilesModified = []string{patch.File}

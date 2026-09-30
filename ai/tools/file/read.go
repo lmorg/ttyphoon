@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -43,6 +44,12 @@ func (t *ReadFiles) Description() string {
 	return readDescription
 }
 
+type readFilesInputT struct {
+	Files []string `json:"files"`
+}
+
+func (t *ReadFiles) InputType() reflect.Type { return reflect.TypeOf(readFilesInputT{}) }
+
 func (t *ReadFiles) Call(ctx context.Context, input string) (response string, err error) {
 	if debug.Trace {
 		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
@@ -57,7 +64,18 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 	if jsonErr != nil {
 		return "call the tool error: input must be valid json, retry tool calling with correct json", nil
 	}
+	return t.callFiles(ctx, files)
+}
 
+func (t *ReadFiles) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*readFilesInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("readFiles received an invalid structured input %T", input)
+	}
+	return t.callFiles(ctx, request.Files)
+}
+
+func (t *ReadFiles) callFiles(ctx context.Context, files []string) (response string, err error) {
 	var archive txtar.Archive
 
 	for i := range files {
@@ -98,15 +116,26 @@ func (t *ReadFiles) Call(ctx context.Context, input string) (response string, er
 }
 
 func (t *ReadFiles) Observation(input, output string, err error) aitypes.ToolObservation {
+	var files []string
+	if json.Unmarshal([]byte(input), &files) != nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Inputs: []string{input}}
+	}
+	return t.observation(files, err)
+}
+
+func (t *ReadFiles) ObservationStructured(input any, _ string, err error) aitypes.ToolObservation {
+	request, ok := input.(*readFilesInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request.Files, err)
+}
+
+func (t *ReadFiles) observation(files []string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"
 		observation.Error = err.Error()
-		return observation
-	}
-	var files []string
-	if json.Unmarshal([]byte(input), &files) != nil {
-		observation.Inputs = []string{input}
 		return observation
 	}
 	observation.FilesRead = files

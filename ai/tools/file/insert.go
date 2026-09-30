@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -34,9 +35,10 @@ func (t *InsertLines) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *InsertLines) Enabled() bool { return t.enabled }
 func (t *InsertLines) Toggle()       { t.enabled = !t.enabled }
 
-func (t *InsertLines) Name() string        { return "insertLines" }
-func (t *InsertLines) Path() string        { return "internal" }
-func (t *InsertLines) Description() string { return insertLinesDescription }
+func (t *InsertLines) Name() string            { return "insertLines" }
+func (t *InsertLines) Path() string            { return "internal" }
+func (t *InsertLines) Description() string     { return insertLinesDescription }
+func (t *InsertLines) InputType() reflect.Type { return reflect.TypeOf(insertLinesInputT{}) }
 func (t *InsertLines) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
 }
@@ -58,7 +60,19 @@ func (t *InsertLines) Call(ctx context.Context, input string) (string, error) {
 	if err := json.Unmarshal([]byte(input), &request); err != nil {
 		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
 	}
+	return t.apply(ctx, &request)
+}
 
+func (t *InsertLines) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*insertLinesInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("insertLines received an invalid structured input %T", input)
+	}
+	return t.apply(ctx, request)
+}
+
+func (t *InsertLines) apply(ctx context.Context, request *insertLinesInputT) (string, error) {
+	debug.Log(request)
 	if strings.TrimSpace(request.File) == "" {
 		return "ERROR: 'file' is required", nil
 	}
@@ -107,15 +121,26 @@ func (t *InsertLines) fail(message string) string {
 }
 
 func (t *InsertLines) Observation(input, output string, err error) aitypes.ToolObservation {
+	var request insertLinesInputT
+	if json.Unmarshal([]byte(input), &request) != nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Inputs: []string{input}}
+	}
+	return t.observation(&request, output, err)
+}
+
+func (t *InsertLines) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	request, ok := input.(*insertLinesInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request, output, err)
+}
+
+func (t *InsertLines) observation(request *insertLinesInputT, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"
 		observation.Error = err.Error()
-	}
-	var request insertLinesInputT
-	if json.Unmarshal([]byte(input), &request) != nil {
-		observation.Inputs = []string{input}
-		return observation
 	}
 	if request.File != "" {
 		observation.FilesModified = []string{request.File}

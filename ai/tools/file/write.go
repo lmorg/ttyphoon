@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -37,8 +38,31 @@ func (t *Write) Path() string { return "internal" }
 func (t *Write) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
 }
+
+type writeFileInputT struct {
+	Archive string `json:"archive"`
+}
+
 func (t *Write) Description() string {
 	return writeFileDescription
+}
+
+func (t *Write) InputType() reflect.Type { return reflect.TypeOf(writeFileInputT{}) }
+
+func (t *Write) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*writeFileInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("writeFile received an invalid structured input %T", input)
+	}
+	return t.Call(ctx, request.Archive)
+}
+
+func (t *Write) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	request, ok := input.(*writeFileInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request.Archive, output, err)
 }
 
 func (t *Write) Call(ctx context.Context, input string) (string, error) {
@@ -84,6 +108,10 @@ func (t *Write) Call(ctx context.Context, input string) (string, error) {
 }
 
 func (t *Write) Observation(input, output string, err error) aitypes.ToolObservation {
+	return t.observation(input, output, err)
+}
+
+func (t *Write) observation(input, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"

@@ -2,6 +2,7 @@ package aitypes
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/lmorg/ttyphoon/types"
 )
@@ -25,6 +26,22 @@ type Tool interface {
 	Path() string
 	Description() string
 	Call(context.Context, string) (string, error)
+}
+
+// StructuredTool opts a native tool into a schema derived from its Go JSON
+// input type (object, array, or scalar). The runtime decodes the model's JSON
+// value once and passes a pointer to that value to CallStructured. Tools not
+// implementing this interface keep the legacy string-input contract.
+type StructuredTool interface {
+	Tool
+	InputType() reflect.Type
+	CallStructured(context.Context, any) (string, error)
+}
+
+// StructuredToolObservationProvider consumes the already-decoded input so
+// structured tools do not need to unmarshal their arguments again for logging.
+type StructuredToolObservationProvider interface {
+	ObservationStructured(input any, output string, err error) ToolObservation
 }
 
 type ToolObservationProvider interface {

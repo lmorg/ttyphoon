@@ -4,7 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
+	"reflect"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -36,17 +38,34 @@ func (t *Grep) New(agent aitypes.Agent) (aitypes.Tool, error) {
 func (t *Grep) Enabled() bool { return t.enabled }
 func (t *Grep) Toggle()       { t.enabled = !t.enabled }
 
-func (t *Grep) Name() string        { return "grep" }
-func (t *Grep) Path() string        { return "internal" }
-func (t *Grep) Description() string { return grepDescription }
+func (t *Grep) Name() string            { return "grep" }
+func (t *Grep) Path() string            { return "internal" }
+func (t *Grep) Description() string     { return grepDescription }
+func (t *Grep) InputType() reflect.Type { return reflect.TypeOf(grepInputT{}) }
 func (t *Grep) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "allow"}
 }
 
 type grepInputT struct {
-	Query   string       `json:"query"`
-	Options grep.Options `json:"options"`
-	Page    int          `json:"page"`
+	Query   string            `json:"query,omitempty"`
+	Options grepOptionsInputT `json:"options,omitempty"`
+	Page    int               `json:"page,omitempty"`
+}
+
+type grepOptionsInputT struct {
+	CaseSensitive bool   `json:"caseSensitive,omitempty"`
+	Regex         bool   `json:"regex,omitempty"`
+	WholeWord     bool   `json:"wholeWord,omitempty"`
+	FileFilter    string `json:"fileFilter,omitempty"`
+}
+
+func (o grepOptionsInputT) grepOptions() grep.Options {
+	return grep.Options{
+		CaseSensitive: o.CaseSensitive,
+		Regex:         o.Regex,
+		WholeWord:     o.WholeWord,
+		FileFilter:    o.FileFilter,
+	}
 }
 
 type grepReturnT struct {
@@ -72,7 +91,18 @@ func (t *Grep) Call(ctx context.Context, input string) (response string, err err
 	if err != nil {
 		return err.Error(), nil
 	}
+	return t.callInput(ctx, inputT)
+}
 
+func (t *Grep) CallStructured(ctx context.Context, input any) (string, error) {
+	inputT, ok := input.(*grepInputT)
+	if !ok || inputT == nil {
+		return "", fmt.Errorf("grep received an invalid structured input %T", input)
+	}
+	return t.callInput(ctx, inputT)
+}
+
+func (t *Grep) callInput(ctx context.Context, inputT *grepInputT) (response string, err error) {
 	var returnT *grepReturnT
 
 	if inputT.Query != "" {
@@ -97,7 +127,7 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 	}()
 
 	mapper := func(s string) string { return s }
-	err := grep.BatchedStreamResults(ctx, t.agent.ProjectRoot(), input.Query, input.Options, mapper, ch)
+	err := grep.BatchedStreamResults(ctx, t.agent.ProjectRoot(), input.Query, input.Options.grepOptions(), mapper, ch)
 	<-done
 	if err != nil {
 		return &grepReturnT{Error: err.Error()}
@@ -126,6 +156,22 @@ func (t *Grep) getPage(input *grepInputT) *grepReturnT {
 }
 
 func (t *Grep) Observation(input, output string, err error) aitypes.ToolObservation {
+	var request grepInputT
+	if json.Unmarshal([]byte(input), &request) != nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Inputs: []string{input}}
+	}
+	return t.observation(&request, output, err)
+}
+
+func (t *Grep) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	request, ok := input.(*grepInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request, output, err)
+}
+
+func (t *Grep) observation(request *grepInputT, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok"}
 	if err != nil {
 		observation.Status = "error"
@@ -133,9 +179,9 @@ func (t *Grep) Observation(input, output string, err error) aitypes.ToolObservat
 		return observation
 	}
 
-	var request grepInputT
-	if json.Unmarshal([]byte(input), &request) != nil || request.Query == "" {
-		observation.Inputs = []string{input}
+	if request.Query == "" {
+		inputJSON, _ := json.Marshal(request)
+		observation.Inputs = []string{string(inputJSON)}
 		return observation
 	}
 

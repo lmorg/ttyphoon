@@ -62,6 +62,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0048](0048-save-rendered-code-blocks.md) | Save rendered code blocks to disk | Notes |
 | [0049](0049-collapsed-ai-tool-output.md) | Collapse AI tool output by default | AI panel |
 | [0050](0050-nested-subagent-output-uses-typed-blocks.md) | Nested subagent output uses typed stream blocks | AI panel |
+| [0051](0051-structured-native-tool-inputs.md) | Native tools can declare structured inputs | AI tools |
 
 ## Recurring themes
 

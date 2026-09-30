@@ -7,7 +7,8 @@ Patching is preferred over rewriting because it keeps the parts of the file you
 are not changing untouched, it avoids spending tokens re-emitting the whole
 file, and it produces clean diffs.
 
-The input for this tool MUST be a JSON object:
+The input for this tool MUST be a JSON object passed directly as tool
+arguments. Do not wrap it in an `input` property:
 
 ```json
 {

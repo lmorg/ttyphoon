@@ -1,12 +1,13 @@
 Runs a `jq` script for easy manipulation of JSON data.
-The input format MUST conform to the following XML schema:
+The input MUST be a JSON object with a jq query and a JSON value:
 ```
-<xml>
-	<query>.example.jq.query</query>
-	<json>{ "example": "this is example json" }</json>
-</xml>
+{
+  "query": ".example.jq.query",
+  "json": { "example": "this is example json" }
+}
 ```
-This will execute 'jq $1' where
-- `$1` is the XML field 'query'
-- and the STDIN of `jq` is the XML field 'json'
+Pass the object directly as tool arguments; do not wrap it in an `input` field.
+`query` is passed to `jq` as its filter, and `json` is serialized to JSON and
+passed to `jq` on STDIN. `json` can be any valid JSON value, including an object,
+array, string, number, boolean, or `null`.
 - STDOUT and STDERR are passed back to you

@@ -11,10 +11,11 @@ calls — handle those yourself directly.
 Entries in the input array run in parallel, so independent tasks should be
 split into separate entries rather than run one after another.
 
-Input must be a JSON array with name and prompt strings:
+Pass a JSON object with a `requests` array directly as tool arguments. Each
+request has `name` and `prompt` fields; do not use an `input` wrapper:
 ```
-[
+{"requests":[
 	{ "name": "example", "prompt": "an example prompt" },
 	{ "name": "another delegate", "prompt": "run this in parallel" }
-]
+]}
 ```

@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,32 @@ import (
 type fakeAgentTool struct {
 	enabled bool
 	input   string
+}
+
+type structuredToolTestInput struct {
+	Query   string `json:"query"`
+	JSON    any    `json:"json"`
+	Options struct {
+		FileFilter string `json:"fileFilter,omitempty"`
+	} `json:"options,omitempty"`
+}
+
+type fakeStructuredAgentTool struct {
+	*fakeAgentTool
+	input *structuredToolTestInput
+}
+
+func (f *fakeStructuredAgentTool) InputType() reflect.Type {
+	return reflect.TypeOf(structuredToolTestInput{})
+}
+
+func (f *fakeStructuredAgentTool) CallStructured(_ context.Context, input any) (string, error) {
+	structured, ok := input.(*structuredToolTestInput)
+	if !ok {
+		return "", fmt.Errorf("unexpected structured input type %T", input)
+	}
+	f.input = structured
+	return "structured result", nil
 }
 
 func (f *fakeAgentTool) New(_ aitypes.Agent) (aitypes.Tool, error) { return f, nil }
@@ -140,7 +168,7 @@ func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
 			schema:      []byte(`{"type":"object"}`),
 			enabled:     false,
 		},
-		&fakeAgentTool{enabled: true},
+		&fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}},
 	}}}
 
 	cfg, err := rt.toolsConfig()
@@ -175,6 +203,87 @@ func TestToolsConfig_OnlyEnabledToolsAreWired(t *testing.T) {
 	}
 	if info2.ParamsOneOf == nil {
 		t.Fatalf("second tool ParamsOneOf is nil, want non-nil schema")
+	}
+}
+
+func TestStructuredToolUsesFieldSchemaAndDecodedInput(t *testing.T) {
+	delegate := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatalf("newEinoAgentTool: %v", err)
+	}
+	info, err := tool.Info(context.Background())
+	if err != nil {
+		t.Fatalf("Info: %v", err)
+	}
+	generatedSchema, err := info.ParamsOneOf.ToJSONSchema()
+	if err != nil {
+		t.Fatalf("ToJSONSchema: %v", err)
+	}
+	schemaJSON, err := json.Marshal(generatedSchema)
+	if err != nil {
+		t.Fatalf("marshal tool schema: %v", err)
+	}
+	for _, field := range []string{`"query"`, `"options"`, `"fileFilter"`} {
+		if !strings.Contains(string(schemaJSON), field) {
+			t.Fatalf("tool schema %s does not contain field %s", schemaJSON, field)
+		}
+	}
+	if strings.Contains(string(schemaJSON), `"input"`) {
+		t.Fatalf("structured tool schema contains legacy input wrapper: %s", schemaJSON)
+	}
+
+	if _, err := tool.InvokableRun(context.Background(), `{"query":"needle","json":{"n":9007199254740993},"options":{"fileFilter":"*.go"}}`); err != nil {
+		t.Fatalf("InvokableRun: %v", err)
+	}
+	if delegate.input == nil || delegate.input.Query != "needle" || delegate.input.Options.FileFilter != "*.go" {
+		t.Fatalf("structured input = %+v, want decoded query and file filter", delegate.input)
+	}
+	jsonValue, ok := delegate.input.JSON.(map[string]any)
+	if !ok || jsonValue["n"] != json.Number("9007199254740993") {
+		t.Fatalf("structured arbitrary JSON = %#v, want exact integer preserved as json.Number", delegate.input.JSON)
+	}
+}
+
+func TestListToolsReportsGeneratedStructuredSchema(t *testing.T) {
+	tool := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
+	owner := &Agent{
+		_tools:     []aitypes.Tool{tool},
+		toolStates: map[string]string{tool.Name(): ToolStateAlways},
+	}
+	listed := owner.ListTools()
+	if len(listed) != 1 {
+		t.Fatalf("ListTools() returned %d tools, want 1", len(listed))
+	}
+	schemaJSON, ok := listed[0]["schema"].(string)
+	if !ok {
+		t.Fatalf("schema type = %T, want string", listed[0]["schema"])
+	}
+	for _, field := range []string{`"query"`, `"options"`, `"fileFilter"`} {
+		if !strings.Contains(schemaJSON, field) {
+			t.Errorf("listed schema %s does not contain %s", schemaJSON, field)
+		}
+	}
+	if strings.Contains(schemaJSON, `"input"`) {
+		t.Fatalf("listed schema still contains legacy input wrapper: %s", schemaJSON)
+	}
+}
+
+func TestStructuredToolRejectsLegacyInputWrapper(t *testing.T) {
+	delegate := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatalf("newEinoAgentTool: %v", err)
+	}
+	output, err := tool.InvokableRun(context.Background(), `{"input":"legacy"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun: %v", err)
+	}
+	if !strings.Contains(output, `unknown field "input"`) {
+		t.Fatalf("InvokableRun output = %q, want legacy wrapper rejected", output)
+	}
+	if delegate.input != nil {
+		t.Fatalf("structured tool was invoked with %+v after invalid arguments", delegate.input)
 	}
 }
 
@@ -437,55 +546,9 @@ func TestBuildEinoConversationMessages_TrimsToMaxHistoryTurns(t *testing.T) {
 	}
 }
 
-func TestUnwrapToolInput_WrappedObject(t *testing.T) {
-	got := unwrapToolInput(`{"input":"hello"}`)
-	if got != "hello" {
-		t.Fatalf("unwrapToolInput() = %q, want %q", got, "hello")
-	}
-}
-
-func TestUnwrapToolInput_JSONString(t *testing.T) {
-	got := unwrapToolInput(`"hello"`)
-	if got != "hello" {
-		t.Fatalf("unwrapToolInput() = %q, want %q", got, "hello")
-	}
-}
-
-func TestUnwrapToolInput_PlainJSONObject(t *testing.T) {
-	got := unwrapToolInput(`{"prompt":"hello","size":"1024x1024"}`)
-	if got != `{"prompt":"hello","size":"1024x1024"}` {
-		t.Fatalf("unwrapToolInput() = %q, want the plain object preserved as JSON", got)
-	}
-}
-
-func TestUnwrapToolInput_WrappedJSONObject(t *testing.T) {
-	got := unwrapToolInput(`{"input":{"prompt":"hello","size":"1024x1024"}}`)
-	if got != `{"prompt":"hello","size":"1024x1024"}` {
-		t.Fatalf("unwrapToolInput() = %q, want the wrapped object encoded as JSON", got)
-	}
-}
-
-func TestUnwrapToolInput_FallbackRaw(t *testing.T) {
-	raw := `not-json`
-	got := unwrapToolInput(raw)
-	if got != raw {
-		t.Fatalf("unwrapToolInput() = %q, want %q", got, raw)
-	}
-}
-
-func TestEinoAgentTool_InvokableRun_UnwrapsInputField(t *testing.T) {
-	f := &fakeAgentTool{enabled: true}
-	et, err := newEinoAgentTool(nil, f)
-	if err != nil {
-		t.Fatalf("newEinoAgentTool() error = %v", err)
-	}
-
-	_, err = et.InvokableRun(context.Background(), `{"input":"abc"}`)
-	if err != nil {
-		t.Fatalf("InvokableRun() error = %v", err)
-	}
-	if f.input != "abc" {
-		t.Fatalf("tool input = %q, want %q", f.input, "abc")
+func TestNewEinoAgentToolRejectsUnstructuredNativeTool(t *testing.T) {
+	if _, err := newEinoAgentTool(nil, &fakeAgentTool{enabled: true}); err == nil || !strings.Contains(err.Error(), "must implement StructuredTool") {
+		t.Fatalf("newEinoAgentTool() error = %v, want StructuredTool requirement", err)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -55,12 +56,14 @@ func (t *GenerateImage) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
 }
 
+func (t *GenerateImage) InputType() reflect.Type { return reflect.TypeOf(generateImageInputT{}) }
+
 type generateImageInputT struct {
 	Prompt     string `json:"prompt"`
-	File       string `json:"file"`
-	Size       string `json:"size"`
-	Quality    string `json:"quality"`
-	InputImage string `json:"inputImage"`
+	File       string `json:"file,omitempty"`
+	Size       string `json:"size,omitempty"`
+	Quality    string `json:"quality,omitempty"`
+	InputImage string `json:"inputImage,omitempty"`
 }
 
 type imageRequestT struct {
@@ -100,7 +103,18 @@ func (t *GenerateImage) Call(ctx context.Context, input string) (string, error) 
 	if err := json.Unmarshal([]byte(input), &request); err != nil {
 		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
 	}
+	return t.generate(ctx, &request)
+}
 
+func (t *GenerateImage) CallStructured(ctx context.Context, input any) (string, error) {
+	request, ok := input.(*generateImageInputT)
+	if !ok || request == nil {
+		return "", fmt.Errorf("generateImage received an invalid structured input %T", input)
+	}
+	return t.generate(ctx, request)
+}
+
+func (t *GenerateImage) generate(ctx context.Context, request *generateImageInputT) (string, error) {
 	if strings.TrimSpace(request.Prompt) == "" {
 		return "ERROR: 'prompt' is required", nil
 	}
@@ -128,13 +142,13 @@ func (t *GenerateImage) Call(ctx context.Context, input string) (string, error) 
 	var b []byte
 	switch {
 	case inputImagePath == "":
-		b, err = t.requestImage(ctx, request, "")
+		b, err = t.requestImage(ctx, *request, "")
 	case isOpenRouterBaseURL(t.agent.ImageGenerationEnvironmentValue("OPENAI_BASE_URL")):
 		// OpenRouter has no separate edits endpoint; it takes the reference
 		// image inline on the same generation request.
-		b, err = t.requestImage(ctx, request, inputImagePath)
+		b, err = t.requestImage(ctx, *request, inputImagePath)
 	default:
-		b, err = t.requestImageEdit(ctx, request, inputImagePath)
+		b, err = t.requestImageEdit(ctx, *request, inputImagePath)
 	}
 	if err != nil {
 		return t.fail(fmt.Sprintf("ERROR: %s", err)), nil
@@ -167,20 +181,33 @@ func (t *GenerateImage) fail(message string) string {
 }
 
 func (t *GenerateImage) Observation(input, output string, err error) aitypes.ToolObservation {
+	var request generateImageInputT
+	if json.Unmarshal([]byte(input), &request) != nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Counts: map[string]int{"images": 1}, Inputs: []string{input}}
+	}
+	return t.observation(&request, output, err)
+}
+
+func (t *GenerateImage) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
+	request, ok := input.(*generateImageInputT)
+	if !ok || request == nil {
+		return aitypes.ToolObservation{Tool: t.Name(), Status: "error", Error: fmt.Sprintf("invalid structured input %T", input)}
+	}
+	return t.observation(request, output, err)
+}
+
+func (t *GenerateImage) observation(request *generateImageInputT, output string, err error) aitypes.ToolObservation {
 	observation := aitypes.ToolObservation{Tool: t.Name(), Status: "ok", Counts: map[string]int{"images": 1}}
 	if err != nil {
 		observation.Status = "error"
 		observation.Error = err.Error()
 	}
 
-	var request generateImageInputT
-	if json.Unmarshal([]byte(input), &request) == nil {
-		if request.InputImage != "" {
-			observation.Inputs = []string{request.InputImage}
-		}
-		if request.Prompt != "" {
-			observation.Summary = request.Prompt
-		}
+	if request.InputImage != "" {
+		observation.Inputs = []string{request.InputImage}
+	}
+	if request.Prompt != "" {
+		observation.Summary = request.Prompt
 	}
 
 	if path := imageOutputPathFromResult(output); path != "" {

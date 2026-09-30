@@ -5,16 +5,14 @@ Use this tool when the user asks for a picture, diagram, illustration, icon,
 logo, mockup or any other generated image — or asks you to change, edit,
 recolour, extend or otherwise modify an image that already exists.
 
-The input for this tool MUST be a JSON object:
+The input for this tool MUST be a JSON object passed directly as tool
+arguments. Do not wrap it in an `input` property:
 
 ```json
-{ 
-  "input": {
-    "prompt": "a watercolour painting of a lighthouse at dusk",
-    "size": "1024x1024",
-    "quality": "high",
-    "file": "/path/to/file.png"
-  }
+{
+  "prompt": "a watercolour painting of a lighthouse at dusk",
+  "size": "1024x1024",
+  "quality": "high"
 }
 ```
 
