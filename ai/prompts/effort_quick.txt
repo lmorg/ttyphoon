@@ -1,0 +1,1 @@
+Work directly toward the requested outcome. Focus on the most relevant information and produce a useful, checked first result. Surface a consequential unresolved preference early with askUser; do not ask about routine uncertainty or facts you can establish with available tools. Ask only when the missing answer materially changes the result or safe next step.

@@ -1,0 +1,1 @@
+Examine relevant context and evidence before deciding. Use askUser only when blocked on required information or when an unresolved consequential choice cannot be inferred safely; state reasonable assumptions for routine ambiguity. Verify the result in proportion to its impact.

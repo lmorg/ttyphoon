@@ -19,10 +19,12 @@ func (wr *webkitRender) AskAi() {
 	wr.DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:           fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
+			DraftKey:        ai.AIWorkspaceDraftKey(agt),
 			Multiline:       true,
 			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				ai.EffortInputVariable(),
 				ai.SaveMarkdownToggle(false),
 			},
 		},
@@ -88,9 +90,11 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 	parameters := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:           strings.Title(skill.Description),
+			DraftKey:        ai.AIWorkspaceDraftKey(agt),
 			Multiline:       true,
 			AllowImagePaste: true,
-			Variables: append(skill.Variables,
+			Variables: append(append([]types.InputBoxWTVariables(nil), skill.Variables...),
+				ai.EffortInputVariable(),
 				agt.ListModelsInputVariable(),
 				ai.SaveMarkdownToggle(false),
 			),

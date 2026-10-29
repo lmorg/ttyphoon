@@ -70,6 +70,7 @@ type InputBoxWTOptions struct {
 	ConfirmIsDanger bool                  `json:"confirmIsDanger"`
 	Variables       []InputBoxWTVariables `json:"variables"`
 	CacheKey        string
+	DraftKey        string `json:"-"`
 }
 
 type InputBoxWTVariables struct {

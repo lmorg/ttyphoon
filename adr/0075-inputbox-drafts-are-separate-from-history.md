@@ -26,7 +26,13 @@ contain typed values such as false, zero, empty strings, and list selections.
 - Store drafts in `inputboxw_draft` for 30 days. Identity is the SHA-256 hash of
   the inputbox options, including initial text, variable definitions/defaults,
   and an explicit CacheKey where provided. Exclude History because adding a
-  submitted history item must not make an existing draft inaccessible.
+  submitted history item must not make an existing draft inaccessible. An
+  explicit `DraftKey` overrides option-derived identity and is itself SHA-256
+  hashed, allowing related dialogs to share one stable draft without sharing
+  submitted history.
+- AI prompt dialogs use one explicit draft key per tmux workspace name, so
+  toolbar, skill, URI, and document prompts restore the same latest draft even
+  when their titles or variable definitions differ.
 - Reopening an identical configuration restores the main input and typed
   variable values, overriding initial defaults even for false, zero and empty
   strings. Legacy comma-separated list options remain intact while restoring

@@ -120,6 +120,24 @@ func TestInputboxDraftIdentityAndTypedValues(t *testing.T) {
 	}
 }
 
+func TestInputboxDraftKeyUsesExplicitScopeInsteadOfDialogOptions(t *testing.T) {
+	options := types.InputBoxWTOptions{
+		DraftKey: "ai-workspace:editor", Title: "Ask AI", Prefill: "URI prompt",
+		Variables: []types.InputBoxWTVariables{{Name: "model", Type: "list", Default: "Model A"}},
+	}
+	key := inputBoxDraftKey(options)
+	options.Title = "Ask AI about document.md"
+	options.Prefill = ""
+	options.Variables[0].Default = "Model B"
+	if inputBoxDraftKey(options) != key {
+		t.Fatal("dialog changes invalidated an explicitly scoped draft")
+	}
+	options.DraftKey = "ai-workspace:terminal"
+	if inputBoxDraftKey(options) == key {
+		t.Fatal("different workspace draft scopes share a key")
+	}
+}
+
 func TestInputboxImagePasteRequiresOptInAndValidData(t *testing.T) {
 	var buffer bytes.Buffer
 	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/utils/imageattachment"
 )
@@ -34,6 +35,37 @@ func TestImageAttachmentsBecomeMultimodalUserParts(t *testing.T) {
 	}
 	if plain := buildUserMessageWithImages("Text only", nil); plain.Content != "Text only" || len(plain.UserInputMultiContent) != 0 {
 		t.Fatal("text-only prompts changed")
+	}
+}
+
+func TestAskMessagesApplySelectedEffortGuidance(t *testing.T) {
+	tests := []struct {
+		name   string
+		effort string
+		want   string
+	}{
+		{name: "quick", effort: "Quick", want: "Surface a consequential unresolved preference early"},
+		{name: "balanced", effort: "Balanced", want: "Examine relevant context and evidence"},
+		{name: "thorough", effort: "Thorough", want: "Explore relevant alternatives, edge cases, dependencies, and downstream effects"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			agt := &agent.Agent{Meta: &aitypes.Meta{Variables: map[string]any{
+				EffortVariableName: test.effort,
+			}}}
+			messages := GetAskMessages(agt, "Inspect the current project")
+			if len(messages) == 0 || !strings.Contains(messages[0].Content, test.want) {
+				t.Fatalf("system prompt does not contain %q for effort %q", test.want, test.effort)
+			}
+		})
+	}
+}
+
+func TestAskMessagesDefaultToQuickEffortGuidance(t *testing.T) {
+	agt := &agent.Agent{Meta: &aitypes.Meta{}}
+	messages := GetAskMessages(agt, "Inspect the current project")
+	if len(messages) == 0 || !strings.Contains(messages[0].Content, "Surface a consequential unresolved preference early") {
+		t.Fatal("system prompt does not use quick effort guidance when no effort is selected")
 	}
 }
 

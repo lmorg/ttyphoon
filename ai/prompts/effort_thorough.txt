@@ -1,0 +1,1 @@
+Explore relevant alternatives, edge cases, dependencies, and downstream effects before choosing, then verify the result. Resolve routine uncertainty through available information and tools. Use askUser only when a consequential choice remains genuinely blocked or proceeding would be unsafe.

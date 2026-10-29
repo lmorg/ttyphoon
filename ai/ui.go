@@ -27,11 +27,13 @@ func ExplainCmdOutput(agt *agent.Agent) {
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:           "Explain output",
+			DraftKey:        AIWorkspaceDraftKey(agt),
 			Placeholder:     "Optional",
 			Multiline:       true,
 			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},
@@ -71,11 +73,13 @@ func ExplainDoc(agt *agent.Agent, filename, contents string, images []aitypes.Im
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:           "Ask AI about " + filename,
+			DraftKey:        AIWorkspaceDraftKey(agt),
 			Placeholder:     "Optional",
 			Multiline:       true,
 			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},
@@ -127,6 +131,26 @@ func prepareInputboxImages(agt *agent.Agent, images []aitypes.ImageAttachment) (
 }
 
 const SAVE_RESPONSE = "saveResponse"
+
+const EFFORT_LEVEL = prompts.EffortVariableName
+
+func EffortInputVariable() types.InputBoxWTVariables {
+	return types.InputBoxWTVariables{
+		Name:        EFFORT_LEVEL,
+		Label:       "Effort",
+		Description: "Quick returns a focused pass; Thorough investigates alternatives and edge cases. This guides the agent but is not a time limit.",
+		Default:     "Quick",
+		Options:     []string{"Quick", "Balanced", "Thorough"},
+		Type:        "list",
+	}
+}
+
+func AIWorkspaceDraftKey(agt *agent.Agent) string {
+	if agt == nil || agt.Workspace() == "" {
+		return ""
+	}
+	return "ai-workspace:" + agt.Workspace()
+}
 
 func joinPromptMessages(messages []*schema.Message) string {
 	if len(messages) == 0 {
@@ -280,6 +304,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 	agt.Renderer().DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
 			Title:           "Invoke prompt from URI?",
+			DraftKey:        AIWorkspaceDraftKey(agt),
 			Multiline:       true,
 			AllowImagePaste: true,
 			Prefill:         prompt,
@@ -293,6 +318,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 					Options:     toolOptions,
 				},
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},

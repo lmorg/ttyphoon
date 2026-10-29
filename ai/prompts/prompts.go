@@ -32,7 +32,18 @@ var _PROMPT_ASK string
 //go:embed title.md
 var _PROMPT_TITLE string
 
+//go:embed effort_quick.txt
+var _PROMPT_EFFORT_QUICK string
+
+//go:embed effort_balanced.txt
+var _PROMPT_EFFORT_BALANCED string
+
+//go:embed effort_thorough.txt
+var _PROMPT_EFFORT_THOROUGH string
+
 var rxSkillFunction = regexp.MustCompile(`^/[-a-zA-Z0-9]+($|\s)`)
+
+const EffortVariableName = "ttyphoonEffort"
 
 func GetExplainCmd(agt *agent.Agent, userPrompt string) string {
 	return os.Expand(_PROMPT_EXPLAIN_CMD, promptVars(agt, userPrompt))
@@ -177,13 +188,32 @@ func GetTitleMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
 func buildPromptSystem(agt *agent.Agent, userPrompt string) string {
 	system := strings.TrimSpace(os.Expand(_PROMPT_SYSTEM, promptVars(agt, userPrompt)))
 	agents := strings.TrimSpace(AgentsMd())
-	if agents == "" {
-		return system
+	if agents != "" {
+		if system == "" {
+			system = agents
+		} else {
+			system += "\n\n" + agents
+		}
 	}
-	if system == "" {
-		return agents
+	return system + "\n\n# Effort and user feedback\n\n" + effortInstructions(agt)
+}
+
+func effortInstructions(agt *agent.Agent) string {
+	effort := "quick"
+	if agt != nil && agt.Meta != nil {
+		if value, ok := agt.Meta.Variables[EffortVariableName]; ok {
+			effort = strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+		}
 	}
-	return system + "\n\n" + agents
+
+	switch effort {
+	case "quick":
+		return strings.TrimSpace(_PROMPT_EFFORT_QUICK)
+	case "thorough":
+		return strings.TrimSpace(_PROMPT_EFFORT_THOROUGH)
+	default:
+		return strings.TrimSpace(_PROMPT_EFFORT_BALANCED)
+	}
 }
 
 func promptVars(agt *agent.Agent, userPrompt string) func(string) string {

@@ -95,6 +95,7 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0078](0078-mcp-oauth-failures-must-be-retryable.md) | MCP OAuth cancellation, registration and retries preserve usable state | MCP |
 | [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
+| [0081](0081-ai-prompt-effort-and-feedback-cadence.md) | Per-prompt effort guides investigation and user-feedback cadence | AI |
 
 ## Recurring themes
 

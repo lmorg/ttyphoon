@@ -107,6 +107,10 @@ func inputBoxDraftKey(options types.InputBoxWTOptions) string {
 	if options.Confirmation {
 		return ""
 	}
+	if options.DraftKey != "" {
+		key := sha256.Sum256([]byte(options.DraftKey))
+		return hex.EncodeToString(key[:])
+	}
 	options.History = nil
 	encoded, _ := json.Marshal(options)
 	key := sha256.Sum256(encoded)
