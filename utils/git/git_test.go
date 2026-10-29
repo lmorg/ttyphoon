@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -757,6 +758,7 @@ func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 		{name: "fetch-branch", parameters: map[string]string{"branch": "main"}, wantArgs: []string{"fetch", "--", "origin", "refs/heads/main:refs/remotes/origin/main"}},
 		{name: "pull-tags", wantArgs: []string{"fetch", "origin", "refs/tags/*:refs/tags/*"}},
 		{name: "push-tag", parameters: map[string]string{"tag": "v1.2.3"}, wantArgs: []string{"push", "origin", "refs/tags/v1.2.3"}},
+		{name: "push", wantArgs: []string{"push"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var called bool
@@ -773,6 +775,87 @@ func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 				t.Fatalf("RunAction() = %v, interactive runner called = %v; want interactive execution", result, called)
 			}
 		})
+	}
+}
+
+func TestRunActionReadOnlyCommandsUseInteractiveRunner(t *testing.T) {
+	root := initGitTestRepo(t)
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitPath := mustLookPathGit(t)
+	head, err := runGit(gitPath, root, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	headHash := strings.TrimSpace(string(head))
+
+	tests := []struct {
+		name       string
+		parameters map[string]string
+		wantArgs   []string
+	}{
+		{name: "status", wantArgs: []string{"--no-pager", "status", "--short", "--branch"}},
+		{name: "diff", parameters: map[string]string{"path": "tracked file.txt"}, wantArgs: []string{"--no-pager", "diff", "--no-ext-diff", "--no-color", "--unified=3", "--", "tracked file.txt"}},
+		{name: "log", parameters: map[string]string{"limit": "5", "revision": "HEAD"}, wantArgs: []string{"--no-pager", "log", "--oneline", "--decorate", "--no-color", "--max-count", "5", headHash}},
+		{name: "show", parameters: map[string]string{"revision": "HEAD", "path": "tracked file.txt"}, wantArgs: []string{"--no-pager", "show", "--no-ext-diff", "--no-color", "--format=fuller", "--stat", "--no-renames", headHash, "--", "tracked file.txt"}},
+		{name: "branches", wantArgs: []string{"--no-pager", "branch", "--all", "--no-color"}},
+		{name: "remotes", wantArgs: []string{"remote"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			called := false
+			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, func(command string, complete func(InteractiveActionResult)) error {
+				called = true
+				if want := interactiveCommand(canonicalRoot, test.wantArgs); command != want {
+					t.Errorf("interactive command = %q, want %q", command, want)
+				}
+				complete(InteractiveActionResult{Output: "read-only result", ExitCode: 0})
+				return nil
+			})
+			if !called || result["mode"] != string(ActionModeInteractive) || result["error"] != "" {
+				t.Fatalf("RunAction() = %v, runner called = %v; want interactive read", result, called)
+			}
+		})
+	}
+}
+
+func TestRunActionRejectsUnsafeReadInputsAndMutatingActions(t *testing.T) {
+	root := initGitTestRepo(t)
+	called := false
+	runner := func(string, func(InteractiveActionResult)) error {
+		called = true
+		return nil
+	}
+	for _, test := range []struct {
+		name       string
+		parameters map[string]string
+	}{
+		{name: "reset"},
+		{name: "diff", parameters: map[string]string{"path": "../outside.txt"}},
+		{name: "log", parameters: map[string]string{"limit": "1000"}},
+	} {
+		result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, runner)
+		if result["error"] == "" {
+			t.Errorf("RunAction(%q) unexpectedly succeeded", test.name)
+		}
+	}
+	if called {
+		t.Fatal("interactive runner was called for an invalid or mutating action")
+	}
+}
+
+func TestRunActionContextCanStopWaitingForClonePane(t *testing.T) {
+	root := initGitTestRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := RunActionContext(ctx, root, ActionRequest{Name: "status"}, nil, func(string, func(InteractiveActionResult)) error {
+		cancel()
+		return nil
+	})
+	if !strings.Contains(result["error"], context.Canceled.Error()) {
+		t.Fatalf("RunActionContext() error = %q, want cancellation", result["error"])
 	}
 }
 

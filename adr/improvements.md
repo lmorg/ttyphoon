@@ -39,7 +39,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes: support for audio playback
 - [ ] Notes, Git commits log: a toggle below the filter search box to choose whether to search for commit messages or file names. Default is commit messages. When file search is toggled then each commit is checked to see which files were changed as part of that commit, with those filenames being what's filtered
 - [x] AI tool, graphs: this currently renders SVG. It should do PNG instead
-- [ ] AI tool: new tool for handling common read only git ops. this should call ClonePane
+- [x] AI tool: read-only Git inspection for status, diff, log, show, branches, and remotes; enabled with per-invocation permission and run through ClonePane ([ADR 0082](../adr/0082-ai-read-only-git-tool.md))
 - [x] AI: per-prompt Effort selector guides investigation depth and when to ask for blocking user feedback ([ADR 0081](../adr/0081-ai-prompt-effort-and-feedback-cadence.md))
 - [x] Notes: spellcheck suggestions open on right-clicking a misspelt word; left-click remains for editing ([ADR 0069](../adr/0069-notes-spellcheck-suggestions-open-on-right-click.md))
 - [ ] Our custom menu should support ctrl+v / cmd+v to paste text to the usually hidden search input field
@@ -53,9 +53,11 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
 - [ ] Terminal: kitty graphics support (this should be a new ADR)
 - [x] Git panel: branch fetch, tag fetch, and tag push use ClonePane so remote credentials can be entered interactively ([ADR 0071](../adr/0071-git-package-owns-action-execution-policy.md))
-- [ ] Git panel: git push button next to git commit (icon: 0xf093). This should show "are you sure" dialog similar to the kill pane dialog and run git via ClonePane
+- [x] Git panel: Push button next to Commit (icon `0xf093`) asks for confirmation, then runs the configured `git push` through ClonePane ([ADR 0062](../adr/0062-notes-git-worktree-panel.md), [ADR 0071](../adr/0071-git-package-owns-action-execution-policy.md))
+- [x] Git panel: keep Commit in the collapsible row and place the icon-style Push button in the main toolbar beside the commit toggle ([ADR 0062](../adr/0062-notes-git-worktree-panel.md))
 - [x] Kill pane confirmation modal: Tab/Shift+Tab switches between buttons; Enter/Space activates the focused button; text and terminal shortcuts are ignored ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md))
 - [x] AI, tool requests: Deny opens the shared inputbox for an optional free-form reason; Cancel/Draft leave the request pending, submitted reasons reach the model and are remembered only within the tmux workspace/prompt scopes ([ADR 0002](../adr/0002-tool-permission-scopes.md))
+- [ ] terminal: hover over buttons (eg maximize, close, etc) should have translucent backgrounds (0.5 alpha)
 
 ## refactors
 

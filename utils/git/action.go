@@ -1,8 +1,11 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -27,7 +30,18 @@ type ActionRequest struct {
 }
 
 func RunAction(root string, action ActionRequest, agentEnvironment map[string]string, interactiveRunner InteractiveActionRunner) map[string]string {
+	return RunActionContext(context.Background(), root, action, agentEnvironment, interactiveRunner)
+}
+
+func RunActionContext(ctx context.Context, root string, action ActionRequest, agentEnvironment map[string]string, interactiveRunner InteractiveActionRunner) map[string]string {
 	result := map[string]string{"mode": "", "stdout": "", "stderr": "", "error": ""}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		result["error"] = err.Error()
+		return result
+	}
 	mode, ok := actionMode(action.Name)
 	if !ok {
 		result["error"] = fmt.Sprintf("unsupported Git action %q", action.Name)
@@ -67,7 +81,13 @@ func RunAction(root string, action ActionRequest, agentEnvironment map[string]st
 			result["error"] = err.Error()
 			return result
 		}
-		actionResult := <-completed
+		var actionResult InteractiveActionResult
+		select {
+		case actionResult = <-completed:
+		case <-ctx.Done():
+			result["error"] = ctx.Err().Error()
+			return result
+		}
 		result["stdout"] = actionResult.Output
 		result["exitCode"] = fmt.Sprintf("%d", actionResult.ExitCode)
 		if actionResult.Err != nil {
@@ -110,6 +130,61 @@ func actionArguments(gitPath, repoRoot string, action ActionRequest) ([]string, 
 			return nil, errors.New("commit message is required")
 		}
 		return []string{"commit", "-m", message}, nil
+	case "push":
+		return []string{"push"}, nil
+	case "status":
+		return []string{"--no-pager", "status", "--short", "--branch"}, nil
+	case "diff":
+		args := []string{"--no-pager", "diff", "--no-ext-diff", "--no-color", "--unified=3"}
+		if action.Parameters["staged"] != "" {
+			staged, err := strconv.ParseBool(action.Parameters["staged"])
+			if err != nil {
+				return nil, errors.New("staged must be true or false")
+			}
+			if staged {
+				args = append(args, "--cached")
+			}
+		}
+		if path := strings.TrimSpace(action.Parameters["path"]); path != "" {
+			path, err := validateRelativePath(path)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "--", filepath.ToSlash(path))
+		}
+		return args, nil
+	case "log":
+		limit := 10
+		if rawLimit := strings.TrimSpace(action.Parameters["limit"]); rawLimit != "" {
+			parsed, err := strconv.Atoi(rawLimit)
+			if err != nil || parsed < 1 || parsed > 50 {
+				return nil, errors.New("log limit must be between 1 and 50")
+			}
+			limit = parsed
+		}
+		revision, err := checkedCommitRevision(gitPath, repoRoot, action.Parameters["revision"])
+		if err != nil {
+			return nil, err
+		}
+		return []string{"--no-pager", "log", "--oneline", "--decorate", "--no-color", "--max-count", strconv.Itoa(limit), revision}, nil
+	case "show":
+		revision, err := checkedCommitRevision(gitPath, repoRoot, action.Parameters["revision"])
+		if err != nil {
+			return nil, err
+		}
+		args := []string{"--no-pager", "show", "--no-ext-diff", "--no-color", "--format=fuller", "--stat", "--no-renames", revision}
+		if path := strings.TrimSpace(action.Parameters["path"]); path != "" {
+			path, err := validateRelativePath(path)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "--", filepath.ToSlash(path))
+		}
+		return args, nil
+	case "branches":
+		return []string{"--no-pager", "branch", "--all", "--no-color"}, nil
+	case "remotes":
+		return []string{"remote"}, nil
 	case "fetch":
 		return []string{"fetch"}, nil
 	case "fetch-branch":
@@ -125,6 +200,21 @@ func actionArguments(gitPath, repoRoot string, action ActionRequest) ([]string, 
 	default:
 		return nil, fmt.Errorf("unsupported Git action %q", action.Name)
 	}
+}
+
+func checkedCommitRevision(gitPath, repoRoot, revision string) (string, error) {
+	revision = strings.TrimSpace(revision)
+	if revision == "" {
+		revision = "HEAD"
+	}
+	if strings.ContainsAny(revision, "\x00\r\n") {
+		return "", errors.New("revision contains unsupported control characters")
+	}
+	output, err := runGit(gitPath, repoRoot, "rev-parse", "--verify", "--quiet", "--end-of-options", revision+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("invalid Git revision %q", revision)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func branchFetchArguments(gitPath, repoRoot, branch string) ([]string, error) {
@@ -150,9 +240,9 @@ func branchFetchArguments(gitPath, repoRoot, branch string) ([]string, error) {
 
 func actionMode(action string) (ActionMode, bool) {
 	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "commit":
+	case "commit", "push":
 		return ActionModeInteractive, true
-	case "fetch", "fetch-branch", "pull-tags", "push-tag":
+	case "fetch", "fetch-branch", "pull-tags", "push-tag", "status", "diff", "log", "show", "branches", "remotes":
 		return ActionModeInteractive, true
 	default:
 		return "", false

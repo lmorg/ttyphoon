@@ -2637,11 +2637,47 @@ func (a *WApp) RunGitAction(projectRoot, actionName string, parameters map[strin
 	})
 	if result["error"] == "" {
 		switch strings.ToLower(strings.TrimSpace(actionName)) {
-		case "fetch", "fetch-branch", "pull-tags":
+		case "fetch", "fetch-branch", "pull-tags", "push":
 			_, _ = a.refreshGitStatus(projectRoot)
 		}
 	}
 	return result
+}
+
+func (a *WApp) ConfirmGitPush(projectRoot string) map[string]string {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return map[string]string{"error": "Notes renderer is unavailable"}
+	}
+	decision := make(chan *types.InputBoxCallbackResultT, 1)
+	renderer.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:           "Confirm Git push",
+			Message:         "Run git push using the repository's configured remote and push settings?",
+			Confirmation:    true,
+			ConfirmLabel:    "Push",
+			CancelLabel:     "Cancel",
+			ConfirmIsDanger: true,
+		},
+		OkFunc: func(value *types.InputBoxCallbackResultT) {
+			decision <- value
+		},
+		CancelFunc: func(*types.InputBoxCallbackResultT) { decision <- nil },
+	})
+	var confirmed *types.InputBoxCallbackResultT
+	if a.ctx != nil {
+		select {
+		case confirmed = <-decision:
+		case <-a.ctx.Done():
+			return map[string]string{"error": "Git push confirmation was cancelled"}
+		}
+	} else {
+		confirmed = <-decision
+	}
+	if confirmed == nil {
+		return map[string]string{"cancelled": "true"}
+	}
+	return a.RunGitAction(projectRoot, "push", nil)
 }
 
 func (a *WApp) UnstageGitFile(projectRoot, filePath string) error {

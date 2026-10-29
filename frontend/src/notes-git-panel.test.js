@@ -20,6 +20,7 @@ function createElements() {
     gitFilterRow.appendChild(gitFileFilter);
     const gitCommitMessage = document.createElement('input');
     const gitCommitSubmit = document.createElement('button');
+    const gitPush = document.createElement('button');
     const gitStageAll = document.createElement('button');
     const gitRemote = document.createElement('button');
     const gitBranch = document.createElement('span');
@@ -32,7 +33,7 @@ function createElements() {
     const gitFilenameSearch = document.createElement('input');
     gitFilenameSearch.type = 'checkbox';
     gitFilenameSearchRow.appendChild(gitFilenameSearch);
-    gitToolbar.append(gitWorkspace, gitCompare, gitCommits, gitCommitToggle, gitRemote, gitBranch, gitAheadBehind, gitRefresh);
+    gitToolbar.append(gitWorkspace, gitCompare, gitCommits, gitCommitToggle, gitPush, gitRemote, gitBranch, gitAheadBehind, gitRefresh);
     gitCommitRow.append(gitCommitMessage, gitCommitSubmit, gitStageAll);
     gitPane.append(gitToolbar, gitFilterRow, gitCommitRow, gitFileList);
     return {
@@ -48,6 +49,7 @@ function createElements() {
         gitFileFilter,
         gitCommitMessage,
         gitCommitSubmit,
+        gitPush,
         gitStageAll,
         gitRemote,
         gitBranch,
@@ -110,6 +112,7 @@ function createApi(overrides = {}) {
         stageAll: vi.fn(() => Promise.resolve()),
         unstageFile: vi.fn(() => Promise.resolve()),
         runGitAction: vi.fn(() => Promise.resolve({ mode: 'interactive', stdout: 'commit output', stderr: '', error: '' })),
+        confirmGitPush: vi.fn(() => Promise.resolve({ cancelled: 'true' })),
         eventsOn: vi.fn(),
         ...overrides,
     };
@@ -210,9 +213,15 @@ describe('Notes Git panel', () => {
         const notifyTransfer = vi.fn();
         initNotesGitPanel(elements, api, { notify, notifyTransfer });
         await flushPromises();
+        const focus = vi.spyOn(elements.gitCommitMessage, 'focus');
         elements.gitCommitSubmit.click();
         await flushPromises();
         expect(api.runGitAction).not.toHaveBeenCalled();
+        expect(elements.gitCommitRow.hidden).toBe(false);
+        expect(focus).toHaveBeenCalledOnce();
+
+        elements.gitCommitSubmit.click();
+        await flushPromises();
         expect(notify).toHaveBeenCalledWith('Commit message is required', 'warn');
 
         elements.gitCommitMessage.value = '  Add feature  ';
@@ -250,6 +259,41 @@ describe('Notes Git panel', () => {
             { stdout: 'fetch completed', stderr: '', error: '' }, 'Commit created',
         );
         expect(api.refreshStatus).toHaveBeenCalledWith('/work/repo');
+    });
+
+    it('keeps Push idle when confirmation is cancelled', async () => {
+        const elements = createElements();
+        const api = createApi();
+        const panel = initNotesGitPanel(elements, api);
+        await flushPromises();
+        elements.gitCommitToggle.click();
+
+        elements.gitPush.click();
+        await flushPromises();
+
+        expect(api.confirmGitPush).toHaveBeenCalledWith('/work/repo');
+        expect(api.runGitAction).not.toHaveBeenCalled();
+        expect(panel.getCurrentRoot()).toBe('/work/repo');
+    });
+
+    it('reports a confirmed push result and refreshes Git status', async () => {
+        const elements = createElements();
+        const api = createApi({ confirmGitPush: vi.fn(() => Promise.resolve({
+            mode: 'interactive', stdout: 'pushed output', stderr: '', error: '',
+        })) });
+        const notify = vi.fn();
+        const notifyTransfer = vi.fn();
+        initNotesGitPanel(elements, api, { notify, notifyTransfer });
+        await flushPromises();
+        api.refreshStatus.mockClear();
+        elements.gitCommitToggle.click();
+        elements.gitPush.click();
+        await flushPromises();
+        expect(notifyTransfer).toHaveBeenCalledWith(
+            { stdout: 'pushed output', stderr: '', error: '' }, 'Push completed',
+        );
+        expect(api.refreshStatus).toHaveBeenCalledWith('/work/repo');
+        expect(elements.gitPush.disabled).toBe(false);
     });
 
     it('opens a commit context menu without changing comparison until requested', async () => {

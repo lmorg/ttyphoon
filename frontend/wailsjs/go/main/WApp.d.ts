@@ -41,6 +41,8 @@ export function CompleteSyntax(arg1:string,arg2:string,arg3:string,arg4:number,a
 
 export function ComposeNoteLocationPath(arg1:string,arg2:string):Promise<string>;
 
+export function ConfirmGitPush(arg1:string):Promise<Record<string, string>>;
+
 export function CreateAISession(arg1:string):Promise<sessiondb.FrontendStateT>;
 
 export function CreateGitTag(arg1:string,arg2:string):Promise<void>;

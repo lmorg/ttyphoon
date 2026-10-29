@@ -96,6 +96,7 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
 | [0081](0081-ai-prompt-effort-and-feedback-cadence.md) | Per-prompt effort guides investigation and user-feedback cadence | AI |
+| [0082](0082-ai-read-only-git-tool.md) | AI Git inspection uses a permission-gated read-only action whitelist | AI tools |
 
 ## Recurring themes
 

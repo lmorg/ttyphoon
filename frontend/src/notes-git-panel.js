@@ -36,7 +36,7 @@ const gitRemoteIcons = {
 export function initNotesGitPanel(elements, api, options = {}) {
     if (!elements?.gitTab || !elements?.gitPane || !elements?.gitToolbar || !elements?.gitFileList || !elements?.gitRemote || !elements?.gitCompare
         || !elements?.gitCommitToggle || !elements?.gitCommitRow || !elements?.gitCommitMessage
-        || !elements?.gitCommitSubmit || !elements?.gitStageAll) {
+        || !elements?.gitCommitSubmit || !elements?.gitPush || !elements?.gitStageAll) {
         return null;
     }
 
@@ -577,6 +577,10 @@ export function initNotesGitPanel(elements, api, options = {}) {
     const submitCommit = async () => {
         const message = String(elements.gitCommitMessage.value || '').trim();
         if (!message) {
+            if (elements.gitCommitRow.hidden) {
+                setCommitRowVisible(true);
+                return;
+            }
             options.notify?.('Commit message is required', 'warn');
             elements.gitCommitMessage.focus();
             return;
@@ -608,6 +612,33 @@ export function initNotesGitPanel(elements, api, options = {}) {
     };
 
     elements.gitCommitSubmit.addEventListener('click', () => void submitCommit());
+    elements.gitPush.addEventListener('click', async () => {
+        if (!projectRoot || typeof api.confirmGitPush !== 'function') {
+            return;
+        }
+        elements.gitPush.disabled = true;
+        try {
+            const result = await api.confirmGitPush(projectRoot);
+            if (result?.cancelled === 'true') {
+                return;
+            }
+            const { mode, ...output } = result || {};
+            if (options.notifyTransfer) {
+                options.notifyTransfer(output, 'Push completed');
+            } else if (output.error) {
+                options.notify?.(output.stdout || output.error, 'error');
+            } else {
+                options.notify?.('Push completed', 'info');
+            }
+            if (!output.error) {
+                await refresh(true);
+            }
+        } catch (error) {
+            options.notify?.(String(error?.message || error), 'error');
+        } finally {
+            elements.gitPush.disabled = false;
+        }
+    });
     elements.gitCommitMessage.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.isComposing) {
             event.preventDefault();

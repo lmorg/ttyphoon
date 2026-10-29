@@ -180,11 +180,18 @@ are unavailable, so it can explain the current context's limitations.
   Git invocations and paths relative to the validated root.
 - Place a Commit toggle with icon `0xf386` after the comparison selector on the
   left side of the toolbar. The existing commit-history toggle moves to icon
-  `0xf022`. The Commit toggle shows/hides a row directly below the toolbar.
-  The row contains a themed single-line `Commit message` input and a Commit
-  button on the left, with Stage all aligned right to the existing 72-by-24
-  Staged/Unstaged actions. The row is hidden initially; changing project roots
-  hides it and clears any unsent message.
+  `0xf022`. Place the icon-only Push button (`0xf093`) beside the Commit toggle
+  in the Git toolbar, using the same icon-button style as other toolbar actions.
+  Push opens the shared danger-style confirmation inputbox; Cancel does nothing.
+  Confirm runs `git push` through the interactive action policy and ClonePane,
+  honoring the repository's configured push behavior. Report one completion
+  notification on success or an error notification with terminal output on
+  failure. The collapsible row contains a themed single-line `Commit message`
+  input, a Commit button, and Stage all aligned right to the existing 72-by-24
+  Staged/Unstaged actions. Clicking Commit while the row is hidden opens it and
+  focuses the message input; clicking it while the row is open submits the
+  commit. The row is hidden initially; changing project roots hides it and
+  clears any unsent message.
 - Updated 2026-10-27: a file-filter row normally occupies the second toolbar
   line. Showing commit controls replaces that row; hiding them restores it
   without clearing the query. Use the shared `FilterStrings` syntax against

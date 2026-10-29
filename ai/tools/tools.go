@@ -3,6 +3,7 @@ package tools
 import (
 	_ "github.com/lmorg/ttyphoon/ai/tools/datetime"
 	_ "github.com/lmorg/ttyphoon/ai/tools/file"
+	_ "github.com/lmorg/ttyphoon/ai/tools/git"
 	_ "github.com/lmorg/ttyphoon/ai/tools/graphs"
 	_ "github.com/lmorg/ttyphoon/ai/tools/image"
 	_ "github.com/lmorg/ttyphoon/ai/tools/jq"

@@ -109,6 +109,7 @@ const getGitDiffMock = vi.fn(() => Promise.resolve({ path: '', original: '', wor
 const stageGitFileMock = vi.fn(() => Promise.resolve());
 const stageAllGitFilesMock = vi.fn(() => Promise.resolve());
 const runGitActionMock = vi.fn(() => Promise.resolve({ mode: 'interactive', stdout: '', stderr: '', error: '' }));
+const confirmGitPushMock = vi.fn(() => Promise.resolve());
 const unstageGitFileMock = vi.fn(() => Promise.resolve());
 const listGitWorktreesMock = vi.fn(() => Promise.resolve([]));
 const listGitBranchesMock = vi.fn(() => Promise.resolve([]));
@@ -235,6 +236,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     StageGitFile: stageGitFileMock,
     StageAllGitFiles: stageAllGitFilesMock,
     RunGitAction: runGitActionMock,
+    ConfirmGitPush: confirmGitPushMock,
     UnstageGitFile: unstageGitFileMock,
     ListGitWorktrees: listGitWorktreesMock,
     ListGitBranches: listGitBranchesMock,
@@ -4188,17 +4190,26 @@ describe('notes rendering', () => {
         await importNotesModule();
         const compare = document.getElementById('notes-tools-git-compare');
         const commitToggle = document.getElementById('notes-tools-git-commit-toggle');
+        const commitSubmit = document.getElementById('notes-tools-git-commit-submit');
+        const push = document.getElementById('notes-tools-git-push');
         const commits = document.getElementById('notes-tools-git-commits');
         const separator = compare.nextElementSibling;
         expect(separator.classList.contains('notes-git-toolbar-separator')).toBe(true);
         expect(separator.getAttribute('aria-hidden')).toBe('true');
         expect(separator.nextElementSibling).toBe(commits);
         expect(document.querySelector('.notes-git-actions').firstElementChild).toBe(commitToggle);
+        expect(push.previousElementSibling).toBe(commitToggle);
+        expect(commitSubmit.parentElement.id).toBe('notes-tools-git-commit-row');
         expect(commitToggle.textContent.codePointAt(0)).toBe(0xf386);
         expect(commits.textContent.codePointAt(0)).toBe(0xf0ca);
         expect(document.getElementById('notes-tools-git-commit-row').hidden).toBe(true);
         expect(document.getElementById('notes-tools-git-commit-message').placeholder).toBe('Commit message');
         expect(document.getElementById('notes-tools-git-stage-all').classList.contains('notes-git-action')).toBe(true);
+        expect(push.textContent.codePointAt(0)).toBe(0xf093);
+        expect(push.getAttribute('aria-label')).toBe('Push current branch');
+        expect(push.classList.contains('notes-tools-icon')).toBe(true);
+        expect(push.classList.contains('notes-git-action')).toBe(false);
+        expect(push.hidden).toBe(false);
     });
 
     it.each([

@@ -62,6 +62,10 @@ export function ComposeNoteLocationPath(arg1, arg2) {
   return window['go']['main']['WApp']['ComposeNoteLocationPath'](arg1, arg2);
 }
 
+export function ConfirmGitPush(arg1) {
+  return window['go']['main']['WApp']['ConfirmGitPush'](arg1);
+}
+
 export function CreateAISession(arg1) {
   return window['go']['main']['WApp']['CreateAISession'](arg1);
 }

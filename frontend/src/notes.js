@@ -1,7 +1,7 @@
 import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile,
     GetGitStatus, GetGitBrowserLink, GetGitBranchDiffFiles, GetGitDiff, GetGitDiffAgainstBranch,
-    RefreshGitStatus, SetGitStatusWatch, StageGitFile, StageAllGitFiles, UnstageGitFile, RunGitAction,
+    RefreshGitStatus, SetGitStatusWatch, StageGitFile, StageAllGitFiles, UnstageGitFile, RunGitAction, ConfirmGitPush,
         ListGitWorktrees, ListGitBranches, ListGitTags, ListGitCommits, ListGitCommitsWithFiles, GetDefaultGitWorktreePath, CreateGitWorktree, CreateGitTagWorktree,
     CheckoutGitBranch, DeleteGitBranch,
         CreateGitTag, DeleteGitTag, CheckoutGitTag,
@@ -570,6 +570,7 @@ const elements = {
     gitCommitRow: document.getElementById('notes-tools-git-commit-row'),
     gitCommitMessage: document.getElementById('notes-tools-git-commit-message'),
     gitCommitSubmit: document.getElementById('notes-tools-git-commit-submit'),
+    gitPush: document.getElementById('notes-tools-git-push'),
     gitStageAll: document.getElementById('notes-tools-git-stage-all'),
     gitBranches: document.getElementById('notes-tools-git-branches'),
     gitTags: document.getElementById('notes-tools-git-tags'),
@@ -15383,6 +15384,7 @@ notesGitPanel = initNotesGitPanel(elements, {
     stageAll: StageAllGitFiles,
     unstageFile: UnstageGitFile,
     runGitAction: RunGitAction,
+    confirmGitPush: ConfirmGitPush,
     getCurrentProject: GetCurrentProject,
     eventsOn: EventsOn,
 }, {

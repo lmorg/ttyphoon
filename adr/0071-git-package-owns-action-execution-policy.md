@@ -23,10 +23,10 @@ couple domain logic to the terminal implementation.
 - The Git package executes Go-mode actions itself. For interactive actions it
   calls an injected runner with the complete, shell-quoted command; the Git
   package does not import or depend on tmux or the renderer.
-- `commit`, generic `fetch`, configured-upstream branch fetch, tag fetch, and
-  single-tag push use the interactive runner. Remote operations that may need
-  credentials must be reachable through this path. Add or change execution
-  modes only in the Git package.
+- `commit`, generic `fetch`, configured-upstream branch fetch, tag fetch,
+  single-tag push, and branch `push` use the interactive runner. Remote
+  operations that may need credentials must be reachable through this path.
+  Add or change execution modes only in the Git package.
 - `frontend.go` remains a thin Wails adapter: it supplies environment data and an
   interactive runner that forwards the command to the active renderer/tmux pane
   and returns the completion result.
