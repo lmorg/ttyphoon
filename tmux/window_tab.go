@@ -19,7 +19,7 @@ func (tmux *Tmux) WorkspaceDirectories() []WorkspaceDirectory {
 		if win.closed || win.activePane == nil || win.activePane.closed {
 			continue
 		}
-		directories = append(directories, WorkspaceDirectory{Pwd: win.activePane.pwd, GroupName: win.name})
+		directories = append(directories, WorkspaceDirectory{Pwd: win.activePane.Pwd(), GroupName: win.name})
 	}
 	return directories
 }

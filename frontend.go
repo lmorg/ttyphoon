@@ -114,7 +114,7 @@ func NewWailsApp() *WApp {
 		notesStickies:    map[string]types.Notification{},
 		lspStartErrs:     map[string]string{},
 		homeDir:          xdg.Home,
-		projRoot:         notes.DirProjectRoot(""),
+		projRoot:         "",
 		globalNotes:      notes.DirGlobal(),
 		lspManager:       lsp.NewManager(),
 		lspDocs:          lsp.NewDocumentStore(),

@@ -867,8 +867,8 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 		name, sourcePwd, command, want string
 	}{
 		{"live directory fallback", "", "", `split-window -v -P -F '#{pane_id}' -t %7 -c "#{pane_current_path}" -e "CLONE_TEST=inherited value"`},
-		{"inherited directory", "/tmp/source dir", "", `split-window -v -P -F '#{pane_id}' -t %7 -c "#{pane_current_path}" -e "CLONE_TEST=inherited value"`},
-		{"inherited command", "/tmp/source dir", "pwd", `split-window -v -k -P -F '#{pane_id}' -t %7 -c "#{pane_current_path}" -e "CLONE_TEST=inherited value"`},
+		{"inherited directory", "/tmp/source dir", "", `split-window -v -P -F '#{pane_id}' -t %7 -c "/tmp/source dir" -e "CLONE_TEST=inherited value"`},
+		{"inherited command", "/tmp/source dir", "pwd", `split-window -v -k -P -F '#{pane_id}' -t %7 -c "/tmp/source dir" -e "CLONE_TEST=inherited value"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reader, writer, err := os.Pipe()
@@ -946,6 +946,9 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 			if !reflect.DeepEqual(clonedTerm.initialEnvVars, map[string]string{"CLONE_TEST": "inherited value"}) {
 				t.Fatalf("clone initial environment = %#v", clonedTerm.initialEnvVars)
 			}
+			if got := cloned.Pwd(); got != test.sourcePwd {
+				t.Fatalf("clone initial PWD = %q, want source PWD %q", got, test.sourcePwd)
+			}
 			_ = writer.Close()
 			<-done
 		})
@@ -954,7 +957,7 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 
 func TestClonePaneCommandKeepsExitedPaneAndStartsWrapper(t *testing.T) {
 	command := clonePaneCommand("%7", "/home/example", map[string]string{"TOKEN": "a b"}, "/tmp/ttyphoon action.sh")
-	want := `split-window -v -k -P -F '#{pane_id}' -t %7 -c "#{pane_current_path}" -e "TOKEN=a b" bash "/tmp/ttyphoon action.sh"`
+	want := `split-window -v -k -P -F '#{pane_id}' -t %7 -c "/home/example" -e "TOKEN=a b" bash "/tmp/ttyphoon action.sh"`
 	if command != want {
 		t.Fatalf("clonePaneCommand() = %q, want %q", command, want)
 	}

@@ -152,7 +152,20 @@ func (agt *Agent) McpServerRemove(server string) {
 
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
-func (agt *Agent) ProjectRoot() string      { return notes.DirProjectRoot(agt.term.Tile().Pwd()) }
+func (agt *Agent) ProjectRoot() string {
+	if agt == nil || agt.term == nil {
+		return ""
+	}
+	tile := agt.term.Tile()
+	if tile == nil {
+		return ""
+	}
+	pwd := strings.TrimSpace(tile.Pwd())
+	if pwd == "" {
+		return ""
+	}
+	return notes.DirProjectRoot(pwd)
+}
 
 type toolPermission uint8
 

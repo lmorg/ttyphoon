@@ -195,6 +195,12 @@ func TestResolveWorkspacePath(t *testing.T) {
 	}
 }
 
+func TestResolveWorkspacePathFailsWhenProjectRootIsUnavailable(t *testing.T) {
+	if _, err := resolveWorkspacePath(&pathTestAgent{}, "README.md"); err == nil || !strings.Contains(err.Error(), "project root is unavailable") {
+		t.Fatalf("resolveWorkspacePath() error = %v, want unavailable-root error", err)
+	}
+}
+
 func TestResolveAnyPath(t *testing.T) {
 	pwd := t.TempDir()
 	outside := t.TempDir()

@@ -23,23 +23,39 @@ func resolveAnyPath(agt aitypes.Agent, name string) (string, error) {
 }
 
 func resolvePath(agt aitypes.Agent, name string, restrictToRoot bool) (string, error) {
-	pwd := agt.ProjectRoot()
-	root, err := filepath.Abs(filepath.Clean(pwd))
-	if err != nil {
-		return "", err
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", err
-	}
-
+	pwd := strings.TrimSpace(agt.ProjectRoot())
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("path cannot be empty")
 	}
+	if !filepath.IsAbs(name) && pwd == "" {
+		return "", fmt.Errorf("project root is unavailable for the active terminal pane")
+	}
+
+	root := ""
+	var err error
+	if pwd != "" {
+		root, err = filepath.Abs(filepath.Clean(pwd))
+		if err != nil {
+			return "", err
+		}
+	}
+	var resolvedRoot string
+	if restrictToRoot {
+		if root == "" {
+			return "", fmt.Errorf("project root is unavailable for the active terminal pane")
+		}
+		resolvedRoot, err = filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", err
+		}
+	}
 
 	path := name
 	if !filepath.IsAbs(path) {
+		if root == "" {
+			return "", fmt.Errorf("project root is unavailable for relative path %q", name)
+		}
 		path = filepath.Join(root, path)
 	}
 	path, err = filepath.Abs(filepath.Clean(path))

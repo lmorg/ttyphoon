@@ -51,3 +51,27 @@ func TestProjectRootTracksOwningPaneDirectoryRatherThanFocusedPane(t *testing.T)
 		t.Fatalf("project root after directory change = %q, want %q", got, secondRoot)
 	}
 }
+
+func TestProjectRootDoesNotUseApplicationWorkingDirectoryWhenPanePathIsEmpty(t *testing.T) {
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applicationRepo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(applicationRepo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(applicationRepo); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(original); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	agt := &Agent{term: &projectRootTestTerm{tile: &projectRootTestTile{pwd: ""}}}
+	if got := agt.ProjectRoot(); got != "" {
+		t.Fatalf("empty pane PWD resolved to application directory %q", got)
+	}
+}

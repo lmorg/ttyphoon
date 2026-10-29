@@ -89,15 +89,20 @@ func (tmux *Tmux) NewWindow() {
 
 func (tmux *Tmux) newWindowWithInitialEnvironment() error {
 	environment := cloneEnvironment(tmux.initialEnvVars)
+	workingDirectory := ""
 	if pane, err := tmux.ActivePane(); err == nil && pane != nil && pane.term != nil {
 		environment = pane.term.GetEnvVars()
+		workingDirectory = pane.Pwd()
 	}
 	command := "new-window -P -F '#{pane_id}'" + workspace.EnvsTmux(environment)
+	if workingDirectory != "" {
+		command += " -c " + workspace.QuoteString(workingDirectory)
+	}
 	response, err := tmux.SendCommand([]byte(command))
 	if err != nil {
 		return err
 	}
-	tmux.seedPaneEnvironment(responsePaneID(response), environment)
+	tmux.seedPaneStartupState(responsePaneID(response), workingDirectory, environment)
 	return nil
 }
 

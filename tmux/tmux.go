@@ -150,8 +150,8 @@ type Tmux struct {
 	renderer       types.Renderer
 	initialEnvVars map[string]string
 
-	pendingPaneEnvMu sync.Mutex
-	pendingPaneEnv   map[string]map[string]string
+	pendingPaneStateMu sync.Mutex
+	pendingPaneState   map[string]paneStartupState
 
 	limiter    sync.Mutex
 	readerDead atomic.Bool
@@ -173,6 +173,11 @@ type tmuxResponseT struct {
 	IsErr   bool
 }
 
+type paneStartupState struct {
+	workingDirectory string
+	environment      map[string]string
+}
+
 const (
 	START_ATTACH_SESSION = "attach-session"
 	START_NEW_SESSION    = "new-session"
@@ -188,7 +193,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		renderer:          renderer,
 		pendingPaneOutput: make(map[string][][]byte),
 		initialEnvVars:    environmentMap(initialEnvironment),
-		pendingPaneEnv:    make(map[string]map[string]string),
+		pendingPaneState:  make(map[string]paneStartupState),
 	}
 
 	var err error
@@ -287,23 +292,26 @@ func cloneEnvironment(environment map[string]string) map[string]string {
 	return clone
 }
 
-func (tmux *Tmux) seedPaneEnvironment(paneID string, environment map[string]string) {
+func (tmux *Tmux) seedPaneStartupState(paneID, workingDirectory string, environment map[string]string) {
 	if paneID == "" {
 		return
 	}
-	seed := cloneEnvironment(environment)
-	tmux.pendingPaneEnvMu.Lock()
-	if tmux.pendingPaneEnv == nil {
-		tmux.pendingPaneEnv = make(map[string]map[string]string)
+	seed := paneStartupState{
+		workingDirectory: workingDirectory,
+		environment:      cloneEnvironment(environment),
 	}
-	tmux.pendingPaneEnv[paneID] = seed
-	tmux.pendingPaneEnvMu.Unlock()
+	tmux.pendingPaneStateMu.Lock()
+	if tmux.pendingPaneState == nil {
+		tmux.pendingPaneState = make(map[string]paneStartupState)
+	}
+	tmux.pendingPaneState[paneID] = seed
+	tmux.pendingPaneStateMu.Unlock()
 
 	if pane := tmux.panes.Get(paneID); pane != nil {
-		pane.setInitialEnvVars(seed)
-		tmux.pendingPaneEnvMu.Lock()
-		delete(tmux.pendingPaneEnv, paneID)
-		tmux.pendingPaneEnvMu.Unlock()
+		pane.setStartupState(seed)
+		tmux.pendingPaneStateMu.Lock()
+		delete(tmux.pendingPaneState, paneID)
+		tmux.pendingPaneStateMu.Unlock()
 	}
 }
 

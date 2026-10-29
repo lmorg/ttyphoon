@@ -12,6 +12,12 @@ import (
 
 func (tmux *Tmux) WorkspaceStart(name string) {
 	settings := config.Config.Workspaces.Workspace(name)
+	workingDirectory := ""
+	if settings.Pwd != "" {
+		workingDirectory = os.ExpandEnv(settings.Pwd)
+	} else if pane, err := tmux.ActivePane(); err == nil && pane != nil {
+		workingDirectory = pane.Pwd()
+	}
 	environment := cloneEnvironment(tmux.initialEnvVars)
 	for key, value := range settings.Envs {
 		environment[key] = value
@@ -21,8 +27,11 @@ func (tmux *Tmux) WorkspaceStart(name string) {
 		delete(baseEnvironment, key)
 	}
 	cmd := fmt.Sprintf(`new-window -n "%s" -P -F '#{pane_id}'`, name)
+	if workingDirectory != "" {
+		cmd += " -c " + workspace.QuoteString(workingDirectory)
+	}
 	cmd += workspace.EnvsTmux(baseEnvironment)
-	cmd += workspaceTermCmdBuilder(settings)
+	cmd += workspaceTermCmdBuilder(&workspace.TermT{Envs: settings.Envs, Cmd: settings.Cmd})
 
 	resp, err := tmux.SendCommand([]byte(cmd))
 	if err != nil {
@@ -30,7 +39,7 @@ func (tmux *Tmux) WorkspaceStart(name string) {
 		return
 	}
 	paneID := responsePaneID(resp)
-	tmux.seedPaneEnvironment(paneID, environment)
+	tmux.seedPaneStartupState(paneID, workingDirectory, environment)
 
 	var msg string
 	for _, slice := range resp.Message {

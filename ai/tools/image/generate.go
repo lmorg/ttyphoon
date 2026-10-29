@@ -404,6 +404,9 @@ func (t *GenerateImage) resolveOutputPath(name string) (relative string, absolut
 		absolute, err = defaultImagePath()
 		return absolute, absolute, err
 	}
+	if strings.TrimSpace(pwd) == "" {
+		return "", "", fmt.Errorf("project root is unavailable for the active terminal pane")
+	}
 
 	absolute = name
 	if !filepath.IsAbs(absolute) {
@@ -436,6 +439,9 @@ func (t *GenerateImage) resolveInputImagePath(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	absolute := name
 	if !filepath.IsAbs(absolute) {
+		if strings.TrimSpace(pwd) == "" {
+			return "", fmt.Errorf("project root is unavailable for the active terminal pane")
+		}
 		absolute = filepath.Join(pwd, absolute)
 	}
 	absolute = filepath.Clean(absolute)

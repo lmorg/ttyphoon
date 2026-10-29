@@ -44,7 +44,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [x] Notes: spellcheck suggestions open on right-clicking a misspelt word; left-click remains for editing ([ADR 0069](../adr/0069-notes-spellcheck-suggestions-open-on-right-click.md))
 - [ ] Our custom menu should support ctrl+v / cmd+v to paste text to the usually hidden search input field
 - [ ] Notes, git panel: hide and disable the commit toolbar button when there are no changes to commit and nothing to stage (clean work tree)
-- [x] Terminal: seed new pane environments from the exact startup values passed to tmux, falling back to the app environment; later shell snapshots override them ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md))
+- [x] Terminal/AI: seed pane PWD and environment from the exact startup values passed to tmux, falling back to tmux path metadata/app environment; shell snapshots update env later, and empty pane PWD never falls back to app cwd ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md))
 - [x] Notes, `Edit` mode: the autosave should also update the ToC and Frontmatter content in the Tools panel
 - [x] Notes, Inputbox: add support for pasting images (this should be an flag added to the inputbox struct to enable. It should be disabled by default).
   - [x] AI: images should be uploaded to the LLM as part of the query

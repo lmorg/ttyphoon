@@ -3,6 +3,7 @@ package tmux
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/codes"
@@ -251,8 +252,10 @@ func fnKeyPreviousWindowAlert(tmux *Tmux) error {
 
 func _fnKeySplitWindow(tmux *Tmux, flag string) error {
 	environment := cloneEnvironment(tmux.initialEnvVars)
+	workingDirectory := ""
 	if pane, err := tmux.ActivePane(); err == nil && pane != nil && pane.term != nil {
 		environment = pane.term.GetEnvVars()
+		workingDirectory = pane.Pwd()
 	}
 	command := "split-window " + flag + " -P -F '#{pane_id}'" + workspace.EnvsTmux(environment)
 
@@ -263,15 +266,18 @@ func _fnKeySplitWindow(tmux *Tmux, flag string) error {
 		settings := config.Config.Workspaces.Workspace(win.name)
 		if pwd := settings.Pwd; pwd != "" {
 			log.Printf("[trace] setting pwd of new pane to %s\n", pwd)
-			command += " -c " + workspace.PwdTmux(pwd)
+			workingDirectory = os.ExpandEnv(pwd)
 		}
+	}
+	if workingDirectory != "" {
+		command += " -c " + workspace.QuoteString(workingDirectory)
 	}
 
 	response, err := tmux.SendCommand([]byte(command))
 	if err != nil {
 		return err
 	}
-	tmux.seedPaneEnvironment(responsePaneID(response), environment)
+	tmux.seedPaneStartupState(responsePaneID(response), workingDirectory, environment)
 	return nil
 }
 func fnKeySplitWindowHorizontally(tmux *Tmux) error { return _fnKeySplitWindow(tmux, "-h") }

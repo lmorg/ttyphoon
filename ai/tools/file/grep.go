@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
@@ -97,6 +98,9 @@ func (t *Grep) callInput(ctx context.Context, inputT *grepInputT) (response stri
 
 func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 	root := t.agent.ProjectRoot()
+	if strings.TrimSpace(root) == "" {
+		return &grepReturnT{Error: "project root is unavailable for the active terminal pane"}
+	}
 	cache := [][]*grep.Result{}
 	ch := make(chan []*grep.Result)
 	done := make(chan struct{})
@@ -126,6 +130,9 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 
 func (t *Grep) getPage(input *grepInputT) *grepReturnT {
 	root := t.agent.ProjectRoot()
+	if strings.TrimSpace(root) == "" {
+		return &grepReturnT{PageNumber: input.Page, Error: "project root is unavailable for the active terminal pane"}
+	}
 	t.cacheMu.RLock()
 	defer t.cacheMu.RUnlock()
 	if t.cacheRoot != "" && t.cacheRoot != root {

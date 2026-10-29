@@ -165,6 +165,13 @@ func TestResolveOutputPath(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("explicit path requires a project root", func(t *testing.T) {
+		tool := &GenerateImage{agent: &fakeAgent{}}
+		if _, _, err := tool.resolveOutputPath("/tmp/generated.png"); err == nil || !strings.Contains(err.Error(), "project root is unavailable") {
+			t.Fatalf("resolveOutputPath() error = %v, want unavailable-root error", err)
+		}
+	})
 }
 
 func TestTruncate(t *testing.T) {

@@ -22,9 +22,15 @@ func (w *WorkspaceT) Workspace(name string) *TermT {
 	}
 	maps.Copy(t.Envs, w.Defaults.Envs)
 
-	t.Pwd = w.Terminals[name].Pwd
-	t.Cmd = w.Terminals[name].Cmd
-	maps.Copy(t.Envs, w.Terminals[name].Envs)
+	if terminal, ok := w.Terminals[name]; ok {
+		if terminal.Pwd != "" {
+			t.Pwd = terminal.Pwd
+		}
+		if terminal.Cmd != "" {
+			t.Cmd = terminal.Cmd
+		}
+		maps.Copy(t.Envs, terminal.Envs)
+	}
 
 	return t
 }

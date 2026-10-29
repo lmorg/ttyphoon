@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/codes"
@@ -75,6 +76,7 @@ type PaneT struct {
 	zoomed       bool
 	windowId     string
 	pwd          string
+	pwdMu        sync.RWMutex
 	tmux         *Tmux
 	term         types.Term
 	buf          *runebuf.Buf
@@ -130,49 +132,58 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 
 func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	debug.Log(info)
-	initialEnvVars := cloneEnvironment(tmux.initialEnvVars)
-	tmux.pendingPaneEnvMu.Lock()
-	if pending, ok := tmux.pendingPaneEnv[info.Id]; ok {
-		initialEnvVars = cloneEnvironment(pending)
-		delete(tmux.pendingPaneEnv, info.Id)
+	startup := paneStartupState{
+		workingDirectory: info.workingDirectory("", true),
+		environment:      cloneEnvironment(tmux.initialEnvVars),
 	}
-	tmux.pendingPaneEnvMu.Unlock()
+	tmux.pendingPaneStateMu.Lock()
+	if pending, ok := tmux.pendingPaneState[info.Id]; ok {
+		if pending.workingDirectory != "" {
+			startup.workingDirectory = pending.workingDirectory
+		}
+		startup.environment = cloneEnvironment(pending.environment)
+		delete(tmux.pendingPaneState, info.Id)
+	}
+	tmux.pendingPaneStateMu.Unlock()
 
 	pane := &PaneT{
 		id:   info.Id,
 		tmux: tmux,
 		buf:  runebuf.New(),
-		pwd:  info.workingDirectory("", true),
+		pwd:  startup.workingDirectory,
 	}
 
 	term := virtualterm.NewTerminal(
 		pane, tmux.renderer,
 		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
 		false)
-	term.SetInitialEnvVars(initialEnvVars)
+	term.SetInitialEnvVars(startup.environment)
 
 	pane.term.Start(pane)
 
 	tmux.panes.Set(pane.id, pane)
-	tmux.pendingPaneEnvMu.Lock()
-	pendingEnvironment, hasPendingEnvironment := tmux.pendingPaneEnv[pane.id]
-	if hasPendingEnvironment {
-		delete(tmux.pendingPaneEnv, pane.id)
+	tmux.pendingPaneStateMu.Lock()
+	pendingState, hasPendingState := tmux.pendingPaneState[pane.id]
+	if hasPendingState {
+		delete(tmux.pendingPaneState, pane.id)
 	}
-	tmux.pendingPaneEnvMu.Unlock()
-	if hasPendingEnvironment {
-		pane.setInitialEnvVars(pendingEnvironment)
+	tmux.pendingPaneStateMu.Unlock()
+	if hasPendingState {
+		pane.setStartupState(pendingState)
 	}
 
 	return pane
 }
 
-func (pane *PaneT) setInitialEnvVars(environment map[string]string) {
+func (pane *PaneT) setStartupState(state paneStartupState) {
 	if pane == nil || pane.term == nil {
 		return
 	}
+	if state.workingDirectory != "" {
+		pane.SetPwd(state.workingDirectory)
+	}
 	if setter, ok := pane.term.(interface{ SetInitialEnvVars(map[string]string) }); ok {
-		setter.SetInitialEnvVars(environment)
+		setter.SetInitialEnvVars(state.environment)
 	}
 }
 
@@ -269,7 +280,7 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	pane.bottom = int32(info.PosBottom)
 	pane.atBottom = info.AtBottom
 	pane.zoomed = info.Zoomed
-	pane.pwd = info.workingDirectory(pane.pwd, isNew)
+	pane.SetPwd(info.workingDirectory(pane.Pwd(), isNew))
 	if pane.dead.Swap(info.Dead) && !info.Dead {
 		pane.actionResult.Store(0)
 		pane.autoCloseAt.Store(0)
@@ -370,7 +381,7 @@ func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallba
 		return fmt.Errorf("interactive action callback is required")
 	}
 
-	pwd := pane.pwd
+	pwd := pane.Pwd()
 
 	var actionID, scriptPath string
 	if commandLine != "" {
@@ -413,7 +424,7 @@ func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallba
 	if newPaneID == "" {
 		return fmt.Errorf("tmux did not return the cloned pane ID")
 	}
-	tmux.seedPaneEnvironment(newPaneID, env)
+	tmux.seedPaneStartupState(newPaneID, pwd, env)
 	if err := tmux.updatePaneInfo(newPaneID); err != nil {
 		return err
 	}
@@ -441,10 +452,11 @@ func clonePaneCommand(paneID string, pwd string, env map[string]string, scriptPa
 	environmentArgs := workspace.EnvsTmux(env)
 
 	//if pwd == "" {
-	workingDirectory = `"#{pane_current_path}"`
-	//} else {
-	//	workingDirectory = workspace.QuoteString(pwd)
-	//}
+	if pwd == "" {
+		workingDirectory = `"#{pane_current_path}"`
+	} else {
+		workingDirectory = workspace.QuoteString(pwd)
+	}
 
 	if scriptPath != "" {
 		keepExitedPane = " -k"

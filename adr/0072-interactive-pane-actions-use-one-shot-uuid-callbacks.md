@@ -48,11 +48,16 @@ terminal text; it must correspond to an outstanding invocation.
 - Seed each virtual terminal with the environment ttyphoon supplied when
   creating it. The tmux process receives the sanitized application environment;
   ClonePane, new-window, hotkey splits, and WorkspaceStart pass their exact
-  child environment with `-e` and seed it by pane ID. Keep pending seeds until
-  pane discovery completes so early `%output` initialization cannot lose them.
-  A pane discovered without a ttyphoon creation request falls back to the
-  application's tmux startup environment. `GetEnvVars` returns this initial
-  snapshot until a Bash/Zsh output block reports a newer shell environment.
+  child environment with `-e` and seed it by pane ID. ClonePane also passes and
+  seeds the source pane's known working directory; new windows and splits seed
+  their configured or inherited directory. Keep pending seeds until pane
+  discovery completes so early `%output` initialization cannot lose them. A
+  pane discovered without a ttyphoon creation request falls back to tmux's
+  `pane_start_path`/`pane_current_path` metadata and the application's startup
+  environment. `GetEnvVars` returns the initial environment until a Bash/Zsh
+  output block reports a newer shell environment. AI project-root lookup must
+  return unavailable for an empty pane PWD rather than falling back to the
+  application's process working directory.
 - Announce the source pane's initial working directory with OSC 7 before running
   the wrapper command. Go encodes the path using `net/url.URL.EscapedPath` and
   passes it as `PathURI`; the Bash template renders it through `shellQuote`,

@@ -25,4 +25,8 @@ func TestWorkspaceMergesDefaultAndWindowEnvironment(t *testing.T) {
 	if got.Envs["SHARED"] != "project" || got.Envs["DEFAULT_ONLY"] != "value" || got.Envs["PROJECT_ONLY"] != "value" {
 		t.Fatalf("workspace environment = %#v", got.Envs)
 	}
+	defaults := settings.Workspace("unconfigured")
+	if defaults.Pwd != "/default" || defaults.Cmd != "default-command" || defaults.Envs["DEFAULT_ONLY"] != "value" {
+		t.Fatalf("unconfigured workspace did not retain defaults: %+v", defaults)
+	}
 }
