@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/workspace"
 )
 
 /*
@@ -80,10 +81,24 @@ func (tmux *Tmux) initSessionWindows() error {
 
 // NewWindow is a request sent to tmux to trigger a new window event
 func (tmux *Tmux) NewWindow() {
-	_, err := tmux.SendCommand([]byte("new-window"))
+	err := tmux.newWindowWithInitialEnvironment()
 	if err != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
+}
+
+func (tmux *Tmux) newWindowWithInitialEnvironment() error {
+	environment := cloneEnvironment(tmux.initialEnvVars)
+	if pane, err := tmux.ActivePane(); err == nil && pane != nil && pane.term != nil {
+		environment = pane.term.GetEnvVars()
+	}
+	command := "new-window -P -F '#{pane_id}'" + workspace.EnvsTmux(environment)
+	response, err := tmux.SendCommand([]byte(command))
+	if err != nil {
+		return err
+	}
+	tmux.seedPaneEnvironment(responsePaneID(response), environment)
+	return nil
 }
 
 // newWindow is a new window event being returned from tmux

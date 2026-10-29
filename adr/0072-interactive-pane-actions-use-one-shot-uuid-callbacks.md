@@ -43,8 +43,16 @@ terminal text; it must correspond to an outstanding invocation.
   existing screen-reading API and the script exit code. Callback execution
   occurs outside the registry lock.
 - Bash and Zsh output-block integrations report their exported environment as
-  base64-encoded NUL-delimited data, allowing a cloned pane to inherit the
-  focused shell's reported environment as well as its working directory.
+  base64-encoded NUL-delimited data. These snapshots update a pane's environment
+  after shell startup and take precedence over its initial environment.
+- Seed each virtual terminal with the environment ttyphoon supplied when
+  creating it. The tmux process receives the sanitized application environment;
+  ClonePane, new-window, hotkey splits, and WorkspaceStart pass their exact
+  child environment with `-e` and seed it by pane ID. Keep pending seeds until
+  pane discovery completes so early `%output` initialization cannot lose them.
+  A pane discovered without a ttyphoon creation request falls back to the
+  application's tmux startup environment. `GetEnvVars` returns this initial
+  snapshot until a Bash/Zsh output block reports a newer shell environment.
 - Announce the source pane's initial working directory with OSC 7 before running
   the wrapper command. Go encodes the path using `net/url.URL.EscapedPath` and
   passes it as `PathURI`; the Bash template renders it through `shellQuote`,

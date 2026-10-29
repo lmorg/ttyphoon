@@ -16,8 +16,9 @@ type TermT struct {
 // Workspace will never return nil. It is used to offer the workspace values, plus defaults should the workspace not exist or workspace specific settings are undefined
 func (w *WorkspaceT) Workspace(name string) *TermT {
 	t := &TermT{
-		Pwd: w.Defaults.Pwd,
-		Cmd: w.Defaults.Cmd,
+		Pwd:  w.Defaults.Pwd,
+		Envs: make(map[string]string),
+		Cmd:  w.Defaults.Cmd,
 	}
 	maps.Copy(t.Envs, w.Defaults.Envs)
 

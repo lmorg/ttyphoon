@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -144,9 +145,13 @@ type Tmux struct {
 
 	allowExit bool
 
-	appWindow    *types.AppWindowTerms
-	activeWindow *WindowT
-	renderer     types.Renderer
+	appWindow      *types.AppWindowTerms
+	activeWindow   *WindowT
+	renderer       types.Renderer
+	initialEnvVars map[string]string
+
+	pendingPaneEnvMu sync.Mutex
+	pendingPaneEnv   map[string]map[string]string
 
 	limiter    sync.Mutex
 	readerDead atomic.Bool
@@ -175,19 +180,22 @@ const (
 
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	debug.Log(startCommand)
+	initialEnvironment := config.SetEnv()
 	tmux := &Tmux{
 		resp:              make(chan *tmuxResponseT, 1),
 		wins:              newWindowMap(),
 		panes:             newPaneMap(),
 		renderer:          renderer,
 		pendingPaneOutput: make(map[string][][]byte),
+		initialEnvVars:    environmentMap(initialEnvironment),
+		pendingPaneEnv:    make(map[string]map[string]string),
 	}
 
 	var err error
 	debug.Log("tmux tty Start()... ")
 	tmux._resp = new(tmuxResponseT)
 	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
-	tmux.cmd.Env = config.SetEnv()
+	tmux.cmd.Env = initialEnvironment
 	tmux.tty, err = pty.Start(tmux.cmd)
 	debug.Log(fmt.Sprintf("tmux tty Start() err == %v", err))
 	if err != nil {
@@ -258,6 +266,45 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	}
 
 	return tmux, nil
+}
+
+func environmentMap(entries []string) map[string]string {
+	environment := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			environment[name] = value
+		}
+	}
+	return environment
+}
+
+func cloneEnvironment(environment map[string]string) map[string]string {
+	clone := make(map[string]string, len(environment))
+	for name, value := range environment {
+		clone[name] = value
+	}
+	return clone
+}
+
+func (tmux *Tmux) seedPaneEnvironment(paneID string, environment map[string]string) {
+	if paneID == "" {
+		return
+	}
+	seed := cloneEnvironment(environment)
+	tmux.pendingPaneEnvMu.Lock()
+	if tmux.pendingPaneEnv == nil {
+		tmux.pendingPaneEnv = make(map[string]map[string]string)
+	}
+	tmux.pendingPaneEnv[paneID] = seed
+	tmux.pendingPaneEnvMu.Unlock()
+
+	if pane := tmux.panes.Get(paneID); pane != nil {
+		pane.setInitialEnvVars(seed)
+		tmux.pendingPaneEnvMu.Lock()
+		delete(tmux.pendingPaneEnv, paneID)
+		tmux.pendingPaneEnvMu.Unlock()
+	}
 }
 
 var tmuxCommandMap = map[string]func(*Tmux, []byte){

@@ -26,8 +26,7 @@ type terminalPaneZoomProvider interface {
 }
 
 func fnKeyNewWindow(tmux *Tmux) error {
-	_, err := tmux.SendCommand([]byte("new-window"))
-	return err
+	return tmux.newWindowWithInitialEnvironment()
 }
 
 func fnKeyKillPane(tmux *Tmux) error {
@@ -250,25 +249,30 @@ func fnKeyPreviousWindowAlert(tmux *Tmux) error {
 	return err
 }
 
-func _fnKeySplitWindow(tmux *Tmux, flag string) (err error) {
-	command := "split-window " + flag
-
-	defer func() { _, err = tmux.SendCommand([]byte(command)) }()
+func _fnKeySplitWindow(tmux *Tmux, flag string) error {
+	environment := cloneEnvironment(tmux.initialEnvVars)
+	if pane, err := tmux.ActivePane(); err == nil && pane != nil && pane.term != nil {
+		environment = pane.term.GetEnvVars()
+	}
+	command := "split-window " + flag + " -P -F '#{pane_id}'" + workspace.EnvsTmux(environment)
 
 	win, err := tmux.ActiveWindow()
 	if err != nil {
 		log.Printf("[error] cannot set new pane pwd: cannot find active window: %v", err)
-		return
+	} else {
+		settings := config.Config.Workspaces.Workspace(win.name)
+		if pwd := settings.Pwd; pwd != "" {
+			log.Printf("[trace] setting pwd of new pane to %s\n", pwd)
+			command += " -c " + workspace.PwdTmux(pwd)
+		}
 	}
 
-	settings := config.Config.Workspaces.Workspace(win.name)
-
-	if pwd := settings.Pwd; pwd != "" {
-		log.Printf("[trace] setting pwd of new pane to %s\n", pwd)
-		command += " -c " + workspace.PwdTmux(pwd)
+	response, err := tmux.SendCommand([]byte(command))
+	if err != nil {
+		return err
 	}
-
-	return
+	tmux.seedPaneEnvironment(responsePaneID(response), environment)
+	return nil
 }
 func fnKeySplitWindowHorizontally(tmux *Tmux) error { return _fnKeySplitWindow(tmux, "-h") }
 func fnKeySplitWindowVertically(tmux *Tmux) error   { return _fnKeySplitWindow(tmux, "-v") }

@@ -11,18 +11,33 @@ import (
 )
 
 func (tmux *Tmux) WorkspaceStart(name string) {
-	cmd := fmt.Sprintf(`new-window -n "%s"`, name)
-	cmd += workspaceTermCmdBuilder(config.Config.Workspaces.Workspace(name))
+	settings := config.Config.Workspaces.Workspace(name)
+	environment := cloneEnvironment(tmux.initialEnvVars)
+	for key, value := range settings.Envs {
+		environment[key] = value
+	}
+	baseEnvironment := cloneEnvironment(tmux.initialEnvVars)
+	for key := range settings.Envs {
+		delete(baseEnvironment, key)
+	}
+	cmd := fmt.Sprintf(`new-window -n "%s" -P -F '#{pane_id}'`, name)
+	cmd += workspace.EnvsTmux(baseEnvironment)
+	cmd += workspaceTermCmdBuilder(settings)
 
 	resp, err := tmux.SendCommand([]byte(cmd))
 	if err != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		return
 	}
+	paneID := responsePaneID(resp)
+	tmux.seedPaneEnvironment(paneID, environment)
 
 	var msg string
 	for _, slice := range resp.Message {
-		msg += string(slice) + "\n"
+		line := strings.TrimSpace(string(slice))
+		if line != "" && line != paneID {
+			msg += line + "\n"
+		}
 	}
 	msg = strings.TrimSpace(msg)
 

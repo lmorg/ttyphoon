@@ -25,6 +25,28 @@ func NewTestTerminal() *Term {
 	return term
 }
 
+func TestGetEnvVarsFallsBackToInitialEnvironmentUntilShellSnapshot(t *testing.T) {
+	term := &Term{}
+	term.SetInitialEnvVars(map[string]string{"PATH": "/app/bin", "APP_VALUE": "initial"})
+
+	initial := term.GetEnvVars()
+	if initial["PATH"] != "/app/bin" || initial["APP_VALUE"] != "initial" {
+		t.Fatalf("initial environment = %#v", initial)
+	}
+	initial["APP_VALUE"] = "mutated copy"
+	if term.GetEnvVars()["APP_VALUE"] != "initial" {
+		t.Fatal("GetEnvVars returned the startup environment by reference")
+	}
+
+	term._normBuf = types.Screen{&types.Row{Block: &types.BlockMeta{EnvVars: map[string]string{
+		"PATH":        "/shell/bin",
+		"SHELL_VALUE": "reported",
+	}}}}
+	if snapshot := term.GetEnvVars(); snapshot["PATH"] != "/shell/bin" || snapshot["SHELL_VALUE"] != "reported" {
+		t.Fatalf("shell snapshot did not replace startup environment: %#v", snapshot)
+	}
+}
+
 type testCondition struct {
 	Screen    string
 	Operation func(t *testing.T, term *Term)

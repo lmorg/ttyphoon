@@ -130,6 +130,13 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 
 func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 	debug.Log(info)
+	initialEnvVars := cloneEnvironment(tmux.initialEnvVars)
+	tmux.pendingPaneEnvMu.Lock()
+	if pending, ok := tmux.pendingPaneEnv[info.Id]; ok {
+		initialEnvVars = cloneEnvironment(pending)
+		delete(tmux.pendingPaneEnv, info.Id)
+	}
+	tmux.pendingPaneEnvMu.Unlock()
 
 	pane := &PaneT{
 		id:   info.Id,
@@ -138,16 +145,35 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 		pwd:  info.workingDirectory("", true),
 	}
 
-	virtualterm.NewTerminal(
+	term := virtualterm.NewTerminal(
 		pane, tmux.renderer,
 		&types.XY{X: int32(info.Width), Y: int32(info.Height)},
 		false)
+	term.SetInitialEnvVars(initialEnvVars)
 
 	pane.term.Start(pane)
 
 	tmux.panes.Set(pane.id, pane)
+	tmux.pendingPaneEnvMu.Lock()
+	pendingEnvironment, hasPendingEnvironment := tmux.pendingPaneEnv[pane.id]
+	if hasPendingEnvironment {
+		delete(tmux.pendingPaneEnv, pane.id)
+	}
+	tmux.pendingPaneEnvMu.Unlock()
+	if hasPendingEnvironment {
+		pane.setInitialEnvVars(pendingEnvironment)
+	}
 
 	return pane
+}
+
+func (pane *PaneT) setInitialEnvVars(environment map[string]string) {
+	if pane == nil || pane.term == nil {
+		return
+	}
+	if setter, ok := pane.term.(interface{ SetInitialEnvVars(map[string]string) }); ok {
+		setter.SetInitialEnvVars(environment)
+	}
 }
 
 type paneInfo struct {
@@ -387,6 +413,7 @@ func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallba
 	if newPaneID == "" {
 		return fmt.Errorf("tmux did not return the cloned pane ID")
 	}
+	tmux.seedPaneEnvironment(newPaneID, env)
 	if err := tmux.updatePaneInfo(newPaneID); err != nil {
 		return err
 	}

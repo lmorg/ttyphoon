@@ -6,3 +6,5 @@ Bash command and script tool. Runs the provided script with Bash in a new cloned
 - Execution/setup failures are returned in `error`; a non-zero `exitCode` means the script failed. Correct the cause rather than assuming success.
 - If interactive input is required, the user can respond directly in the cloned terminal pane. Do not request secrets through chat.
 - Cancelling the tool stops waiting; it does not necessarily terminate the cloned command. The pane can be inspected or killed through its normal controls.
+- stdout and stdeerr are already both captured and sent. You do not need to use `2>&1` and similar tricks to combine them
+- because this is an interactive TTY that the user can see, prefer command lines which displays progress than ones which hide progress in the terminal. eg when writing to a file, use `tee` so output is printed to screen AND the file

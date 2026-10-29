@@ -177,12 +177,157 @@ func TestSplitWindowUsesWorkspaceDirectoryWhenSupplied(t *testing.T) {
 				if err := _fnKeySplitWindow(tmux, flag); err != nil {
 					t.Fatal(err)
 				}
-				if got, want := <-commands, "split-window "+flag+test.suffix; got != want {
+				if got, want := <-commands, "split-window "+flag+" -P -F '#{pane_id}'"+test.suffix; got != want {
 					t.Fatalf("split command = %q, want %q", got, want)
 				}
 			})
 		}
 	}
+}
+
+func TestSplitWindowPassesAndSeedsActivePaneEnvironment(t *testing.T) {
+	previous := config.Config.Workspaces
+	config.Config.Workspaces = &workspace.WorkspaceT{
+		Defaults:  workspace.TermT{Envs: map[string]string{}},
+		Terminals: map[string]workspace.TermT{"project": {Envs: map[string]string{}}},
+	}
+	t.Cleanup(func() { config.Config.Workspaces = previous })
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	tmux := &Tmux{tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap()}
+	win := &WindowT{id: "@1", name: "project", active: true, panes: newPaneMap()}
+	tmux.wins.Set(win.id, win)
+	tmux.activeWindow = win
+	source := &PaneT{id: "%7", windowId: win.id, tmux: tmux, active: true}
+	source.term = &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: source}}
+	child := &PaneT{id: "%8", windowId: win.id, tmux: tmux}
+	childTerm := &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: child}}
+	child.term = childTerm
+	win.activePane = source
+	win.panes.Set(source.id, source)
+	tmux.panes.Set(source.id, source)
+	tmux.panes.Set(child.id, child)
+	commands := make(chan string, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if scanner := bufio.NewScanner(reader); scanner.Scan() {
+			commands <- scanner.Text()
+			tmux.resp <- &tmuxResponseT{Message: [][]byte{[]byte(child.id)}}
+		}
+	}()
+	if err := _fnKeySplitWindow(tmux, "-h"); err != nil {
+		t.Fatal(err)
+	}
+	command := <-commands
+	if !strings.Contains(command, `-e "CLONE_TEST=inherited value"`) {
+		t.Fatalf("split command omitted pane environment: %q", command)
+	}
+	if !reflect.DeepEqual(childTerm.initialEnvVars, map[string]string{"CLONE_TEST": "inherited value"}) {
+		t.Fatalf("split pane initial environment = %#v", childTerm.initialEnvVars)
+	}
+	_ = writer.Close()
+	<-done
+}
+
+func TestWorkspaceStartSeedsApplicationAndWorkspaceEnvironment(t *testing.T) {
+	previous := config.Config.Workspaces
+	config.Config.Workspaces = &workspace.WorkspaceT{
+		Defaults: workspace.TermT{Envs: map[string]string{"DEFAULT_VALUE": "default"}},
+		Terminals: map[string]workspace.TermT{
+			"project": {Pwd: "/workspace/project", Envs: map[string]string{"PROJECT_VALUE": "workspace"}},
+		},
+	}
+	t.Cleanup(func() { config.Config.Workspaces = previous })
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	tmux := &Tmux{
+		tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap(),
+		renderer: &paneCloseTestRenderer{}, initialEnvVars: map[string]string{"APP_VALUE": "app"},
+	}
+	child := &PaneT{id: "%8", tmux: tmux}
+	childTerm := &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: child}}
+	child.term = childTerm
+	tmux.panes.Set(child.id, child)
+	commands := make(chan string, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if scanner := bufio.NewScanner(reader); scanner.Scan() {
+			commands <- scanner.Text()
+			tmux.resp <- &tmuxResponseT{Message: [][]byte{[]byte(child.id)}}
+		}
+	}()
+
+	tmux.WorkspaceStart("project")
+	command := <-commands
+	for _, expected := range []string{
+		`-e "APP_VALUE=app"`,
+		`-e "DEFAULT_VALUE=default"`,
+		`-e "PROJECT_VALUE=workspace"`,
+		`-c "/workspace/project"`,
+	} {
+		if !strings.Contains(command, expected) {
+			t.Errorf("workspace command %q does not contain %q", command, expected)
+		}
+	}
+	wantEnvironment := map[string]string{
+		"APP_VALUE":     "app",
+		"DEFAULT_VALUE": "default",
+		"PROJECT_VALUE": "workspace",
+	}
+	if !reflect.DeepEqual(childTerm.initialEnvVars, wantEnvironment) {
+		t.Fatalf("workspace pane initial environment = %#v, want %#v", childTerm.initialEnvVars, wantEnvironment)
+	}
+	_ = writer.Close()
+	<-done
+}
+
+func TestNewWindowInheritsAndSeedsActivePaneEnvironment(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	tmux := &Tmux{tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap()}
+	win := &WindowT{id: "@1", active: true, panes: newPaneMap()}
+	tmux.wins.Set(win.id, win)
+	tmux.activeWindow = win
+	source := &PaneT{id: "%7", windowId: win.id, tmux: tmux, active: true}
+	source.term = &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: source}}
+	child := &PaneT{id: "%8", windowId: win.id, tmux: tmux}
+	childTerm := &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: child}}
+	child.term = childTerm
+	win.activePane = source
+	win.panes.Set(source.id, source)
+	tmux.panes.Set(source.id, source)
+	tmux.panes.Set(child.id, child)
+	commands := make(chan string, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if scanner := bufio.NewScanner(reader); scanner.Scan() {
+			commands <- scanner.Text()
+			tmux.resp <- &tmuxResponseT{Message: [][]byte{[]byte(child.id)}}
+		}
+	}()
+	if err := tmux.newWindowWithInitialEnvironment(); err != nil {
+		t.Fatal(err)
+	}
+	if command := <-commands; !strings.Contains(command, `-e "CLONE_TEST=inherited value"`) {
+		t.Fatalf("new-window command omitted pane environment: %q", command)
+	}
+	if !reflect.DeepEqual(childTerm.initialEnvVars, map[string]string{"CLONE_TEST": "inherited value"}) {
+		t.Fatalf("new window initial environment = %#v", childTerm.initialEnvVars)
+	}
+	_ = writer.Close()
+	<-done
 }
 
 func TestZoomPaneTargetsRequestedPane(t *testing.T) {
@@ -704,10 +849,17 @@ func TestRespawnedPaneClearsCompletionState(t *testing.T) {
 	}
 }
 
-type shellCloneTestTerm struct{ paneGeometryTestTerm }
+type shellCloneTestTerm struct {
+	paneGeometryTestTerm
+	initialEnvVars map[string]string
+}
 
 func (*shellCloneTestTerm) GetEnvVars() map[string]string {
 	return map[string]string{"CLONE_TEST": "inherited value"}
+}
+
+func (term *shellCloneTestTerm) SetInitialEnvVars(environment map[string]string) {
+	term.initialEnvVars = cloneEnvironment(environment)
 }
 
 func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
@@ -728,11 +880,12 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 			win := &WindowT{id: "@1", panes: newPaneMap()}
 			client.wins.Set(win.id, win)
 			source := &PaneT{id: "%7", windowId: win.id, tmux: client, pwd: test.sourcePwd, active: true}
-			source.term = &shellCloneTestTerm{paneGeometryTestTerm{pane: source}}
+			source.term = &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: source}}
 			win.activePane = source
 			win.panes.Set(source.id, source)
 			cloned := &PaneT{id: "%8", windowId: win.id, tmux: client}
-			cloned.term = &paneGeometryTestTerm{pane: cloned}
+			clonedTerm := &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: cloned}}
+			cloned.term = clonedTerm
 			client.panes.Set(source.id, source)
 			client.panes.Set(cloned.id, cloned)
 			commands := make(chan string, 2)
@@ -789,6 +942,9 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 			}
 			if source.pwd != test.sourcePwd || cloned.CommandFinished() || cloned.AutoCloseAt() != 0 {
 				t.Fatal("clone changed source directory or initialized completion state prematurely")
+			}
+			if !reflect.DeepEqual(clonedTerm.initialEnvVars, map[string]string{"CLONE_TEST": "inherited value"}) {
+				t.Fatalf("clone initial environment = %#v", clonedTerm.initialEnvVars)
 			}
 			_ = writer.Close()
 			<-done

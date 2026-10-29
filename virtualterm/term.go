@@ -47,6 +47,8 @@ type Term struct {
 	Pty      types.Pty
 	_mutex   sync.Mutex
 
+	initialEnvVars map[string]string
+
 	screen        *types.Screen
 	_normBuf      types.Screen
 	_altBuf       types.Screen
@@ -513,7 +515,13 @@ func (term *Term) GetEnvVars() map[string]string {
 		}
 	}
 
-	return map[string]string{}
+	return cloneEnvVars(term.initialEnvVars)
+}
+
+func (term *Term) SetInitialEnvVars(envvars map[string]string) {
+	term._mutex.Lock()
+	term.initialEnvVars = cloneEnvVars(envvars)
+	term._mutex.Unlock()
 }
 
 func cloneEnvVars(envvars map[string]string) map[string]string {
