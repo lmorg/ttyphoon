@@ -2,7 +2,7 @@ import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile,
     GetGitStatus, GetGitBrowserLink, GetGitBranchDiffFiles, GetGitDiff, GetGitDiffAgainstBranch,
     RefreshGitStatus, SetGitStatusWatch, StageGitFile, StageAllGitFiles, UnstageGitFile, RunGitAction,
-        ListGitWorktrees, ListGitBranches, ListGitTags, ListGitCommits, GetDefaultGitWorktreePath, CreateGitWorktree, CreateGitTagWorktree,
+        ListGitWorktrees, ListGitBranches, ListGitTags, ListGitCommits, ListGitCommitsWithFiles, GetDefaultGitWorktreePath, CreateGitWorktree, CreateGitTagWorktree,
     CheckoutGitBranch, DeleteGitBranch, FetchGitBranch,
         CreateGitTag, DeleteGitTag, CheckoutGitTag, PullGitTags, PushGitTag,
     SwitchGitWorktree, RemoveGitWorktree, ShowGitWorktreeInfo, ShowGitRefInfo,
@@ -464,6 +464,10 @@ const elements = {
     currentFileTitle: document.getElementById('notes-current-file'),
     list: document.getElementById('notes-list'),
     gitCommitList: document.getElementById('notes-commits-list'),
+    gitFilterRow: document.getElementById('notes-tools-git-filter-row'),
+    gitFileFilter: document.getElementById('notes-tools-git-file-filter'),
+    gitFilenameSearchRow: document.getElementById('notes-commit-filename-search-row'),
+    gitFilenameSearch: document.getElementById('notes-commit-filename-search'),
     listFilter: document.getElementById('notes-list-filter'),
     listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
@@ -15338,6 +15342,7 @@ notesGitPanel = initNotesGitPanel(elements, {
     getBrowserLink: GetGitBrowserLink,
     getBranchDiffFiles: GetGitBranchDiffFiles,
     listCommits: ListGitCommits,
+    listCommitsWithFiles: ListGitCommitsWithFiles,
     filterStrings: FilterStrings,
     openRemote: BrowserOpenURL,
     refreshStatus: RefreshGitStatus,
@@ -15392,7 +15397,9 @@ notesGitPanel = initNotesGitPanel(elements, {
         const wasActive = !elements.gitCommitList.hidden;
         elements.list.hidden = active;
         elements.gitCommitList.hidden = !active;
-        elements.listFilter.placeholder = active ? 'Filter commits...' : 'Filter files...';
+        elements.listFilter.placeholder = active
+            ? elements.gitFilenameSearch.checked ? 'Filter commits by filename...' : 'Filter commits...'
+            : 'Filter files...';
         if (!active && wasActive) {
             if (isProjectFindListModeActive()) scheduleProjectFindSearch();
             else void applyFileFilter();

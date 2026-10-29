@@ -106,12 +106,24 @@ are unavailable, so it can explain the current context's limitations.
   with topologically ordered history, while Tools continues to show Git status.
   Keep the shared file/grep filter visible during history mode. Use the same
   `FilterStrings` query language against full commit hashes and complete messages,
-  including message bodies, while still displaying short hashes and subjects.
+  including message bodies and tags, while still displaying short hashes and subjects.
   A non-empty history filter hides the graph and uses the full sidebar width for
   commit text. Clearing it restores the unfiltered graph and text positioning.
   Search a cached window of up to 10,000 commits; repeated queries reuse it,
   with request guards rejecting stale filter results. Restore file/grep filtering
   on history exit; keep the file tree mounted and updated in the background.
+  Updated 2026-10-26: show a default-off `Search filenames` checkbox below the
+  shared filter only while history is displayed. When enabled, apply the same
+  query language to individual changed repository-relative paths and include a
+  commit when any path matches; do not also match hashes, messages, or tags in
+  this mode. An empty query still shows all commits. Fetch changed paths only
+  for a nonempty filename query, using a single NUL-delimited raw Git log batch
+  that includes root commits and separate merge diffs. Disable rename detection
+  so both old and new paths are searchable, include deletions, and deduplicate
+  paths repeated across merge parents. Cache file-aware snapshots separately
+  from metadata-only results; reject stale responses after query/mode changes.
+  Hide the checkbox in file mode and reset it on project-root changes. Normal
+  metadata filtering does not load changed paths.
   History includes only commits reachable from the checked-out worktree's HEAD,
   including merged ancestry, not unrelated branches, remote refs, or tags.
   Detached HEAD uses its own ancestry; an unborn branch shows no commits.
@@ -181,6 +193,16 @@ are unavailable, so it can explain the current context's limitations.
   button on the left, with Stage all aligned right to the existing 72-by-24
   Staged/Unstaged actions. The row is hidden initially; changing project roots
   hides it and clears any unsent message.
+- Updated 2026-10-27: a file-filter row normally occupies the second toolbar
+  line. Showing commit controls replaces that row; hiding them restores it
+  without clearing the query. Use the shared `FilterStrings` syntax against
+  displayed paths in both working-tree and revision-comparison lists. Preserve
+  file order and actions while hiding nonmatches; show `No matching files` for
+  an empty result. Escape clears the query. Reapply it after status refreshes,
+  reset it on root changes, and reject stale asynchronous results. Hide both
+  secondary rows when Git operations are unavailable. The filter uses the same
+  input styling and native-text-assistance disablement as other Git inputs,
+  without enabling dictionary spellchecking.
 - Stage all runs `git add -u -- .`: stage modifications and deletions to tracked
   files, but do not stage untracked files. Disable the button when workspace
   status has no unstaged tracked files. Refresh Git status after successful
@@ -207,6 +229,14 @@ are unavailable, so it can explain the current context's limitations.
 - Branch comparison is view-only: `HEAD` remains the default status view, while
   selecting a local branch changes the file list and diff base without checking
   out or mutating any branch.
+- Updated 2026-10-27: revision comparisons also list files present in the selected
+  commit tree that match the working tree. Keep the existing differing-file
+  groups and `≠` status first, then append equal files with `=` and a matching
+  revision tooltip. Read the selected tree using NUL-delimited `git ls-tree`;
+  do not infer equality from a missing working-tree status entry alone. Equal
+  entries retain any real staging flags but do not acquire artificial staging
+  actions, and remain openable through the normal comparison diff path. Returning
+  to `HEAD` restores the ordinary changed-only working-tree list.
 - Git metadata status refreshes are watched only while the Git tab is selected.
   Linked worktrees watch their external per-worktree and common Git directories;
   ordinary file edits are covered by the active project file-index watch.

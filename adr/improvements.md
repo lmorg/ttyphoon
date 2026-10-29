@@ -27,7 +27,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [x] Notes: cache the sizing of the `notes | terminal` splitter / resizer ([ADR 0059](../adr/0059-notes-layout-sizing-persistence.md))
 - [x] Notes: add support for the tools panel to be resized ([ADR 0059](../adr/0059-notes-layout-sizing-persistence.md))
   - [x] Notes: cache and restore the resized tools-panel dimensions
-- [ ] Terminal: the guagebars should have the same styling as the scrollbars in Notes: width, default colour, rounded corners, alpha transparency
+- [x] Terminal: the gaugebars should have the same styling as the scrollbars in Notes: width, default colour, rounded corners, alpha transparency
 - [x] AI: once the agent has completed, if autoscrolling is enabled (eg we don't see [Latest] button), the AI panel scrolls to the start of the final returned answer, not tool calls or thinking ([ADR 0035](../adr/0035-ai-output-explicit-follow-mode.md))
 - [x] Chore: consolidate all the references of ~/Documents/ttyphoon into one function in the `file` package ([ADR 0065](../adr/0065-shared-documents-directory.md))
 - [x] When the git panel is open, add a watch for .git directory to push updates to the git tab.
@@ -50,6 +50,10 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [x] Notes, Inputbox: add support to "Save draft". This will close the dialog but cache that the values for all fields (including additional fields referred to as "variables"). Then the next time that inputbox with the same parameters is opened, pre-populate all those fields
 - [x] Notes, Inputbox: any additional fields (variables) are not stored in the history like the main input field is. I'd like all fields to be stored in history. Clicking the [...] should update all fields. But the up arrow on text fields should return history for just that field
 - [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
+- [ ] Terminal: kitty graphics support (this should be a new ADR)
+- [ ] Git panel: all git operations that call origin (eg git pull, git fetch, git commit) should call ClonePane (some already do)
+- [ ] Git panel: git push button next to git commit. This should show "are you sure" dialog similar to the kill pane dialog
+- [x] Kill pane confirmation modal: Tab/Shift+Tab switches between buttons; Enter/Space activates the focused button; text and terminal shortcuts are ignored ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md))
 
 ## refactors
 

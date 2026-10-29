@@ -167,6 +167,8 @@ export function ListGitBranches(arg1:string):Promise<Array<string>>;
 
 export function ListGitCommits(arg1:string,arg2:number):Promise<Array<git.Commit>>;
 
+export function ListGitCommitsWithFiles(arg1:string,arg2:number):Promise<Array<git.Commit>>;
+
 export function ListGitTags(arg1:string):Promise<Array<string>>;
 
 export function ListGitWorktrees(arg1:string):Promise<Array<git.Worktree>>;

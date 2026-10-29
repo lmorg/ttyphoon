@@ -775,6 +775,10 @@ export function initInputBox(canvas) {
             inputboxSubmit(false);
         } else if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
             cycleInputboxFocus(e.shiftKey);
+        } else if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+            if (document.activeElement === inputboxOkBtn || document.activeElement === inputboxCancel) {
+                document.activeElement.click();
+            }
         }
     }
     for (const eventName of ['keydown', 'keypress', 'keyup']) {

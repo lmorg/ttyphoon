@@ -50,11 +50,14 @@ export function initNotesGitPanel(elements, api, options = {}) {
     let historyLimit = 100;
     let historyLayoutObserver = null;
     let historyFilter = '';
+    let filenameSearch = false;
+    let historySnapshotIncludesFiles = false;
     let historySnapshot = null;
     let historySnapshotLimit = 0;
     let historyLoad = null;
     let watchActive = false;
     let remoteRequest = 0;
+    let fileFilterRequest = 0;
     const statusCache = new Map();
 
     const syncStatusWatch = () => {
@@ -67,9 +70,11 @@ export function initNotesGitPanel(elements, api, options = {}) {
     const setAvailable = (available) => {
         elements.gitTab.style.display = '';
         elements.gitToolbar.hidden = !available;
+        if (elements.gitFilterRow) elements.gitFilterRow.hidden = !available || !elements.gitCommitRow.hidden;
         elements.gitPane.dataset.available = String(available);
         options.onAvailabilityChange?.(available);
         if (!available) {
+            fileFilterRequest++;
             elements.gitStageAll.disabled = true;
             elements.gitCommitRow.hidden = true;
             elements.gitCommitToggle.setAttribute('aria-pressed', 'false');
@@ -120,7 +125,39 @@ export function initNotesGitPanel(elements, api, options = {}) {
         }
     };
 
+    const applyFileFilter = async () => {
+        const request = ++fileFilterRequest;
+        const status = currentStatus;
+        const root = projectRoot;
+        const query = String(elements.gitFileFilter?.value || '').trim();
+        const rows = [...elements.gitFileList.querySelectorAll('.notes-git-file-row')];
+        const result = query ? await api.filterStrings(query, rows.map((row) => row.dataset.path)) : null;
+        if (request !== fileFilterRequest || status !== currentStatus || root !== projectRoot) return;
+        elements.gitFileList.querySelector('.notes-git-filter-empty')?.remove();
+        const matches = result ? new Set(result.Error ? [] : result.List || []) : null;
+        for (const row of rows) row.hidden = matches !== null && !matches.has(row.dataset.path);
+        if (query && rows.length && rows.every((row) => row.hidden)) {
+            const message = document.createElement('div');
+            message.className = 'notes-git-message notes-git-filter-empty';
+            message.textContent = 'No matching files';
+            elements.gitFileList.appendChild(message);
+        }
+    };
+
+    elements.gitFileFilter?.addEventListener('input', () => {
+        void applyFileFilter().catch((error) => options.notify?.(String(error?.message || error), 'error'));
+    });
+    elements.gitFileFilter?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            elements.gitFileFilter.value = '';
+            void applyFileFilter();
+        }
+    });
+
     const renderStatus = (status, cachedStatus = status) => {
+        fileFilterRequest++;
         currentStatus = status;
         syncStatusWatch();
         void updateRemoteLink(status, projectRoot);
@@ -149,6 +186,9 @@ export function initNotesGitPanel(elements, api, options = {}) {
 
         const fragment = document.createDocumentFragment();
         const files = [...status.files].sort((left, right) => {
+            const leftEqual = left.compareOnly && left.code === '=';
+            const rightEqual = right.compareOnly && right.code === '=';
+            if (leftEqual !== rightEqual) return leftEqual ? 1 : -1;
             const leftGroup = left.untracked ? 0 : left.unstaged ? 1 : 2;
             const rightGroup = right.untracked ? 0 : right.unstaged ? 1 : 2;
             return leftGroup - rightGroup || left.path.localeCompare(right.path);
@@ -171,10 +211,11 @@ export function initNotesGitPanel(elements, api, options = {}) {
 
             const code = document.createElement('span');
             code.className = 'notes-git-status-code';
-            code.textContent = file.compareOnly ? '≠' : statusCode(file);
+            const comparisonEqual = file.compareOnly && file.code === '=';
+            code.textContent = file.compareOnly ? (comparisonEqual ? '=' : '≠') : statusCode(file);
             code.dataset.statusCode = statusCode(file);
             code.dataset.tooltip = file.compareOnly
-                ? `Differs from ${compareBranch}`
+                ? `${comparisonEqual ? 'Matches' : 'Differs from'} ${compareBranch}`
                 : statusTooltip(code.dataset.statusCode);
             code.setAttribute('aria-label', `Git status ${code.dataset.tooltip}`);
 
@@ -196,20 +237,24 @@ export function initNotesGitPanel(elements, api, options = {}) {
             fragment.appendChild(row);
         }
         elements.gitFileList.appendChild(fragment);
+        void applyFileFilter().catch((error) => options.notify?.(String(error?.message || error), 'error'));
     };
 
     const loadCommits = (root, limit, force) => {
-        if (!force && historySnapshot && historySnapshotLimit >= limit) {
+        const includeFiles = filenameSearch && Boolean(historyFilter.trim());
+        if (!force && historySnapshot && historySnapshotLimit >= limit && (!includeFiles || historySnapshotIncludesFiles)) {
             return Promise.resolve(historySnapshot.slice(0, limit));
         }
-        if (!force && historyLoad?.root === root && historyLoad.limit >= limit) {
+        if (!force && historyLoad?.root === root && historyLoad.limit >= limit && (!includeFiles || historyLoad.includeFiles)) {
             return historyLoad.promise.then((commits) => commits.slice(0, limit));
         }
-        const load = { root, limit };
-        load.promise = api.listCommits(root, limit).then((commits) => {
+        const load = { root, limit, includeFiles };
+        const list = includeFiles ? api.listCommitsWithFiles : api.listCommits;
+        load.promise = list(root, limit).then((commits) => {
             if (historyLoad === load && root === projectRoot) {
                 historySnapshot = commits;
                 historySnapshotLimit = limit;
+                historySnapshotIncludesFiles = includeFiles;
             }
             return commits;
         }).finally(() => {
@@ -224,6 +269,7 @@ export function initNotesGitPanel(elements, api, options = {}) {
         const root = projectRoot;
         try {
             const query = historyFilter.trim();
+            const searchFilenames = filenameSearch;
             const limit = query ? 10000 : historyLimit;
             const commits = await loadCommits(root, limit, force);
             if (request !== historyRequest || !commitsActive || root !== projectRoot) {
@@ -238,7 +284,10 @@ export function initNotesGitPanel(elements, api, options = {}) {
             const searchText = (commit) => [commit.fullHash || commit.hash, commit.message || commit.subject, ...(commit.tags || [])].join('\n');
             let matches = null;
             if (query) {
-                const result = await api.filterStrings(query, commits.map(searchText));
+                const searchItems = searchFilenames
+                    ? [...new Set(commits.flatMap((commit) => commit.files || []))]
+                    : commits.map(searchText);
+                const result = await api.filterStrings(query, searchItems);
                 if (request !== historyRequest || !commitsActive || root !== projectRoot) return;
                 matches = new Set(result?.Error ? [] : result?.List || []);
                 if (!matches.size) {
@@ -250,7 +299,9 @@ export function initNotesGitPanel(elements, api, options = {}) {
             const fragment = document.createDocumentFragment();
             const historyRows = [];
             for (const [commitIndex, commit] of commits.entries()) {
-                if (matches && !matches.has(searchText(commit))) continue;
+                if (matches && !(searchFilenames
+                    ? (commit.files || []).some((path) => matches.has(path))
+                    : matches.has(searchText(commit)))) continue;
                 const row = document.createElement('div');
                 row.className = 'notes-find-files-item notes-git-commit';
                 row.classList.toggle('notes-git-commit-filtered', Boolean(query));
@@ -350,6 +401,7 @@ export function initNotesGitPanel(elements, api, options = {}) {
         historyRequest++;
         historyLimit = 100;
         elements.gitCommits?.setAttribute('aria-pressed', String(commitsActive));
+        if (elements.gitFilenameSearchRow) elements.gitFilenameSearchRow.hidden = !commitsActive;
         options.onCommitsChange?.(commitsActive);
         if (commitsActive) {
             historyFilter = options.getCommitFilter?.() ?? historyFilter;
@@ -360,6 +412,14 @@ export function initNotesGitPanel(elements, api, options = {}) {
     };
 
     elements.gitCommits?.addEventListener('click', () => setCommitsActive(!commitsActive));
+
+    elements.gitFilenameSearch?.addEventListener('change', () => {
+        filenameSearch = elements.gitFilenameSearch.checked;
+        if (commitsActive) {
+            if (elements.listFilter) elements.listFilter.placeholder = filenameSearch ? 'Filter commits by filename...' : 'Filter commits...';
+            void renderCommits();
+        }
+    });
 
     const refresh = async (force = true) => {
         const generation = ++requestGeneration;
@@ -430,6 +490,11 @@ export function initNotesGitPanel(elements, api, options = {}) {
         elements.gitCommitToggle.setAttribute('aria-pressed', 'false');
         elements.gitCommitMessage.value = '';
         projectRoot = nextRoot;
+        fileFilterRequest++;
+        if (elements.gitFileFilter) elements.gitFileFilter.value = '';
+        filenameSearch = false;
+        if (elements.gitFilenameSearch) elements.gitFilenameSearch.checked = false;
+        if (elements.gitFilenameSearchRow) elements.gitFilenameSearchRow.hidden = true;
         historySnapshot = null;
         historySnapshotLimit = 0;
         historyLoad = null;
@@ -496,6 +561,7 @@ export function initNotesGitPanel(elements, api, options = {}) {
 
     const setCommitRowVisible = (visible) => {
         elements.gitCommitRow.hidden = !visible;
+        if (elements.gitFilterRow) elements.gitFilterRow.hidden = visible || elements.gitToolbar.hidden;
         elements.gitCommitToggle.setAttribute('aria-pressed', String(visible));
         if (visible) {
             elements.gitCommitMessage.focus();

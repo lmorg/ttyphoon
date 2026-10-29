@@ -74,10 +74,19 @@ type Commit struct {
 	Date     string   `json:"date"`
 	Author   string   `json:"author"`
 	Tags     []string `json:"tags"`
+	Files    []string `json:"files,omitempty"`
 	Graph    []string `json:"graph"`
 }
 
 func ListCommits(root string, limit int) ([]Commit, error) {
+	return listCommits(root, limit, false)
+}
+
+func ListCommitsWithFiles(root string, limit int) ([]Commit, error) {
+	return listCommits(root, limit, true)
+}
+
+func listCommits(root string, limit int, includeFiles bool) ([]Commit, error) {
 	gitPath, repoRoot, err := checkedRepository(root)
 	if err != nil {
 		return nil, err
@@ -124,6 +133,33 @@ func ListCommits(root string, limit int) ([]Commit, error) {
 	}
 	for index := range commits {
 		commits[index].Message = messages[commits[index].FullHash]
+	}
+	if includeFiles {
+		output, err := runGit(gitPath, repoRoot, "log", "--topo-order", "--no-color", "--no-ext-diff", "--raw", "--root", "-m", "--no-renames", "-z", "--format=%H%x00", "--max-count="+strconv.Itoa(limit), headRef, "--")
+		if err != nil {
+			return nil, err
+		}
+		byHash := make(map[string]*Commit, len(commits))
+		seen := make(map[string]map[string]bool, len(commits))
+		for index := range commits {
+			byHash[commits[index].FullHash] = &commits[index]
+			seen[commits[index].FullHash] = make(map[string]bool)
+		}
+		var current *Commit
+		records := strings.Split(string(output), "\x00")
+		for index := 0; index < len(records); index++ {
+			record := strings.TrimLeft(records[index], "\r\n")
+			if commit := byHash[strings.TrimSpace(record)]; commit != nil {
+				current = commit
+			} else if strings.HasPrefix(record, ":") && index+1 < len(records) {
+				index++
+				path := records[index]
+				if current != nil && path != "" && !seen[current.FullHash][path] {
+					current.Files = append(current.Files, path)
+					seen[current.FullHash][path] = true
+				}
+			}
+		}
 	}
 	return commits, nil
 }
@@ -748,8 +784,33 @@ func BranchDiffFiles(root, branch string) ([]FileStatus, error) {
 		}
 		file.CompareOnly = true
 		files = append(files, file)
+		seen[file.Path] = struct{}{}
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	tree, err := runGit(gitPath, repoRoot, "ls-tree", "-r", "--name-only", "-z", branchRef, "--")
+	if err != nil {
+		return nil, err
+	}
+	for _, rawPath := range bytes.Split(tree, []byte{0}) {
+		if len(rawPath) == 0 {
+			continue
+		}
+		path := filepath.ToSlash(string(rawPath))
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		file := workingFiles[path]
+		file.Path = path
+		file.Code = "="
+		file.CompareOnly = true
+		files = append(files, file)
+		seen[path] = struct{}{}
+	}
+	sort.Slice(files, func(i, j int) bool {
+		if (files[i].Code == "=") != (files[j].Code == "=") {
+			return files[j].Code == "="
+		}
+		return files[i].Path < files[j].Path
+	})
 	return files, nil
 }
 

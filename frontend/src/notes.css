@@ -335,6 +335,23 @@ body {
     cursor: pointer;
 }
 
+.notes-commit-filename-search {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 10px 6px;
+    color: var(--fg);
+    cursor: pointer;
+}
+
+.notes-commit-filename-search[hidden] {
+    display: none;
+}
+
+.notes-commit-filename-search > span {
+    font: inherit;
+}
+
 #notes-list-filter-wrap {
     position: relative;
     padding: 0 10px;
@@ -2117,6 +2134,7 @@ body {
     display: none;
 }
 
+#notes-tools-git-file-filter,
 #notes-tools-git-commit-message {
     flex: 1 1 auto;
     min-width: 0;
@@ -2132,6 +2150,7 @@ body {
     outline: none;
 }
 
+#notes-tools-git-file-filter:focus,
 #notes-tools-git-commit-message:focus {
     border-color: var(--accent);
 }
@@ -2145,6 +2164,10 @@ body {
     min-height: 0;
     overflow: auto;
     padding: 4px 8px 12px;
+}
+
+.notes-git-file-row[hidden] {
+    display: none;
 }
 
 .notes-git-commits-toggle[aria-pressed="true"] {

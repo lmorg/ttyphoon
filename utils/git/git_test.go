@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -403,6 +404,51 @@ func TestDeleteBranchRemovesOnlySafeLocalBranches(t *testing.T) {
 	}
 }
 
+func TestListCommitsWithFilesIncludesChangesAndRenamePaths(t *testing.T) {
+	root := initGitTestRepo(t)
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldName := "old file\nname.txt"
+	newName := "nested/new file.txt"
+	if err := os.WriteFile(filepath.Join(root, oldName), []byte("content\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGitTestCommand(t, gitPath, root, "add", "--", oldName)
+	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "-m", "add document")
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	runGitTestCommand(t, gitPath, root, "mv", "--", oldName, newName)
+	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "-m", "rename document")
+	commits, err := ListCommitsWithFiles(root, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 3 || !slices.Contains(commits[0].Files, oldName) || !slices.Contains(commits[0].Files, newName) || !slices.Contains(commits[1].Files, oldName) {
+		t.Fatalf("changed paths = %+v", commits)
+	}
+	if !slices.Contains(commits[2].Files, "tracked file.txt") {
+		t.Fatalf("root commit paths = %v", commits[2].Files)
+	}
+	runGitTestCommand(t, gitPath, root, "rm", "--", newName)
+	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "-m", "delete document")
+	deleted, err := ListCommitsWithFiles(root, 1)
+	if err != nil || len(deleted) != 1 || !slices.Contains(deleted[0].Files, newName) {
+		t.Fatalf("deleted paths = %+v, %v", deleted, err)
+	}
+	plain, err := ListCommits(root, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, commit := range plain {
+		if len(commit.Files) != 0 {
+			t.Fatalf("default history unexpectedly loads changed paths: %+v", commit)
+		}
+	}
+}
+
 func TestListCommitsIncludesMetadataAndGraph(t *testing.T) {
 	root := initGitTestRepo(t)
 	gitPath, err := exec.LookPath("git")
@@ -458,6 +504,10 @@ func TestListCommitsPreservesMergeGraphAndLimit(t *testing.T) {
 	}
 	branch := strings.TrimSpace(string(output))
 	runGitTestCommand(t, gitPath, root, "checkout", "--quiet", "-b", "feature")
+	if err := os.WriteFile(filepath.Join(root, "feature.txt"), []byte("feature\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGitTestCommand(t, gitPath, root, "add", "feature.txt")
 	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "--allow-empty", "-m", "Feature commit")
 	runGitTestCommand(t, gitPath, root, "checkout", "--quiet", branch)
 	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "--allow-empty", "-m", "Main commit")
@@ -479,6 +529,10 @@ func TestListCommitsPreservesMergeGraphAndLimit(t *testing.T) {
 	limited, err := ListCommits(root, 2)
 	if err != nil || len(limited) != 2 {
 		t.Fatalf("limited history = %+v, %v", limited, err)
+	}
+	withFiles, err := ListCommitsWithFiles(root, 2)
+	if err != nil || len(withFiles) != 2 || !slices.Contains(withFiles[0].Files, "feature.txt") {
+		t.Fatalf("merge paths with limit = %+v, %v", withFiles, err)
 	}
 }
 
@@ -787,6 +841,12 @@ func TestBranchDiffFilesAndReadDiffDoNotSwitchBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 	currentBranch := strings.TrimSpace(string(branchOutput))
+	unchangedPath := "unchanged file\nname.txt"
+	if err := os.WriteFile(filepath.Join(root, unchangedPath), []byte("same contents\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runGitTestCommand(t, gitPath, root, "add", "--", unchangedPath)
+	runGitTestCommand(t, gitPath, root, "commit", "--quiet", "-m", "unchanged file")
 	runGitTestCommand(t, gitPath, root, "checkout", "--quiet", "-b", "compare-base")
 	if err := os.WriteFile(filepath.Join(root, "tracked file.txt"), []byte("compare contents\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -805,8 +865,11 @@ func TestBranchDiffFilesAndReadDiffDoNotSwitchBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BranchDiffFiles() error = %v", err)
 	}
-	if len(files) != 3 {
-		t.Fatalf("BranchDiffFiles() = %+v, want tracked, branch-only, and untracked paths", files)
+	if len(files) != 4 {
+		t.Fatalf("BranchDiffFiles() = %+v, want tracked, branch-only, untracked, and equal paths", files)
+	}
+	if last := files[len(files)-1]; last.Path != unchangedPath || last.Code != "=" || last.Staged || last.Unstaged || last.Untracked {
+		t.Fatalf("last comparison entry = %+v, want unchanged file without staging actions", last)
 	}
 	for _, file := range files {
 		if !file.CompareOnly {
@@ -865,7 +928,7 @@ func TestCommitComparisonUsesCommitWithoutChangingHead(t *testing.T) {
 	}
 	runGitTestCommand(t, gitPath, root, "branch", commit[:8], "HEAD")
 	files, err := BranchDiffFiles(root, commit[:8])
-	if err != nil || len(files) != 0 {
+	if err != nil || len(files) != 1 || files[0].Code != "=" || !files[0].CompareOnly {
 		t.Fatalf("hex-named branch precedence = %+v, %v", files, err)
 	}
 	for _, target := range []string{"HEAD~1", "--all", "0000000"} {

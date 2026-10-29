@@ -596,6 +596,61 @@ describe('inputbox', () => {
             .filter((button) => button.style.display !== 'none');
         expect(visibleButtons.map((button) => button.id)).toEqual(['inputbox-ok', 'inputbox-cancel']);
 
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.activeElement).toBe(document.getElementById('inputbox-cancel'));
+        const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+        document.dispatchEvent(tabEvent);
+        expect(tabEvent.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(document.getElementById('inputbox-ok'));
+        const reverseTabEvent = new KeyboardEvent('keydown', {
+            key: 'Tab', shiftKey: true, bubbles: true, cancelable: true,
+        });
+        document.dispatchEvent(reverseTabEvent);
+        expect(reverseTabEvent.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(document.getElementById('inputbox-cancel'));
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(document.activeElement).toBe(document.getElementById('inputbox-ok'));
+        const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+        document.dispatchEvent(enterEvent);
+        expect(enterEvent.defaultPrevented).toBe(true);
+        expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(12, { value: '', variables: {} }, true);
+
+        terminalInputBoxSubmitMock.mockClear();
+        openHandler({
+            id: 12,
+            title: 'Confirm pane close',
+            message: 'Are you sure you wish to kill the active pane?\n\nID: %7\nName: shell',
+            confirmation: true,
+            confirmLabel: 'Kill',
+            cancelLabel: 'Cancel',
+            confirmIsDanger: true,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        for (const keyEvent of [{ key: 'x' }, { key: 'c', ctrlKey: true }]) {
+            const event = new KeyboardEvent('keydown', { ...keyEvent, bubbles: true, cancelable: true });
+            document.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(true);
+        }
+        expect(terminalInputBoxSubmitMock).not.toHaveBeenCalled();
+        expect(document.getElementById('terminal-inputbox').style.display).toBe('flex');
+
+        const spaceEvent = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+        document.dispatchEvent(spaceEvent);
+        expect(spaceEvent.defaultPrevented).toBe(true);
+        expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(12, { value: '', variables: {} }, false);
+
+        terminalInputBoxSubmitMock.mockClear();
+        openHandler({
+            id: 12,
+            title: 'Confirm pane close',
+            message: 'Are you sure you wish to kill the active pane?\n\nID: %7\nName: shell',
+            confirmation: true,
+            confirmLabel: 'Kill',
+            cancelLabel: 'Cancel',
+            confirmIsDanger: true,
+        });
+
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(12, { value: '', variables: {} }, false);
     });
@@ -633,6 +688,20 @@ describe('inputbox', () => {
         }
     });
 
+    it('visibly outlines the focused modal button', () => {
+        const style = document.createElement('style');
+        style.textContent = inputboxCss;
+        document.head.appendChild(style);
+        try {
+            const focus = Array.from(style.sheet.cssRules)
+                .find((rule) => rule.selectorText === '.inputbox-btn:focus').style;
+            expect(focus.getPropertyValue('outline')).toContain('var(--accent');
+            expect(focus.getPropertyValue('outline-offset')).toBe('2px');
+        } finally {
+            style.remove();
+        }
+    });
+
     it('submits a confirmation only when Kill is activated', async () => {
         const { initInputBox } = await import('./inputbox.js');
         initInputBox(document.createElement('canvas'));
@@ -642,7 +711,7 @@ describe('inputbox', () => {
         expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(13, { value: '', variables: {} }, true);
     });
 
-    it('blocks terminal input during confirmation and cycles only Kill and Cancel with Tab', async () => {
+    it('blocks terminal input during confirmation and supports keyboard button activation', async () => {
         const { initInputBox } = await import('./inputbox.js');
         const { wireKeyboardEvents } = await import('./events.js');
         const canvas = document.createElement('canvas');
@@ -656,7 +725,7 @@ describe('inputbox', () => {
         const cancel = document.getElementById('inputbox-cancel');
         cancel.focus();
         window.terminalFocusedState = true;
-        for (const key of ['x', 'Enter', ' ', 'ArrowUp']) {
+        for (const key of ['x', 'ArrowUp']) {
             for (const type of ['keydown', 'keypress', 'keyup']) {
                 const event = new KeyboardEvent(type, { key, bubbles: true, cancelable: true });
                 cancel.dispatchEvent(event);
@@ -675,6 +744,11 @@ describe('inputbox', () => {
         cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
         expect(document.activeElement).toBe(kill);
 
+        kill.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(14, { value: '', variables: {} }, true);
+        terminalInputBoxSubmitMock.mockClear();
+
+        openHandler({ id: 14, title: 'Confirm pane close', confirmation: true, confirmLabel: 'Kill' });
         kill.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         expect(terminalInputBoxSubmitMock).toHaveBeenCalledWith(14, { value: '', variables: {} }, false);
         expect(terminalKeyPressMock).not.toHaveBeenCalled();

@@ -13,6 +13,10 @@
                     <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                     <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
                 </div>
+                <label id="notes-commit-filename-search-row" class="notes-commit-filename-search markdown-body" hidden>
+                    <input id="notes-commit-filename-search" type="checkbox">
+                    <span>Search filenames</span>
+                </label>
             </div>
             <div id="notes-list" role="list"></div>
             <div id="notes-commits-list" role="list" aria-label="Commit history" hidden></div>
@@ -211,6 +215,9 @@
                                     <button id="notes-tools-git-remote" type="button" class="notes-tools-clear notes-tools-icon notes-git-remote" aria-label="Open remote repository" data-tooltip="Open remote repository" hidden></button>
                                     <button id="notes-tools-git-refresh" type="button" class="notes-tools-clear notes-tools-icon" data-tooltip="Refresh Git status" aria-label="Refresh Git status">&#xf021;</button>
                                 </div>
+                            </div>
+                            <div id="notes-tools-git-filter-row" class="notes-git-commit-row" hidden>
+                                <input id="notes-tools-git-file-filter" type="search" placeholder="Filter files..." aria-label="Filter Git files" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false">
                             </div>
                             <div id="notes-tools-git-commit-row" class="notes-git-commit-row" hidden>
                                 <input id="notes-tools-git-commit-message" type="text" placeholder="Commit message" aria-label="Commit message" autocomplete="off">

@@ -123,9 +123,9 @@ terminal text; it must correspond to an outstanding invocation.
   confirmation in the shared themed input box. The dialog identifies the pane,
   puts `Kill` before right-aligned `Cancel`, and gives Kill the same neutral
   outline at rest with a red-tinted hover state. Confirmation dialogs consume
-  keyboard events before terminal handlers: only Tab/Shift+Tab cycles between
-  the buttons and Escape cancels. Enter, Space, text, and terminal shortcuts
-  are ignored; actions remain mouse-activated. Confirmed kills target that pane ID, not whichever pane is active
+  keyboard events before terminal handlers: Tab/Shift+Tab cycles between the
+  buttons, Enter/Space activates the focused button, and Escape cancels. Text
+  and terminal shortcuts are ignored. Confirmed kills target that pane ID, not whichever pane is active
   when the dialog is answered. The kill-pane hotkey passes the selected pane's
   ID and title through the same renderer `ConfirmKillPane` policy as the button:
   running panes require confirmation, completed panes close immediately, and

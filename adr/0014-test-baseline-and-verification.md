@@ -21,6 +21,17 @@ failures are fixed.
 
 ### Latest verification
 
+On 2026-10-27, all 616 frontend tests across 23 files passed after adding the
+Git file-filter toolbar and single-equals comparison status. The full Go suite
+and both application/frontend builds also passed. The preceding unchanged-file
+comparison change passed all 613 frontend tests before the toolbar tests were
+added.
+
+On 2026-10-26, all 612 frontend tests across 23 files passed after adding Git
+history filename filtering. The full Go suite, application build, and frontend
+production build also passed. Existing chunk-size and duplicate `-lobjc` linker
+notices remain warnings, not failures.
+
 On 2026-10-24, the full frontend suite passed all 609 tests across 23 files after
 the native text-assistance and single-line spellchecker changes. The production
 frontend build also succeeded; its existing chunk-size notices remain warnings.

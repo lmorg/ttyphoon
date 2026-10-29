@@ -13,6 +13,11 @@ function createElements() {
     const gitCommits = document.createElement('button');
     const gitCommitToggle = document.createElement('button');
     const gitCommitRow = document.createElement('div');
+    const gitFilterRow = document.createElement('div');
+    gitFilterRow.hidden = true;
+    const gitFileFilter = document.createElement('input');
+    gitFileFilter.type = 'search';
+    gitFilterRow.appendChild(gitFileFilter);
     const gitCommitMessage = document.createElement('input');
     const gitCommitSubmit = document.createElement('button');
     const gitStageAll = document.createElement('button');
@@ -22,9 +27,14 @@ function createElements() {
     const gitRefresh = document.createElement('button');
     const gitFileList = document.createElement('div');
     const gitCommitList = document.createElement('div');
+    const gitFilenameSearchRow = document.createElement('label');
+    gitFilenameSearchRow.hidden = true;
+    const gitFilenameSearch = document.createElement('input');
+    gitFilenameSearch.type = 'checkbox';
+    gitFilenameSearchRow.appendChild(gitFilenameSearch);
     gitToolbar.append(gitWorkspace, gitCompare, gitCommits, gitCommitToggle, gitRemote, gitBranch, gitAheadBehind, gitRefresh);
     gitCommitRow.append(gitCommitMessage, gitCommitSubmit, gitStageAll);
-    gitPane.append(gitToolbar, gitCommitRow, gitFileList);
+    gitPane.append(gitToolbar, gitFilterRow, gitCommitRow, gitFileList);
     return {
         gitTab,
         gitPane,
@@ -34,6 +44,8 @@ function createElements() {
         gitCommits,
         gitCommitToggle,
         gitCommitRow,
+        gitFilterRow,
+        gitFileFilter,
         gitCommitMessage,
         gitCommitSubmit,
         gitStageAll,
@@ -43,6 +55,8 @@ function createElements() {
         gitRefresh,
         gitFileList,
         gitCommitList,
+        gitFilenameSearchRow,
+        gitFilenameSearch,
     };
 }
 
@@ -61,6 +75,7 @@ function createApi(overrides = {}) {
             { hash: 'abcdef1', subject: 'Merge feature', date: '2026-10-12 12:30:00', author: 'Test User', graph: ['*   ', '|\\  '] },
             { hash: 'abcdef2', subject: 'Feature commit', date: '2026-10-12 12:00:00', author: 'Test User', graph: ['| * ', '|/  '] },
         ])),
+        listCommitsWithFiles: vi.fn(() => Promise.resolve([])),
         getBrowserLink: vi.fn(() => Promise.resolve({
             provider: 'github',
             url: 'https://github.com/org/repo/tree/main',
@@ -329,6 +344,77 @@ describe('Notes Git panel', () => {
         expect(elements.gitCommitList.querySelector('.notes-git-commit-filtered')).toBeNull();
         expect(elements.gitCommitList.querySelector('.notes-git-commit-graph')).not.toBeNull();
         expect(api.listCommits).toHaveBeenCalledTimes(2);
+    });
+
+    it('defaults filename search off and filters only matching changed paths when enabled', async () => {
+        const elements = createElements();
+        const commits = [
+            { hash: 'aaaaaaa', message: 'needle in message', subject: 'needle in message', tags: ['needle-tag'], files: ['src/api.go'], graph: ['*'] },
+            { hash: 'bbbbbbb', message: 'Update docs', subject: 'Update docs', files: ['docs/needle.md', 'docs/guide.md'], graph: ['*'] },
+        ];
+        const api = createApi({
+            listCommits: vi.fn(async () => commits), listCommitsWithFiles: vi.fn(async () => commits),
+        });
+        const panel = initNotesGitPanel(elements, api);
+        await flushPromises();
+        expect(elements.gitFilenameSearch.checked).toBe(false);
+        expect(elements.gitFilenameSearchRow.hidden).toBe(true);
+        panel.setCommitsActive(true);
+        await flushPromises();
+        expect(elements.gitFilenameSearchRow.hidden).toBe(false);
+        elements.gitFilenameSearch.checked = true;
+        elements.gitFilenameSearch.dispatchEvent(new Event('change'));
+        await flushPromises();
+        expect(api.listCommitsWithFiles).not.toHaveBeenCalled();
+        elements.gitFilenameSearch.checked = false;
+        elements.gitFilenameSearch.dispatchEvent(new Event('change'));
+        await flushPromises();
+        await panel.setCommitFilter('needle');
+        expect(elements.gitCommitList.querySelector('.notes-git-commit-hash').textContent).toBe('aaaaaaa');
+        expect(api.listCommitsWithFiles).not.toHaveBeenCalled();
+        elements.gitFilenameSearch.checked = true;
+        elements.gitFilenameSearch.dispatchEvent(new Event('change'));
+        await flushPromises();
+        expect(elements.gitCommitList.querySelectorAll('.notes-git-commit')).toHaveLength(1);
+        expect(elements.gitCommitList.querySelector('.notes-git-commit-hash').textContent).toBe('bbbbbbb');
+        expect(api.filterStrings).toHaveBeenLastCalledWith('needle', ['src/api.go', 'docs/needle.md', 'docs/guide.md']);
+        expect(api.listCommitsWithFiles).toHaveBeenCalledOnce();
+        await panel.setCommitFilter('api');
+        expect(elements.gitCommitList.querySelector('.notes-git-commit-hash').textContent).toBe('aaaaaaa');
+        expect(api.listCommitsWithFiles).toHaveBeenCalledOnce();
+        await panel.setCommitFilter('');
+        expect(elements.gitCommitList.querySelectorAll('.notes-git-commit')).toHaveLength(2);
+        panel.setCommitsActive(false);
+        expect(elements.gitFilenameSearchRow.hidden).toBe(true);
+        panel.setProjectRoot('/other/repo');
+        expect(elements.gitFilenameSearch.checked).toBe(false);
+    });
+
+    it('ignores a delayed filename-search result after the toggle is disabled', async () => {
+        const elements = createElements();
+        const commits = [
+            { hash: 'aaaaaaa', message: 'needle', subject: 'needle', files: ['other.go'], graph: ['*'] },
+            { hash: 'bbbbbbb', message: 'Other', subject: 'Other', files: ['needle.go'], graph: ['*'] },
+        ];
+        let finish;
+        const api = createApi({
+            listCommits: vi.fn(async () => commits),
+            listCommitsWithFiles: vi.fn(() => new Promise((resolve) => { finish = resolve; })),
+        });
+        const panel = initNotesGitPanel(elements, api);
+        await flushPromises();
+        panel.setCommitsActive(true);
+        await flushPromises();
+        await panel.setCommitFilter('needle');
+        elements.gitFilenameSearch.checked = true;
+        elements.gitFilenameSearch.dispatchEvent(new Event('change'));
+        elements.gitFilenameSearch.checked = false;
+        elements.gitFilenameSearch.dispatchEvent(new Event('change'));
+        await flushPromises();
+        finish(commits);
+        await flushPromises();
+        expect(elements.gitCommitList.querySelectorAll('.notes-git-commit')).toHaveLength(1);
+        expect(elements.gitCommitList.querySelector('.notes-git-commit-hash').textContent).toBe('aaaaaaa');
     });
 
     it('uses the current shared query when re-enabling Commits after the filter was cleared', async () => {
@@ -639,6 +725,61 @@ describe('Notes Git panel', () => {
         expect(panel.getCurrentRoot()).toBe('/work/repo');
     });
 
+    it('filters Git files and swaps the second row with commit controls without losing the query', async () => {
+        const elements = createElements();
+        const api = createApi();
+        const panel = initNotesGitPanel(elements, api);
+        await flushPromises();
+        expect(elements.gitFilterRow.hidden).toBe(false);
+        expect(elements.gitCommitRow.hidden).toBe(true);
+        const visiblePaths = () => [...elements.gitFileList.querySelectorAll('.notes-git-file-row')]
+            .filter((row) => !row.hidden).map((row) => row.dataset.path);
+        elements.gitFileFilter.value = 'main.go';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        await flushPromises();
+        expect(visiblePaths()).toEqual(['src/main.go']);
+        expect(api.filterStrings).toHaveBeenLastCalledWith('main.go', expect.arrayContaining(['src/main.go']));
+        elements.gitCommitToggle.click();
+        expect(elements.gitCommitRow.hidden).toBe(false);
+        expect(elements.gitFilterRow.hidden).toBe(true);
+        elements.gitCommitToggle.click();
+        expect(elements.gitCommitRow.hidden).toBe(true);
+        expect(elements.gitFilterRow.hidden).toBe(false);
+        expect(elements.gitFileFilter.value).toBe('main.go');
+        await panel.refresh();
+        await flushPromises();
+        expect(visiblePaths()).toEqual(['src/main.go']);
+        elements.gitFileFilter.value = 'missing-file';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        await flushPromises();
+        expect(visiblePaths()).toEqual([]);
+        expect(elements.gitFileList.textContent).toContain('No matching files');
+        elements.gitFileFilter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(elements.gitFileFilter.value).toBe('');
+        expect(visiblePaths()).toHaveLength(3);
+        expect(elements.gitFileList.querySelector('.notes-git-filter-empty')).toBeNull();
+        elements.gitFileFilter.value = 'main';
+        await panel.setProjectRoot('/other/repo');
+        expect(elements.gitFileFilter.value).toBe('');
+    });
+
+    it('ignores a delayed file-filter response after the filter is cleared', async () => {
+        const elements = createElements();
+        let complete;
+        initNotesGitPanel(elements, createApi({
+            filterStrings: vi.fn(() => new Promise((resolve) => { complete = resolve; })),
+        }));
+        await flushPromises();
+        elements.gitFileFilter.value = 'old query';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        elements.gitFileFilter.value = '';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        complete({ List: [] });
+        await flushPromises();
+        expect([...elements.gitFileList.querySelectorAll('.notes-git-file-row')].every((row) => !row.hidden)).toBe(true);
+        expect(elements.gitFileList.querySelector('.notes-git-filter-empty')).toBeNull();
+    });
+
     it('switches comparison branches without changing the status branch and opens branch-based diffs', async () => {
         const elements = createElements();
         const api = createApi();
@@ -667,6 +808,37 @@ describe('Notes Git panel', () => {
         expect(onOpenDiff).toHaveBeenCalledWith(expect.objectContaining({
             diff: expect.objectContaining({ original: 'branch' }),
         }));
+    });
+
+    it('appends equal commit files after differing files and opens their comparison without staging controls', async () => {
+        const elements = createElements();
+        const api = createApi({
+            getBranchDiffFiles: vi.fn(async () => [
+                { path: 'a-equal.go', code: '=', compareOnly: true },
+                { path: 'z-different.go', code: ' M', compareOnly: true, unstaged: true },
+                { path: 'b-equal.go', code: '=', compareOnly: true },
+            ]),
+        });
+        const panel = initNotesGitPanel(elements, api);
+        await flushPromises();
+        await panel.setCompareBranch('abcdef123456');
+        const rows = [...elements.gitFileList.querySelectorAll('.notes-git-file-row')];
+        expect(rows.map((row) => row.dataset.path)).toEqual(['z-different.go', 'a-equal.go', 'b-equal.go']);
+        expect(rows.map((row) => row.querySelector('.notes-git-status-code').textContent)).toEqual(['≠', '=', '=']);
+        expect(rows[1].querySelector('.notes-git-status-code').dataset.tooltip).toBe('Matches abcdef123456');
+        expect(rows[1].querySelectorAll('.notes-git-action')).toHaveLength(0);
+        rows[1].querySelector('.notes-git-file').click();
+        await flushPromises();
+        expect(api.getDiffAgainstBranch).toHaveBeenCalledWith('/work/repo', 'a-equal.go', '', 'abcdef123456');
+        elements.gitFileFilter.value = 'a-equal.go';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        await flushPromises();
+        expect([...elements.gitFileList.querySelectorAll('.notes-git-file-row')]
+            .filter((row) => !row.hidden).map((row) => row.dataset.path)).toEqual(['a-equal.go']);
+        elements.gitFileFilter.value = '';
+        elements.gitFileFilter.dispatchEvent(new Event('input'));
+        await panel.setCompareBranch('');
+        expect([...elements.gitFileList.querySelectorAll('.notes-git-status-code')].some((code) => code.textContent === '=')).toBe(false);
     });
 
     it('keeps the Git panel available when the selected comparison branch disappears', async () => {

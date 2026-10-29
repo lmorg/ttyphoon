@@ -303,6 +303,11 @@
     color: var(--terminal-fg, #e6edf3);
 }
 
+.inputbox-btn:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 .inputbox-ok {
     border-color: var(--terminal-fg, #316db0);
 }

@@ -2368,6 +2368,10 @@ func (a *WApp) ListGitCommits(projectRoot string, limit int) ([]gitutils.Commit,
 	return gitutils.ListCommits(projectRoot, limit)
 }
 
+func (a *WApp) ListGitCommitsWithFiles(projectRoot string, limit int) ([]gitutils.Commit, error) {
+	return gitutils.ListCommitsWithFiles(projectRoot, limit)
+}
+
 func (a *WApp) RefreshGitStatus(projectRoot string) (gitutils.Status, error) {
 	return a.refreshGitStatus(projectRoot)
 }

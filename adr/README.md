@@ -6,7 +6,10 @@ on them rather than rediscover them.
 Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 **Reference**.
 
-`0000-high-level-project-context.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
+`0000-high-level-project-context-for-ai.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
+If you're an AI, please read this first for new sessions to gain context into the application.
+
+`improvements.md` is a catalogue of known feature requests and bugs.
 
 ## Index
 
@@ -91,6 +94,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0077](0077-ai-filesystem-tools-use-the-live-project-root.md) | AI filesystem tools resolve the owning pane's live project root | AI tools |
 | [0078](0078-mcp-oauth-failures-must-be-retryable.md) | MCP OAuth cancellation, registration and retries preserve usable state | MCP |
 | [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
+| [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
 
 ## Recurring themes
 

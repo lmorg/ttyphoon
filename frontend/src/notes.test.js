@@ -121,6 +121,7 @@ const pullGitTagsMock = vi.fn(() => Promise.resolve({ stdout: '', stderr: '', er
 const pushGitTagMock = vi.fn(() => Promise.resolve({ stdout: '', stderr: '', error: '' }));
 const createGitTagWorktreeMock = vi.fn(() => Promise.resolve({ path: '', branch: '' }));
 const listGitCommitsMock = vi.fn(() => Promise.resolve([]));
+const listGitCommitsWithFilesMock = vi.fn(() => Promise.resolve([]));
 const getDefaultGitWorktreePathMock = vi.fn(() => Promise.resolve('/home/test/Documents/ttyphoon/.git_worktrees/default-hash'));
 const createGitWorktreeMock = vi.fn(() => Promise.resolve({ path: '', branch: '' }));
 const switchGitWorktreeMock = vi.fn(() => Promise.resolve());
@@ -246,6 +247,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     PushGitTag: pushGitTagMock,
     CreateGitTagWorktree: createGitTagWorktreeMock,
     ListGitCommits: listGitCommitsMock,
+    ListGitCommitsWithFiles: listGitCommitsWithFilesMock,
     GetDefaultGitWorktreePath: getDefaultGitWorktreePathMock,
     CreateGitWorktree: createGitWorktreeMock,
     SwitchGitWorktree: switchGitWorktreeMock,
@@ -590,6 +592,7 @@ describe('notes rendering', () => {
         createGitTagWorktreeMock.mockResolvedValue({ path: '', branch: '' });
         listGitCommitsMock.mockReset();
         listGitCommitsMock.mockResolvedValue([]);
+        listGitCommitsWithFilesMock.mockReset().mockResolvedValue([]);
         getDefaultGitWorktreePathMock.mockReset();
         createGitWorktreeMock.mockReset();
         switchGitWorktreeMock.mockReset();
@@ -6053,6 +6056,75 @@ describe('notes rendering', () => {
         expect(hoverStyle).toContain('mask-image: none;');
         const textHoverStyle = notesCss.match(/\.notes-git-commit-graph:hover\s*\+\s*\.notes-git-commit-content\s*\{([^}]*)\}/)?.[1] || '';
         expect(textHoverStyle).toContain('opacity: 0.2;');
+    });
+
+    it('shows the Git file filter as the second toolbar row and replaces it with commit controls', async () => {
+        getCurrentProjectMock.mockResolvedValue('/workspace/repo');
+        getGitStatusMock.mockResolvedValue({ root: '/workspace/repo', branch: 'main', clean: true, files: [] });
+        await importNotesModule();
+        const toolbar = document.getElementById('notes-tools-git-toolbar');
+        const filterRow = document.getElementById('notes-tools-git-filter-row');
+        const filter = document.getElementById('notes-tools-git-file-filter');
+        const commitRow = document.getElementById('notes-tools-git-commit-row');
+        const toggle = document.getElementById('notes-tools-git-commit-toggle');
+        expect(toolbar.nextElementSibling).toBe(filterRow);
+        expect(filterRow.hidden).toBe(false);
+        expect(commitRow.hidden).toBe(true);
+        expect(filter.getAttribute('aria-label')).toBe('Filter Git files');
+        for (const [attribute, value] of [
+            ['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'],
+            ['spellcheck', 'false'], ['writingsuggestions', 'false'],
+        ]) expect(filter.getAttribute(attribute)).toBe(value);
+        expect(attachSpellCheck.mock.calls.some(([target]) => target === filter)).toBe(false);
+        filter.value = 'retained query';
+        toggle.click();
+        expect(filterRow.hidden).toBe(true);
+        expect(commitRow.hidden).toBe(false);
+        toggle.click();
+        expect(filterRow.hidden).toBe(false);
+        expect(commitRow.hidden).toBe(true);
+        expect(filter.value).toBe('retained query');
+    });
+
+    it('shows a default-off Search filenames toggle below the filter only for Git history', async () => {
+        getCurrentProjectMock.mockResolvedValue('/workspace/repo');
+        getGitStatusMock.mockResolvedValue({ root: '/workspace/repo', branch: 'main', clean: true, files: [] });
+        const commits = [
+            { hash: 'aaaaaaa', subject: 'needle in message', message: 'needle in message', files: ['src/main.go'], graph: ['*'] },
+            { hash: 'bbbbbbb', subject: 'Update docs', message: 'Update docs', files: ['docs/needle.md'], graph: ['*'] },
+        ];
+        listGitCommitsMock.mockResolvedValue(commits);
+        listGitCommitsWithFilesMock.mockResolvedValue(commits);
+        await importNotesModule();
+        const row = document.getElementById('notes-commit-filename-search-row');
+        const checkbox = document.getElementById('notes-commit-filename-search');
+        const input = document.getElementById('notes-list-filter');
+        const history = document.getElementById('notes-commits-list');
+        expect(row.hidden).toBe(true);
+        expect(checkbox.checked).toBe(false);
+        expect(row.textContent.trim()).toBe('Search filenames');
+        expect(row.classList.contains('markdown-body')).toBe(true);
+        expect(getNotesStyleProperties('.notes-commit-filename-search > span').font).toBe('inherit');
+        expect(getNotesStyleProperties('.notes-commit-filename-search')['font-size']).toBeUndefined();
+        expect(row.previousElementSibling.id).toBe('notes-list-filter-wrap');
+        document.getElementById('notes-tools-git-commits').click();
+        await flushPromises();
+        expect(row.hidden).toBe(false);
+        input.value = 'needle';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+        expect(history.querySelector('.notes-git-commit-hash').textContent).toBe('aaaaaaa');
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change'));
+        await flushPromises();
+        await flushPromises();
+        expect(input.placeholder).toBe('Filter commits by filename...');
+        expect(history.querySelectorAll('.notes-git-commit')).toHaveLength(1);
+        expect(history.querySelector('.notes-git-commit-hash').textContent).toBe('bbbbbbb');
+        expect(listGitCommitsWithFilesMock).toHaveBeenCalledWith('/workspace/repo', 10000);
+        document.getElementById('notes-tools-git-commits').click();
+        expect(row.hidden).toBe(true);
+        expect(input.placeholder).toBe('Filter files...');
     });
 
     it('keeps the shared sidebar filter for full commit hashes and messages', async () => {

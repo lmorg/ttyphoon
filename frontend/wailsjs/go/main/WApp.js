@@ -314,6 +314,10 @@ export function ListGitCommits(arg1, arg2) {
   return window['go']['main']['WApp']['ListGitCommits'](arg1, arg2);
 }
 
+export function ListGitCommitsWithFiles(arg1, arg2) {
+  return window['go']['main']['WApp']['ListGitCommitsWithFiles'](arg1, arg2);
+}
+
 export function ListGitTags(arg1) {
   return window['go']['main']['WApp']['ListGitTags'](arg1);
 }
