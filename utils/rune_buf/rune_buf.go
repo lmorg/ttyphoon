@@ -1,29 +1,40 @@
 package runebuf
 
 import (
-	"bytes"
 	"io"
 	"log"
 	"sync"
 	"sync/atomic"
-	"time"
+	"unicode/utf8"
 
 	"github.com/lmorg/ttyphoon/codes"
 )
 
+const decodedRuneBatchSize = 256
+
 type Buf struct {
-	bytes  []byte
-	bm     sync.Mutex
-	runes  []rune
-	rm     sync.Mutex
-	utf8   []byte
-	l      int
-	rPtr   int
-	closed atomic.Bool
+	bytes       []byte
+	bm          sync.Mutex
+	runes       []rune
+	runeBytes   []uint8
+	rm          sync.Mutex
+	runeReady   *sync.Cond
+	rPtr        int
+	writeReady  chan struct{}
+	closeCh     chan struct{}
+	closeOnce   sync.Once
+	pending     atomic.Int64
+	partialUTF8 [utf8.UTFMax]byte
+	partialLen  int
+	closed      atomic.Bool
 }
 
 func New() *Buf {
-	buf := &Buf{}
+	buf := &Buf{
+		writeReady: make(chan struct{}, 1),
+		closeCh:    make(chan struct{}),
+	}
+	buf.runeReady = sync.NewCond(&buf.rm)
 
 	go buf.loop()
 
@@ -36,39 +47,80 @@ func (buf *Buf) loop() {
 			return
 		}
 
-		buf.bm.Lock()
-		if len(buf.bytes) == 0 {
+		select {
+		case <-buf.writeReady:
+		case <-buf.closeCh:
+			return
+		}
+
+		for {
+			buf.bm.Lock()
+			if buf.closed.Load() {
+				buf.bm.Unlock()
+				return
+			}
+			if len(buf.bytes) == 0 {
+				buf.bm.Unlock()
+				break
+			}
+
+			// Transfer ownership rather than copying the whole backlog while
+			// holding the producer lock.
+			chunk := buf.bytes
+			buf.bytes = nil
 			buf.bm.Unlock()
-			time.Sleep(15 * time.Millisecond)
+			buf.decode(chunk)
+		}
+	}
+}
+
+func (buf *Buf) decode(chunk []byte) {
+	data := chunk
+	if buf.partialLen > 0 {
+		joined := make([]byte, 0, buf.partialLen+len(chunk))
+		joined = append(joined, buf.partialUTF8[:buf.partialLen]...)
+		joined = append(joined, chunk...)
+		data = joined
+		buf.partialLen = 0
+	}
+	var decodedRunes [decodedRuneBatchSize]rune
+	var decodedBytes [decodedRuneBatchSize]uint8
+	decodedCount := 0
+	flush := func() {
+		if decodedCount == 0 {
+			return
+		}
+		buf.rm.Lock()
+		buf.runes = append(buf.runes, decodedRunes[:decodedCount]...)
+		buf.runeBytes = append(buf.runeBytes, decodedBytes[:decodedCount]...)
+		buf.runeReady.Signal()
+		buf.rm.Unlock()
+		decodedCount = 0
+	}
+
+	for len(data) > 0 {
+		r, size := utf8.DecodeRune(data)
+		if r == utf8.RuneError && size == 1 && !utf8.FullRune(data) {
+			buf.partialLen = copy(buf.partialUTF8[:], data)
+			flush()
+			return
+		}
+		if r == utf8.RuneError && size == 1 {
+			log.Printf("ERROR: skipping invalid byte: %d", data[0])
+			buf.pending.Add(-1)
+			data = data[size:]
 			continue
 		}
 
-		b := make([]byte, len(buf.bytes))
-		copy(b, buf.bytes)
-		buf.bytes = []byte{}
-
-		buf.bm.Unlock()
-
-		for i := 0; i < len(b); i++ {
-			if buf.l == 0 {
-				buf.l = runeLength(b[i])
-				if buf.l == 0 {
-					log.Printf("ERROR: skipping invalid byte: %d", b[i])
-					continue
-				}
-				buf.utf8 = make([]byte, buf.l)
-			}
-
-			buf.utf8[len(buf.utf8)-buf.l] = b[i]
-
-			if buf.l == 1 {
-				buf.rm.Lock()
-				buf.runes = append(buf.runes, bytes.Runes(buf.utf8)[0])
-				buf.rm.Unlock()
-			}
-			buf.l--
+		decodedRunes[decodedCount] = r
+		decodedBytes[decodedCount] = uint8(size)
+		decodedCount++
+		if decodedCount == decodedRuneBatchSize {
+			flush()
 		}
+		data = data[size:]
 	}
+	flush()
 }
 
 func runeLength(b byte) int {
@@ -87,52 +139,63 @@ func runeLength(b byte) int {
 }
 
 func (buf *Buf) Write(b []byte) {
+	if len(b) == 0 {
+		return
+	}
 	buf.bm.Lock()
+	if buf.closed.Load() {
+		buf.bm.Unlock()
+		return
+	}
+	buf.pending.Add(int64(len(b)))
 	buf.bytes = append(buf.bytes, b...)
 	buf.bm.Unlock()
-}
-
-func (buf *Buf) Read() (rune, error) {
-	for {
-		if buf.closed.Load() {
-			return codes.AsciiEOF, io.EOF
-		}
-
-		buf.rm.Lock()
-		if len(buf.runes) == 0 {
-			buf.rm.Unlock()
-			time.Sleep(15 * time.Millisecond)
-			continue
-		}
-
-		if buf.rPtr != 0 && buf.rPtr >= len(buf.runes) {
-			buf.runes = []rune{}
-			buf.rPtr = 0
-			buf.rm.Unlock()
-			time.Sleep(15 * time.Millisecond)
-			continue
-		}
-
-		r := buf.runes[buf.rPtr]
-		buf.inc()
-		buf.rm.Unlock()
-		return r, nil
+	select {
+	case buf.writeReady <- struct{}{}:
+	default:
 	}
 }
 
-func (buf *Buf) inc() {
+func (buf *Buf) Read() (rune, error) {
+	if buf.closed.Load() {
+		return codes.AsciiEOF, io.EOF
+	}
+
+	buf.rm.Lock()
+	for buf.rPtr >= len(buf.runes) && !buf.closed.Load() {
+		buf.runeReady.Wait()
+	}
+	if buf.closed.Load() {
+		buf.rm.Unlock()
+		return codes.AsciiEOF, io.EOF
+	}
+
+	r := buf.runes[buf.rPtr]
+	buf.pending.Add(-int64(buf.runeBytes[buf.rPtr]))
 	buf.rPtr++
+	if buf.rPtr == len(buf.runes) {
+		buf.runes = buf.runes[:0]
+		buf.runeBytes = buf.runeBytes[:0]
+		buf.rPtr = 0
+	} else {
+		buf.runeReady.Signal()
+	}
+	buf.rm.Unlock()
+	return r, nil
 }
 
 func (buf *Buf) BufSize() int {
-	buf.rm.Lock()
-	size := len(buf.runes) + len(buf.bytes)
-	buf.rm.Unlock()
-	return size
+	return int(buf.pending.Load())
 }
 
 func (buf *Buf) Close() {
-	//close(buf.bytes)
-	//close(buf.r) // TODO: should really allow the channel to flush first
-	buf.closed.Store(true)
+	buf.closeOnce.Do(func() {
+		buf.bm.Lock()
+		buf.closed.Store(true)
+		buf.bm.Unlock()
+		close(buf.closeCh)
+		buf.rm.Lock()
+		buf.runeReady.Broadcast()
+		buf.rm.Unlock()
+	})
 }

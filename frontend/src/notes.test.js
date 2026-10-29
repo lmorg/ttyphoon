@@ -5889,11 +5889,11 @@ describe('notes rendering', () => {
         expect(document.querySelector('.notes-git-actions #notes-tools-git-workspace')).not.toBeNull();
         const gitToolbarItems = Array.from(document.querySelector('.notes-git-actions').children);
         expect(gitToolbarItems.map((element) => element.id || 'separator')).toEqual([
-            'notes-tools-git-commit-toggle', 'separator', 'notes-tools-git-branches', 'notes-tools-git-tags', 'notes-tools-git-workspace', 'separator', 'notes-tools-git-remote', 'notes-tools-git-refresh',
+            'notes-tools-git-commit-toggle', 'notes-tools-git-push', 'separator', 'notes-tools-git-branches', 'notes-tools-git-tags', 'notes-tools-git-workspace', 'separator', 'notes-tools-git-remote', 'notes-tools-git-refresh',
         ]);
-        expect(gitToolbarItems[1].getAttribute('aria-hidden')).toBe('true');
-        expect(gitToolbarItems[5].getAttribute('aria-hidden')).toBe('true');
-        expect(gitToolbarItems[1].className).toBe(gitToolbarItems[5].className);
+        expect(gitToolbarItems[2].getAttribute('aria-hidden')).toBe('true');
+        expect(gitToolbarItems[6].getAttribute('aria-hidden')).toBe('true');
+        expect(gitToolbarItems[2].className).toBe(gitToolbarItems[6].className);
         for (const [id, glyph, label] of [
             ['notes-tools-git-commits', 0xf0ca, 'View commit log'],
             ['notes-tools-git-branches', 0xf126, 'Manage branches'],
