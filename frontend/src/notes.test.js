@@ -89,6 +89,8 @@ const getAIToolsListMock = vi.fn(() => Promise.resolve([]));
 const getAIMcpServersMock = vi.fn(() => Promise.resolve([]));
 const setAIMcpServerEnabledMock = vi.fn(() => Promise.resolve());
 const showAIToolStateMenuMock = vi.fn(() => Promise.resolve());
+const resolveAIToolPermissionMock = vi.fn(() => Promise.resolve());
+const promptAIToolPermissionReasonMock = vi.fn(() => Promise.resolve());
 const listAIModelSelectionsMock = vi.fn(() => Promise.resolve(['OpenAI: gpt-4.1']));
 const getCurrentAIModelSelectionMock = vi.fn(() => Promise.resolve('OpenAI: gpt-4.1'));
 const getAIExecutionLimitsMock = vi.fn(() => Promise.resolve({ agentSteps: 10, requestTimeout: '5m' }));
@@ -296,6 +298,8 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetAIMcpServers: getAIMcpServersMock,
     SetAIMcpServerEnabled: setAIMcpServerEnabledMock,
     ShowAIToolStateMenu: showAIToolStateMenuMock,
+    ResolveAIToolPermission: resolveAIToolPermissionMock,
+    PromptAIToolPermissionReason: promptAIToolPermissionReasonMock,
     ListAIModelSelections: listAIModelSelectionsMock,
     GetCurrentAIModelSelection: getCurrentAIModelSelectionMock,
     GetAIExecutionLimits: getAIExecutionLimitsMock,
@@ -660,6 +664,8 @@ describe('notes rendering', () => {
         getAIMcpServersMock.mockResolvedValue([]);
         setAIMcpServerEnabledMock.mockClear();
         showAIToolStateMenuMock.mockClear();
+        resolveAIToolPermissionMock.mockReset().mockResolvedValue();
+        promptAIToolPermissionReasonMock.mockReset().mockResolvedValue();
         createAISessionMock.mockReset();
         createAISessionMock.mockResolvedValue({ activeSessionId: 1, sessions: [], history: [] });
         setActiveAISessionMock.mockReset();
@@ -750,6 +756,42 @@ describe('notes rendering', () => {
         vi.mocked(swaggerUtils.extractPaths).mockReturnValue([]);
         clipboardSetTextMock.mockResolvedValue();
         runHyperlinkMenuActionMock.mockResolvedValue();
+    });
+
+    it('keeps denial links active until the user submits a reason', async () => {
+        document.body.innerHTML = '<div id="notes-status"></div><div id="app"><div id="notes-ai-output"></div></div>';
+        await importNotesModule();
+        const output = document.getElementById('notes-ai-output');
+        output.innerHTML = [
+            '<a href="ttyphoon://ai-tool-permission?request=wp-deny&decision=allow-once">Allow once</a>',
+            '<a href="ttyphoon://ai-tool-permission?request=wp-deny&decision=allow-prompt">Allow prompt</a>',
+            '<a href="ttyphoon://ai-tool-permission?request=wp-deny&decision=deny-once">Deny once</a>',
+            '<a href="ttyphoon://ai-tool-permission?request=wp-deny&decision=deny-prompt">Deny prompt</a>',
+        ].join('');
+
+        const denyAnchor = output.querySelector('[href*="decision=deny-once"]');
+        document.dispatchEvent(new CustomEvent('ttyphoon-ai-tool-permission', {
+            detail: { requestId: 'wp-deny', decision: 'deny-once', anchor: denyAnchor },
+        }));
+        await flushPromises();
+
+        expect(promptAIToolPermissionReasonMock).toHaveBeenCalledWith('wp-deny', 'deny-once');
+        expect(resolveAIToolPermissionMock).not.toHaveBeenCalled();
+        expect(output.querySelectorAll('a[href^="ttyphoon://ai-tool-permission"]')).toHaveLength(4);
+
+        getEventHandler('aiToolPermissionResolved')({ requestId: 'wp-deny', decision: 'deny-once' });
+        expect(output.querySelectorAll('a[href^="ttyphoon://ai-tool-permission"]')).toHaveLength(0);
+        expect(output.querySelector('.ai-tool-permission-chosen')?.textContent).toBe('Deny once');
+
+        output.innerHTML = '<a href="ttyphoon://ai-tool-permission?request=wp-allow&decision=allow-prompt">Allow prompt</a>';
+        const allowAnchor = output.querySelector('a');
+        document.dispatchEvent(new CustomEvent('ttyphoon-ai-tool-permission', {
+            detail: { requestId: 'wp-allow', decision: 'allow-prompt', anchor: allowAnchor },
+        }));
+        await flushPromises();
+        expect(resolveAIToolPermissionMock).toHaveBeenCalledWith('wp-allow', 'allow-prompt');
+        expect(promptAIToolPermissionReasonMock).toHaveBeenCalledOnce();
+        expect(output.querySelector('a')?.hasAttribute('href')).toBe(false);
     });
 
     it('filters AI tools and MCP servers independently without changing their original indices', async () => {
@@ -5873,7 +5915,7 @@ describe('notes rendering', () => {
         listGitBranchesMock.mockResolvedValue(['zeta', 'main', 'alpha']);
         getDefaultGitWorktreePathMock.mockResolvedValue('/Users/test/.git_worktrees/default/');
         createGitWorktreeMock.mockResolvedValue({ path: '/Users/test/.git_worktrees/default/alpha', branch: 'alpha' });
-        fetchGitBranchMock.mockResolvedValue({ stdout: 'Fetched objects', stderr: 'Fetch warning', error: '' });
+        runGitActionMock.mockResolvedValue({ mode: 'interactive', stdout: 'Fetched objects', stderr: 'Fetch warning', error: '' });
         await importNotesModule();
         document.getElementById('notes-tools-git-branches').click();
         await flushPromises();
@@ -5902,19 +5944,19 @@ describe('notes rendering', () => {
         const beforeFetch = sendIpcMock.mock.calls.length;
         menu.onSelect(4);
         await flushPromises();
-        expect(fetchGitBranchMock).toHaveBeenCalledWith('/workspace/repo', 'alpha');
+        expect(runGitActionMock).toHaveBeenCalledWith('/workspace/repo', 'fetch-branch', { branch: 'alpha' });
         expect(checkoutGitBranchMock).toHaveBeenCalledTimes(checkouts);
         expect(sendIpcMock.mock.calls.slice(beforeFetch).filter(([channel]) => channel === 'terminal-notify'))
             .toEqual([['terminal-notify', { message: 'Fetch completed for alpha', level: 'info' }]]);
         const previousCalls = sendIpcMock.mock.calls.length;
-        fetchGitBranchMock.mockResolvedValueOnce({ stdout: '', stderr: 'Fetch failed', error: 'exit status 1' });
+        runGitActionMock.mockResolvedValueOnce({ mode: 'interactive', stdout: '', stderr: 'Fetch failed', error: 'exit status 1' });
         menu.onSelect(4);
         await flushPromises();
         const failureCalls = sendIpcMock.mock.calls.slice(previousCalls);
         expect(failureCalls.some(([channel, payload]) => channel === 'terminal-notify' && payload.message === 'Fetch completed for alpha')).toBe(false);
         expect(failureCalls.some(([channel, payload]) => channel === 'terminal-notify' && payload.message === 'Fetch failed' && payload.level === 'error')).toBe(true);
         const beforeFallback = sendIpcMock.mock.calls.length;
-        fetchGitBranchMock.mockResolvedValueOnce({ stdout: 'partial output', stderr: '', error: 'exit status 128' });
+        runGitActionMock.mockResolvedValueOnce({ mode: 'interactive', stdout: 'partial output', stderr: '', error: 'exit status 128' });
         menu.onSelect(4);
         await flushPromises();
         expect(sendIpcMock.mock.calls.slice(beforeFallback).filter(([channel]) => channel === 'terminal-notify'))
@@ -5952,8 +5994,7 @@ describe('notes rendering', () => {
         listGitTagsMock.mockResolvedValue(['v10.3.4', 'v5.9.9', 'release']);
         getDefaultGitWorktreePathMock.mockResolvedValue('/Users/test/.git_worktrees/default/');
         createGitTagWorktreeMock.mockResolvedValue({ path: '/Users/test/.git_worktrees/default/v10.3.4', branch: 'tag: v10.3.4' });
-        pullGitTagsMock.mockResolvedValue({ stdout: 'Fetched tags', stderr: 'From origin: new tags', error: '' });
-        pushGitTagMock.mockResolvedValue({ stdout: 'Pushed tag', stderr: 'To origin: new tag', error: '' });
+        runGitActionMock.mockResolvedValue({ mode: 'interactive', stdout: 'Fetched tags', stderr: 'From origin: new tags', error: '' });
         await importNotesModule();
 
         document.getElementById('notes-tools-git-tags').click();
@@ -5967,7 +6008,7 @@ describe('notes rendering', () => {
         const beforePull = sendIpcMock.mock.calls.length;
         menu.onSelect(2);
         await flushPromises();
-        expect(pullGitTagsMock).toHaveBeenCalledWith('/workspace/repo');
+        expect(runGitActionMock).toHaveBeenCalledWith('/workspace/repo', 'pull-tags', {});
         expect(sendIpcMock.mock.calls.slice(beforePull).filter(([channel]) => channel === 'terminal-notify'))
             .toEqual([['terminal-notify', { message: 'Tags pulled', level: 'info' }]]);
 
@@ -5985,11 +6026,11 @@ describe('notes rendering', () => {
         const beforePush = sendIpcMock.mock.calls.length;
         menu.onSelect(2);
         await flushPromises();
-        expect(pushGitTagMock).toHaveBeenCalledWith('/workspace/repo', 'v10.3.4');
+        expect(runGitActionMock).toHaveBeenCalledWith('/workspace/repo', 'push-tag', { tag: 'v10.3.4' });
         expect(sendIpcMock.mock.calls.slice(beforePush).filter(([channel]) => channel === 'terminal-notify'))
             .toEqual([['terminal-notify', { message: 'Pushed tag v10.3.4', level: 'info' }]]);
         const beforePushFailure = sendIpcMock.mock.calls.length;
-        pushGitTagMock.mockResolvedValueOnce({ stdout: '', stderr: 'Push rejected', error: 'exit status 1' });
+        runGitActionMock.mockResolvedValueOnce({ mode: 'interactive', stdout: '', stderr: 'Push rejected', error: 'exit status 1' });
         menu.onSelect(2);
         await flushPromises();
         expect(sendIpcMock.mock.calls.slice(beforePushFailure).filter(([channel]) => channel === 'terminal-notify'))

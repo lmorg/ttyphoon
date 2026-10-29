@@ -28,23 +28,12 @@ type ActionRequest struct {
 
 func RunAction(root string, action ActionRequest, agentEnvironment map[string]string, interactiveRunner InteractiveActionRunner) map[string]string {
 	result := map[string]string{"mode": "", "stdout": "", "stderr": "", "error": ""}
-	args, err := actionArguments(action)
-	if err != nil {
-		result["error"] = err.Error()
-		return result
-	}
 	mode, ok := actionMode(action.Name)
 	if !ok {
 		result["error"] = fmt.Sprintf("unsupported Git action %q", action.Name)
 		return result
 	}
 	result["mode"] = string(mode)
-	for _, argument := range args {
-		if strings.ContainsAny(argument, "\x00\r\n") {
-			result["error"] = "Git action argument contains unsupported control characters"
-			return result
-		}
-	}
 
 	gitPath, repoRoot, err := checkedRepository(root)
 	if err != nil {
@@ -52,6 +41,17 @@ func RunAction(root string, action ActionRequest, agentEnvironment map[string]st
 		return result
 	}
 
+	args, err := actionArguments(gitPath, repoRoot, action)
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+	for _, argument := range args {
+		if strings.ContainsAny(argument, "\x00\r\n") {
+			result["error"] = "Git action argument contains unsupported control characters"
+			return result
+		}
+	}
 	if mode == ActionModeInteractive {
 		if interactiveRunner == nil {
 			result["error"] = errors.New("interactive Git action runner is unavailable").Error()
@@ -102,7 +102,7 @@ func quoteShellArgument(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
-func actionArguments(action ActionRequest) ([]string, error) {
+func actionArguments(gitPath, repoRoot string, action ActionRequest) ([]string, error) {
 	switch strings.ToLower(strings.TrimSpace(action.Name)) {
 	case "commit":
 		message := strings.TrimSpace(action.Parameters["message"])
@@ -112,17 +112,48 @@ func actionArguments(action ActionRequest) ([]string, error) {
 		return []string{"commit", "-m", message}, nil
 	case "fetch":
 		return []string{"fetch"}, nil
+	case "fetch-branch":
+		return branchFetchArguments(gitPath, repoRoot, action.Parameters["branch"])
+	case "pull-tags":
+		return []string{"fetch", "origin", "refs/tags/*:refs/tags/*"}, nil
+	case "push-tag":
+		ref, err := checkedLocalTag(gitPath, repoRoot, action.Parameters["tag"])
+		if err != nil {
+			return nil, err
+		}
+		return []string{"push", "origin", ref}, nil
 	default:
 		return nil, fmt.Errorf("unsupported Git action %q", action.Name)
 	}
+}
+
+func branchFetchArguments(gitPath, repoRoot, branch string) ([]string, error) {
+	ref, err := checkedLocalBranch(gitPath, repoRoot, branch)
+	if err != nil {
+		return nil, err
+	}
+	upstream, err := runGit(gitPath, repoRoot, "for-each-ref", "--format=%(upstream:remotename)%00%(upstream:remoteref)", ref)
+	if err != nil {
+		return nil, err
+	}
+	fields := strings.Split(strings.TrimRight(string(upstream), "\r\n"), "\x00")
+	remote, remoteRef := "origin", ref
+	if len(fields) == 2 && fields[0] != "" && fields[1] != "" {
+		remote, remoteRef = fields[0], fields[1]
+	}
+	destination := "refs/remotes/" + remote + "/" + strings.TrimPrefix(remoteRef, "refs/heads/")
+	if remote == "." {
+		destination = remoteRef
+	}
+	return []string{"fetch", "--", remote, remoteRef + ":" + destination}, nil
 }
 
 func actionMode(action string) (ActionMode, bool) {
 	switch strings.ToLower(strings.TrimSpace(action)) {
 	case "commit":
 		return ActionModeInteractive, true
-	case "fetch":
-		return ActionModeGo, true
+	case "fetch", "fetch-branch", "pull-tags", "push-tag":
+		return ActionModeInteractive, true
 	default:
 		return "", false
 	}

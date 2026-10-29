@@ -47,18 +47,12 @@ are unavailable, so it can explain the current context's limitations.
   copy name, checkout, Fetch latest, and Create new worktree. Checkout reports
   `Switched to <branch>` on success and Git errors on failure without forcing.
   Fetch targets the configured upstream (or same-named branch on origin), never
-  checks out or pulls. Classify transfer results by the command outcome, not
-  which stream carries the text: Git routinely writes successful progress and
-  ref updates to stderr. The Go transfer runner writes stdout and successful
-  stderr to the application log at info level, one log entry per nonempty line,
-  without creating output notifications. Successful fetches report one
-  `Fetch completed for <branch>` notification, regardless of output. Failed
-  transfers report one error notification using stderr, falling back to the
-  returned command error; they never emit a completion notification. Fetch
-  inherits the app
-  environment with non-empty `SSH_AUTH_SOCK` and `SSH_AGENT_PID` overlaid from
-  the active tile's terminal snapshot; no other terminal variables are copied.
-  Missing agent values retain app defaults, and Git prompting stays disabled.
+  checks out or pulls. Branch fetch runs through the interactive Git action
+  policy and `ClonePane`, so credential prompts are available in the retained
+  terminal pane. Success is determined by the command exit status and reports
+  one `Fetch completed for <branch>` notification; failure reports one error
+  notification using captured terminal output, falling back to the command
+  error. ClonePane inherits the active tile's terminal environment.
   Worktree
   creation uses the default directory plus branch name and the shared creation/
   switch flow. Git commands remain in Go behind thin Wails bindings.
@@ -66,14 +60,12 @@ are unavailable, so it can explain the current context's limitations.
   `manage tags`. Offer tag creation, pull-tags, and local tags ordered by
   descending semantic version. A tag submenu provides copy, push-only-that-tag,
   detached checkout, a detached worktree at the default directory plus tag
-  name, and local deletion. Pull/push use the active tile's SSH-agent variables
-  just like branch fetch; Git operations remain behind Wails bindings.
-- Tag pull/push uses the same outcome-based log/notification policy as branch
-  fetch, via a shared frontend transfer-result helper. Regression tests verify
-  successful stderr is logged as info, raw output is not presented as a popup,
-  completion/error notifications are mutually exclusive, and failures without
-  stderr fall back to the command error. Output streams remain unchanged in
-  the Go response.
+  name, and local deletion. Pull-tags and push-tag use the interactive Git
+  action policy and `ClonePane`, allowing credentials to be entered in the
+  retained terminal pane. Successful commands report one completion
+  notification; failures report one error notification using captured terminal
+  output, falling back to the command error. ClonePane inherits the active
+  tile's terminal environment.
 - Git toolbar controls use Font Awesome icons: Commits `0xf0ca` with tooltip
   `View commit log`, Branches `0xf126` with tooltip `Manage branches`, and
   Worktrees `0xf802` retaining its existing tooltip. Keep accessible labels and

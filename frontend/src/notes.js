@@ -3,8 +3,8 @@ import {
     GetGitStatus, GetGitBrowserLink, GetGitBranchDiffFiles, GetGitDiff, GetGitDiffAgainstBranch,
     RefreshGitStatus, SetGitStatusWatch, StageGitFile, StageAllGitFiles, UnstageGitFile, RunGitAction,
         ListGitWorktrees, ListGitBranches, ListGitTags, ListGitCommits, ListGitCommitsWithFiles, GetDefaultGitWorktreePath, CreateGitWorktree, CreateGitTagWorktree,
-    CheckoutGitBranch, DeleteGitBranch, FetchGitBranch,
-        CreateGitTag, DeleteGitTag, CheckoutGitTag, PullGitTags, PushGitTag,
+    CheckoutGitBranch, DeleteGitBranch,
+        CreateGitTag, DeleteGitTag, CheckoutGitTag,
     SwitchGitWorktree, RemoveGitWorktree, ShowGitWorktreeInfo, ShowGitRefInfo,
     NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableRestore, NotesTableSetGraph, NotesTableRenderGraph, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
@@ -21,7 +21,7 @@ import {
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
     ListAIStreamBlocks, GetAIStreamBlockContent, ListAILiveStreamBlocks,
-    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
+    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, PromptAIToolPermissionReason, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPreviousPosition, NotesHistoryNextPosition, NotesHistoryAddPosition, NotesHistoryCurrentPosition, NotesGrepStream,
     GetProjectCache, SetProjectCache,
@@ -14460,8 +14460,40 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     }
 });
 
+function markAIToolPermissionResolved(requestId, decision, anchor) {
+    if (!elements.aiOutput) {
+        return;
+    }
+    for (const link of elements.aiOutput.querySelectorAll('a[href^="ttyphoon://ai-tool-permission"]')) {
+        const href = link.getAttribute('href') || '';
+        const query = href.includes('?') ? href.slice(href.indexOf('?') + 1) : '';
+        const params = new URLSearchParams(query);
+        if (params.get('request') !== requestId) {
+            continue;
+        }
+        link.classList.add('ai-tool-permission-resolved');
+        link.removeAttribute('href');
+        if (link === anchor || params.get('decision') === decision) {
+            link.classList.add('ai-tool-permission-chosen');
+        }
+    }
+}
+
+EventsOn('aiToolPermissionResolved', (payload) => {
+    const requestId = String(payload?.requestId || '');
+    const decision = String(payload?.decision || '');
+    if (requestId && decision) {
+        markAIToolPermissionResolved(requestId, decision, null);
+    }
+});
+
+EventsOn('aiToolPermissionResolutionError', (payload) => {
+    const message = String(payload?.error || 'Could not resolve tool access request');
+    notifyTerminal(message, 'error');
+});
+
 // Access-request options rendered in the AI panel output (see
-// agent.RequestWritePermission) resolve here rather than via a native/context menu.
+// agent.RequestToolPermission) resolve here rather than via a native/context menu.
 document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
     const requestId = String(e.detail?.requestId || '');
     const decision = String(e.detail?.decision || '');
@@ -14470,21 +14502,19 @@ document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
         return;
     }
 
-    if (elements.aiOutput) {
-        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
-            const href = link.getAttribute('href') || '';
-            if (href.startsWith('ttyphoon://ai-tool-permission') && href.includes(`request=${requestId}`)) {
-                link.classList.add('ai-tool-permission-resolved');
-                link.removeAttribute('href');
-            }
-        });
-    }
-    if (anchor instanceof HTMLElement) {
-        anchor.classList.add('ai-tool-permission-chosen');
+    if (decision.startsWith('deny-')) {
+        try {
+            await PromptAIToolPermissionReason(requestId, decision);
+        } catch (err) {
+            notifyTerminal('Failed to open tool denial input', 'error');
+            console.error(err);
+        }
+        return;
     }
 
     try {
         await ResolveAIToolPermission(requestId, decision);
+        markAIToolPermissionResolved(requestId, decision, anchor);
     } catch (err) {
         notifyTerminal('Failed to resolve tool access request', 'error');
         console.error(err);
@@ -15177,7 +15207,7 @@ elements.gitTags.addEventListener('click', async () => {
                 title: 'Pull tags', icon: 0xf019,
                 onSelect: async () => {
                     try {
-                        notifyGitTransfer(await PullGitTags(root), 'Tags pulled');
+                        notifyGitTransfer(await RunGitAction(root, 'pull-tags', {}), 'Tags pulled');
                     } catch (error) {
                         notifyTerminal(String(error?.message || error), 'error');
                     }
@@ -15203,7 +15233,7 @@ elements.gitTags.addEventListener('click', async () => {
                         title: 'Push tag', icon: 0xf093,
                         onSelect: async () => {
                             try {
-                                notifyGitTransfer(await PushGitTag(root, tag), `Pushed tag ${tag}`);
+                                notifyGitTransfer(await RunGitAction(root, 'push-tag', { tag }), `Pushed tag ${tag}`);
                             } catch (error) {
                                 notifyTerminal(String(error?.message || error), 'error');
                             }
@@ -15290,7 +15320,7 @@ elements.gitBranches.addEventListener('click', async () => {
                         title: 'Fetch latest', icon: 0xf019,
                         onSelect: async () => {
                             try {
-                                const output = await FetchGitBranch(root, branch);
+                                const output = await RunGitAction(root, 'fetch-branch', { branch });
                                 notifyGitTransfer(output, `Fetch completed for ${branch}`);
                             } catch (error) {
                                 notifyTerminal(String(error?.message || error), 'error');

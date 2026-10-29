@@ -300,7 +300,7 @@ func TestStructuredToolCallDescriptionUsesDecodedCallInputForApproval(t *testing
 		t.Fatal("no pending permission request was raised")
 	}
 
-	if err := ResolveWritePermissionRequest(requestID, "allow-once"); err != nil {
+	if err := ResolveWritePermissionRequest(requestID, "allow-once", ""); err != nil {
 		t.Fatalf("ResolveWritePermissionRequest: %v", err)
 	}
 	if err := <-resultCh; err != nil {
@@ -1042,7 +1042,8 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 				t.Fatal("no pending permission request was raised")
 			}
 
-			if err := ResolveWritePermissionRequest(reqID, test.decision); err != nil {
+			const denialReason = "This request is outside the approved scope."
+			if err := ResolveWritePermissionRequest(reqID, test.decision, denialReason); err != nil {
 				t.Fatalf("ResolveWritePermissionRequest() error = %v", err)
 			}
 
@@ -1054,6 +1055,9 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 				if !errors.Is(err, ErrToolPermissionRefused) {
 					t.Fatalf("RequestToolPermission() error = %v, want ErrToolPermissionRefused", err)
 				}
+				if !strings.Contains(err.Error(), denialReason) {
+					t.Fatalf("RequestToolPermission() error = %v, want denial reason", err)
+				}
 			}
 
 			agent.toolPermissionMu.Lock()
@@ -1061,6 +1065,12 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 			agent.toolPermissionMu.Unlock()
 			if stored != test.wantStored {
 				t.Fatalf("decision stored = %v, want %v", stored, test.wantStored)
+			}
+			if test.decision == "deny-prompt" {
+				err := agent.RequestToolPermission(context.Background(), "fake.tool")
+				if !errors.Is(err, ErrToolPermissionRefused) || !strings.Contains(err.Error(), denialReason) {
+					t.Fatalf("subsequent prompt-scoped refusal = %v, want stored denial reason", err)
+				}
 			}
 		})
 	}

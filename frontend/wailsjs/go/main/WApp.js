@@ -522,6 +522,10 @@ export function NotesTyposOpenDocument(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['NotesTyposOpenDocument'](arg1, arg2, arg3);
 }
 
+export function PromptAIToolPermissionReason(arg1, arg2) {
+  return window['go']['main']['WApp']['PromptAIToolPermissionReason'](arg1, arg2);
+}
+
 export function PullGitTags(arg1) {
   return window['go']['main']['WApp']['PullGitTags'](arg1);
 }

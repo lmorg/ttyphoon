@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -167,6 +168,7 @@ var ErrToolPermissionRefused = errors.New("tool call refused")
 
 type toolPermissionState struct {
 	decision  toolPermission
+	reason    string
 	prompting bool
 	wait      chan struct{}
 }
@@ -183,39 +185,57 @@ func (agt *Agent) ResetToolPermissions() {
 // frontend can resolve them by request ID once the user clicks an option.
 var writePermissionRequests = struct {
 	mu sync.Mutex
-	m  map[string]chan string
-}{m: map[string]chan string{}}
+	m  map[string]writePermissionRequestT
+}{m: map[string]writePermissionRequestT{}}
+
+type writePermissionDecisionT struct {
+	decision string
+	reason   string
+}
+
+type writePermissionRequestT struct {
+	workspace string
+	toolName  string
+	response  chan writePermissionDecisionT
+}
 
 var writePermissionSeq int64
 
-func newWritePermissionRequest() (string, chan string) {
+func newWritePermissionRequest(workspace, toolName string) (string, chan writePermissionDecisionT) {
 	id := fmt.Sprintf("wp%d", atomic.AddInt64(&writePermissionSeq, 1))
-	ch := make(chan string, 1)
+	ch := make(chan writePermissionDecisionT, 1)
 	writePermissionRequests.mu.Lock()
-	writePermissionRequests.m[id] = ch
+	writePermissionRequests.m[id] = writePermissionRequestT{workspace: workspace, toolName: toolName, response: ch}
 	writePermissionRequests.mu.Unlock()
 	return id, ch
 }
 
-func takeWritePermissionRequest(id string) (chan string, bool) {
+func takeWritePermissionRequest(id string) (writePermissionRequestT, bool) {
 	writePermissionRequests.mu.Lock()
 	defer writePermissionRequests.mu.Unlock()
-	ch, ok := writePermissionRequests.m[id]
+	request, ok := writePermissionRequests.m[id]
 	if ok {
 		delete(writePermissionRequests.m, id)
 	}
-	return ch, ok
+	return request, ok
 }
 
 // ResolveWritePermissionRequest is called by the frontend when the user clicks
 // one of the access-request options rendered in the AI panel output.
-func ResolveWritePermissionRequest(id, decision string) error {
-	ch, ok := takeWritePermissionRequest(id)
+func ResolveWritePermissionRequest(id, decision, reason string) error {
+	request, ok := takeWritePermissionRequest(id)
 	if !ok {
 		return fmt.Errorf("permission request %q not found or already resolved", id)
 	}
-	ch <- decision
+	request.response <- writePermissionDecisionT{decision: decision, reason: strings.TrimSpace(reason)}
 	return nil
+}
+
+func WritePermissionRequestDetails(id string) (workspace, toolName string, ok bool) {
+	writePermissionRequests.mu.Lock()
+	defer writePermissionRequests.mu.Unlock()
+	request, ok := writePermissionRequests.m[id]
+	return request.workspace, request.toolName, ok
 }
 
 func formatToolPermissionRequestMarkdown(toolName, requestID, description string) string {
@@ -267,8 +287,9 @@ func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, de
 			agt.toolPermissionMu.Unlock()
 			return nil
 		case toolPermissionDeniedPrompt:
+			reason := permission.reason
 			agt.toolPermissionMu.Unlock()
-			return fmt.Errorf("%w: user denied tool %q for this prompt", ErrToolPermissionRefused, toolName)
+			return toolPermissionRefusal(toolName, reason)
 		}
 
 		if permission.prompting {
@@ -287,7 +308,7 @@ func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, de
 		wait := permission.wait
 		agt.toolPermissionMu.Unlock()
 
-		reqID, decisionCh := newWritePermissionRequest()
+		reqID, decisionCh := newWritePermissionRequest(agt.Workspace(), toolName)
 		description := ""
 		if describeCall != nil {
 			description = describeCall()
@@ -295,7 +316,7 @@ func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, de
 		permissionMarkdown := formatToolPermissionRequestMarkdown(toolName, reqID, description)
 		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, permissionMarkdown)
 
-		var decision string
+		var decision writePermissionDecisionT
 		select {
 		case decision = <-decisionCh:
 		case <-ctx.Done():
@@ -311,12 +332,14 @@ func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, de
 		// invocation of the same tool prompts again.
 		var allowed bool
 		agt.toolPermissionMu.Lock()
-		switch decision {
+		refusalReason := decision.reason
+		switch decision.decision {
 		case "allow-prompt":
 			permission.decision = toolPermissionAllowedPrompt
 			allowed = true
 		case "deny-prompt":
 			permission.decision = toolPermissionDeniedPrompt
+			permission.reason = refusalReason
 		case "allow-once":
 			allowed = true
 		}
@@ -327,8 +350,15 @@ func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, de
 		if allowed {
 			return nil
 		}
+		return toolPermissionRefusal(toolName, refusalReason)
+	}
+}
+
+func toolPermissionRefusal(toolName, reason string) error {
+	if reason == "" {
 		return fmt.Errorf("%w: user denied tool %q", ErrToolPermissionRefused, toolName)
 	}
+	return fmt.Errorf("%w: user denied tool %q: %s", ErrToolPermissionRefused, toolName, reason)
 }
 
 func Close(tileId string) {

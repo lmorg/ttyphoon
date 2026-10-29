@@ -2619,7 +2619,7 @@ func (a *WApp) StageAllGitFiles(projectRoot string) error {
 }
 
 func (a *WApp) RunGitAction(projectRoot, actionName string, parameters map[string]string) map[string]string {
-	return gitutils.RunAction(projectRoot, gitutils.ActionRequest{
+	result := gitutils.RunAction(projectRoot, gitutils.ActionRequest{
 		Name:       actionName,
 		Parameters: parameters,
 	}, activeGitAgentEnvironment(), func(command string, complete func(gitutils.InteractiveActionResult)) error {
@@ -2635,6 +2635,13 @@ func (a *WApp) RunGitAction(projectRoot, actionName string, parameters map[strin
 			})
 		})
 	})
+	if result["error"] == "" {
+		switch strings.ToLower(strings.TrimSpace(actionName)) {
+		case "fetch", "fetch-branch", "pull-tags":
+			_, _ = a.refreshGitStatus(projectRoot)
+		}
+	}
+	return result
 }
 
 func (a *WApp) UnstageGitFile(projectRoot, filePath string) error {
@@ -2679,15 +2686,11 @@ func (a *WApp) CreateGitTagWorktree(projectRoot, tag, worktreePath string) (gitu
 }
 
 func (a *WApp) PullGitTags(projectRoot string) (map[string]string, error) {
-	output, err := gitutils.PullTags(projectRoot, activeGitAgentEnvironment())
-	if err == nil && output["error"] == "" {
-		_, _ = a.refreshGitStatus(projectRoot)
-	}
-	return output, err
+	return a.RunGitAction(projectRoot, "pull-tags", nil), nil
 }
 
 func (a *WApp) PushGitTag(projectRoot, tag string) (map[string]string, error) {
-	return gitutils.PushTag(projectRoot, tag, activeGitAgentEnvironment())
+	return a.RunGitAction(projectRoot, "push-tag", map[string]string{"tag": tag}), nil
 }
 
 func (a *WApp) CheckoutGitBranch(projectRoot, branch string, create bool) error {
@@ -2707,11 +2710,7 @@ func (a *WApp) DeleteGitBranch(projectRoot, branch string) error {
 }
 
 func (a *WApp) FetchGitBranch(projectRoot, branch string) (map[string]string, error) {
-	output, err := gitutils.FetchBranch(projectRoot, branch, activeGitAgentEnvironment())
-	if err == nil {
-		_, _ = a.refreshGitStatus(projectRoot)
-	}
-	return output, err
+	return a.RunGitAction(projectRoot, "fetch-branch", map[string]string{"branch": branch}), nil
 }
 
 func activeGitAgentEnvironment() map[string]string {
@@ -3561,7 +3560,55 @@ func (a *WApp) ShowAIToolStateMenu(toolName string, x, y float64) {
 // ResolveAIToolPermission is called when the user clicks an access-request
 // option rendered in the AI panel output (see agent.RequestWritePermission).
 func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
-	return agent.ResolveWritePermissionRequest(requestID, decision)
+	if decision != "allow-once" && decision != "allow-prompt" {
+		return fmt.Errorf("tool denial decisions must use the reason inputbox")
+	}
+	return agent.ResolveWritePermissionRequest(requestID, decision, "")
+}
+
+func (a *WApp) PromptAIToolPermissionReason(requestID, decision string) error {
+	if decision != "deny-once" && decision != "deny-prompt" {
+		return fmt.Errorf("unsupported tool denial decision %q", decision)
+	}
+	workspace, toolName, ok := agent.WritePermissionRequestDetails(requestID)
+	if !ok {
+		return fmt.Errorf("permission request %q not found or already resolved", requestID)
+	}
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer is unavailable")
+	}
+	denialScope := "this invocation"
+	confirmLabel := "Deny invocation"
+	if decision == "deny-prompt" {
+		denialScope = "this prompt"
+		confirmLabel = "Deny prompt"
+	}
+	renderer.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:        fmt.Sprintf("Why deny %s for %s?", toolName, denialScope),
+			Placeholder:  "Optional reason to share with the AI",
+			Multiline:    true,
+			CacheKey:     "ai-tool-denial-reasons:" + workspace,
+			DraftKey:     "ai-tool-denial:" + workspace + ":" + requestID,
+			ConfirmLabel: confirmLabel,
+			CancelLabel:  "Cancel",
+		},
+		OkFunc: func(value *types.InputBoxCallbackResultT) {
+			if err := agent.ResolveWritePermissionRequest(requestID, decision, value.String()); err != nil {
+				runtime.EventsEmit(a.ctx, "aiToolPermissionResolutionError", map[string]string{
+					"requestId": requestID,
+					"error":     err.Error(),
+				})
+				return
+			}
+			runtime.EventsEmit(a.ctx, "aiToolPermissionResolved", map[string]string{
+				"requestId": requestID,
+				"decision":  decision,
+			})
+		},
+	})
+	return nil
 }
 
 func (a *WApp) ResolveAIUserQuestion(requestID, answer string) error {

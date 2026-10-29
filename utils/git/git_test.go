@@ -741,16 +741,48 @@ func TestInteractiveCommandQuotesRootAndArguments(t *testing.T) {
 	}
 }
 
-func TestRunActionUsesGoForFetch(t *testing.T) {
+func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 	root := initGitTestRepo(t)
-	called := false
-	result := RunAction(root, ActionRequest{Name: "fetch"}, nil, func(string, func(InteractiveActionResult)) error {
-		called = true
-		return nil
-	})
-	if result["mode"] != string(ActionModeGo) || result["error"] != "" || called {
-		t.Fatalf("RunAction() = %v, interactive runner called = %v; want Go execution", result, called)
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
 	}
+	runGitTestCommand(t, mustLookPathGit(t), root, "tag", "v1.2.3")
+	for _, test := range []struct {
+		name       string
+		parameters map[string]string
+		wantArgs   []string
+	}{
+		{name: "fetch", wantArgs: []string{"fetch"}},
+		{name: "fetch-branch", parameters: map[string]string{"branch": "main"}, wantArgs: []string{"fetch", "--", "origin", "refs/heads/main:refs/remotes/origin/main"}},
+		{name: "pull-tags", wantArgs: []string{"fetch", "origin", "refs/tags/*:refs/tags/*"}},
+		{name: "push-tag", parameters: map[string]string{"tag": "v1.2.3"}, wantArgs: []string{"push", "origin", "refs/tags/v1.2.3"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var called bool
+			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, func(command string, complete func(InteractiveActionResult)) error {
+				called = true
+				want := interactiveCommand(canonicalRoot, test.wantArgs)
+				if command != want {
+					t.Errorf("interactive command = %q, want %q", command, want)
+				}
+				complete(InteractiveActionResult{Output: "transfer output", ExitCode: 0})
+				return nil
+			})
+			if result["mode"] != string(ActionModeInteractive) || result["error"] != "" || !called {
+				t.Fatalf("RunAction() = %v, interactive runner called = %v; want interactive execution", result, called)
+			}
+		})
+	}
+}
+
+func mustLookPathGit(t *testing.T) string {
+	t.Helper()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	return gitPath
 }
 
 func TestMetadataDirectoriesIncludeLinkedWorktreeCommonDirectory(t *testing.T) {
