@@ -50,7 +50,7 @@ func (t *Git) Description() string {
 	return strings.TrimSpace(description)
 }
 func (t *Git) DefaultPermissions() aitypes.DefaultPermissions {
-	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
+	return aitypes.DefaultPermissions{Invocation: "alwaysAllow", Subagents: "deny"}
 }
 
 type gitInputT struct {

@@ -37,7 +37,7 @@ func (agent *gitToolTestAgent) ProjectRoot() string                           { 
 func (agent *gitToolTestAgent) EnvironmentValue(string) string                { return "" }
 func (agent *gitToolTestAgent) ImageGenerationEnvironmentValue(string) string { return "" }
 
-func TestGitToolEnabledAndRequiresInvocationPermission(t *testing.T) {
+func TestGitToolEnabledAndAllowedByDefault(t *testing.T) {
 	tool, err := (&Git{}).New(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -46,8 +46,8 @@ func TestGitToolEnabledAndRequiresInvocationPermission(t *testing.T) {
 		t.Fatal("Git tool is disabled by default")
 	}
 	permissions := tool.(*Git).DefaultPermissions()
-	if permissions.Invocation != "askPermission" {
-		t.Fatalf("default invocation permission = %q, want askPermission", permissions.Invocation)
+	if permissions.Invocation != "alwaysAllow" {
+		t.Fatalf("default invocation permission = %q, want alwaysAllow", permissions.Invocation)
 	}
 	if permissions.Subagents != "deny" {
 		t.Fatalf("default subagent permission = %q, want deny", permissions.Subagents)

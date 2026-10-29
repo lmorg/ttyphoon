@@ -39,7 +39,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes: support for audio playback
 - [ ] Notes, Git commits log: a toggle below the filter search box to choose whether to search for commit messages or file names. Default is commit messages. When file search is toggled then each commit is checked to see which files were changed as part of that commit, with those filenames being what's filtered
 - [x] AI tool, graphs: this currently renders SVG. It should do PNG instead
-- [x] AI tool: read-only Git inspection for status, diff, log, show, branches, and remotes; enabled with per-invocation permission and run through ClonePane ([ADR 0082](../adr/0082-ai-read-only-git-tool.md))
+- [x] AI tool: read-only Git inspection for status, diff, log, show, branches, and remotes; enabled and always allowed by default, run through ClonePane ([ADR 0082](../adr/0082-ai-read-only-git-tool.md))
 - [x] AI: per-prompt Effort selector guides investigation depth and when to ask for blocking user feedback ([ADR 0081](../adr/0081-ai-prompt-effort-and-feedback-cadence.md))
 - [x] Notes: spellcheck suggestions open on right-clicking a misspelt word; left-click remains for editing ([ADR 0069](../adr/0069-notes-spellcheck-suggestions-open-on-right-click.md))
 - [ ] Our custom menu should support ctrl+v / cmd+v to paste text to the usually hidden search input field

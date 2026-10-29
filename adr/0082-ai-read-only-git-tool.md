@@ -15,7 +15,7 @@ and ClonePane provides the interactive terminal execution path.
 
 - Register an internal structured AI tool named `git` with actions `status`,
   `diff`, `log`, `show`, `branches`, and `remotes`.
-- The tool is enabled by default, with invocation permission `askPermission` and
+- The tool is enabled by default, with invocation permission `alwaysAllow` and
   subagent permission `deny`.
 - Execute every action through the Git package's interactive runner and
   ClonePane. Do not accept arbitrary Git flags or shell commands.
@@ -26,8 +26,8 @@ and ClonePane provides the interactive terminal execution path.
 
 ## Consequences
 
-- Users approve each Git inspection invocation; the tool appears enabled in AI
-  settings by default.
+- Git inspection runs without per-invocation approval; the tool appears enabled
+  and always allowed in AI settings by default.
 - Subagents cannot use the interactive tool because they cannot obtain user
   approval.
 - The allowlist is intentionally narrow. Any added action must be audited for
