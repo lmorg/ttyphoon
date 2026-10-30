@@ -29,11 +29,11 @@ type ActionRequest struct {
 	Parameters map[string]string
 }
 
-func RunAction(root string, action ActionRequest, agentEnvironment map[string]string, interactiveRunner InteractiveActionRunner) map[string]string {
-	return RunActionContext(context.Background(), root, action, agentEnvironment, interactiveRunner)
+func RunAction(root string, action ActionRequest, interactiveRunner InteractiveActionRunner) map[string]string {
+	return RunActionContext(context.Background(), root, action, interactiveRunner)
 }
 
-func RunActionContext(ctx context.Context, root string, action ActionRequest, agentEnvironment map[string]string, interactiveRunner InteractiveActionRunner) map[string]string {
+func RunActionContext(ctx context.Context, root string, action ActionRequest, interactiveRunner InteractiveActionRunner) map[string]string {
 	result := map[string]string{"mode": "", "stdout": "", "stderr": "", "error": ""}
 	if ctx == nil {
 		ctx = context.Background()
@@ -98,7 +98,7 @@ func RunActionContext(ctx context.Context, root string, action ActionRequest, ag
 		return result
 	}
 
-	output, err := runGitWithAgentEnvironment(gitPath, repoRoot, agentEnvironment, args...)
+	output, err := runGitWithOutput(gitPath, repoRoot, args...)
 	if err != nil {
 		result["error"] = err.Error()
 		return result

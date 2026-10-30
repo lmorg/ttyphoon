@@ -385,6 +385,16 @@ type paneCloseTestRenderer struct{ types.Renderer }
 
 func (*paneCloseTestRenderer) DisplayNotification(types.NotificationType, string) {}
 func (*paneCloseTestRenderer) RefreshWindowList()                                 {}
+func (*paneCloseTestRenderer) ActiveTile() types.Tile                             { return nil }
+
+type clonePaneFocusTestRenderer struct {
+	paneCloseTestRenderer
+	activeTile types.Tile
+}
+
+func (renderer *clonePaneFocusTestRenderer) ActiveTile() types.Tile {
+	return renderer.activeTile
+}
 
 type paneCloseRequestTestRenderer struct {
 	types.Renderer
@@ -854,7 +864,10 @@ type shellCloneTestTerm struct {
 	initialEnvVars map[string]string
 }
 
-func (*shellCloneTestTerm) GetEnvVars() map[string]string {
+func (term *shellCloneTestTerm) GetEnvVars() map[string]string {
+	if term.initialEnvVars != nil {
+		return cloneEnvironment(term.initialEnvVars)
+	}
 	return map[string]string{"CLONE_TEST": "inherited value"}
 }
 
@@ -953,6 +966,167 @@ func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {
 			<-done
 		})
 	}
+}
+
+func TestClonePaneInheritsSeededStateTransitively(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+
+	workingDirectory := "/workspace/project dir"
+	environment := map[string]string{
+		"SSH_AUTH_SOCK": "/tmp/agent.sock",
+		"CUSTOM_ENV":    "inherited value",
+	}
+	client := &Tmux{
+		tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap(),
+		renderer: &paneCloseTestRenderer{},
+	}
+	win := &WindowT{id: "@1", active: true, panes: newPaneMap()}
+	client.wins.Set(win.id, win)
+	client.activeWindow = win
+	source := &PaneT{id: "%7", windowId: win.id, tmux: client, pwd: workingDirectory, active: true}
+	source.term = &shellCloneTestTerm{
+		paneGeometryTestTerm: paneGeometryTestTerm{pane: source},
+		initialEnvVars:       cloneEnvironment(environment),
+	}
+	win.activePane = source
+	win.panes.Set(source.id, source)
+	client.panes.Set(source.id, source)
+
+	clonedPanes := []*PaneT{
+		{id: "%8", windowId: win.id, tmux: client},
+		{id: "%9", windowId: win.id, tmux: client},
+	}
+	for _, pane := range clonedPanes {
+		pane.term = &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: pane}}
+		win.panes.Set(pane.id, pane)
+		client.panes.Set(pane.id, pane)
+	}
+
+	commands := make(chan string, 4)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		cloneIndex := 0
+		var pendingPaneID string
+		for scanner := bufio.NewScanner(reader); scanner.Scan(); {
+			command := scanner.Text()
+			commands <- command
+			switch {
+			case strings.HasPrefix(command, "split-window "):
+				pendingPaneID = clonedPanes[cloneIndex].id
+				cloneIndex++
+				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte(pendingPaneID)}}
+			case strings.HasPrefix(command, "list-panes "):
+				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte("Id:" + pendingPaneID + "|||WindowId:@1|||Width:80|||Height:12|||Active:true")}}
+			default:
+				client.resp <- &tmuxResponseT{IsErr: true}
+			}
+		}
+	}()
+
+	for range clonedPanes {
+		if err := client.ClonePane("", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, pane := range clonedPanes {
+		command := <-commands
+		if !strings.HasPrefix(command, "split-window ") {
+			t.Fatalf("expected split-window command, got %q", command)
+		}
+		if !strings.Contains(command, "-c "+workspace.QuoteString(workingDirectory)) {
+			t.Errorf("clone command omitted inherited working directory: %q", command)
+		}
+		for name, value := range environment {
+			if !strings.Contains(command, workspace.QuoteString(name+"="+value)) {
+				t.Errorf("clone command omitted inherited %s: %q", name, command)
+			}
+		}
+		if command := <-commands; !strings.HasPrefix(command, "list-panes ") {
+			t.Fatalf("expected pane refresh command, got %q", command)
+		}
+		if pane.Pwd() != workingDirectory {
+			t.Errorf("clone %s working directory = %q, want %q", pane.id, pane.Pwd(), workingDirectory)
+		}
+		if !reflect.DeepEqual(pane.term.(*shellCloneTestTerm).initialEnvVars, environment) {
+			t.Errorf("clone %s initial environment = %#v, want %#v", pane.id, pane.term.(*shellCloneTestTerm).initialEnvVars, environment)
+		}
+	}
+	_ = writer.Close()
+	<-done
+}
+
+func TestClonePaneUsesRendererFocusedPane(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+
+	client := &Tmux{tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap()}
+	win := &WindowT{id: "@1", active: true, panes: newPaneMap()}
+	client.wins.Set(win.id, win)
+	client.activeWindow = win
+	mainPane := &PaneT{id: "%7", windowId: win.id, tmux: client, pwd: "/main", active: true}
+	mainPane.term = &shellCloneTestTerm{
+		paneGeometryTestTerm: paneGeometryTestTerm{pane: mainPane},
+		initialEnvVars:       map[string]string{"SSH_AUTH_SOCK": "/main/agent.sock"},
+	}
+	focusedPane := &PaneT{id: "%8", windowId: win.id, tmux: client, pwd: "/focused clone"}
+	focusedPane.term = &shellCloneTestTerm{
+		paneGeometryTestTerm: paneGeometryTestTerm{pane: focusedPane},
+		initialEnvVars:       map[string]string{"SSH_AUTH_SOCK": "/clone/agent.sock"},
+	}
+	clonedPane := &PaneT{id: "%9", windowId: win.id, tmux: client}
+	clonedPane.term = &shellCloneTestTerm{paneGeometryTestTerm: paneGeometryTestTerm{pane: clonedPane}}
+	for _, pane := range []*PaneT{mainPane, focusedPane, clonedPane} {
+		win.panes.Set(pane.id, pane)
+		client.panes.Set(pane.id, pane)
+	}
+	win.activePane = mainPane
+	client.renderer = &clonePaneFocusTestRenderer{activeTile: focusedPane}
+
+	commands := make(chan string, 2)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for scanner := bufio.NewScanner(reader); scanner.Scan(); {
+			command := scanner.Text()
+			commands <- command
+			switch {
+			case strings.HasPrefix(command, "split-window "):
+				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte(clonedPane.id)}}
+			case strings.HasPrefix(command, "list-panes "):
+				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte("Id:%9|||WindowId:@1|||Width:80|||Height:12|||Active:true")}}
+			default:
+				client.resp <- &tmuxResponseT{IsErr: true}
+			}
+		}
+	}()
+
+	if err := client.ClonePane("", nil); err != nil {
+		t.Fatal(err)
+	}
+	command := <-commands
+	for _, expected := range []string{
+		"-t %8",
+		"-c " + workspace.QuoteString(focusedPane.Pwd()),
+		workspace.QuoteString("SSH_AUTH_SOCK=/clone/agent.sock"),
+	} {
+		if !strings.Contains(command, expected) {
+			t.Errorf("clone command %q does not contain focused-pane value %q", command, expected)
+		}
+	}
+	if command := <-commands; !strings.HasPrefix(command, "list-panes ") {
+		t.Fatalf("expected pane refresh command, got %q", command)
+	}
+	_ = writer.Close()
+	<-done
 }
 
 func TestClonePaneCommandKeepsExitedPaneAndStartsWrapper(t *testing.T) {

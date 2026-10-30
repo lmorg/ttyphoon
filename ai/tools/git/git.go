@@ -113,7 +113,7 @@ func (t *Git) CallStructured(ctx context.Context, input any) (string, error) {
 	result := gitutils.RunActionContext(ctx, t.agent.ProjectRoot(), gitutils.ActionRequest{
 		Name:       request.Action,
 		Parameters: parameters,
-	}, nil, func(command string, complete func(gitutils.InteractiveActionResult)) error {
+	}, func(command string, complete func(gitutils.InteractiveActionResult)) error {
 		return cloner.ClonePane(command, func(output []byte, exitCode int, err error) {
 			complete(gitutils.InteractiveActionResult{
 				Output:   string(output),

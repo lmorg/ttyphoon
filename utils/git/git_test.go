@@ -62,7 +62,7 @@ func TestGitTransferLogsOutputByCommandOutcome(t *testing.T) {
 			previous := log.Writer()
 			log.SetOutput(&output)
 			t.Cleanup(func() { log.SetOutput(previous) })
-			result, err := runGitWithAgentEnvironment(gitPath, root, nil, "fetch")
+			result, err := runGitWithOutput(gitPath, root, "fetch")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,49 +86,26 @@ func TestGitTransferLogsOutputByCommandOutcome(t *testing.T) {
 	}
 }
 
-func TestFetchEnvironmentUsesOnlyNonEmptyAgentVariables(t *testing.T) {
+func TestGitCommandEnvironmentInheritsProcessEnvironment(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", "/app/agent.sock")
 	t.Setenv("SSH_AGENT_PID", "11")
 	t.Setenv("GIT_TERMINAL_PROMPT", "1")
-	appPath := os.Getenv("PATH")
-	for _, test := range []struct {
-		name   string
-		vars   map[string]string
-		socket string
-		pid    string
-	}{
-		{"tile agent", map[string]string{"SSH_AUTH_SOCK": "/tile/agent.sock", "SSH_AGENT_PID": "22", "PATH": "/wrong", "GIT_SSH_COMMAND": "wrong"}, "/tile/agent.sock", "22"},
-		{"socket only", map[string]string{"SSH_AUTH_SOCK": "/tile/agent.sock"}, "/tile/agent.sock", "11"},
-		{"unset values", map[string]string{"SSH_AUTH_SOCK": "", "SSH_AGENT_PID": ""}, "/app/agent.sock", "11"},
-		{"no tile", nil, "/app/agent.sock", "11"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			values := make(map[string]string)
-			counts := make(map[string]int)
-			for _, entry := range fetchEnvironment(test.vars) {
-				name, value, _ := strings.Cut(entry, "=")
-				values[name] = value
-				counts[name]++
-			}
-			if values["SSH_AUTH_SOCK"] != test.socket || values["SSH_AGENT_PID"] != test.pid {
-				t.Fatal("SSH agent environment does not match the selected source")
-			}
-			if values["PATH"] != appPath || values["GIT_SSH_COMMAND"] != os.Getenv("GIT_SSH_COMMAND") {
-				t.Fatal("non-agent variables were overridden")
-			}
-			if values["GIT_TERMINAL_PROMPT"] != "0" {
-				t.Fatal("interactive Git prompting was enabled")
-			}
-			for _, name := range []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID", "GIT_TERMINAL_PROMPT"} {
-				if counts[name] != 1 {
-					t.Fatalf("duplicate environment key %q", name)
-				}
-			}
-		})
+	values := make(map[string]string)
+	counts := make(map[string]int)
+	for _, entry := range gitCommandEnvironment() {
+		name, value, _ := strings.Cut(entry, "=")
+		values[name] = value
+		counts[name]++
+	}
+	if values["SSH_AUTH_SOCK"] != "/app/agent.sock" || values["SSH_AGENT_PID"] != "11" {
+		t.Fatal("Git environment did not inherit the process SSH agent")
+	}
+	if values["GIT_TERMINAL_PROMPT"] != "0" || counts["GIT_TERMINAL_PROMPT"] != 1 {
+		t.Fatal("interactive Git prompting was not disabled exactly once")
 	}
 }
 
-func TestFetchBranchPassesAgentEnvironmentToTransport(t *testing.T) {
+func TestFetchBranchInheritsProcessEnvironment(t *testing.T) {
 	if os.PathSeparator == '\\' {
 		t.Skip("transport fixture uses a POSIX wrapper")
 	}
@@ -153,7 +130,7 @@ func TestFetchBranchPassesAgentEnvironmentToTransport(t *testing.T) {
 		t.Fatal(err)
 	}
 	runGitTestCommand(t, gitPath, root, "config", "remote.origin.uploadpack", wrapper)
-	result, err := FetchBranch(root, "agent-test", map[string]string{"SSH_AUTH_SOCK": "/tile/agent.sock", "SSH_AGENT_PID": "22"})
+	result, err := FetchBranch(root, "agent-test")
 	if err != nil || result["error"] != "" {
 		t.Fatalf("fetch = %v, %v", result, err)
 	}
@@ -161,7 +138,7 @@ func TestFetchBranchPassesAgentEnvironmentToTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(actual) != "/tile/agent.sock\n22\n" {
+	if string(actual) != "/app/agent.sock\n11\n" {
 		t.Fatalf("transport agent environment = %q", actual)
 	}
 }
@@ -308,7 +285,7 @@ func TestTagListCheckoutWorktreeAndDelete(t *testing.T) {
 	}
 }
 
-func TestPullAndPushTagsPassAgentEnvironmentToTransport(t *testing.T) {
+func TestPullAndPushTagsInheritProcessEnvironment(t *testing.T) {
 	root := initGitTestRepo(t)
 	gitPath, err := exec.LookPath("git")
 	if err != nil {
@@ -340,13 +317,12 @@ func TestPullAndPushTagsPassAgentEnvironmentToTransport(t *testing.T) {
 	}
 	t.Setenv("FETCH_TEST_SERVICE", "upload-pack")
 	runGitTestCommand(t, gitPath, root, "config", "remote.origin.uploadpack", wrapper)
-	agent := map[string]string{"SSH_AUTH_SOCK": "/tile/agent.sock", "SSH_AGENT_PID": "22"}
-	result, err := PullTags(root, agent)
+	result, err := PullTags(root)
 	if err != nil || result["error"] != "" {
 		t.Fatalf("PullTags() = %v, %v", result, err)
 	}
 	actual, err := os.ReadFile(capture)
-	if err != nil || string(actual) != "/tile/agent.sock\n22\n" {
+	if err != nil || string(actual) != "/app/agent.sock\n11\n" {
 		t.Fatalf("pull transport environment = %q, %v", actual, err)
 	}
 	if tags, err := ListTags(root); err != nil || len(tags) != 1 || tags[0] != "v1.2.3" {
@@ -355,12 +331,12 @@ func TestPullAndPushTagsPassAgentEnvironmentToTransport(t *testing.T) {
 	runGitTestCommand(t, gitPath, remote, "tag", "--delete", "v1.2.3")
 	t.Setenv("FETCH_TEST_SERVICE", "receive-pack")
 	runGitTestCommand(t, gitPath, root, "config", "remote.origin.receivepack", wrapper)
-	result, err = PushTag(root, "v1.2.3", agent)
+	result, err = PushTag(root, "v1.2.3")
 	if err != nil || result["error"] != "" {
 		t.Fatalf("PushTag() = %v, %v", result, err)
 	}
 	actual, err = os.ReadFile(capture)
-	if err != nil || string(actual) != "/tile/agent.sock\n22\n" {
+	if err != nil || string(actual) != "/app/agent.sock\n11\n" {
 		t.Fatalf("push transport environment = %q, %v", actual, err)
 	}
 	if _, err := exec.Command(gitPath, "--git-dir", remote, "rev-parse", "--verify", "refs/tags/v1.2.3").Output(); err != nil {
@@ -709,7 +685,7 @@ func TestRunActionUsesInteractivePolicyForCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	var called bool
-	result := RunAction(root, ActionRequest{Name: "commit", Parameters: map[string]string{"message": "Update"}}, nil, func(command string, complete func(InteractiveActionResult)) error {
+	result := RunAction(root, ActionRequest{Name: "commit", Parameters: map[string]string{"message": "Update"}}, func(command string, complete func(InteractiveActionResult)) error {
 		called = true
 		want := "git -C '" + canonicalRoot + "' 'commit' '-m' 'Update'"
 		if command != want {
@@ -725,7 +701,7 @@ func TestRunActionUsesInteractivePolicyForCommit(t *testing.T) {
 
 func TestRunActionReturnsInteractiveFailureOutputAndExitCode(t *testing.T) {
 	root := initGitTestRepo(t)
-	result := RunAction(root, ActionRequest{Name: "commit", Parameters: map[string]string{"message": "Update"}}, nil, func(_ string, complete func(InteractiveActionResult)) error {
+	result := RunAction(root, ActionRequest{Name: "commit", Parameters: map[string]string{"message": "Update"}}, func(_ string, complete func(InteractiveActionResult)) error {
 		complete(InteractiveActionResult{Output: "hook rejected commit", ExitCode: 1})
 		return nil
 	})
@@ -762,7 +738,7 @@ func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var called bool
-			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, func(command string, complete func(InteractiveActionResult)) error {
+			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, func(command string, complete func(InteractiveActionResult)) error {
 				called = true
 				want := interactiveCommand(canonicalRoot, test.wantArgs)
 				if command != want {
@@ -806,7 +782,7 @@ func TestRunActionReadOnlyCommandsUseInteractiveRunner(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			called := false
-			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, func(command string, complete func(InteractiveActionResult)) error {
+			result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, func(command string, complete func(InteractiveActionResult)) error {
 				called = true
 				if want := interactiveCommand(canonicalRoot, test.wantArgs); command != want {
 					t.Errorf("interactive command = %q, want %q", command, want)
@@ -836,7 +812,7 @@ func TestRunActionRejectsUnsafeReadInputsAndMutatingActions(t *testing.T) {
 		{name: "diff", parameters: map[string]string{"path": "../outside.txt"}},
 		{name: "log", parameters: map[string]string{"limit": "1000"}},
 	} {
-		result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, nil, runner)
+		result := RunAction(root, ActionRequest{Name: test.name, Parameters: test.parameters}, runner)
 		if result["error"] == "" {
 			t.Errorf("RunAction(%q) unexpectedly succeeded", test.name)
 		}
@@ -850,7 +826,7 @@ func TestRunActionContextCanStopWaitingForClonePane(t *testing.T) {
 	root := initGitTestRepo(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	result := RunActionContext(ctx, root, ActionRequest{Name: "status"}, nil, func(string, func(InteractiveActionResult)) error {
+	result := RunActionContext(ctx, root, ActionRequest{Name: "status"}, func(string, func(InteractiveActionResult)) error {
 		cancel()
 		return nil
 	})

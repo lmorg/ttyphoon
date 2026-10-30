@@ -2622,7 +2622,7 @@ func (a *WApp) RunGitAction(projectRoot, actionName string, parameters map[strin
 	result := gitutils.RunAction(projectRoot, gitutils.ActionRequest{
 		Name:       actionName,
 		Parameters: parameters,
-	}, activeGitAgentEnvironment(), func(command string, complete func(gitutils.InteractiveActionResult)) error {
+	}, func(command string, complete func(gitutils.InteractiveActionResult)) error {
 		renderer, ok := renderwebkit.CurrentRenderer()
 		if !ok {
 			return errors.New("Notes renderer is unavailable")
@@ -2747,23 +2747,6 @@ func (a *WApp) DeleteGitBranch(projectRoot, branch string) error {
 
 func (a *WApp) FetchGitBranch(projectRoot, branch string) (map[string]string, error) {
 	return a.RunGitAction(projectRoot, "fetch-branch", map[string]string{"branch": branch}), nil
-}
-
-func activeGitAgentEnvironment() map[string]string {
-	agentVars := make(map[string]string)
-	if renderer, ok := renderwebkit.CurrentRenderer(); ok {
-		if tile := renderer.ActiveTile(); tile != nil {
-			if term := tile.GetTerm(); term != nil {
-				environment := term.GetEnvVars()
-				for _, name := range []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID"} {
-					if value := environment[name]; value != "" {
-						agentVars[name] = value
-					}
-				}
-			}
-		}
-	}
-	return agentVars
 }
 
 func (a *WApp) GetDefaultGitWorktreePath(projectRoot string) (string, error) {

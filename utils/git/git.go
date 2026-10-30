@@ -324,15 +324,15 @@ func CreateTagWorktree(root, tag, worktreePath string) (Worktree, error) {
 	return worktree, nil
 }
 
-func PullTags(root string, agentEnvironment ...map[string]string) (map[string]string, error) {
+func PullTags(root string) (map[string]string, error) {
 	gitPath, repoRoot, err := checkedRepository(root)
 	if err != nil {
 		return nil, err
 	}
-	return runGitWithAgentEnvironment(gitPath, repoRoot, firstAgentEnvironment(agentEnvironment), "fetch", "origin", "refs/tags/*:refs/tags/*")
+	return runGitWithOutput(gitPath, repoRoot, "fetch", "origin", "refs/tags/*:refs/tags/*")
 }
 
-func PushTag(root, tag string, agentEnvironment ...map[string]string) (map[string]string, error) {
+func PushTag(root, tag string) (map[string]string, error) {
 	gitPath, repoRoot, err := checkedRepository(root)
 	if err != nil {
 		return nil, err
@@ -341,14 +341,7 @@ func PushTag(root, tag string, agentEnvironment ...map[string]string) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	return runGitWithAgentEnvironment(gitPath, repoRoot, firstAgentEnvironment(agentEnvironment), "push", "origin", ref)
-}
-
-func firstAgentEnvironment(environments []map[string]string) map[string]string {
-	if len(environments) == 0 {
-		return nil
-	}
-	return environments[0]
+	return runGitWithOutput(gitPath, repoRoot, "push", "origin", ref)
 }
 
 func checkedTagName(gitPath, repoRoot, tag string) (string, error) {
@@ -409,7 +402,7 @@ func DeleteBranch(root, branch string) error {
 	return err
 }
 
-func FetchBranch(root, branch string, agentEnvironment ...map[string]string) (map[string]string, error) {
+func FetchBranch(root, branch string) (map[string]string, error) {
 	gitPath, repoRoot, err := checkedRepository(root)
 	if err != nil {
 		return nil, err
@@ -431,14 +424,14 @@ func FetchBranch(root, branch string, agentEnvironment ...map[string]string) (ma
 	if remote == "." {
 		destination = remoteRef
 	}
-	return runGitWithAgentEnvironment(gitPath, repoRoot, firstAgentEnvironment(agentEnvironment), "fetch", "--", remote, remoteRef+":"+destination)
+	return runGitWithOutput(gitPath, repoRoot, "fetch", "--", remote, remoteRef+":"+destination)
 }
 
-func runGitWithAgentEnvironment(gitPath, repoRoot string, agentVars map[string]string, args ...string) (map[string]string, error) {
+func runGitWithOutput(gitPath, repoRoot string, args ...string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, gitPath, append([]string{"-C", repoRoot}, args...)...)
-	cmd.Env = fetchEnvironment(agentVars)
+	cmd.Env = gitCommandEnvironment()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()
@@ -460,26 +453,15 @@ func runGitWithAgentEnvironment(gitPath, repoRoot string, agentVars map[string]s
 	return result, nil
 }
 
-func fetchEnvironment(agentVars map[string]string) []string {
-	overrides := map[string]string{"GIT_TERMINAL_PROMPT": "0"}
-	for _, name := range []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID"} {
-		if value := agentVars[name]; value != "" {
-			overrides[name] = value
-		}
-	}
-	environment := make([]string, 0)
+func gitCommandEnvironment() []string {
+	environment := make([]string, 0, len(os.Environ())+1)
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
-		if _, replaced := overrides[name]; !replaced {
+		if name != "GIT_TERMINAL_PROMPT" {
 			environment = append(environment, entry)
 		}
 	}
-	for _, name := range []string{"GIT_TERMINAL_PROMPT", "SSH_AUTH_SOCK", "SSH_AGENT_PID"} {
-		if value, ok := overrides[name]; ok {
-			environment = append(environment, name+"="+value)
-		}
-	}
-	return environment
+	return append(environment, "GIT_TERMINAL_PROMPT=0")
 }
 
 func DefaultWorktreePath(root string) (string, error) {

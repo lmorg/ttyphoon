@@ -370,9 +370,20 @@ func (tmux *Tmux) removeExitedPanes(livePanes map[string]struct{}) {
 }
 
 func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallback) error {
-	pane, err := tmux.ActivePane()
-	if err != nil {
-		return err
+	var pane *PaneT
+	if tmux != nil && tmux.renderer != nil {
+		if tile := tmux.renderer.ActiveTile(); tile != nil {
+			if focusedPane := tmux.panes.Get(tile.Id()); focusedPane != nil && !focusedPane.closed && focusedPane.term != nil {
+				pane = focusedPane
+			}
+		}
+	}
+	if pane == nil {
+		var err error
+		pane, err = tmux.ActivePane()
+		if err != nil {
+			return err
+		}
 	}
 	if pane == nil || pane.closed || pane.term == nil {
 		return fmt.Errorf("source terminal pane is unavailable")
