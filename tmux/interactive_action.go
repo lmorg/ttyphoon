@@ -124,22 +124,21 @@ func (tmux *Tmux) finishInteractiveAction(entry interactiveActionEntry, output [
 	}
 	if pane := tmux.panes.Get(entry.paneID); pane != nil {
 		if exitCode == 0 && actionErr == nil {
-			delay := config.PaneAutoCloseDelay()
-			deadline := time.Now().Add(delay).UnixMilli()
-			pane.autoCloseAt.Store(deadline)
 			pane.actionResult.Store(1)
-			time.AfterFunc(delay, func() {
-				if tmux.panes.Get(entry.paneID) != pane || !pane.autoCloseAt.CompareAndSwap(deadline, -1) {
-					return
-				}
-				if err := tmux.CloseCompletedPane(entry.paneID); err != nil && tmux.renderer != nil {
-					tmux.renderer.TriggerRedraw()
-				}
-			})
 		} else {
-			pane.autoCloseAt.Store(0)
 			pane.actionResult.Store(2)
 		}
+		delay := config.PaneAutoCloseDelay()
+		deadline := time.Now().Add(delay).UnixMilli()
+		pane.autoCloseAt.Store(deadline)
+		time.AfterFunc(delay, func() {
+			if tmux.panes.Get(entry.paneID) != pane || !pane.autoCloseAt.CompareAndSwap(deadline, -1) {
+				return
+			}
+			if err := tmux.CloseCompletedPane(entry.paneID); err != nil && tmux.renderer != nil {
+				tmux.renderer.TriggerRedraw()
+			}
+		})
 		if tmux.renderer != nil {
 			tmux.renderer.TriggerRedraw()
 		}

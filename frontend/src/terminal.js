@@ -651,6 +651,7 @@ function applyTerminalStyles(result) {
     style.textContent = `
         :root {
             --terminal-bg: rgb(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue});
+            --terminal-bg-50: rgba(${result.colors.bg.Red}, ${result.colors.bg.Green}, ${result.colors.bg.Blue}, 0.5);
             --terminal-fg: rgb(${result.colors.fg.Red}, ${result.colors.fg.Green}, ${result.colors.fg.Blue});
             --terminal-accent: rgb(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue});
             --terminal-accent-20: rgba(${result.colors.accent.Red}, ${result.colors.accent.Green}, ${result.colors.accent.Blue}, 0.2);
@@ -755,7 +756,7 @@ function applyTerminalStyles(result) {
             padding: 0;
             border: 1px solid var(--terminal-menu-border);
             border-radius: 3px;
-            background: var(--terminal-bg);
+            background: var(--terminal-bg-50);
             color: var(--terminal-fg);
             font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
             font-weight: 400;

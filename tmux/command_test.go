@@ -1021,6 +1021,9 @@ func TestClonePaneInheritsSeededStateTransitively(t *testing.T) {
 				cloneIndex++
 				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte(pendingPaneID)}}
 			case strings.HasPrefix(command, "list-panes "):
+				for _, pane := range append([]*PaneT{source}, clonedPanes...) {
+					pane.active = pane.id == pendingPaneID
+				}
 				client.resp <- &tmuxResponseT{Message: [][]byte{[]byte("Id:" + pendingPaneID + "|||WindowId:@1|||Width:80|||Height:12|||Active:true")}}
 			default:
 				client.resp <- &tmuxResponseT{IsErr: true}
@@ -1028,16 +1031,27 @@ func TestClonePaneInheritsSeededStateTransitively(t *testing.T) {
 		}
 	}()
 
-	for range clonedPanes {
+	for index := range clonedPanes {
+		if index == 1 {
+			clonedPanes[0].dead.Store(true)
+			clonedPanes[0].actionResult.Store(1)
+		}
 		if err := client.ClonePane("", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	for _, pane := range clonedPanes {
+	for index, pane := range clonedPanes {
 		command := <-commands
 		if !strings.HasPrefix(command, "split-window ") {
 			t.Fatalf("expected split-window command, got %q", command)
+		}
+		wantSourceID := source.id
+		if index > 0 {
+			wantSourceID = clonedPanes[index-1].id
+		}
+		if !strings.Contains(command, "-t "+wantSourceID) {
+			t.Errorf("clone command source = %q, want %q", command, wantSourceID)
 		}
 		if !strings.Contains(command, "-c "+workspace.QuoteString(workingDirectory)) {
 			t.Errorf("clone command omitted inherited working directory: %q", command)
@@ -1138,6 +1152,10 @@ func TestClonePaneCommandKeepsExitedPaneAndStartsWrapper(t *testing.T) {
 }
 
 func TestInteractiveActionCallbackRequiresMatchingUUIDAndRunsOnce(t *testing.T) {
+	previousDelay := config.Config.Terminal.PaneAutoCloseDelay
+	config.Config.Terminal.PaneAutoCloseDelay = "7s"
+	t.Cleanup(func() { config.Config.Terminal.PaneAutoCloseDelay = previousDelay })
+
 	tmux := &Tmux{panes: newPaneMap()}
 	pane := &PaneT{id: "%7", tmux: tmux}
 	tmux.panes.Set("%7", pane)
@@ -1179,8 +1197,16 @@ func TestInteractiveActionCallbackRequiresMatchingUUIDAndRunsOnce(t *testing.T) 
 	if pane.InteractiveActionChrome() != types.COLOR_ERROR {
 		t.Fatal("failed interactive action did not retain error chrome")
 	}
-	if pane.AutoCloseAt() != 0 {
-		t.Fatal("failed interactive action has an auto-close deadline")
+	deadline := pane.AutoCloseAt()
+	remaining := time.Until(time.UnixMilli(deadline))
+	if remaining < 6*time.Second || remaining > 7*time.Second {
+		t.Fatalf("failed action auto-close deadline is %s away, want 7 seconds", remaining)
+	}
+	if err := tmux.CancelPaneAutoClose(pane.id); err != nil {
+		t.Fatal(err)
+	}
+	if pane.AutoCloseAt() != 0 || pane.autoCloseAt.CompareAndSwap(deadline, -1) {
+		t.Fatal("cancelled failed-action auto-close can still fire")
 	}
 }
 
