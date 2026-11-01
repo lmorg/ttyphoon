@@ -41,6 +41,7 @@ import (
 type einoRuntime struct {
 	agent               *Agent
 	agentReact          *react.Agent
+	chatModel           einoModel.ToolCallingChatModel
 	tools               []aitypes.Tool
 	boundedWindowRunner func(context.Context, []*schema.Message, func(string)) (string, error)
 }
@@ -740,6 +741,7 @@ func (r *einoRuntime) initOpenAI() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	// OpenAI-compatible proxies (OpenRouter et al) often emit content or reasoning
 	// chunks before tool_calls, which the default first-chunk checker would miss.
@@ -785,6 +787,7 @@ func (r *einoRuntime) initAnthropic() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel:      chatModel,
@@ -820,6 +823,7 @@ func (r *einoRuntime) initOllama() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel: chatModel,
@@ -857,6 +861,22 @@ func streamToolCallCheckerAllChunks(_ context.Context, modelOutput *schema.Strea
 
 func (r *einoRuntime) Reset() {
 	r.agentReact = nil
+}
+
+func (r *einoRuntime) RunSkillSelection(ctx context.Context, messages []*schema.Message) (string, error) {
+	if r.chatModel == nil {
+		if err := r.init(); err != nil {
+			return "", err
+		}
+	}
+	response, err := r.chatModel.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	if response == nil {
+		return "", nil
+	}
+	return response.Content, nil
 }
 
 func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []*schema.Message) []*schema.Message {

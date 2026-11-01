@@ -499,6 +499,13 @@ func (wr *webkitRender) ClonePane(command string, callback func(output []byte, e
 	return wr.tmux.ClonePane(command, callback)
 }
 
+func (wr *webkitRender) ClonePaneAtCurrentDirectory() error {
+	if wr == nil || wr.tmux == nil {
+		return fmt.Errorf("terminal is unavailable")
+	}
+	return wr.tmux.ClonePaneAtCurrentDirectory()
+}
+
 func (wr *webkitRender) activeTerm() types.Term {
 	if wr.termWin == nil {
 		return nil

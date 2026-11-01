@@ -111,7 +111,10 @@ func AskAIWithImages(agt *agent.Agent, prompt string, images []aitypes.ImageAtta
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			return
 		}
-		askAI(agt, prompts.GetAskMessagesWithImages(agt, prompt, attachments), prompt)
+		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
+		defer cancel()
+		messages := prompts.GetAskMessagesWithSkillSelectionAndImages(ctx, agt, prompt, attachments)
+		askAI(agt, messages, prompt)
 	}()
 }
 
@@ -180,6 +183,10 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 	)
 
 	go func() {
+		defer func() {
+			agt.SetSkillResourceDirectories(nil)
+		}()
+
 		startTime := time.Now()
 		noteTime := startTime
 		filenameCh := make(chan string, 1)
@@ -201,6 +208,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
+		ctx = agent.WithOriginalUserRequest(ctx, query)
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 

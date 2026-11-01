@@ -64,6 +64,71 @@ func TestFilesystemToolsUseCurrentRootAfterDirectoryChanges(t *testing.T) {
 	}
 }
 
+func TestResolveWorkspacePathAllowsMissingDescendantsWithoutCreatingThem(t *testing.T) {
+	root := t.TempDir()
+	agent := &pathTestAgent{projectRoot: root}
+	want := filepath.Join(root, "nested", "new", "note.md")
+	got, err := resolveWorkspacePath(agent, filepath.Join("nested", "new", "note.md"))
+	if err != nil || got != want {
+		t.Fatalf("resolveWorkspacePath() = %q, %v; want %q", got, err, want)
+	}
+	if _, err := os.Stat(filepath.Dir(want)); !os.IsNotExist(err) {
+		t.Fatalf("path resolution created a directory: %v", err)
+	}
+}
+
+func TestResolveWorkspacePathRejectsMissingDescendantsThroughOutsideSymlink(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	link := filepath.Join(root, "outside")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	agent := &pathTestAgent{projectRoot: root}
+	if _, err := resolveWorkspacePath(agent, filepath.Join("outside", "new", "note.md")); err == nil {
+		t.Fatal("resolved a missing path through an outside symlink")
+	}
+}
+
+func TestWriteFilesCreatesMissingParentDirectories(t *testing.T) {
+	root := t.TempDir()
+	agent := &directoryTestAgent{
+		pathTestAgent: pathTestAgent{projectRoot: root},
+		renderer:      directoryTestRenderer{},
+	}
+	writer := &Write{agent: agent}
+	result, err := writer.writeFiles(context.Background(), "-- nested/new/note.md --\ncreated\n")
+	if err != nil || strings.Contains(result, "ERROR") {
+		t.Fatalf("writeFiles() = %q, %v", result, err)
+	}
+	contents, err := os.ReadFile(filepath.Join(root, "nested", "new", "note.md"))
+	if err != nil || string(contents) != "created\n" {
+		t.Fatalf("created file = %q, %v", contents, err)
+	}
+}
+
+func TestWriteFileAuthorizationDescribesMissingParentDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "existing"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	agent := &directoryTestAgent{
+		pathTestAgent: pathTestAgent{projectRoot: root},
+		renderer:      directoryTestRenderer{},
+	}
+	writer := &Write{agent: agent}
+	archive := "-- new/nested/file.md --\nnew\n-- existing/file.md --\nexisting\n"
+	description := writer.CallDescription(context.Background(), &writeFileInputT{Archive: archive})
+	if !strings.Contains(description, `new/nested/file\.md<br/>(creating directories too)`) {
+		t.Fatalf("authorization omitted the conditional directory-creation note: %s", description)
+	}
+	if !strings.Contains(description, `existing/file\.md | <pre><code>existing&#10;</code></pre>`) {
+		t.Fatalf("authorization omitted the existing file path or contents: %s", description)
+	}
+	if strings.Contains(description, `existing/file\.md<br/>(creating directories too)`) {
+		t.Fatalf("authorization incorrectly marked an existing parent for creation: %s", description)
+	}
+}
+
 func TestApplyPatchEdits(t *testing.T) {
 	tests := []struct {
 		name    string

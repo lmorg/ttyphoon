@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"text/template"
 
@@ -73,9 +74,24 @@ func (t *Write) CallDescription(_ context.Context, input any) string {
 	}
 
 	arc := txtar.Parse([]byte(request.Archive))
+	descriptionInput := writeFileAuthDescriptionInput{Files: make([]writeFileAuthDescriptionEntry, 0, len(arc.Files))}
+	for _, file := range arc.Files {
+		entry := writeFileAuthDescriptionEntry{Name: file.Name, Content: string(file.Data)}
+		filename, err := resolveWorkspacePath(t.agent, file.Name)
+		if err != nil {
+			entry.PathError = "Path cannot be resolved: " + err.Error()
+		} else {
+			_, statErr := os.Stat(filepath.Dir(filename))
+			entry.CreatesDirectories = os.IsNotExist(statErr)
+			if statErr != nil && !entry.CreatesDirectories {
+				entry.PathError = "Parent directory cannot be inspected: " + statErr.Error()
+			}
+		}
+		descriptionInput.Files = append(descriptionInput.Files, entry)
+	}
 
 	var description bytes.Buffer
-	if err := writeFileAuthDescriptionTemplate.Execute(&description, arc); err != nil {
+	if err := writeFileAuthDescriptionTemplate.Execute(&description, descriptionInput); err != nil {
 		return fmt.Sprintf("Unable to render description: %v", err)
 	}
 	return description.String()
@@ -103,6 +119,11 @@ func (t *Write) writeFiles(_ context.Context, input string) (string, error) {
 		}
 
 		t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" writing file: "+filename)
+		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+			t.agent.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			result += fmt.Sprintf("ERROR '%s': %s\n", filename, err)
+			continue
+		}
 
 		f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0664)
 		if err != nil {
@@ -132,6 +153,17 @@ func (t *Write) writeFiles(_ context.Context, input string) (string, error) {
 
 	debug.Log(result)
 	return result, nil
+}
+
+type writeFileAuthDescriptionInput struct {
+	Files []writeFileAuthDescriptionEntry
+}
+
+type writeFileAuthDescriptionEntry struct {
+	Name               string
+	Content            string
+	CreatesDirectories bool
+	PathError          string
 }
 
 func (t *Write) Observation(input, output string, err error) aitypes.ToolObservation {

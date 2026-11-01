@@ -32,11 +32,8 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 		emitStream = streamBlock.Emit
 	}
 	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), r.agent.EnvironmentValue).Run(ctx, subagent.Request{
-		SystemPrompt: summariserSystemPrompt,
-		Prompt: fmt.Sprintf(
-			"Tool name: %s\nTool input arguments (JSON):\n%s\n\nTool raw output:\n%s",
-			toolName, toolInput, rawOutput,
-		),
+		SystemPrompt:         summariserSystemPrompt,
+		Prompt:               toolOutputSummaryPrompt(ctx, toolName, toolInput, rawOutput),
 		EmitStream:           emitStream,
 		DisableStreamFraming: true,
 		FormatStreamChunk: func(text string) string {
@@ -47,4 +44,15 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 		return "", err
 	}
 	return summariserPrefix + content, nil
+}
+
+func toolOutputSummaryPrompt(ctx context.Context, toolName, toolInput, rawOutput string) string {
+	var prompt string
+	if request := OriginalUserRequestFromContext(ctx); request != "" {
+		prompt = fmt.Sprintf("Original user request:\n%s\n\n", request)
+	}
+	return prompt + fmt.Sprintf(
+		"Tool name: %s\nTool input arguments (JSON):\n%s\n\nTool raw output:\n%s",
+		toolName, toolInput, rawOutput,
+	)
 }

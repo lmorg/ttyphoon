@@ -150,6 +150,10 @@ export function GetAISessionManagement() {
   return window['go']['main']['WApp']['GetAISessionManagement']();
 }
 
+export function GetAISessionPrompt(arg1, arg2) {
+  return window['go']['main']['WApp']['GetAISessionPrompt'](arg1, arg2);
+}
+
 export function GetAIStreamBlockContent(arg1, arg2, arg3) {
   return window['go']['main']['WApp']['GetAIStreamBlockContent'](arg1, arg2, arg3);
 }

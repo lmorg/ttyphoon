@@ -1,9 +1,11 @@
 package prompts
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"runtime"
@@ -123,14 +125,17 @@ func buildUserMessageWithImages(text string, images []aitypes.ImageAttachment) *
 func GetAsk(agt *agent.Agent, userPrompt string) string {
 	fn := rxSkillFunction.FindString(userPrompt)
 	if fn == "" {
+		setSkillResourceDirectories(agt, nil)
 		return os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt))
 	}
 
 	agt.Meta.Function = strings.TrimRight(fn[1:], " ")
-	skill := skills.ReadSkills().FromFunctionName(agt.Meta.Function)
-	if skill == nil {
+	skill := skills.ReadSkills().FromName(agt.Meta.Function)
+	if skill == nil || !skill.IsUserInvocable() {
+		setSkillResourceDirectories(agt, nil)
 		return os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt))
 	}
+	setSkillResourceDirectories(agt, skills.Skills{skill})
 
 	err := agt.StartTools(skill.Tools)
 	if err != nil {
@@ -142,30 +147,137 @@ func GetAsk(agt *agent.Agent, userPrompt string) string {
 func GetAskMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
 	fn := rxSkillFunction.FindString(userPrompt)
 	if fn == "" {
-		return []*schema.Message{
-			schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
-			schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt)))),
-		}
+		return normalAskMessages(agt, userPrompt)
 	}
 
-	agt.Meta.Function = strings.TrimRight(fn[1:], " ")
-	skill := skills.ReadSkills().FromFunctionName(agt.Meta.Function)
-	if skill == nil {
-		return []*schema.Message{
-			schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
-			schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt)))),
+	skill := skills.ReadSkills().FromName(strings.TrimRight(fn[1:], " "))
+	if skill == nil || !skill.IsUserInvocable() {
+		return normalAskMessages(agt, userPrompt)
+	}
+	return GetAskMessagesWithSkills(agt, userPrompt, skills.Skills{skill})
+}
+
+func GetAskMessagesWithSkillSelection(ctx context.Context, agt *agent.Agent, userPrompt string) []*schema.Message {
+	selected := SelectSkills(ctx, agt, userPrompt)
+	return GetAskMessagesWithSkills(agt, userPrompt, selected)
+}
+
+func GetAskMessagesWithSkillSelectionAndImages(ctx context.Context, agt *agent.Agent, userPrompt string, images []aitypes.ImageAttachment) []*schema.Message {
+	messages := GetAskMessagesWithSkillSelection(ctx, agt, userPrompt)
+	messages[len(messages)-1] = buildUserMessageWithImages(messages[len(messages)-1].Content, images)
+	return messages
+}
+
+type skillSelectionRunner interface {
+	RunSkillSelection(context.Context, []*schema.Message) (string, error)
+}
+
+func SelectSkills(ctx context.Context, agt *agent.Agent, userPrompt string) skills.Skills {
+	agt.SetSkillResourceDirectories(nil)
+	return selectSkills(ctx, userPrompt, skills.ReadSkills(), agt)
+}
+
+func selectSkills(ctx context.Context, userPrompt string, available skills.Skills, runner skillSelectionRunner) skills.Skills {
+	if fn := rxSkillFunction.FindString(userPrompt); fn != "" {
+		if skill := available.FromName(strings.TrimRight(fn[1:], " ")); skill != nil {
+			if skill.IsUserInvocable() {
+				return skills.Skills{skill}
+			}
 		}
+		return nil
 	}
 
-	err := agt.StartTools(skill.Tools)
+	available = available.ModelInvocable()
+	if len(available) == 0 || runner == nil {
+		return nil
+	}
+	response, err := runner.RunSkillSelection(ctx, skillSelectionMessages(userPrompt, available))
 	if err != nil {
-		agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		log.Printf("[debug] skill routing failed; using normal prompt: %v", err)
+		return nil
 	}
+	selected, err := skills.ParseSelection(response, available)
+	if err != nil {
+		log.Printf("[debug] invalid skill routing response; using normal prompt: %v", err)
+		return nil
+	}
+	return selected
+}
 
-	user := strings.TrimSpace(os.Expand(skill.Prompt+"\n# User Prompt\n\n$USER_PROMPT\n", promptVars(agt, userPrompt)))
+func skillSelectionMessages(userPrompt string, available skills.Skills) []*schema.Message {
+	type skillDescription struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	catalog := make([]skillDescription, 0, len(available))
+	for _, skill := range available {
+		if skill.Name == "" {
+			continue
+		}
+		catalog = append(catalog, skillDescription{
+			ID:          skill.Name,
+			Name:        skill.Name,
+			Description: skill.Description,
+		})
+	}
+	encodedCatalog, _ := json.Marshal(catalog)
+	return []*schema.Message{
+		schema.SystemMessage(`Select the agent skills that materially help with the user's request. Select the smallest relevant set; select none when no skill is useful. Return only a JSON array of exact skill IDs, for example [] or ["skill-id"]. Do not answer the request, use tools, or invent IDs.`),
+		schema.UserMessage(fmt.Sprintf("Available skills (JSON): %s\n\nUser request:\n%s", encodedCatalog, userPrompt)),
+	}
+}
+
+func GetAskMessagesWithSkills(agt *agent.Agent, userPrompt string, selected skills.Skills) []*schema.Message {
+	setSkillResourceDirectories(agt, selected)
+	if len(selected) == 0 {
+		return normalAskMessages(agt, userPrompt)
+	}
+	if agt.Meta == nil {
+		agt.Meta = &aitypes.Meta{}
+	}
+	names := make([]string, 0, len(selected))
+	for _, skill := range selected {
+		names = append(names, skill.Name)
+		if err := agt.StartTools(skill.Tools); err != nil {
+			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+	}
+	agt.Meta.Function = strings.Join(names, ",")
+
+	var promptBuilder strings.Builder
+	for index, skill := range selected {
+		if index > 0 {
+			promptBuilder.WriteString("\n\n")
+			promptBuilder.WriteString("# Additional skill: ")
+			promptBuilder.WriteString(skill.Name)
+			promptBuilder.WriteString("\n\n")
+		}
+		promptBuilder.WriteString(skill.Prompt)
+	}
+	promptBuilder.WriteString("\n# User Prompt\n\n$USER_PROMPT\n")
+	user := strings.TrimSpace(os.Expand(promptBuilder.String(), promptVars(agt, userPrompt)))
 	return []*schema.Message{
 		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
 		schema.UserMessage(user),
+	}
+}
+
+func setSkillResourceDirectories(agt *agent.Agent, selected skills.Skills) {
+	directories := make(map[string]string, len(selected))
+	for _, skill := range selected {
+		if skill.Directory != "" {
+			directories[skill.Name] = skill.Directory
+		}
+	}
+	agt.SetSkillResourceDirectories(directories)
+}
+
+func normalAskMessages(agt *agent.Agent, userPrompt string) []*schema.Message {
+	setSkillResourceDirectories(agt, nil)
+	return []*schema.Message{
+		schema.SystemMessage(buildPromptSystem(agt, userPrompt)),
+		schema.UserMessage(strings.TrimSpace(os.Expand(_PROMPT_ASK, promptVars(agt, userPrompt)))),
 	}
 }
 

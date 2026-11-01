@@ -41,27 +41,21 @@ func askAiSkills(wr *webkitRender) {
 }
 
 func askAiSkillsAt(wr *webkitRender, x, y int, anchored bool) {
-	skills := skills.ReadSkills()
+	skills := skills.ReadSkills().UserInvocable()
 
 	if len(skills) == 0 {
 		wr.DisplayNotification(types.NOTIFY_WARN, "You don't have any Agent Skills available to use")
 		return
 	}
 
-	var padFunc, padName int
+	var padName int
 	for i := range skills {
 		padName = max(padName, len(skills[i].Name))
-		padFunc = max(padFunc, len(skills[i].FunctionName))
 	}
 
 	slice := make([]string, len(skills))
 	for i := range skills {
-		slice[i] = fmt.Sprintf("/%s%s%s%s(%s)",
-			skills[i].FunctionName,
-			strings.Repeat(" ", padFunc+3-len(skills[i].FunctionName)),
-			skills[i].Name,
-			strings.Repeat(" ", padName+1-len(skills[i].Name)),
-			skills[i].Description)
+		slice[i] = fmt.Sprintf("/%-*s (%s)", padName, skills[i].Name, skills[i].Description)
 	}
 
 	fnSelect := func(i int) {
@@ -102,7 +96,7 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
 			agt.SetModelFromInputVariable(v.Variables)
-			ai.AskAIWithImages(agt, fmt.Sprintf("/%s %s", skill.FunctionName, v.String()), v.Images)
+			ai.AskAIWithImages(agt, fmt.Sprintf("/%s %s", skill.Name, v.String()), v.Images)
 		},
 	}
 	wr.DisplayInputBoxW(parameters)

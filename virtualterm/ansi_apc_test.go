@@ -19,7 +19,7 @@ func TestParseInteractiveActionCompletion(t *testing.T) {
 
 func TestDecodeOutputBlockSnapshot(t *testing.T) {
 	command := "git commit -m 'message'"
-	environment := []byte("PATH=/bin:/usr/bin\x00SSH_AUTH_SOCK=/tmp/agent socket\x00MULTILINE=one\ntwo\x00EMPTY=\x00")
+	environment := []byte("PATH=/bin:/usr/bin\x00CUSTOM_ENV=custom value\x00MULTILINE=one\ntwo\x00EMPTY=\x00")
 	gotCommand, gotEnvironment, err := decodeOutputBlockSnapshot(
 		base64.StdEncoding.EncodeToString([]byte(command)),
 		base64.StdEncoding.EncodeToString(environment),
@@ -28,10 +28,10 @@ func TestDecodeOutputBlockSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantEnvironment := map[string]string{
-		"PATH":          "/bin:/usr/bin",
-		"SSH_AUTH_SOCK": "/tmp/agent socket",
-		"MULTILINE":     "one\ntwo",
-		"EMPTY":         "",
+		"PATH":       "/bin:/usr/bin",
+		"CUSTOM_ENV": "custom value",
+		"MULTILINE":  "one\ntwo",
+		"EMPTY":      "",
 	}
 	if gotCommand != command || !reflect.DeepEqual(gotEnvironment, wantEnvironment) {
 		t.Fatalf("snapshot = (%q, %#v), want (%q, %#v)", gotCommand, gotEnvironment, command, wantEnvironment)

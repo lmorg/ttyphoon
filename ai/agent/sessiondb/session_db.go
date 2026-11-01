@@ -396,6 +396,46 @@ func AppendActiveSessionEntry(workspace, prompt, commandLine, outputBlock, llmRe
 	return activeID, insertedID, nil
 }
 
+func GetSessionPrompt(workspace string, sessionID, promptID int64) (string, error) {
+	if sessionID <= 0 || promptID <= 0 {
+		return "", fmt.Errorf("session and prompt ids must be positive")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	db, err := openDB(workspace)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("cannot begin sessiondb transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	exists, err := sessionExistsTx(tx, sessionID)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("session %d does not exist", sessionID)
+	}
+
+	var prompt string
+	if err := tx.QueryRow(fmt.Sprintf(`SELECT prompt FROM %s WHERE id = ?`, quotedSessionTable(sessionID)), promptID).Scan(&prompt); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("prompt %d does not exist in session %d", promptID, sessionID)
+		}
+		return "", fmt.Errorf("cannot load prompt %d from session %d: %w", promptID, sessionID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("cannot commit sessiondb transaction: %w", err)
+	}
+	return prompt, nil
+}
+
 func ActiveSessionEntries(workspace string, limit int) ([]Entry, error) {
 	mu.Lock()
 	defer mu.Unlock()

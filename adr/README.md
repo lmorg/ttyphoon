@@ -97,6 +97,8 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
 | [0081](0081-ai-prompt-effort-and-feedback-cadence.md) | Per-prompt effort guides investigation and user-feedback cadence | AI |
 | [0082](0082-ai-read-only-git-tool.md) | AI Git inspection uses a permission-gated read-only action whitelist | AI tools |
+| [0083](0083-ai-skills-support-manual-and-model-invocation.md) | AI skills support independent manual and automatic invocation | AI |
+| [0084](0084-ai-skills-read-selected-supporting-files.md) | AI skills can read selected supporting files | AI |
 
 ## Recurring themes
 

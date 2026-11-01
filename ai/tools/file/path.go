@@ -63,17 +63,9 @@ func resolvePath(agt aitypes.Agent, name string, restrictToRoot bool) (string, e
 		return "", err
 	}
 
-	resolvedPath, err := filepath.EvalSymlinks(path)
+	resolvedPath, err := resolveExistingPrefix(path)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return "", err
-		}
-		parent := filepath.Dir(path)
-		resolvedParent, parentErr := filepath.EvalSymlinks(parent)
-		if parentErr != nil {
-			return "", parentErr
-		}
-		resolvedPath = filepath.Join(resolvedParent, filepath.Base(path))
+		return "", err
 	}
 
 	if !restrictToRoot {
@@ -86,4 +78,27 @@ func resolvePath(agt aitypes.Agent, name string, restrictToRoot bool) (string, e
 	}
 
 	return path, nil
+}
+
+func resolveExistingPrefix(path string) (string, error) {
+	current := path
+	var missing []string
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			for index := len(missing) - 1; index >= 0; index-- {
+				resolved = filepath.Join(resolved, missing[index])
+			}
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+		missing = append(missing, filepath.Base(current))
+		current = parent
+	}
 }

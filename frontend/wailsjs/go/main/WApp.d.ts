@@ -85,6 +85,8 @@ export function GetAISessionCache(arg1:string):Promise<string>;
 
 export function GetAISessionManagement():Promise<sessiondb.FrontendStateT>;
 
+export function GetAISessionPrompt(arg1:number,arg2:number):Promise<string>;
+
 export function GetAIStreamBlockContent(arg1:number,arg2:number,arg3:string):Promise<string>;
 
 export function GetAIToolsList():Promise<Array<Record<string, any>>>;

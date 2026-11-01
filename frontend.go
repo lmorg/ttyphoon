@@ -544,7 +544,7 @@ func (a *WApp) TerminalClonePane() error {
 	if !ok {
 		return fmt.Errorf("renderer not available")
 	}
-	return renderer.ClonePane("", nil)
+	return renderer.ClonePaneAtCurrentDirectory()
 }
 
 func (a *WApp) TerminalClosePane(paneID string) error {
@@ -2997,6 +2997,19 @@ func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
 		return ""
 	}
 	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
+}
+
+func (a *WApp) GetAISessionPrompt(sessionID, promptID int64) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+	prompt, err := sessiondb.GetSessionPrompt(agt.Workspace(), sessionID, promptID)
+	if err != nil {
+		log.Printf("[debug] ai get session prompt %d: %v", promptID, err)
+		return ""
+	}
+	return prompt
 }
 
 func (a *WApp) ListAIStreamBlocks(sessionID, promptID int64) []sessiondb.StreamBlockMeta {

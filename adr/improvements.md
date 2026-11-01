@@ -21,7 +21,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
   - [x] File list: right click on a folder: menu option `Paste as new file...`. This will copy the contents of clipboard to memory, then show the create file model with the path prepopulated and the file name either `clipboard.png` (for images) or `clipboard.md` (for text). Clipboard access uses existing Go bindings rather than web APIs.
 - [x] Terminal: hotkey for tmux pane zoom
 - [x] AI, read file tool: should support reading chunks defined by line number ranges so that large files don't cause us to run out of tokens
-- [ ] AI, skills: improve support for idiomatic skills files
+- [x] AI, skills: improve support for idiomatic skills files
 - [x] Notes, CSV: in `View` mode, the markdown auto-URL tool should be invoked (inc the support for custom url regexp)
 - [x] Notes: cache the sizing of the `file list | notes editor` splitter / resizer ([ADR 0059](../adr/0059-notes-layout-sizing-persistence.md))
 - [x] Notes: cache the sizing of the `notes | terminal` splitter / resizer ([ADR 0059](../adr/0059-notes-layout-sizing-persistence.md))
@@ -37,7 +37,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
   - [ ] Using this new data, the frontend can then support a tmux zoom for the pane by placing the maximize button in the top right corner of the pane rather than in the terminal toolbar
 - [ ] Notes: support for displaying video files
 - [ ] Notes: support for audio playback
-- [ ] Notes, Git commits log: a toggle below the filter search box to choose whether to search for commit messages or file names. Default is commit messages. When file search is toggled then each commit is checked to see which files were changed as part of that commit, with those filenames being what's filtered
+- [x] Notes, Git commits log: a toggle below the filter search box to choose whether to search for commit messages or file names. Default is commit messages. When file search is toggled then each commit is checked to see which files were changed as part of that commit, with those filenames being what's filtered
 - [x] AI tool, graphs: this currently renders SVG. It should do PNG instead
 - [x] AI tool: read-only Git inspection for status, diff, log, show, branches, and remotes; enabled and always allowed by default, run through ClonePane ([ADR 0082](../adr/0082-ai-read-only-git-tool.md))
 - [x] AI: per-prompt Effort selector guides investigation depth and when to ask for blocking user feedback ([ADR 0081](../adr/0081-ai-prompt-effort-and-feedback-cadence.md))
@@ -57,7 +57,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [x] Git panel: keep Commit in the collapsible row and place the icon-style Push button in the main toolbar beside the commit toggle ([ADR 0062](../adr/0062-notes-git-worktree-panel.md))
 - [x] Kill pane confirmation modal: Tab/Shift+Tab switches between buttons; Enter/Space activates the focused button; text and terminal shortcuts are ignored ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md))
 - [x] AI, tool requests: Deny opens the shared inputbox for an optional free-form reason; Cancel/Draft leave the request pending, submitted reasons reach the model and are remembered only within the tmux workspace/prompt scopes ([ADR 0002](../adr/0002-tool-permission-scopes.md))
-- [ ] terminal: hover over buttons (eg maximize, close, etc) should have translucent backgrounds (0.5 alpha)
+- [x] terminal: hover over buttons (eg maximize, close, etc) should have translucent backgrounds (0.5 alpha)
 
 ## refactors
 

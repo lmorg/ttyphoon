@@ -87,8 +87,8 @@ func TestGitTransferLogsOutputByCommandOutcome(t *testing.T) {
 }
 
 func TestGitCommandEnvironmentInheritsProcessEnvironment(t *testing.T) {
-	t.Setenv("SSH_AUTH_SOCK", "/app/agent.sock")
-	t.Setenv("SSH_AGENT_PID", "11")
+	t.Setenv("GIT_TEST_INHERITED_ENV", "first value")
+	t.Setenv("GIT_TEST_INHERITED_ENV_2", "second value")
 	t.Setenv("GIT_TERMINAL_PROMPT", "1")
 	values := make(map[string]string)
 	counts := make(map[string]int)
@@ -97,8 +97,8 @@ func TestGitCommandEnvironmentInheritsProcessEnvironment(t *testing.T) {
 		values[name] = value
 		counts[name]++
 	}
-	if values["SSH_AUTH_SOCK"] != "/app/agent.sock" || values["SSH_AGENT_PID"] != "11" {
-		t.Fatal("Git environment did not inherit the process SSH agent")
+	if values["GIT_TEST_INHERITED_ENV"] != "first value" || values["GIT_TEST_INHERITED_ENV_2"] != "second value" {
+		t.Fatal("Git environment did not inherit process variables")
 	}
 	if values["GIT_TERMINAL_PROMPT"] != "0" || counts["GIT_TERMINAL_PROMPT"] != 1 {
 		t.Fatal("interactive Git prompting was not disabled exactly once")
@@ -123,9 +123,9 @@ func TestFetchBranchInheritsProcessEnvironment(t *testing.T) {
 	wrapper := filepath.Join(directory, "upload-pack")
 	t.Setenv("FETCH_TEST_CAPTURE", capture)
 	t.Setenv("FETCH_TEST_GIT", gitPath)
-	t.Setenv("SSH_AUTH_SOCK", "/app/agent.sock")
-	t.Setenv("SSH_AGENT_PID", "11")
-	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$SSH_AUTH_SOCK\" \"$SSH_AGENT_PID\" > \"$FETCH_TEST_CAPTURE\"\nexec \"$FETCH_TEST_GIT\" upload-pack \"$@\"\n"
+	t.Setenv("GIT_TEST_INHERITED_ENV", "first value")
+	t.Setenv("GIT_TEST_INHERITED_ENV_2", "second value")
+	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$GIT_TEST_INHERITED_ENV\" \"$GIT_TEST_INHERITED_ENV_2\" > \"$FETCH_TEST_CAPTURE\"\nexec \"$FETCH_TEST_GIT\" upload-pack \"$@\"\n"
 	if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +138,8 @@ func TestFetchBranchInheritsProcessEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(actual) != "/app/agent.sock\n11\n" {
-		t.Fatalf("transport agent environment = %q", actual)
+	if string(actual) != "first value\nsecond value\n" {
+		t.Fatalf("transport inherited environment = %q", actual)
 	}
 }
 
@@ -308,9 +308,9 @@ func TestPullAndPushTagsInheritProcessEnvironment(t *testing.T) {
 	capture := filepath.Join(directory, "agent-environment")
 	t.Setenv("FETCH_TEST_CAPTURE", capture)
 	t.Setenv("FETCH_TEST_GIT", gitPath)
-	t.Setenv("SSH_AUTH_SOCK", "/app/agent.sock")
-	t.Setenv("SSH_AGENT_PID", "11")
-	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$SSH_AUTH_SOCK\" \"$SSH_AGENT_PID\" > \"$FETCH_TEST_CAPTURE\"\nexec \"$FETCH_TEST_GIT\" $FETCH_TEST_SERVICE \"$@\"\n"
+	t.Setenv("GIT_TEST_INHERITED_ENV", "first value")
+	t.Setenv("GIT_TEST_INHERITED_ENV_2", "second value")
+	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$GIT_TEST_INHERITED_ENV\" \"$GIT_TEST_INHERITED_ENV_2\" > \"$FETCH_TEST_CAPTURE\"\nexec \"$FETCH_TEST_GIT\" $FETCH_TEST_SERVICE \"$@\"\n"
 	wrapper := filepath.Join(directory, "git-transport")
 	if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestPullAndPushTagsInheritProcessEnvironment(t *testing.T) {
 		t.Fatalf("PullTags() = %v, %v", result, err)
 	}
 	actual, err := os.ReadFile(capture)
-	if err != nil || string(actual) != "/app/agent.sock\n11\n" {
+	if err != nil || string(actual) != "first value\nsecond value\n" {
 		t.Fatalf("pull transport environment = %q, %v", actual, err)
 	}
 	if tags, err := ListTags(root); err != nil || len(tags) != 1 || tags[0] != "v1.2.3" {
@@ -336,7 +336,7 @@ func TestPullAndPushTagsInheritProcessEnvironment(t *testing.T) {
 		t.Fatalf("PushTag() = %v, %v", result, err)
 	}
 	actual, err = os.ReadFile(capture)
-	if err != nil || string(actual) != "/app/agent.sock\n11\n" {
+	if err != nil || string(actual) != "first value\nsecond value\n" {
 		t.Fatalf("push transport environment = %q, %v", actual, err)
 	}
 	if _, err := exec.Command(gitPath, "--git-dir", remote, "rev-parse", "--verify", "refs/tags/v1.2.3").Output(); err != nil {

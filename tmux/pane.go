@@ -12,6 +12,7 @@ import (
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/notes"
 	runebuf "github.com/lmorg/ttyphoon/utils/rune_buf"
 	"github.com/lmorg/ttyphoon/utils/workspace"
 	"github.com/lmorg/ttyphoon/virtualterm"
@@ -370,6 +371,14 @@ func (tmux *Tmux) removeExitedPanes(livePanes map[string]struct{}) {
 }
 
 func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallback) error {
+	return tmux.clonePane(commandLine, callback, false)
+}
+
+func (tmux *Tmux) ClonePaneAtCurrentDirectory() error {
+	return tmux.clonePane("", nil, true)
+}
+
+func (tmux *Tmux) clonePane(commandLine string, callback interactiveActionCallback, keepCurrentDirectory bool) error {
 	var pane *PaneT
 	if tmux != nil && tmux.renderer != nil {
 		if tile := tmux.renderer.ActiveTile(); tile != nil {
@@ -393,6 +402,9 @@ func (tmux *Tmux) ClonePane(commandLine string, callback interactiveActionCallba
 	}
 
 	pwd := pane.Pwd()
+	if !keepCurrentDirectory && pwd != "" {
+		pwd = notes.DirProjectRoot(pwd)
+	}
 
 	var actionID, scriptPath string
 	if commandLine != "" {

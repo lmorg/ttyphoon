@@ -101,11 +101,12 @@ type DefaultPermissions struct {
 }
 
 type Meta struct {
-	CmdLine     string
-	Pwd         string // this is not the same as the application working directory
-	OutputBlock string
-	Function    string
-	Variables   map[string]any
+	CmdLine        string
+	Pwd            string // this is not the same as the application working directory
+	OutputBlock    string
+	Function       string
+	Variables      map[string]any
+	SkillResources map[string]string
 }
 
 // ImageAttachment carries an inline image to send alongside a prompt.

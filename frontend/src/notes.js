@@ -20,7 +20,7 @@ import {
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
-    ListAIStreamBlocks, GetAIStreamBlockContent, ListAILiveStreamBlocks,
+    ListAIStreamBlocks, GetAIStreamBlockContent, GetAISessionPrompt, ListAILiveStreamBlocks,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, PromptAIToolPermissionReason, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
     NotesHistoryPreviousPosition, NotesHistoryNextPosition, NotesHistoryAddPosition, NotesHistoryCurrentPosition, NotesGrepStream,
@@ -12354,11 +12354,37 @@ async function jumpToAIPromptTarget(target) {
                 ? await ListAIStreamBlocks(target.sessionId, target.promptId)
                 : [];
             if (Array.isArray(blocks) && blocks.length > 0 && typeof GetAIStreamBlockContent === 'function') {
-                aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
-                    target.sessionId,
-                    target.promptId,
-                    String(block?.blockId || ''),
-                ));
+                const promptText = typeof GetAISessionPrompt === 'function'
+                    ? await GetAISessionPrompt(target.sessionId, target.promptId)
+                    : '';
+                const historicalBlocks = [...blocks];
+                const hasRequestBlock = historicalBlocks.some((block) => block?.kind === 'request');
+                const requestBlockId = `historical-request-${target.sessionId}-${target.promptId}`;
+                if (promptText && !hasRequestBlock) {
+                    historicalBlocks.unshift({
+                        sessionId: target.sessionId,
+                        promptId: target.promptId,
+                        runId: Number(blocks[0]?.runId) || 0,
+                        blockId: requestBlockId,
+                        parentId: '',
+                        kind: 'request',
+                        label: 'Prompt',
+                        ordinal: Math.min(0, Number(blocks[0]?.ordinal) - 1 || -1),
+                        status: 'closed',
+                        size: promptText.length,
+                        historyPrompt: true,
+                    });
+                }
+                aiPipelineFormatter.setBlocks(historicalBlocks, (block) => {
+                    if (block?.historyPrompt) {
+                        return `## Prompt\n\n${promptText}`;
+                    }
+                    return GetAIStreamBlockContent(
+                        target.sessionId,
+                        target.promptId,
+                        String(block?.blockId || ''),
+                    );
+                });
             } else {
                 const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
                 aiPipelineFormatter.clear();

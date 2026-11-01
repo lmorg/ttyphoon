@@ -31,9 +31,13 @@ effort guidance must not assume a coding task.
   domain-neutral language. All modes preserve the `askUser` contract: don't
   interrupt for routine uncertainty; ask only when the answer materially affects
   the result or safe next step.
-- Treat effort as portable behavioral guidance, not a hard time budget, an
-  iteration limit, or a provider API parameter. Provider-specific reasoning
-  controls can be added separately when they can be mapped reliably.
+- Treat effort as portable behavioral guidance, not a time budget, harness
+  max-step limit, or provider API parameter. It does set a recovery-attempt
+  budget for stalled work: Quick allows one distinct safe alternative,
+  Balanced two, and Thorough three. All modes stop sooner when attempts become
+  repetitive, unsafe, or stop producing evidence, then askUser for specific
+  help if still blocked. Provider-specific reasoning controls can be added
+  separately when they can be mapped reliably.
 
 ## Consequences
 
@@ -41,6 +45,7 @@ effort guidance must not assume a coding task.
   model or tool settings.
 - The selected guidance is captured in the full prompt transcript.
 - Actual elapsed time and reasoning depth remain model/provider dependent.
+- Recovery budgets guide behavior but are not enforced runtime iteration limits.
 
 ## Reference
 

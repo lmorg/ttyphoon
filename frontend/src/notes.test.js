@@ -76,6 +76,7 @@ const askAIImageMock = vi.fn(() => Promise.resolve());
 const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
 const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
 const getAIPromptLogMock = vi.fn(() => Promise.resolve(''));
+const getAISessionPromptMock = vi.fn(() => Promise.resolve(''));
 const listAILiveStreamBlocksMock = vi.fn(() => Promise.resolve([]));
 const listAIStreamBlocksMock = vi.fn(() => Promise.resolve([]));
 const getAIStreamBlockContentMock = vi.fn(() => Promise.resolve(''));
@@ -287,6 +288,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     GetAISessionCache: getAISessionCacheMock,
     ListAIPromptLogs: listAIPromptLogsMock,
     GetAIPromptLog: getAIPromptLogMock,
+    GetAISessionPrompt: getAISessionPromptMock,
     ListAILiveStreamBlocks: listAILiveStreamBlocksMock,
     ListAIStreamBlocks: listAIStreamBlocksMock,
     GetAIStreamBlockContent: getAIStreamBlockContentMock,
@@ -652,6 +654,8 @@ describe('notes rendering', () => {
         listAIPromptLogsMock.mockResolvedValue([]);
         getAIPromptLogMock.mockReset();
         getAIPromptLogMock.mockResolvedValue('');
+        getAISessionPromptMock.mockReset();
+        getAISessionPromptMock.mockResolvedValue('');
         listAILiveStreamBlocksMock.mockReset();
         listAILiveStreamBlocksMock.mockResolvedValue([]);
         listAIStreamBlocksMock.mockReset();
@@ -4123,6 +4127,42 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(showAISkillsMenuMock).toHaveBeenCalledWith(0, 4);
+    });
+
+    it('shows the stored user prompt before historical stream and tool blocks', async () => {
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 12, promptId: 7, heading: 'Explain the failure' },
+        ]);
+        listAIStreamBlocksMock.mockResolvedValue([
+            { blockId: 'tool-call', kind: 'tool-call', status: 'closed', ordinal: 0 },
+            { blockId: 'answer', kind: 'text', status: 'closed', ordinal: 1 },
+        ]);
+        getAISessionPromptMock.mockResolvedValue('Why did this command fail?');
+        getAIStreamBlockContentMock.mockImplementation((_sessionId, _promptId, blockId) => Promise.resolve(
+            blockId === 'tool-call' ? '{"command":"go test"}' : 'The command failed because a test failed.',
+        ));
+
+        await importNotesModule();
+        await flushPromises();
+
+        document.getElementById('notes-tools-ai-prompt-jump').click();
+        await flushPromises();
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        menu.onSelect(1);
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(getAISessionPromptMock).toHaveBeenCalledWith(12, 7);
+        const output = document.getElementById('notes-ai-output');
+        expect(output.textContent).toContain('Prompt');
+        expect(output.textContent).toContain('Why did this command fail?');
+        expect(output.textContent).toContain('Tool call');
+        expect(output.textContent).toContain('The command failed because a test failed.');
+        const blocks = Array.from(output.querySelectorAll('[data-block-id]'));
+        expect(blocks[0]?.dataset.blockId).toBe('historical-request-12-7');
+        expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'tool-call');
+        expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'answer');
     });
 
     it('places Prompt after Skills and provides a session menu for creating and switching sessions', async () => {

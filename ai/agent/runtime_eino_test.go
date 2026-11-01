@@ -88,6 +88,12 @@ type fakeRuntime struct {
 	err    error
 	chunks []string
 
+	selectionResult   string
+	selectionErr      error
+	selectionCalled   bool
+	selectionCtx      context.Context
+	selectionMessages []*schema.Message
+
 	called   bool
 	ctx      context.Context
 	prompt   string
@@ -123,6 +129,13 @@ func (f *fakeRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 func (f *fakeRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
 	f.prompt = prompt
 	return f.RunLLMWithMessageStream(ctx, []*schema.Message{schema.UserMessage(prompt)}, streamCallback)
+}
+
+func (f *fakeRuntime) RunSkillSelection(ctx context.Context, messages []*schema.Message) (string, error) {
+	f.selectionCalled = true
+	f.selectionCtx = ctx
+	f.selectionMessages = messages
+	return f.selectionResult, f.selectionErr
 }
 
 func (f *fakeRuntime) Reset() {
@@ -473,11 +486,15 @@ func TestStringInputToolInvocationErrorDoesNotAbortRun(t *testing.T) {
 }
 
 type toolRecoveryChatModel struct {
-	generate func([]*schema.Message) (*schema.Message, error)
+	generate       func([]*schema.Message) (*schema.Message, error)
+	withToolsCalls *int
 }
 
 func (model *toolRecoveryChatModel) WithTools([]*schema.ToolInfo) (einoModel.ToolCallingChatModel, error) {
-	return &toolRecoveryChatModel{generate: model.generate}, nil
+	if model.withToolsCalls != nil {
+		*model.withToolsCalls++
+	}
+	return &toolRecoveryChatModel{generate: model.generate, withToolsCalls: model.withToolsCalls}, nil
 }
 
 func (model *toolRecoveryChatModel) Generate(_ context.Context, messages []*schema.Message, _ ...einoModel.Option) (*schema.Message, error) {
@@ -490,6 +507,29 @@ func (model *toolRecoveryChatModel) Stream(ctx context.Context, messages []*sche
 		return nil, err
 	}
 	return schema.StreamReaderFromArray([]*schema.Message{message}), nil
+}
+
+func TestEinoRuntimeSkillSelectionUsesModelWithoutToolBinding(t *testing.T) {
+	calls := 0
+	toolBindings := 0
+	model := &toolRecoveryChatModel{
+		withToolsCalls: &toolBindings,
+		generate: func(messages []*schema.Message) (*schema.Message, error) {
+			calls++
+			if len(messages) != 2 || messages[0].Role != schema.System || messages[1].Role != schema.User {
+				t.Fatalf("skill selection messages = %+v", messages)
+			}
+			return schema.AssistantMessage(`["review"]`, nil), nil
+		},
+	}
+	runtime := &einoRuntime{chatModel: model}
+	result, err := runtime.RunSkillSelection(context.Background(), []*schema.Message{
+		schema.SystemMessage("choose"),
+		schema.UserMessage("review this"),
+	})
+	if err != nil || result != `["review"]` || calls != 1 || toolBindings != 0 {
+		t.Fatalf("skill selection = %q, err=%v, generates=%d tool bindings=%d", result, err, calls, toolBindings)
+	}
 }
 
 func TestEinoReActModelReceivesToolFailureAndRetries(t *testing.T) {
@@ -1187,6 +1227,35 @@ func TestAgentRunLLMWithStream_InvokesCancelThenRuntime(t *testing.T) {
 	}
 	if result != "done" {
 		t.Fatalf("result = %q, want %q", result, "done")
+	}
+}
+
+func TestAgentRunSkillSelectionUsesRuntimeBoundary(t *testing.T) {
+	ctx := context.Background()
+	messages := []*schema.Message{schema.SystemMessage("choose skills"), schema.UserMessage("inspect code")}
+	runtime := &fakeRuntime{selectionResult: `["review"]`}
+	agent := &Agent{runtime: runtime}
+
+	result, err := agent.RunSkillSelection(ctx, messages)
+	if err != nil || result != runtime.selectionResult {
+		t.Fatalf("RunSkillSelection() = %q, %v", result, err)
+	}
+	if !runtime.selectionCalled || runtime.selectionCtx != ctx || len(runtime.selectionMessages) != len(messages) {
+		t.Fatal("skill selection did not use the configured runtime boundary")
+	}
+}
+
+func TestAgentRunLLMWithMessageStreamPassesSelectedSkillResources(t *testing.T) {
+	runtime := &fakeRuntime{}
+	agent := &Agent{
+		runtime: runtime,
+		Meta:    &aitypes.Meta{SkillResources: map[string]string{"review": "/skills/review"}},
+	}
+	if _, err := agent.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("review")}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := SkillResourceDirectoriesFromContext(runtime.ctx); got["review"] != "/skills/review" {
+		t.Fatalf("skill resource context = %#v", got)
 	}
 }
 
