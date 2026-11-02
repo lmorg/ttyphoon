@@ -639,6 +639,7 @@ const state = {
     autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
+    renamingFolder: false,
     historyPositionTimer: null,
     pendingNewFile: null,
     textPromptHandler: null,
@@ -2098,6 +2099,20 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         item.type = 'button';
         item.className = 'notes-file notes-tree-file';
         item.dataset.file = node.file;
+        const projectRoot = state.currentProjectRoot
+            ? `${state.currentProjectRoot.replace(/[\\/]+$/, '')}/`
+            : '(none)';
+        const { relativePath } = splitCategoryPath(node.file);
+        const directory = `/${getPathParts(relativePath).slice(0, -1).join('/')}`;
+        const tooltipCode = (value) => `<code>${escapeHtml(value).replace(
+            /[\\`*_[\]{}()#+.!|~-]/g,
+            (character) => `&#${character.charCodeAt(0)};`,
+        )}</code>`;
+        item.dataset.tooltip = [
+            ['Project', 'f015', projectRoot],
+            ['Path', 'f07b', directory],
+            ['File', 'f15b', node.name],
+        ].map(([label, icon, value]) => `<div class="notes-file-tooltip-row"><span class="notes-file-tooltip-icon" role="img" aria-label="${label}">&#x${icon};</span> ${tooltipCode(value)}</div>`).join('\n');
         item.appendChild(indentForItem);
         item.appendChild(label);
 
@@ -8297,6 +8312,7 @@ function renderFileList() {
     const projectFindMode = isProjectFindListModeActive();
     const previousScrollTop = elements.list ? elements.list.scrollTop : 0;
 
+    closeSharedTooltip();
     updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
 
@@ -8546,7 +8562,11 @@ function openFolderContextForListRow(row, x, y) {
         const folderPath = separatorIndex === -1 ? '' : folderKey.slice(separatorIndex + 1);
         const folderNode = findFolderNodeByPath(getCategoryTreeNodes(category), folderPath);
         const folderName = folderNode ? folderNode.name : folderPath;
-        openFolderTreeContextMenu(category, folderNode?.children || [], x, y, folderName, folderKey);
+        openFolderTreeContextMenu(category, folderNode?.children || [], x, y, folderName, folderKey, [{
+            title: 'Rename folder...',
+            icon: CONTEXT_ICON_EDIT,
+            onSelect: () => void openRenamePrompt(folderKey, true),
+        }]);
         return;
     }
 
@@ -11442,9 +11462,10 @@ function finishGitBranchPrompt(value) {
     setTimeout(() => state.gitWorktreePrompt?.branchButton?.focus(), 0);
 }
 
-async function openRenamePrompt(file) {
+async function openRenamePrompt(file, folder = false) {
     const source = String(file || '').trim();
     state.renamingFile = file;
+    state.renamingFolder = folder;
     state.pendingNewFile = null;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
@@ -11464,7 +11485,7 @@ async function openRenamePrompt(file) {
     elements.modalLocation.textContent = location;
     elements.modalLocation.style.display = '';
     elements.modalInput.value = name;
-    setNotesModalTitle('Rename note', true);
+    setNotesModalTitle(folder ? 'Rename folder' : 'Rename note', true);
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
         elements.modalInput.focus();
@@ -12375,7 +12396,7 @@ async function jumpToAIPromptTarget(target) {
                         historyPrompt: true,
                     });
                 }
-                aiPipelineFormatter.setBlocks(historicalBlocks, (block) => {
+                aiPipelineFormatter.setBlocks(historicalBlocks.map((block) => ({ ...block, userPrompt: promptText })), (block) => {
                     if (block?.historyPrompt) {
                         return `## Prompt\n\n${promptText}`;
                     }
@@ -13285,6 +13306,7 @@ function initAIOutputContextMenu(container) {
         const aiBlock = e.target instanceof Element ? e.target.closest('[data-block-kind]') : null;
         const isFinalAIResponse = aiBlock?.dataset.blockKind === 'text'
             && aiBlock?.dataset.blockStatus === 'closed';
+        const copyRoot = e.target instanceof Element ? e.target.closest('.notes-ai-job') : null;
         const tableItems = table && container.contains(table)
             ? [
                 ...createTableCopyMenuItems(table),
@@ -13316,9 +13338,26 @@ function initAIOutputContextMenu(container) {
                 { title: '-' },
             ]
             : [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
                 { title: '-' },
             ];
+        copyItems.splice(copyItems.length - 1, 0,
+            {
+                title: 'Copy prompt',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: async () => {
+                    copyTextToClipboard(await aiPipelineFormatter.promptMarkdown(copyRoot || undefined));
+                },
+            },
+            {
+                title: 'Copy response',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: async () => {
+                    const root = copyRoot || Array.from(container.querySelectorAll('.notes-ai-job')).at(-1);
+                    copyTextToClipboard(await aiPipelineFormatter.outputMarkdown(root));
+                },
+            },
+        );
         const codeSaveItems = codeBlockText && isFinalAIResponse
             ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
             : [];
@@ -13729,17 +13768,31 @@ async function createNewFile() {
             ? await ComposeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
             : name;
 
-        state.mutatingFile = state.renamingFile;
+        const oldPath = state.renamingFile;
+        const oldPrefix = `${oldPath}${PRIMARY_PATH_SEPARATOR}`;
+        const renamingCurrent = state.currentFile === oldPath
+            || (state.renamingFolder && state.currentFile.startsWith(oldPrefix));
+        const renamedCurrent = renamingCurrent ? fileName + state.currentFile.slice(oldPath.length) : '';
+        state.mutatingFile = renamingCurrent ? state.currentFile : oldPath;
         try {
-            await RenameFile(state.renamingFile, fileName);
-            if (state.currentFile === state.renamingFile) {
-                await loadFile(fileName);
+            await RenameFile(oldPath, fileName);
+            if (state.renamingFolder) {
+                for (const key of Object.keys(state.expandedFolders)) {
+                    if (key === oldPath || key.startsWith(oldPrefix)) {
+                        state.expandedFolders[fileName + key.slice(oldPath.length)] = state.expandedFolders[key];
+                        delete state.expandedFolders[key];
+                    }
+                }
+                saveProjectCache();
+            }
+            if (renamingCurrent) {
+                await loadFile(renamedCurrent);
             }
             await refreshFiles({ skipHistoryRestore: true });
             closeNewFilePrompt();
             setStatus(`Renamed to ${fileName}`, false);
         } catch (err) {
-            notifyTerminal(`Failed to rename file: ${err}`, 'error');
+            notifyTerminal(`Failed to rename ${state.renamingFolder ? 'folder' : 'file'}: ${err}`, 'error');
             console.error(err);
         } finally {
             state.mutatingFile = '';
@@ -17116,7 +17169,28 @@ if (elements.listFilter) {
 }
 
 if (elements.list) {
+    const showFileTooltip = (event) => {
+        const row = event.target.closest('[data-tooltip]');
+        if (!row || row.contains(event.relatedTarget)) {
+            return;
+        }
+        if (event.type === 'mouseover') {
+            updateSharedTooltipPointer(event.clientX, event.clientY);
+        }
+        void showSharedTooltip(row.dataset.tooltip);
+    };
+    const hideFileTooltip = (event) => {
+        const row = event.target.closest('[data-tooltip]');
+        if (row && !row.contains(event.relatedTarget)) {
+            closeSharedTooltip();
+        }
+    };
+    elements.list.addEventListener('mouseover', showFileTooltip);
+    elements.list.addEventListener('mouseout', hideFileTooltip);
+    elements.list.addEventListener('focusin', showFileTooltip);
+    elements.list.addEventListener('focusout', hideFileTooltip);
     elements.list.addEventListener('scroll', () => {
+        closeSharedTooltip();
         if (!isProjectFindListModeActive()) {
             return;
         }
@@ -17129,6 +17203,7 @@ if (elements.list) {
     // one-to-several closures per file/folder on every render. A single delegated
     // listener per event type avoids that cost regardless of tree size.
     elements.list.addEventListener('click', (event) => {
+        closeSharedTooltip();
         const fileItem = event.target.closest('.notes-file');
         if (fileItem) {
             addHistoryPosition(fileItem.dataset.file, currentEditorLineForFile(fileItem.dataset.file));
@@ -17158,6 +17233,7 @@ if (elements.list) {
     });
 
     elements.list.addEventListener('contextmenu', (event) => {
+        closeSharedTooltip();
         const fileItem = event.target.closest('.notes-file');
         if (fileItem) {
             event.preventDefault();

@@ -34,7 +34,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [x] Terminal: tmux window / pane resizes should push the pane dimensions to the frontend ([ADR 0072](../adr/0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md)).
   - [x] Show a close button at the top right of completed panes retained for inspection, including ClonePane actions.
   - [x] Successful ClonePane actions close after 30 seconds with a notification-style countdown; click the timer to cancel auto-close and retain the pane for manual closing.
-  - [ ] Using this new data, the frontend can then support a tmux zoom for the pane by placing the maximize button in the top right corner of the pane rather than in the terminal toolbar
+  - [x] Using this new data, the frontend can then support a tmux zoom for the pane by placing the maximize button in the top right corner of the pane rather than in the terminal toolbar
 - [ ] Notes: support for displaying video files
 - [ ] Notes: support for audio playback
 - [x] Notes, Git commits log: a toggle below the filter search box to choose whether to search for commit messages or file names. Default is commit messages. When file search is toggled then each commit is checked to see which files were changed as part of that commit, with those filenames being what's filtered

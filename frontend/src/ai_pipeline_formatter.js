@@ -196,6 +196,8 @@ export function createAIPipelineFormatter(container, options = {}) {
     const lazyChunkSize = Math.max(8, Number(options.lazyChunkSize) || 24);
 
     let streamText = '';
+    let requestTitle = '';
+    const requestTitles = new WeakMap();
     let renderVersion = 0;
     let jobRoot = null;
     let isRendering = false;
@@ -325,6 +327,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         pendingBlockChildren.clear();
         legacyRender = false;
         streamText = '';
+        requestTitle = '';
         jobRoot = null;
         isRendering = false;
         needsRender = false;
@@ -332,6 +335,7 @@ export function createAIPipelineFormatter(container, options = {}) {
     }
 
     function startJob(title = '') {
+        requestTitle = String(title || '');
         // Any lazy observer from a previously-restored session log belongs to
         // the old job; drop it before the new job's chunks start streaming.
         destroyLazyObserver();
@@ -372,6 +376,7 @@ export function createAIPipelineFormatter(container, options = {}) {
 
         jobRoot = document.createElement('div');
         jobRoot.className = 'notes-ai-job';
+        requestTitles.set(jobRoot, requestTitle);
         container.appendChild(jobRoot);
     }
 
@@ -399,14 +404,32 @@ export function createAIPipelineFormatter(container, options = {}) {
             && !block.dataset.parentId && block.textContent.trim()).at(-1) || null;
     }
 
-    async function outputMarkdown() {
+    async function promptMarkdown(root = jobRoot) {
+        const entries = Array.from(streamBlocks.values()).filter((entry) => !root || root.contains(entry.wrapper));
+        const storedPrompt = entries.find((entry) => entry.userPrompt !== undefined);
+        if (storedPrompt) return String(storedPrompt.userPrompt || '');
+        const request = entries.find((entry) => entry.kind === 'request' && !entry.parentId);
+        if (request) {
+            const content = request.loadPrintContent && !request.text && request.root.dataset.blockLoaded !== 'true'
+                ? String(await request.loadPrintContent() || '')
+                : request.text;
+            return content.replace(/^## Prompt[^\S\n]*\n+/, '');
+        }
+        const prompt = /^### Prompt[^\S\n]*\n+([\s\S]*?)(?=\n### (?:Command|Output|Stream Trace)\b|$)/m.exec(requestTitles.get(root) || requestTitle);
+        if (prompt) return prompt[1].trim();
+        return parseSections(streamText, createSectionCache())
+            .filter((section) => section.label === 'Question')
+            .map((section) => section.content.trim()).filter(Boolean).join('\n\n');
+    }
+
+    async function outputMarkdown(root = null) {
         if (!streamBlocks.size) {
             return parseSections(streamText, createSectionCache())
                 .filter((section) => section.label === 'Final Answer')
                 .map((section) => section.content.trim()).filter(Boolean).join('\n\n');
         }
         const entries = Array.from(streamBlocks.values())
-            .filter((entry) => entry.kind === 'text' && !entry.parentId);
+            .filter((entry) => entry.kind === 'text' && !entry.parentId && (!root || root.contains(entry.wrapper)));
         const output = await Promise.all(entries.map(async (entry) => {
             if (entry.loadPrintContent && !entry.text && entry.root.dataset.blockLoaded !== 'true') {
                 return String(await entry.loadPrintContent() || '');
@@ -569,6 +592,7 @@ export function createAIPipelineFormatter(container, options = {}) {
 
         const entry = {
             kind,
+            userPrompt: block?.userPrompt,
             text: '',
             root: contentRoot,
             wrapper,
@@ -1184,6 +1208,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         startJob,
         finishJob,
         finalResponseElement,
+        promptMarkdown,
         outputMarkdown,
         appendChunk,
         openBlock,

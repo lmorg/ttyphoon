@@ -65,6 +65,32 @@ func TestHistoryRecentFilesReturnsNewestTenDistinctFilesAcrossRoots(t *testing.T
 	}
 }
 
+func TestHistoryListRenameUpdatesFolderDescendants(t *testing.T) {
+	root := t.TempDir()
+	workspace := t.Name() + root
+	oldPath := filepath.Join(root, "docs")
+	newPath := filepath.Join(root, "renamed")
+	history := &HistoryListT{History: []HistoryEntryT{
+		{Filename: oldPath, Line: 1},
+		{Filename: filepath.Join(oldPath, "guide.md"), Line: 12},
+		{Filename: filepath.Join(oldPath, "nested", "api.md"), Line: 30},
+		{Filename: filepath.Join(root, "docs-old", "other.md"), Line: 7},
+	}, Index: 2}
+	setHistoryList(workspace, history)
+	if err := HistoryListRename(workspace, oldPath, newPath); err != nil {
+		t.Fatal(err)
+	}
+	want := HistoryListT{History: []HistoryEntryT{
+		{Filename: newPath, Line: 1},
+		{Filename: filepath.Join(newPath, "guide.md"), Line: 12},
+		{Filename: filepath.Join(newPath, "nested", "api.md"), Line: 30},
+		{Filename: filepath.Join(root, "docs-old", "other.md"), Line: 7},
+	}, Index: 2}
+	if got := getHistoryList(workspace); !reflect.DeepEqual(*got, want) {
+		t.Fatalf("renamed history = %+v, want %+v", *got, want)
+	}
+}
+
 func TestHistoryListDelete_SelectsSurvivingDocument(t *testing.T) {
 	for _, test := range []struct {
 		name    string

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/lmorg/murex/utils/lists"
@@ -150,8 +151,11 @@ func HistoryListRename(workspace, oldFile, newFile string) error {
 	h := getHistoryList(workspace)
 
 	for i := range h.History {
-		if filepath.Clean(h.History[i].Filename) == oldFile {
+		filename := filepath.Clean(h.History[i].Filename)
+		if filename == oldFile {
 			h.History[i].Filename = newFile
+		} else if strings.HasPrefix(filename, oldFile+string(filepath.Separator)) {
+			h.History[i].Filename = filepath.Join(newFile, strings.TrimPrefix(filename, oldFile+string(filepath.Separator)))
 		}
 	}
 

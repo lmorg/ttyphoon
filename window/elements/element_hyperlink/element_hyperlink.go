@@ -3,6 +3,8 @@ package element_hyperlink
 import (
 	"errors"
 	"fmt"
+	"html"
+	"path"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/config"
@@ -138,9 +140,25 @@ func (el *ElementHyperlink) MouseWheel(_ *types.XY, _ *types.XY, callback types.
 	callback()
 }
 
+func (el *ElementHyperlink) tooltipText() string {
+	row := func(label, icon, value string) string {
+		return fmt.Sprintf(`<div class="shared-tooltip-row"><span class="shared-tooltip-icon" role="img" aria-label="%s">&#x%s;</span> <code>%s</code></div>`, label, icon, html.EscapeString(value))
+	}
+	rows := []string{}
+	if el.scheme == "file" {
+		rows = append(rows,
+			row("Path", "f07b", path.Dir(el.path)),
+			row("File", "f15b", path.Base(el.path)),
+		)
+	} else {
+		rows = append(rows, row("Scheme", "f121", el.scheme), row("Path", "f07b", el.path))
+	}
+	return strings.Join(rows, "\n")
+}
+
 func (el *ElementHyperlink) MouseMotion(pos *types.XY, size *types.XY, callback types.EventIgnoredCallback) {
 	el.renderer.StatusBarText("[Click] Hyperlink options: " + el.url)
-	el.renderer.ShowTooltip(el.Url())
+	el.renderer.ShowTooltip(el.tooltipText())
 	cursor.Hand()
 
 	if !config.Config.Window.HoverEffectHighlight {

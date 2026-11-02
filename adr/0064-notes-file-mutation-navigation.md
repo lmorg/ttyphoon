@@ -24,6 +24,10 @@ returns, causing the frontend to reload a path that no longer exists.
 - After renaming the open note, load the new path before refreshing the file list.
   Refresh without workspace history restoration. Renaming another note does not
   switch the open document.
+- Folder rows offer rename through the same dialog and backend operation. Rename
+  remaps descendant history paths and expansion state; an open descendant follows
+  its new path with watcher reloads suppressed during the operation. Matching uses
+  path-separator boundaries so similarly named sibling folders are unaffected.
 - Track the path being renamed/deleted and suppress its watcher-driven reloads
   during the operation. Clear the gate in `finally`, including on failure.
   Subsequent notifications reload the new current document normally.

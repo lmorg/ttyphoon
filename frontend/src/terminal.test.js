@@ -58,6 +58,7 @@ vi.mock('../wailsjs/runtime/runtime', () => ({
 
 vi.mock('../wailsjs/go/main/WApp', () => ({
     GetWindowStyle: getWindowStyleMock,
+    GetCustomRegexp: vi.fn(async () => []),
     SendIpc: sendIpcMock,
     TerminalCopyImageDataURL: terminalCopyImageDataURLMock,
     TerminalGetTabs: terminalGetTabsMock,
@@ -210,6 +211,31 @@ describe('terminal compact redraw decoder', () => {
         }
 
         window.Image = MockImage;
+    });
+
+    it('renders hyperlink tooltip icon rows and literal file values', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        const rows = [
+            ['Scheme', 'f5fc', 'file'],
+            ['Path', 'f07b', '/project/docs'],
+            ['File', 'f15b', '&lt;filename&gt;-**literal**-`code`.md'],
+        ];
+        eventHandlers.get('tooltipShow')({ text: rows.map(([label, icon, value]) =>
+            `<div class="shared-tooltip-row"><span class="shared-tooltip-icon" role="img" aria-label="${label}">&#x${icon};</span> <code>${value}</code></div>`,
+        ).join('\n') });
+        await flushPromises();
+
+        const tooltip = document.getElementById('ttyphoon-shared-tooltip');
+        expect(tooltip.style.display).toBe('block');
+        expect(Array.from(tooltip.querySelectorAll('.shared-tooltip-icon')).map((icon) => icon.textContent)).toEqual([
+            '\uf5fc', '\uf07b', '\uf15b',
+        ]);
+        expect(Array.from(tooltip.querySelectorAll('code')).map((value) => value.textContent)).toEqual([
+            'file', '/project/docs', '<filename>-**literal**-`code`.md',
+        ]);
+        expect(tooltip.querySelector('filename, strong, ul')).toBeNull();
+        expect(document.getElementById('ttyphoon-shared-tooltip-style').textContent).toContain('.shared-tooltip-icon');
     });
 
     it('clears backend hover when the pointer leaves the terminal for Notes', async () => {

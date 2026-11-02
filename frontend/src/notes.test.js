@@ -897,6 +897,50 @@ describe('notes rendering', () => {
         expect(document.querySelector('[data-file="$PROJECT/apis/openapi.yaml"]')?.textContent).toContain('openapi.yaml');
     });
 
+    it('shows full literal filenames in the shared tooltip on hover and focus', async () => {
+        const filename = 'a-very-long-<filename>-with-**markdown**-and-`code`.md';
+        getCurrentProjectMock.mockResolvedValue('/project/root/');
+        listFilesMock.mockResolvedValue([`$PROJECT/path/from/project/root/${filename}`]);
+        await importNotesModule();
+
+        const row = document.querySelector('.notes-file');
+        const label = row.querySelector('.notes-tree-label');
+        expect(row.hasAttribute('title')).toBe(false);
+        expect(row.dataset.tooltip).toContain('notes-file-tooltip-icon');
+        label.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 30, clientY: 40 }));
+        await flushPromises();
+
+        const tooltip = document.getElementById('ttyphoon-shared-tooltip');
+        expect(tooltip.style.display).toBe('block');
+        expect(tooltip.querySelector('ul, li')).toBeNull();
+        const icons = Array.from(tooltip.querySelectorAll('.notes-file-tooltip-icon'));
+        expect(icons.map((icon) => icon.textContent)).toEqual([
+            '\uf015', '\uf07b', '\uf15b',
+        ]);
+        expect(icons.map((icon) => icon.getAttribute('aria-label'))).toEqual(['Project', 'Path', 'File']);
+        expect(getNotesStyleProperties('.notes-file-tooltip-icon')['font-family']).toContain('Font Awesome Solid');
+        expect(Array.from(tooltip.querySelectorAll('code')).map((item) => item.textContent)).toEqual([
+            '/project/root/', '/path/from/project/root', filename,
+        ]);
+        expect(tooltip.querySelector('filename, strong')).toBeNull();
+
+        label.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: row }));
+        expect(tooltip.style.display).toBe('block');
+        row.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+        expect(tooltip.style.display).toBe('none');
+
+        row.focus();
+        await flushPromises();
+        expect(tooltip.style.display).toBe('block');
+        row.blur();
+        expect(tooltip.style.display).toBe('none');
+
+        row.focus();
+        await flushPromises();
+        document.getElementById('notes-list').dispatchEvent(new Event('scroll'));
+        expect(tooltip.style.display).toBe('none');
+    });
+
     it('filters the file list from the sidebar input and shows a no-match empty state', async () => {
         listFilesMock.mockResolvedValue([
             '$GLOBAL/docs/guide.md',
@@ -2954,6 +2998,41 @@ describe('notes rendering', () => {
         expect(getFileMock).toHaveBeenCalledWith('$PROJECT/docs/todo.txt');
     });
 
+    it.each([true, false])('renames folders and preserves the open document (inside folder: %s)', async (insideFolder) => {
+        const currentFile = insideFolder ? '$PROJECT/docs/nested/guide.md' : '$PROJECT/docs-old/other.md';
+        listFilesMock.mockResolvedValue(['$PROJECT/docs/nested/guide.md', '$PROJECT/docs-old/other.md']);
+        resolveNoteLocationMock.mockResolvedValueOnce('$PROJECT/docs');
+        await importNotesModule();
+        document.querySelector(`[data-file="${currentFile}"]`).click();
+        await flushPromises();
+        await flushPromises();
+
+        document.querySelector('[data-folder-key="$PROJECT/docs"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        menu.onSelect(menu.options.indexOf('Rename folder...'));
+        await flushPromises();
+        expect(document.querySelector('#notes-modal-title h3')?.textContent).toBe('Rename folder');
+        expect(document.getElementById('notes-modal-input').value).toBe('docs');
+        document.getElementById('notes-modal-input').value = 'renamed';
+        listFilesMock.mockResolvedValue(['$PROJECT/renamed/nested/guide.md', '$PROJECT/docs-old/other.md']);
+        getFileMock.mockClear();
+        renameFileMock.mockImplementationOnce(async () => {
+            await getEventHandler('notesFileChanged')();
+        });
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(renameFileMock).toHaveBeenCalledWith('$PROJECT/docs', '$PROJECT/renamed');
+        expect(document.querySelector('[data-folder-key="$PROJECT/renamed"]')).not.toBeNull();
+        const expectedFile = insideFolder ? '$PROJECT/renamed/nested/guide.md' : currentFile;
+        expect(document.querySelector(`[data-file="${expectedFile}"]`).dataset.active).toBe('true');
+        if (insideFolder) {
+            expect(getFileMock).not.toHaveBeenCalledWith(currentFile);
+            expect(getFileMock).toHaveBeenCalledWith(expectedFile);
+        }
+    });
+
     it.each([
         ['open note', '$NOTES/current.md', '$NOTES/previous.md'],
         ['other note', '$NOTES/previous.md', ''],
@@ -3473,7 +3552,7 @@ describe('notes rendering', () => {
         expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
         expect(menuConfig.title).toBe('reference');
-        expect(menuConfig.options).toEqual(['Collapse Folders', 'Expand Folders', '-', 'Create new file...', 'Paste as new file...']);
+        expect(menuConfig.options).toEqual(['Rename folder...', '-', 'Collapse Folders', 'Expand Folders', '-', 'Create new file...', 'Paste as new file...']);
         menuConfig.onSelect(menuConfig.options.indexOf('Create new file...'));
         expect(document.getElementById('notes-modal-input').value).toBe('docs/reference/');
     });
@@ -3546,6 +3625,8 @@ describe('notes rendering', () => {
         expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
         expect(menuConfig.options).toEqual([
+            'Rename folder...',
+            '-',
             'Collapse Folders',
             'Expand Folders',
             '-',
@@ -3553,14 +3634,14 @@ describe('notes rendering', () => {
             'Paste as new file...',
         ]);
 
-        menuConfig.onSelect(0);
+        menuConfig.onSelect(menuConfig.options.indexOf('Collapse Folders'));
         await flushPromises();
 
         expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs"]')?.dataset.expanded).toBe('true');
         expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('false');
         expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/images"]')?.dataset.expanded).toBe('true');
 
-        menuConfig.onSelect(1);
+        menuConfig.onSelect(menuConfig.options.indexOf('Expand Folders'));
         await flushPromises();
 
         expect(document.querySelector('.notes-tree-folder[data-folder-key="$PROJECT/docs/reference"]')?.dataset.expanded).toBe('true');
@@ -4163,6 +4244,16 @@ describe('notes rendering', () => {
         expect(blocks[0]?.dataset.blockId).toBe('historical-request-12-7');
         expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'tool-call');
         expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'answer');
+        output.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const copyMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        copyMenu.onSelect(copyMenu.options.indexOf('Copy prompt'));
+        await vi.waitFor(() => {
+            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Why did this command fail?');
+        });
+        copyMenu.onSelect(copyMenu.options.indexOf('Copy response'));
+        await vi.waitFor(() => {
+            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('The command failed because a test failed.');
+        });
     });
 
     it('places Prompt after Skills and provides a session menu for creating and switching sessions', async () => {
@@ -4438,6 +4529,46 @@ describe('notes rendering', () => {
         await flushPromises();
         expect(output.scrollTop).toBe(123);
         vi.mocked(markdown.processMarkdownContainer).mockResolvedValue();
+    });
+
+    it('copies the user prompt and response Markdown without thoughts or tools', async () => {
+        await importNotesModule();
+        getEventHandler('aiJobStart')({ runId: 989, title: '## Request\n\n### Prompt\n\nExplain **this** command\n\n### Command\n\n~~~sh\nls\n~~~\n\n### Stream Trace\n' });
+        const append = getEventHandler('aiStreamBlock');
+        for (const block of [
+            { blockId: 'thinking', kind: 'thinking', delta: 'Private reasoning excluded' },
+            { blockId: 'tool', kind: 'tool-call', delta: 'Tool arguments excluded' },
+            { blockId: 'tool-output', parentId: 'tool', kind: 'tool-output', delta: 'Tool output excluded' },
+            { blockId: 'subagent', kind: 'subagent', delta: 'Subagent excluded' },
+            { blockId: 'child', parentId: 'subagent', kind: 'text', delta: 'Nested output excluded' },
+            { blockId: 'answer', kind: 'text', delta: '# Answer\n\n**Final output only**' },
+        ]) append({ runId: 989, status: 'closed', ...block });
+        await flushPromises();
+        document.getElementById('notes-ai-output').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        expect(menu.options).toContain('Copy selection');
+        expect(menu.options).not.toContain('Copy');
+        await menu.onSelect(menu.options.indexOf('Copy prompt'));
+        expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Explain **this** command');
+        await menu.onSelect(menu.options.indexOf('Copy response'));
+        await vi.waitFor(() => {
+            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('# Answer\n\n**Final output only**');
+        });
+        const firstJob = document.querySelector('.notes-ai-job');
+        getEventHandler('aiJobStart')({ runId: 990, title: '## Request\n\n### Prompt\n\nSecond prompt\n\n### Stream Trace\n' });
+        append({ runId: 990, blockId: 'second-answer', kind: 'text', status: 'closed', delta: '**Second response**' });
+        await flushPromises();
+        expect(firstJob.isConnected).toBe(false);
+        document.querySelector('.notes-ai-job').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const jobMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        jobMenu.onSelect(jobMenu.options.indexOf('Copy prompt'));
+        await vi.waitFor(() => {
+            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Second prompt');
+        });
+        jobMenu.onSelect(jobMenu.options.indexOf('Copy response'));
+        await vi.waitFor(() => {
+            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('**Second response**');
+        });
     });
 
     it('prints only top-level AI output without thinking, tools, or subagent content', async () => {
@@ -4718,7 +4849,9 @@ describe('notes rendering', () => {
 
         expect(showLocalMenuMock).toHaveBeenCalled();
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
-        expect(menuConfig.options).toContain('Copy');
+        expect(menuConfig.options).toContain('Copy selection');
+        expect(menuConfig.options).toContain('Copy prompt');
+        expect(menuConfig.options).toContain('Copy response');
         expect(menuConfig.options).toContain('Copy table (CSV)');
         expect(menuConfig.options).toContain('Copy table (Markdown)');
         expect(menuConfig.options).toContain('Clear sorting');

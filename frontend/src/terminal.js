@@ -758,7 +758,7 @@ function applyTerminalStyles(result) {
             border-radius: 3px;
             background: var(--terminal-bg-50);
             color: var(--terminal-fg);
-            font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
             font-weight: 400;
             font-size: 12px;
             line-height: 1;
