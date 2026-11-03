@@ -2,6 +2,10 @@
 
 The build directory contains the Wails v3 project configuration, platform build tasks, and assets.
 
+Frontend tooling requires Node 20.19+, Node 22.12+, or Node 24+ (see the
+`engines` field in `frontend/package.json`). Install the locked dependencies
+with `npm --prefix frontend ci --allow-git=root`.
+
 The structure is:
 
 * bin - Build output directory
@@ -17,6 +21,14 @@ The directory contains the following files:
 
 - `Info.plist` - the main plist file used when packaging the app bundle.
 - `Info.dev.plist` - the development plist file.
+
+## Linux
+
+The `linux` directory holds Linux build tasks and packaging assets.
+
+Global hotkeys require CGO and X11 development libraries (`libx11-dev` on
+Debian/Ubuntu or `libX11-devel` on Fedora). Registration requires an accessible
+X display; native Wayland global shortcuts are not supported by this backend.
 
 ## Windows
 

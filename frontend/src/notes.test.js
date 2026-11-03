@@ -1317,8 +1317,9 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const actualJsonViewer = await vi.importActual('./json-viewer.js');
-        const renderCall = renderJsonViewer.mock.calls.at(-1);
-        const editHandlerCall = attachJsonViewerEditHandler.mock.calls.at(-1);
+        const view = document.getElementById('notes-swagger-view');
+        const renderCall = renderJsonViewer.mock.calls.findLast(([target]) => target === view);
+        const editHandlerCall = attachJsonViewerEditHandler.mock.calls.findLast(([target]) => target === view);
         expect(renderCall?.[0]).toBe(document.getElementById('notes-swagger-view'));
         expect(editHandlerCall?.[0]).toBe(document.getElementById('notes-swagger-view'));
         actualJsonViewer.renderJsonViewer(...renderCall);

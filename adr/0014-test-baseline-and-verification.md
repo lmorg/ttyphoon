@@ -21,6 +21,19 @@ failures are fixed.
 
 ### Latest verification
 
+On 2026-11-03, all 645 frontend tests across 24 files passed with Vite 6.4.5
+and Vitest 4.1.12. The production frontend build and direct DOMPurify/KaTeX
+smoke checks passed, and `npm audit` reported zero vulnerabilities. The updated
+toolchain requires Node 20.19+, Node 22.12+, or Node 24+. Go and native runtime
+checks were not rerun for this dependency-only change.
+
+Scoped overrides replace Monaco's pinned vulnerable DOMPurify with 3.4.17+
+and Mermaid's vulnerable KaTeX with 0.18.2+ (resolved to 0.18.10), retaining
+the current Monaco and Mermaid versions. Reassess these overrides when upgrading
+their parent packages. Vitest's faster runner exposed an XML fixture that read
+the last global mock call after a delayed detached-view render; it now selects
+calls targeting the live view, retaining identity and source-preservation checks.
+
 On 2026-10-27, all 616 frontend tests across 23 files passed after adding the
 Git file-filter toolbar and single-equals comparison status. The full Go suite
 and both application/frontend builds also passed. The preceding unchanged-file

@@ -2,6 +2,9 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,8 +17,8 @@
     "marked": "^17.0.6",
     "marked-code-format": "^1.1.6",
     "prettier": "^3.8.1",
-    "vite": "^3.0.7",
-    "vitest": "^0.34.6"
+    "vite": "^6.4.5",
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "@wailsio/runtime": "3.0.0",
@@ -28,5 +31,17 @@
     "monaco-editor": "^0.55.1",
     "monaco-vim": "^0.4.4",
     "yaml": "^2.8.3"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "^3.4.17"
+    },
+    "mermaid": {
+      "katex": "^0.18.2"
+    }
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.3": true
   }
 }
