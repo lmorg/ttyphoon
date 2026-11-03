@@ -6,7 +6,7 @@ import { disableNativeTextAssistanceIn } from './text-input.js';
 const notesSpellCheckMock = vi.fn(() => Promise.resolve([]));
 const showLocalMenuMock = vi.fn();
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     NotesSpellCheck: notesSpellCheckMock,
 }));
 

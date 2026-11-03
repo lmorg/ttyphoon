@@ -5,7 +5,7 @@ package printing
 import (
 	"context"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 func printWindow(ctx context.Context) error {

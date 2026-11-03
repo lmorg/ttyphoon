@@ -113,8 +113,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## future ambitions
 
-- [ ] Migrate to Wails 3
-  - [ ] Notes: Printing should cause the view to go fullscreen so superfluous widgets aren't visible in the print
+- [x] Migrate to Wails 3
 - [x] Git support: new tab in tools panel (between `Find` and `AI`) called `Git`. Selecting that should switch the file list to a git log tree which shows branches, commits and merge history. The `Git` panel should have two headings: `Status` and `Diff`, each which show the respective output from `git` but formatted for readability and colour in a Wails web frontend. Colours should follow the theme colours defined in CSS
 - [ ] Notes: support having multiple documents open at a time
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)

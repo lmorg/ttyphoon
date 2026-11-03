@@ -20,7 +20,7 @@
  *                           which reuse this same red wavy-underline chrome.
  */
 
-import { NotesSpellCheck } from '../wailsjs/go/main/WApp';
+import { NotesSpellCheck } from './wails-bindings.js';
 import { showLocalMenu } from './popup_menu';
 import { disableNativeTextAssistance } from './text-input.js';
 

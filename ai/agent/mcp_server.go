@@ -12,8 +12,8 @@ import (
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	mcp_sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func startServerCmdLine(ctx context.Context, cfgPath string, agent *Agent, envvars []string, server string, svr mcp_config.ServerT) error {

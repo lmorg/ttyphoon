@@ -1,0 +1,1 @@
+export * from '../bindings/github.com/lmorg/ttyphoon/wapp.js';

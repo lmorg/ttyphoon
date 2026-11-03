@@ -39,8 +39,8 @@ import {
     NotesLspPrepareRename, NotesLspRename,
     FilterStrings,
     ResolveAIUserQuestion,
-} from '../wailsjs/go/main/WApp';
-import { EventsOn, EventsOff, ClipboardSetText, BrowserOpenURL } from '../wailsjs/runtime/runtime';
+} from './wails-bindings.js';
+import { EventsOn, EventsOff, ClipboardSetText, BrowserOpenURL } from './wails-runtime.js';
 
 import {
     showLocalMenu,

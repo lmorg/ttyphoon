@@ -15,7 +15,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/notes"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type commandPaletteEvent struct {

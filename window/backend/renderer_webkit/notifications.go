@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 var lastNotificationID atomic.Int64

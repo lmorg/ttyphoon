@@ -6,6 +6,30 @@ import (
 
 type MenuCallbackT func(int)
 
+type FileFilter struct {
+	DisplayName string
+	Pattern     string
+}
+
+type SaveDialogOptions struct {
+	Title            string
+	DefaultDirectory string
+	DefaultFilename  string
+	Filters          []FileFilter
+}
+
+type DesktopRuntime interface {
+	Emit(event string, data ...any)
+	OpenURL(url string)
+	ShowWindow()
+	HideWindow()
+	SetWindowTitle(title string)
+	SetWindowSize(width, height int)
+	SetAlwaysOnTop(alwaysOnTop bool)
+	SaveFileDialog(options SaveDialogOptions) (string, error)
+	PrintWindow() error
+}
+
 type MenuItem struct {
 	Title     string
 	Fn        func()

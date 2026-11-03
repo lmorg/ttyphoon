@@ -9,9 +9,9 @@ import {
     WindowUnmaximise,
     WindowSetPosition,
     WindowSetSize,
-} from '../wailsjs/runtime/runtime';
-import { GetWindowStyle, GetAppTitle, TerminalGetPanes, TerminalPaneZoom, TerminalSetFocus } from '../wailsjs/go/main/WApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+} from './wails-runtime.js';
+import { GetWindowStyle, GetAppTitle, TerminalGetPanes, TerminalPaneZoom, TerminalSetFocus } from './wails-bindings.js';
+import { EventsOn } from './wails-runtime.js';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
 import { restoreLayoutRatio, saveLayoutRatio } from './layout-sizing.js';
 

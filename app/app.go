@@ -6,12 +6,12 @@ const DirName = "ttyphoon"
 const undefined = "undef"
 
 var (
-	name      = DirName
-	tagLine   = undefined
-	version   = undefined
-	branch    = undefined
-	buildDate = undefined
-	copyright = undefined
+	name      = "Ttyphoon"
+	tagLine   = "The Next Generation Terminal Emulator"
+	version   = "0.52.1000"
+	branch    = "unknown"
+	buildDate = "unknown"
+	copyright = "2023-2026 Laurence Morgan"
 	license   = "GPL v2"
 )
 

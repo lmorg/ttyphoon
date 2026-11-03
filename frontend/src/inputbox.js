@@ -1,5 +1,5 @@
-import { GetClipboardData, TerminalInputBoxHistoryImages, TerminalInputBoxSubmit } from '../wailsjs/go/main/WApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { GetClipboardData, TerminalInputBoxHistoryImages, TerminalInputBoxSubmit } from './wails-bindings.js';
+import { EventsOn } from './wails-runtime.js';
 import { showLocalMenu } from './popup_menu';
 import { initLineNavigationKeys } from './line-navigation.js';
 import { attachVimMode } from './vim-mode';

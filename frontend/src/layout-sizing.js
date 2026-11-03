@@ -1,4 +1,4 @@
-import { GetNotesLayoutSizing, SetNotesLayoutRatio } from '../wailsjs/go/main/WApp';
+import { GetNotesLayoutSizing, SetNotesLayoutRatio } from './wails-bindings.js';
 
 let sizingPromise;
 const selectedRatios = new Map();
