@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	_ "embed"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -249,7 +248,11 @@ func (ai *AiT) RequestTimeoutDuration() time.Duration {
 func (ai *AiT) Service(name string) *AIServiceT {
 	service, ok := ai.services[name]
 	if !ok {
-		panic(fmt.Sprintf("service not found: '%s'", name))
+		log.Println("[error] Service not found: " + name)
+		return &AIServiceT{
+			Label:       name,
+			Description: "unset",
+		}
 	}
 	return service
 }
