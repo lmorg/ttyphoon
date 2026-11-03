@@ -4044,6 +4044,16 @@ func startWails() {
 		wapp.setVisible(false)
 		window.Hide()
 	})
+	var maximizeOnFirstShow sync.Once
+	window.OnWindowEvent(events.Common.WindowShow, func(*application.WindowEvent) {
+		maximizeOnFirstShow.Do(func() {
+			application.InvokeAsync(func() {
+				if !window.IsMaximised() {
+					window.Maximise()
+				}
+			})
+		})
+	})
 
 	if err := wailsApp.Run(); err != nil {
 		panic(err)
