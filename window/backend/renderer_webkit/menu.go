@@ -2,7 +2,7 @@ package rendererwebkit
 
 import (
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type menuCallbacks struct {

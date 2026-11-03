@@ -20,7 +20,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
 	"github.com/lmorg/ttyphoon/utils/imageattachment"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 func ExplainCmdOutput(agt *agent.Agent) {

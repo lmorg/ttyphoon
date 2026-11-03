@@ -2,7 +2,7 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
+import { GetCustomRegexp, HyperlinkOpenWithDefault } from './wails-bindings.js';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";

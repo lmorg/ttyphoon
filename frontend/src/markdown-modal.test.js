@@ -5,7 +5,7 @@ const { eventsOnMock, showLocalMenuMock } = vi.hoisted(() => ({
     showLocalMenuMock: vi.fn(),
 }));
 
-vi.mock('../wailsjs/runtime/runtime', () => ({ EventsOn: eventsOnMock }));
+vi.mock('./wails-runtime.js', () => ({ EventsOn: eventsOnMock }));
 vi.mock('./popup_menu', () => ({ showLocalMenu: showLocalMenuMock }));
 
 import { initMarkdownModal, showMarkdownModal } from './markdown-modal.js';

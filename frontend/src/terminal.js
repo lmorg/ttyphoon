@@ -1,5 +1,5 @@
-import { CloseNotification, GetWindowStyle, SendIpc, TerminalCancelPaneAutoClose, TerminalClonePane, TerminalClosePane, TerminalConfirmKillPane, TerminalCopyImageDataURL, TerminalGetPanes, TerminalGetTabs, TerminalMouseLeave, TerminalPaneZoom, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from '../wailsjs/go/main/WApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { CloseNotification, GetWindowStyle, SendIpc, TerminalCancelPaneAutoClose, TerminalClonePane, TerminalClosePane, TerminalConfirmKillPane, TerminalCopyImageDataURL, TerminalGetPanes, TerminalGetTabs, TerminalMouseLeave, TerminalPaneZoom, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from './wails-bindings.js';
+import { EventsOn } from './wails-runtime.js';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
 import { drawGauge } from './gauge';

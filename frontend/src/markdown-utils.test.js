@@ -6,7 +6,7 @@ const { getCustomRegexpMock, getImageMock, hyperlinkOpenWithDefaultMock } = vi.h
     hyperlinkOpenWithDefaultMock: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetImage: getImageMock,
     GetCustomRegexp: getCustomRegexpMock,
     HyperlinkOpenWithDefault: hyperlinkOpenWithDefaultMock,

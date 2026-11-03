@@ -52,11 +52,11 @@ const fontApplyCellStyleMock = vi.fn((cmd) => {
     fontApplyCellStyleMock.lastCmd = cmd;
 });
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetCustomRegexp: vi.fn(async () => []),
     SendIpc: sendIpcMock,

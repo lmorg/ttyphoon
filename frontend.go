@@ -46,15 +46,11 @@ import (
 	"github.com/lmorg/ttyphoon/utils/spellcheck"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/lmorg/ttyphoon/window/elements/element_table/tablecore"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/linux"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"golang.design/x/clipboard"
 )
 
@@ -64,6 +60,7 @@ var wailsAssets embed.FS
 // App struct
 type WApp struct {
 	ctx                   context.Context
+	uiRuntime             types.DesktopRuntime
 	mdBaseDir             string
 	mdBaseDirMu           sync.RWMutex
 	projRoot              string
@@ -72,6 +69,7 @@ type WApp struct {
 	homeDir               string
 	globalNotes           string
 	visible               bool
+	visibleMu             sync.Mutex
 	notesKills            map[string]func()
 	notesStickies         map[string]types.Notification
 	notesMu               sync.Mutex
@@ -307,22 +305,32 @@ func (a *WApp) GetTerminalGlyphSize() *types.XY {
 }
 
 func (a *WApp) WindowShow() {
-	a.visible = true
+	a.setVisible(true)
 	runtime.WindowShow(a.ctx)
 }
 
 func (a *WApp) WindowHide() {
-	a.visible = false
+	a.setVisible(false)
 	runtime.WindowHide(a.ctx)
 }
 
 func (a *WApp) WindowShowHide() {
+	a.visibleMu.Lock()
 	a.visible = !a.visible
-	if a.visible {
-		a.WindowShow()
+	visible := a.visible
+	a.visibleMu.Unlock()
+
+	if visible {
+		runtime.WindowShow(a.ctx)
 	} else {
-		a.WindowHide()
+		runtime.WindowHide(a.ctx)
 	}
+}
+
+func (a *WApp) setVisible(visible bool) {
+	a.visibleMu.Lock()
+	a.visible = visible
+	a.visibleMu.Unlock()
 }
 
 func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
@@ -3943,8 +3951,8 @@ func (lw *logWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (a *WApp) startup(ctx context.Context) {
-	a.ctx = ctx
+func (a *WApp) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.ctx = runtime.WithRuntime(ctx, a.uiRuntime)
 
 	// Set up log capture to emit events
 	lw := &logWriter{ctx: ctx}
@@ -3964,9 +3972,10 @@ func (a *WApp) startup(ctx context.Context) {
 			a.WindowShowHide()
 		}
 	})
+	return nil
 }
 
-func (a *WApp) shutdown(ctx context.Context) {
+func (a *WApp) shutdown() {
 	a.stopGitStatusWatch()
 	a.notesListMu.Lock()
 	a.notesIndexClosed = true
@@ -3985,10 +3994,6 @@ func (a *WApp) shutdown(ctx context.Context) {
 	watcher.Close()
 }
 
-func (a *WApp) domReady(ctx context.Context) {
-	go a.startTerminalWindow()
-}
-
 func appTitle() string {
 	return fmt.Sprintf("%s: %s", app.Name(), app.TagLine())
 }
@@ -3998,47 +4003,49 @@ var appIcon []byte
 
 func startWails() {
 	wapp := NewWailsApp()
-
-	// Create application with options
-	err := wails.Run(&options.App{
-		Title:             appTitle(),
-		AlwaysOnTop:       config.Config.Window.AlwaysOnTop,
-		HideWindowOnClose: true,
-		WindowStartState:  options.Maximised,
-		AssetServer: &assetserver.Options{
-			Assets:  wailsAssets,
-			Handler: wapp.notesAssetHandler(),
-		},
-		BackgroundColour: &options.RGBA{
-			R: types.SGR_DEFAULT.Bg.Red,
-			G: types.SGR_DEFAULT.Bg.Green,
-			B: types.SGR_DEFAULT.Bg.Blue,
-			A: 255,
-		},
-		OnStartup:  wapp.startup,
-		OnShutdown: wapp.shutdown,
-		OnDomReady: wapp.domReady,
-		Bind:       []any{wapp},
-		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHidden(),
-			About: &mac.AboutInfo{
-				Title:   app.Name(),
-				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
-				Icon:    appIcon,
-			},
-			//Preferences: &mac.Preferences{TextInteractionEnabled: mac.Disabled},
-		},
-		Linux: &linux.Options{
-			Icon:        appIcon,
-			ProgramName: app.Name(),
-		},
-		Windows: &windows.Options{
-			WindowClassName: app.Name(),
-		},
+	assetServer := application.AssetFileServerFS(wailsAssets)
+	notesAssets := wapp.notesAssetHandler()
+	assets := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == notesAssetURLPath {
+			notesAssets.ServeHTTP(writer, request)
+			return
+		}
+		assetServer.ServeHTTP(writer, request)
 	})
 
-	if err != nil {
-		//closeHotkeys()
+	wailsApp := application.New(application.Options{
+		Name:        app.Name(),
+		Description: app.TagLine(),
+		Icon:        appIcon,
+		Services:    []application.Service{application.NewService(wapp)},
+		Assets:      application.AssetOptions{Handler: assets},
+		Linux:       application.LinuxOptions{ProgramName: app.Name()},
+		Windows:     application.WindowsOptions{WndClass: app.Name()},
+		OnShutdown:  wapp.shutdown,
+	})
+	wailsApp.Event.On("ttyphoon:frontend-ready", func(*application.CustomEvent) {
+		go wapp.startTerminalWindow()
+	})
+	window := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:          appTitle(),
+		AlwaysOnTop:    config.Config.Window.AlwaysOnTop,
+		StartState:     application.WindowStateMaximised,
+		BackgroundColour: application.NewRGBA(
+			types.SGR_DEFAULT.Bg.Red,
+			types.SGR_DEFAULT.Bg.Green,
+			types.SGR_DEFAULT.Bg.Blue,
+			255,
+		),
+		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
+	})
+	wapp.uiRuntime = &wailsDesktopRuntime{app: wailsApp, window: window}
+	window.OnWindowEvent(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		wapp.setVisible(false)
+		window.Hide()
+	})
+
+	if err := wailsApp.Run(); err != nil {
 		panic(err)
 	}
 }

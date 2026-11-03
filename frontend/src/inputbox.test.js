@@ -15,7 +15,7 @@ const showLocalMenuMock = vi.fn();
 const showSharedTooltipMock = vi.fn(() => Promise.resolve());
 const closeSharedTooltipMock = vi.fn();
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     TerminalInputBoxSubmit: terminalInputBoxSubmitMock,
     TerminalInputBoxHistoryImages: terminalInputBoxHistoryImagesMock,
     GetClipboardData: getClipboardDataMock,
@@ -23,7 +23,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     TerminalKeyPress: terminalKeyPressMock,
 }));
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
 }));
 

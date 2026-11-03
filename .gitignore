@@ -9,6 +9,7 @@ ttyphoon.exe
 
 # Wails
 
+.task/
 build/bin
 node_modules
 frontend/dist

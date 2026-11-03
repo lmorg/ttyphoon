@@ -13,7 +13,7 @@ import (
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	mcp_sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 func startServerCmdLine(ctx context.Context, cfgPath string, agent *Agent, envvars []string, server string, svr mcp_config.ServerT) error {

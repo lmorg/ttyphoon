@@ -33,7 +33,7 @@ const terminalPaneZoomMock = vi.fn(async () => {});
 const getNotesLayoutSizingMock = vi.fn(async () => ({}));
 const setNotesLayoutRatioMock = vi.fn(async () => {});
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
     ScreenGetAll: screenGetAllMock,
     WindowGetPosition: windowGetPositionMock,
@@ -45,7 +45,7 @@ vi.mock('../wailsjs/runtime/runtime', () => ({
     WindowSetSize: windowSetSizeMock,
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetAppTitle: getAppTitleMock,
     TerminalSetFocus: terminalSetFocusMock,

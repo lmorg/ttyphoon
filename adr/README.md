@@ -99,6 +99,7 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0082](0082-ai-read-only-git-tool.md) | AI Git inspection uses a permission-gated read-only action whitelist | AI tools |
 | [0083](0083-ai-skills-support-manual-and-model-invocation.md) | AI skills support independent manual and automatic invocation | AI |
 | [0084](0084-ai-skills-read-selected-supporting-files.md) | AI skills can read selected supporting files | AI |
+| [0085](0085-wails-v3-migration.md) | Migrate the desktop application to Wails v3 | Platform |
 
 ## Recurring themes
 

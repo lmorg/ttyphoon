@@ -1,4 +1,4 @@
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from './wails-runtime.js';
 import { disableNativeTextAssistance } from './text-input.js';
 import {
     CommandPaletteSelect,
@@ -7,7 +7,7 @@ import {
     TerminalMenuSelect,
     TerminalMenuCancel,
     TerminalRequestRedraw,
-} from '../wailsjs/go/main/WApp';
+} from './wails-bindings.js';
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
 const PASSIVE_MENU_ROOT_ID = 'ttyphoon-passive-menu';

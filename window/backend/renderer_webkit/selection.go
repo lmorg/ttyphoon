@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	"golang.design/x/clipboard"
 )
 

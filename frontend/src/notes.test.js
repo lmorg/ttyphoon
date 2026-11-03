@@ -213,7 +213,7 @@ const clipboardSetHTMLMock = vi.fn(() => Promise.resolve());
 const browserOpenURLMock = vi.fn();
 const showLocalMenuMock = vi.fn();
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetNotesLayoutSizing: getNotesLayoutSizingMock,
     SetNotesLayoutRatio: setNotesLayoutRatioMock,
@@ -388,7 +388,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     NotesSpellCheck: vi.fn(() => Promise.resolve([])),
 }));
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
     EventsOff: vi.fn(),
     ClipboardSetText: clipboardSetTextMock,

@@ -1,4 +1,4 @@
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from './wails-runtime.js';
 import './markdown-modal.css';
 import { marked } from 'marked';
 import { showLocalMenu } from './popup_menu';

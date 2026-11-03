@@ -7,7 +7,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/utils/notes"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type NotesFilesSnapshot struct {
