@@ -25,17 +25,35 @@ type Tool interface {
 	Name() string
 	Path() string
 	Description() string
+}
+
+// StringInputTool is the compatibility contract for tools that consume JSON
+// arguments as a string instead of a decoded value.
+type StringInputTool interface {
+	Tool
 	Call(context.Context, string) (string, error)
+}
+
+// JSONSchemaTool combines a declared JSON Schema with the string-input
+// compatibility adapter, for tools such as MCP tools.
+type JSONSchemaTool interface {
+	StringInputTool
+	JSONSchema() []byte
 }
 
 // StructuredTool opts a native tool into a schema derived from its Go JSON
 // input type (object, array, or scalar). The runtime decodes the model's JSON
-// value once and passes a pointer to that value to CallStructured. Tools not
-// implementing this interface keep the legacy string-input contract.
+// value once and passes a pointer to that value to CallStructured.
 type StructuredTool interface {
 	Tool
 	InputType() reflect.Type
 	CallStructured(context.Context, any) (string, error)
+}
+
+// ToolCallDescriber optionally provides Markdown describing a pending tool
+// invocation. input matches the value passed to Call or CallStructured.
+type ToolCallDescriber interface {
+	CallDescription(context.Context, any) string
 }
 
 // StructuredToolObservationProvider consumes the already-decoded input so
@@ -83,15 +101,13 @@ type DefaultPermissions struct {
 }
 
 type Meta struct {
-	CmdLine     string
-	Pwd         string // this is not the same as the application working directory
-	OutputBlock string
-	Function    string
-	Variables   map[string]any
+	CmdLine        string
+	Pwd            string // this is not the same as the application working directory
+	OutputBlock    string
+	Function       string
+	Variables      map[string]any
+	SkillResources map[string]string
 }
 
 // ImageAttachment carries an inline image to send alongside a prompt.
-type ImageAttachment struct {
-	MIMEType string
-	Base64   string
-}
+type ImageAttachment = types.ImageAttachment

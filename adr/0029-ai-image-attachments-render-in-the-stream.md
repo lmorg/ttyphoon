@@ -58,6 +58,45 @@ path for turning an on-screen image into an AI request. See ADR 0031 for the
 defensive render-side truncation that also protects against any base64 that
 was already persisted before this fix.
 
+### Amendment: opt-in inputbox image paste
+
+Updated 2026-10-21: `InputBoxWTOptions.AllowImagePaste` enables clipboard image
+attachments and defaults to false. AI Ask, skill, URI, command explanation and
+document explanation dialogs enable it. Confirmation dialogs always disable it.
+
+The inputbox accepts browser clipboard files with a native `GetClipboardData`
+fallback, shows removable previews, and disables submission while reads are
+pending. Cancelling or reopening discards pending results and attachments. Text
+paste retains its normal behavior. Images are not stored in inputbox history.
+
+Callbacks carry structured `Images` independently from text and variables. The
+backend retains the opt-in with the callback, strips images for disabled or
+cancelled dialogs, and validates enabled submissions. Accept at most six PNG,
+JPEG, GIF or WebP images, each at most 8 MiB and 40 megapixels. Validation checks
+decoded headers and declared MIME types, not just filename extensions.
+
+AI submission stores pasted images under the shared application `.images`
+directory with unique names and sends their bytes through Eino multimodal image
+parts. Only escaped file-backed Markdown references are added to visible
+metadata, preserving the original context and avoiding base64 in prompt logs.
+Draft saving and expanded variable history are separate features.
+
+### Amendment: model-visible local attachment references
+
+Updated 2026-10-22: image bytes alone do not tell the model which saved file can
+be passed to an image-editing tool. Before each image part that has a saved
+`Path`, emit a text part containing a JSON reference with its 1-based attachment
+number and exact `inputImage` path. JSON encoding preserves spaces, quotes and
+other path characters without confusing them with Markdown or URL encoding.
+
+The reference instructs the model to use that path directly with `generateImage`
+for requested edits, without Bash, filesystem searches or workspace copies.
+The tool description explicitly accepts pasted/uploaded files in the existing
+application `.images` directory. No filesystem access rules are broadened.
+Pathless attachments and text-only messages retain their previous behavior.
+Model path references contain no inline image bytes; display-safe file-backed
+Markdown metadata and the original multimodal image bytes remain unchanged.
+
 ## Consequences
 
 - The model receives a real multimodal image upload.

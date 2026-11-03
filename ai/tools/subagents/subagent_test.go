@@ -41,26 +41,24 @@ func TestSubagentToolContracts(t *testing.T) {
 	}
 }
 
-// Malformed input reaches Call straight from model output, so it must degrade to
-// a message rather than panic or abort the run.
-func TestCallRejectsMalformedInputWithoutTouchingTheAgent(t *testing.T) {
+// Invalid structured requests must degrade to a message rather than panic or
+// abort the run.
+func TestStructuredCallRejectsInvalidRequestsWithoutTouchingTheAgent(t *testing.T) {
 	tool := &Subagent{agentType: agent.TOOL_DELEGATE} // nil agent: nothing below may dereference it
 
-	for name, input := range map[string]string{
-		"not json":     `{"name":"a"}garbage`,
-		"json object":  `{"name":"a","prompt":"b"}`,
-		"null element": `[null]`,
-		"empty name":   `[{"name":"  ","prompt":"b"}]`,
-		"empty prompt": `[{"name":"a","prompt":"  "}]`,
-		"empty array":  `[]`,
+	for name, input := range map[string]subagentInputT{
+		"null element": {Requests: []*requestT{nil}},
+		"empty name":   {Requests: []*requestT{{Name: "  ", Prompt: "b"}}},
+		"empty prompt": {Requests: []*requestT{{Name: "a", Prompt: "  "}}},
+		"empty array":  {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := tool.Call(context.Background(), input)
+			got, err := tool.CallStructured(context.Background(), &input)
 			if err != nil {
-				t.Fatalf("Call returned error %v, want nil so the agent run continues", err)
+				t.Fatalf("CallStructured returned error %v, want nil so the agent run continues", err)
 			}
 			if got == "" {
-				t.Fatal("Call returned an empty response")
+				t.Fatal("CallStructured returned an empty response")
 			}
 		})
 	}
@@ -96,10 +94,11 @@ func TestStructuredCallAcceptsRequestArray(t *testing.T) {
 	}
 }
 
-func TestCallReportsPerRequestErrors(t *testing.T) {
+func TestStructuredCallReportsPerRequestErrors(t *testing.T) {
 	tool := &Subagent{agentType: agent.TOOL_DELEGATE}
 
-	got, err := tool.Call(context.Background(), `[{"name":"a","prompt":""},{"name":"","prompt":"b"}]`)
+	request := &subagentInputT{Requests: []*requestT{{Name: "a", Prompt: ""}, {Name: "", Prompt: "b"}}}
+	got, err := tool.CallStructured(context.Background(), request)
 	if err != nil {
 		t.Fatalf("Call returned error %v, want nil", err)
 	}

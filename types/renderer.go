@@ -6,6 +6,30 @@ import (
 
 type MenuCallbackT func(int)
 
+type FileFilter struct {
+	DisplayName string
+	Pattern     string
+}
+
+type SaveDialogOptions struct {
+	Title            string
+	DefaultDirectory string
+	DefaultFilename  string
+	Filters          []FileFilter
+}
+
+type DesktopRuntime interface {
+	Emit(event string, data ...any)
+	OpenURL(url string)
+	ShowWindow()
+	HideWindow()
+	SetWindowTitle(title string)
+	SetWindowSize(width, height int)
+	SetAlwaysOnTop(alwaysOnTop bool)
+	SaveFileDialog(options SaveDialogOptions) (string, error)
+	PrintWindow() error
+}
+
 type MenuItem struct {
 	Title     string
 	Fn        func()
@@ -33,9 +57,17 @@ const MENU_SEPARATOR = "-"
 
 type InputBoxCallbackT func(*InputBoxCallbackResultT)
 
+type ImageAttachment struct {
+	MIMEType string `json:"mimeType"`
+	Base64   string `json:"base64"`
+	Path     string `json:"path,omitempty"`
+}
+
 type InputBoxCallbackResultT struct {
-	Value     string         `json:"value"`
-	Variables map[string]any `json:"variables"`
+	Value     string            `json:"value"`
+	Variables map[string]any    `json:"variables"`
+	Images    []ImageAttachment `json:"images,omitempty"`
+	SaveDraft bool              `json:"saveDraft,omitempty"`
 }
 
 func (ibcr InputBoxCallbackResultT) String() string {
@@ -49,13 +81,20 @@ type InputBoxWT struct {
 }
 
 type InputBoxWTOptions struct {
-	Title       string                `json:"title"`
-	Prefill     string                `json:"prefill"`
-	Placeholder string                `json:"placeholder"`
-	History     []string              `json:"history"`
-	Multiline   bool                  `json:"multiline"`
-	Variables   []InputBoxWTVariables `json:"variables"`
-	CacheKey    string
+	Title           string                `json:"title"`
+	Message         string                `json:"message"`
+	Prefill         string                `json:"prefill"`
+	Placeholder     string                `json:"placeholder"`
+	History         []string              `json:"history"`
+	Multiline       bool                  `json:"multiline"`
+	AllowImagePaste bool                  `json:"allowImagePaste"`
+	Confirmation    bool                  `json:"confirmation"`
+	ConfirmLabel    string                `json:"confirmLabel"`
+	CancelLabel     string                `json:"cancelLabel"`
+	ConfirmIsDanger bool                  `json:"confirmIsDanger"`
+	Variables       []InputBoxWTVariables `json:"variables"`
+	CacheKey        string
+	DraftKey        string `json:"-"`
 }
 
 type InputBoxWTVariables struct {
@@ -101,7 +140,8 @@ type Renderer interface {
 	DisplayMenu(title string, items []string, highlight MenuCallbackT, ok MenuCallbackT, cancel MenuCallbackT)
 	NewContextMenu() ContextMenu
 	AddToContextMenu(...MenuItem)
-	DisplayMarkdownModel(string)
+	// id identifies the modal's content so its table preferences can be restored.
+	DisplayMarkdownModel(id, markdown string)
 	ShowTooltip(text string)
 	CloseTooltip()
 	ResizeWindow(*XY)

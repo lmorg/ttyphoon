@@ -1,13 +1,44 @@
 package mcp_client
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/oauth2"
 )
+
+func TestTokenFileReplacementRemainsReadableDuringConcurrentWrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token.json")
+	if err := writeTokenFile(path, &oauth2.Token{AccessToken: "initial", Expiry: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	var group sync.WaitGroup
+	for worker := range 8 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			for range 20 {
+				if err := writeTokenFile(path, &oauth2.Token{AccessToken: fmt.Sprintf("fixture-%d", worker), Expiry: time.Now().Add(time.Hour)}); err != nil {
+					t.Error(err)
+					return
+				}
+				if _, err := readTokenFile(path); err != nil {
+					t.Errorf("read partial token file: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	group.Wait()
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("token permissions changed: %v", err)
+	}
+}
 
 func TestFilePersistingTokenSource_ReadExisting(t *testing.T) {
 	dir := t.TempDir()

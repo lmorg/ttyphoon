@@ -1,0 +1,8 @@
+set +e
+
+printf '\033]7;file://%s%s\033\\' "$HOSTNAME" {{ shellQuote .PathURI }}
+
+{{ .CommandLine }}
+
+_ttyphoon_exit_code=$?
+printf '\033_ttyphoon;interactive-action-complete;{"id":"%s","exitCode":%s}\033\\' '{{ .CallbackID }}' "$_ttyphoon_exit_code"

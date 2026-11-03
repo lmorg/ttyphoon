@@ -56,6 +56,14 @@ Serve images over the Wails asset server instead of the JS bridge.
 - The image context menu no longer fetches bytes up front. It resolves a data URL
   lazily inside `onSelect`, so opening the menu costs nothing and a failed read
   no longer suppresses the menu entirely.
+- Pasted images keep their literal filesystem path when passed to
+  `SaveBinaryFile`, but each segment of the generated Markdown image destination
+  is URI-encoded, preserving slash separators. Document names containing spaces
+  therefore produce valid image links. The Markdown Edit `Delete image from
+  disk` action decodes that relative destination before resolving it against
+  the document directory and passing a literal path to `DeleteFile`. Malformed
+  escapes retain their literal spelling. This is local to Markdown image path
+  resolution; generic Go file deletion does not URL-decode filenames.
 
 ## Consequences
 

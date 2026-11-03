@@ -22,7 +22,16 @@ func (term *Term) readLoop() {
 
 		term._mutex.Lock()
 		term.readChar(r)
+		completion := term.pendingInteractiveAction
+		term.pendingInteractiveAction = nil
 		term._mutex.Unlock()
+		if completion != nil {
+			if handler, ok := term.Pty.(interface {
+				HandleInteractiveActionCompletion(string, int, []byte)
+			}); ok {
+				handler.HandleInteractiveActionCompletion(completion.ID, completion.ExitCode, term.GetTermContents())
+			}
+		}
 	}
 }
 

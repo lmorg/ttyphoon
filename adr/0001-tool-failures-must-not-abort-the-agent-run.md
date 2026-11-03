@@ -6,6 +6,9 @@ Date: 2026-09-06
 
 Accepted
 
+Updated 2026-10-08: invocation-error recovery is centralized for structured
+native tools and string-input adapters.
+
 ## Context
 
 The Eino ReAct runtime treats a non-nil `error` returned from
@@ -35,8 +38,10 @@ Only genuinely terminal conditions return a non-nil error.
 
 Terminal (still return an error):
 
-- `context.Canceled` — the user pressed stop
-- `context.DeadlineExceeded` — the request timeout elapsed
+- The agent invocation context's `ctx.Err()` is `context.Canceled` — the user
+   pressed stop
+- The agent invocation context's `ctx.Err()` is `context.DeadlineExceeded` —
+   the request timeout elapsed
 - runtime/init failures that mean no further progress is possible
 
 Recoverable (return `(message, nil)`):
@@ -45,6 +50,24 @@ Recoverable (return `(message, nil)`):
 - tool permission denials
 - disabled or denied tool state
 - malformed JSON arguments
+- ordinary errors returned from native `CallStructured` or string-input `Call`,
+  including input validation, filesystem/network failures, and tool-local
+  timeouts or cancellation while the agent invocation context remains live
+
+The Eino adapter is the recovery boundary. Concrete tools may return normal
+Go errors without swallowing them or guessing whether Eino will abort. After
+recording the original failure in the typed stream and continuation observation,
+`InvokableRun` returns model-visible failure text with a nil framework error.
+The text includes the tool name, original error, and any partial output, and
+guides the model to correct its input or choose another tool. Since a failed
+operation may have partially succeeded, it also tells the model to check the
+existing state before retrying. No automatic blind retry is performed.
+
+Check the invocation context before dispatch and after the call; a delegate
+that ignores cancellation and returns success cannot keep a stopped run alive.
+A returned `context.DeadlineExceeded` alone is not proof that the agent timed
+out: with a live invocation context it can represent a recoverable tool-local
+timeout.
 
 To distinguish them, `ai/agent/agent.go` defines a sentinel:
 
@@ -71,9 +94,13 @@ tell the user what you need."*
 
 - A refused or malfunctioning tool degrades the run instead of ending it.
 - Cancellation semantics are preserved; the stop button still works.
-- **Care required:** any new `return "", err` added to the tool call path
-  re-introduces this class of bug. Classify the error first.
+- Tool implementations can return ordinary errors. New adapter/framework
+   paths must preserve this classification rather than forwarding invocation
+   errors into the graph as terminal node failures.
 - Notifications still surface the failure in the UI, so nothing becomes silent.
+- Network-free integration testing exercises the actual Eino ReAct loop: a
+   scripted model receives a failing tool's observation, issues corrected
+   arguments, receives success, and produces its final answer.
 
 ## Reference
 
@@ -82,3 +109,7 @@ tell the user what you need."*
 - `ai/agent/agent.go` — `ErrToolPermissionRefused`
 - Tests: `TestEinoAgentTool_InvokableRun_DeniedToolDoesNotAbortRun`,
   `TestEinoAgentTool_InvokableRun_CancellationStaysTerminal`
+- Tests: `TestEinoReActModelReceivesToolFailureAndRetries`,
+  `TestStructuredToolInvocationErrorIsModelVisibleAndRetryable`,
+  `TestStructuredToolLocalTimeoutDoesNotCancelAgent`,
+  `TestStructuredToolExpiredAgentDeadlineStaysTerminal`

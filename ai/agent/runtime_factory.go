@@ -18,6 +18,10 @@ func (r *runtimeInitError) RunLLMWithStream(_ context.Context, _ string, _ func(
 	return "", r.err
 }
 
+func (r *runtimeInitError) RunSkillSelection(_ context.Context, _ []*schema.Message) (string, error) {
+	return "", r.err
+}
+
 func (r *runtimeInitError) Reset() {}
 
 func newPreferredRuntime(agent *Agent) agentRuntime {

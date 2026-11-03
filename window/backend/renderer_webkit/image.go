@@ -10,7 +10,7 @@ import (
 	"golang.org/x/image/bmp"
 
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type cachedImage struct {

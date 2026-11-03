@@ -1,6 +1,7 @@
 package filetools
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -9,11 +10,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"text/template"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/markdownutil"
+	"github.com/lmorg/ttyphoon/utils/notes"
 )
 
 type PatchFile struct {
@@ -27,6 +31,11 @@ func init() {
 
 //go:embed patch_description.md
 var patchFileDescription string
+
+//go:embed patch_auth_desc.md
+var patchFileAuthDescription string
+
+var patchFileAuthDescriptionTemplate = template.Must(template.New("patch-file-auth-description").Funcs(markdownutil.TemplateFuncMap()).Parse(patchFileAuthDescription))
 
 func (t *PatchFile) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &PatchFile{agent: agent, enabled: true}, nil
@@ -53,22 +62,25 @@ type patchInputT struct {
 	Edits []patchEditT `json:"edits"`
 }
 
-func (t *PatchFile) Call(ctx context.Context, input string) (string, error) {
-	debug.Log(input)
-
-	var patch patchInputT
-	if err := json.Unmarshal([]byte(input), &patch); err != nil {
-		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
-	}
-	return t.apply(ctx, &patch)
-}
-
 func (t *PatchFile) CallStructured(ctx context.Context, input any) (string, error) {
 	patch, ok := input.(*patchInputT)
 	if !ok || patch == nil {
 		return "", fmt.Errorf("patchFile received an invalid structured input %T", input)
 	}
 	return t.apply(ctx, patch)
+}
+
+func (t *PatchFile) CallDescription(_ context.Context, input any) string {
+	patch, ok := input.(*patchInputT)
+	if !ok || patch == nil {
+		return "Tool received an invalid structured input"
+	}
+
+	var description bytes.Buffer
+	if err := patchFileAuthDescriptionTemplate.Execute(&description, patch); err != nil {
+		return fmt.Sprintf("Unable to render description: %v", err)
+	}
+	return description.String()
 }
 
 func (t *PatchFile) apply(ctx context.Context, patch *patchInputT) (string, error) {
@@ -203,5 +215,9 @@ func writeFileAtomic(filename string, data []byte, perm os.FileMode) error {
 		return err
 	}
 
-	return os.Rename(tmpName, filename)
+	if err := os.Rename(tmpName, filename); err != nil {
+		return err
+	}
+	notes.NotifyFileChanges(filename)
+	return nil
 }

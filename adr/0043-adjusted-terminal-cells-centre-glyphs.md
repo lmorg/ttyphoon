@@ -32,6 +32,15 @@ glyphOffsetY = ceil((cellHeight - measuredEmHeight) / 2)
 The terminal canvas renderer adds this offset only to glyph `fillText` and
 `strokeText` coordinates. It does not move cell backgrounds or decorations.
 
+Pane frame backgrounds are likewise cell-aligned except at the empty tmux
+divider row between vertically adjacent panes. The upper and lower pane frames
+inset by half a cell at that shared edge, meeting at the row midpoint without
+changing either pane's terminal-cell geometry.
+
+Inactive-pane dimming covers the matching divider half once per pane edge,
+not once per neighbour. A row split into side-by-side panes must not cause
+duplicate translucent strips that darken the pane above or below it.
+
 Before drawing text, the renderer clips the canvas to the command's allocated
 cell rectangle. A normal character receives one cell, a wide character receives
 two, and a shaped run receives its complete run width. The clip applies to both
@@ -52,6 +61,8 @@ keeps negative adjustments and the minimum one-pixel cell-height clamp coherent.
 - Oversized and anti-aliased glyph pixels cannot blend with neighboring cells.
 - Wide characters and ligature runs retain their complete allocated width.
 - Decorations remain anchored to the cell rather than the glyph.
+- Only the empty background row at a horizontal tmux pane divider is split at
+	half-height; terminal content cells and row sizing remain unchanged.
 
 ## Reference
 
@@ -59,4 +70,5 @@ keeps negative adjustments and the minimum one-pixel cell-height clamp coherent.
 - `frontend/src/font.js` - cell measurement and glyph offset
 - `frontend/src/font.test.js` - odd, even, zero, and negative adjustment coverage
 - `frontend/src/terminal.js` - clipped glyph drawing
+- `window/backend/renderer_webkit/print_frame.go` - stacked-pane divider insets
 - `frontend/src/terminal.test.js` - adjusted row-coordinate and clipping coverage

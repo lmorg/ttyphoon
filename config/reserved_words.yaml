@@ -451,3 +451,18 @@ Notes:
         'abs', 'int', 'sqrt', 'rand', 'srand', 'time', 'localtime',
         'scalar', 'wantarray', 'prototype',
       ]
+
+    docker:
+      ReservedWords: [
+        # Dockerfile instructions (case-insensitive; common spellings)
+        'ADD', 'ARG', 'CMD', 'COPY', 'ENTRYPOINT', 'ENV', 'EXPOSE',
+        'FROM', 'HEALTHCHECK', 'LABEL', 'ONBUILD', 'RUN', 'SHELL',
+        'STOPSIGNAL', 'USER', 'VOLUME', 'WORKDIR',
+        'add', 'arg', 'cmd', 'copy', 'entrypoint', 'env', 'expose',
+        'from', 'healthcheck', 'label', 'onbuild', 'run', 'shell',
+        'stopsignal', 'user', 'volume', 'workdir',
+        # Deprecated instruction
+        'MAINTAINER', 'maintainer',
+        # Stage aliases and healthcheck disabling
+        'AS', 'as', 'NONE', 'none',
+      ]

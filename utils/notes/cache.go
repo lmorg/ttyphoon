@@ -2,9 +2,57 @@ package notes
 
 import (
 	"fmt"
+	"math"
+	"sync"
 
 	"github.com/lmorg/ttyphoon/utils/cache"
 )
+
+type LayoutSizing struct {
+	FileListRatio float64 `json:"fileListRatio"`
+	NotesRatio    float64 `json:"notesRatio"`
+	ToolsRatio    float64 `json:"toolsRatio"`
+}
+
+var layoutSizingMu sync.Mutex
+
+func GetLayoutSizing() LayoutSizing {
+	return getLayoutSizing("application")
+}
+
+func getLayoutSizing(key string) LayoutSizing {
+	layoutSizingMu.Lock()
+	defer layoutSizingMu.Unlock()
+	var sizing LayoutSizing
+	cache.Read(cache.NS_NOTESW_LAYOUT, key, &sizing)
+	return sizing
+}
+
+func SetLayoutRatio(name string, ratio float64) error {
+	return setLayoutRatio("application", name, ratio)
+}
+
+func setLayoutRatio(key, name string, ratio float64) error {
+	if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio >= 1 {
+		return fmt.Errorf("invalid layout ratio %v", ratio)
+	}
+	layoutSizingMu.Lock()
+	defer layoutSizingMu.Unlock()
+	var sizing LayoutSizing
+	cache.Read(cache.NS_NOTESW_LAYOUT, key, &sizing)
+	switch name {
+	case "fileListRatio":
+		sizing.FileListRatio = ratio
+	case "notesRatio":
+		sizing.NotesRatio = ratio
+	case "toolsRatio":
+		sizing.ToolsRatio = ratio
+	default:
+		return fmt.Errorf("unknown layout size %q", name)
+	}
+	cache.Write(cache.NS_NOTESW_LAYOUT, key, &sizing, cache.Days(365))
+	return nil
+}
 
 // Project-wide cache
 

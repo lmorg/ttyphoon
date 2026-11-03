@@ -1,0 +1,301 @@
+    <div id="notes-app">
+        <aside id="notes-sidebar">
+            <div id="notes-sidebar-header">
+                <div id="notes-title-group">
+                    <button id="notes-title" type="button" aria-haspopup="menu">Notes</button>
+                    <button id="notes-current-file" type="button" aria-haspopup="menu" title="Recent files" hidden></button>
+                    <span id="notes-file-index-status" role="status" aria-live="polite" hidden>
+                        <span id="notes-file-index-spinner" class="notes-ai-lazy-spinner notes-file-index-spinner" aria-hidden="true" hidden></span>
+                        <span id="notes-file-index-warning" aria-hidden="true" hidden>&#xf071;</span>
+                    </span>
+                </div>
+                <div id="notes-list-filter-wrap">
+                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                    <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
+                </div>
+                <label id="notes-commit-filename-search-row" class="notes-commit-filename-search markdown-body" hidden>
+                    <input id="notes-commit-filename-search" type="checkbox">
+                    <span>Search filenames</span>
+                </label>
+            </div>
+            <div id="notes-list" role="list"></div>
+            <div id="notes-commits-list" role="list" aria-label="Commit history" hidden></div>
+        </aside>
+        <div id="notes-splitter"></div>
+        <main id="notes-main">
+            <div id="notes-tabs" role="tablist">
+                <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
+                <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
+                <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
+                <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
+                <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
+                <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
+                <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
+                <button id="notes-tab-csv-run"    type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Run</button>
+                <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
+                <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
+                <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
+                <button id="notes-tab-diff" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Diff</button>
+                <div id="notes-toolbar" class="notes-toolbar">
+                    <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
+                    <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
+                    <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
+                    <button id="notes-fullsize-btn" type="button" class="notes-toolbar-btn" title="Full size" aria-label="Full size">&#xf065;</button>
+                </div>
+            </div>
+            <div id="notes-panel">
+                <div id="notes-editor-wrap" role="tabpanel">
+                    <div id="notes-editor-shell" data-code-view="false">
+                        <div id="notes-editor-scroll">
+                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+                            <div id="notes-monaco-editor" aria-hidden="true"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="notes-git-diff-wrap" class="notes-git-diff-wrap" data-active="false" role="tabpanel">
+                    <div id="notes-git-diff-editor" class="notes-git-diff-editor"></div>
+                    <div id="notes-git-diff-message" class="notes-git-diff-message" hidden></div>
+                </div>
+                <div id="notes-hex-wrap" role="tabpanel">
+                    <div id="notes-hex"></div>
+                </div>
+                <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-preview"></div>
+                </div>
+                <div id="notes-html-view-wrap" role="tabpanel">
+                    <iframe id="notes-html-view-frame" title="HTML preview" sandbox=""></iframe>
+                </div>
+                <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-jupyter"></div>
+                </div>
+                <div id="notes-csv-view-wrap" role="tabpanel">
+                    <div id="notes-csv-view" class="markdown-body"></div>
+                </div>
+                <div id="notes-image-view-wrap" role="tabpanel">
+                    <img id="notes-image-view-img" alt="" />
+                </div>
+                <div id="notes-meta-wrap" class="markdown-body" role="tabpanel">
+                    <div id="notes-meta"></div>
+                </div>
+                <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
+                    <div id="notes-swagger-view" class="json-viewer"></div>
+                </div>
+                <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
+                    <div id="notes-swagger-layout" class="swagger-layout">
+                        <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
+                        <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
+                        <section id="notes-swagger-main" class="swagger-main-pane">
+                            <div id="notes-swagger-request-builder"></div>
+                            <div id="notes-swagger-response"></div>
+                        </section>
+                    </div>
+                </div>
+                <div id="notes-tools-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize Tools panel" tabindex="0" data-enabled="false" title="Drag to resize Tools; double-click to reset"></div>
+                <div id="notes-tools-panel" class="notes-tools-panel" data-collapsed="true">
+                    <div class="notes-tools-header">
+                        <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
+                            <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
+                            <button id="notes-tools-tab-frontmatter" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-frontmatter-pane" data-tab="frontmatter" style="display: none;">Frontmatter</button>
+                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
+                            <button id="notes-tools-tab-git" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-git-pane" data-tab="git">Git</button>
+                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
+                            <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
+                        </div>
+                        <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
+                    </div>
+                    <div id="notes-tools-content" class="notes-tools-content">
+                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
+                            <div class="notes-tools-pane-header">
+                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask…</button>
+                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills</button>
+                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt</button>
+                                <button id="notes-tools-ai-session" type="button" class="notes-ai-model-picker" title="Sessions">Session</button>
+                                <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear notes-tools-icon" title="AI session management" aria-label="AI session management">&#xf013;</button>
+                                <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear notes-tools-icon" title="Maximize AI view" aria-label="Maximize AI view">&#xf065;</button>
+                            </div>
+                            <div id="notes-ai-output" class="notes-ai-output"></div>
+                            <button id="notes-ai-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest AI output">Latest</button>
+                        </div>
+                        <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
+                            <div id="notes-tools-toc" class="notes-tools-toc"></div>
+                        </div>
+                        <div id="notes-tools-frontmatter-pane" class="notes-tools-pane" data-tab="frontmatter" data-active="false">
+                            <div id="notes-tools-frontmatter" class="notes-tools-frontmatter"></div>
+                        </div>
+                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="true">
+                            <div class="notes-tools-find-wrap markdown-body">
+                                <h1 class="notes-find-heading">In open file</h1>
+                                <div id="notes-find-controls" data-disabled="false">
+                                    <div id="notes-find-row">
+                                        <div id="notes-find-input-wrap">
+                                            <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                            <button id="notes-find-input-clear" type="button" title="Clear find" aria-label="Clear find">&#xf410;</button>
+                                        </div>
+                                        <div id="notes-find-doc-options" class="notes-find-options">
+                                            <button id="notes-find-doc-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
+                                            <button id="notes-find-doc-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
+                                            <button id="notes-find-doc-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
+                                        </div>
+                                    </div>
+                                    <div id="notes-find-actions">
+                                        <span id="notes-find-counter"></span>
+                                        <button id="notes-find-prev" type="button" title="Previous match">↑</button>
+                                        <button id="notes-find-next" type="button" title="Next match">↓</button>
+                                    </div>
+                                </div>
+                                <div id="notes-replace-controls" data-disabled="true">
+                                    <div id="notes-replace-input-wrap">
+                                        <input id="notes-replace-input" type="text" placeholder="Replace..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                        <button id="notes-replace-input-clear" type="button" title="Clear replace" aria-label="Clear replace">&#xf410;</button>
+                                    </div>
+                                    <div id="notes-replace-actions">
+                                        <button id="notes-replace-one" type="button" title="Replace current match">Replace</button>
+                                        <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
+                                    </div>
+                                </div>
+                                <h1 id="notes-find-files-heading" class="notes-find-heading">For files containing</h1>
+                                <div id="notes-find-files-row">
+                                    <div id="notes-find-files-input-wrap">
+                                        <input id="notes-find-files-input" type="text" placeholder="Search project files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+                                        <button id="notes-find-files-clear" type="button" title="Close results" aria-label="Close results">&#xf410;</button>
+                                    </div>
+                                    <div id="notes-find-options" class="notes-find-options">
+                                        <button id="notes-find-references" type="button" class="notes-find-option-btn" title="LSP references" aria-label="Find references">&#xf121;</button>
+                                        <button id="notes-find-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
+                                        <button id="notes-find-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
+                                        <button id="notes-find-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
+                                    </div>
+                                </div>
+                                <div id="notes-find-files-results"></div>
+                            </div>
+                        </div>
+                        <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
+                            <div class="notes-tools-pane-header">
+                                <div class="notes-tools-log-button-group" role="group" aria-label="Log selection">
+                                    <button id="notes-tools-log-copy" type="button" class="notes-tools-clear notes-tools-icon" title="Copy log to clipboard" aria-label="Copy log to clipboard">&#xf0c5;</button>
+                                    <button id="notes-tools-log-select-all" type="button" class="notes-tools-clear notes-tools-icon" title="Select visible log lines" aria-label="Select visible log lines">&#xf0fe;</button>
+                                    <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear notes-tools-icon" title="Deselect log lines" aria-label="Deselect log lines">&#xf850;</button>
+                                </div>
+                                <div class="notes-tools-log-button-group" role="group" aria-label="Log level filters">
+                                    <button id="notes-tools-log-error" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle error-level log lines" aria-label="Toggle error-level log lines" aria-pressed="true">e</button>
+                                    <button id="notes-tools-log-warn" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle warning-level log lines" aria-label="Toggle warning-level log lines" aria-pressed="true">w</button>
+                                    <button id="notes-tools-log-info" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle info-level log lines" aria-label="Toggle info-level log lines" aria-pressed="true">i</button>
+                                    <button id="notes-tools-log-debug" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle debug-level log lines" aria-label="Toggle debug-level log lines" aria-pressed="false">d</button>
+                                    <button id="notes-tools-log-trace" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle trace-level log lines" aria-label="Toggle trace-level log lines" aria-pressed="false">t</button>
+                                </div>
+                                <div class="notes-tools-log-button-group" role="group" aria-label="Log display">
+                                    <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle timestamps" aria-label="Toggle timestamps" aria-pressed="false">&#xf017;</button>
+                                    <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear notes-tools-icon notes-tools-log-toggle" title="Toggle word wrap" aria-label="Toggle word wrap" aria-pressed="false">&#x21b5;</button>
+                                </div>
+                                <div class="notes-tools-log-button-group" role="group" aria-label="Log actions">
+                                    <button id="notes-tools-log-clear" type="button" class="notes-tools-clear notes-tools-icon" title="Clear log" aria-label="Clear log">&#xf2ed;</button>
+                                    <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear notes-tools-icon" title="Maximize log view" aria-label="Maximize log view">&#xf065;</button>
+                                </div>
+                            </div>
+                            <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>
+                            <button id="notes-log-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest log output">Latest</button>
+                        </div>
+                        <div id="notes-tools-git-pane" class="notes-tools-pane" data-tab="git" data-active="false">
+                            <div id="notes-tools-git-toolbar" class="notes-tools-pane-header notes-git-header" hidden>
+                                <div class="notes-git-summary">
+                                    <span id="notes-tools-git-branch" class="notes-git-branch"></span>
+                                    <span id="notes-tools-git-ahead-behind" class="notes-git-ahead-behind"></span>
+                                    <button id="notes-tools-git-compare" type="button" class="notes-tools-clear notes-git-compare" aria-label="Choose comparison branch" data-tooltip="Choose comparison branch">HEAD</button>
+                                    <span class="notes-git-toolbar-separator" aria-hidden="true"></span>
+                                    <button id="notes-tools-git-commits" type="button" class="notes-tools-clear notes-tools-icon notes-git-commits-toggle" aria-label="View commit log" data-tooltip="View commit log" aria-pressed="false">&#xf0ca;</button>
+                                </div>
+                                <div class="notes-git-actions">
+                                    <button id="notes-tools-git-commit-toggle" type="button" class="notes-tools-clear notes-tools-icon notes-git-commit-toggle" aria-label="Toggle commit controls" data-tooltip="Toggle commit controls" aria-pressed="false">&#xf386;</button>
+                                    <button id="notes-tools-git-push" type="button" class="notes-tools-clear notes-tools-icon" aria-label="Push current branch" data-tooltip="Push current branch">&#xf093;</button>
+                                    <span class="notes-git-toolbar-separator" aria-hidden="true"></span>
+                                    <button id="notes-tools-git-branches" type="button" class="notes-tools-clear notes-tools-icon" aria-label="Manage branches" data-tooltip="Manage branches" aria-haspopup="menu">&#xf126;</button>
+                                    <button id="notes-tools-git-tags" type="button" class="notes-tools-clear notes-tools-icon" aria-label="Manage tags" data-tooltip="Manage tags" aria-haspopup="menu">&#xf02c;</button>
+                                    <button id="notes-tools-git-workspace" type="button" class="notes-tools-clear notes-tools-icon" aria-label="Worktrees" data-tooltip="Manage worktrees">&#xf802;</button>
+                                    <span class="notes-git-toolbar-separator" aria-hidden="true"></span>
+                                    <button id="notes-tools-git-remote" type="button" class="notes-tools-clear notes-tools-icon notes-git-remote" aria-label="Open remote repository" data-tooltip="Open remote repository" hidden></button>
+                                    <button id="notes-tools-git-refresh" type="button" class="notes-tools-clear notes-tools-icon" data-tooltip="Refresh Git status" aria-label="Refresh Git status">&#xf021;</button>
+                                </div>
+                            </div>
+                            <div id="notes-tools-git-filter-row" class="notes-git-commit-row" hidden>
+                                <input id="notes-tools-git-file-filter" type="search" placeholder="Filter files..." aria-label="Filter Git files" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false">
+                            </div>
+                            <div id="notes-tools-git-commit-row" class="notes-git-commit-row" hidden>
+                                <input id="notes-tools-git-commit-message" type="text" placeholder="Commit message" aria-label="Commit message" autocomplete="off">
+                                <button id="notes-tools-git-commit-submit" type="button" class="notes-git-action">Commit</button>
+                                <button id="notes-tools-git-stage-all" type="button" class="notes-git-action" data-tooltip="Stage all tracked changes">Stage all</button>
+                            </div>
+                            <div id="notes-tools-git-files" class="notes-git-file-list" role="list"></div>
+                        </div>
+                    </div>
+                </div>
+                <button id="notes-tools-restore" type="button" class="notes-tools-restore" title="Show Tools panel">Tools</button>
+            </div>
+        </main>
+    </div>
+    <div id="notes-modal" data-open="false" aria-hidden="true">
+        <div id="notes-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
+            <div id="notes-modal-title">New note name</div>
+            <div id="notes-modal-location-row">
+                <button id="notes-modal-location" type="button" aria-label="Location" title="Select location">$NOTES</button>
+                <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+            </div>
+            <div id="notes-modal-body"></div>
+            <div id="notes-modal-actions">
+                <button id="notes-modal-create" type="button">Create</button>
+                <button id="notes-modal-cancel" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <div id="notes-delete-modal" data-open="false" aria-hidden="true">
+        <div id="notes-delete-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-delete-modal-title">
+            <div id="notes-delete-modal-title">Delete note</div>
+            <div id="notes-delete-modal-body"></div>
+            <div id="notes-delete-modal-actions">
+                <button id="notes-delete-confirm" type="button">Delete</button>
+                <button id="notes-delete-cancel" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <div id="notes-ai-settings-modal" data-open="false" aria-hidden="true">
+        <div id="notes-ai-settings-card" class="markdown-body" role="dialog" aria-modal="true" aria-labelledby="notes-ai-settings-title">
+            <h3 id="notes-ai-settings-title">AI Session Management</h3>
+
+            <h2>Default Model</h2>
+            <p>Choose the default model for new AI requests.</p>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-model-picker" type="button" class="notes-ai-model-picker" title="Select AI model">Model</button>
+            </div>
+            <dl id="notes-ai-settings-execution-limits" class="notes-ai-settings-execution-limits" aria-label="AI execution limits"></dl>
+
+            <h2>Tools</h2>
+            <p>Enable or disable tools for AI requests.</p>
+            <input id="notes-ai-settings-tools-filter" class="notes-ai-settings-filter" type="search" placeholder="Filter tools" aria-label="Filter tools" aria-controls="notes-ai-settings-tools-list" autocomplete="off">
+            <div id="notes-ai-settings-tools-list" class="notes-ai-settings-tools-list"></div>
+
+            <h2>MCP Servers</h2>
+            <p>Load or unload MCP servers for AI requests.</p>
+            <input id="notes-ai-settings-mcp-filter" class="notes-ai-settings-filter" type="search" placeholder="Filter MCP servers" aria-label="Filter MCP servers" aria-controls="notes-ai-settings-mcp-list" autocomplete="off">
+            <div id="notes-ai-settings-mcp-list" class="notes-ai-settings-tools-list"></div>
+
+            <h2>Sessions</h2>
+            <p>Create, switch, clear, or delete sessions for this workspace.</p>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-session-new" type="button">New session</button>
+            </div>
+            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
+
+            <h2>Active Session Transcript</h2>
+            <p>Recent prompts and responses from the active session.</p>
+            <div class="notes-ai-settings-controls">
+                <button id="notes-ai-settings-history-clear" type="button">Clear active history</button>
+            </div>
+            <div id="notes-ai-settings-history-list" class="notes-ai-settings-history-list"></div>
+
+            <div id="notes-ai-tool-meta-modal" data-open="false" aria-hidden="true">
+                <div id="notes-ai-tool-meta-card" class="markdown-body" role="dialog" aria-modal="true" aria-label="Tool metadata" tabindex="-1">
+                    <div id="notes-ai-tool-meta-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>

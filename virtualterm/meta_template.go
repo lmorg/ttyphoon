@@ -68,7 +68,7 @@ func commandMeta(term *Term, absPosY int) {
 		term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
 
-	term.renderer.DisplayMarkdownModel(buf.String())
+	term.renderer.DisplayMarkdownModel("command-meta", buf.String())
 
 	//filename := fmt.Sprintf("debug-%d.md", time.Now().Unix())
 	//term.renderer.NotesCreateAndOpen(filename, buf.String())

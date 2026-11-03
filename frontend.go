@@ -29,27 +29,28 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/hotkeys"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
+	"github.com/lmorg/ttyphoon/utils/file/dirwatch"
 	"github.com/lmorg/ttyphoon/utils/file/meta"
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
 	"github.com/lmorg/ttyphoon/utils/find"
+	gitutils "github.com/lmorg/ttyphoon/utils/git"
 	globalhotkeys "github.com/lmorg/ttyphoon/utils/global_hotkeys"
 	"github.com/lmorg/ttyphoon/utils/grep"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/lsp"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	"github.com/lmorg/ttyphoon/utils/notes"
+	"github.com/lmorg/ttyphoon/utils/printing"
+	shellutils "github.com/lmorg/ttyphoon/utils/shell"
 	"github.com/lmorg/ttyphoon/utils/spellcheck"
 	"github.com/lmorg/ttyphoon/utils/swagger"
 	"github.com/lmorg/ttyphoon/utils/syntaxcompletion"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/lmorg/ttyphoon/window/elements/element_table/tablecore"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/linux"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"golang.design/x/clipboard"
 )
 
@@ -58,47 +59,68 @@ var wailsAssets embed.FS
 
 // App struct
 type WApp struct {
-	ctx             context.Context
-	mdBaseDir       string
-	mdBaseDirMu     sync.RWMutex
-	projRoot        string
-	groupName       string
-	usrNotesDir     string
-	homeDir         string
-	globalNotes     string
-	visible         bool
-	notesKills      map[string]func()
-	notesStickies   map[string]types.Notification
-	notesMu         sync.Mutex
-	notesListMu     sync.Mutex
-	notesListCancel context.CancelFunc
-	notesListSeq    uint64
-	lspStartErrMu   sync.Mutex
-	lspStartErrs    map[string]string
-	lspManager      *lsp.Manager
-	lspDocs         *lsp.DocumentStore
-	typosDocs       *lsp.DocumentStore
-	typosUnavail    map[string]bool
-	typosMu         sync.Mutex
-	syntaxEngine    *syntaxcompletion.Engine
-	notesTables     *tablecore.Registry
+	ctx                   context.Context
+	uiRuntime             types.DesktopRuntime
+	mdBaseDir             string
+	mdBaseDirMu           sync.RWMutex
+	projRoot              string
+	groupName             string
+	usrNotesDir           string
+	homeDir               string
+	globalNotes           string
+	visible               bool
+	visibleMu             sync.Mutex
+	notesKills            map[string]func()
+	notesStickies         map[string]types.Notification
+	notesMu               sync.Mutex
+	notesListMu           sync.Mutex
+	notesListCancel       context.CancelFunc
+	notesListSeq          uint64
+	notesContext          notes.FileContext
+	notesFileIndex        *notes.FileIndex
+	notesIndexActivated   bool
+	notesIndexClosed      bool
+	notesIndexUnsubscribe func()
+	gitStatusMu           sync.Mutex
+	gitStatusCache        map[string]gitStatusCacheEntry
+	gitStatusRequest      map[string]uint64
+	gitWatchMu            sync.Mutex
+	gitWatchCancel        context.CancelFunc
+	gitWatchRoot          string
+	gitWatchRequest       uint64
+	lspStartErrMu         sync.Mutex
+	lspStartErrs          map[string]string
+	lspManager            *lsp.Manager
+	lspDocs               *lsp.DocumentStore
+	typosDocs             *lsp.DocumentStore
+	typosUnavail          map[string]bool
+	typosMu               sync.Mutex
+	syntaxEngine          *syntaxcompletion.Engine
+	notesTables           *tablecore.Registry
+}
+
+type gitStatusCacheEntry struct {
+	status gitutils.Status
+	err    string
 }
 
 // NewApp creates a new App application struct
 func NewWailsApp() *WApp {
 	a := &WApp{
-		visible:       true,
-		notesKills:    map[string]func(){},
-		notesStickies: map[string]types.Notification{},
-		lspStartErrs:  map[string]string{},
-		homeDir:       xdg.Home,
-		projRoot:      notes.DirProjectRoot(""),
-		globalNotes:   notes.DirGlobal(),
-		lspManager:    lsp.NewManager(),
-		lspDocs:       lsp.NewDocumentStore(),
-		typosDocs:     lsp.NewDocumentStore(),
-		typosUnavail:  map[string]bool{},
-		notesTables:   tablecore.NewRegistry(),
+		visible:          true,
+		notesKills:       map[string]func(){},
+		notesStickies:    map[string]types.Notification{},
+		lspStartErrs:     map[string]string{},
+		homeDir:          xdg.Home,
+		projRoot:         "",
+		globalNotes:      notes.DirGlobal(),
+		lspManager:       lsp.NewManager(),
+		lspDocs:          lsp.NewDocumentStore(),
+		typosDocs:        lsp.NewDocumentStore(),
+		typosUnavail:     map[string]bool{},
+		notesTables:      tablecore.NewRegistry(),
+		gitStatusCache:   map[string]gitStatusCacheEntry{},
+		gitStatusRequest: map[string]uint64{},
 	}
 
 	engine, err := syntaxcompletion.NewDefaultEngine()
@@ -111,19 +133,16 @@ func NewWailsApp() *WApp {
 	return a
 }
 
-func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) {
+func (a *WApp) notifyLspStartError(languageID string, err error) {
 	if err == nil {
 		return
 	}
 
 	log.Println(err)
 
-	message := err.Error() //fmt.Sprintf("LSP (%s) failed to start: %v", languageID, err)
-	/*if len(argv) > 0 {
-		message += ": " + strings.Join(argv, " ")
-	}*/
+	message := err.Error()
 
-	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	key := fmt.Sprintf("%s|%s", a.GetCurrentProject(), languageID)
 	a.lspStartErrMu.Lock()
 	if prev, ok := a.lspStartErrs[key]; ok && prev == message {
 		a.lspStartErrMu.Unlock()
@@ -143,7 +162,7 @@ func (a *WApp) notifyLspStartError(languageID string, argv []string, err error) 
 }
 
 func (a *WApp) clearLspStartError(languageID string) {
-	key := fmt.Sprintf("%s|%s", a.projRoot, languageID)
+	key := fmt.Sprintf("%s|%s", a.GetCurrentProject(), languageID)
 	a.lspStartErrMu.Lock()
 	defer a.lspStartErrMu.Unlock()
 	delete(a.lspStartErrs, key)
@@ -154,7 +173,7 @@ func (a *WApp) notifyLspWorkspaceFiles(send func(t *lsp.Transport) error) {
 		return
 	}
 
-	for _, sp := range a.lspManager.ServersForWorkspace(a.projRoot) {
+	for _, sp := range a.lspManager.ServersForWorkspace(a.GetCurrentProject()) {
 		if sp == nil {
 			continue
 		}
@@ -262,8 +281,13 @@ func (a *WApp) GetNotesLanguageTabIndent(language string) int {
 
 // GetNotesLanguageReservedWords returns the reserved words / built-in identifiers for a given language.
 func (a *WApp) GetNotesLanguageReservedWords(language string) []string {
-	if settings, ok := config.Config.Notes.Languages[strings.ToLower(language)]; ok {
+	if settings := config.Config.Notes.Languages[strings.ToLower(strings.TrimSpace(language))]; settings != nil && len(settings.ReservedWords) > 0 {
 		return settings.ReservedWords
+	}
+	for _, alias := range jupyter.LanguageAliases(language) {
+		if settings := config.Config.Notes.Languages[strings.ToLower(alias)]; settings != nil && len(settings.ReservedWords) > 0 {
+			return settings.ReservedWords
+		}
 	}
 	return nil
 }
@@ -281,22 +305,32 @@ func (a *WApp) GetTerminalGlyphSize() *types.XY {
 }
 
 func (a *WApp) WindowShow() {
-	a.visible = true
+	a.setVisible(true)
 	runtime.WindowShow(a.ctx)
 }
 
 func (a *WApp) WindowHide() {
-	a.visible = false
+	a.setVisible(false)
 	runtime.WindowHide(a.ctx)
 }
 
 func (a *WApp) WindowShowHide() {
+	a.visibleMu.Lock()
 	a.visible = !a.visible
-	if a.visible {
-		a.WindowShow()
+	visible := a.visible
+	a.visibleMu.Unlock()
+
+	if visible {
+		runtime.WindowShow(a.ctx)
 	} else {
-		a.WindowHide()
+		runtime.WindowHide(a.ctx)
 	}
+}
+
+func (a *WApp) setVisible(visible bool) {
+	a.visibleMu.Lock()
+	a.visible = visible
+	a.visibleMu.Unlock()
 }
 
 func (a *WApp) TerminalMouseButton(cellX, cellY int32, button int, clicks int, pressed bool) {
@@ -320,6 +354,14 @@ func (a *WApp) TerminalMouseWheel(cellX, cellY, moveX, moveY int32) {
 	}
 
 	renderer.HandleMouseWheel(cellX, cellY, moveX, moveY)
+}
+
+func (a *WApp) TerminalMouseLeave() {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return
+	}
+	renderer.HandleMouseLeave()
 }
 
 func (a *WApp) TerminalMouseMotion(cellX, cellY, relX, relY, state int32) {
@@ -489,6 +531,46 @@ func (a *WApp) TerminalGetTabs() []map[string]any {
 	return out
 }
 
+func (a *WApp) TerminalGetPanes() []renderwebkit.TerminalPane {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return nil
+	}
+	return renderer.GetPaneLayout()
+}
+
+func (a *WApp) TerminalCancelPaneAutoClose(paneID string) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer not available")
+	}
+	return renderer.CancelPaneAutoClose(paneID)
+}
+
+func (a *WApp) TerminalClonePane() error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer not available")
+	}
+	return renderer.ClonePaneAtCurrentDirectory()
+}
+
+func (a *WApp) TerminalClosePane(paneID string) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer not available")
+	}
+	return renderer.CloseCompletedPane(paneID)
+}
+
+func (a *WApp) TerminalConfirmKillPane(paneID, paneName string) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer not available")
+	}
+	return renderer.ConfirmKillPane(paneID, paneName)
+}
+
 func (a *WApp) TerminalSelectWindow(windowID string) {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
@@ -498,18 +580,12 @@ func (a *WApp) TerminalSelectWindow(windowID string) {
 	renderer.SelectWindow(windowID)
 }
 
-func (a *WApp) TerminalPaneZoom() {
-	log.Println("TerminalPaneZoom()")
+func (a *WApp) TerminalPaneZoom(paneID string) error {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
-		//return fmt.Errorf("renderer not available")
-		panic("renderer not available")
+		return fmt.Errorf("renderer not available")
 	}
-
-	err := renderer.ZoomActivePane()
-	if err != nil {
-		renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	}
+	return renderer.ZoomPane(paneID)
 }
 
 func (a *WApp) Log(s string) {
@@ -550,6 +626,14 @@ func (a *WApp) TerminalInputBoxSubmit(id int64, v *types.InputBoxCallbackResultT
 	renderer.InputBoxSubmit(id, v, isOk)
 }
 
+func (a *WApp) TerminalInputBoxHistoryImages(id int64, index int) ([]types.ImageAttachment, error) {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return nil, errors.New("terminal renderer is unavailable")
+	}
+	return renderer.InputBoxHistoryImages(id, index)
+}
+
 func (a *WApp) startTerminalWindow() {
 	err := startBackend(a)
 	if err != nil {
@@ -559,6 +643,7 @@ func (a *WApp) startTerminalWindow() {
 	// Set app reference on renderer for hotkey handlers
 	if wr, ok := renderwebkit.CurrentRenderer(); ok {
 		wr.SetApp(a)
+		go a.prewarmNotesFiles(wr)
 	}
 }
 
@@ -674,14 +759,14 @@ func (a *WApp) GetAllLanguageDescriptions() []string {
 func (a *WApp) RunNote(docPath, id string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
 
-	bookID := jupyter.BookId(a.projRoot, a.filePath(docPath))
+	bookID := jupyter.BookId(a.GetCurrentProject(), a.filePath(docPath))
 
 	ctx, kill := context.WithCancel(context.Background())
 	a.notesMu.Lock()
 	a.notesKills[id] = kill
 	a.notesMu.Unlock()
 
-	go jupyter.RunNote(ctx, bookID, id, a.projRoot, code, language, ch)
+	go jupyter.RunNote(ctx, bookID, id, a.GetCurrentProject(), code, language, ch)
 
 	go func() {
 		for output := range ch {
@@ -756,9 +841,9 @@ func (a *WApp) CompleteSyntax(docPath, language, source string, cursor, selectio
 }
 
 func (a *WApp) RunFunction(docPath, functionName, cellId, code string, parameters []string, language string) RunFunctionReturnT {
-	bookID := jupyter.BookId(a.projRoot, a.filePath(docPath))
+	bookID := jupyter.BookId(a.GetCurrentProject(), a.filePath(docPath))
 
-	output, err := jupyter.RunFunction(context.Background(), a.projRoot, bookID, functionName, code, parameters, language)
+	output, err := jupyter.RunFunction(context.Background(), a.GetCurrentProject(), bookID, functionName, code, parameters, language)
 	if err != nil {
 		return RunFunctionReturnT{
 			Output:  err.Error(),
@@ -775,8 +860,8 @@ func (a *WApp) RunFunction(docPath, functionName, cellId, code string, parameter
 }
 
 func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.FormatCodeReturnT {
-	bookId := jupyter.BookId(a.projRoot, a.filePath(docPath))
-	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.projRoot, code, language)
+	bookId := jupyter.BookId(a.GetCurrentProject(), a.filePath(docPath))
+	return jupyter.FormatCode(context.Background(), bookId, "lsp_"+codeId, a.GetCurrentProject(), code, language)
 }
 
 // FormatNotesContent formats a whole document's content (no snippet template
@@ -784,14 +869,14 @@ func (a *WApp) FormatCodeBlock(docPath, codeId, code, language string) *jupyter.
 // FormatCommand is configured, HasFormatter is false and the frontend falls
 // back to LSP formatting.
 func (a *WApp) FormatNotesContent(docPath, content, language string) *jupyter.FormatCodeReturnT {
-	bookId := jupyter.BookId(a.projRoot, a.filePath(docPath))
-	return jupyter.FormatNotesContent(context.Background(), bookId, "editor", a.projRoot, content, language)
+	bookId := jupyter.BookId(a.GetCurrentProject(), a.filePath(docPath))
+	return jupyter.FormatNotesContent(context.Background(), bookId, "editor", a.GetCurrentProject(), content, language)
 }
 
 func (a *WApp) FormatCodeFile(docPath, language string) {
-	filePath := a.filePathWithProject(docPath, a.projRoot)
-	log.Printf(`[debug] FormatCodeFile: pwd="%s" docPath="%s" language="%s"`, a.projRoot, filePath, language)
-	jupyter.FormatFile(context.Background(), a.projRoot, filePath, language)
+	filePath := a.filePathWithProject(docPath, a.GetCurrentProject())
+	log.Printf(`[debug] FormatCodeFile: pwd="%s" docPath="%s" language="%s"`, a.GetCurrentProject(), filePath, language)
+	jupyter.FormatFile(context.Background(), a.GetCurrentProject(), filePath, language)
 }
 
 func (a *WApp) StopNote(id string) {
@@ -823,7 +908,6 @@ type NotesGrepReturnT = grep.ReturnValue
 type NotesGrepOptionsT = grep.Options
 
 func (a *WApp) GetFile(filename string) GetFileReturnT {
-	requestedFilename := strings.TrimSpace(filename)
 	filename = a.filePath(filename)
 
 	stat, err := os.Stat(filename)
@@ -852,11 +936,6 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 
 	a.setMarkdownBaseDir(filepath.Dir(filename))
 	watcher.Watch(filename)
-	err = notes.RecentListAdd(a.projRoot, requestedFilename)
-	if err != nil {
-		//log.Println(err)
-		return GetFileReturnT{Error: err.Error()}
-	}
 
 	if bytes.Contains(b[:min(1024, len(b))], []byte{0}) {
 		return GetFileReturnT{Contents: base64.StdEncoding.EncodeToString(b), Binary: true}
@@ -890,7 +969,7 @@ func (a *WApp) markdownBaseDir() string {
 }
 
 func (a *WApp) documentsTtyphoonDir() string {
-	return filepath.Join(a.homeDir, "Documents", app.DirName)
+	return file.DocumentsDir(a.homeDir)
 }
 
 func (a *WApp) notesAssetHandler() http.Handler {
@@ -935,7 +1014,7 @@ func (a *WApp) resolveNotesAsset(requested string) (string, error) {
 		return "", errors.New("asset not found")
 	}
 
-	for _, root := range []string{baseDir, a.projRoot, a.usrNotesDir, a.globalNotes, a.documentsTtyphoonDir()} {
+	for _, root := range []string{baseDir, a.GetCurrentProject(), a.currentNotesContext().PathUserNotes, a.currentNotesContext().PathGlobalNotes, a.documentsTtyphoonDir()} {
 		if root == "" {
 			continue
 		}
@@ -998,10 +1077,6 @@ func (a *WApp) GetImage(path string) string {
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
-
-	/*if recentFile := a.notesFileForAbsolutePath(resolvedPath); recentFile != "" {
-		notes.RecentListAdd(a.projRoot, recentFile)
-	}*/
 
 	base64 := base64.StdEncoding.EncodeToString(b)
 
@@ -1109,35 +1184,83 @@ func (a *WApp) FilterStrings(query string, items []string) *FilterResultsT {
 }
 
 func (a *WApp) ListFiles() []string {
+	files, _ := a.ListFilesForContext(a.GetNotesContext())
+	return files
+}
+
+func (a *WApp) GetNotesContext() notes.FileContext {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
-		return []string{}
+		return notes.FileContext{}
 	}
+	renderer.NotesFileContext()
+	return a.currentNotesContext()
+}
 
+func (a *WApp) SyncNotesContext(roots notes.FileContext) {
 	a.notesListMu.Lock()
+	defer a.notesListMu.Unlock()
+	if a.notesIndexClosed {
+		return
+	}
+	if a.notesContext == roots {
+		return
+	}
+	if a.notesListCancel != nil {
+		a.notesListCancel()
+		a.notesListCancel = nil
+	}
+	a.notesListSeq++
+	a.notesContext = roots
+	a.globalNotes = roots.PathGlobalNotes
+	a.usrNotesDir = roots.PathUserNotes
+	a.projRoot = roots.PathProjectRoot
+	a.groupName = roots.GroupName
+	index := a.notesFileIndexLocked()
+	paths := notes.FileContextRoots(roots)
+	if !a.notesIndexActivated {
+		index.Prewarm(paths)
+		a.notesIndexActivated = true
+	}
+	index.Activate(paths)
+}
+
+func (a *WApp) currentNotesContext() notes.FileContext {
+	a.notesListMu.Lock()
+	defer a.notesListMu.Unlock()
+	return notes.FileContext{
+		PathProjectRoot: a.projRoot,
+		PathGlobalNotes: a.globalNotes,
+		PathUserNotes:   a.usrNotesDir,
+		GroupName:       a.groupName,
+	}
+}
+
+func (a *WApp) ListFilesForContext(roots notes.FileContext) ([]string, error) {
+	a.notesListMu.Lock()
+	if a.notesContext != roots {
+		a.notesListMu.Unlock()
+		return nil, context.Canceled
+	}
 	if a.notesListCancel != nil {
 		a.notesListCancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	a.notesListCancel = cancel
 	a.notesListSeq++
 	scanID := a.notesListSeq
 	a.notesListMu.Unlock()
 
-	ulf := notes.ListFiles(ctx, renderer)
+	ulf := notes.ScanFiles(ctx, roots)
 
 	a.notesListMu.Lock()
-	if a.notesListSeq == scanID {
-		a.notesListCancel = nil
+	defer a.notesListMu.Unlock()
+	if a.notesListSeq != scanID || a.notesContext != roots || ctx.Err() != nil {
+		return nil, context.Canceled
 	}
-	a.notesListMu.Unlock()
-
-	a.globalNotes = ulf.PathGlobalNotes
-	a.usrNotesDir = ulf.PathUserNotes
-	a.projRoot = ulf.PathProjectRoot
-	a.groupName = ulf.GroupName
-
-	return ulf.Files
+	a.notesListCancel = nil
+	return ulf.Files, ulf.Err
 }
 
 // NotesGrepStream performs a streaming grep search, sending results via EventsEmit in batches.
@@ -1149,7 +1272,7 @@ func (a *WApp) NotesGrepStream(query string, opts NotesGrepOptionsT) {
 }
 
 func (a *WApp) notesGrepStream(query string, opts NotesGrepOptionsT) {
-	searchRoot := strings.TrimSpace(a.projRoot)
+	searchRoot := strings.TrimSpace(a.GetCurrentProject())
 	if searchRoot == "" {
 		runtime.EventsEmit(a.ctx, "notesGrepError", "search root is empty")
 		return
@@ -1199,7 +1322,7 @@ func (a *WApp) CancelNotesListFiles() {
 }
 
 func (a *WApp) GetCurrentGroupName() string {
-	return a.groupName
+	return a.currentNotesContext().GroupName
 }
 
 func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
@@ -1208,13 +1331,13 @@ func (a *WApp) expandMappingFuncWithProject(s, projectPath string) string {
 		if projectPath != "" {
 			return projectPath
 		}
-		return a.projRoot
+		return a.GetCurrentProject()
 	case "NOTES":
-		return a.usrNotesDir
+		return a.currentNotesContext().PathUserNotes
 	case "HOME":
 		return a.homeDir
 	case "GLOBAL":
-		return a.globalNotes
+		return a.currentNotesContext().PathGlobalNotes
 	//case "HISTORY":
 	//	return a.historyDir
 	default:
@@ -1232,9 +1355,9 @@ func (a *WApp) notesPathForHistory(filename string) string {
 		prefix   string
 		variable string
 	}{
-		{prefix: filepath.Clean(a.projRoot), variable: "$PROJECT"},
-		{prefix: filepath.Clean(a.usrNotesDir), variable: "$NOTES"},
-		{prefix: filepath.Clean(a.globalNotes), variable: "$GLOBAL"},
+		{prefix: filepath.Clean(a.GetCurrentProject()), variable: "$PROJECT"},
+		{prefix: filepath.Clean(a.currentNotesContext().PathUserNotes), variable: "$NOTES"},
+		{prefix: filepath.Clean(a.currentNotesContext().PathGlobalNotes), variable: "$GLOBAL"},
 		{prefix: filepath.Clean(a.homeDir), variable: "$HOME"},
 	}
 
@@ -1260,7 +1383,7 @@ func (a *WApp) filePath(filename string) string {
 		return a.expandMappingFuncWithProject(s, "")
 	})
 	if filepath.IsLocal(filename) {
-		filename = a.usrNotesDir + string(filepath.Separator) + filename
+		filename = a.currentNotesContext().PathUserNotes + string(filepath.Separator) + filename
 	}
 	return filename
 }
@@ -1272,7 +1395,7 @@ func (a *WApp) filePathWithProject(filename string, projectPath string) string {
 		return a.expandMappingFuncWithProject(s, projectPath)
 	})
 	if filepath.IsLocal(filename) {
-		filename = a.usrNotesDir + string(filepath.Separator) + filename
+		filename = a.currentNotesContext().PathUserNotes + string(filepath.Separator) + filename
 	}
 	return filename
 }
@@ -1348,11 +1471,11 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 		return nil
 	}
 
-	alreadyRunning := a.lspManager.Has(a.projRoot, selectedLanguageID)
+	alreadyRunning := a.lspManager.Has(a.GetCurrentProject(), selectedLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, selectedLanguageID, argv, initOptions)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), selectedLanguageID, argv, initOptions)
 	if err != nil {
-		a.notifyLspStartError(selectedLanguageID, argv, err)
+		a.notifyLspStartError(selectedLanguageID, err)
 		return nil
 	}
 
@@ -1384,8 +1507,8 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 		})
 	}
 
-	if err := sp.EnsureInitialized(a.ctx, a.projRoot); err != nil {
-		a.notifyLspStartError(selectedLanguageID, argv, err)
+	if err := sp.EnsureInitialized(a.ctx, a.GetCurrentProject()); err != nil {
+		a.notifyLspStartError(selectedLanguageID, err)
 		return nil
 	}
 
@@ -1492,16 +1615,16 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 	}
 
 	a.typosMu.Lock()
-	unavailable := a.typosUnavail[a.projRoot]
+	unavailable := a.typosUnavail[a.GetCurrentProject()]
 	a.typosMu.Unlock()
 	if unavailable {
 		return nil
 	}
 
 	initOptions := config.Config.Notes.SpellCheck.TyposLsp.InitOptions
-	alreadyRunning := a.lspManager.Has(a.projRoot, typosLspLanguageID)
+	alreadyRunning := a.lspManager.Has(a.GetCurrentProject(), typosLspLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.projRoot, typosLspLanguageID, argv, initOptions)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), typosLspLanguageID, argv, initOptions)
 	if err != nil {
 		// typos-lsp is optional; do not surface a user-facing error. Record the
 		// failure so a missing binary isn't repeatedly respawned.
@@ -1521,7 +1644,7 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 		}, nil, nil)
 	}
 
-	if err := sp.EnsureInitialized(a.ctx, a.projRoot); err != nil {
+	if err := sp.EnsureInitialized(a.ctx, a.GetCurrentProject()); err != nil {
 		log.Printf("lsp: typos-lsp init failed (%v); falling back to aspell", err)
 		a.markTyposUnavailable()
 		return nil
@@ -1532,7 +1655,7 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 
 func (a *WApp) markTyposUnavailable() {
 	a.typosMu.Lock()
-	a.typosUnavail[a.projRoot] = true
+	a.typosUnavail[a.GetCurrentProject()] = true
 	a.typosMu.Unlock()
 }
 
@@ -2221,11 +2344,531 @@ func (a *WApp) NotesSpellCheck(text string) []SpellCheckSuggestionT {
 // preventing issues where a file opened in one project could be overwritten
 // if the user switches projects before autosave completes.
 func (a *WApp) GetCurrentProject() string {
-	return a.projRoot
+	return a.currentNotesContext().PathProjectRoot
+}
+
+func (a *WApp) GetGitStatus(projectRoot string) (gitutils.Status, error) {
+	key, err := gitStatusCacheKey(projectRoot)
+	if err != nil {
+		return gitutils.Status{}, err
+	}
+	a.gitStatusMu.Lock()
+	entry, ok := a.gitStatusCache[key]
+	a.gitStatusMu.Unlock()
+	if ok {
+		if entry.err != "" {
+			return gitutils.Status{}, errors.New(entry.err)
+		}
+		return cloneGitStatus(entry.status), nil
+	}
+	return a.refreshGitStatus(projectRoot)
+}
+
+func (a *WApp) GetGitBranchDiffFiles(projectRoot, branch string) ([]gitutils.FileStatus, error) {
+	return gitutils.BranchDiffFiles(projectRoot, branch)
+}
+
+func (a *WApp) GetGitBrowserLink(projectRoot, branch string) (gitutils.BrowserLink, error) {
+	return gitutils.RemoteBrowserLink(projectRoot, branch)
+}
+
+func (a *WApp) ListGitCommits(projectRoot string, limit int) ([]gitutils.Commit, error) {
+	return gitutils.ListCommits(projectRoot, limit)
+}
+
+func (a *WApp) ListGitCommitsWithFiles(projectRoot string, limit int) ([]gitutils.Commit, error) {
+	return gitutils.ListCommitsWithFiles(projectRoot, limit)
+}
+
+func (a *WApp) RefreshGitStatus(projectRoot string) (gitutils.Status, error) {
+	return a.refreshGitStatus(projectRoot)
+}
+
+func (a *WApp) SetGitStatusWatch(projectRoot string, enabled bool) error {
+	a.gitWatchMu.Lock()
+	a.gitWatchRequest++
+	request := a.gitWatchRequest
+	if !enabled {
+		a.stopGitStatusWatchLocked()
+		a.gitWatchMu.Unlock()
+		return nil
+	}
+	a.gitWatchMu.Unlock()
+
+	key, err := gitStatusCacheKey(projectRoot)
+	if err != nil {
+		a.gitWatchMu.Lock()
+		if request == a.gitWatchRequest {
+			a.stopGitStatusWatchLocked()
+		}
+		a.gitWatchMu.Unlock()
+		return err
+	}
+	directories, err := gitutils.MetadataDirectories(projectRoot)
+	if err != nil {
+		a.gitWatchMu.Lock()
+		if request == a.gitWatchRequest {
+			a.stopGitStatusWatchLocked()
+		}
+		a.gitWatchMu.Unlock()
+		return err
+	}
+
+	a.gitWatchMu.Lock()
+	if request != a.gitWatchRequest {
+		a.gitWatchMu.Unlock()
+		return nil
+	}
+	if a.gitWatchRoot == key && a.gitWatchCancel != nil {
+		a.gitWatchMu.Unlock()
+		return nil
+	}
+	if a.gitWatchCancel != nil {
+		a.gitWatchCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.gitWatchCancel = cancel
+	a.gitWatchRoot = key
+	a.gitWatchMu.Unlock()
+
+	go a.watchGitStatus(ctx, key, directories)
+	return nil
+}
+
+func (a *WApp) stopGitStatusWatch() {
+	a.gitWatchMu.Lock()
+	a.gitWatchRequest++
+	a.stopGitStatusWatchLocked()
+	a.gitWatchMu.Unlock()
+}
+
+func (a *WApp) stopGitStatusWatchLocked() {
+	if a.gitWatchCancel != nil {
+		a.gitWatchCancel()
+	}
+	a.gitWatchCancel = nil
+	a.gitWatchRoot = ""
+}
+
+func (a *WApp) watchGitStatus(ctx context.Context, root string, directories []string) {
+	changes := make(chan struct{}, 1)
+	ready := make(chan error, len(directories))
+	var watchers sync.WaitGroup
+	for _, directory := range directories {
+		directory := directory
+		watchers.Add(1)
+		go func() {
+			defer watchers.Done()
+			dirwatch.RunWithOptions(ctx, directory, func(path string) bool {
+				return ignoredGitMetadataPath(directory, path)
+			}, dirwatch.Options{WatchFileWrites: true}, func(dirwatch.Change) {
+				select {
+				case changes <- struct{}{}:
+				default:
+				}
+			}, func(err error) {
+				ready <- err
+			})
+		}()
+	}
+	defer watchers.Wait()
+	for range directories {
+		select {
+		case err := <-ready:
+			if err != nil && ctx.Err() == nil {
+				log.Printf("Git metadata watch setup for %q: %v", root, err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+
+	_, _ = a.refreshGitStatus(root)
+	var timer *time.Timer
+	var timerChannel <-chan time.Time
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-changes:
+			if timer == nil {
+				timer = time.NewTimer(250 * time.Millisecond)
+			} else {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(250 * time.Millisecond)
+			}
+			timerChannel = timer.C
+		case <-timerChannel:
+			timerChannel = nil
+			_, _ = a.refreshGitStatus(root)
+		}
+	}
+}
+
+func ignoredGitMetadataPath(root, path string) bool {
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	first := strings.SplitN(relative, string(filepath.Separator), 2)[0]
+	return first == "objects" || first == "hooks" || first == "logs"
+}
+
+func (a *WApp) refreshGitStatus(projectRoot string) (gitutils.Status, error) {
+	key, err := gitStatusCacheKey(projectRoot)
+	if err != nil {
+		return gitutils.Status{}, err
+	}
+	a.gitStatusMu.Lock()
+	if a.gitStatusCache == nil {
+		a.gitStatusCache = map[string]gitStatusCacheEntry{}
+	}
+	if a.gitStatusRequest == nil {
+		a.gitStatusRequest = map[string]uint64{}
+	}
+	a.gitStatusRequest[key]++
+	request := a.gitStatusRequest[key]
+	a.gitStatusMu.Unlock()
+
+	status, statusErr := gitutils.WorkspaceStatus(projectRoot)
+	entry := gitStatusCacheEntry{status: cloneGitStatus(status)}
+	if statusErr != nil {
+		entry.err = statusErr.Error()
+	}
+	a.gitStatusMu.Lock()
+	if a.gitStatusRequest[key] == request {
+		if statusErr == nil {
+			a.gitStatusCache[key] = entry
+		} else {
+			delete(a.gitStatusCache, key)
+		}
+	}
+	a.gitStatusMu.Unlock()
+
+	if a.ctx != nil {
+		update := map[string]any{"root": projectRoot, "status": status}
+		if statusErr != nil {
+			update["status"] = nil
+			update["error"] = statusErr.Error()
+		}
+		runtime.EventsEmit(a.ctx, "notesGitStatusChanged", update)
+	}
+	return status, statusErr
+}
+
+func (a *WApp) refreshGitStatusForFileIndex(root string, event notes.FileIndexEvent) {
+	if event.State == "scanning" || event.State == "refreshing" {
+		return
+	}
+	contextRoot, err := gitStatusCacheKey(a.currentNotesContext().PathProjectRoot)
+	if err != nil {
+		return
+	}
+	eventRoot, err := gitStatusCacheKey(root)
+	if err != nil || eventRoot != contextRoot {
+		return
+	}
+	go func() {
+		_, _ = a.refreshGitStatus(root)
+	}()
+}
+
+func gitStatusCacheKey(root string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("Git workspace root is empty")
+	}
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(absolute); resolveErr == nil {
+		absolute = resolved
+	}
+	return filepath.Clean(absolute), nil
+}
+
+func cloneGitStatus(status gitutils.Status) gitutils.Status {
+	status.Files = append([]gitutils.FileStatus(nil), status.Files...)
+	return status
+}
+
+func (a *WApp) GetGitDiff(projectRoot, filePath, originalPath string) (gitutils.Diff, error) {
+	diff, err := gitutils.ReadDiff(projectRoot, filePath, originalPath)
+	if err != nil {
+		return gitutils.Diff{}, err
+	}
+	return diff, nil
+}
+
+func (a *WApp) GetGitDiffAgainstBranch(projectRoot, filePath, originalPath, branch string) (gitutils.Diff, error) {
+	diff, err := gitutils.ReadDiff(projectRoot, filePath, originalPath, branch)
+	if err != nil {
+		return gitutils.Diff{}, err
+	}
+	return diff, nil
+}
+
+func (a *WApp) StageGitFile(projectRoot, filePath string) error {
+	return gitutils.StageFile(projectRoot, filePath)
+}
+
+func (a *WApp) StageAllGitFiles(projectRoot string) error {
+	return gitutils.StageAllTrackedFiles(projectRoot)
+}
+
+func (a *WApp) RunGitAction(projectRoot, actionName string, parameters map[string]string) map[string]string {
+	result := gitutils.RunAction(projectRoot, gitutils.ActionRequest{
+		Name:       actionName,
+		Parameters: parameters,
+	}, func(command string, complete func(gitutils.InteractiveActionResult)) error {
+		renderer, ok := renderwebkit.CurrentRenderer()
+		if !ok {
+			return errors.New("Notes renderer is unavailable")
+		}
+		return renderer.ClonePane(command, func(output []byte, exitCode int, err error) {
+			complete(gitutils.InteractiveActionResult{
+				Output:   string(output),
+				ExitCode: exitCode,
+				Err:      err,
+			})
+		})
+	})
+	if result["error"] == "" {
+		switch strings.ToLower(strings.TrimSpace(actionName)) {
+		case "fetch", "fetch-branch", "pull-tags", "push":
+			_, _ = a.refreshGitStatus(projectRoot)
+		}
+	}
+	return result
+}
+
+func (a *WApp) ConfirmGitPush(projectRoot string) map[string]string {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return map[string]string{"error": "Notes renderer is unavailable"}
+	}
+	decision := make(chan *types.InputBoxCallbackResultT, 1)
+	renderer.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:           "Confirm Git push",
+			Message:         "Run git push using the repository's configured remote and push settings?",
+			Confirmation:    true,
+			ConfirmLabel:    "Push",
+			CancelLabel:     "Cancel",
+			ConfirmIsDanger: true,
+		},
+		OkFunc: func(value *types.InputBoxCallbackResultT) {
+			decision <- value
+		},
+		CancelFunc: func(*types.InputBoxCallbackResultT) { decision <- nil },
+	})
+	var confirmed *types.InputBoxCallbackResultT
+	if a.ctx != nil {
+		select {
+		case confirmed = <-decision:
+		case <-a.ctx.Done():
+			return map[string]string{"error": "Git push confirmation was cancelled"}
+		}
+	} else {
+		confirmed = <-decision
+	}
+	if confirmed == nil {
+		return map[string]string{"cancelled": "true"}
+	}
+	return a.RunGitAction(projectRoot, "push", nil)
+}
+
+func (a *WApp) UnstageGitFile(projectRoot, filePath string) error {
+	return gitutils.UnstageFile(projectRoot, filePath)
+}
+
+func (a *WApp) ListGitWorktrees(projectRoot string) ([]gitutils.Worktree, error) {
+	return gitutils.ListWorktrees(projectRoot)
+}
+
+func (a *WApp) ListGitBranches(projectRoot string) ([]string, error) {
+	return gitutils.ListBranches(projectRoot)
+}
+
+func (a *WApp) ListGitTags(projectRoot string) ([]string, error) {
+	return gitutils.ListTags(projectRoot)
+}
+
+func (a *WApp) CreateGitTag(projectRoot, tag string) error {
+	return gitutils.CreateTag(projectRoot, tag)
+}
+
+func (a *WApp) DeleteGitTag(projectRoot, tag string) error {
+	return gitutils.DeleteTag(projectRoot, tag)
+}
+
+func (a *WApp) CheckoutGitTag(projectRoot, tag string) error {
+	if err := gitutils.CheckoutTag(projectRoot, tag); err != nil {
+		return err
+	}
+	_, _ = a.refreshGitStatus(projectRoot)
+	return nil
+}
+
+func (a *WApp) CreateGitTagWorktree(projectRoot, tag, worktreePath string) (gitutils.Worktree, error) {
+	worktree, err := gitutils.CreateTagWorktree(projectRoot, tag, worktreePath)
+	if err != nil {
+		return gitutils.Worktree{}, err
+	}
+	_, _ = a.refreshGitStatus(projectRoot)
+	return worktree, nil
+}
+
+func (a *WApp) PullGitTags(projectRoot string) (map[string]string, error) {
+	return a.RunGitAction(projectRoot, "pull-tags", nil), nil
+}
+
+func (a *WApp) PushGitTag(projectRoot, tag string) (map[string]string, error) {
+	return a.RunGitAction(projectRoot, "push-tag", map[string]string{"tag": tag}), nil
+}
+
+func (a *WApp) CheckoutGitBranch(projectRoot, branch string, create bool) error {
+	if err := gitutils.CheckoutBranch(projectRoot, branch, create); err != nil {
+		return err
+	}
+	_, _ = a.refreshGitStatus(projectRoot)
+	return nil
+}
+
+func (a *WApp) DeleteGitBranch(projectRoot, branch string) error {
+	if err := gitutils.DeleteBranch(projectRoot, branch); err != nil {
+		return err
+	}
+	_, _ = a.refreshGitStatus(projectRoot)
+	return nil
+}
+
+func (a *WApp) FetchGitBranch(projectRoot, branch string) (map[string]string, error) {
+	return a.RunGitAction(projectRoot, "fetch-branch", map[string]string{"branch": branch}), nil
+}
+
+func (a *WApp) GetDefaultGitWorktreePath(projectRoot string) (string, error) {
+	return gitutils.DefaultWorktreePath(projectRoot)
+}
+
+func (a *WApp) CreateGitWorktree(projectRoot, branch, worktreePath string, createBranch bool) (gitutils.Worktree, error) {
+	worktree, err := gitutils.CreateWorktree(projectRoot, branch, worktreePath, createBranch)
+	if err != nil {
+		return gitutils.Worktree{}, err
+	}
+	_, _ = a.refreshGitStatus(projectRoot)
+	return worktree, nil
+}
+
+func (a *WApp) SwitchGitWorktree(projectRoot, worktreePath string) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return errors.New("Notes renderer is unavailable")
+	}
+	worktrees, err := gitutils.ListWorktrees(projectRoot)
+	if err != nil {
+		return err
+	}
+	selectedPath, err := canonicalGitPath(worktreePath)
+	if err != nil {
+		return err
+	}
+	for _, worktree := range worktrees {
+		listedPath, pathErr := canonicalGitPath(worktree.Path)
+		if pathErr == nil && listedPath == selectedPath {
+			tile := renderer.ActiveTile()
+			if tile == nil || tile.GetTerm() == nil {
+				return errors.New("active terminal is unavailable")
+			}
+			shellutils.UpdateReadline(tile.GetTerm(), "cd "+quoteShellArgument(listedPath))
+			return nil
+		}
+	}
+	return errors.New("selected path is not a registered worktree for the current repository")
+}
+
+func (a *WApp) RemoveGitWorktree(projectRoot, worktreePath string) error {
+	if err := gitutils.RemoveWorktree(projectRoot, worktreePath); err != nil {
+		return err
+	}
+	_, err := a.refreshGitStatus(projectRoot)
+	return err
+}
+
+func (a *WApp) ShowGitWorktreeInfo(projectRoot, worktreePath string) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return errors.New("Notes renderer is unavailable")
+	}
+	return showGitInfoModel(renderer, "git-info:"+worktreePath, func() (string, error) {
+		return gitutils.RenderWorktreeInfo(projectRoot, worktreePath)
+	})
+}
+
+func (a *WApp) ShowGitRefInfo(projectRoot, name string, isTag bool) error {
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return errors.New("Notes renderer is unavailable")
+	}
+	kind := "branch"
+	if isTag {
+		kind = "tag"
+	}
+	return showGitInfoModel(renderer, "git-info:"+kind+":"+name, func() (string, error) {
+		return gitutils.RenderGitRefInfo(projectRoot, name, isTag)
+	})
+}
+
+func showGitInfoModel(renderer types.Renderer, id string, generate func() (string, error)) error {
+	sticky := renderer.DisplaySticky(types.NOTIFY_INFO, "Generating diffs", func() {})
+	markdown, err := generate()
+	if err != nil {
+		sticky.Close()
+		return err
+	}
+	sticky.Close()
+	renderer.DisplayMarkdownModel(id, markdown)
+	return nil
+}
+
+func quoteShellArgument(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func canonicalGitPath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(resolved), nil
 }
 
 func (a *WApp) NotesRecentFiles() []string {
-	return notes.GetRecentList(a.projRoot)
+	files := notes.HistoryRecentFiles(a.notesHistoryWorkspace())
+	for index, filename := range files {
+		files[index] = a.notesPathForHistory(filename)
+	}
+	return files
+}
+
+func (a *WApp) notesHistoryWorkspace() string {
+	context := a.currentNotesContext()
+	notes.MigrateWorkspaceHistory(context.GroupName, context.PathProjectRoot)
+	return context.GroupName
 }
 
 func (a *WApp) GetNotesFindFieldValues(fieldName string) []string {
@@ -2237,8 +2880,12 @@ func (a *WApp) AddNotesFindFieldValue(fieldName, value string) []string {
 }
 
 func (a *WApp) NotesHistoryAdd(filename string) {
+	a.NotesHistoryAddPosition(filename, 1)
+}
+
+func (a *WApp) NotesHistoryAddPosition(filename string, line int) {
 	expanded := a.filePath(filename)
-	if err := notes.HistoryListAdd(a.projRoot, expanded); err != nil {
+	if err := notes.HistoryListAddAt(a.notesHistoryWorkspace(), expanded, line); err != nil {
 		if renderer, ok := renderwebkit.CurrentRenderer(); ok {
 			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 		} else {
@@ -2248,41 +2895,84 @@ func (a *WApp) NotesHistoryAdd(filename string) {
 }
 
 func (a *WApp) NotesHistoryCurrent() string {
-	return a.notesPathForHistory(notes.HistoryListCurrent(a.projRoot))
+	return a.NotesHistoryCurrentPosition().File
 }
 
 func (a *WApp) NotesHistoryPrevious() (string, error) {
-	file, err := notes.HistoryListPrevious(a.projRoot)
+	entry, err := a.NotesHistoryPreviousPosition()
 	if err != nil {
 		return "", err
 	}
 
-	return a.notesPathForHistory(file), nil
+	return entry.File, nil
 }
 
 func (a *WApp) NotesHistoryNext() (string, error) {
-	file, err := notes.HistoryListNext(a.projRoot)
+	entry, err := a.NotesHistoryNextPosition()
 	if err != nil {
 		return "", err
 	}
 
-	return a.notesPathForHistory(file), nil
+	return entry.File, nil
+}
+
+type NotesHistoryPosition struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
+}
+
+func (a *WApp) NotesHistoryCurrentPosition() NotesHistoryPosition {
+	return a.notesHistoryPosition(notes.HistoryListCurrentEntry(a.notesHistoryWorkspace()))
+}
+
+func (a *WApp) NotesHistoryPreviousPosition() (NotesHistoryPosition, error) {
+	entry, err := notes.HistoryListPreviousEntry(a.notesHistoryWorkspace())
+	if err != nil {
+		return NotesHistoryPosition{}, err
+	}
+	return a.notesHistoryPosition(entry), nil
+}
+
+func (a *WApp) NotesHistoryNextPosition() (NotesHistoryPosition, error) {
+	entry, err := notes.HistoryListNextEntry(a.notesHistoryWorkspace())
+	if err != nil {
+		return NotesHistoryPosition{}, err
+	}
+	return a.notesHistoryPosition(entry), nil
+}
+
+func (a *WApp) notesHistoryPosition(entry notes.HistoryEntryT) NotesHistoryPosition {
+	if entry.Line < 1 {
+		entry.Line = 1
+	}
+	return NotesHistoryPosition{
+		File: a.notesPathForHistory(entry.Filename),
+		Line: entry.Line,
+	}
 }
 
 func (a *WApp) GetProjectCache() *notes.ProjectCacheT {
-	return notes.GetProjectCache(a.projRoot)
+	return notes.GetProjectCache(a.GetCurrentProject())
+}
+
+func (a *WApp) GetNotesLayoutSizing() notes.LayoutSizing {
+	return notes.GetLayoutSizing()
+}
+
+func (a *WApp) SetNotesLayoutRatio(name string, ratio float64) error {
+	return notes.SetLayoutRatio(name, ratio)
 }
 
 func (a *WApp) SetProjectCache(ptr *notes.ProjectCacheT) {
-	notes.SetProjectCache(a.projRoot, ptr)
+	notes.SetProjectCache(a.GetCurrentProject(), ptr)
 }
 
 func (a *WApp) GetDocumentCache(filename string) *notes.DocumentCacheT {
-	return notes.GetDocumentCache(a.projRoot, filename)
+	return notes.GetDocumentCache(a.GetCurrentProject(), filename)
 }
 
 func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
-	notes.SetDocumentCache(a.projRoot, filename, ptr)
+	notes.SetDocumentCache(a.GetCurrentProject(), filename, ptr)
 }
 
 func (a *WApp) GetAISessionCache(workspace string) string {
@@ -2315,6 +3005,19 @@ func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
 		return ""
 	}
 	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
+}
+
+func (a *WApp) GetAISessionPrompt(sessionID, promptID int64) string {
+	agt, ok := a.activeAgent()
+	if !ok {
+		return ""
+	}
+	prompt, err := sessiondb.GetSessionPrompt(agt.Workspace(), sessionID, promptID)
+	if err != nil {
+		log.Printf("[debug] ai get session prompt %d: %v", promptID, err)
+		return ""
+	}
+	return prompt
 }
 
 func (a *WApp) ListAIStreamBlocks(sessionID, promptID int64) []sessiondb.StreamBlockMeta {
@@ -2475,6 +3178,7 @@ func (a *WApp) SaveFile(filename, contents, projectPath string) error {
 	if err := os.WriteFile(absPath, []byte(contents), 0644); err != nil {
 		return err
 	}
+	notes.NotifyFileChanges(absPath)
 
 	if created {
 		a.notifyLspWorkspaceFiles(func(t *lsp.Transport) error {
@@ -2497,7 +3201,11 @@ func (a *WApp) SaveBinaryFile(filename, base64Contents string) error {
 		return fmt.Errorf("decode base64 file contents: %w", err)
 	}
 
-	return os.WriteFile(filename, b, 0644)
+	if err := os.WriteFile(filename, b, 0644); err != nil {
+		return err
+	}
+	notes.NotifyFileChanges(filename)
+	return nil
 }
 
 func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
@@ -2521,7 +3229,7 @@ func (a *WApp) SaveImageDialog(defaultFilename string) (string, error) {
 func (a *WApp) SaveCodeDialog(defaultFilename string) (string, error) {
 	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:            "Save Code Block",
-		DefaultDirectory: a.projRoot,
+		DefaultDirectory: a.GetCurrentProject(),
 		DefaultFilename:  defaultFilename,
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Code files", Pattern: "*.txt;*.md;*.go;*.js;*.ts;*.py;*.sh;*.json;*.yaml;*.yml;*.html;*.css"},
@@ -2534,13 +3242,38 @@ func (a *WApp) SaveCodeDialog(defaultFilename string) (string, error) {
 	return path, nil
 }
 
-func (a *WApp) WindowPrint() {
-	runtime.WindowPrint(a.ctx)
+func (a *WApp) WindowPrint() error {
+	return printing.Print(a.ctx)
 }
 
 type ClipboardData struct {
 	Text  string `json:"text"`
 	Image string `json:"image"`
+}
+
+func (a *WApp) ClipboardSetHTML(html, plainText string) error {
+	return a.ClipboardSetFormatted(html, "", plainText)
+}
+
+func formattedClipboardItems(html, rtf, plainText string) []clipboard.Item {
+	items := []clipboard.Item{}
+	if rtf != "" {
+		items = append(items, clipboard.Item{Format: clipboard.Register("text/rtf"), Bytes: []byte(rtf)})
+	}
+	return append(items,
+		clipboard.Item{Format: clipboard.Register("text/html"), Bytes: []byte(html)},
+		clipboard.Item{Format: clipboard.FmtText, Bytes: []byte(plainText)},
+	)
+}
+
+func (a *WApp) ClipboardSetFormatted(html, rtf, plainText string) error {
+	items := formattedClipboardItems(html, rtf, plainText)
+	options := make([]clipboard.Option, len(items))
+	for position, item := range items {
+		options[position] = item
+	}
+	_, err := clipboard.WriteAll(context.Background(), options...)
+	return err
 }
 
 func (a *WApp) GetFileMetaMarkdown(filename string) string {
@@ -2573,12 +3306,9 @@ func (a *WApp) RenameFile(oldPath, newPath string) error {
 	if err != nil {
 		return err
 	}
+	notes.NotifyFileChanges(oldAbsPath, newAbsPath)
 
-	err = notes.RecentListRename(a.projRoot, oldPath, newPath)
-	if err != nil {
-		return err
-	}
-	err = notes.HistoryListRename(a.projRoot, oldAbsPath, newAbsPath)
+	err = notes.HistoryListRename(a.notesHistoryWorkspace(), oldAbsPath, newAbsPath)
 	if err != nil {
 		return err
 	}
@@ -2596,12 +3326,9 @@ func (a *WApp) DeleteFile(filename string) error {
 	if err != nil {
 		return err
 	}
+	notes.NotifyFileChanges(absPath)
 
-	err = notes.RecentListDelete(a.projRoot, filename)
-	if err != nil {
-		return err
-	}
-	err = notes.HistoryListDelete(a.projRoot, absPath)
+	err = notes.HistoryListDelete(a.notesHistoryWorkspace(), absPath)
 	if err != nil {
 		return err
 	}
@@ -2627,13 +3354,26 @@ func (a *WApp) GetCustomRegexp() []map[string]string {
 	return result
 }
 
-func (a *WApp) SendToTerminal(content string) {
+func (a *WApp) SendToTerminal(content, language string) error {
 	renderer, ok := renderwebkit.CurrentRenderer()
 	if !ok {
-		return
+		return fmt.Errorf("renderer not available")
 	}
 
-	renderer.ActiveTile().GetTerm().Reply([]byte(content))
+	command, cleanup, err := jupyter.PrepareTerminalCommand(content, language, a.GetCurrentProject())
+	if err != nil {
+		return err
+	}
+	err = renderer.ClonePane(command, func(_ []byte, _ int, err error) {
+		cleanup()
+		if err != nil {
+			renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+		}
+	})
+	if err != nil {
+		cleanup()
+	}
+	return err
 }
 
 // SwaggerRequest executes an HTTP request for a Swagger/OpenAPI endpoint.
@@ -2860,7 +3600,55 @@ func (a *WApp) ShowAIToolStateMenu(toolName string, x, y float64) {
 // ResolveAIToolPermission is called when the user clicks an access-request
 // option rendered in the AI panel output (see agent.RequestWritePermission).
 func (a *WApp) ResolveAIToolPermission(requestID, decision string) error {
-	return agent.ResolveWritePermissionRequest(requestID, decision)
+	if decision != "allow-once" && decision != "allow-prompt" {
+		return fmt.Errorf("tool denial decisions must use the reason inputbox")
+	}
+	return agent.ResolveWritePermissionRequest(requestID, decision, "")
+}
+
+func (a *WApp) PromptAIToolPermissionReason(requestID, decision string) error {
+	if decision != "deny-once" && decision != "deny-prompt" {
+		return fmt.Errorf("unsupported tool denial decision %q", decision)
+	}
+	workspace, toolName, ok := agent.WritePermissionRequestDetails(requestID)
+	if !ok {
+		return fmt.Errorf("permission request %q not found or already resolved", requestID)
+	}
+	renderer, ok := renderwebkit.CurrentRenderer()
+	if !ok {
+		return fmt.Errorf("renderer is unavailable")
+	}
+	denialScope := "this invocation"
+	confirmLabel := "Deny invocation"
+	if decision == "deny-prompt" {
+		denialScope = "this prompt"
+		confirmLabel = "Deny prompt"
+	}
+	renderer.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:        fmt.Sprintf("Why deny %s for %s?", toolName, denialScope),
+			Placeholder:  "Optional reason to share with the AI",
+			Multiline:    true,
+			CacheKey:     "ai-tool-denial-reasons:" + workspace,
+			DraftKey:     "ai-tool-denial:" + workspace + ":" + requestID,
+			ConfirmLabel: confirmLabel,
+			CancelLabel:  "Cancel",
+		},
+		OkFunc: func(value *types.InputBoxCallbackResultT) {
+			if err := agent.ResolveWritePermissionRequest(requestID, decision, value.String()); err != nil {
+				runtime.EventsEmit(a.ctx, "aiToolPermissionResolutionError", map[string]string{
+					"requestId": requestID,
+					"error":     err.Error(),
+				})
+				return
+			}
+			runtime.EventsEmit(a.ctx, "aiToolPermissionResolved", map[string]string{
+				"requestId": requestID,
+				"decision":  decision,
+			})
+		},
+	})
+	return nil
 }
 
 func (a *WApp) ResolveAIUserQuestion(requestID, answer string) error {
@@ -2909,13 +3697,13 @@ func (a *WApp) GetAISessionManagement() sessiondb.FrontendStateT {
 	return state
 }
 
-func (a *WApp) CreateAISession() sessiondb.FrontendStateT {
+func (a *WApp) CreateAISession(summary string) sessiondb.FrontendStateT {
 	agt, ok := a.activeAgent()
 	if !ok {
 		return sessiondb.FrontendStateT{}
 	}
 
-	state, err := sessiondb.CreateSession(agt.Workspace(), "", 24)
+	state, err := sessiondb.CreateSession(agt.Workspace(), summary, 24)
 	if err != nil {
 		log.Printf("[debug] ai create session: %v", err)
 		return sessiondb.FrontendStateT{}
@@ -3135,7 +3923,7 @@ func saveAIImageUpload(mimeType, encoded string) (string, error) {
 }
 
 func aiImagesDir(home string) string {
-	return filepath.Join(home, "Documents", app.DirName, ".images")
+	return filepath.Join(file.DocumentsDir(home), ".images")
 }
 
 // --------------------
@@ -3163,8 +3951,8 @@ func (lw *logWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (a *WApp) startup(ctx context.Context) {
-	a.ctx = ctx
+func (a *WApp) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.ctx = runtime.WithRuntime(ctx, a.uiRuntime)
 
 	// Set up log capture to emit events
 	lw := &logWriter{ctx: ctx}
@@ -3184,14 +3972,26 @@ func (a *WApp) startup(ctx context.Context) {
 			a.WindowShowHide()
 		}
 	})
+	return nil
 }
 
-func (a *WApp) shutdown(ctx context.Context) {
+func (a *WApp) shutdown() {
+	a.stopGitStatusWatch()
+	a.notesListMu.Lock()
+	a.notesIndexClosed = true
+	if a.notesListCancel != nil {
+		a.notesListCancel()
+	}
+	index := a.notesFileIndex
+	unsubscribe := a.notesIndexUnsubscribe
+	a.notesListMu.Unlock()
+	if unsubscribe != nil {
+		unsubscribe()
+	}
+	if index != nil {
+		index.Close()
+	}
 	watcher.Close()
-}
-
-func (a *WApp) domReady(ctx context.Context) {
-	go a.startTerminalWindow()
 }
 
 func appTitle() string {
@@ -3203,47 +4003,59 @@ var appIcon []byte
 
 func startWails() {
 	wapp := NewWailsApp()
-
-	// Create application with options
-	err := wails.Run(&options.App{
-		Title:             appTitle(),
-		AlwaysOnTop:       config.Config.Window.AlwaysOnTop,
-		HideWindowOnClose: true,
-		WindowStartState:  options.Maximised,
-		AssetServer: &assetserver.Options{
-			Assets:  wailsAssets,
-			Handler: wapp.notesAssetHandler(),
-		},
-		BackgroundColour: &options.RGBA{
-			R: types.SGR_DEFAULT.Bg.Red,
-			G: types.SGR_DEFAULT.Bg.Green,
-			B: types.SGR_DEFAULT.Bg.Blue,
-			A: 255,
-		},
-		OnStartup:  wapp.startup,
-		OnShutdown: wapp.shutdown,
-		OnDomReady: wapp.domReady,
-		Bind:       []any{wapp},
-		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHidden(),
-			About: &mac.AboutInfo{
-				Title:   app.Name(),
-				Message: fmt.Sprintf("%s\n\nVersion: %s (%s)\nBuild Date: %s\n\nCopyright: %s\nSoftware License: %s", app.TagLine(), app.Version(), app.Branch(), app.BuildDate(), app.Copyright(), app.License()),
-				Icon:    appIcon,
-			},
-			//Preferences: &mac.Preferences{TextInteractionEnabled: mac.Disabled},
-		},
-		Linux: &linux.Options{
-			Icon:        appIcon,
-			ProgramName: app.Name(),
-		},
-		Windows: &windows.Options{
-			WindowClassName: app.Name(),
-		},
+	assetServer := application.AssetFileServerFS(wailsAssets)
+	notesAssets := wapp.notesAssetHandler()
+	assets := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == notesAssetURLPath {
+			notesAssets.ServeHTTP(writer, request)
+			return
+		}
+		assetServer.ServeHTTP(writer, request)
 	})
 
-	if err != nil {
-		//closeHotkeys()
+	wailsApp := application.New(application.Options{
+		Name:        app.Name(),
+		Description: app.TagLine(),
+		Icon:        appIcon,
+		Services:    []application.Service{application.NewService(wapp)},
+		Assets:      application.AssetOptions{Handler: assets},
+		Linux:       application.LinuxOptions{ProgramName: app.Name()},
+		Windows:     application.WindowsOptions{WndClass: app.Name()},
+		OnShutdown:  wapp.shutdown,
+	})
+	wailsApp.Event.On("ttyphoon:frontend-ready", func(*application.CustomEvent) {
+		go wapp.startTerminalWindow()
+	})
+	window := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:       appTitle(),
+		AlwaysOnTop: config.Config.Window.AlwaysOnTop,
+		StartState:  application.WindowStateMaximised,
+		BackgroundColour: application.NewRGBA(
+			types.SGR_DEFAULT.Bg.Red,
+			types.SGR_DEFAULT.Bg.Green,
+			types.SGR_DEFAULT.Bg.Blue,
+			255,
+		),
+		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
+	})
+	wapp.uiRuntime = &wailsDesktopRuntime{app: wailsApp, window: window}
+	window.OnWindowEvent(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		wapp.setVisible(false)
+		window.Hide()
+	})
+	var maximizeOnFirstShow sync.Once
+	window.OnWindowEvent(events.Common.WindowShow, func(*application.WindowEvent) {
+		maximizeOnFirstShow.Do(func() {
+			application.InvokeAsync(func() {
+				if !window.IsMaximised() {
+					window.Maximise()
+				}
+			})
+		})
+	})
+
+	if err := wailsApp.Run(); err != nil {
 		panic(err)
 	}
 }

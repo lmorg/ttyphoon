@@ -28,8 +28,12 @@ const getWindowStyleMock = vi.fn(async () => ({
 }));
 const getAppTitleMock = vi.fn(async () => 'TTYphoon');
 const terminalSetFocusMock = vi.fn(async () => {});
+const terminalGetPanesMock = vi.fn(async () => []);
+const terminalPaneZoomMock = vi.fn(async () => {});
+const getNotesLayoutSizingMock = vi.fn(async () => ({}));
+const setNotesLayoutRatioMock = vi.fn(async () => {});
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
     ScreenGetAll: screenGetAllMock,
     WindowGetPosition: windowGetPositionMock,
@@ -41,10 +45,14 @@ vi.mock('../wailsjs/runtime/runtime', () => ({
     WindowSetSize: windowSetSizeMock,
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetWindowStyle: getWindowStyleMock,
     GetAppTitle: getAppTitleMock,
     TerminalSetFocus: terminalSetFocusMock,
+    TerminalGetPanes: terminalGetPanesMock,
+    TerminalPaneZoom: terminalPaneZoomMock,
+    GetNotesLayoutSizing: getNotesLayoutSizingMock,
+    SetNotesLayoutRatio: setNotesLayoutRatioMock,
 }));
 
 vi.mock('./notes.js', () => ({}));
@@ -97,6 +105,11 @@ describe('ttyphoon focus handoff', () => {
         getWindowStyleMock.mockClear();
         getAppTitleMock.mockClear();
         terminalSetFocusMock.mockClear();
+        terminalGetPanesMock.mockReset().mockResolvedValue([]);
+        terminalPaneZoomMock.mockReset().mockResolvedValue();
+        getNotesLayoutSizingMock.mockReset();
+        getNotesLayoutSizingMock.mockResolvedValue({});
+        setNotesLayoutRatioMock.mockClear();
 
         if (typeof window.requestAnimationFrame !== 'function') {
             window.requestAnimationFrame = (cb) => setTimeout(() => cb(0), 0);
@@ -137,6 +150,41 @@ describe('ttyphoon focus handoff', () => {
         expect(window.terminalFocusedState).toBe(true);
     });
 
+    it('restores the cached outer split and saves only a completed user resize', async () => {
+        getNotesLayoutSizingMock.mockResolvedValue({ notesRatio: 0.65 });
+        await importTtyphoon();
+        const notesPane = document.getElementById('notes-pane');
+        const splitter = document.getElementById('notes-terminal-split');
+        expect(Number.parseFloat(notesPane.style.width)).toBeCloseTo(65);
+        expect(setNotesLayoutRatioMock).not.toHaveBeenCalled();
+
+        splitter.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 720 }));
+        expect(setNotesLayoutRatioMock).not.toHaveBeenCalled();
+        window.dispatchEvent(new MouseEvent('mouseup'));
+        await flushPromises();
+        expect(setNotesLayoutRatioMock).toHaveBeenCalledWith('notesRatio', 0.6);
+
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+        window.dispatchEvent(new Event('resize'));
+        expect(setNotesLayoutRatioMock).toHaveBeenCalledTimes(1);
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+        expect(Number.parseFloat(notesPane.style.width)).toBeCloseTo(60);
+    });
+
+    it('preserves a cached ratio when Notes is collapsed and restored', async () => {
+        getNotesLayoutSizingMock.mockResolvedValue({ notesRatio: 0.65 });
+        await importTtyphoon();
+        const toggle = eventHandlers.get('toggleNotesPane');
+        await toggle();
+        await flushPromises();
+        await toggle();
+        await flushPromises();
+        await flushPromises();
+        expect(Number.parseFloat(document.getElementById('notes-pane').style.width)).toBeCloseTo(65);
+        expect(setNotesLayoutRatioMock).not.toHaveBeenCalled();
+    });
+
     // The terminal pane's base `flex:1` sets flex-basis:0%/flex-grow:1, which
     // beats `width` inside the overlay and removed its left/right margins.
     it('neutralises flex growth on a maximized pane so its width applies', async () => {
@@ -162,6 +210,49 @@ describe('ttyphoon focus handoff', () => {
         expect(terminalPane.style.flex).toBe('1');
         expect(notesPane.style.width).toBe('50%');
         expect(document.getElementById('notes-terminal-split').style.display).not.toBe('none');
+    });
+
+    it('unzooms the tmux pane before exiting terminal fullsize from the backdrop', async () => {
+        terminalGetPanesMock.mockResolvedValue([{ id: '%17', zoomed: true }]);
+        await importTtyphoon();
+
+        const terminalPane = document.getElementById('terminal-pane');
+        window.dispatchEvent(new CustomEvent('ttyphoon-terminal-fullsize-toggle'));
+        await flushPromises();
+        expect(terminalPane.parentElement.id).toBe('terminal-fullsize-overlay');
+        const overlay = terminalPane.parentElement;
+
+        terminalPaneZoomMock.mockImplementation(async () => {
+            expect(terminalPane.parentElement.id).toBe('terminal-fullsize-overlay');
+        });
+        overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushPromises();
+        await flushPromises();
+
+        expect(terminalGetPanesMock).toHaveBeenCalledOnce();
+        expect(terminalPaneZoomMock).toHaveBeenCalledWith('%17');
+        await vi.waitFor(() => {
+            expect(terminalPane.parentElement.id).toBe('content-wrapper');
+            expect(overlay.isConnected).toBe(false);
+        });
+    });
+
+    it('toggles the terminal fullsize overlay from the zoom hotkey event', async () => {
+        await importTtyphoon();
+        const terminalPane = document.getElementById('terminal-pane');
+        const toggle = eventHandlers.get('terminalFullsizeToggle');
+        expect(toggle).toBeTypeOf('function');
+
+        toggle();
+        expect(terminalPane.dataset.fullsize).toBe('true');
+        expect(terminalPane.parentElement.id).toBe('terminal-fullsize-overlay');
+        expect(terminalPane.style.width).toBe('calc(100vw - 100px)');
+        expect(terminalPane.style.height).toBe('calc(100vh - 100px)');
+
+        toggle();
+        expect(terminalPane.dataset.fullsize).toBeUndefined();
+        expect(terminalPane.parentElement.id).toBe('content-wrapper');
+        expect(terminalPane.style.flex).toBe('1');
     });
 
     it('maximizes notes with the same geometry as the terminal', async () => {

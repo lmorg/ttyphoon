@@ -3,7 +3,6 @@ package graphtools
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
-	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/graphs"
 )
 
@@ -46,21 +45,12 @@ type createGraphInputT struct {
 	Headings          []string   `json:"headings"`
 	Rows              [][]string `json:"rows"`
 	Type              string     `json:"type"`
-	Format            string     `json:"format,omitempty"`
 	Title             string     `json:"title,omitempty"`
 	CategoryColumn    int        `json:"categoryColumn"`
 	ValueColumns      []int      `json:"valueColumns"`
 	SeriesNames       []string   `json:"seriesNames,omitempty"`
 	CategoryAxisTitle string     `json:"categoryAxisTitle,omitempty"`
 	ValueAxisTitle    string     `json:"valueAxisTitle,omitempty"`
-}
-
-func (t *CreateGraph) Call(ctx context.Context, input string) (string, error) {
-	var request createGraphInputT
-	if err := json.Unmarshal([]byte(input), &request); err != nil {
-		return "", fmt.Errorf("invalid graph arguments: %w", err)
-	}
-	return t.create(ctx, &request, "")
 }
 
 func (t *CreateGraph) CallStructured(ctx context.Context, input any) (string, error) {
@@ -72,7 +62,7 @@ func (t *CreateGraph) CallStructured(ctx context.Context, input any) (string, er
 }
 
 func (t *CreateGraph) create(_ context.Context, request *createGraphInputT, outputDir string) (string, error) {
-	format := graphs.Format(strings.ToLower(strings.TrimSpace(request.Format)))
+	const format = graphs.PNG
 	data, err := graphs.RenderTable(graphs.Table{Headings: request.Headings, Rows: request.Rows}, graphs.Spec{
 		Type:              graphs.Type(strings.ToLower(strings.TrimSpace(request.Type))),
 		Format:            format,
@@ -85,9 +75,6 @@ func (t *CreateGraph) create(_ context.Context, request *createGraphInputT, outp
 	})
 	if err != nil {
 		return "", err
-	}
-	if format == "" {
-		format = graphs.SVG
 	}
 	if outputDir == "" {
 		outputDir, err = defaultGraphImagesDir()
@@ -120,7 +107,7 @@ func defaultGraphImagesDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Documents", app.DirName, ".images"), nil
+	return filepath.Join(file.DocumentsDir(home), ".images"), nil
 }
 
 func markdownAlt(text string) string {

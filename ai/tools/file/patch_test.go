@@ -23,6 +23,112 @@ func (a *pathTestAgent) RequestWritePermission(context.Context, string) error { 
 func (a *pathTestAgent) EnvironmentValue(string) string                       { return "" }
 func (a *pathTestAgent) ImageGenerationEnvironmentValue(string) string        { return "" }
 
+type dynamicPathTestAgent struct {
+	directoryTestAgent
+	meta aitypes.Meta
+}
+
+func (agent *dynamicPathTestAgent) GetMeta() *aitypes.Meta { return &agent.meta }
+
+func TestFilesystemToolsUseCurrentRootAfterDirectoryChanges(t *testing.T) {
+	firstRoot, secondRoot := t.TempDir(), t.TempDir()
+	previousDirectory := filepath.Join(firstRoot, "a-long-nested-directory-from-the-original-terminal-pane")
+	if err := os.MkdirAll(previousDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agent := &dynamicPathTestAgent{
+		directoryTestAgent: directoryTestAgent{
+			pathTestAgent: pathTestAgent{projectRoot: firstRoot}, renderer: directoryTestRenderer{},
+		},
+		meta: aitypes.Meta{Pwd: previousDirectory},
+	}
+	writer := &Write{agent: agent}
+	reader := &ReadFiles{agent: agent}
+	for _, root := range []string{firstRoot, secondRoot} {
+		agent.projectRoot = root
+		result, err := writer.writeFiles(context.Background(), "-- note.md --\n"+root+"\n")
+		if err != nil || strings.Contains(result, "ERROR") {
+			t.Fatalf("write in current root failed: %q, %v", result, err)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "note.md"))
+		if err != nil || strings.TrimSpace(string(data)) != root {
+			t.Fatalf("file not written in current root %q: %q, %v", root, data, err)
+		}
+		result, err = reader.callFiles(context.Background(), []string{"note.md"})
+		if err != nil || !strings.Contains(result, root) {
+			t.Fatalf("read did not use current root %q: %q, %v", root, result, err)
+		}
+		if _, err := resolveWorkspacePath(agent, filepath.Join(firstRoot, "note.md")); root != firstRoot && err == nil {
+			t.Fatal("old project root remained inside the write sandbox after changing roots")
+		}
+	}
+}
+
+func TestResolveWorkspacePathAllowsMissingDescendantsWithoutCreatingThem(t *testing.T) {
+	root := t.TempDir()
+	agent := &pathTestAgent{projectRoot: root}
+	want := filepath.Join(root, "nested", "new", "note.md")
+	got, err := resolveWorkspacePath(agent, filepath.Join("nested", "new", "note.md"))
+	if err != nil || got != want {
+		t.Fatalf("resolveWorkspacePath() = %q, %v; want %q", got, err, want)
+	}
+	if _, err := os.Stat(filepath.Dir(want)); !os.IsNotExist(err) {
+		t.Fatalf("path resolution created a directory: %v", err)
+	}
+}
+
+func TestResolveWorkspacePathRejectsMissingDescendantsThroughOutsideSymlink(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	link := filepath.Join(root, "outside")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	agent := &pathTestAgent{projectRoot: root}
+	if _, err := resolveWorkspacePath(agent, filepath.Join("outside", "new", "note.md")); err == nil {
+		t.Fatal("resolved a missing path through an outside symlink")
+	}
+}
+
+func TestWriteFilesCreatesMissingParentDirectories(t *testing.T) {
+	root := t.TempDir()
+	agent := &directoryTestAgent{
+		pathTestAgent: pathTestAgent{projectRoot: root},
+		renderer:      directoryTestRenderer{},
+	}
+	writer := &Write{agent: agent}
+	result, err := writer.writeFiles(context.Background(), "-- nested/new/note.md --\ncreated\n")
+	if err != nil || strings.Contains(result, "ERROR") {
+		t.Fatalf("writeFiles() = %q, %v", result, err)
+	}
+	contents, err := os.ReadFile(filepath.Join(root, "nested", "new", "note.md"))
+	if err != nil || string(contents) != "created\n" {
+		t.Fatalf("created file = %q, %v", contents, err)
+	}
+}
+
+func TestWriteFileAuthorizationDescribesMissingParentDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "existing"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	agent := &directoryTestAgent{
+		pathTestAgent: pathTestAgent{projectRoot: root},
+		renderer:      directoryTestRenderer{},
+	}
+	writer := &Write{agent: agent}
+	archive := "-- new/nested/file.md --\nnew\n-- existing/file.md --\nexisting\n"
+	description := writer.CallDescription(context.Background(), &writeFileInputT{Archive: archive})
+	if !strings.Contains(description, `new/nested/file\.md<br/>(creating directories too)`) {
+		t.Fatalf("authorization omitted the conditional directory-creation note: %s", description)
+	}
+	if !strings.Contains(description, `existing/file\.md | <pre><code>existing&#10;</code></pre>`) {
+		t.Fatalf("authorization omitted the existing file path or contents: %s", description)
+	}
+	if strings.Contains(description, `existing/file\.md<br/>(creating directories too)`) {
+		t.Fatalf("authorization incorrectly marked an existing parent for creation: %s", description)
+	}
+}
+
 func TestApplyPatchEdits(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -99,6 +205,30 @@ func TestApplyPatchEdits(t *testing.T) {
 	}
 }
 
+func TestPatchFileCallDescriptionRendersEmbeddedTemplate(t *testing.T) {
+	patch := &patchInputT{
+		File: "src/<example>.go",
+		Edits: []patchEditT{
+			{Old: "<old> **first** |", New: "new first"},
+			{Old: "old second", New: "new second"},
+		},
+	}
+
+	description := (&PatchFile{}).CallDescription(context.Background(), patch)
+	for _, want := range []string{
+		"File: `src/&lt;example&gt;\\.go`",
+		"| Change | Text |",
+		"| `-` | &lt;old&gt; \\*\\*first\\*\\* \\| |",
+		"| `+` | new first |",
+		"| `-` | old second |",
+		"| `+` | new second |",
+	} {
+		if !strings.Contains(description, want) {
+			t.Errorf("CallDescription() = %q, want it to contain %q", description, want)
+		}
+	}
+}
+
 func TestResolveWorkspacePath(t *testing.T) {
 	pwd := t.TempDir()
 	agent := &pathTestAgent{projectRoot: pwd}
@@ -127,6 +257,12 @@ func TestResolveWorkspacePath(t *testing.T) {
 		if _, err := resolveWorkspacePath(agent, input); err == nil {
 			t.Errorf("resolveWorkspacePath(%q) error = nil, want outside-root error", input)
 		}
+	}
+}
+
+func TestResolveWorkspacePathFailsWhenProjectRootIsUnavailable(t *testing.T) {
+	if _, err := resolveWorkspacePath(&pathTestAgent{}, "README.md"); err == nil || !strings.Contains(err.Error(), "project root is unavailable") {
+		t.Fatalf("resolveWorkspacePath() error = %v, want unavailable-root error", err)
 	}
 }
 

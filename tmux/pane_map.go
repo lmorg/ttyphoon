@@ -40,19 +40,17 @@ func (pm *paneMap) Delete(key string) {
 
 func (pm *paneMap) Each() iter.Seq[*PaneT] {
 	return func(yield func(*PaneT) bool) {
-
 		pm._mutex.RLock()
-		//defer pm._mutex.RUnlock()
+		panes := make([]*PaneT, 0, len(pm._map))
 		for _, pane := range pm._map {
-			pm._mutex.RUnlock()
+			panes = append(panes, pane)
+		}
+		pm._mutex.RUnlock()
 
-			ok := yield(pane)
-			pm._mutex.RLock()
-			if !ok {
+		for _, pane := range panes {
+			if !yield(pane) {
 				break
 			}
 		}
-
-		pm._mutex.RUnlock()
 	}
 }

@@ -9,6 +9,8 @@
  * render fully expanded, preserving the previous behaviour.
  */
 
+import { disableNativeTextAssistance } from './text-input.js';
+
 // Number of container nodes (objects/arrays) that may be eagerly expanded
 // during the initial render. Once exhausted, remaining containers render
 // collapsed and lazy. Tuned so typical documents render fully expanded while
@@ -463,10 +465,7 @@ function startInlineEdit(container, editable) {
     input.type = 'text';
     input.className = 'json-inline-editor';
     input.value = initialValue;
-    input.spellcheck = false;
-    input.setAttribute('autocomplete', 'off');
-    input.setAttribute('autocorrect', 'off');
-    input.setAttribute('autocapitalize', 'off');
+    disableNativeTextAssistance(input);
     input.setAttribute('data-json-inline-editor', 'true');
     input.setAttribute('aria-label', editType === 'key' ? 'Edit property name' : 'Edit value');
 

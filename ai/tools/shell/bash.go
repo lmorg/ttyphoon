@@ -1,18 +1,16 @@
 package shell
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"reflect"
-	"sync"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
-	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/utils/markdownutil"
 )
 
 type Bash struct {
@@ -28,7 +26,7 @@ func init() {
 var bashDescription string
 
 func (t *Bash) New(agt aitypes.Agent) (aitypes.Tool, error) {
-	return &Bash{agent: agt, enabled: false}, nil
+	return &Bash{agent: agt, enabled: true}, nil
 }
 
 func (t *Bash) Enabled() bool { return t.enabled }
@@ -42,50 +40,84 @@ func (t *Bash) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "deny"}
 }
 
-// bashInputT is deliberately a script rather than a command line. The script
-// is written to a temporary file so Bash receives the exact multiline input.
 type bashInputT struct {
-	Script string `json:"script"`
+	Script  string `json:"script"`
+	Summary string `json:"summary"`
+}
+
+type bashResultT struct {
+	Output   string `json:"output"`
+	ExitCode *int   `json:"exitCode,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+type bashPaneCloner interface {
+	ClonePane(string, func([]byte, int, error)) error
 }
 
 func (t *Bash) InputType() reflect.Type { return reflect.TypeOf(bashInputT{}) }
-func (t *Bash) StreamsOutput() bool     { return true }
-
-func (t *Bash) Call(ctx context.Context, input string) (string, error) {
-	return t.run(ctx, input)
-}
 
 func (t *Bash) CallStructured(ctx context.Context, input any) (string, error) {
 	request, ok := input.(*bashInputT)
 	if !ok || request == nil {
 		return "", fmt.Errorf("bash received an invalid structured input %T", input)
 	}
-	return t.run(ctx, request.Script)
+	result, err := t.run(ctx, request.Script)
+	if err != nil {
+		result.Error = err.Error()
+	}
+	output, err := json.Marshal(result)
+	return string(output), err
 }
 
-func (t *Bash) run(ctx context.Context, script string) (string, error) {
-	dir, err := os.MkdirTemp("", "ttyphoon-bash-")
-	if err != nil {
-		return "", fmt.Errorf("create temporary directory: %w", err)
+func (t *Bash) CallDescription(ctx context.Context, input any) string {
+	request, ok := input.(*bashInputT)
+	if !ok || request == nil {
+		return "Tool received an invalid structured input"
 	}
-	defer os.RemoveAll(dir)
+	description := markdownutil.MarkdownCodeBlock(request.Script, "bash")
+	summary := strings.Join(strings.Fields(request.Summary), " ")
+	if summary != "" {
+		description = markdownutil.EscapeMarkdownText(summary) + "\n\n" + description
+	}
+	return description
+}
 
-	path := dir + "/script.sh"
-	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
-		return "", fmt.Errorf("write temporary Bash script: %w", err)
+func (t *Bash) run(ctx context.Context, script string) (bashResultT, error) {
+	if err := ctx.Err(); err != nil {
+		return bashResultT{}, err
 	}
-
-	command := exec.CommandContext(ctx, "bash", path)
-	stream := agent.OpenAITypedStreamBlock(ctx, sessiondb.StreamBlockToolOutput, "")
-	defer stream.Close()
-	output := &bashOutputWriter{stream: stream}
-	command.Stdout = output
-	command.Stderr = output
-	err = command.Run()
-	if err != nil {
-		return output.String(), fmt.Errorf("bash exited unsuccessfully: %w", err)
+	if t.agent == nil {
+		return bashResultT{}, fmt.Errorf("terminal pane cloning is unavailable")
 	}
-	return output.String(), nil
+	cloner, ok := t.agent.Renderer().(bashPaneCloner)
+	if !ok {
+		return bashResultT{}, fmt.Errorf("terminal pane cloning is unavailable")
+	}
+	type completion struct {
+		result bashResultT
+		err    error
+	}
+	completed := make(chan completion, 1)
+	command := "bash -c '" + strings.ReplaceAll(script, "'", "'\"'\"'") + "'"
+	if err := cloner.ClonePane(command, func(output []byte, exitCode int, err error) {
+		result := bashResultT{Output: string(output)}
+		if err == nil {
+			result.ExitCode = &exitCode
+		}
+		select {
+		case completed <- completion{result: result, err: err}:
+		default:
+		}
+	}); err != nil {
+		return bashResultT{}, fmt.Errorf("create Bash terminal pane: %w", err)
+	}
+	select {
+	case finished := <-completed:
+		return finished.result, finished.err
+	case <-ctx.Done():
+		return bashResultT{}, fmt.Errorf("stopped waiting for Bash: %w; the cloned command may still be running", ctx.Err())
+	}
 }
 
 func (t *Bash) ObservationStructured(input any, output string, err error) aitypes.ToolObservation {
@@ -104,32 +136,30 @@ func (t *Bash) ObservationStructured(input any, output string, err error) aitype
 	command := aitypes.CommandObservation{
 		Command: request.Script,
 		Status:  observation.Status,
-		Summary: firstNonEmptyLine(output),
+	}
+	var result bashResultT
+	if json.Unmarshal([]byte(output), &result) == nil {
+		command.Summary = firstNonEmptyLine(result.Output)
+		command.ExitCode = result.ExitCode
+		if result.Error != "" {
+			observation.Status = "error"
+			observation.Error = result.Error
+			command.Status = "error"
+		} else if result.ExitCode != nil && *result.ExitCode != 0 {
+			observation.Status = "error"
+			command.Status = "failed"
+		}
 	}
 	observation.CommandsRun = []aitypes.CommandObservation{command}
 	return observation
 }
 
-type bashOutputWriter struct {
-	mu     sync.Mutex
-	output bytes.Buffer
-	stream *agent.AIStreamBlockEmitter
-}
-
-func (w *bashOutputWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if _, err := w.output.Write(p); err != nil {
-		return 0, err
+func firstNonEmptyLine(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
 	}
-	if w.stream != nil {
-		w.stream.Emit(string(p))
-	}
-	return len(p), nil
-}
-
-func (w *bashOutputWriter) String() string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.output.String()
+	return ""
 }

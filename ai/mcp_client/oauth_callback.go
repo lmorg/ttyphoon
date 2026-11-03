@@ -38,17 +38,23 @@ func renderOAuthCallbackPage(w http.ResponseWriter) error {
 }
 
 type OAuthCallbackServer struct {
-	server *http.Server
-	result chan OAuthCallbackResult
-	err    chan error
+	server   *http.Server
+	listener net.Listener
+	result   chan OAuthCallbackResult
+	err      chan error
 }
 
 type OAuthCallbackResult struct {
 	Code  string
 	State string
+	Iss   string
 }
 
 func StartOAuthCallbackServer(redirectURI string) (*OAuthCallbackServer, error) {
+	return startOAuthCallbackServer(redirectURI, "")
+}
+
+func startOAuthCallbackServer(redirectURI, expectedState string) (*OAuthCallbackServer, error) {
 	log.Printf("[debug] MCP OAuth: starting callback server redirect_uri=%q", redirectURI)
 	u, err := url.Parse(redirectURI)
 	if err != nil {
@@ -77,6 +83,18 @@ func StartOAuthCallbackServer(redirectURI string) (*OAuthCallbackServer, error) 
 		log.Printf("[debug] MCP OAuth: callback request received remote=%q path=%q host=%q", r.RemoteAddr, r.URL.Path, r.Host)
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
+		if expectedState != "" && state != expectedState {
+			http.Error(w, "OAuth state does not match the active sign-in attempt", http.StatusBadRequest)
+			return
+		}
+		if failure := r.URL.Query().Get("error"); failure != "" && state != "" {
+			http.Error(w, "Authorization failed. You can close this window.", http.StatusBadRequest)
+			select {
+			case errCh <- fmt.Errorf("OAuth authorization failed: %s", failure):
+			default:
+			}
+			return
+		}
 		if code == "" || state == "" {
 			log.Printf("[error] MCP OAuth: callback missing code or state")
 			http.Error(w, "Missing code or state", http.StatusBadRequest)
@@ -88,7 +106,7 @@ func StartOAuthCallbackServer(redirectURI string) (*OAuthCallbackServer, error) 
 			http.Error(w, "Authentication complete. You can close this window.", http.StatusOK)
 		}
 		select {
-		case result <- OAuthCallbackResult{Code: code, State: state}:
+		case result <- OAuthCallbackResult{Code: code, State: state, Iss: r.URL.Query().Get("iss")}:
 		default:
 		}
 	})
@@ -107,14 +125,16 @@ func StartOAuthCallbackServer(redirectURI string) (*OAuthCallbackServer, error) 
 		}
 	}()
 
-	return &OAuthCallbackServer{server: server, result: result, err: errCh}, nil
+	return &OAuthCallbackServer{server: server, listener: listener, result: result, err: errCh}, nil
 }
 
 func (s *OAuthCallbackServer) Wait(timeout time.Duration) (*OAuthCallbackResult, error) {
-	log.Printf("[debug] MCP OAuth: waiting for callback timeout=%s", timeout)
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return s.WaitContext(ctx)
+}
 
+func (s *OAuthCallbackServer) WaitContext(ctx context.Context) (*OAuthCallbackResult, error) {
 	select {
 	case res := <-s.result:
 		log.Printf("[debug] MCP OAuth: callback wait completed state_present=%t code_len=%d", res.State != "", len(res.Code))
@@ -122,9 +142,8 @@ func (s *OAuthCallbackServer) Wait(timeout time.Duration) (*OAuthCallbackResult,
 	case err := <-s.err:
 		log.Printf("[error] MCP OAuth: callback wait failed: %v", err)
 		return nil, fmt.Errorf("OAuth callback server error: %w", err)
-	case <-timer.C:
-		log.Printf("[error] MCP OAuth: callback wait timed out")
-		return nil, fmt.Errorf("timed out waiting for OAuth callback")
+	case <-ctx.Done():
+		return nil, fmt.Errorf("waiting for OAuth callback: %w", ctx.Err())
 	}
 }
 
@@ -132,5 +151,8 @@ func (s *OAuthCallbackServer) Close() {
 	log.Printf("[info] MCP OAuth: shutting down callback server")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_ = s.server.Shutdown(ctx)
+	if err := s.server.Shutdown(ctx); err != nil {
+		_ = s.server.Close()
+	}
+	_ = s.listener.Close()
 }

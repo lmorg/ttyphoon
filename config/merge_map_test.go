@@ -1,6 +1,29 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+func TestPaneAutoCloseDelayUsesConfiguredGoDuration(t *testing.T) {
+	previous := Config.Terminal.PaneAutoCloseDelay
+	t.Cleanup(func() { Config.Terminal.PaneAutoCloseDelay = previous })
+
+	for _, test := range []struct {
+		configured string
+		want       time.Duration
+	}{
+		{configured: "17s", want: 17 * time.Second},
+		{configured: "1m30s", want: 90 * time.Second},
+		{configured: "invalid", want: defaultPaneAutoCloseDelay},
+		{configured: "0s", want: defaultPaneAutoCloseDelay},
+	} {
+		Config.Terminal.PaneAutoCloseDelay = test.configured
+		if got := PaneAutoCloseDelay(); got != test.want {
+			t.Errorf("PaneAutoCloseDelay(%q) = %s, want %s", test.configured, got, test.want)
+		}
+	}
+}
 
 func TestMergeMapMergesNestedMapsAndOverwritesValues(t *testing.T) {
 	older := map[string]any{

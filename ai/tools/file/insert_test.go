@@ -1,6 +1,7 @@
 package filetools
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,28 @@ func TestApplyLineInserts(t *testing.T) {
 				t.Errorf("applyLineInserts() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestInsertLinesCallDescriptionRendersEscapedInserts(t *testing.T) {
+	request := &insertLinesInputT{
+		File: "src/<example>.go",
+		Inserts: []insertT{
+			{Line: 4, Text: "**inserted** | <value>"},
+			{Line: 8, Text: "second line"},
+		},
+	}
+
+	description := (&InsertLines{}).CallDescription(context.Background(), request)
+	for _, want := range []string{
+		"File: `src/&lt;example&gt;\\.go`",
+		"| # | Text |",
+		"| 5 | \\*\\*inserted\\*\\* \\| &lt;value&gt; |",
+		"| 9 | second line |",
+	} {
+		if !strings.Contains(description, want) {
+			t.Errorf("CallDescription() = %q, want it to contain %q", description, want)
+		}
 	}
 }
 

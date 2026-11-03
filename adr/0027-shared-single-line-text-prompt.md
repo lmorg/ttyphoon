@@ -36,6 +36,38 @@ for the modal did not need to change — only the two functions that decide what
 Both `renameCurrentLspSymbol()` and the AI session rename button now call
 `openTextPrompt(...)` instead of `window.prompt(...)`.
 
+Updated 2026-10-14: creating a new AI session from the AI panel's session
+dropdown also uses `openTextPrompt(...)`. A supplied name is passed to
+`CreateAISession`; confirming an empty value passes an empty summary so the
+session database retains its existing `New session` default. Cancelling the
+prompt creates no session. The prompt title is `New AI session`, with a `Create`
+confirmation action and an optional-name placeholder.
+
+Updated 2026-10-19: shared prompts use the same `markdown-body`/`h3` title
+markup as Rename, Delete, and New Worktree, including Git Branch/Tag and AI
+Session creation. Dialog titles use the yellow Jura heading style rather than
+plain accent-colored prompt text. Shared terminal input-box titles and the AI
+settings dialog follow that same heading presentation.
+
+### Folder-targeted file creation
+
+The file-list context menu reuses the same create-file modal for
+`Create new file...` and `Paste as new file...`, including storage section
+headings such as `$PROJECT` and `$NOTES`. The location selector identifies the
+storage root and the filename input is prefilled with the folder-relative path.
+Paste reads through `GetClipboardData`, captures the payload before showing
+the modal, and suggests `clipboard.md` for text or `clipboard.png` for an image.
+Confirmation writes text through `SaveFile` or base64 PNG through
+`SaveBinaryFile`; cancellation or a fresh create/rename clears the pending payload.
+
+File right-clicks combine the original Go-provided file actions, including
+rename/delete/copy, with the parent-folder Create/Paste actions. They do not
+replace the original file actions. Blank-space right-clicks use the nearest
+visible folder or section header above the pointer. Folder collapse/expand
+controls remain available, falling back to the section's folders when the
+target folder has no descendants. Existing descendant-only collapse/expand
+behaviour is preserved for folders that have child folders.
+
 ## Consequences
 
 - No new DOM/CSS: the prompt looks and behaves like every other modal in the

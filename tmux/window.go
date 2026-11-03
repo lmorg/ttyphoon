@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/workspace"
 )
 
 /*
@@ -80,10 +81,29 @@ func (tmux *Tmux) initSessionWindows() error {
 
 // NewWindow is a request sent to tmux to trigger a new window event
 func (tmux *Tmux) NewWindow() {
-	_, err := tmux.SendCommand([]byte("new-window"))
+	err := tmux.newWindowWithInitialEnvironment()
 	if err != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
 	}
+}
+
+func (tmux *Tmux) newWindowWithInitialEnvironment() error {
+	environment := cloneEnvironment(tmux.initialEnvVars)
+	workingDirectory := ""
+	if pane, err := tmux.ActivePane(); err == nil && pane != nil && pane.term != nil {
+		environment = pane.term.GetEnvVars()
+		workingDirectory = pane.Pwd()
+	}
+	command := "new-window -P -F '#{pane_id}'" + workspace.EnvsTmux(environment)
+	if workingDirectory != "" {
+		command += " -c " + workspace.QuoteString(workingDirectory)
+	}
+	response, err := tmux.SendCommand([]byte(command))
+	if err != nil {
+		return err
+	}
+	tmux.seedPaneStartupState(responsePaneID(response), workingDirectory, environment)
+	return nil
 }
 
 // newWindow is a new window event being returned from tmux
@@ -169,54 +189,51 @@ func (tmux *Tmux) ActiveWindow() (*WindowT, error) {
 		return nil, errors.New("no open windows")
 	}
 
-	win := tmux.activeWindow
-	if win != nil {
-		return win, nil
+	var fallback *WindowT
+	for win := range tmux.wins.Each() {
+		if win == nil || win.closed {
+			continue
+		}
+		if win.active {
+			tmux.activeWindow = win
+			return win, nil
+		}
+		if fallback == nil || win.index < fallback.index || (win.index == fallback.index && win.id < fallback.id) {
+			fallback = win
+		}
 	}
-
-	if len(tmux.wins._map) == 0 {
+	if cached := tmux.activeWindow; cached != nil && !cached.closed && tmux.wins.Get(cached.id) == cached {
+		return cached, nil
+	}
+	tmux.activeWindow = fallback
+	if fallback == nil {
 		return nil, errors.New("no open windows")
 	}
-
-	// lets just pick one at random
-	for win = range tmux.wins.Each() {
-		break
-	}
-	return win, nil
+	return fallback, nil
 }
 
 func (win *WindowT) ActivePane() *PaneT {
-	if win.activePane == nil {
-		panic("*WindowT.activePane is unset")
-		//return nil
+	if win == nil || win.closed {
+		return nil
 	}
-
-	if !win.activePane.closed {
-		return win.activePane
+	var fallback *PaneT
+	for pane := range win.panes.Each() {
+		if pane == nil || pane.closed {
+			continue
+		}
+		if pane.active {
+			win.activePane = pane
+			return pane
+		}
+		if fallback == nil || pane.top < fallback.top || (pane.top == fallback.top && pane.left < fallback.left) || (pane.top == fallback.top && pane.left == fallback.left && pane.id < fallback.id) {
+			fallback = pane
+		}
 	}
-
-	err := fnKeySelectPaneLast(win.activePane.tmux)
-	if err == nil && !win.activePane.closed {
-		return win.activePane
+	if cached := win.activePane; cached != nil && !cached.closed && win.panes.Get(cached.id) == cached {
+		return cached
 	}
-
-	err = fnKeySelectPaneUp(win.activePane.tmux)
-	if err == nil && !win.activePane.closed {
-		return win.activePane
-	}
-
-	err = fnKeySelectPaneLeft(win.activePane.tmux)
-	if err == nil && !win.activePane.closed {
-		return win.activePane
-	}
-
-	if err != nil {
-		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
-	} else {
-		win.activePane.tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, "Cannot find an active pane")
-	}
-
-	return win.activePane
+	win.activePane = fallback
+	return fallback
 }
 
 func (tmux *Tmux) RenameWindow(win *WindowT, name string) error {

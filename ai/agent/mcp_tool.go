@@ -43,8 +43,9 @@ func (t *mcpTool) Enabled() bool { return t.enabled }
 func (t *mcpTool) Toggle()       { t.enabled = !t.enabled }
 func (t *mcpTool) Close() error  { return t.client.Close() }
 
-func (t *mcpTool) Name() string { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
-func (t *mcpTool) Path() string { return t.path }
+func (t *mcpTool) Name() string       { return fmt.Sprintf("mcp.%s.%s", t.server, t.name) }
+func (t *mcpTool) Path() string       { return t.path }
+func (t *mcpTool) JSONSchema() []byte { return t.schema }
 func (t *mcpTool) Description() string {
 	description := t.description //+ "\nInput MUST be a JSON object with the following schema:\n" + string(t.schema)
 

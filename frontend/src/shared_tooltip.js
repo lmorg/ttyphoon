@@ -60,6 +60,19 @@ function ensureTooltipStyle() {
         #ttyphoon-shared-tooltip :where(code, pre) {
             font-family: var(--terminal-menu-font, var(--font-family, monospace));
         }
+
+        #ttyphoon-shared-tooltip .shared-tooltip-row {
+            display: grid;
+            grid-template-columns: 1.25em minmax(0, 1fr);
+            column-gap: 0.5em;
+            align-items: baseline;
+        }
+
+        #ttyphoon-shared-tooltip .shared-tooltip-icon {
+            font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+            font-weight: 400;
+            text-align: center;
+        }
     `;
     document.head.appendChild(style);
 }

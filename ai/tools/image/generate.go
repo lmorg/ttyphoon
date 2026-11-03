@@ -18,9 +18,9 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
-	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 const (
@@ -94,16 +94,6 @@ type imageResponseT struct {
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
-}
-
-func (t *GenerateImage) Call(ctx context.Context, input string) (string, error) {
-	debug.Log(input)
-
-	var request generateImageInputT
-	if err := json.Unmarshal([]byte(input), &request); err != nil {
-		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
-	}
-	return t.generate(ctx, &request)
 }
 
 func (t *GenerateImage) CallStructured(ctx context.Context, input any) (string, error) {
@@ -414,6 +404,9 @@ func (t *GenerateImage) resolveOutputPath(name string) (relative string, absolut
 		absolute, err = defaultImagePath()
 		return absolute, absolute, err
 	}
+	if strings.TrimSpace(pwd) == "" {
+		return "", "", fmt.Errorf("project root is unavailable for the active terminal pane")
+	}
 
 	absolute = name
 	if !filepath.IsAbs(absolute) {
@@ -446,6 +439,9 @@ func (t *GenerateImage) resolveInputImagePath(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	absolute := name
 	if !filepath.IsAbs(absolute) {
+		if strings.TrimSpace(pwd) == "" {
+			return "", fmt.Errorf("project root is unavailable for the active terminal pane")
+		}
 		absolute = filepath.Join(pwd, absolute)
 	}
 	absolute = filepath.Clean(absolute)
@@ -472,7 +468,7 @@ func defaultImagesDir() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(home, "Documents", app.DirName, ".images"), nil
+	return filepath.Join(file.DocumentsDir(home), ".images"), nil
 }
 
 // defaultImagePath is used when the caller doesn't name a file.

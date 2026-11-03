@@ -1,0 +1,12 @@
+/*!
+ * Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com
+ * License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License)
+ * Copyright 2026 Fonticons, Inc.
+ */
+@font-face {
+  font-family: "Font Awesome Brands";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./fa-brands-400.woff2") format("woff2");
+}

@@ -41,6 +41,11 @@ type DrawCommand struct {
 	UlC        *types.Colour
 }
 
+const (
+	tileOverlayTopHalf    int32 = 1 << 0
+	tileOverlayBottomHalf int32 = 1 << 1
+)
+
 func sgrOpts(sgr *types.Sgr, forceBg bool) (fg *types.Colour, bg *types.Colour) {
 	if sgr == nil {
 		return types.SGR_COLOR_FOREGROUND, nil

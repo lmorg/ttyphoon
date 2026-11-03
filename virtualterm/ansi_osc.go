@@ -88,6 +88,10 @@ parsed:
 		// Change VT100 text background color to Pt.
 		term.osc1xColorFgBG(11, stack[1:], terminator)
 
+	case "133":
+		// Shell integration state markers.
+		term.osc133UpdateState(stack[1:])
+
 	case "22":
 		// Change pointer cursor shape to Pt.
 		term.osc22SetPointerCursor(stack[1:])

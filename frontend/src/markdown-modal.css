@@ -17,7 +17,7 @@
     border-radius: 8px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
     display: inline-block;
-    max-width: min(860px, calc(100vw - 80px));
+    max-width: min(1200px, calc(100vw - 80px));
     max-height: calc(100vh - 80px);
     overflow: auto;
     scrollbar-width: none;
@@ -80,6 +80,38 @@
     white-space: nowrap !important;
     overflow-wrap: normal !important;
     word-break: normal;
+}
+
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap td pre,
+.markdown-modal-body:not(.markdown-modal-table-wordwrap-off) .markdown-modal-table-scroll-wrap td pre code {
+    white-space: pre-wrap !important;
+}
+
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap td pre,
+.markdown-modal-body.markdown-modal-table-wordwrap-off .markdown-modal-table-scroll-wrap td pre code {
+    white-space: pre !important;
+}
+
+/* Headings use the foreground as their background, so match their text colour instead. */
+.markdown-modal-body th .notes-table-col-resize-handle::before {
+    background: currentColor;
+    opacity: 0.6;
+}
+
+.markdown-modal-body .notes-table-col-resize-handle:hover::before,
+.markdown-modal-body .notes-table-col-resize-handle.is-dragging::before {
+    width: 2px;
+    background: var(--accent, var(--terminal-accent, #99c0d3));
+    opacity: 1;
+}
+
+/* Notes prompts and menus opened from the modal must stack above it. */
+body.markdown-modal-open #notes-modal {
+    z-index: 10001;
+}
+
+body.markdown-modal-open .tty-menu {
+    z-index: 10002;
 }
 
 .markdown-modal-code-shell {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -144,21 +145,37 @@ type Tmux struct {
 
 	allowExit bool
 
-	appWindow    *types.AppWindowTerms
-	activeWindow *WindowT
-	renderer     types.Renderer
+	appWindow      *types.AppWindowTerms
+	activeWindow   *WindowT
+	renderer       types.Renderer
+	initialEnvVars map[string]string
+
+	pendingPaneStateMu sync.Mutex
+	pendingPaneState   map[string]paneStartupState
 
 	limiter    sync.Mutex
 	readerDead atomic.Bool
 	prefixTtl  time.Time
 
+	layoutRefreshMu      sync.Mutex
+	layoutRefreshRunning bool
+	layoutRefreshPending bool
+
 	pendingPaneOutputMu sync.Mutex
 	pendingPaneOutput   map[string][][]byte
+
+	interactiveActionMu sync.Mutex
+	interactiveActions  map[string]interactiveActionEntry
 }
 
 type tmuxResponseT struct {
 	Message [][]byte
 	IsErr   bool
+}
+
+type paneStartupState struct {
+	workingDirectory string
+	environment      map[string]string
 }
 
 const (
@@ -168,19 +185,22 @@ const (
 
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	debug.Log(startCommand)
+	initialEnvironment := config.SetEnv()
 	tmux := &Tmux{
 		resp:              make(chan *tmuxResponseT, 1),
 		wins:              newWindowMap(),
 		panes:             newPaneMap(),
 		renderer:          renderer,
 		pendingPaneOutput: make(map[string][][]byte),
+		initialEnvVars:    environmentMap(initialEnvironment),
+		pendingPaneState:  make(map[string]paneStartupState),
 	}
 
 	var err error
 	debug.Log("tmux tty Start()... ")
 	tmux._resp = new(tmuxResponseT)
 	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
-	tmux.cmd.Env = config.SetEnv()
+	tmux.cmd.Env = initialEnvironment
 	tmux.tty, err = pty.Start(tmux.cmd)
 	debug.Log(fmt.Sprintf("tmux tty Start() err == %v", err))
 	if err != nil {
@@ -217,6 +237,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		scanErr := scanner.Err()
 		debug.Log(fmt.Sprintf("tmux reader loop exited: %v", scanErr))
 		tmux.readerDead.Store(true)
+		tmux.cancelAllInteractiveActions(errors.New("tmux control channel closed"))
 
 		if scanErr != nil && tmux.renderer != nil {
 			tmux.renderer.DisplayNotification(types.NOTIFY_ERROR,
@@ -252,6 +273,48 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	return tmux, nil
 }
 
+func environmentMap(entries []string) map[string]string {
+	environment := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			environment[name] = value
+		}
+	}
+	return environment
+}
+
+func cloneEnvironment(environment map[string]string) map[string]string {
+	clone := make(map[string]string, len(environment))
+	for name, value := range environment {
+		clone[name] = value
+	}
+	return clone
+}
+
+func (tmux *Tmux) seedPaneStartupState(paneID, workingDirectory string, environment map[string]string) {
+	if paneID == "" {
+		return
+	}
+	seed := paneStartupState{
+		workingDirectory: workingDirectory,
+		environment:      cloneEnvironment(environment),
+	}
+	tmux.pendingPaneStateMu.Lock()
+	if tmux.pendingPaneState == nil {
+		tmux.pendingPaneState = make(map[string]paneStartupState)
+	}
+	tmux.pendingPaneState[paneID] = seed
+	tmux.pendingPaneStateMu.Unlock()
+
+	if pane := tmux.panes.Get(paneID); pane != nil {
+		pane.setStartupState(seed)
+		tmux.pendingPaneStateMu.Lock()
+		delete(tmux.pendingPaneState, paneID)
+		tmux.pendingPaneStateMu.Unlock()
+	}
+}
+
 var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_OUTPUT:  _respOutput,
 	_RESP_BEGIN:   _respBegin,
@@ -264,7 +327,7 @@ var tmuxCommandMap = map[string]func(*Tmux, []byte){
 	_RESP_CONFIG_ERROR:            _respConfigError,
 	_RESP_CONTINUE:                __respIgnored,
 	_RESP_EXIT:                    _respExit,
-	_RESP_LAYOUT_CHANGE:           __respIgnored,
+	_RESP_LAYOUT_CHANGE:           _respLayoutChange,
 	_RESP_EXTENDED_OUTPUT:         _respExtendedOutput,
 	_RESP_PANE_MODE_CHANGED:       __respIgnored,
 	_RESP_PASTE_BUFFER_CHANGED:    __respIgnored,
@@ -345,6 +408,9 @@ func (tmux *Tmux) finishPendingPaneOutput(paneId string, pane *PaneT, initErr er
 	if initErr != nil && tmux.renderer != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, initErr.Error())
 	}
+	if initErr == nil && pane != nil {
+		tmux.renderer.RefreshWindowList()
+	}
 }
 
 func _respExtendedOutput(tmux *Tmux, b []byte) {
@@ -388,6 +454,31 @@ func _respWindowPaneChanged(tmux *Tmux, b []byte) {
 	go func() {
 		errToNotification(tmux.renderer, tmux.updatePaneInfo(string(params[2])))
 		tmux.renderer.RefreshWindowList()
+	}()
+}
+
+func _respLayoutChange(tmux *Tmux, _ []byte) {
+	tmux.layoutRefreshMu.Lock()
+	if tmux.layoutRefreshRunning {
+		tmux.layoutRefreshPending = true
+		tmux.layoutRefreshMu.Unlock()
+		return
+	}
+	tmux.layoutRefreshRunning = true
+	tmux.layoutRefreshMu.Unlock()
+	go func() {
+		for {
+			tmux.renderer.RefreshWindowList()
+			tmux.layoutRefreshMu.Lock()
+			if tmux.layoutRefreshPending {
+				tmux.layoutRefreshPending = false
+				tmux.layoutRefreshMu.Unlock()
+				continue
+			}
+			tmux.layoutRefreshRunning = false
+			tmux.layoutRefreshMu.Unlock()
+			return
+		}
 	}()
 }
 

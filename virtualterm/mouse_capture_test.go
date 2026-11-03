@@ -7,6 +7,35 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 )
 
+type mouseLeaveTestElement struct {
+	types.Element
+	mouseOutCalls int
+}
+
+func (element *mouseLeaveTestElement) MouseOut() {
+	element.mouseOutCalls++
+}
+
+func TestMouseLeaveClearsHoverWithoutSendingInput(t *testing.T) {
+	term := newParserTestTerm()
+	pty := term.Pty.(*parserTestPty)
+	element := &mouseLeaveTestElement{}
+	term._mouseIn = element
+	hoverCalls := 0
+	term._mousePosRenderer.Set(func() { hoverCalls++ })
+	term.MouseLeave()
+	term.MouseLeave()
+	if term._mousePosRenderer.Call() || hoverCalls != 0 {
+		t.Fatal("mouse leave retained the hover drawing callback")
+	}
+	if term._mouseIn != nil || element.mouseOutCalls != 1 {
+		t.Fatalf("hovered element = %v, MouseOut calls = %d, want nil and 1", term._mouseIn, element.mouseOutCalls)
+	}
+	if len(pty.out) != 0 {
+		t.Fatalf("mouse leave wrote terminal input: %q", pty.out)
+	}
+}
+
 func TestMouseClickSendsPressAndReleaseWithPosition(t *testing.T) {
 	term := newParserTestTerm()
 	pty := term.Pty.(*parserTestPty)

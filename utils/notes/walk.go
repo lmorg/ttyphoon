@@ -11,8 +11,14 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/lmorg/ttyphoon/utils/cache"
 )
+
+type FileContext struct {
+	PathProjectRoot string `json:"projectRoot"`
+	PathGlobalNotes string `json:"globalNotes"`
+	PathUserNotes   string `json:"userNotes"`
+	GroupName       string `json:"groupName"`
+}
 
 type ListFilesReturnT struct {
 	PathProjectRoot string
@@ -20,44 +26,92 @@ type ListFilesReturnT struct {
 	PathUserNotes   string
 	GroupName       string // tmux window name (tab name)
 	Files           []string
+	Err             error
+	Truncated       bool
+	Entries         int
 }
 
 const MAX_FILES = 5_000
 
-func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
-	ulf := &ListFilesReturnT{}
+var errFileScanLimit = errors.New("filesystem entry limit reached")
 
+func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 	tile := renderer.ActiveTile()
+	return ScanFiles(ctx, ResolveFileContext(tile))
+}
+
+func ResolveFileContext(tile types.Tile) FileContext {
 	if tile == nil {
+		return FileContext{}
+	}
+	return ResolveDirectoryContext(tile.Pwd(), tile.GroupName())
+}
+
+func ResolveDirectoryContext(pwd, group string) FileContext {
+	global := DirGlobal()
+	projectRoot := ""
+	if pwd != "" {
+		projectRoot = DirProjectRoot(pwd)
+	}
+	return FileContext{
+		PathProjectRoot: projectRoot,
+		PathGlobalNotes: global,
+		PathUserNotes:   global + group + "/",
+		GroupName:       group,
+	}
+}
+
+func FileContextRoots(roots FileContext) []string {
+	paths := []string{}
+	seen := make(map[string]bool)
+	for _, path := range []string{roots.PathProjectRoot, roots.PathUserNotes, roots.PathGlobalNotes} {
+		root := indexRoot(path)
+		if root != "" && !seen[root] {
+			paths = append(paths, root)
+			seen[root] = true
+		}
+	}
+	return paths
+}
+
+func ScanFiles(ctx context.Context, roots FileContext) *ListFilesReturnT {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ulf := &ListFilesReturnT{
+		PathProjectRoot: roots.PathProjectRoot,
+		PathGlobalNotes: roots.PathGlobalNotes,
+		PathUserNotes:   roots.PathUserNotes,
+		GroupName:       roots.GroupName,
+	}
+	if err := ctx.Err(); err != nil {
+		ulf.Err = err
 		return ulf
 	}
-
-	ulf.PathProjectRoot = DirProjectRoot(tile.Pwd())
-	ulf.PathGlobalNotes = DirGlobal()
-	ulf.GroupName = tile.GroupName()
-	ulf.PathUserNotes = ulf.PathGlobalNotes + ulf.GroupName + "/"
-
-	cache.Read(cache.NS_NOTESW_FILES, ulf.PathUserNotes, &ulf.Files)
-	cache.Write(cache.NS_NOTESW_FILES, ulf.PathUserNotes, &ulf.Files, cache.Days(365))
 
 	ulf.Files = append(ulf.Files, listFiles(ulf.PathGlobalNotes, "GLOBAL")...)
 	ulf.Files = append(ulf.Files, listFiles(ulf.PathUserNotes, "NOTES")...)
 	//files = append(files, listFiles(a.historyDir, "HISTORY")...)
 
 	if ulf.PathProjectRoot == "" {
+		ulf.Err = ctx.Err()
+		if ulf.Err != nil {
+			ulf.Files = nil
+		}
 		return ulf
 	}
 
 	var (
 		projectFiles []string
 		count        int
+		scanError    error
 	)
 
 	err := filepath.WalkDir(ulf.PathProjectRoot, func(path string, d os.DirEntry, err error) error {
 		count++
 
 		if count > MAX_FILES {
-			return fmt.Errorf(`filesystem walk: too many files. MAX_FILES=%d`, MAX_FILES)
+			return fmt.Errorf("%w: MAX_FILES=%d", errFileScanLimit, MAX_FILES)
 		}
 
 		if ctx != nil {
@@ -70,6 +124,7 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 
 		if err != nil {
 			log.Printf("filesystem walk: %v", err)
+			scanError = err
 			return nil
 		}
 		if d.IsDir() {
@@ -97,11 +152,29 @@ func ListFiles(ctx context.Context, renderer types.Renderer) *ListFilesReturnT {
 		return nil
 	})
 
-	ulf.Files = append(ulf.Files, projectFiles...)
-
-	if err != nil && !errors.Is(err, context.Canceled) {
-		log.Println(err)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+		ulf.Err = ctx.Err()
+		if ulf.Err == nil {
+			ulf.Err = err
+		}
+		ulf.Files = nil
+		return ulf
 	}
+
+	if errors.Is(err, errFileScanLimit) {
+		ulf.Truncated = true
+	} else if err != nil {
+		ulf.Err = err
+	}
+	if scanError != nil {
+		ulf.Err = scanError
+	}
+	if ulf.Err != nil {
+		ulf.Files = nil
+		return ulf
+	}
+	ulf.Entries = min(count, MAX_FILES)
+	ulf.Files = append(ulf.Files, projectFiles...)
 
 	return ulf
 }

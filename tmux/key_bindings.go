@@ -91,6 +91,7 @@ type fnKeyT func(*Tmux) error
 var defaultFnKeys = map[string]fnKeyT{
 	"Create a new window":                             fnKeyNewWindow,
 	"Kill the active pane":                            fnKeyKillPane,
+	"Zoom the active pane":                            fnKeyZoomPane,
 	"Kill current window":                             fnKeyKillCurrentWindow,
 	"Choose a window from a list":                     fnKeyChooseWindowFromList,
 	"Rename current window":                           fnKeyRenameWindow,
@@ -104,7 +105,7 @@ var defaultFnKeys = map[string]fnKeyT{
 	"Select window 7":                                 fnKeySelectWindow7,
 	"Select window 8":                                 fnKeySelectWindow8,
 	"Select window 9":                                 fnKeySelectWindow9,
-	"Move to the previously active pane":              fnKeyLastPane,
+	"Move to the previously active pane":              fnKeySelectPaneLast,
 	"Select the previously current window":            fnKeyLastWindow,
 	"Select the next window with an alert":            fnKeyNextWindowAlert,
 	"Select the previous window with an alert":        fnKeyPreviousWindowAlert,

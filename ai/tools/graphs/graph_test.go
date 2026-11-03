@@ -16,9 +16,12 @@ func TestCreateGraphExposesStructuredInput(t *testing.T) {
 	if got := structured.InputType(); got != reflect.TypeOf(createGraphInputT{}) {
 		t.Fatalf("InputType() = %v, want createGraphInputT", got)
 	}
+	if _, ok := structured.InputType().FieldByName("Format"); ok {
+		t.Fatal("InputType() still exposes a format option")
+	}
 }
 
-func TestCreateGraphWritesSVGAndReturnsMarkdownImage(t *testing.T) {
+func TestCreateGraphDefaultsToPNGAndReturnsMarkdownImage(t *testing.T) {
 	outputDir := t.TempDir()
 	tool := &CreateGraph{}
 	output, err := tool.create(nil, &createGraphInputT{
@@ -34,15 +37,15 @@ func TestCreateGraphWritesSVGAndReturnsMarkdownImage(t *testing.T) {
 	}
 
 	path := graphPathFromOutput(output)
-	if path == "" || filepath.Dir(path) != outputDir || filepath.Ext(path) != ".svg" {
-		t.Fatalf("output path = %q, want generated SVG in %q", path, outputDir)
+	if path == "" || filepath.Dir(path) != outputDir || filepath.Ext(path) != ".png" {
+		t.Fatalf("output path = %q, want generated PNG in %q", path, outputDir)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q): %v", path, err)
 	}
-	if !strings.Contains(string(data), "<svg") {
-		t.Fatalf("file %q does not contain SVG data", path)
+	if len(data) < 8 || string(data[:8]) != string([]byte{137, 80, 78, 71, 13, 10, 26, 10}) {
+		t.Fatalf("file %q does not contain PNG data", path)
 	}
 	if !strings.Contains(output, "![Monthly sales]("+filepath.ToSlash(path)+")") {
 		t.Fatalf("output %q does not contain the file-backed Markdown image", output)
@@ -54,13 +57,12 @@ func TestCreateGraphWritesSVGAndReturnsMarkdownImage(t *testing.T) {
 	}
 }
 
-func TestCreateGraphWritesPNGWhenRequested(t *testing.T) {
+func TestCreateGraphAlwaysWritesPNG(t *testing.T) {
 	outputDir := t.TempDir()
 	output, err := (&CreateGraph{}).create(nil, &createGraphInputT{
 		Headings:       []string{"Month", "Sales"},
 		Rows:           [][]string{{"Jan", "12"}, {"Feb", "18"}},
 		Type:           "bar",
-		Format:         "png",
 		CategoryColumn: 0,
 		ValueColumns:   []int{1},
 	}, outputDir)

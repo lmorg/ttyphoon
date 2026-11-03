@@ -2,7 +2,7 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetCustomRegexp, HyperlinkOpenWithDefault } from '../wailsjs/go/main/WApp';
+import { GetCustomRegexp, HyperlinkOpenWithDefault } from './wails-bindings.js';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -83,8 +83,8 @@ export function configureMarked() {
 /**
  * Regular expressions for Wails URLs
  */
-const rxWailsUrl = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)/;
-const rxBookmark = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+const rxWailsUrl = /^(?:(?:wails:\/\/(?:wails|localhost|wails\.localhost)|https?:\/\/wails\.localhost)(?::[0-9]+)?\/)/;
+const rxBookmark = /^(?:(?:wails:\/\/(?:wails|localhost|wails\.localhost)|https?:\/\/wails\.localhost)(?::[0-9]+)?\/)#/;
 
 /**
  * Render Mermaid diagrams in a container

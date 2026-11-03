@@ -1,4 +1,5 @@
 - Output matching files and directories under the current project root.
+- The root is resolved dynamically from the agent's owning terminal pane, not from the pane currently in focus.
 - Returns a JSON array of objects: `[{"Name":"relative/path","IsDir":false}]`.
 - `Name` is relative to the project root. `IsDir` is true for directories.
 - Input is a filter, not a path. Use it to include or exclude specific files

@@ -18,7 +18,7 @@ func TestGrepCallReturnsMatchingFiles(t *testing.T) {
 	}
 
 	tool := &Grep{agent: &pathTestAgent{projectRoot: root}}
-	response, err := tool.Call(context.Background(), `{"query":"needle"}`)
+	response, err := tool.CallStructured(context.Background(), &grepInputT{Query: "needle"})
 	if err != nil {
 		t.Fatalf("Call() error = %v", err)
 	}
@@ -54,6 +54,32 @@ func TestGrepCallReturnsMatchingFiles(t *testing.T) {
 	}
 }
 
+func TestGrepDoesNotReturnCachedPagesFromPreviousProjectRoot(t *testing.T) {
+	firstRoot, secondRoot := t.TempDir(), t.TempDir()
+	for _, root := range []string{firstRoot, secondRoot} {
+		if err := os.WriteFile(filepath.Join(root, "match.txt"), []byte("needle\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	agent := &pathTestAgent{projectRoot: firstRoot}
+	tool := &Grep{agent: agent}
+	initial := tool.newSearch(context.Background(), &grepInputT{Query: "needle"})
+	if initial.Error != "" || len(initial.Results) != 1 || initial.Results[0].Path != filepath.Join(firstRoot, "match.txt") {
+		t.Fatalf("initial search failed: %+v", initial)
+	}
+	agent.projectRoot = secondRoot
+	if stale := tool.getPage(&grepInputT{Page: 1}); stale.Error == "" || len(stale.Results) != 0 {
+		t.Fatalf("returned cached matches from the old project: %+v", stale)
+	}
+	updated := tool.newSearch(context.Background(), &grepInputT{Query: "needle"})
+	if updated.Error != "" || len(updated.Results) != 1 || updated.Results[0].Path != filepath.Join(secondRoot, "match.txt") {
+		t.Fatalf("new search did not follow project change: %+v", updated)
+	}
+	if current := tool.getPage(&grepInputT{Page: 1}); current.Error != "" || current.Results[0].Path != filepath.Join(secondRoot, "match.txt") {
+		t.Fatalf("current-root pagination failed: %+v", current)
+	}
+}
+
 func TestGrepCallReturnsRequestedPage(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < 51; i++ {
@@ -77,7 +103,7 @@ func TestGrepCallReturnsRequestedPage(t *testing.T) {
 	}
 
 	tool := &Grep{agent: &pathTestAgent{projectRoot: root}}
-	response, err := tool.Call(context.Background(), `{"query":"needle"}`)
+	response, err := tool.CallStructured(context.Background(), &grepInputT{Query: "needle"})
 	if err != nil {
 		t.Fatalf("Call(search) error = %v", err)
 	}
@@ -89,7 +115,7 @@ func TestGrepCallReturnsRequestedPage(t *testing.T) {
 		t.Fatalf("first page = pageCount %d pageNumber %d results %d, want 2, 1, 50", first.PageCount, first.PageNumber, len(first.Results))
 	}
 
-	response, err = tool.Call(context.Background(), `{"page":2}`)
+	response, err = tool.CallStructured(context.Background(), &grepInputT{Page: 2})
 	if err != nil {
 		t.Fatalf("Call(page): %v", err)
 	}

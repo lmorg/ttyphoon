@@ -79,8 +79,21 @@ func writeTokenFile(path string, token *oauth2.Token) error {
 	if err != nil {
 		return fmt.Errorf("encode token: %w", err)
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return fmt.Errorf("write token file: %w", err)
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".oauth-token-*")
+	if err != nil {
+		return fmt.Errorf("create token file: %w", err)
+	}
+	defer os.Remove(temporary.Name())
+	_, writeErr := temporary.Write(b)
+	closeErr := temporary.Close()
+	if writeErr != nil {
+		return fmt.Errorf("write token file: %w", writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close token file: %w", closeErr)
+	}
+	if err := os.Rename(temporary.Name(), path); err != nil {
+		return fmt.Errorf("replace token file: %w", err)
 	}
 	return nil
 }

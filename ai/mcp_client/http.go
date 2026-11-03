@@ -1,6 +1,7 @@
 package mcp_client
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -31,8 +32,12 @@ var rxUnsafeTokenPath = regexp.MustCompile(`[^-_a-zA-Z0-9.]+`)
 var rxUnsafeWorkspaceSegment = regexp.MustCompile(`[^-_a-zA-Z0-9]+`)
 
 func ConnectHttp(overrides *mcp_config.OverrideT, url string) (*Client, error) {
+	return ConnectHttpContext(context.Background(), overrides, url)
+}
+
+func ConnectHttpContext(ctx context.Context, overrides *mcp_config.OverrideT, url string) (*Client, error) {
 	// Use the Go-SDK HTTP adapter for HTTP transport
-	g, err := ConnectHttpGoSDK(overrides, url, nil)
+	g, err := ConnectHttpGoSDKContext(ctx, overrides, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP MCP client: %w", err)
 	}

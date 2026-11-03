@@ -24,7 +24,7 @@ arguments. Do not wrap it in an `input` property:
 
 Rules:
 
-- `file` is relative to the working directory, or an absolute path within it.
+- `file` is relative to the owning terminal pane's current project root, resolved dynamically, or an absolute path within that root.
   The file must already exist.
 - `old` MUST match the file contents **exactly**, byte for byte, including
   whitespace, indentation and line breaks. Do not add ellipses or placeholder

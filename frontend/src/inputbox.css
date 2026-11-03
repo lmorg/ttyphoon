@@ -23,13 +23,106 @@
     flex-direction: column;
     gap: 12px;
     font-family: var(--terminal-menu-font);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
 }
 
 .inputbox-title {
-    font-size: 14px;
+    font-family: "Jura", var(--font-family), sans-serif;
+    font-size: var(--notes-font-size, 14px);
     font-weight: bold;
-    color: var(--terminal-accent, #99c0d3);
+    color: var(--yellow, #99c0d3);
     word-break: break-word;
+}
+
+.inputbox-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.inputbox-images[hidden],
+.inputbox-image-error[hidden] {
+    display: none;
+}
+
+.inputbox-image {
+    position: relative;
+    width: 96px;
+    height: 72px;
+    border: 1px solid var(--terminal-fg);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.inputbox-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.inputbox-image-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--terminal-fg);
+    border-radius: 4px;
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+    cursor: pointer;
+}
+
+.inputbox-image-remove:hover,
+.inputbox-image-remove:focus-visible {
+    color: var(--terminal-accent);
+    border-color: var(--terminal-accent);
+}
+
+.inputbox-image-error {
+    color: var(--red, #ff6666);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.inputbox-image-loading {
+    align-self: center;
+    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+    animation: inputbox-image-spin 1s linear infinite;
+}
+
+@keyframes inputbox-image-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+    .inputbox-dialog {
+        min-width: 0;
+        width: calc(100% - 32px);
+        box-sizing: border-box;
+        padding: 16px;
+    }
+    .inputbox-variable-line {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+}
+
+.inputbox-title h3 {
+    margin: 0;
+}
+
+.inputbox-confirmation-message {
+    color: var(--terminal-fg, #e6edf3);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .inputbox-input {
@@ -82,37 +175,6 @@
     font-size: 12px;
     color: var(--terminal-fg, #99c0d3);
     cursor: help;
-}
-
-.inputbox-variable-tooltip {
-    position: absolute;
-    left: 0;
-    top: calc(100% + 6px);
-    z-index: 1;
-    min-width: 180px;
-    max-width: 280px;
-    padding: 6px 8px;
-    border: 1px solid var(--terminal-fg, #316db0);
-    border-radius: 4px;
-    background: var(--terminal-bg, #1e2228);
-    color: var(--terminal-fg, #e6edf3);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-    font-size: 11px;
-    font-weight: normal;
-    line-height: 1.35;
-    white-space: normal;
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-2px);
-    transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
-}
-
-.inputbox-variable-label:hover .inputbox-variable-tooltip,
-.inputbox-variable-label:focus-within .inputbox-variable-tooltip {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
 }
 
 .inputbox-variable-line > .inputbox-input,
@@ -205,9 +267,29 @@
 
 .inputbox-buttons {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
     justify-content: flex-end;
+}
+
+.inputbox-draft[hidden] {
+    display: none;
+}
+
+.inputbox-button-icon {
+    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+    margin-right: 6px;
+}
+
+.inputbox-draft:hover {
+    color: var(--terminal-accent);
+    border-color: var(--terminal-accent);
+}
+
+.inputbox-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .inputbox-btn {
@@ -221,6 +303,11 @@
     color: var(--terminal-fg, #e6edf3);
 }
 
+.inputbox-btn:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 .inputbox-ok {
     border-color: var(--terminal-fg, #316db0);
 }
@@ -229,6 +316,18 @@
     border-color: var(--terminal-green, #3d7fc7);
     color: var(--terminal-green, #3d7fc7);
     background: var(--terminal-green-20, rgba(61, 127, 199, 0.2));
+}
+
+.inputbox-danger {
+    border-color: var(--terminal-fg, #99c0d3);
+    color: var(--terminal-fg, #99c0d3);
+    background: transparent;
+}
+
+.inputbox-danger:hover {
+    border-color: var(--red, var(--terminal-red, #dc323c));
+    color: var(--red, var(--terminal-red, #dc323c));
+    background: var(--terminal-red-20, rgba(220, 50, 60, 0.2));
 }
 
 .inputbox-cancel {
@@ -241,9 +340,10 @@
     background: var(--terminal-accent-20, rgba(49, 109, 176, 0.2));
 }
 
+.inputbox-draft,
 .inputbox-history-btn {
-    font-family: "Font Awesome Solid", "Font Awesome", sans-serif;
-    font-weight: 900;
+    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 400;
     min-width: 31px;
     min-height: 31px;
     display: inline-flex;
@@ -255,4 +355,13 @@
 .inputbox-history-btn:hover {
     border-color: var(--terminal-accent, #316db0);
     background: var(--terminal-accent-20, rgba(49, 109, 176, 0.2));
+}
+
+@media (max-width: 600px) {
+    .inputbox-buttons {
+        gap: 6px;
+    }
+    .inputbox-btn {
+        padding: 5px 10px;
+    }
 }

@@ -1,42 +1,35 @@
-export function drawGauge(offCtx, getCellSize, cmd) {
-    if (!offCtx || !cmd?.fg || !Number.isFinite(cmd.max) || cmd.max <= 0) {
+export function drawGauge(offCtx, getCellSize, cmd, foreground = cmd?.fg) {
+    if (!offCtx || !cmd || !foreground || !Number.isFinite(cmd.max) || cmd.max <= 0) {
         return;
     }
 
+    const horizontal = cmd.op === 'gauge_h';
+    if (!horizontal && cmd.op !== 'gauge_v') {
+        return;
+    }
     const { cellWidth, cellHeight } = getCellSize();
-
     const x = (Number.isFinite(cmd.x) ? cmd.x : 0) * cellWidth;
     const y = (Number.isFinite(cmd.y) ? cmd.y : 0) * cellHeight;
     const ratio = Math.max(0, Math.min(1, (Number.isFinite(cmd.value) ? cmd.value : 0) / cmd.max));
-
-    const base = `rgb(${cmd.fg.Red}, ${cmd.fg.Green}, ${cmd.fg.Blue})`;
-
-    if (cmd.op === 'gauge_h') {
-        const widthCells = Number.isFinite(cmd.width) && cmd.width > 0 ? cmd.width : 1;
-        const fullW = widthCells * cellWidth;
-        const gaugeY = y + cellHeight - cellWidth;
-
-        offCtx.globalAlpha = 0.15;
-        offCtx.fillStyle = base;
-        offCtx.fillRect(x, gaugeY, fullW, cellWidth);
-
-        offCtx.globalAlpha = 0.35;
-        offCtx.fillRect(x, gaugeY, Math.floor(fullW * ratio), cellWidth);
-        offCtx.globalAlpha = 1;
+    const cells = horizontal ? cmd.width : cmd.height;
+    const extent = (Number.isFinite(cells) && cells > 0 ? cells : 1) * (horizontal ? cellWidth : cellHeight);
+    const filled = Math.floor(extent * ratio);
+    if (filled <= 0) {
         return;
     }
 
-    if (cmd.op === 'gauge_v') {
-        const heightCells = Number.isFinite(cmd.height) && cmd.height > 0 ? cmd.height : 1;
-        const fullH = heightCells * cellHeight;
-
-        offCtx.globalAlpha = 0.15;
-        offCtx.fillStyle = base;
-        offCtx.fillRect(x, y, cellWidth, fullH);
-
-        const fillH = Math.floor(fullH * ratio);
-        offCtx.globalAlpha = 0.35;
-        offCtx.fillRect(x, y, cellWidth, fillH);
-        offCtx.globalAlpha = 1;
-    }
+    const thickness = 8;
+    offCtx.save();
+    offCtx.globalAlpha = 0.5;
+    offCtx.fillStyle = `rgb(${foreground.Red}, ${foreground.Green}, ${foreground.Blue})`;
+    offCtx.beginPath();
+    offCtx.roundRect(
+        horizontal ? x : x + cellWidth - thickness,
+        horizontal ? y + cellHeight - thickness : y,
+        horizontal ? filled : thickness,
+        horizontal ? thickness : filled,
+        4,
+    );
+    offCtx.fill();
+    offCtx.restore();
 }

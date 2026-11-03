@@ -25,6 +25,21 @@ func TestResolverMapsExtensionAndAlias(t *testing.T) {
 	}
 }
 
+func TestResolverRecognizesDockerfileNamesAndAliases(t *testing.T) {
+	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{{Aliases: []string{"dockerfile", "docker"}, FileExtension: "Dockerfile"}})
+	for _, path := range []string{"Dockerfile", "/workspace/Dockerfile", "dockerfile", "Dockerfile.dev", "/workspace/DOCKERFILE.prod", "app.Dockerfile"} {
+		if got := resolver.LanguageIDForFile(path); got != "dockerfile" {
+			t.Errorf("LanguageIDForFile(%q) = %q, want dockerfile", path, got)
+		}
+		if ids := resolver.LanguageIDsForFile(path); len(ids) != 2 || ids[0] != "dockerfile" || ids[1] != "docker" {
+			t.Errorf("LanguageIDsForFile(%q) = %v, want dockerfile and docker", path, ids)
+		}
+	}
+	if got := resolver.LanguageIDForFile("not-a-Dockerfile"); got != "" {
+		t.Fatalf("unrelated extensionless name resolved to %q", got)
+	}
+}
+
 func TestResolverKeepsFirstMappingOnDuplicates(t *testing.T) {
 	resolver := NewResolverFromJupyter([]*jupyter.LanguageBindingT{
 		{Aliases: []string{"python", "py"}, FileExtension: "py"},

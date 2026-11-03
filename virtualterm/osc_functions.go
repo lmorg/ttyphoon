@@ -3,6 +3,7 @@ package virtualterm
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -83,22 +84,26 @@ func (term *Term) osc1xColorFgBG(key int, params []string, terminator string) {
 }
 
 func (term *Term) osc7UpdatePath(params []string) {
-	if len(params[0]) <= 7 { // "file://" {
+	host, pwd, ok := parseOSC7URI(params)
+	if !ok {
 		return
 	}
+	_osc7UpdatePath(term, host, pwd)
+}
 
-	var (
-		host, pwd []rune
-		ptr       *[]rune = &host
-	)
-	for _, r := range params[0][7:] {
-		if r == '/' {
-			ptr = &pwd
-		}
-		*ptr = append(*ptr, r)
+func parseOSC7URI(params []string) (host, pwd string, ok bool) {
+	if len(params) == 0 {
+		return "", "", false
 	}
 
-	_osc7UpdatePath(term, string(host), string(pwd))
+	uri, err := url.Parse(strings.Join(params, ";"))
+	if err != nil || !strings.EqualFold(uri.Scheme, "file") || uri.Opaque != "" || uri.User != nil {
+		return "", "", false
+	}
+	if uri.ForceQuery || uri.RawQuery != "" || uri.Fragment != "" || !strings.HasPrefix(uri.Path, "/") {
+		return "", "", false
+	}
+	return uri.Host, uri.Path, true
 }
 
 func _osc7UpdatePath(term *Term, host, pwd string) {
@@ -117,4 +122,25 @@ func _osc7UpdatePath(term *Term, host, pwd string) {
 func (term *Term) osc9PostNotification(params []string) {
 	// OSC 9 ; [Message content goes here] ST
 	term.renderer.DisplayNotification(types.NOTIFY_INFO, strings.Join(params, ";"))
+}
+
+func (term *Term) osc133UpdateState(params []string) {
+	if len(params) == 0 {
+		return
+	}
+
+	var state types.TermStateT
+	switch params[0] {
+	case "A":
+		state = types.TermStatePromptStart
+	case "B":
+		state = types.TermStatePromptEnd
+	case "C":
+		state = types.TermStateCommandOutputStart
+	case "D":
+		state = types.TermStateCommandFinished
+	default:
+		return
+	}
+	term._termState.Store(int32(state))
 }

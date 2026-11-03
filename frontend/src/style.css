@@ -1,4 +1,7 @@
 @import "./assets/fonts/font-face.css";
+@import "./assets/fonts/FontAwesome/regular.css";
+@import "./assets/fonts/FontAwesome/solid.css";
+@import "./assets/fonts/FontAwesome/brands.css";
 
 html {
   height: 100%;
@@ -9,14 +12,6 @@ body {
     margin: 0;
     padding-left: 20px;
     padding-right: 20px;
-}
-
-@font-face {
-    font-family: "Font Awesome Solid";
-    font-style: normal;
-    font-weight: 900;
-    src: local(""),
-    url("assets/fonts/Font Awesome 7 Free-Solid-900.otf") format("opentype");
 }
 
 #app {

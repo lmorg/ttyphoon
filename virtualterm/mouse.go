@@ -341,6 +341,15 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].GetElementXY(), movement, callback)
 }
 
+func (term *Term) MouseLeave() {
+	term._mousePosRenderer.Set(nil)
+	if term._mouseIn != nil {
+		element := term._mouseIn
+		term._mouseIn = nil
+		element.MouseOut()
+	}
+}
+
 func (term *Term) MouseHover(pos *types.XY) {
 	if term.IsAltBuf() {
 		return

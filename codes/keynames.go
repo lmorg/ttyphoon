@@ -92,6 +92,8 @@ func KeyNameToCode(key KeyName) (KeyCode, Modifier) {
 		return AnsiInsert, mod
 	case "Home":
 		return AnsiHome, mod
+	case "End":
+		return AnsiEnd, mod
 	case "Delete":
 		return AnsiDelete, mod
 	case "PageUp":

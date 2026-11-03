@@ -125,6 +125,16 @@ func readConfigFile(r io.Reader) error {
 
 var Config configT
 
+const defaultPaneAutoCloseDelay = 30 * time.Second
+
+func PaneAutoCloseDelay() time.Duration {
+	delay, err := time.ParseDuration(strings.TrimSpace(Config.Terminal.PaneAutoCloseDelay))
+	if err != nil || delay <= 0 {
+		return defaultPaneAutoCloseDelay
+	}
+	return delay
+}
+
 type configT struct {
 	Tmux struct {
 		Enabled bool `yaml:"Enabled"`
@@ -143,6 +153,7 @@ type configT struct {
 
 	Terminal struct {
 		ColorTheme              string `yaml:"ColorTheme"`
+		PaneAutoCloseDelay      string `yaml:"PaneAutoCloseDelay"`
 		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
 		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
 		WriteMarkdownHistory    bool   `yaml:"WriteMarkdownHistory"`
@@ -175,7 +186,6 @@ type configT struct {
 	Notes struct {
 		MaxFileSize       int64 `yaml:"MaxFileSizeMB"`
 		StructViewMaxSize int64 `yaml:"StructViewMaxSizeKB"`
-		MaxRecentFiles    int   `yaml:"MaxRecentFiles"`
 		MaxLogLines       int   `yaml:"MaxLogLines"`
 
 		ExcludeDirectories map[string]bool `yaml:"ExcludeDirectories"`

@@ -42,6 +42,13 @@ chronological order is unchanged, since `ActiveSessionEntries` depends on it.
 `FrontendHistoryItemT`, so the two callers of `loadEntriesTx` get opposite,
 independently-correct orders from the same underlying query.
 
+Updated 2026-10-21: Tools and MCP Servers have independent, case-insensitive
+filter inputs. Tool filters match names/descriptions; MCP filters match display
+names and source paths. Filtering preserves original ordering and source indices
+so metadata, permissions and load/unload actions keep targeting the correct
+items. Filter values survive list refreshes and do not alter session/history
+ordering or persisted settings.
+
 ## Consequences
 
 - Switching sessions to look at old history no longer reorders the session

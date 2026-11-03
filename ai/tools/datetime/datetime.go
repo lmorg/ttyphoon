@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -66,12 +65,6 @@ func (a *dateTimeAmount) UnmarshalJSON(data []byte) error {
 }
 
 func (t *DateTime) InputType() reflect.Type { return reflect.TypeFor[dateTimeInputT]() }
-
-func (t *DateTime) Call(ctx context.Context, input string) (response string, err error) {
-	log.Println("[debug] ai tool: dateTime")
-
-	return time.Now().String(), nil
-}
 
 func (t *DateTime) CallStructured(_ context.Context, input any) (string, error) {
 	request, ok := input.(*dateTimeInputT)

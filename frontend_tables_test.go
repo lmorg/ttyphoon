@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
+	"image/png"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -285,6 +288,31 @@ func TestNotesTableRestoreMigratesGraphFromLegacySurfaceIndex(t *testing.T) {
 	migrated := notes.GetTableState(workspace, document, 0, headings)
 	if migrated.Graph == nil || migrated.Graph.Type != graphs.Bar {
 		t.Fatalf("stable graph state = %+v, want migrated legacy graph", migrated.Graph)
+	}
+}
+
+func TestNotesTableRenderGraphPNG(t *testing.T) {
+	app := newTableTestApp()
+	request := NotesTableRequestT{
+		Key:    tablecore.Key{Surface: "preview", Document: filepath.Join(t.TempDir(), "graph.md"), Index: 0},
+		Filter: `"Value" > 1`,
+		Seed:   &NotesTableSeedT{Headings: []string{"Category", "Value"}, Rows: [][]string{{"Excluded", "1"}, {"Selected", "2"}}},
+	}
+	spec := &NotesTableGraphSpecT{Type: string(graphs.Bar), Format: string(graphs.PNG), CategoryColumn: 0, ValueColumns: []int{1}, RowIndices: []int{1}}
+	result := app.NotesTableRenderGraph(request, spec)
+	if result.Error != "" || result.SVG != "" || !strings.HasPrefix(result.PNGDataURL, "data:image/png;base64,") {
+		t.Fatalf("PNG result error = %q, SVG = %q, data URL prefix valid = %v", result.Error, result.SVG, strings.HasPrefix(result.PNGDataURL, "data:image/png;base64,"))
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(result.PNGDataURL, "data:image/png;base64,"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	image, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image.Bounds().Dx() <= 0 || image.Bounds().Dy() <= 0 {
+		t.Fatal("PNG graph has empty dimensions")
 	}
 }
 

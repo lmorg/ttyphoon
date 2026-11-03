@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -110,16 +111,49 @@ func (term *Term) mxapcBeginOutputBlock(apc *types.ApcSlice) {
 	}
 
 	var params struct {
-		CmdLine string
-		EnvVars map[string]string
+		CmdLine       string
+		EnvVars       map[string]string
+		CmdLineBase64 string
+		EnvVarsBase64 string
 	}
 
 	if err := apc.Parameters(&params); err != nil {
 		params.CmdLine = apc.Index(2)
 		params.EnvVars = map[string]string{}
+	} else if params.CmdLineBase64 != "" || params.EnvVarsBase64 != "" {
+		commandLine, envVars, err := decodeOutputBlockSnapshot(params.CmdLineBase64, params.EnvVarsBase64)
+		if err != nil {
+			debug.Log(fmt.Sprintf("cannot decode output block environment: %v", err))
+			return
+		}
+		params.CmdLine = commandLine
+		params.EnvVars = envVars
 	}
 
 	term.beginOutputBlock([]rune(params.CmdLine), params.EnvVars)
+}
+
+func decodeOutputBlockSnapshot(commandLineBase64, environmentBase64 string) (string, map[string]string, error) {
+	commandLineBytes, err := base64.StdEncoding.DecodeString(commandLineBase64)
+	if err != nil {
+		return "", nil, err
+	}
+	environmentBytes, err := base64.StdEncoding.DecodeString(environmentBase64)
+	if err != nil {
+		return "", nil, err
+	}
+
+	environment := make(map[string]string)
+	for _, entry := range strings.Split(string(environmentBytes), "\x00") {
+		if entry == "" {
+			continue
+		}
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			environment[name] = value
+		}
+	}
+	return string(commandLineBytes), environment, nil
 }
 
 func (term *Term) beginOutputBlock(cmdLine []rune, envvars map[string]string) {

@@ -49,3 +49,24 @@ func TestGetFrontendState_HistoryIsNewestFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestGetSessionPromptReturnsPromptFromRequestedSessionEntry(t *testing.T) {
+	workspace := "session-prompt-lookup-test-workspace"
+	path, err := dbPath(workspace)
+	if err != nil {
+		t.Fatalf("dbPath: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	sessionID, promptID, err := AppendActiveSessionEntry(workspace, "the exact user request", "", "", "response")
+	if err != nil {
+		t.Fatalf("AppendActiveSessionEntry: %v", err)
+	}
+	got, err := GetSessionPrompt(workspace, sessionID, promptID)
+	if err != nil || got != "the exact user request" {
+		t.Fatalf("GetSessionPrompt() = %q, %v", got, err)
+	}
+	if _, err := GetSessionPrompt(workspace, sessionID, promptID+1); err == nil {
+		t.Fatal("GetSessionPrompt accepted an unknown prompt ID")
+	}
+}

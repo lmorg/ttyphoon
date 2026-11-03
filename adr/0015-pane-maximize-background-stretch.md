@@ -67,6 +67,11 @@ Only one pane may be maximized at a time; `toggleFullsize` exits any active
 pane first. Both buttons now signal active state through `data-enabled`, with
 matching CSS rules, so no inline style is left behind on exit.
 
+When terminal fullsize is dismissed by clicking its backdrop, the frontend
+queries the pane snapshot and toggles off any tmux-zoomed pane before restoring
+the split. This prevents tmux zoom from surviving after the application overlay
+has closed.
+
 ## Consequences
 
 - Both directions look the same: the other pane fills the window behind the
@@ -83,6 +88,14 @@ matching CSS rules, so no inline style is left behind on exit.
   maximized, but a third overlapping mechanism would need reconciling.
 - Geometry is covered by regression tests, since these defects are visual and
   otherwise only caught by eye.
+
+## Layout Persistence Follow-up
+
+ADR 0059 implements splitter-size caching and vertical Tools-panel resizing.
+It persists normal user-selected ratios, not temporary fullscreen/background
+dimensions, and reapplies the preferred outer ratio after restoring these style
+snapshots. Resizing the window or entering/exiting maximize does not write the
+layout cache.
 
 ## Reference
 

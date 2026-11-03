@@ -8,8 +8,8 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 var currentRenderer *webkitRender

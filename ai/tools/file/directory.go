@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -68,10 +69,6 @@ type directoryInputT struct {
 	Filter string `json:"filter,omitempty"`
 }
 
-func (t *Directory) Call(ctx context.Context, input string) (response string, err error) {
-	return t.callFilter(ctx, input)
-}
-
 func (t *Directory) CallStructured(ctx context.Context, input any) (string, error) {
 	request, ok := input.(*directoryInputT)
 	if !ok || request == nil {
@@ -86,6 +83,9 @@ func (t *Directory) callFilter(ctx context.Context, input string) (response stri
 		return fmt.Sprintf("ERROR: %s\n", err), nil
 	}*/
 	pathname := t.agent.ProjectRoot()
+	if strings.TrimSpace(pathname) == "" {
+		return "", fmt.Errorf("project root is unavailable for the active terminal pane")
+	}
 
 	t.agent.Renderer().DisplayNotification(types.NOTIFY_INFO, t.agent.ServiceName()+" is querying directory: "+pathname)
 

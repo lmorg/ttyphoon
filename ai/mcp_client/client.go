@@ -27,8 +27,12 @@ func initClientFromGoSDK(g *GoSDKClient, overrides *mcp_config.OverrideT) (*Clie
 }
 
 func (c *Client) ListTools() error {
+	return c.ListToolsContext(context.Background())
+}
+
+func (c *Client) ListToolsContext(ctx context.Context) error {
 	if c.gosdk != nil {
-		err := c.gosdk.ListTools()
+		err := c.gosdk.ListToolsContext(ctx)
 		if err == nil {
 			// Propagate tools from gosdk to Client struct for backward compatibility
 			c.Tools = c.gosdk.Tools

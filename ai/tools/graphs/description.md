@@ -24,6 +24,5 @@ sample positions. Numeric values are strings, matching CSV data; blank values
 are treated as missing. Non-numeric values are rejected with their row and
 column identified.
 
-`format` may be `svg` or `png` and defaults to `svg`. The output is fixed at
-800x600. Optional fields are `title`, `seriesNames`, `categoryAxisTitle`, and
-`valueAxisTitle`.
+Charts are always saved as PNG at 800x600. Optional fields are `title`,
+`seriesNames`, `categoryAxisTitle`, and `valueAxisTitle`.

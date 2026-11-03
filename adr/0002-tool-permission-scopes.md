@@ -43,6 +43,26 @@ Rules:
    badges in AI settings is untouched.
 4. **Denials do not abort the run** — they return via `ErrToolPermissionRefused`.
 
+## Update — denial context and inputbox behavior
+
+Updated 2026-10-29:
+
+- Allow decisions remain immediate. Either deny decision opens the shared
+  multiline inputbox for an optional free-form explanation; no preset reasons
+  are offered.
+- Submitting resolves the selected denial and includes the explanation in the
+  tool refusal returned to the model. A prompt-scoped denial retains its reason
+  for later invocations during that prompt only.
+- Cancel and Save Draft do not resolve the permission request. The original
+  access links remain actionable until a decision is submitted. Drafts are
+  scoped to that pending request, while submitted explanation history is shared
+  within the tmux workspace. Existing inputbox Draft and History controls remain
+  available.
+- The explanation is not written to persistent tool settings or reused by
+  later prompts automatically. Submitted explanations remain available in the
+  shared inputbox history for the tmux workspace and can be recalled manually.
+  Blank explanations preserve the generic denial result.
+
 `ResetToolPermissions()` clears the entire map and is called **once per user
 prompt**, from the outer `RunLLMWithMessageStream`. It must not be called from
 the inner per-continuation function, or prompt scope would be lost on every
@@ -58,8 +78,9 @@ continuation.
   infinite re-prompt loop. Only *waiters* blocked on a concurrent request for the
   same tool loop back — which is correct, as they must prompt for their own
   invocation.
-- The frontend needs no per-decision knowledge: `markdown-utils.js` forwards the
-  `decision` query parameter verbatim, so new values work without JS changes.
+- `markdown-utils.js` forwards the `decision` query parameter verbatim. The
+  frontend routes deny decisions through the explanation inputbox and resolves
+  the links only after the backend confirms submission.
 
 ## Update — sub-agent tool eligibility
 

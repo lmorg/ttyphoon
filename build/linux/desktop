@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Ttyphoon
+Comment=The Next Generation Terminal Emulator
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/ttyphoon %u
+Terminal=false
+Type=Application
+Icon=ttyphoon
+Categories=Utility;
+StartupWMClass=ttyphoon
+
+ 

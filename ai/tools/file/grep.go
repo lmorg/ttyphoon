@@ -5,21 +5,21 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
-	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/utils/grep"
 )
 
 type Grep struct {
-	agent   aitypes.Agent
-	enabled bool
-	cacheMu sync.RWMutex
-	cache   [][]*grep.Result
+	agent     aitypes.Agent
+	enabled   bool
+	cacheMu   sync.RWMutex
+	cache     [][]*grep.Result
+	cacheRoot string
 }
 
 func init() {
@@ -75,25 +75,6 @@ type grepReturnT struct {
 	Error      string         `json:"error"`
 }
 
-func (t *Grep) Call(ctx context.Context, input string) (response string, err error) {
-	if debug.Trace {
-		log.Printf("Agent tool '%s' input:\n%s", t.Name(), input)
-		defer func() {
-			log.Printf("Agent tool '%s' response:\n%s", t.Name(), response)
-			log.Printf("Agent tool '%s' error: %v", t.Name(), err)
-		}()
-	}
-
-	log.Printf("[debug] agent: tool=grep input=%s\n", input)
-
-	inputT := new(grepInputT)
-	err = json.Unmarshal([]byte(input), inputT)
-	if err != nil {
-		return err.Error(), nil
-	}
-	return t.callInput(ctx, inputT)
-}
-
 func (t *Grep) CallStructured(ctx context.Context, input any) (string, error) {
 	inputT, ok := input.(*grepInputT)
 	if !ok || inputT == nil {
@@ -116,6 +97,10 @@ func (t *Grep) callInput(ctx context.Context, inputT *grepInputT) (response stri
 }
 
 func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
+	root := t.agent.ProjectRoot()
+	if strings.TrimSpace(root) == "" {
+		return &grepReturnT{Error: "project root is unavailable for the active terminal pane"}
+	}
 	cache := [][]*grep.Result{}
 	ch := make(chan []*grep.Result)
 	done := make(chan struct{})
@@ -127,7 +112,7 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 	}()
 
 	mapper := func(s string) string { return s }
-	err := grep.BatchedStreamResults(ctx, t.agent.ProjectRoot(), input.Query, input.Options.grepOptions(), mapper, ch)
+	err := grep.BatchedStreamResults(ctx, root, input.Query, input.Options.grepOptions(), mapper, ch)
 	<-done
 	if err != nil {
 		return &grepReturnT{Error: err.Error()}
@@ -135,6 +120,7 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 
 	t.cacheMu.Lock()
 	t.cache = cache
+	t.cacheRoot = root
 	t.cacheMu.Unlock()
 	if len(cache) == 0 {
 		return &grepReturnT{PageNumber: 1, Results: []*grep.Result{}}
@@ -143,8 +129,15 @@ func (t *Grep) newSearch(ctx context.Context, input *grepInputT) *grepReturnT {
 }
 
 func (t *Grep) getPage(input *grepInputT) *grepReturnT {
+	root := t.agent.ProjectRoot()
+	if strings.TrimSpace(root) == "" {
+		return &grepReturnT{PageNumber: input.Page, Error: "project root is unavailable for the active terminal pane"}
+	}
 	t.cacheMu.RLock()
 	defer t.cacheMu.RUnlock()
+	if t.cacheRoot != "" && t.cacheRoot != root {
+		return &grepReturnT{Error: "Project root changed; run a new search before requesting pages"}
+	}
 	if input.Page < 1 {
 		return &grepReturnT{PageCount: len(t.cache), Error: "Page numbers cannot be 0 nor negative"}
 	}

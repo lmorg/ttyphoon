@@ -1,50 +1,38 @@
-# Variables
-GO_FLAGS=-v
-
-# Build variables that can be overridden
-APP_NAME=$(shell jq -r '.name' wails.json || echo "unknown")
-TAG_LINE=$(shell jq -r '.info.comments' wails.json || echo "unknown")
-VERSION=$(shell jq -r '.info.productVersion' wails.json || echo "unknown")
-BRANCH=$(shell git rev-parse --abbrev-ref HEAD || echo "unknown")
-BUILD_DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S' || echo "unknown")
-COPYRIGHT=$(shell jq -r '.info.copyright' wails.json || echo "unknown")
-
-PKG_PATH="github.com/lmorg/ttyphoon"
-LDFLAGS="-X '${PKG_PATH}/app.name=${APP_NAME}' -X '${PKG_PATH}/app.tagLine=${TAG_LINE}' -X '${PKG_PATH}/app.version=${VERSION}' -X '${PKG_PATH}/app.branch=${BRANCH}' -X '${PKG_PATH}/app.buildDate=${BUILD_DATE}' -X '${PKG_PATH}/app.copyright=${COPYRIGHT}'"
-
-
 # Build the binary
 .PHONY: build
 build:
-	wails build -ldflags ${LDFLAGS}
+	wails build
 
 # Clean build the binary
 .PHONY: clean
 clean:
-	wails build -clean -ldflags ${LDFLAGS}
+	rm -rf build/bin frontend/dist
 
 # Generate code
 .PHONY: generate
 generate:
 	@echo "Running code generation..."
 	go generate ./...
-	wails generate module
+	wails generate bindings
+
+.PHONY: package
+package:
+	wails package
 
 # Run the application
 .PHONY: run-darwin
-run-darwin: generate build
-	./build/bin/TTYphoon.app/Contents/MacOS/ttyphoon
+run-darwin: generate package
+	./build/bin/ttyphoon.app/Contents/MacOS/ttyphoon
 
 .PHONY: run-webkit
 run-webkit:
-	wails dev
+	wails dev -config ./build/config.yml -port 9245
 
 # Test
 .PHONY: test
 test: generate
-	npm --prefix frontend run test:run
+	npm --prefix frontend run test:run -- --reporter=dot
 	go test ./... -count 1 -race -covermode=atomic
-
 
 # Benchmark
 .PHONY: bench

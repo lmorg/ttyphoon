@@ -1,4 +1,4 @@
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from './wails-runtime.js';
 import './markdown-modal.css';
 import { marked } from 'marked';
 import { showLocalMenu } from './popup_menu';
@@ -13,6 +13,8 @@ import {
 configureMarked();
 
 let markdownModalTableWordWrapEnabled = true;
+let markdownModalHooks = {};
+let currentMarkdownContent = '';
 
 function applyTableWordWrapMode(container) {
     if (!container) {
@@ -47,7 +49,7 @@ function wrapTablesForHorizontalScroll(container) {
         }
 
         const wrapper = document.createElement('div');
-        wrapper.className = 'markdown-modal-table-scroll-wrap';
+        wrapper.className = 'markdown-modal-table-scroll-wrap notes-table-scroll-wrap';
         table.before(wrapper);
         wrapper.appendChild(table);
     });
@@ -121,6 +123,8 @@ function ensureMarkdownModalDom() {
 }
 
 function closeMarkdownModal() {
+    currentMarkdownContent = '';
+    document.body.classList.remove('markdown-modal-open');
     const overlay = document.getElementById('markdown-modal-overlay');
     if (overlay) {
         overlay.style.display = 'none';
@@ -131,7 +135,7 @@ function closeMarkdownModal() {
     }
 }
 
-export async function showMarkdownModal(markdownContent) {
+export async function showMarkdownModal(markdownContent, id = '') {
     ensureMarkdownModalDom();
 
     const overlay = document.getElementById('markdown-modal-overlay');
@@ -141,19 +145,23 @@ export async function showMarkdownModal(markdownContent) {
         return;
     }
 
+    currentMarkdownContent = markdownContent;
     body.innerHTML = marked.parse(markdownContent);
     await renderMermaidDiagrams(body);
     await applySyntaxHighlighting(body);
     processWailsImages(body);
     wrapTablesForHorizontalScroll(body);
+    markdownModalHooks.onTablesRendered?.(body, { id, wrapped: markdownModalTableWordWrapEnabled });
     applyTableWordWrapMode(body);
     enhanceCodeBlocks(body);
     enableFullscreenImages(body);
 
+    document.body.classList.add('markdown-modal-open');
     overlay.style.display = 'flex';
 }
 
-export function initMarkdownModal() {
+export function initMarkdownModal(hooks = {}) {
+    markdownModalHooks = hooks;
     ensureMarkdownModalDom();
 
     const overlay = document.getElementById('markdown-modal-overlay');
@@ -170,6 +178,10 @@ export function initMarkdownModal() {
 
     // Close on Escape key
     document.addEventListener('keydown', (e) => {
+        // Let a Notes prompt opened from the modal, such as the SQL filter, handle Escape first.
+        if (e.key === 'Escape' && document.getElementById('notes-modal')?.dataset.open === 'true') {
+            return;
+        }
         if (e.key === 'Escape' && overlay.style.display !== 'none') {
             e.stopPropagation();
             closeMarkdownModal();
@@ -184,7 +196,7 @@ export function initMarkdownModal() {
 
         const target = e.target instanceof Element ? e.target : null;
         const tableTarget = target?.closest?.('.markdown-modal-table-scroll-wrap, table, th, td');
-        if (!tableTarget) {
+        if (!tableTarget && !markdownModalHooks.onPrint) {
             return;
         }
 
@@ -192,23 +204,42 @@ export function initMarkdownModal() {
         e.stopPropagation();
 
         const isWrapEnabled = !body.classList.contains('markdown-modal-table-wordwrap-off');
-        const options = ['Word wrap'];
-
-        showLocalMenu({
-            title: 'Select an action',
-            options,
-            icons: [isWrapEnabled ? 0xf00c : 0x20],
-            x: e.clientX,
-            y: e.clientY,
-            showNextToMouseCursor: true,
+        const table = tableTarget?.closest('table') || tableTarget?.querySelector('table');
+        const items = tableTarget ? [{
+            title: 'Word wrap',
+            icon: isWrapEnabled ? 0xf00c : 0x20,
             onSelect: () => {
                 markdownModalTableWordWrapEnabled = !isWrapEnabled;
                 applyTableWordWrapMode(body);
             },
+        }] : [];
+        const tableItems = table ? markdownModalHooks.tableMenuItems?.(table) || [] : [];
+        if (tableItems.length > 0) {
+            items.push({ title: '-', icon: 0 }, ...tableItems);
+        }
+        if (markdownModalHooks.onPrint) {
+            const markdown = currentMarkdownContent;
+            if (items.length) items.push({ title: '-', icon: 0 });
+            items.push({ title: 'Print...', icon: 0xf02f, onSelect: () => markdownModalHooks.onPrint(markdown) });
+        }
+
+        showLocalMenu({
+            title: 'Select an action',
+            options: items.map((item) => item.title),
+            icons: items.map((item) => item.icon),
+            x: e.clientX,
+            y: e.clientY,
+            showNextToMouseCursor: true,
+            onSelect: (index) => items[index]?.onSelect?.(),
         });
     });
 
-    EventsOn('showMarkdownModal', (markdownContent) => {
-        void showMarkdownModal(markdownContent);
+    EventsOn('showMarkdownModal', (payload) => {
+        const message = Array.isArray(payload) ? payload[0] : payload;
+        if (typeof message === 'string') {
+            void showMarkdownModal(message);
+            return;
+        }
+        void showMarkdownModal(String(message?.markdown || ''), String(message?.id || ''));
     });
 }

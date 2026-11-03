@@ -3,13 +3,16 @@ package rendererwebkit
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/tmux"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/lmorg/ttyphoon/utils/notes"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type terminalTab struct {
@@ -24,11 +27,32 @@ type terminalTabsPayload struct {
 	TileCount int           `json:"tileCount"`
 }
 
+type TerminalPane struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	X                 int32  `json:"x"`
+	Y                 int32  `json:"y"`
+	Width             int32  `json:"width"`
+	Height            int32  `json:"height"`
+	CanClose          bool   `json:"canClose"`
+	Finished          bool   `json:"finished"`
+	Zoomed            bool   `json:"zoomed"`
+	AutoCloseAt       int64  `json:"autoCloseAt,omitempty"`
+	AutoCloseDuration int64  `json:"autoCloseDuration,omitempty"`
+}
+
 type webkitRender struct {
 	termWin         *types.AppWindowTerms
+	paneLayoutMu    sync.Mutex
+	paneLayout      []TerminalPane
 	tmux            *tmux.Tmux
 	app             interface{} // Reference to WApp for accessing methods like ListFiles()
 	auxTabsMu       sync.RWMutex
+	notesContextMu  sync.Mutex
+	notesContext    notes.FileContext
+	notesResolved   notes.FileContext
+	notesPwd        string
+	notesGroup      string
 	auxTerminalTabs []types.TerminalPaneTab
 	glyphSize       *types.XY
 	windowCells     *types.XY
@@ -234,6 +258,103 @@ func (wr *webkitRender) GetWindowTabs() []terminalTab {
 	return wr.tmuxTabs()
 }
 
+func (wr *webkitRender) GetPaneLayout() []TerminalPane {
+	panes := make([]TerminalPane, 0)
+	termWin := wr.termWin
+	if termWin == nil {
+		return panes
+	}
+	for _, tile := range termWin.Tiles {
+		if tile == nil {
+			continue
+		}
+		term := tile.GetTerm()
+		if term == nil {
+			continue
+		}
+		size := term.GetSize()
+		if size == nil || size.X <= 0 || size.Y <= 0 {
+			continue
+		}
+		pane := TerminalPane{ID: tile.Id(), Name: tile.Name(), X: tile.Left(), Y: tile.Top(), Width: size.X, Height: size.Y}
+		if tmuxPane, ok := tile.(*tmux.PaneT); ok {
+			pane.CanClose = true
+			pane.Finished = tmuxPane.CommandFinished()
+			pane.Zoomed = tmuxPane.IsZoomed()
+			pane.AutoCloseAt = tmuxPane.AutoCloseAt()
+			pane.AutoCloseDuration = config.PaneAutoCloseDelay().Milliseconds()
+		}
+		panes = append(panes, pane)
+	}
+	slices.SortFunc(panes, func(left, right TerminalPane) int { return strings.Compare(left.ID, right.ID) })
+	return panes
+}
+
+func (wr *webkitRender) emitPaneLayout() {
+	if wr.wapp == nil {
+		return
+	}
+	panes := wr.GetPaneLayout()
+	wr.paneLayoutMu.Lock()
+	defer wr.paneLayoutMu.Unlock()
+	if slices.Equal(wr.paneLayout, panes) {
+		return
+	}
+	wr.paneLayout = panes
+	runtime.EventsEmit(wr.wapp, "terminalPanes", panes)
+}
+
+func (wr *webkitRender) CancelPaneAutoClose(paneID string) error {
+	if wr.tmux == nil {
+		return fmt.Errorf("tmux not available")
+	}
+	return wr.tmux.CancelPaneAutoClose(paneID)
+}
+
+func (wr *webkitRender) CloseCompletedPane(paneID string) error {
+	if wr.tmux == nil {
+		return fmt.Errorf("tmux not available")
+	}
+	if err := wr.tmux.CloseCompletedPane(paneID); err != nil {
+		return err
+	}
+	wr.RefreshWindowList()
+	return nil
+}
+
+func (wr *webkitRender) ConfirmKillPane(paneID, paneName string) error {
+	if wr.tmux == nil {
+		return fmt.Errorf("tmux not available")
+	}
+	finished, err := wr.tmux.PaneCommandFinished(paneID)
+	if err != nil {
+		return err
+	}
+	if finished {
+		return wr.CloseCompletedPane(paneID)
+	}
+
+	wr.DisplayInputBoxW(&types.InputBoxWT{
+		Options: types.InputBoxWTOptions{
+			Title:           "Confirm pane close",
+			Message:         fmt.Sprintf("Are you sure you wish to kill the active pane?\n\nID: %s\nName: %s", paneID, paneName),
+			Confirmation:    true,
+			ConfirmLabel:    "Kill",
+			CancelLabel:     "Cancel",
+			ConfirmIsDanger: true,
+		},
+		OkFunc: func(*types.InputBoxCallbackResultT) {
+			if wr.tmux == nil {
+				return
+			}
+			if err := wr.tmux.KillPane(paneID); err != nil {
+				wr.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			}
+		},
+	})
+	return nil
+}
+
 func (wr *webkitRender) SelectWindow(windowID string) {
 	if windowID == "" || wr.tmux == nil {
 		return
@@ -250,26 +371,30 @@ func (wr *webkitRender) SelectWindow(windowID string) {
 	wr.RefreshWindowList()
 }
 
-func (wr *webkitRender) ZoomActivePane() error {
+func (wr *webkitRender) ZoomPane(paneID string) error {
 	if wr.tmux == nil {
 		return fmt.Errorf("tmux not available")
 	}
-
-	pane, err := wr.tmux.ActivePane()
-	if err != nil {
-		return err
+	if paneID == "" {
+		return fmt.Errorf("pane ID is required")
 	}
-	if pane == nil {
-		return fmt.Errorf("no active pane")
-	}
-
-	if err := wr.tmux.ZoomPane(pane.Id()); err != nil {
+	if err := wr.tmux.ZoomPane(paneID); err != nil {
 		return err
 	}
 
 	// ZoomPane blocks until tmux has applied the (un)zoom, so re-read the tile
 	// layout now to pick up the new pane geometry.
 	wr.RefreshWindowList()
+	return nil
+}
+
+func (wr *webkitRender) ZoomPaneAndMaximize(paneID string) error {
+	if err := wr.ZoomPane(paneID); err != nil {
+		return err
+	}
+	if wr.wapp != nil {
+		runtime.EventsEmit(wr.wapp, "terminalFullsizeToggle")
+	}
 	return nil
 }
 
@@ -367,6 +492,20 @@ func (wr *webkitRender) ActiveTile() types.Tile {
 	return wr.termWin.Active
 }
 
+func (wr *webkitRender) ClonePane(command string, callback func(output []byte, exitCode int, err error)) error {
+	if wr == nil || wr.tmux == nil {
+		return fmt.Errorf("terminal is unavailable")
+	}
+	return wr.tmux.ClonePane(command, callback)
+}
+
+func (wr *webkitRender) ClonePaneAtCurrentDirectory() error {
+	if wr == nil || wr.tmux == nil {
+		return fmt.Errorf("terminal is unavailable")
+	}
+	return wr.tmux.ClonePaneAtCurrentDirectory()
+}
+
 func (wr *webkitRender) activeTerm() types.Term {
 	if wr.termWin == nil {
 		return nil
@@ -389,8 +528,11 @@ func (wr *webkitRender) GetWindowContext() context.Context {
 	return wr.wapp
 }
 
-func (wr *webkitRender) DisplayMarkdownModel(markdownContent string) {
-	runtime.EventsEmit(wr.wapp, "showMarkdownModal", markdownContent)
+func (wr *webkitRender) DisplayMarkdownModel(id, markdownContent string) {
+	runtime.EventsEmit(wr.wapp, "showMarkdownModal", map[string]string{
+		"id":       id,
+		"markdown": markdownContent,
+	})
 }
 
 func (wr *webkitRender) ShowTooltip(text string) {

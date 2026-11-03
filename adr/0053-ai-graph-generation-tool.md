@@ -20,8 +20,9 @@ formats, and theme mapping as future CSV and Markdown table consumers.
   category/value column indices. Keep the AI tool input aligned with CSV data;
   blank numeric cells are missing values, while invalid numeric cells are
   reported with row and heading context.
-- Save generated SVG or PNG files under
-  `~/Documents/<application>/.images/` using unique filenames.
+- Save generated PNG files under `~/Documents/<application>/.images/` using
+  unique filenames. The tool always produces PNG; output format is not a
+  caller-selectable input.
 - Return a standalone file-backed Markdown image reference in the tool output.
   Do not put image bytes or data URLs in the AI stream or session log.
 - Allow the tool without an additional invocation prompt; it only renders

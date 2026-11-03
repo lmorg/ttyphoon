@@ -22,7 +22,7 @@ arguments. Do not wrap it in an `input` property:
 
 Rules:
 
-- `file` is relative to the working directory, or an absolute path within it.
+- `file` is relative to the owning terminal pane's current project root, resolved dynamically, or an absolute path within that root.
   The file must already exist.
 - `line` is the 1-indexed line number to insert **after**. Use `0` to insert at
   the very start of the file. Use the file's last line number to append to the

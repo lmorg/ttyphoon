@@ -82,6 +82,13 @@ if (returnTo && !_localMenuReturnFocus) returnTo.focus();
   turned the new test red with `expected 'none' to be 'block'`, confirming it
   pins the real defect rather than passing incidentally.
 
+## Notes Printing (2026-10-23)
+
+The printing implementation and its native PDF lifecycle are recorded in
+[ADR 0079: Document printing uses isolated snapshots and platform backends](0079-document-printing-uses-isolated-snapshots.md).
+Printing still follows this ADR's dismissal-before-dispatch rule and waits for
+menu dismissal animations before opening the native dialog.
+
 ## Reference
 
 - `frontend/src/popup_menu.js` — `selectMenuItem`, `menuSelect`, `hideListMenu`,

@@ -46,10 +46,6 @@ type envVarsInputT struct{}
 
 func (t *EnvVars) InputType() reflect.Type { return reflect.TypeOf(envVarsInputT{}) }
 
-func (t *EnvVars) Call(ctx context.Context, input string) (string, error) {
-	return t.getEnvVarsJSON()
-}
-
 func (t *EnvVars) CallStructured(_ context.Context, input any) (string, error) {
 	if _, ok := input.(*envVarsInputT); !ok {
 		return "", fmt.Errorf("envVars received an invalid structured input %T", input)

@@ -1,8 +1,12 @@
 package imagetools
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,7 +17,31 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/imageattachment"
 )
+
+func TestGenerateImageAcceptsExactSavedInputboxAttachmentPath(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home with spaces"))
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := imageattachment.Store([]types.ImageAttachment{{
+		MIMEType: "image/png", Base64: base64.StdEncoding.EncodeToString(buffer.Bytes()),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := &GenerateImage{agent: &fakeAgent{pwd: t.TempDir()}}
+	got, err := tool.resolveInputImagePath(stored[0].Path)
+	if err != nil || got != stored[0].Path {
+		t.Fatalf("pasted image required discovery or copying: path=%q, error=%v", got, err)
+	}
+	data, err := os.ReadFile(got)
+	if err != nil || !bytes.Equal(data, buffer.Bytes()) {
+		t.Fatalf("resolved attachment bytes changed: %v", err)
+	}
+}
 
 type fakeAgent struct {
 	pwd string
@@ -135,6 +163,13 @@ func TestResolveOutputPath(t *testing.T) {
 			if _, _, err := tool.resolveOutputPath(name); err == nil {
 				t.Errorf("resolveOutputPath(%q) error = nil, want rejection", name)
 			}
+		}
+	})
+
+	t.Run("explicit path requires a project root", func(t *testing.T) {
+		tool := &GenerateImage{agent: &fakeAgent{}}
+		if _, _, err := tool.resolveOutputPath("/tmp/generated.png"); err == nil || !strings.Contains(err.Error(), "project root is unavailable") {
+			t.Fatalf("resolveOutputPath() error = %v, want unavailable-root error", err)
 		}
 	})
 }

@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "0.52.1000"
 	},
 	"info": {
-		"0000": {
-			"ProductVersion": "{{.Info.ProductVersion}}",
-			"CompanyName": "{{.Info.CompanyName}}",
-			"FileDescription": "{{.Info.ProductName}}",
-			"LegalCopyright": "{{.Info.Copyright}}",
-			"ProductName": "{{.Info.ProductName}}",
-			"Comments": "{{.Info.Comments}}"
+		"0409": {
+			"ProductVersion": "0.52.1000",
+			"CompanyName": "Laurence Morgan",
+			"FileDescription": "The Next Generation Terminal Emulator",
+			"LegalCopyright": "2023-2026 Laurence Morgan",
+			"ProductName": "Ttyphoon",
+			"Comments": "The Next Generation Terminal Emulator"
 		}
 	}
 }

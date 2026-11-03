@@ -140,6 +140,135 @@ function loadMonacoModule() {
     return monacoModulePromise;
 }
 
+export function attachMonacoSpellcheckContextMenu(editor, findMisspelling, replaceMisspelling) {
+    const domNode = editor.getDomNode();
+    const handler = (event) => {
+        const position = editor.getTargetAtClientPoint(event.clientX, event.clientY)?.position;
+        if (!position) return;
+        const misspelling = findMisspelling(editor.getModel().getOffsetAt(position));
+        if (!misspelling) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        showSpellcheckSuggestionsPopup(
+            event.clientX,
+            event.clientY,
+            misspelling,
+            (suggestion) => replaceMisspelling(misspelling, suggestion),
+        );
+    };
+    domNode?.addEventListener('contextmenu', handler, true);
+    return {
+        dispose() {
+            domNode?.removeEventListener('contextmenu', handler, true);
+        },
+    };
+}
+
+function attachMonacoEditorHooks(editor, options, onEscape) {
+    const keyDownDisposable = editor.onKeyDown((event) => {
+        const browserEvent = event?.browserEvent;
+        const position = editor.getPosition();
+
+        if (browserEvent && position && typeof options.onCompletionRequest === 'function') {
+            const completionRequested = options.onCompletionRequest({
+                source: 'keydown',
+                key: String(browserEvent.key || ''),
+                ctrlKey: browserEvent.ctrlKey === true,
+                metaKey: browserEvent.metaKey === true,
+                altKey: browserEvent.altKey === true,
+                shiftKey: browserEvent.shiftKey === true,
+                triggerKind: 1,
+                triggerChar: '',
+                line: Math.max(0, position.lineNumber - 1),
+                character: Math.max(0, position.column - 1),
+            }) === true;
+            if (completionRequested) {
+                browserEvent.preventDefault?.();
+                browserEvent.stopPropagation?.();
+                return;
+            }
+        }
+
+        if (browserEvent && String(browserEvent.key || '') === 'Escape'
+            && typeof onEscape === 'function' && onEscape(browserEvent, event) === true) {
+            return;
+        }
+
+        if (browserEvent) {
+            options.onKeyDown?.(browserEvent, event);
+        }
+    });
+
+    const typeDisposable = editor.onDidType((text) => {
+        const position = editor.getPosition();
+        if (!position || typeof options.onCompletionRequest !== 'function') {
+            return;
+        }
+        const triggerChar = String(text || '').slice(-1);
+        const isTrigger = triggerChar === '.' || triggerChar === ':' || triggerChar === '>';
+        options.onCompletionRequest({
+            source: 'type',
+            key: triggerChar,
+            ctrlKey: false,
+            metaKey: false,
+            altKey: false,
+            shiftKey: false,
+            triggerKind: isTrigger ? 2 : 1,
+            triggerChar: isTrigger ? triggerChar : '',
+            line: Math.max(0, position.lineNumber - 1),
+            character: Math.max(0, position.column - 1),
+        });
+    });
+
+    const domNode = editor.getDomNode();
+    const onPasteHandler = typeof options.onPaste === 'function'
+        ? (event) => options.onPaste(event)
+        : null;
+    const onPrimaryPasteHandler = typeof options.onPrimaryPaste === 'function'
+        ? (event) => {
+            const key = String(event?.key || '').toLowerCase();
+            const isPrimaryPaste = key === 'v'
+                && (event.ctrlKey === true || event.metaKey === true)
+                && event.altKey !== true;
+            if (!isPrimaryPaste || options.onPrimaryPaste(event) !== true) {
+                return;
+            }
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+        : null;
+    const onContextMenuHandler = typeof options.onContextMenu === 'function'
+        ? (event) => options.onContextMenu(event)
+        : null;
+
+    if (domNode && onPrimaryPasteHandler) {
+        domNode.addEventListener('keydown', onPrimaryPasteHandler, true);
+    }
+    if (domNode && onPasteHandler) {
+        domNode.addEventListener('paste', onPasteHandler, true);
+    }
+    if (domNode && onContextMenuHandler) {
+        domNode.addEventListener('contextmenu', onContextMenuHandler);
+    }
+
+    return {
+        dispose() {
+            keyDownDisposable.dispose();
+            typeDisposable.dispose();
+            if (domNode && onPrimaryPasteHandler) {
+                domNode.removeEventListener('keydown', onPrimaryPasteHandler, true);
+            }
+            if (domNode && onPasteHandler) {
+                domNode.removeEventListener('paste', onPasteHandler, true);
+            }
+            if (domNode && onContextMenuHandler) {
+                domNode.removeEventListener('contextmenu', onContextMenuHandler);
+            }
+        },
+    };
+}
+
 function toMonacoLanguage(language) {
     const value = String(language || '').trim().toLowerCase();
     if (!value) {
@@ -848,7 +977,8 @@ export async function createMonacoAdapter(container, options = {}) {
             }
             const start = model.getOffsetAt(selection.getStartPosition());
             const end = model.getOffsetAt(selection.getEndPosition());
-            options.onSelectionChange(start, end);
+            const activeOffset = model.getOffsetAt(selection.getPosition());
+            options.onSelectionChange(start, end, activeOffset);
         }
     });
 
@@ -870,79 +1000,18 @@ export async function createMonacoAdapter(container, options = {}) {
 
 
 
-    const keyDownDisposable = editor.onKeyDown((event) => {
-        const browserEvent = event?.browserEvent;
-        const position = editor.getPosition();
-
-        if (browserEvent && position && typeof options.onCompletionRequest === 'function') {
-            const completionRequested = options.onCompletionRequest({
-                source: 'keydown',
-                key: String(browserEvent.key || ''),
-                ctrlKey: browserEvent.ctrlKey === true,
-                metaKey: browserEvent.metaKey === true,
-                altKey: browserEvent.altKey === true,
-                shiftKey: browserEvent.shiftKey === true,
-                triggerKind: 1,
-                triggerChar: '',
-                line: Math.max(0, position.lineNumber - 1),
-                character: Math.max(0, position.column - 1),
-            }) === true;
-            if (completionRequested) {
-                browserEvent.preventDefault?.();
-                browserEvent.stopPropagation?.();
-                return;
-            }
-        }
-
-        if (!browserEvent || String(browserEvent.key || '') !== 'Escape') {
-            if (typeof options.onKeyDown === 'function' && browserEvent) {
-                options.onKeyDown(browserEvent, event);
-            }
-            return;
-        }
-
+    const inputHooks = attachMonacoEditorHooks(editor, options, (browserEvent) => {
         if (vimAdapter || isMonacoOverlayOpen()) {
-            return;
+            return true;
         }
-
         browserEvent.preventDefault?.();
         browserEvent.stopPropagation?.();
         void enableVimMode();
-
-        if (typeof options.onKeyDown === 'function' && browserEvent) {
-            options.onKeyDown(browserEvent, event);
-        }
+        return true;
     });
 
     const scrollDisposable = editor.onDidScrollChange(() => {
         positionVimIndicator();
-    });
-
-    const typeDisposable = editor.onDidType((text) => {
-        if (typeof options.onCompletionRequest !== 'function') {
-            return;
-        }
-
-        const triggerChar = String(text || '').slice(-1);
-        const position = editor.getPosition();
-        if (!position) {
-            return;
-        }
-
-        const isTrigger = triggerChar === '.' || triggerChar === ':' || triggerChar === '>';
-
-        options.onCompletionRequest({
-            source: 'type',
-            key: triggerChar,
-            ctrlKey: false,
-            metaKey: false,
-            altKey: false,
-            shiftKey: false,
-            triggerKind: isTrigger ? 2 : 1,
-            triggerChar: isTrigger ? triggerChar : '',
-            line: Math.max(0, position.lineNumber - 1),
-            character: Math.max(0, position.column - 1),
-        });
     });
 
     const blurDisposable = editor.onDidBlurEditorWidget(() => {
@@ -964,69 +1033,7 @@ export async function createMonacoAdapter(container, options = {}) {
         }
     });
 
-    const mouseDownDisposable = editor.onMouseDown((event) => {
-        const browserEvent = event?.event?.browserEvent;
-        const position = event?.target?.position;
-
-        if (!browserEvent || Number(browserEvent.button) !== 0 || !position) {
-            return;
-        }
-
-        const misspelling = getMisspellingAtOffset(model.getOffsetAt(position));
-        if (!misspelling) {
-            return;
-        }
-
-        browserEvent.preventDefault?.();
-        browserEvent.stopPropagation?.();
-
-        showSpellcheckSuggestionsPopup(
-            Number(browserEvent.clientX) || 0,
-            Number(browserEvent.clientY) || 0,
-            misspelling,
-            (suggestion) => {
-                replaceMisspellingWithSuggestion(misspelling, suggestion);
-            },
-        );
-    });
-
-    const domNode = editor.getDomNode();
-    const onPasteHandler = typeof options.onPaste === 'function'
-        ? (event) => options.onPaste(event)
-        : null;
-    const onPrimaryPasteHandler = typeof options.onPrimaryPaste === 'function'
-        ? (event) => {
-            const key = String(event?.key || '').toLowerCase();
-            const isPrimaryPaste = key === 'v'
-                && (event.ctrlKey === true || event.metaKey === true)
-                && event.altKey !== true;
-            if (!isPrimaryPaste || options.onPrimaryPaste(event) !== true) {
-                return;
-            }
-
-            // Prevent Monaco from consuming Cmd/Ctrl+V before Notes reads the
-            // native clipboard through its Go-backed paste path.
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        }
-        : null;
-    const onContextMenuHandler = typeof options.onContextMenu === 'function'
-        ? (event) => options.onContextMenu(event)
-        : null;
-
-    if (domNode && onPrimaryPasteHandler) {
-        domNode.addEventListener('keydown', onPrimaryPasteHandler, true);
-    }
-
-    if (domNode && onPasteHandler) {
-        // Monaco consumes keyboard paste before bubble listeners run. Capture so
-        // Notes can divert image clipboard data into its Markdown asset path.
-        domNode.addEventListener('paste', onPasteHandler, true);
-    }
-
-    if (domNode && onContextMenuHandler) {
-        domNode.addEventListener('contextmenu', onContextMenuHandler);
-    }
+    const spellcheckContextMenu = attachMonacoSpellcheckContextMenu(editor, getMisspellingAtOffset, replaceMisspellingWithSuggestion);
 
     const lspDisposables = [];
     let lspCodeActionCommandDisposable = null;
@@ -1635,27 +1642,183 @@ export async function createMonacoAdapter(container, options = {}) {
             mouseMoveDisposable.dispose();
             blurDisposable.dispose();
             focusDisposable.dispose();
-            mouseDownDisposable.dispose();
-            keyDownDisposable.dispose();
+            spellcheckContextMenu.dispose();
             scrollDisposable.dispose();
-            typeDisposable.dispose();
+            inputHooks.dispose();
             disposeLsp();
             while (fallbackProviderDisposables.length > 0) {
                 const disposable = fallbackProviderDisposables.pop();
                 disposable?.dispose?.();
             }
             setTyposDecorations([]);
-            if (domNode && onPrimaryPasteHandler) {
-                domNode.removeEventListener('keydown', onPrimaryPasteHandler, true);
-            }
-            if (domNode && onPasteHandler) {
-                domNode.removeEventListener('paste', onPasteHandler, true);
-            }
-            if (domNode && onContextMenuHandler) {
-                domNode.removeEventListener('contextmenu', onContextMenuHandler);
-            }
             editor.dispose();
             model.dispose();
+        },
+    };
+}
+
+export async function createMonacoDiffAdapter(container, options = {}) {
+    if (!container) {
+        return null;
+    }
+
+    const monaco = await loadMonacoModule();
+    const fontMetrics = toFontMetrics(options);
+    const diffEditor = monaco.editor.createDiffEditor(container, {
+        automaticLayout: true,
+        originalEditable: false,
+        readOnly: false,
+        renderSideBySide: true,
+        minimap: { enabled: false },
+        overviewRulerLanes: 0,
+        hideCursorInOverviewRuler: true,
+        fontFamily: fontMetrics.fontFamily,
+        fontSize: fontMetrics.fontSize,
+        lineHeight: fontMetrics.lineHeight,
+        scrollBeyondLastLine: false,
+        scrollbar: {
+            vertical: 'visible',
+            horizontal: 'auto',
+            alwaysConsumeMouseWheel: false,
+            verticalScrollbarSize: 8,
+            horizontalScrollbarSize: 8,
+        },
+    });
+
+    let originalModel = null;
+    let modifiedModel = null;
+    const modifiedEditor = diffEditor.getModifiedEditor();
+    const changeDisposable = modifiedEditor.onDidChangeModelContent(() => {
+        options.onChange?.(modifiedEditor.getValue());
+    });
+    const selectionDisposable = modifiedEditor.onDidChangeCursorSelection(() => {
+        const selection = modifiedEditor.getSelection();
+        if (!selection || !modifiedModel) {
+            return;
+        }
+        options.onSelectionChange?.(
+            modifiedModel.getOffsetAt(selection.getStartPosition()),
+            modifiedModel.getOffsetAt(selection.getEndPosition()),
+            modifiedModel.getOffsetAt(selection.getPosition()),
+        );
+    });
+    const inputHooks = attachMonacoEditorHooks(modifiedEditor, options);
+
+    const languageForPath = (filePath) => {
+        const extension = `.${String(filePath || '').split('.').at(-1).toLowerCase()}`;
+        const language = monaco.languages.getLanguages().find((entry) => entry.extensions?.includes(extension));
+        return language?.id || 'plaintext';
+    };
+
+    return {
+        setDiff(diff) {
+            const language = languageForPath(diff?.path);
+            modifiedEditor.updateOptions({ readOnly: diff?.readOnly === true });
+            const nextOriginal = monaco.editor.createModel(String(diff?.original || ''), language);
+            const nextModified = monaco.editor.createModel(String(diff?.working || ''), language);
+            const previousOriginal = originalModel;
+            const previousModified = modifiedModel;
+            originalModel = nextOriginal;
+            modifiedModel = nextModified;
+            diffEditor.setModel({ original: nextOriginal, modified: nextModified });
+            previousOriginal?.dispose();
+            previousModified?.dispose();
+            diffEditor.layout();
+        },
+
+        setModifiedValue(value) {
+            const text = String(value || '');
+            if (modifiedModel && modifiedModel.getValue() !== text) {
+                modifiedModel.setValue(text);
+            }
+        },
+
+        getModifiedValue() {
+            return modifiedEditor.getValue();
+        },
+
+        getSelectionOffsets() {
+            const selection = modifiedEditor.getSelection();
+            if (!selection || !modifiedModel) {
+                return { start: 0, end: 0 };
+            }
+            return {
+                start: modifiedModel.getOffsetAt(selection.getStartPosition()),
+                end: modifiedModel.getOffsetAt(selection.getEndPosition()),
+            };
+        },
+
+        setSelectionOffsets(start, end) {
+            if (!modifiedModel) {
+                return;
+            }
+            const boundedStart = Math.max(0, Math.min(Number(start) || 0, modifiedModel.getValueLength()));
+            const boundedEnd = Math.max(boundedStart, Math.min(Number(end) || boundedStart, modifiedModel.getValueLength()));
+            const startPosition = modifiedModel.getPositionAt(boundedStart);
+            const endPosition = modifiedModel.getPositionAt(boundedEnd);
+            modifiedEditor.setSelection({
+                startLineNumber: startPosition.lineNumber,
+                startColumn: startPosition.column,
+                endLineNumber: endPosition.lineNumber,
+                endColumn: endPosition.column,
+            });
+        },
+
+        getSelectionText() {
+            const selection = modifiedEditor.getSelection();
+            return selection && modifiedModel ? modifiedModel.getValueInRange(selection) : '';
+        },
+
+        replaceRange(start, end, value, source = 'notes-git-diff-edit') {
+            if (!modifiedModel) {
+                return;
+            }
+            const boundedStart = Math.max(0, Math.min(Number(start) || 0, modifiedModel.getValueLength()));
+            const boundedEnd = Math.max(boundedStart, Math.min(Number(end) || boundedStart, modifiedModel.getValueLength()));
+            const startPosition = modifiedModel.getPositionAt(boundedStart);
+            const endPosition = modifiedModel.getPositionAt(boundedEnd);
+            modifiedEditor.executeEdits(source, [{
+                range: {
+                    startLineNumber: startPosition.lineNumber,
+                    startColumn: startPosition.column,
+                    endLineNumber: endPosition.lineNumber,
+                    endColumn: endPosition.column,
+                },
+                text: String(value || ''),
+                forceMoveMarkers: true,
+            }]);
+        },
+
+        focus() {
+            modifiedEditor.focus();
+        },
+
+        layout() {
+            diffEditor.layout();
+        },
+
+        setWordWrap(enabled) {
+            modifiedEditor.updateOptions({ wordWrap: enabled ? 'on' : 'off' });
+        },
+
+        openCommandPalette() {
+            modifiedEditor.focus();
+            const action = modifiedEditor.getAction?.('editor.action.quickCommand');
+            if (action && typeof action.run === 'function') {
+                action.run();
+                return;
+            }
+            modifiedEditor.trigger('notes-git-diff', 'editor.action.quickCommand', null);
+        },
+
+        dispose() {
+            changeDisposable.dispose();
+            selectionDisposable.dispose();
+            inputHooks.dispose();
+            diffEditor.setModel(null);
+            originalModel?.dispose();
+            modifiedModel?.dispose();
+            diffEditor.dispose();
         },
     };
 }

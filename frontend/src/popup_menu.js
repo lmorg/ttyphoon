@@ -1,4 +1,5 @@
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from './wails-runtime.js';
+import { disableNativeTextAssistance } from './text-input.js';
 import {
     CommandPaletteSelect,
     FilterStrings,
@@ -6,7 +7,7 @@ import {
     TerminalMenuSelect,
     TerminalMenuCancel,
     TerminalRequestRedraw,
-} from '../wailsjs/go/main/WApp';
+} from './wails-bindings.js';
 
 const LISTBOX_ROOT_ID = 'ttyphoon-listbox-menu';
 const PASSIVE_MENU_ROOT_ID = 'ttyphoon-passive-menu';
@@ -486,10 +487,7 @@ export function initTerminalPopupMenu(canvas) {
     listSearchInput.type = 'text';
     listSearchInput.className = 'tty-listbox-search-input';
     listSearchInput.placeholder = 'Filter...';
-    listSearchInput.setAttribute('autocomplete', 'off');
-    listSearchInput.setAttribute('autocorrect', 'off');
-    listSearchInput.setAttribute('autocapitalize', 'off');
-    listSearchInput.setAttribute('spellcheck', 'false');
+    disableNativeTextAssistance(listSearchInput);
     listSearchWrap.appendChild(listSearchInput);
 
     const listBody = document.createElement('div');
@@ -725,8 +723,8 @@ export function initTerminalPopupMenu(canvas) {
                 icon.className = 'tty-menu-row-icon';
                 icon.textContent = toIconText(item.icon);
                 icon.style.opacity = icon.textContent ? '0.9' : '0';
-                icon.style.fontFamily = '"Font Awesome Solid", "Font Awesome';
-                icon.style.fontWeight = '900';
+                icon.style.fontFamily = '"Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif';
+                icon.style.fontWeight = '400';
                 row.appendChild(icon);
             }
 

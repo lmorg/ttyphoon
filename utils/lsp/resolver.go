@@ -101,7 +101,7 @@ func (r *Resolver) LanguageIDForFile(path string) string {
 		}
 	}
 
-	ext := normalizeExtension(strings.TrimPrefix(filepath.Ext(path), "."))
+	ext := languageFileExtension(path)
 	if ext == "" {
 		return ""
 	}
@@ -120,7 +120,7 @@ func (r *Resolver) LanguageIDsForFile(path string) []string {
 		}
 	}
 
-	ext := normalizeExtension(strings.TrimPrefix(filepath.Ext(path), "."))
+	ext := languageFileExtension(path)
 	if ext == "" {
 		return nil
 	}
@@ -190,6 +190,14 @@ func canonicalLanguageID(binding *jupyter.LanguageBindingT) string {
 	}
 
 	return normalizeExtension(binding.FileExtension)
+}
+
+func languageFileExtension(path string) string {
+	name := strings.ToLower(filepath.Base(path))
+	if name == "dockerfile" || strings.HasPrefix(name, "dockerfile.") {
+		return "dockerfile"
+	}
+	return normalizeExtension(filepath.Ext(path))
 }
 
 func normalizeExtension(ext string) string {

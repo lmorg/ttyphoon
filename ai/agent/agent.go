@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -18,7 +19,6 @@ type Agent struct {
 	runtime          agentRuntime
 	serviceName      string
 	modelName        string
-	projectRoot      string
 	maxIterations    int
 	toolMu           sync.RWMutex
 	toolPermissionMu sync.Mutex
@@ -35,6 +35,9 @@ type Agent struct {
 
 	_mcpServers       map[string]client
 	_mcpServerSources map[string]string
+	mcpMu             sync.RWMutex
+	mcpLoads          map[string]context.CancelFunc
+	mcpClosed         bool
 	_tools            []aitypes.Tool
 }
 
@@ -71,7 +74,6 @@ func New(renderer types.Renderer, tile types.Tile) {
 		maxIterations:     config.Config.Ai.MaxIterations,
 		term:              tile.GetTerm(),
 		renderer:          renderer,
-		projectRoot:       notes.DirProjectRoot(tile.Pwd()),
 		toolStates:        make(map[string]string),
 		subagentTools:     make(map[string]bool),
 		toolPermissions:   make(map[string]*toolPermissionState),
@@ -111,28 +113,59 @@ func (agt *Agent) Reload() {
 	agt.runtime = nil
 }
 
-func (agt *Agent) McpServerAdd(server, source string, client client) {
-	agt._mcpServers[server] = client
+func (agt *Agent) McpServerAdd(server, source string, connection client) {
+	agt.mcpMu.Lock()
+	defer agt.mcpMu.Unlock()
+	if agt.mcpClosed {
+		return
+	}
+	if agt._mcpServers == nil {
+		agt._mcpServers = make(map[string]client)
+		agt._mcpServerSources = make(map[string]string)
+	}
+	if _, exists := agt._mcpServers[server]; exists {
+		return
+	}
+	agt._mcpServers[server] = connection
 	agt._mcpServerSources[server] = source
 }
 
 func (agt *Agent) McpServerExists(server string) bool {
+	agt.mcpMu.RLock()
+	defer agt.mcpMu.RUnlock()
 	_, ok := agt._mcpServers[server]
 	return ok
 }
 
 func (agt *Agent) McpServerSource(server string) string {
+	agt.mcpMu.RLock()
+	defer agt.mcpMu.RUnlock()
 	return agt._mcpServerSources[server]
 }
 
 func (agt *Agent) McpServerRemove(server string) {
+	agt.mcpMu.Lock()
+	defer agt.mcpMu.Unlock()
 	delete(agt._mcpServers, server)
 	delete(agt._mcpServerSources, server)
 }
 
 func (agt *Agent) Renderer() types.Renderer { return agt.renderer }
 func (agt *Agent) Term() types.Term         { return agt.term }
-func (agt *Agent) ProjectRoot() string      { return agt.projectRoot }
+func (agt *Agent) ProjectRoot() string {
+	if agt == nil || agt.term == nil {
+		return ""
+	}
+	tile := agt.term.Tile()
+	if tile == nil {
+		return ""
+	}
+	pwd := strings.TrimSpace(tile.Pwd())
+	if pwd == "" {
+		return ""
+	}
+	return notes.DirProjectRoot(pwd)
+}
 
 type toolPermission uint8
 
@@ -148,6 +181,7 @@ var ErrToolPermissionRefused = errors.New("tool call refused")
 
 type toolPermissionState struct {
 	decision  toolPermission
+	reason    string
 	prompting bool
 	wait      chan struct{}
 }
@@ -164,53 +198,80 @@ func (agt *Agent) ResetToolPermissions() {
 // frontend can resolve them by request ID once the user clicks an option.
 var writePermissionRequests = struct {
 	mu sync.Mutex
-	m  map[string]chan string
-}{m: map[string]chan string{}}
+	m  map[string]writePermissionRequestT
+}{m: map[string]writePermissionRequestT{}}
+
+type writePermissionDecisionT struct {
+	decision string
+	reason   string
+}
+
+type writePermissionRequestT struct {
+	workspace string
+	toolName  string
+	response  chan writePermissionDecisionT
+}
 
 var writePermissionSeq int64
 
-func newWritePermissionRequest() (string, chan string) {
+func newWritePermissionRequest(workspace, toolName string) (string, chan writePermissionDecisionT) {
 	id := fmt.Sprintf("wp%d", atomic.AddInt64(&writePermissionSeq, 1))
-	ch := make(chan string, 1)
+	ch := make(chan writePermissionDecisionT, 1)
 	writePermissionRequests.mu.Lock()
-	writePermissionRequests.m[id] = ch
+	writePermissionRequests.m[id] = writePermissionRequestT{workspace: workspace, toolName: toolName, response: ch}
 	writePermissionRequests.mu.Unlock()
 	return id, ch
 }
 
-func takeWritePermissionRequest(id string) (chan string, bool) {
+func takeWritePermissionRequest(id string) (writePermissionRequestT, bool) {
 	writePermissionRequests.mu.Lock()
 	defer writePermissionRequests.mu.Unlock()
-	ch, ok := writePermissionRequests.m[id]
+	request, ok := writePermissionRequests.m[id]
 	if ok {
 		delete(writePermissionRequests.m, id)
 	}
-	return ch, ok
+	return request, ok
 }
 
 // ResolveWritePermissionRequest is called by the frontend when the user clicks
 // one of the access-request options rendered in the AI panel output.
-func ResolveWritePermissionRequest(id, decision string) error {
-	ch, ok := takeWritePermissionRequest(id)
+func ResolveWritePermissionRequest(id, decision, reason string) error {
+	request, ok := takeWritePermissionRequest(id)
 	if !ok {
 		return fmt.Errorf("permission request %q not found or already resolved", id)
 	}
-	ch <- decision
+	request.response <- writePermissionDecisionT{decision: decision, reason: strings.TrimSpace(reason)}
 	return nil
 }
 
-func formatToolPermissionRequestMarkdown(toolName, requestID string) string {
+func WritePermissionRequestDetails(id string) (workspace, toolName string, ok bool) {
+	writePermissionRequests.mu.Lock()
+	defer writePermissionRequests.mu.Unlock()
+	request, ok := writePermissionRequests.m[id]
+	return request.workspace, request.toolName, ok
+}
+
+func formatToolPermissionRequestMarkdown(toolName, requestID, description string) string {
+	descriptionBlock := ""
+	if description != "" {
+		descriptionBlock = description + "\n\n"
+	}
+
 	return fmt.Sprintf(
-		"\n\n**Access requested for tool %s**\n\n"+
+		"\n\n**Access requested for tool %s**\n\n%s"+
 			"- [Allow this invocation](ttyphoon://ai-tool-permission?request=%s&decision=allow-once)\n"+
 			"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=allow-prompt)\n"+
 			"- [Deny this invocation](ttyphoon://ai-tool-permission?request=%s&decision=deny-once)\n"+
 			"- [Deny for this prompt](ttyphoon://ai-tool-permission?request=%s&decision=deny-prompt)\n\n",
-		toolName, requestID, requestID, requestID, requestID,
+		toolName, descriptionBlock, requestID, requestID, requestID, requestID,
 	)
 }
 
 func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) error {
+	return agt.requestToolPermission(ctx, toolName, nil)
+}
+
+func (agt *Agent) requestToolPermission(ctx context.Context, toolName string, describeCall func() string) error {
 	state := agt.ToolState(toolName)
 	if state == ToolStateDisabled {
 		return fmt.Errorf("%w: tool %q is disabled", ErrToolPermissionRefused, toolName)
@@ -239,8 +300,9 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 			agt.toolPermissionMu.Unlock()
 			return nil
 		case toolPermissionDeniedPrompt:
+			reason := permission.reason
 			agt.toolPermissionMu.Unlock()
-			return fmt.Errorf("%w: user denied tool %q for this prompt", ErrToolPermissionRefused, toolName)
+			return toolPermissionRefusal(toolName, reason)
 		}
 
 		if permission.prompting {
@@ -259,11 +321,15 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 		wait := permission.wait
 		agt.toolPermissionMu.Unlock()
 
-		reqID, decisionCh := newWritePermissionRequest()
-		permissionMarkdown := formatToolPermissionRequestMarkdown(toolName, reqID)
+		reqID, decisionCh := newWritePermissionRequest(agt.Workspace(), toolName)
+		description := ""
+		if describeCall != nil {
+			description = describeCall()
+		}
+		permissionMarkdown := formatToolPermissionRequestMarkdown(toolName, reqID, description)
 		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockQuestion, permissionMarkdown)
 
-		var decision string
+		var decision writePermissionDecisionT
 		select {
 		case decision = <-decisionCh:
 		case <-ctx.Done():
@@ -279,12 +345,14 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 		// invocation of the same tool prompts again.
 		var allowed bool
 		agt.toolPermissionMu.Lock()
-		switch decision {
+		refusalReason := decision.reason
+		switch decision.decision {
 		case "allow-prompt":
 			permission.decision = toolPermissionAllowedPrompt
 			allowed = true
 		case "deny-prompt":
 			permission.decision = toolPermissionDeniedPrompt
+			permission.reason = refusalReason
 		case "allow-once":
 			allowed = true
 		}
@@ -295,8 +363,15 @@ func (agt *Agent) RequestToolPermission(ctx context.Context, toolName string) er
 		if allowed {
 			return nil
 		}
+		return toolPermissionRefusal(toolName, refusalReason)
+	}
+}
+
+func toolPermissionRefusal(toolName, reason string) error {
+	if reason == "" {
 		return fmt.Errorf("%w: user denied tool %q", ErrToolPermissionRefused, toolName)
 	}
+	return fmt.Errorf("%w: user denied tool %q: %s", ErrToolPermissionRefused, toolName, reason)
 }
 
 func Close(tileId string) {
@@ -305,8 +380,26 @@ func Close(tileId string) {
 		return
 	}
 
-	for server, client := range agent._mcpServers {
-		err := client.Close()
+	agent.mcpMu.Lock()
+	agent.mcpClosed = true
+	for _, cancel := range agent.mcpLoads {
+		cancel()
+	}
+	connections := agent._mcpServers
+	agent._mcpServers = make(map[string]client)
+	agent._mcpServerSources = make(map[string]string)
+	agent.toolMu.Lock()
+	nativeTools := agent._tools[:0]
+	for _, tool := range agent._tools {
+		if _, isMcp := tool.(*mcpTool); !isMcp {
+			nativeTools = append(nativeTools, tool)
+		}
+	}
+	agent._tools = nativeTools
+	agent.toolMu.Unlock()
+	agent.mcpMu.Unlock()
+	for server, connection := range connections {
+		err := connection.Close()
 		if err != nil {
 			if agent.renderer != nil {
 				agent.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Error closing MCP Server '%s': %v", server, err))

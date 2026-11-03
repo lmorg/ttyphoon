@@ -4,6 +4,16 @@ import "time"
 
 type EventIgnoredCallback func()
 
+type TermStateT int
+
+const (
+	TermStateUnknown TermStateT = iota
+	TermStatePromptStart
+	TermStatePromptEnd
+	TermStateCommandOutputStart
+	TermStateCommandFinished
+)
+
 type SearchMode int
 
 const (
@@ -16,6 +26,7 @@ const (
 
 type Term interface {
 	Start(Pty)
+	State() TermStateT
 	GetSize() *XY
 	GetSgr() *Sgr
 	GetCellSgr(*XY) *Sgr
@@ -30,6 +41,7 @@ type Term interface {
 	MouseClick(*XY, MouseButtonT, uint8, ButtonStateT, EventIgnoredCallback)
 	MouseWheel(*XY, *XY)
 	MouseMotion(*XY, *XY, EventIgnoredCallback)
+	MouseLeave()
 	IsMouseCaptureEnabled() bool
 	MouseHover(*XY)
 	ShowCursor(bool)

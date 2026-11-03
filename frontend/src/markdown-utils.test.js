@@ -6,7 +6,7 @@ const { getCustomRegexpMock, getImageMock, hyperlinkOpenWithDefaultMock } = vi.h
     hyperlinkOpenWithDefaultMock: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetImage: getImageMock,
     GetCustomRegexp: getCustomRegexpMock,
     HyperlinkOpenWithDefault: hyperlinkOpenWithDefaultMock,
@@ -41,6 +41,20 @@ describe('wails image asset rewriting', () => {
         expect(img.getAttribute('src')).toBe('/__asset?path=images%2Fdiagram.png');
         expect(img.dataset.originalFilename).toBe('diagram.png');
         expect(getImageMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        'wails://localhost/images/diagram.png',
+        'wails://localhost:34115/images/diagram.png',
+        'http://wails.localhost/images/diagram.png',
+        'http://wails.localhost:34115/images/diagram.png',
+    ])('rewrites v3 image origin %s', (source) => {
+        const container = containerWith(source);
+
+        processWailsImages(container);
+
+        expect(container.querySelector('img').getAttribute('src'))
+            .toBe('/__asset?path=images%2Fdiagram.png');
     });
 
     it('decodes percent escapes so the handler receives the real filename', () => {

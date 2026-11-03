@@ -1,17 +1,60 @@
 package rendererwebkit
 
 import (
+	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/notes"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 func (wr *webkitRender) RefreshNotes() {
-	if wr == nil || wr.wapp == nil || wr.termWin == nil || wr.termWin.Active == nil {
-		// bit of a hack but this should only happen on application startup
-		//time.Sleep(500 * time.Millisecond)
+	if wr == nil || wr.wapp == nil {
 		return
 	}
-	runtime.EventsEmit(wr.wapp, "notesUpdate", wr.termWin.Active.GroupName())
+	wr.NotesFileContext()
+}
+
+func (wr *webkitRender) NotesFileContext() notes.FileContext {
+	if wr == nil {
+		return notes.FileContext{}
+	}
+	wr.notesContextMu.Lock()
+	defer wr.notesContextMu.Unlock()
+	var tile types.Tile = wr.ActiveTile()
+	if wr.tmux != nil {
+		if pane, err := wr.tmux.ActivePane(); err == nil && pane != nil {
+			tile = pane
+		}
+	}
+	if tile == nil {
+		return notes.FileContext{}
+	}
+	pwd, group := tile.Pwd(), tile.GroupName()
+	if wr.notesResolved.PathGlobalNotes == "" || pwd != wr.notesPwd || group != wr.notesGroup {
+		wr.notesPwd, wr.notesGroup = pwd, group
+		wr.notesResolved = notes.ResolveFileContext(tile)
+	}
+	roots := wr.notesResolved
+	if roots != wr.notesContext {
+		wr.notesContext = roots
+		if app, ok := wr.app.(interface{ SyncNotesContext(notes.FileContext) }); ok {
+			app.SyncNotesContext(roots)
+		}
+		if wr.wapp != nil {
+			runtime.EventsEmit(wr.wapp, "notesContextChanged", roots)
+		}
+	}
+	return roots
+}
+
+func (wr *webkitRender) NotesWorkspaceContexts() []notes.FileContext {
+	if wr == nil || wr.tmux == nil {
+		return nil
+	}
+	contexts := []notes.FileContext{}
+	for _, directory := range wr.tmux.WorkspaceDirectories() {
+		contexts = append(contexts, notes.ResolveDirectoryContext(directory.Pwd, directory.GroupName))
+	}
+	return contexts
 }
 
 func (wr *webkitRender) NotesEditFile(filename string) {
@@ -32,13 +75,9 @@ func (wr *webkitRender) NotesCreateAndOpen(filename, content string) {
 }
 
 func (wr *webkitRender) NotesRecentFiles() {
-	tile := wr.ActiveTile()
-	if tile == nil {
-		return
-	}
-
-	project := notes.DirProjectRoot(tile.Pwd())
-	recent := notes.GetRecentList(project)
+	context := wr.NotesFileContext()
+	notes.MigrateWorkspaceHistory(context.GroupName, context.PathProjectRoot)
+	recent := notes.HistoryRecentFiles(context.GroupName)
 
 	okFn := func(i int) {
 		runtime.EventsEmit(wr.wapp, "viewFileInNotesOpen", recent[i])

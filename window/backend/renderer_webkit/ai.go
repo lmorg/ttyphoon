@@ -18,17 +18,20 @@ func (wr *webkitRender) AskAi() {
 
 	wr.DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
-			Title:     fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
-			Multiline: true,
+			Title:           fmt.Sprintf("What would you like to ask %s?", agt.ServiceName()),
+			DraftKey:        ai.AIWorkspaceDraftKey(agt),
+			Multiline:       true,
+			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				ai.EffortInputVariable(),
 				ai.SaveMarkdownToggle(false),
 			},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
 			agt.SetModelFromInputVariable(v.Variables)
-			ai.AskAI(agt, v.String())
+			ai.AskAIWithImages(agt, v.String(), v.Images)
 		},
 	})
 }
@@ -38,27 +41,21 @@ func askAiSkills(wr *webkitRender) {
 }
 
 func askAiSkillsAt(wr *webkitRender, x, y int, anchored bool) {
-	skills := skills.ReadSkills()
+	skills := skills.ReadSkills().UserInvocable()
 
 	if len(skills) == 0 {
 		wr.DisplayNotification(types.NOTIFY_WARN, "You don't have any Agent Skills available to use")
 		return
 	}
 
-	var padFunc, padName int
+	var padName int
 	for i := range skills {
 		padName = max(padName, len(skills[i].Name))
-		padFunc = max(padFunc, len(skills[i].FunctionName))
 	}
 
 	slice := make([]string, len(skills))
 	for i := range skills {
-		slice[i] = fmt.Sprintf("/%s%s%s%s(%s)",
-			skills[i].FunctionName,
-			strings.Repeat(" ", padFunc+3-len(skills[i].FunctionName)),
-			skills[i].Name,
-			strings.Repeat(" ", padName+1-len(skills[i].Name)),
-			skills[i].Description)
+		slice[i] = fmt.Sprintf("/%-*s (%s)", padName, skills[i].Name, skills[i].Description)
 	}
 
 	fnSelect := func(i int) {
@@ -86,9 +83,12 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 
 	parameters := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
-			Title:     strings.Title(skill.Description),
-			Multiline: true,
-			Variables: append(skill.Variables,
+			Title:           strings.Title(skill.Description),
+			DraftKey:        ai.AIWorkspaceDraftKey(agt),
+			Multiline:       true,
+			AllowImagePaste: true,
+			Variables: append(append([]types.InputBoxWTVariables(nil), skill.Variables...),
+				ai.EffortInputVariable(),
 				agt.ListModelsInputVariable(),
 				ai.SaveMarkdownToggle(false),
 			),
@@ -96,7 +96,7 @@ func askAiSkill(wr *webkitRender, skill *skills.SkillT) {
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
 			agt.SetModelFromInputVariable(v.Variables)
-			ai.AskAI(agt, fmt.Sprintf("/%s %s", skill.FunctionName, v.String()))
+			ai.AskAIWithImages(agt, fmt.Sprintf("/%s %s", skill.Name, v.String()), v.Images)
 		},
 	}
 	wr.DisplayInputBoxW(parameters)

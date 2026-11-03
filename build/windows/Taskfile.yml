@@ -1,0 +1,33 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+tasks:
+  build:
+    summary: Build for Windows
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+      - task: common:generate:icons
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
+    vars:
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}}'
+    env:
+      GOOS: windows
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'
+
+  package:
+    summary: Build the Windows executable
+    deps:
+      - task: build
+
+  run:
+    summary: Run the Windows application
+    deps:
+      - task: build
+    cmds:
+      - "{{.BIN_DIR}}/{{.APP_NAME}}.exe"

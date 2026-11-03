@@ -22,10 +22,13 @@ Rules:
   composition and mood all improve the result. When `inputImage` is set,
   describe the change you want made, not the whole scene from scratch.
 - `inputImage` is optional. Set it to the path of an existing image (relative
-  to the working directory, or a path previously returned by this tool) to
-  edit that image instead of generating a new one. The path must be inside the
-  workspace or be an image this tool previously generated; anything else is
-  rejected.
+  to the current project root, or an absolute path) to edit that image instead
+  of generating a new one. The path must be inside the workspace or the
+  application's `.images` directory, which contains generated images and
+  pasted/uploaded attachments; anything else is rejected.
+- For an inline user attachment, use the exact `inputImage` path supplied beside
+  that image in the request. It is already saved and accessible to this tool.
+  Do not run Bash, search directories, or copy it into the workspace to locate it.
 - `file` is optional and should be **omitted** in almost every case. Only set it
   if the user has explicitly asked for the image to be saved at a particular
   name or path. Do not invent a filename. When omitted, the image is saved to a

@@ -14,7 +14,7 @@ const filterStringsMock = vi.fn((query, items) => {
 });
 const eventsOnMock = vi.fn();
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     CommandPaletteSelect: commandPaletteSelectMock,
     FilterStrings: filterStringsMock,
     TerminalMenuHighlight: terminalMenuHighlightMock,
@@ -23,7 +23,7 @@ vi.mock('../wailsjs/go/main/WApp', () => ({
     TerminalRequestRedraw: terminalRequestRedrawMock,
 }));
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
 }));
 

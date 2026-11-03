@@ -49,6 +49,20 @@ from Jupyter language metadata. Unconfigured file types silently have no LSP.
 Full-document sync only. `didChange` sends `contentChanges: [{text: <whole
 document>}]` with no `range` field. Incremental sync remains unimplemented.
 
+### Spellcheck language selection (2026-10-18)
+
+Reserved-word exclusions load independently of code-LSP startup. The backend
+prefers an exact configured language key, then resolves aliases from the selected
+Jupyter runtime binding. Thus `docker`, `dockerfile`, and the Docker runtime
+description share the configured Docker words. File-language resolution also
+recognizes `Dockerfile` and `Dockerfile.*`, after custom path-pattern rules.
+
+Each Jupyter block owns its exclusions, refreshed on initialization, cached
+runtime restoration, and runtime selection. Late responses cannot overwrite a
+newer selection or replacement block. Block exclusions never enter the main
+Markdown document's exclusion set; both aspell and typos-LSP use the existing
+spellcheck handle's case-insensitive filtering.
+
 ### Position encoding
 
 `initialize` advertises `general.positionEncodings` for UTF-16 and UTF-8 plus the

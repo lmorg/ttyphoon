@@ -13,7 +13,7 @@ import (
 	"github.com/lmorg/ttyphoon/types"
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 const _ITERMCOLORS_EXT = ".itermcolors"

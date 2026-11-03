@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"text/template"
 	"time"
@@ -18,17 +19,21 @@ import (
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	historymd "github.com/lmorg/ttyphoon/utils/history_md"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/lmorg/ttyphoon/utils/imageattachment"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 func ExplainCmdOutput(agt *agent.Agent) {
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
-			Title:       "Explain output",
-			Placeholder: "Optional",
-			Multiline:   true,
+			Title:           "Explain output",
+			DraftKey:        AIWorkspaceDraftKey(agt),
+			Placeholder:     "Optional",
+			Multiline:       true,
+			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},
@@ -43,7 +48,12 @@ func ExplainCmdOutput(agt *agent.Agent) {
 
 			query := fmt.Sprintf("%s\n\n```\n%s\n```", v.String(), agt.Meta.CmdLine)
 			query = strings.TrimSpace(query)
-			askAI(agt, prompts.GetExplainCmdMessages(agt, query), query)
+			images, err := prepareInputboxImages(agt, v.Images)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+			askAI(agt, prompts.GetExplainCmdMessagesWithImages(agt, query, images), query)
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -62,18 +72,27 @@ func ExplainDoc(agt *agent.Agent, filename, contents string, images []aitypes.Im
 	}
 	params := &types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
-			Title:       "Ask AI about " + filename,
-			Placeholder: "Optional",
-			Multiline:   true,
+			Title:           "Ask AI about " + filename,
+			DraftKey:        AIWorkspaceDraftKey(agt),
+			Placeholder:     "Optional",
+			Multiline:       true,
+			AllowImagePaste: true,
 			Variables: []types.InputBoxWTVariables{
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},
 		OkFunc: func(v *types.InputBoxCallbackResultT) {
 			agt.Meta.Variables = v.Variables
 			agt.SetModelFromInputVariable(v.Variables)
-			askAI(agt, prompts.GetExplainDocMessagesWithImages(agt, v.String(), images), v.String())
+			pastedImages, err := prepareInputboxImages(agt, v.Images)
+			if err != nil {
+				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+				return
+			}
+			attachments := append(append([]aitypes.ImageAttachment(nil), images...), pastedImages...)
+			askAI(agt, prompts.GetExplainDocMessagesWithImages(agt, v.String(), attachments), v.String())
 		},
 	}
 	agt.Renderer().DisplayInputBoxW(params)
@@ -82,12 +101,59 @@ func ExplainDoc(agt *agent.Agent, filename, contents string, images []aitypes.Im
 const _STICKY_MESSAGE = "Asking %s...."
 
 func AskAI(agt *agent.Agent, prompt string) {
+	AskAIWithImages(agt, prompt, nil)
+}
+
+func AskAIWithImages(agt *agent.Agent, prompt string, images []aitypes.ImageAttachment) {
 	go func() {
-		askAI(agt, prompts.GetAskMessages(agt, prompt), prompt)
+		attachments, err := prepareInputboxImages(agt, images)
+		if err != nil {
+			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
+		defer cancel()
+		messages := prompts.GetAskMessagesWithSkillSelectionAndImages(ctx, agt, prompt, attachments)
+		askAI(agt, messages, prompt)
 	}()
 }
 
+func prepareInputboxImages(agt *agent.Agent, images []aitypes.ImageAttachment) ([]aitypes.ImageAttachment, error) {
+	stored, err := imageattachment.Store(images)
+	if err != nil || len(stored) == 0 {
+		return stored, err
+	}
+	if agt.Meta == nil {
+		agt.Meta = &aitypes.Meta{}
+	}
+	for _, attachment := range stored {
+		path := (&url.URL{Path: attachment.Path}).EscapedPath()
+		agt.Meta.OutputBlock += fmt.Sprintf("\n\n![attached image](%s)", path)
+	}
+	return stored, nil
+}
+
 const SAVE_RESPONSE = "saveResponse"
+
+const EFFORT_LEVEL = prompts.EffortVariableName
+
+func EffortInputVariable() types.InputBoxWTVariables {
+	return types.InputBoxWTVariables{
+		Name:        EFFORT_LEVEL,
+		Label:       "Effort",
+		Description: "Quick returns a focused pass; Thorough investigates alternatives and edge cases. This guides the agent but is not a time limit.",
+		Default:     "Quick",
+		Options:     []string{"Quick", "Balanced", "Thorough"},
+		Type:        "list",
+	}
+}
+
+func AIWorkspaceDraftKey(agt *agent.Agent) string {
+	if agt == nil || agt.Workspace() == "" {
+		return ""
+	}
+	return "ai-workspace:" + agt.Workspace()
+}
 
 func joinPromptMessages(messages []*schema.Message) string {
 	if len(messages) == 0 {
@@ -117,6 +183,10 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 	)
 
 	go func() {
+		defer func() {
+			agt.SetSkillResourceDirectories(nil)
+		}()
+
 		startTime := time.Now()
 		noteTime := startTime
 		filenameCh := make(chan string, 1)
@@ -138,6 +208,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
+		ctx = agent.WithOriginalUserRequest(ctx, query)
 		sticky.UpdateCanceller(cancel)
 		defer cancel()
 
@@ -240,9 +311,11 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 	}
 	agt.Renderer().DisplayInputBoxW(&types.InputBoxWT{
 		Options: types.InputBoxWTOptions{
-			Title:     "Invoke prompt from URI?",
-			Multiline: true,
-			Prefill:   prompt,
+			Title:           "Invoke prompt from URI?",
+			DraftKey:        AIWorkspaceDraftKey(agt),
+			Multiline:       true,
+			AllowImagePaste: true,
+			Prefill:         prompt,
 			Variables: []types.InputBoxWTVariables{
 				{
 					Name:        "tools",
@@ -253,6 +326,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 					Options:     toolOptions,
 				},
 				agt.ListModelsInputVariable(),
+				EffortInputVariable(),
 				SaveMarkdownToggle(false),
 			},
 		},
@@ -280,7 +354,7 @@ func UriPrompt(agt *agent.Agent, prompt, tools string) {
 				agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 				return
 			}
-			AskAI(agt, v.String())
+			AskAIWithImages(agt, v.String(), v.Images)
 		},
 	})
 }

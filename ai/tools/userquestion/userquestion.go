@@ -3,7 +3,6 @@ package userquestion
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -45,14 +44,6 @@ type askUserInput struct {
 }
 
 func (t *AskUser) InputType() reflect.Type { return reflect.TypeOf(askUserInput{}) }
-
-func (t *AskUser) Call(ctx context.Context, input string) (string, error) {
-	var req askUserInput
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
-		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
-	}
-	return t.ask(ctx, &req)
-}
 
 func (t *AskUser) CallStructured(ctx context.Context, input any) (string, error) {
 	req, ok := input.(*askUserInput)

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 const (
@@ -113,7 +113,7 @@ func sessionLogDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(homeDir, "Documents", app.DirName)
+	dir := file.DocumentsDir(homeDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

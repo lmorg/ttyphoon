@@ -35,12 +35,13 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type einoRuntime struct {
 	agent               *Agent
 	agentReact          *react.Agent
+	chatModel           einoModel.ToolCallingChatModel
 	tools               []aitypes.Tool
 	boundedWindowRunner func(context.Context, []*schema.Message, func(string)) (string, error)
 }
@@ -96,6 +97,7 @@ type continuationCheckpoint struct {
 type einoAgentTool struct {
 	runtime         *einoRuntime
 	delegate        aitypes.Tool
+	stringInputTool aitypes.StringInputTool
 	info            *schema.ToolInfo
 	structuredInput reflect.Type
 }
@@ -108,13 +110,19 @@ func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 	var (
 		params          *schema.ParamsOneOf
 		structuredInput reflect.Type
+		stringInputTool aitypes.StringInputTool
 	)
-	if mcp, ok := t.(*mcpTool); ok && len(mcp.schema) > 0 {
+	if jsonSchemaTool, ok := t.(aitypes.JSONSchemaTool); ok {
+		rawSchema := jsonSchemaTool.JSONSchema()
+		if len(rawSchema) == 0 {
+			return nil, fmt.Errorf("JSON schema tool %q returned an empty schema", t.Name())
+		}
 		var js jsonschema.Schema
-		if err := json.Unmarshal(mcp.schema, &js); err != nil {
+		if err := json.Unmarshal(rawSchema, &js); err != nil {
 			return nil, fmt.Errorf("invalid schema for tool %q: %w", t.Name(), err)
 		}
 		params = schema.NewParamsOneOfByJSONSchema(&js)
+		stringInputTool = jsonSchemaTool
 	} else if structured, ok := t.(aitypes.StructuredTool); ok {
 		structuredInput = structured.InputType()
 		if structuredInput == nil {
@@ -128,12 +136,13 @@ func newEinoAgentTool(r *einoRuntime, t aitypes.Tool) (*einoAgentTool, error) {
 		}
 		params = schema.NewParamsOneOfByJSONSchema(structuredToolSchema(structuredInput))
 	} else {
-		return nil, fmt.Errorf("native tool %q must implement StructuredTool", t.Name())
+		return nil, fmt.Errorf("tool %q must implement StructuredTool or JSONSchemaTool", t.Name())
 	}
 
 	return &einoAgentTool{
 		runtime:         r,
 		delegate:        t,
+		stringInputTool: stringInputTool,
 		structuredInput: structuredInput,
 		info: &schema.ToolInfo{
 			Name:        sanitizeToolName(t.Name()),
@@ -148,6 +157,9 @@ func (t *einoAgentTool) Info(context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...einoTool.Option) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	toolCallBlock := OpenAITypedStreamBlock(ctx, sessiondb.StreamBlockToolCall, t.delegate.Name())
 	if toolCallBlock != nil {
 		toolCallBlock.Emit(argumentsInJSON)
@@ -172,7 +184,17 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	}
 
 	if t.runtime != nil && t.runtime.agent != nil {
-		if err := t.runtime.agent.RequestToolPermission(ctx, t.delegate.Name()); err != nil {
+		var describeCall func() string
+		if describer, ok := t.delegate.(aitypes.ToolCallDescriber); ok {
+			callInput := any(argumentsInJSON)
+			if structuredInput != nil {
+				callInput = structuredInput
+			}
+			describeCall = func() string {
+				return describer.CallDescription(ctx, callInput)
+			}
+		}
+		if err := t.runtime.agent.requestToolPermission(ctx, t.delegate.Name(), describeCall); err != nil {
 			emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
 			recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, "", err))
 			if errors.Is(err, ErrToolPermissionRefused) {
@@ -189,13 +211,30 @@ func (t *einoAgentTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if t.structuredInput != nil {
 		output, err = t.delegate.(aitypes.StructuredTool).CallStructured(ctx, structuredInput)
 	} else {
-		// MCP tools retain their own declared object schema and JSON adapter.
-		output, err = t.delegate.Call(ctx, argumentsInJSON)
+		stringInputTool := t.stringInputTool
+		if stringInputTool == nil {
+			var ok bool
+			stringInputTool, ok = t.delegate.(aitypes.StringInputTool)
+			if !ok {
+				return "", fmt.Errorf("tool %q has no string-input adapter", t.delegate.Name())
+			}
+		}
+		output, err = stringInputTool.Call(ctx, argumentsInJSON)
+	}
+	if err == nil {
+		err = ctx.Err()
 	}
 	if err != nil {
 		emitAIStreamToolBlock(ctx, sessiondb.StreamBlockToolError, err.Error())
 		recordContinuationToolObservation(ctx, t.toolObservationForInput(argumentsInJSON, structuredInput, output, err))
-		return output, err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return output, ctxErr
+		}
+		failure := fmt.Sprintf("Tool %q failed: %s\nReview the error and retry with corrected input, or use another tool. The operation may have partially completed; check existing state before retrying.", t.delegate.Name(), err)
+		if output != "" {
+			failure += "\nPartial tool output:\n" + output
+		}
+		return failure, nil
 	}
 
 	// Interposer: compress oversized tool outputs so the main agent's context stays
@@ -702,6 +741,7 @@ func (r *einoRuntime) initOpenAI() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	// OpenAI-compatible proxies (OpenRouter et al) often emit content or reasoning
 	// chunks before tool_calls, which the default first-chunk checker would miss.
@@ -747,6 +787,7 @@ func (r *einoRuntime) initAnthropic() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel:      chatModel,
@@ -782,6 +823,7 @@ func (r *einoRuntime) initOllama() error {
 	if err != nil {
 		return err
 	}
+	r.chatModel = chatModel
 
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel: chatModel,
@@ -819,6 +861,22 @@ func streamToolCallCheckerAllChunks(_ context.Context, modelOutput *schema.Strea
 
 func (r *einoRuntime) Reset() {
 	r.agentReact = nil
+}
+
+func (r *einoRuntime) RunSkillSelection(ctx context.Context, messages []*schema.Message) (string, error) {
+	if r.chatModel == nil {
+		if err := r.init(); err != nil {
+			return "", err
+		}
+	}
+	response, err := r.chatModel.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	if response == nil {
+		return "", nil
+	}
+	return response.Content, nil
 }
 
 func buildEinoConversationMessages(history []sessiondb.Entry, currentMessages []*schema.Message) []*schema.Message {

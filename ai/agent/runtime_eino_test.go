@@ -12,6 +12,10 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	einoModel "github.com/cloudwego/eino/components/model"
+	einoTool "github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
@@ -33,7 +37,20 @@ type structuredToolTestInput struct {
 
 type fakeStructuredAgentTool struct {
 	*fakeAgentTool
-	input *structuredToolTestInput
+	input         *structuredToolTestInput
+	callError     error
+	partialOutput string
+	onCall        func()
+}
+
+type fakeDescribedStructuredAgentTool struct {
+	*fakeStructuredAgentTool
+	describedInput any
+}
+
+func (f *fakeDescribedStructuredAgentTool) CallDescription(_ context.Context, input any) string {
+	f.describedInput = input
+	return "### Invocation details\n\nThis describes the requested operation."
 }
 
 func (f *fakeStructuredAgentTool) InputType() reflect.Type {
@@ -46,6 +63,12 @@ func (f *fakeStructuredAgentTool) CallStructured(_ context.Context, input any) (
 		return "", fmt.Errorf("unexpected structured input type %T", input)
 	}
 	f.input = structured
+	if f.onCall != nil {
+		f.onCall()
+	}
+	if f.callError != nil {
+		return f.partialOutput, f.callError
+	}
 	return "structured result", nil
 }
 
@@ -64,6 +87,12 @@ type fakeRuntime struct {
 	result string
 	err    error
 	chunks []string
+
+	selectionResult   string
+	selectionErr      error
+	selectionCalled   bool
+	selectionCtx      context.Context
+	selectionMessages []*schema.Message
 
 	called   bool
 	ctx      context.Context
@@ -100,6 +129,13 @@ func (f *fakeRuntime) RunLLMWithMessageStream(ctx context.Context, messages []*s
 func (f *fakeRuntime) RunLLMWithStream(ctx context.Context, prompt string, streamCallback func(string)) (string, error) {
 	f.prompt = prompt
 	return f.RunLLMWithMessageStream(ctx, []*schema.Message{schema.UserMessage(prompt)}, streamCallback)
+}
+
+func (f *fakeRuntime) RunSkillSelection(ctx context.Context, messages []*schema.Message) (string, error) {
+	f.selectionCalled = true
+	f.selectionCtx = ctx
+	f.selectionMessages = messages
+	return f.selectionResult, f.selectionErr
 }
 
 func (f *fakeRuntime) Reset() {
@@ -245,6 +281,77 @@ func TestStructuredToolUsesFieldSchemaAndDecodedInput(t *testing.T) {
 	}
 }
 
+func TestStructuredToolCallDescriptionUsesDecodedCallInputForApproval(t *testing.T) {
+	delegate := &fakeDescribedStructuredAgentTool{
+		fakeStructuredAgentTool: &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}},
+	}
+	permissionAgent := &Agent{toolStates: map[string]string{delegate.Name(): ToolStateApproval}}
+	tool, err := newEinoAgentTool(&einoRuntime{agent: permissionAgent}, delegate)
+	if err != nil {
+		t.Fatalf("newEinoAgentTool: %v", err)
+	}
+
+	resultCh := make(chan error, 1)
+	go func() {
+		_, callErr := tool.InvokableRun(context.Background(), `{"query":"needle","options":{"fileFilter":"*.go"}}`)
+		resultCh <- callErr
+	}()
+
+	var requestID string
+	for range 200 {
+		writePermissionRequests.mu.Lock()
+		for id := range writePermissionRequests.m {
+			requestID = id
+		}
+		writePermissionRequests.mu.Unlock()
+		if requestID != "" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if requestID == "" {
+		t.Fatal("no pending permission request was raised")
+	}
+
+	if err := ResolveWritePermissionRequest(requestID, "allow-once", ""); err != nil {
+		t.Fatalf("ResolveWritePermissionRequest: %v", err)
+	}
+	if err := <-resultCh; err != nil {
+		t.Fatalf("InvokableRun: %v", err)
+	}
+
+	input, ok := delegate.describedInput.(*structuredToolTestInput)
+	if !ok {
+		t.Fatalf("CallDescription input type = %T, want *structuredToolTestInput", delegate.describedInput)
+	}
+	if input != delegate.input {
+		t.Fatalf("CallDescription input %p differs from CallStructured input %p", input, delegate.input)
+	}
+	if input.Query != "needle" || input.Options.FileFilter != "*.go" {
+		t.Fatalf("CallDescription input = %+v, want decoded invocation arguments", input)
+	}
+}
+
+func TestFormatToolPermissionRequestMarkdownIncludesDescriptionBeforeOptions(t *testing.T) {
+	description := "### Invocation details\n\nThe requested operation."
+	got := formatToolPermissionRequestMarkdown("fake.tool", "wp-test", description)
+	descriptionIndex := strings.Index(got, description)
+	allowIndex := strings.Index(got, "[Allow this invocation]")
+	if descriptionIndex < 0 || allowIndex < 0 || descriptionIndex > allowIndex {
+		t.Fatalf("permission Markdown = %q, want description before the approval options", got)
+	}
+
+	legacy := formatToolPermissionRequestMarkdown("fake.tool", "wp-test", "")
+	wantLegacy := "\n\n**Access requested for tool fake.tool**\n\n" +
+		"- [Allow this invocation](ttyphoon://ai-tool-permission?request=wp-test&decision=allow-once)\n" +
+		"- [Allow for this prompt](ttyphoon://ai-tool-permission?request=wp-test&decision=allow-prompt)\n" +
+		"- [Deny this invocation](ttyphoon://ai-tool-permission?request=wp-test&decision=deny-once)\n" +
+		"- [Deny for this prompt](ttyphoon://ai-tool-permission?request=wp-test&decision=deny-prompt)\n\n"
+	if legacy != wantLegacy {
+		t.Fatalf("permission Markdown without a description = %q, want unchanged format %q", legacy, wantLegacy)
+	}
+}
+
 func TestListToolsReportsGeneratedStructuredSchema(t *testing.T) {
 	tool := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
 	owner := &Agent{
@@ -284,6 +391,192 @@ func TestStructuredToolRejectsLegacyInputWrapper(t *testing.T) {
 	}
 	if delegate.input != nil {
 		t.Fatalf("structured tool was invoked with %+v after invalid arguments", delegate.input)
+	}
+}
+
+func TestStructuredToolInvocationErrorIsModelVisibleAndRetryable(t *testing.T) {
+	delegate := &fakeStructuredAgentTool{
+		fakeAgentTool: &fakeAgentTool{enabled: true},
+		callError:     errors.New("invalid query: choose an existing file"),
+		partialOutput: "one file was already processed",
+	}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := &continuationCheckpoint{}
+	ctx := withContinuationCheckpoint(context.Background(), checkpoint)
+	output, err := tool.InvokableRun(ctx, `{"query":"missing"}`)
+	if err != nil {
+		t.Fatalf("recoverable tool error aborted invocation: %v", err)
+	}
+	for _, text := range []string{"fake.tool", "invalid query", "corrected input", "another tool", "partially completed", delegate.partialOutput} {
+		if !strings.Contains(output, text) {
+			t.Fatalf("tool result %q does not include %q", output, text)
+		}
+	}
+	observations := checkpoint.snapshot().toolObservations
+	if len(observations) != 1 || observations[0].Status != "error" || observations[0].Error != delegate.callError.Error() {
+		t.Fatalf("failed tool observation = %+v", observations)
+	}
+	delegate.callError = nil
+	output, err = tool.InvokableRun(context.Background(), `{"query":"existing"}`)
+	if err != nil || output != "structured result" || delegate.input.Query != "existing" {
+		t.Fatalf("corrected retry = %q, %v, input %+v", output, err, delegate.input)
+	}
+}
+
+func TestStructuredToolLocalTimeoutDoesNotCancelAgent(t *testing.T) {
+	delegate := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}, callError: context.DeadlineExceeded}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := tool.InvokableRun(context.Background(), `{"query":"slow"}`)
+	if err != nil || !strings.Contains(output, context.DeadlineExceeded.Error()) {
+		t.Fatalf("local timeout = %q, %v; want model-visible failure", output, err)
+	}
+}
+
+func TestStructuredToolCancellationDuringInvocationStaysTerminal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	delegate := &fakeStructuredAgentTool{
+		fakeAgentTool: &fakeAgentTool{enabled: true},
+		onCall:        cancel,
+	}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.InvokableRun(ctx, `{"query":"file"}`); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled tool error = %v, want context.Canceled", err)
+	}
+}
+
+func TestStructuredToolExpiredAgentDeadlineStaysTerminal(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	delegate := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.InvokableRun(ctx, `{"query":"file"}`); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expired agent deadline = %v, want context.DeadlineExceeded", err)
+	}
+	if delegate.input != nil {
+		t.Fatal("tool was called after the agent deadline expired")
+	}
+}
+
+type failingStringInputTool struct{ *fakeAgentTool }
+
+func (tool *failingStringInputTool) Call(context.Context, string) (string, error) {
+	return "partial response", errors.New("server rejected arguments")
+}
+
+func TestStringInputToolInvocationErrorDoesNotAbortRun(t *testing.T) {
+	delegate := &failingStringInputTool{fakeAgentTool: &fakeAgentTool{enabled: true}}
+	tool := &einoAgentTool{delegate: delegate, stringInputTool: delegate}
+	output, err := tool.InvokableRun(context.Background(), `{}`)
+	if err != nil || !strings.Contains(output, "server rejected arguments") || !strings.Contains(output, "partial response") {
+		t.Fatalf("string adapter failure = %q, %v; want model-visible error", output, err)
+	}
+}
+
+type toolRecoveryChatModel struct {
+	generate       func([]*schema.Message) (*schema.Message, error)
+	withToolsCalls *int
+}
+
+func (model *toolRecoveryChatModel) WithTools([]*schema.ToolInfo) (einoModel.ToolCallingChatModel, error) {
+	if model.withToolsCalls != nil {
+		*model.withToolsCalls++
+	}
+	return &toolRecoveryChatModel{generate: model.generate, withToolsCalls: model.withToolsCalls}, nil
+}
+
+func (model *toolRecoveryChatModel) Generate(_ context.Context, messages []*schema.Message, _ ...einoModel.Option) (*schema.Message, error) {
+	return model.generate(messages)
+}
+
+func (model *toolRecoveryChatModel) Stream(ctx context.Context, messages []*schema.Message, options ...einoModel.Option) (*schema.StreamReader[*schema.Message], error) {
+	message, err := model.Generate(ctx, messages, options...)
+	if err != nil {
+		return nil, err
+	}
+	return schema.StreamReaderFromArray([]*schema.Message{message}), nil
+}
+
+func TestEinoRuntimeSkillSelectionUsesModelWithoutToolBinding(t *testing.T) {
+	calls := 0
+	toolBindings := 0
+	model := &toolRecoveryChatModel{
+		withToolsCalls: &toolBindings,
+		generate: func(messages []*schema.Message) (*schema.Message, error) {
+			calls++
+			if len(messages) != 2 || messages[0].Role != schema.System || messages[1].Role != schema.User {
+				t.Fatalf("skill selection messages = %+v", messages)
+			}
+			return schema.AssistantMessage(`["review"]`, nil), nil
+		},
+	}
+	runtime := &einoRuntime{chatModel: model}
+	result, err := runtime.RunSkillSelection(context.Background(), []*schema.Message{
+		schema.SystemMessage("choose"),
+		schema.UserMessage("review this"),
+	})
+	if err != nil || result != `["review"]` || calls != 1 || toolBindings != 0 {
+		t.Fatalf("skill selection = %q, err=%v, generates=%d tool bindings=%d", result, err, calls, toolBindings)
+	}
+}
+
+func TestEinoReActModelReceivesToolFailureAndRetries(t *testing.T) {
+	delegate := &fakeStructuredAgentTool{fakeAgentTool: &fakeAgentTool{enabled: true}, callError: errors.New("file does not exist")}
+	tool, err := newEinoAgentTool(nil, delegate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	model := &toolRecoveryChatModel{generate: func(messages []*schema.Message) (*schema.Message, error) {
+		last := messages[len(messages)-1]
+		arguments := `{"query":"missing"}`
+		switch calls {
+		case 0:
+		case 1:
+			if last.Role != schema.Tool || !strings.Contains(last.Content, "file does not exist") {
+				return nil, fmt.Errorf("model did not receive tool failure: %+v", last)
+			}
+			delegate.callError = nil
+			arguments = `{"query":"existing"}`
+		case 2:
+			if last.Role != schema.Tool || last.Content != "structured result" {
+				return nil, fmt.Errorf("model did not receive retry result: %+v", last)
+			}
+			calls++
+			return &schema.Message{Role: schema.Assistant, Content: "Recovered and finished"}, nil
+		default:
+			return nil, errors.New("unexpected model call")
+		}
+		calls++
+		return &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{
+			ID: fmt.Sprintf("retry-%d", calls), Type: "function",
+			Function: schema.FunctionCall{Name: tool.info.Name, Arguments: arguments},
+		}}}, nil
+	}}
+	runner, err := react.NewAgent(context.Background(), &react.AgentConfig{
+		ToolCallingModel: model, ToolsConfig: compose.ToolsNodeConfig{Tools: []einoTool.BaseTool{tool}}, MaxStep: 8,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := runner.Generate(context.Background(), []*schema.Message{schema.UserMessage("Read the file")})
+	if err != nil {
+		t.Fatalf("tool failure ended the ReAct run: %v", err)
+	}
+	if result.Content != "Recovered and finished" || calls != 3 || delegate.input.Query != "existing" {
+		t.Fatalf("result = %+v, model calls %d, tool input %+v", result, calls, delegate.input)
 	}
 }
 
@@ -700,7 +993,7 @@ func TestBuildEinoConversationMessages_TrimsToMaxHistoryTurns(t *testing.T) {
 }
 
 func TestNewEinoAgentToolRejectsUnstructuredNativeTool(t *testing.T) {
-	if _, err := newEinoAgentTool(nil, &fakeAgentTool{enabled: true}); err == nil || !strings.Contains(err.Error(), "must implement StructuredTool") {
+	if _, err := newEinoAgentTool(nil, &fakeAgentTool{enabled: true}); err == nil || !strings.Contains(err.Error(), "must implement StructuredTool or JSONSchemaTool") {
 		t.Fatalf("newEinoAgentTool() error = %v, want StructuredTool requirement", err)
 	}
 }
@@ -789,7 +1082,8 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 				t.Fatal("no pending permission request was raised")
 			}
 
-			if err := ResolveWritePermissionRequest(reqID, test.decision); err != nil {
+			const denialReason = "This request is outside the approved scope."
+			if err := ResolveWritePermissionRequest(reqID, test.decision, denialReason); err != nil {
 				t.Fatalf("ResolveWritePermissionRequest() error = %v", err)
 			}
 
@@ -801,6 +1095,9 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 				if !errors.Is(err, ErrToolPermissionRefused) {
 					t.Fatalf("RequestToolPermission() error = %v, want ErrToolPermissionRefused", err)
 				}
+				if !strings.Contains(err.Error(), denialReason) {
+					t.Fatalf("RequestToolPermission() error = %v, want denial reason", err)
+				}
 			}
 
 			agent.toolPermissionMu.Lock()
@@ -808,6 +1105,12 @@ func TestRequestToolPermission_DecisionScopes(t *testing.T) {
 			agent.toolPermissionMu.Unlock()
 			if stored != test.wantStored {
 				t.Fatalf("decision stored = %v, want %v", stored, test.wantStored)
+			}
+			if test.decision == "deny-prompt" {
+				err := agent.RequestToolPermission(context.Background(), "fake.tool")
+				if !errors.Is(err, ErrToolPermissionRefused) || !strings.Contains(err.Error(), denialReason) {
+					t.Fatalf("subsequent prompt-scoped refusal = %v, want stored denial reason", err)
+				}
 			}
 		})
 	}
@@ -924,6 +1227,35 @@ func TestAgentRunLLMWithStream_InvokesCancelThenRuntime(t *testing.T) {
 	}
 	if result != "done" {
 		t.Fatalf("result = %q, want %q", result, "done")
+	}
+}
+
+func TestAgentRunSkillSelectionUsesRuntimeBoundary(t *testing.T) {
+	ctx := context.Background()
+	messages := []*schema.Message{schema.SystemMessage("choose skills"), schema.UserMessage("inspect code")}
+	runtime := &fakeRuntime{selectionResult: `["review"]`}
+	agent := &Agent{runtime: runtime}
+
+	result, err := agent.RunSkillSelection(ctx, messages)
+	if err != nil || result != runtime.selectionResult {
+		t.Fatalf("RunSkillSelection() = %q, %v", result, err)
+	}
+	if !runtime.selectionCalled || runtime.selectionCtx != ctx || len(runtime.selectionMessages) != len(messages) {
+		t.Fatal("skill selection did not use the configured runtime boundary")
+	}
+}
+
+func TestAgentRunLLMWithMessageStreamPassesSelectedSkillResources(t *testing.T) {
+	runtime := &fakeRuntime{}
+	agent := &Agent{
+		runtime: runtime,
+		Meta:    &aitypes.Meta{SkillResources: map[string]string{"review": "/skills/review"}},
+	}
+	if _, err := agent.RunLLMWithMessageStream(context.Background(), []*schema.Message{schema.UserMessage("review")}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := SkillResourceDirectoriesFromContext(runtime.ctx); got["review"] != "/skills/review" {
+		t.Fatalf("skill resource context = %#v", got)
 	}
 }
 

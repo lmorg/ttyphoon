@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 const FMT_DATE = "2006.01.02 @ 15.04.05"
@@ -162,7 +164,7 @@ func Ai(data *TemplateFieldsT, write TemplateWriterT) error {
 }
 
 func TemplateWriter(tmpl *template.Template, data *TemplateFieldsT) error {
-	path := fmt.Sprintf("%s/Documents/%s/history/%s", xdg.Home, app.DirName, data.GroupName)
+	path := filepath.Join(file.DocumentsDir(xdg.Home), "history", data.GroupName)
 	err := os.MkdirAll(path, 0700)
 	if err != nil {
 		return err

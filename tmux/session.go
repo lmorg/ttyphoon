@@ -34,9 +34,13 @@ import (
 const _PANE_EXITED = "Pane exited"
 
 func (tmux *Tmux) setSessionHooks() error {
-	command := fmt.Sprintf(`set-hook -g pane-exited 'display-message "%s"'`, _PANE_EXITED)
-	_, err := tmux.SendCommand([]byte(command))
-	return err
+	for _, hook := range []string{"pane-exited", "pane-died"} {
+		command := fmt.Sprintf(`set-hook -g %s 'display-message "%s"'`, hook, _PANE_EXITED)
+		if _, err := tmux.SendCommand([]byte(command)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const _COMMAND_SET_OPTION = "set-option terminal-features[%d] %s"

@@ -9,10 +9,11 @@ import {
     WindowUnmaximise,
     WindowSetPosition,
     WindowSetSize,
-} from '../wailsjs/runtime/runtime';
-import { GetWindowStyle, GetAppTitle, TerminalSetFocus } from '../wailsjs/go/main/WApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+} from './wails-runtime.js';
+import { GetWindowStyle, GetAppTitle, TerminalGetPanes, TerminalPaneZoom, TerminalSetFocus } from './wails-bindings.js';
+import { EventsOn } from './wails-runtime.js';
 import { DARKEN_BACKGROUND_OVERLAY } from './style-utils';
+import { restoreLayoutRatio, saveLayoutRatio } from './layout-sizing.js';
 
 // Global terminal focus state for canvas dimming
 window.terminalFocusedState = true;
@@ -178,6 +179,9 @@ let fullsizeActive = null;
 let isDraggingSplit = false;
 let notesCollapsed = false;
 let lastNotesWidthPercent = 50;
+let preferredNotesRatio = 0.5;
+let splitEdited = false;
+let splitChanged = false;
 let terminalFocusState = true;
 let terminalKeyboardFocusVisible = false;
 let lastInputWasKeyboard = false;
@@ -243,6 +247,10 @@ function updateTerminalFocusChrome() {
         'touch-action:none',
     ].join(';');
     splitHandle.title = 'Drag to resize notes';
+    splitHandle.setAttribute('role', 'separator');
+    splitHandle.setAttribute('aria-orientation', 'vertical');
+    splitHandle.setAttribute('aria-label', 'Resize Notes and terminal');
+    splitHandle.tabIndex = 0;
 
     const splitHandleLine = document.createElement('div');
     splitHandleLine.style.cssText = [
@@ -357,20 +365,31 @@ function updateTerminalFocusChrome() {
         }
 
         const embeddedInTerminal = notesPane?.parentElement?.id === 'terminal-jupyter-host';
-        if (notesCollapsed || embeddedInTerminal) {
+        if (notesCollapsed || embeddedInTerminal || fullsizeActive) {
             return;
         }
 
         isDraggingSplit = true;
+        splitChanged = false;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         event.preventDefault();
     });
 
     splitHandle.addEventListener('dblclick', (event) => {
+        if (fullsizeActive) return;
         event.preventDefault();
         event.stopPropagation();
         void toggleNotesPaneCollapsed();
+    });
+    splitHandle.addEventListener('keydown', (event) => {
+        if (fullsizeActive || notesCollapsed || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const rect = app.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        setSplitFromClientX(rect.left + rect.width * preferredNotesRatio + (event.key === 'ArrowRight' ? 16 : -16));
+        if (!notesCollapsed) void saveLayoutRatio('notesRatio', preferredNotesRatio);
+        requestTerminalResizeAfterLayout();
     });
 
     function shouldKeepTerminalFocusedForNotesTarget(target) {
@@ -561,13 +580,25 @@ function setTerminalJupyterMode(enabled) {
     }));
 }
 
+function applyPreferredNotesSplit() {
+    if (!notesPane || fullsizeActive || notesCollapsed || notesPane.parentElement !== contentWrapper) return;
+    const rect = app.getBoundingClientRect();
+    const available = rect.width - splitHandle.offsetWidth;
+    if (available <= 0) return;
+    const minimum = Math.min(available / 2, Math.max(MIN_NOTES_PX, Math.round(rect.width * 0.15)));
+    const width = Math.min(Math.max(rect.width * preferredNotesRatio, minimum), available - minimum);
+    notesPane.style.width = `${width / rect.width * 100}%`;
+    lastNotesWidthPercent = preferredNotesRatio * 100;
+    splitHandle.setAttribute('aria-valuenow', String(Math.round(preferredNotesRatio * 100)));
+}
+
 function setSplitFromClientX(clientX) {
     const rect = app.getBoundingClientRect();
     if (rect.width <= 0) {
         return;
     }
 
-    const minPanePx = Math.max(MIN_NOTES_PX, Math.round(rect.width * 0.15));
+    const minPanePx = Math.min((rect.width - splitHandle.offsetWidth) / 2, Math.max(MIN_NOTES_PX, Math.round(rect.width * 0.15)));
     const maxNotesPx = rect.width - minPanePx - splitHandle.offsetWidth;
     const rawNotesPx = clientX - rect.left;
     const notesPx = Math.min(Math.max(rawNotesPx, minPanePx), maxNotesPx);
@@ -584,6 +615,9 @@ function setSplitFromClientX(clientX) {
 
     notesCollapsed = false;
     lastNotesWidthPercent = notesPercent;
+    preferredNotesRatio = notesPercent / 100;
+    splitEdited = true;
+    splitChanged = true;
     notesPane.style.width = `${notesPercent}%`;
     updateSplitHandleTooltip();
 
@@ -679,9 +713,7 @@ async function toggleNotesPaneCollapsed() {
         WindowSetPosition(expandedX, frame.y);
 
         requestAnimationFrame(() => {
-            const nextRect = app.getBoundingClientRect();
-            // Expanded state should restore with divider at exact midpoint.
-            setSplitFromClientX(nextRect.left + (nextRect.width / 2));
+            applyPreferredNotesSplit();
             refreshStatusBarLayout();
         });
     }
@@ -811,6 +843,7 @@ window.addEventListener('mouseup', () => {
     isDraggingSplit = false;
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    if (splitChanged && !notesCollapsed && !fullsizeActive) void saveLayoutRatio('notesRatio', preferredNotesRatio);
     requestTerminalResizeAfterLayout();
 });
 
@@ -881,9 +914,21 @@ function enterFullsize(kind) {
         'justify-content: center',
         'background: rgba(0, 0, 0, 0.7)',
     ].join('; ');
-    // Clicking the darkened border exits full-size mode.
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) exitFullsize();
+    // Clicking outside a tmux-zoomed pane restores the pane before leaving fullsize.
+    overlay.addEventListener('click', async (e) => {
+        if (e.target !== overlay) return;
+        if (kind === 'terminal') {
+            try {
+                const panes = await TerminalGetPanes();
+                const zoomedPane = panes?.find((item) => item?.zoomed && item.id);
+                if (zoomedPane && typeof TerminalPaneZoom === 'function') {
+                    await TerminalPaneZoom(zoomedPane.id);
+                }
+            } catch (err) {
+                console.error('Failed to restore zoomed terminal pane', err);
+            }
+        }
+        exitFullsize();
     });
 
     overlay.appendChild(pane);
@@ -987,6 +1032,7 @@ function exitFullsize() {
     overlay.remove();
     fullsizeOverlay = null;
     fullsizeActive = null;
+    applyPreferredNotesSplit();
 
     setFullsizeButtonState(kind, false);
 
@@ -1010,6 +1056,10 @@ window.addEventListener('ttyphoon-notes-fullsize-toggle', () => {
 });
 
 window.addEventListener('ttyphoon-terminal-fullsize-toggle', () => {
+    toggleFullsize('terminal');
+});
+
+EventsOn('terminalFullsizeToggle', () => {
     toggleFullsize('terminal');
 });
 
@@ -1056,8 +1106,22 @@ EventsOn('notesCreateAndOpen', payload => {
 });
 
 window.addEventListener('resize', () => {
+    if (!isDraggingSplit) applyPreferredNotesSplit();
     refreshStatusBarLayout();
 });
+
+void restoreLayoutRatio('notesRatio', 0.5).then((ratio) => {
+    if (splitEdited) return;
+    preferredNotesRatio = ratio;
+    lastNotesWidthPercent = ratio * 100;
+    applyPreferredNotesSplit();
+    requestTerminalResizeAfterLayout();
+});
+
+if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => { if (!isDraggingSplit) applyPreferredNotesSplit(); });
+    observer.observe(app);
+}
 
 // Dynamic imports — the promises resolve asynchronously, but the resolution
 // microtask queue starts only after this synchronous module body finishes.

@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
@@ -115,11 +117,36 @@ func (agent *Agent) StartServerFromConfigServer(config *mcp_config.ConfigT, serv
 }
 
 func (agent *Agent) startServerFromConfigEntry(source, name string, svr mcp_config.ServerT, cache *map[string]string) error {
-	if agent.McpServerExists(name) {
+	agent.mcpMu.Lock()
+	if agent.mcpClosed {
+		agent.mcpMu.Unlock()
+		return fmt.Errorf("MCP agent has been closed")
+	}
+	if loaded, exists := agent._mcpServers[name]; exists && loaded != nil {
+		loadedSource := agent._mcpServerSources[name]
+		agent.mcpMu.Unlock()
+		if loadedSource != source {
+			return fmt.Errorf("MCP server %q is already loaded from %s", name, loadedSource)
+		}
 		return nil
 	}
-
-	sticky := agent.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), func() {})
+	if _, loading := agent.mcpLoads[name]; loading {
+		agent.mcpMu.Unlock()
+		return fmt.Errorf("MCP server %q is already loading", name)
+	}
+	if agent.mcpLoads == nil {
+		agent.mcpLoads = make(map[string]context.CancelFunc)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	agent.mcpLoads[name] = cancel
+	agent.mcpMu.Unlock()
+	defer func() {
+		cancel()
+		agent.mcpMu.Lock()
+		delete(agent.mcpLoads, name)
+		agent.mcpMu.Unlock()
+	}()
+	sticky := agent.renderer.DisplaySticky(types.NOTIFY_INFO, fmt.Sprintf("Starting MCP server: %s", name), cancel)
 	defer sticky.Close()
 
 	envs := svr.Env.Slice()
@@ -169,9 +196,9 @@ func (agent *Agent) startServerFromConfigEntry(source, name string, svr mcp_conf
 
 	switch svr.Type {
 	case "http", "https":
-		return startServerHttp(source, agent, name, svr)
+		return startServerHttp(ctx, source, agent, name, svr)
 	default:
-		return startServerCmdLine(source, agent, envs, name, svr)
+		return startServerCmdLine(ctx, source, agent, envs, name, svr)
 	}
 }
 
@@ -262,24 +289,25 @@ func (agent *Agent) SetMcpServerEnabled(serverKey string, enabled bool) error {
 		return nil
 	}
 
+	agent.mcpMu.Lock()
+	if cancel, loading := agent.mcpLoads[server]; loading {
+		cancel()
+		agent.mcpMu.Unlock()
+		return nil
+	}
+	loadedSource = agent._mcpServerSources[server]
 	if loadedSource == "" {
+		agent.mcpMu.Unlock()
 		return nil
 	}
 	if loadedSource != source {
+		agent.mcpMu.Unlock()
 		return fmt.Errorf("MCP server %q is loaded from %s", server, loadedSource)
 	}
 
-	client, ok := agent._mcpServers[server]
-	if !ok || client == nil {
-		agent.McpServerRemove(server)
-		return nil
-	}
-
-	if err := client.Close(); err != nil {
-		return err
-	}
-
-	agent.McpServerRemove(server)
+	connection := agent._mcpServers[server]
+	delete(agent._mcpServers, server)
+	delete(agent._mcpServerSources, server)
 
 	agent.toolMu.Lock()
 	nextTools := make([]aitypes.Tool, 0, len(agent._tools))
@@ -292,8 +320,11 @@ func (agent *Agent) SetMcpServerEnabled(serverKey string, enabled bool) error {
 	}
 	agent._tools = nextTools
 	agent.toolMu.Unlock()
+	agent.mcpMu.Unlock()
 	agent.Reload()
-
+	if connection != nil {
+		return connection.Close()
+	}
 	return nil
 }
 

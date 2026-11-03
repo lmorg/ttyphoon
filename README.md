@@ -3,18 +3,22 @@
 ![logo](frontend/src/assets/images/icon-large.bmp)
 
 - [Multimedia Terminal Emulator](#multimedia-terminal-emulator)
-- [Screenshots](#screenshots)
+- [Terminal Features](#terminal-features)
   - [Output Blocks](#output-blocks)
   - [Structured Text](#structured-text)
   - [Tables](#tables)
   - [Images](#images)
   - [Tmux Support](#tmux-support)
   - [Highlighted Search Results](#highlighted-search-results)
-  - [Markdown Viewer](#markdown-viewer)
-  - [Vim-style Editor Keys](#vim-style-editor-keys)
+- [IDE](#ide)
   - [Programming Language Tools (LSP)](#programming-language-tools-lsp)
-  - [Config Files](#config-files)
+  - [Markdown Viewer](#markdown-viewer)
+    - [Executable Notebooks](#executable-notebooks)
+    - [Structured Data Documents](#structured-data-documents)
+  - [Spreadsheets](#spreadsheets)
+  - [Vim-style Editor Keys](#vim-style-editor-keys)
   - [Swagger](#swagger)
+  - [Hex Viewer](#hex-viewer)
   - [Non-Intrusive AI](#non-intrusive-ai)
 - [How It Works](#how-it-works)
 - [Whats Left To Do](#whats-left-to-do)
@@ -31,6 +35,7 @@
 - [Install Guide](#install-guide)
   - [VT Debugging](#vt-debugging)
   - [AI Tracing](#ai-tracing)
+  - [AI Web Search](#ai-web-search)
 - [How To Support](#how-to-support)
 
 ## Multimedia Terminal Emulator
@@ -108,8 +113,8 @@ they can be copied to clipboard
 
 ### Tmux Support
 
-Tmux support built in using tmux's control plane. This allows for the power of
-tmux but with the easy of use and elegance of being fully integrated into the
+Terminal multiplexing support is built in using tmux's control plane. This allows for the power of
+tmux but with the ease of use and elegance of being fully integrated into the
 terminal emulator
 
 ![1791026230](README.md.d/1791026230.png)
@@ -172,60 +177,7 @@ Or use markdown tables if you want to build your own formula functions
 
 ### Vim-style Editor Keys
 
-The Notes editor and Jupyter code blocks support Vim-style keyboard navigation. Press `Escape` to enter Normal mode; a mode indicator appears in the bottom-right corner of the editor. Press `i` (or any insert command) to return to regular editing.
-
-#### Mode entry
-
-| Key | Action |
-|-----|--------|
-| `Esc` | Enter Normal mode |
-| `i` | Insert before cursor |
-| `a` | Insert after cursor |
-| `I` | Insert at first non-blank of line |
-| `A` | Insert at end of line |
-| `o` | Open new line below, insert |
-| `O` | Open new line above, insert |
-| `R` | Enter Replace (overtype) mode — all typed characters overwrite |
-| `r{char}` | Replace single character under cursor, stay in Normal |
-
-#### Navigation (Normal mode)
-
-| Key | Action |
-|-----|--------|
-| `h` / `←` | Left |
-| `l` / `→` | Right |
-| `j` / `↓` | Down |
-| `k` / `↑` | Up |
-| `w` | Forward to start of next word |
-| `b` | Back to start of previous word |
-| `e` | Forward to end of word |
-| `0` | Start of line (column 0) |
-| `^` | First non-blank character of line |
-| `$` / `End` | End of line |
-| `gg` | First non-blank of file |
-| `G` | Last non-blank of file |
-| `{n}G` | Go to line *n* |
-| `%` | Jump to matching bracket (`(` `)` `[` `]` `{` `}`) |
-
-#### Operators (combine with a motion or double for whole line)
-
-| Key | Action |
-|-----|--------|
-| `d{motion}` | Delete range covered by motion |
-| `dd` | Delete current line |
-| `D` | Delete to end of line |
-| `c{motion}` | Delete range and enter Insert |
-| `cc` | Change current line |
-| `C` | Change to end of line |
-| `y{motion}` | Yank (copy) range into internal register |
-| `yy` / `Y` | Yank current line |
-| `x` | Delete character under cursor |
-| `X` | Delete character before cursor |
-| `p` | Paste yanked text after cursor |
-| `P` | Paste yanked text before cursor |
-| `u` | Undo |
-
-All operators and motions accept a **count prefix** (e.g. `3w`, `5dd`, `10j`).
+The Notes editor and Jupyter code blocks support Vim-style keyboard navigation. See [docs/Vim-Editor-Keys.md](docs/Vim-Editor-Keys.md) for the full keybinding reference.
 
 ### Swagger
 
@@ -423,6 +375,126 @@ lot of noise to the stdout of the terminal used to launch TTYphoon.
 The AI features, prompts sent to LLMs and messages between MCP tools can be
 traced for debugging. To enable this, build with `-tags trace`. Trace messages
 are sent to the stdout of the terminal used to launch TTYphoon.
+
+### AI Web Search
+
+| Environment Variable | Default | Meaning |
+| --- | --- | --- |
+| `TTYPHOON_WEB_SEARCH_PROVIDER` | `duckduckgo` | Select `duckduckgo` or `searxng`. Unset or empty preserves DuckDuckGo. |
+| `TTYPHOON_SEARXNG_URL` | Unset | Required for `searxng`: an absolute HTTP(S) instance URL, optionally with a path prefix or `/search`. Credentials, query parameters, and fragments are not allowed. |
+| `TTYPHOON_SEARXNG_HEADERS` | No extra headers | Optional JSON object of header names to string values, up to 32 KiB. Supports private-instance authentication; requires HTTPS except on loopback. Invalid or reserved headers are rejected. |
+| `TTYPHOON_SEARXNG_MAX_CONCURRENT` | `2` | Integer from `1` to `16`. Shared limit for active search and discovery requests to the same instance across agents. |
+
+These are application launch-environment settings, not active-pane environment
+settings. Set them before launching TTYphoon and restart after changing them;
+exporting them inside an already-running terminal pane does not reconfigure the
+application. The three `TTYPHOON_SEARXNG_*` settings are ignored when the provider
+is DuckDuckGo.
+
+The existing web-search tool defaults to DuckDuckGo's Instant Answer API. To
+use a SearXNG instance instead, set these variables in the environment that
+launches TTYphoon, then restart the application:
+
+```sh
+export TTYPHOON_WEB_SEARCH_PROVIDER=searxng
+export TTYPHOON_SEARXNG_URL=http://127.0.0.1:8080
+```
+
+Private instances can use authentication headers configured in the launch
+environment, never in AI tool arguments:
+
+```sh
+export TTYPHOON_SEARXNG_HEADERS='{"Authorization":"Bearer REPLACE_WITH_TOKEN"}'
+export TTYPHOON_SEARXNG_MAX_CONCURRENT=2
+```
+
+The headers variable is a JSON object; custom authentication headers such as
+`X-API-Key`, Basic authorization, and cookies are also supported. Keep real
+values in a private launcher environment or secret manager, not source control
+or tool prompts. Credential-bearing URLs and reserved routing/framing headers
+are rejected. Authentication requires HTTPS except for loopback instances.
+Configured credential values are redacted from tool output and errors, and are
+never applied to DuckDuckGo or forwarded through redirects. Changing these
+settings requires an application restart.
+
+SearXNG search and discovery share a per-instance concurrency limit across
+agents: two requests by default, configurable from 1 to 16. The slot remains
+held until the response body is closed; queued requests can be cancelled. HTTP
+429 and 503 responses start a shared cooldown using `Retry-After` seconds or an
+HTTP date. A missing or invalid value uses 30 seconds. During cooldown, new
+outbound requests fail promptly with the remaining delay and UTC retry time;
+they are not automatically retried or sent to another provider. Existing
+in-flight requests are not aborted, and cached discovery remains usable.
+
+The URL may include an instance path prefix or end in `/search`. The instance
+must permit JSON responses in its `settings.yml`:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+```
+
+Many public instances disable JSON or rate-limit automated requests; a private
+instance is preferable. Searches return titles, URLs, and plain-text snippets,
+not complete pages. The existing `scrapeWebPage` tool can read a selected page.
+For compatibility with saved tool permissions, the tool keeps its existing
+`searchDuckDuckGo` identifier even when its description and backend use SearXNG.
+
+SearXNG accepts optional categories, engines, language, and time-range filters,
+plus bounded pagination and result limits:
+
+```json
+{"query":"Go release notes","categories":["general"],"language":"en","time_range":"month","page":2,"limit":5}
+```
+
+`page` defaults to 1 and accepts 1-10; `limit` defaults to 10 and accepts 1-50.
+The limit applies to unique URL results returned to the AI, not an upstream
+engine's page size. Additional pages are never fetched automatically. DuckDuckGo
+also accepts `limit`, but its Instant Answer API does not support later pages.
+
+Results preserve publication dates, publishers/source labels, and contributing
+engines when supplied. Missing dates are reported as unknown. Known tracking
+parameters (`utm_*`, `fbclid`, `gclid`, `msclkid`) are removed for URL
+deduplication; meaningful query parameters and fragments are retained. Duplicate
+URLs merge engine provenance, not independent corroboration.
+
+SearXNG may also return suggested queries, corrections, direct answers, and
+source-linked infobox summaries. These are bounded supplements, not automatic
+follow-up actions. Answers lacking attribution say so; infoboxes without a valid
+source URL are omitted. Search output is capped at 64 KiB, with a truncation
+notice when necessary. Image metadata and image downloading are not included.
+
+To discover your instance's engine names, shortcuts, categories, and support
+for paging, language filters, time ranges, and safe search, call the same tool
+without a search query:
+
+```json
+{"action":"discover"}
+```
+
+Discovery uses the instance's `/config` endpoint. Results are cached for ten
+minutes per search-tool instance; use `{"action":"discover","refresh":true}`
+to reload them. Engine `enabled` means enabled by default, not current engine
+health. Missing capability flags remain unknown. Discovery does not send a
+query to upstream search engines, and an inaccessible `/config` endpoint does
+not prevent normal searches. Normal searches do not fetch discovery metadata
+automatically. Large responses report their full engine count and whether the
+returned metadata was truncated.
+
+When fresh discovery metadata is cached, unknown engine/category names are
+rejected with a refresh hint. Known engine shortcuts are resolved to full names.
+Truncated caches cannot definitively reject an unlisted name, and missing or
+expired discovery never blocks searching. Advertised paging, language,
+time-range, default-enablement, and category mismatches produce advisories rather
+than silently changing the request. This validation does not fetch `/config`.
+
+Use category and engine names supported by your instance. Time ranges are
+`day`, `month`, or `year`; support varies by upstream engine. SearXNG errors do
+not silently fall back to another provider, and search redirects are not
+followed. To restore DuckDuckGo, unset `TTYPHOON_WEB_SEARCH_PROVIDER` or set it
+to `duckduckgo`. These optional filters require the SearXNG backend.
 
 ## How To Support
 

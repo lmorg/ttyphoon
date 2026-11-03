@@ -43,6 +43,10 @@ Hotkeys:
     "F4::w": LspJumpToWorkspaceSymbol
 
 Terminal:
+  # How long successful interactive-action panes remain open before auto-close.
+  # Use a Go duration such as 30s, 2m, or 1m30s.
+  PaneAutoCloseDelay: 10s
+
   # ScrollbackHistory is the size of the scrollback buffer.
   # Value is number of lines
   ScrollbackHistory: 10000
@@ -123,14 +127,13 @@ Notes:
   # Maximum file size for the JSON/YAML structured view
   StructViewMaxSizeKB: 1024
 
-  MaxRecentFiles: 10
-
   MaxLogLines: 1000
 
   ExcludeDirectories:
     ".git": true
     ".terraform": true
     "node_modules": true
+    ".git_worktrees": true
 
   Languages:
     yaml:

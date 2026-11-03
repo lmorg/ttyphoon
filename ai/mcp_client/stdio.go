@@ -1,14 +1,19 @@
 package mcp_client
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 )
 
 func ConnectCmdLine(overrides *mcp_config.OverrideT, envvars []string, command string, args ...string) (*Client, error) {
+	return ConnectCmdLineContext(context.Background(), overrides, envvars, command, args...)
+}
+
+func ConnectCmdLineContext(ctx context.Context, overrides *mcp_config.OverrideT, envvars []string, command string, args ...string) (*Client, error) {
 	// Use the Go SDK adapter for stdio/command transport
-	g, err := ConnectCmdLineGoSDK(overrides, envvars, command, args...)
+	g, err := ConnectCmdLineGoSDKContext(ctx, overrides, envvars, command, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdio MCP client: %w", err)
 	}

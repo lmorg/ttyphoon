@@ -37,6 +37,10 @@ type GoSDKClient struct {
 
 // ConnectCmdLineGoSDK connects to a local MCP server process using the Go SDK transports.
 func ConnectCmdLineGoSDK(overrides *mcp_config.OverrideT, envvars []string, command string, args ...string) (*GoSDKClient, error) {
+	return ConnectCmdLineGoSDKContext(context.Background(), overrides, envvars, command, args...)
+}
+
+func ConnectCmdLineGoSDKContext(ctx context.Context, overrides *mcp_config.OverrideT, envvars []string, command string, args ...string) (*GoSDKClient, error) {
 	impl := &mcp_sdk.Implementation{
 		Name:    or.NotEmpty(overrides.AppName, app.Name()),
 		Version: app.Version(),
@@ -57,12 +61,15 @@ func ConnectCmdLineGoSDK(overrides *mcp_config.OverrideT, envvars []string, comm
 
 		sess, err := client.Connect(ctx, transport, nil)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("gosdk: command connection cancelled: %w", ctx.Err())
+			}
 			return nil, fmt.Errorf("gosdk: connect command transport failed: %w", err)
 		}
 		return sess, nil
 	}
 
-	sess, err := connect(context.Background())
+	sess, err := connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +79,10 @@ func ConnectCmdLineGoSDK(overrides *mcp_config.OverrideT, envvars []string, comm
 
 // ConnectHttpGoSDK connects to a streamable HTTP MCP endpoint. oauth may be nil.
 func ConnectHttpGoSDK(overrides *mcp_config.OverrideT, endpoint string, oauth authsdk.OAuthHandler) (*GoSDKClient, error) {
+	return ConnectHttpGoSDKContext(context.Background(), overrides, endpoint, oauth)
+}
+
+func ConnectHttpGoSDKContext(ctx context.Context, overrides *mcp_config.OverrideT, endpoint string, oauth authsdk.OAuthHandler) (*GoSDKClient, error) {
 	impl := &mcp_sdk.Implementation{
 		Name:    or.NotEmpty(overrides.AppName, app.Name()),
 		Version: app.Version(),
@@ -91,12 +102,15 @@ func ConnectHttpGoSDK(overrides *mcp_config.OverrideT, endpoint string, oauth au
 
 		sess, err := client.Connect(ctx, transport, nil)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("gosdk: HTTP connection cancelled: %w", ctx.Err())
+			}
 			return nil, fmt.Errorf("gosdk: connect http transport failed: %w", err)
 		}
 		return sess, nil
 	}
 
-	sess, err := connect(context.Background())
+	sess, err := connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +120,15 @@ func ConnectHttpGoSDK(overrides *mcp_config.OverrideT, endpoint string, oauth au
 
 // ListTools calls ListTools on the underlying session and caches the result.
 func (c *GoSDKClient) ListTools() error {
-	res, err := c.session.ListTools(context.Background(), &mcp_sdk.ListToolsParams{})
+	return c.ListToolsContext(context.Background())
+}
+
+func (c *GoSDKClient) ListToolsContext(ctx context.Context) error {
+	res, err := c.session.ListTools(ctx, &mcp_sdk.ListToolsParams{})
 	if err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("gosdk: tool discovery cancelled: %w", ctx.Err())
+		}
 		return fmt.Errorf("gosdk: list tools failed: %w", err)
 	}
 	c.Tools = res

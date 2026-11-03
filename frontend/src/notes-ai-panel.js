@@ -17,7 +17,7 @@ export function initNotesAIPanel(elements) {
 
         if (elements.toolsAIMaximize) {
             elements.toolsAIMaximize.dataset.enabled = isAIMaximized ? 'true' : 'false';
-            elements.toolsAIMaximize.textContent = 'Maximize';
+            elements.toolsAIMaximize.textContent = String.fromCodePoint(0xf065);
         }
     };
 
@@ -41,6 +41,6 @@ export function initNotesAIPanel(elements) {
         });
 
         elements.toolsAIMaximize.dataset.enabled = 'false';
-        elements.toolsAIMaximize.textContent = 'Maximize';
+        elements.toolsAIMaximize.textContent = String.fromCodePoint(0xf065);
     }
 }

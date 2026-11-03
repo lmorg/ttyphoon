@@ -1,18 +1,17 @@
 package notes
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/file"
 )
 
 const _FUNCTION = "notes"
 
 func DirGlobal() string {
-	path := fmt.Sprintf("%s/Documents/%s/%s/", xdg.Home, app.DirName, _FUNCTION)
+	path := filepath.Join(file.DocumentsDir(xdg.Home), _FUNCTION) + string(filepath.Separator)
 
 	/*err :=*/
 	_ = os.MkdirAll(path, 0700)

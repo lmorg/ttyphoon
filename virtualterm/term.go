@@ -47,6 +47,8 @@ type Term struct {
 	Pty      types.Pty
 	_mutex   sync.Mutex
 
+	initialEnvVars map[string]string
+
 	screen        *types.Screen
 	_normBuf      types.Screen
 	_altBuf       types.Screen
@@ -72,6 +74,7 @@ type Term struct {
 
 	// state
 	_vtMode          _stateVtMode
+	_termState       atomic.Int32
 	_insertOrReplace _stateIrmT
 	_isFocused       bool
 	_activeElement   types.Element
@@ -85,7 +88,8 @@ type Term struct {
 	_blockMetaId     atomic.Int64
 	_spellingExc     map[string]bool
 
-	_apcStack uint
+	_apcStack                uint
+	pendingInteractiveAction *interactiveActionCompletion
 
 	// search
 	_searchHighlight  bool
@@ -181,6 +185,7 @@ func NewRowBlockMeta(term *Term) *types.BlockMeta {
 }
 
 func (term *Term) reset(size *types.XY) {
+	term._termState.Store(int32(types.TermStateUnknown))
 	term.size = size
 	term._synchronizedUpdateDeadline = time.Time{}
 	term.resizePty()
@@ -243,6 +248,10 @@ func (term *Term) makeCells(length int32) []*types.Cell {
 
 func (term *Term) GetSize() *types.XY {
 	return term.size
+}
+
+func (term *Term) State() types.TermStateT {
+	return types.TermStateT(term._termState.Load())
 }
 
 func (term *Term) currentCell() *types.Cell {
@@ -506,7 +515,13 @@ func (term *Term) GetEnvVars() map[string]string {
 		}
 	}
 
-	return map[string]string{}
+	return cloneEnvVars(term.initialEnvVars)
+}
+
+func (term *Term) SetInitialEnvVars(envvars map[string]string) {
+	term._mutex.Lock()
+	term.initialEnvVars = cloneEnvVars(envvars)
+	term._mutex.Unlock()
 }
 
 func cloneEnvVars(envvars map[string]string) map[string]string {

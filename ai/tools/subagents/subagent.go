@@ -110,14 +110,6 @@ func (t *Subagent) Description() string {
 	return description + "\n\nNo tools are currently allowed for sub-agents."
 }
 
-func (t *Subagent) Call(ctx context.Context, input string) (string, error) {
-	var requests []*requestT
-	if err := json.Unmarshal([]byte(input), &requests); err != nil {
-		return "call the tool error: input must be valid json with name and prompt", nil
-	}
-	return t.runRequests(ctx, requests)
-}
-
 func (t *Subagent) CallStructured(ctx context.Context, input any) (string, error) {
 	request, ok := input.(*subagentInputT)
 	if !ok || request == nil {

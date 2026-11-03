@@ -15,7 +15,7 @@ import (
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/notes"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 )
 
 type commandPaletteEvent struct {
@@ -117,7 +117,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 
 		for _, skill := range skills {
 			menu = append(menu, types.MenuItem{
-				Title: fmt.Sprintf("AI Skill /%s: %s", skill.FunctionName, skill.Description),
+				Title: fmt.Sprintf("AI Skill /%s: %s", skill.Name, skill.Description),
 				Fn:    func() { askAiSkill(wr, skill) },
 				Icon:  0xf544,
 			})

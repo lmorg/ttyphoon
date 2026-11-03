@@ -6,7 +6,10 @@ on them rather than rediscover them.
 Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 **Reference**.
 
-`0000-high-level-project-context.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
+`0000-high-level-project-context-for-ai.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
+If you're an AI, please read this first for new sessions to gain context into the application.
+
+`improvements.md` is a catalogue of known feature requests and bugs.
 
 ## Index
 
@@ -67,8 +70,37 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0053](0053-ai-graph-generation-tool.md) | AI graph tool uses the shared tabular renderer | AI tools |
 | [0054](0054-persisted-graphs-for-notes-tables.md) | Persisted graphs for Notes tables | Notes |
 | [0055](0055-chart-numeric-cell-normalization.md) | Normalize formatted numeric chart cells | Graphs |
-| [0056](0056-shell-tools-separate-tty-and-script-execution.md) | Separate interactive terminal commands from Bash scripts | AI tools |
+| [0056](0056-shell-tools-separate-tty-and-script-execution.md) | One Bash tool executes commands in cloned terminal panes | AI tools |
 | [0057](0057-xml-structured-notes-view.md) | XML uses source-preserving structured Notes View | Notes |
+| [0058](0058-notes-file-index-scan-once-then-watch.md) | Notes file list is a Go-owned index: scan once, then watch | Notes |
+| [0059](0059-notes-layout-sizing-persistence.md) | Notes layout sizing and persistence | Layout |
+| [0060](0060-notes-log-level-filters.md) | Notes log filters are independent by level | Notes |
+| [0061](0061-fontawesome-face-fallbacks.md) | Font Awesome uses separate regular and solid faces | Frontend |
+| [0062](0062-notes-git-worktree-panel.md) | Notes Git panel is scoped to the current project root | Notes |
+| [0063](0063-notes-tooltips-use-shared-overlay.md) | Notes uses the shared tooltip instead of native webview tooltips | Notes |
+| [0064](0064-notes-file-mutation-navigation.md) | Notes file mutations preserve document navigation | Notes |
+| [0065](0065-shared-documents-directory.md) | Shared application documents directory | Storage |
+| [0066](0066-end-key-name-must-reach-terminal-encoding.md) | End key names must reach terminal encoding | Terminal |
+| [0067](0067-terminal-hover-is-scoped-to-pointer-presence.md) | Terminal hover is scoped to pointer presence | Terminal |
+| [0068](0068-separate-git-command-output-streams-proposal.md) | Proposal: separate Git command output streams | Git |
+| [0069](0069-notes-spellcheck-suggestions-open-on-right-click.md) | Notes spellcheck suggestions open on right-click | Notes |
+| [0070](0070-notes-markup-lives-in-notes-html.md) | Keep static Notes markup in `notes.html` | Frontend |
+| [0071](0071-git-package-owns-action-execution-policy.md) | Git package owns action execution policy | Git |
+| [0072](0072-interactive-pane-actions-use-one-shot-uuid-callbacks.md) | Interactive pane actions use one-shot UUID callbacks | Terminal |
+| [0073](0073-configurable-web-search-backends.md) | Web search supports configurable DuckDuckGo and SearXNG backends | AI tools |
+| [0074](0074-notes-history-is-scoped-to-workspace-names.md) | Notes history follows tmux window names; recents derive from history | Notes |
+| [0075](0075-inputbox-drafts-are-separate-from-history.md) | Inputboxes persist complete drafts separately from submitted history | Inputboxes |
+| [0076](0076-inputbox-history-restores-complete-submissions.md) | Inputbox history restores complete submissions or individual text fields | Inputboxes |
+| [0077](0077-ai-filesystem-tools-use-the-live-project-root.md) | AI filesystem tools resolve the owning pane's live project root | AI tools |
+| [0078](0078-mcp-oauth-failures-must-be-retryable.md) | MCP OAuth cancellation, registration and retries preserve usable state | MCP |
+| [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
+| [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
+| [0081](0081-ai-prompt-effort-and-feedback-cadence.md) | Per-prompt effort guides investigation and user-feedback cadence | AI |
+| [0082](0082-ai-read-only-git-tool.md) | AI Git inspection uses a permission-gated read-only action whitelist | AI tools |
+| [0083](0083-ai-skills-support-manual-and-model-invocation.md) | AI skills support independent manual and automatic invocation | AI |
+| [0084](0084-ai-skills-read-selected-supporting-files.md) | AI skills can read selected supporting files | AI |
+| [0085](0085-wails-v3-migration.md) | Migrate the desktop application to Wails v3 | Platform |
+| [0086](0086-markdown-run-edits-preserve-source.md) | Markdown Run edits preserve source | Notes |
 
 ## Recurring themes
 

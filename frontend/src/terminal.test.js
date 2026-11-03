@@ -17,12 +17,20 @@ const getWindowStyleMock = vi.fn(async () => ({
         yellow: { Red: 220, Green: 180, Blue: 40 },
         selection: { Red: 80, Green: 120, Blue: 200 },
         green: { Red: 70, Green: 180, Blue: 110 },
+        red: { Red: 220, Green: 50, Blue: 60 },
         searchResult: { Red: 64, Green: 64, Blue: 255 },
         whiteBright: { Red: 255, Green: 255, Blue: 255 },
     },
 }));
 const terminalGetTabsMock = vi.fn(async () => []);
+const terminalGetPanesMock = vi.fn(async () => []);
+const terminalClosePaneMock = vi.fn(async () => {});
+const terminalClonePaneMock = vi.fn(async () => {});
+const terminalConfirmKillPaneMock = vi.fn(async () => {});
+const terminalPaneZoomMock = vi.fn(async () => {});
+const terminalCancelPaneAutoCloseMock = vi.fn(async () => {});
 const terminalRequestRedrawMock = vi.fn(async () => {});
+const terminalMouseLeaveMock = vi.fn(async () => {});
 const terminalSetGlyphSizeMock = vi.fn(async () => {});
 const terminalResizeMock = vi.fn(async () => {});
 const sendIpcMock = vi.fn(async () => {});
@@ -44,15 +52,23 @@ const fontApplyCellStyleMock = vi.fn((cmd) => {
     fontApplyCellStyleMock.lastCmd = cmd;
 });
 
-vi.mock('../wailsjs/runtime/runtime', () => ({
+vi.mock('./wails-runtime.js', () => ({
     EventsOn: eventsOnMock,
 }));
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     GetWindowStyle: getWindowStyleMock,
+    GetCustomRegexp: vi.fn(async () => []),
     SendIpc: sendIpcMock,
     TerminalCopyImageDataURL: terminalCopyImageDataURLMock,
     TerminalGetTabs: terminalGetTabsMock,
+    TerminalGetPanes: terminalGetPanesMock,
+    TerminalClosePane: terminalClosePaneMock,
+    TerminalClonePane: terminalClonePaneMock,
+    TerminalConfirmKillPane: terminalConfirmKillPaneMock,
+    TerminalPaneZoom: terminalPaneZoomMock,
+    TerminalCancelPaneAutoClose: terminalCancelPaneAutoCloseMock,
+    TerminalMouseLeave: terminalMouseLeaveMock,
     TerminalRequestRedraw: terminalRequestRedrawMock,
     TerminalResize: terminalResizeMock,
     TerminalSelectWindow: terminalSelectWindowMock,
@@ -144,6 +160,13 @@ describe('terminal compact redraw decoder', () => {
         vi.resetModules();
         eventHandlers.clear();
         eventsOnMock.mockClear();
+        terminalMouseLeaveMock.mockClear();
+        terminalGetPanesMock.mockReset().mockResolvedValue([]);
+        terminalClosePaneMock.mockReset().mockResolvedValue(undefined);
+        terminalClonePaneMock.mockReset().mockResolvedValue(undefined);
+        terminalConfirmKillPaneMock.mockReset().mockResolvedValue(undefined);
+        terminalPaneZoomMock.mockReset().mockResolvedValue(undefined);
+        terminalCancelPaneAutoCloseMock.mockReset().mockResolvedValue(undefined);
         fontApplyCellStyleMock.mockClear();
 
         document.body.innerHTML = '<div id="terminal-pane"></div>';
@@ -190,6 +213,288 @@ describe('terminal compact redraw decoder', () => {
         window.Image = MockImage;
     });
 
+    it('renders hyperlink tooltip icon rows and literal file values', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        const rows = [
+            ['Scheme', 'f5fc', 'file'],
+            ['Path', 'f07b', '/project/docs'],
+            ['File', 'f15b', '&lt;filename&gt;-**literal**-`code`.md'],
+        ];
+        eventHandlers.get('tooltipShow')({ text: rows.map(([label, icon, value]) =>
+            `<div class="shared-tooltip-row"><span class="shared-tooltip-icon" role="img" aria-label="${label}">&#x${icon};</span> <code>${value}</code></div>`,
+        ).join('\n') });
+        await flushPromises();
+
+        const tooltip = document.getElementById('ttyphoon-shared-tooltip');
+        expect(tooltip.style.display).toBe('block');
+        expect(Array.from(tooltip.querySelectorAll('.shared-tooltip-icon')).map((icon) => icon.textContent)).toEqual([
+            '\uf5fc', '\uf07b', '\uf15b',
+        ]);
+        expect(Array.from(tooltip.querySelectorAll('code')).map((value) => value.textContent)).toEqual([
+            'file', '/project/docs', '<filename>-**literal**-`code`.md',
+        ]);
+        expect(tooltip.querySelector('filename, strong, ul')).toBeNull();
+        expect(document.getElementById('ttyphoon-shared-tooltip-style').textContent).toContain('.shared-tooltip-icon');
+    });
+
+    it('clears backend hover when the pointer leaves the terminal for Notes', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        const notes = document.createElement('div');
+        notes.id = 'notes-pane';
+        document.body.appendChild(notes);
+        document.getElementById('ttyphoon-terminal').dispatchEvent(new MouseEvent('mouseleave', {
+            relatedTarget: notes,
+        }));
+        await flushPromises();
+        expect(terminalMouseLeaveMock).toHaveBeenCalledOnce();
+    });
+
+    it('shows every pane close control but reveals running panes only on hover', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const panesChanged = eventHandlers.get('terminalPanes');
+        panesChanged([
+            { id: '%1', name: 'Running shell', x: 0, y: 0, width: 40, height: 24, canClose: true, finished: false, zoomed: false },
+            { id: '%2', name: 'Completed command', x: 41, y: 5, width: 39, height: 19, canClose: true, finished: true, zoomed: true },
+        ]);
+        let buttons = document.querySelectorAll('.terminal-pane-close');
+        let zoomButtons = document.querySelectorAll('.terminal-pane-zoom');
+        const cloneButtons = document.querySelectorAll('.terminal-pane-clone');
+        expect(buttons).toHaveLength(2);
+        expect(zoomButtons).toHaveLength(2);
+        expect(cloneButtons).toHaveLength(2);
+        expect(cloneButtons[0].textContent).toBe(String.fromCodePoint(0xf24d));
+        expect(cloneButtons[0].getAttribute('aria-label')).toBe('Clone pane');
+        expect(cloneButtons[0].dataset.hovered).toBe('false');
+        expect(cloneButtons[0].nextElementSibling).toBe(zoomButtons[0]);
+        expect(buttons[0].dataset.paneId).toBe('%1');
+        expect(buttons[0].dataset.hovered).toBe('false');
+        expect(buttons[0].getAttribute('aria-label')).toBe('Kill pane');
+        expect(buttons[0].classList.contains('terminal-pane-action')).toBe(true);
+        expect(buttons[1].dataset.paneId).toBe('%2');
+        expect(buttons[1].style.left).toBe('778px');
+        expect(buttons[1].style.top).toBe('102px');
+        expect(buttons[1].getAttribute('aria-label')).toBe('Close completed pane');
+        expect(zoomButtons[0].dataset.hovered).toBe('false');
+        expect(zoomButtons[0].classList.contains('terminal-pane-action')).toBe(true);
+        expect(zoomButtons[1].dataset.finished).toBe('true');
+        expect(zoomButtons[1].getAttribute('aria-label')).toBe('Restore pane');
+        expect(zoomButtons[1].nextElementSibling).toBe(buttons[1]);
+        expect(document.getElementById('terminal-theme').textContent).toContain(
+            '.terminal-pane-action[data-finished="false"][data-hovered="false"]',
+        );
+
+        const canvas = document.getElementById('ttyphoon-terminal');
+        canvas.width = 800;
+        canvas.height = 600;
+        canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
+        document.getElementById('terminal-viewport').dispatchEvent(new MouseEvent('pointermove', {
+            bubbles: true, clientX: 100, clientY: 100,
+        }));
+        expect(buttons[0].dataset.hovered).toBe('true');
+        expect(zoomButtons[0].dataset.hovered).toBe('true');
+        expect(cloneButtons[0].dataset.hovered).toBe('true');
+        cloneButtons[0].click();
+        await flushPromises();
+        expect(terminalClonePaneMock).toHaveBeenCalledWith();
+        expect(terminalConfirmKillPaneMock).not.toHaveBeenCalled();
+        const fullsizeToggle = vi.fn();
+        window.addEventListener('ttyphoon-terminal-fullsize-toggle', fullsizeToggle);
+        zoomButtons[0].click();
+        await flushPromises();
+        expect(terminalPaneZoomMock).toHaveBeenCalledWith('%1');
+        expect(fullsizeToggle).toHaveBeenCalledOnce();
+        window.removeEventListener('ttyphoon-terminal-fullsize-toggle', fullsizeToggle);
+
+        buttons[0].click();
+        await flushPromises();
+        expect(terminalConfirmKillPaneMock).toHaveBeenCalledWith('%1', 'Running shell');
+        expect(terminalClosePaneMock).not.toHaveBeenCalled();
+
+        panesChanged([[{ id: '%2', name: 'Completed command', x: 0, y: 0, width: 60, height: 24, canClose: true, finished: true }]]);
+        buttons = document.querySelectorAll('.terminal-pane-close');
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].style.left).toBe('578px');
+        expect(buttons[0].style.top).toBe('2px');
+        buttons[0].click();
+        await flushPromises();
+        expect(terminalClosePaneMock).toHaveBeenCalledWith('%2');
+        expect(document.querySelector('.terminal-pane-close')).toBeNull();
+        expect(document.getElementById('terminal-pane').hasAttribute('data-completed-panes')).toBe(false);
+
+        panesChanged([]);
+        expect(document.querySelector('.terminal-pane-close')).toBeNull();
+    });
+
+    it('exits terminal fullsize when the active tmux window changes, but not on same-window refresh', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        const tabsChanged = eventHandlers.get('terminalTabs');
+        const panesChanged = eventHandlers.get('terminalPanes');
+        const terminalPane = document.getElementById('terminal-pane');
+        const fullsizeToggle = vi.fn();
+        window.addEventListener('ttyphoon-terminal-fullsize-toggle', fullsizeToggle);
+
+        tabsChanged({ tabs: [{ id: '@1', active: true }] });
+        panesChanged([{ id: '%7', x: 0, y: 0, width: 80, height: 24, canClose: true, zoomed: true }]);
+        terminalPane.dataset.fullsize = 'true';
+        tabsChanged({ tabs: [{ id: '@1', active: true }] });
+        expect(fullsizeToggle).not.toHaveBeenCalled();
+        expect(terminalPaneZoomMock).not.toHaveBeenCalled();
+
+        tabsChanged({ tabs: [{ id: '@2', active: true }, { id: '@1', active: false }] });
+        expect(fullsizeToggle).toHaveBeenCalledOnce();
+        expect(terminalPaneZoomMock).toHaveBeenCalledWith('%7');
+        window.removeEventListener('ttyphoon-terminal-fullsize-toggle', fullsizeToggle);
+    });
+
+    it('shows the success countdown without resetting it on layout changes and lets it be cancelled', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        const panesChanged = eventHandlers.get('terminalPanes');
+        vi.useFakeTimers();
+        try {
+            const pane = { id: '%2', x: 0, y: 0, width: 80, height: 24, canClose: true, finished: true, autoCloseAt: Date.now() + 30000 };
+            panesChanged([pane]);
+            let timer = document.querySelector('.terminal-pane-timer');
+            expect(Array.from(document.getElementById('terminal-pane-controls').children, (element) =>
+                element.classList.contains('terminal-pane-clone') ? 'clone'
+                    : element.classList.contains('terminal-pane-zoom') ? 'zoom'
+                        : element.classList.contains('terminal-pane-timer') ? 'timer' : 'close')).toEqual(['clone', 'zoom', 'timer', 'close']);
+            expect(timer.getAttribute('aria-label')).toContain('30s');
+            expect(timer.firstElementChild.style.getPropertyValue('--progress-deg')).toBe('0deg');
+            await vi.advanceTimersByTimeAsync(15000);
+            expect(timer.firstElementChild.style.getPropertyValue('--progress-deg')).toBe('180deg');
+            panesChanged([{ ...pane, width: 60 }]);
+            timer = document.querySelector('.terminal-pane-timer');
+            expect(timer.getAttribute('aria-label')).toContain('15s');
+            timer.click();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(terminalCancelPaneAutoCloseMock).toHaveBeenCalledWith('%2');
+            expect(document.querySelector('.terminal-pane-timer')).toBeNull();
+            expect(document.querySelector('.terminal-pane-close')).not.toBeNull();
+            await vi.advanceTimersByTimeAsync(31000);
+            expect(terminalClosePaneMock).not.toHaveBeenCalled();
+            document.querySelector('.terminal-pane-close').click();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(terminalClosePaneMock).toHaveBeenCalledWith('%2');
+        } finally {
+            panesChanged([]);
+            vi.useRealTimers();
+        }
+    });
+
+    it('uses the configured auto-close duration for countdown progress', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        vi.useFakeTimers();
+        try {
+            const panesChanged = eventHandlers.get('terminalPanes');
+            panesChanged([{
+                id: '%5', x: 0, y: 0, width: 80, height: 24,
+                canClose: true, finished: true,
+                autoCloseAt: Date.now() + 12000,
+                autoCloseDuration: 12000,
+            }]);
+            const timer = document.querySelector('.terminal-pane-timer');
+            expect(timer.getAttribute('aria-label')).toContain('12s');
+            await vi.advanceTimersByTimeAsync(6000);
+            expect(timer.firstElementChild.style.getPropertyValue('--progress-deg')).toBe('180deg');
+            expect(timer.getAttribute('aria-label')).toContain('6s');
+        } finally {
+            eventHandlers.get('terminalPanes')([]);
+            vi.useRealTimers();
+        }
+    });
+
+    it('loads retained pane controls from the initial snapshot', async () => {
+        terminalGetPanesMock.mockResolvedValue([
+            { id: '%3', x: 0, y: 0, width: 80, height: 24, canClose: true, finished: true, zoomed: false },
+        ]);
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        expect(document.querySelector('.terminal-pane-close')?.dataset.paneId).toBe('%3');
+    });
+
+    it.each([
+        [1, 'rgb(22, 52, 46)'],
+        [2, 'rgb(52, 26, 36)'],
+    ])('tints completed pane backgrounds at 20 percent without borders for result %s', async (result, colour) => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.strokeRect.mockClear();
+        redraw([[2, 0, 0, 40, 24, result]]);
+        expect(latestOffscreenCtx.fillStyle).toBe(colour);
+        expect(latestOffscreenCtx.strokeRect).not.toHaveBeenCalled();
+        redraw([[1, 1, 1, 1, 'X', 0, 0xAABBCC, 0]]);
+        expect(latestOffscreenCtx.fillStyle).toBe('rgb(170, 187, 204)');
+        redraw([[2, 41, 0, 39, 24, 0]]);
+        expect(latestOffscreenCtx.fillStyle).toBe('rgb(10, 20, 30)');
+    });
+
+    it('splits a stacked-pane divider background at the half-cell pixel', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.fillRect.mockClear();
+
+        redraw([
+            [2, 0, -1, 80, 24, 1 << 3],
+            [2, 0, 23, 80, 25, 1 << 2],
+        ]);
+
+        const frameFills = latestOffscreenCtx.fillRect.mock.calls.filter(([, , width]) => width > 700);
+        expect(frameFills[0][1]).toBe(0);
+        expect(frameFills[0][3]).toBe(470);
+        expect(frameFills[1][1]).toBe(470);
+    });
+
+    it('keeps the background continuous across two dividers in a three-pane stack', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.fillRect.mockClear();
+
+        redraw([
+            [2, 0, -1, 80, 8, 1 << 3],
+            [2, 0, 7, 80, 8, (1 << 2) | (1 << 3)],
+            [2, 0, 15, 80, 8, 1 << 2],
+        ]);
+
+        const frameFills = latestOffscreenCtx.fillRect.mock.calls.filter(([, , width]) => width > 700);
+        expect(frameFills.map(([, y, , height]) => [y, height])).toEqual([
+            [0, 150], [150, 160], [310, 152],
+        ]);
+    });
+
+    it('splits the inactive-pane hint at the same divider midpoint', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.fillRect.mockClear();
+        window.terminalFocusedState = true;
+
+        redraw([
+            [8, 0, 23, 81, 1, 51, 1],
+            [8, 0, 23, 81, 1, 51, 2],
+        ]);
+
+        expect(latestOffscreenCtx.fillRect).toHaveBeenNthCalledWith(1, 0, 460, 810, 10);
+        expect(latestOffscreenCtx.fillRect).toHaveBeenNthCalledWith(2, 0, 470, 810, 10);
+    });
+
     it('vertically centres glyphs within adjusted cells', async () => {
         await import('./terminal.js');
         await flushPromises();
@@ -223,6 +528,29 @@ describe('terminal compact redraw decoder', () => {
         expect(latestOffscreenCtx.clip).toHaveBeenCalledTimes(1);
         expect(latestOffscreenCtx.rect.mock.invocationCallOrder[0])
             .toBeLessThan(latestOffscreenCtx.fillText.mock.invocationCallOrder[0]);
+    });
+
+    it('applies redraw batches that arrive while a canvas paint is pending', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+
+        const frameCallbacks = [];
+        window.requestAnimationFrame = (callback) => {
+            frameCallbacks.push(callback);
+            return frameCallbacks.length;
+        };
+        const redraw = eventHandlers.get('terminalRedraw');
+        latestOffscreenCtx.fillRect.mockClear();
+
+        redraw([[2, 0, 0, 20, 10]]);
+        redraw([[2, 20, 0, 20, 10]]);
+
+        expect(latestOffscreenCtx.fillRect).toHaveBeenCalledTimes(2);
+        expect(latestOffscreenCtx.fillRect).toHaveBeenNthCalledWith(1, 0, 0, 202, 202);
+        expect(latestOffscreenCtx.fillRect).toHaveBeenNthCalledWith(2, 200, 0, 202, 202);
+
+        frameCallbacks[0](0);
     });
 
     it('decodes compact cell flags and packed colours from terminalRedraw', async () => {

@@ -1,6 +1,7 @@
 package filetools
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -9,11 +10,13 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/markdownutil"
 )
 
 type InsertLines struct {
@@ -27,6 +30,11 @@ func init() {
 
 //go:embed insert_description.md
 var insertLinesDescription string
+
+//go:embed insert_auth_desc.md
+var insertFileAuthDescription string
+
+var insertFileAuthDescriptionTemplate = template.Must(template.New("insert-file-auth-description").Funcs(markdownutil.TemplateFuncMap()).Parse(insertFileAuthDescription))
 
 func (t *InsertLines) New(agent aitypes.Agent) (aitypes.Tool, error) {
 	return &InsertLines{agent: agent, enabled: true}, nil
@@ -53,22 +61,25 @@ type insertLinesInputT struct {
 	Inserts []insertT `json:"inserts"`
 }
 
-func (t *InsertLines) Call(ctx context.Context, input string) (string, error) {
-	debug.Log(input)
-
-	var request insertLinesInputT
-	if err := json.Unmarshal([]byte(input), &request); err != nil {
-		return fmt.Sprintf("ERROR: input must be valid JSON matching the tool schema: %s", err), nil
-	}
-	return t.apply(ctx, &request)
-}
-
 func (t *InsertLines) CallStructured(ctx context.Context, input any) (string, error) {
 	request, ok := input.(*insertLinesInputT)
 	if !ok || request == nil {
 		return "", fmt.Errorf("insertLines received an invalid structured input %T", input)
 	}
 	return t.apply(ctx, request)
+}
+
+func (t *InsertLines) CallDescription(_ context.Context, input any) string {
+	request, ok := input.(*insertLinesInputT)
+	if !ok || request == nil {
+		return "Tool received an invalid structured input"
+	}
+
+	var description bytes.Buffer
+	if err := insertFileAuthDescriptionTemplate.Execute(&description, request); err != nil {
+		return fmt.Sprintf("Unable to render description: %v", err)
+	}
+	return description.String()
 }
 
 func (t *InsertLines) apply(ctx context.Context, request *insertLinesInputT) (string, error) {

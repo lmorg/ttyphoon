@@ -230,6 +230,10 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
     const appRoot = elements.appRoot || document.getElementById('notes-pane') || document.getElementById('app') || document.body;
     let isWordWrapped = false;
     let isTimestampVisible = false;
+    let isErrorVisible = true;
+    let isWarnVisible = true;
+    let isInfoVisible = true;
+    let isDebugVisible = false;
     let isTraceVisible = false;
     let isLogMaximized = false;
     let restoreWordWrapOnClose = false;
@@ -270,7 +274,8 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
         elements.logOutput.dataset.wordwrap = isWordWrapped ? 'true' : 'false';
 
         if (elements.toolsLogWordwrap) {
-            elements.toolsLogWordwrap.dataset.wrapped = isWordWrapped ? 'true' : 'false';
+            elements.toolsLogWordwrap.dataset.enabled = isWordWrapped ? 'true' : 'false';
+            elements.toolsLogWordwrap.setAttribute('aria-pressed', isWordWrapped ? 'true' : 'false');
         }
     };
 
@@ -278,16 +283,58 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
         isTimestampVisible = enabled === true;
         if (elements.toolsLogTimestamp) {
             elements.toolsLogTimestamp.dataset.enabled = isTimestampVisible ? 'true' : 'false';
+            elements.toolsLogTimestamp.setAttribute('aria-pressed', isTimestampVisible ? 'true' : 'false');
         }
         elements.logOutput.dataset.showTimestamp = isTimestampVisible ? 'true' : 'false';
     };
 
-    const setTraceVisible = (enabled) => {
-        isTraceVisible = enabled === true;
-        if (elements.toolsLogTrace) {
-            elements.toolsLogTrace.dataset.enabled = isTraceVisible ? 'true' : 'false';
+    const setLevelVisible = (level, enabled) => {
+        const isVisible = enabled === true;
+        if (level === 'error') {
+            isErrorVisible = isVisible;
+            elements.logOutput.dataset.showError = isVisible ? 'true' : 'false';
+        } else if (level === 'warn') {
+            isWarnVisible = isVisible;
+            elements.logOutput.dataset.showWarn = isVisible ? 'true' : 'false';
+        } else if (level === 'info') {
+            isInfoVisible = isVisible;
+            elements.logOutput.dataset.showInfo = isVisible ? 'true' : 'false';
+        } else if (level === 'debug') {
+            isDebugVisible = isVisible;
+            elements.logOutput.dataset.showDebug = isVisible ? 'true' : 'false';
+        } else if (level === 'trace') {
+            isTraceVisible = isVisible;
+            elements.logOutput.dataset.showTrace = isVisible ? 'true' : 'false';
         }
-        elements.logOutput.dataset.showTrace = isTraceVisible ? 'true' : 'false';
+
+        const button = {
+            error: elements.toolsLogError,
+            warn: elements.toolsLogWarn,
+            info: elements.toolsLogInfo,
+            debug: elements.toolsLogDebug,
+            trace: elements.toolsLogTrace,
+        }[level];
+        if (button) {
+            button.dataset.enabled = isVisible ? 'true' : 'false';
+            button.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+        }
+    };
+
+    const isLogLineVisible = (line) => {
+        switch (line.dataset.level) {
+            case 'error':
+                return isErrorVisible;
+            case 'warn':
+                return isWarnVisible;
+            case 'info':
+                return isInfoVisible;
+            case 'debug':
+                return isDebugVisible;
+            case 'trace':
+                return isTraceVisible;
+            default:
+                return true;
+        }
     };
 
     const setLogMaximized = (enabled) => {
@@ -301,7 +348,7 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
 
         if (elements.toolsLogMaximize) {
             elements.toolsLogMaximize.dataset.enabled = isLogMaximized ? 'true' : 'false';
-            elements.toolsLogMaximize.textContent = 'Maximize';
+            elements.toolsLogMaximize.textContent = String.fromCodePoint(0xf065);
         }
 
         if (isLogMaximized) {
@@ -351,6 +398,15 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
             const selectedLines = elements.logOutput.querySelectorAll('.notes-log-line[data-selected="true"]');
             for (const line of selectedLines) {
                 line.dataset.selected = 'false';
+            }
+        });
+    }
+
+    if (elements.toolsLogSelectAll) {
+        elements.toolsLogSelectAll.addEventListener('click', () => {
+            const lines = elements.logOutput.querySelectorAll('.notes-log-line');
+            for (const line of lines) {
+                line.dataset.selected = isLogLineVisible(line) ? 'true' : 'false';
             }
         });
     }
@@ -413,10 +469,25 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
         });
     }
 
-    if (elements.toolsLogTrace && elements.logOutput) {
-        elements.toolsLogTrace.addEventListener('click', () => {
-            setTraceVisible(!isTraceVisible);
-        });
+    for (const [level, button] of [
+        ['error', elements.toolsLogError],
+        ['warn', elements.toolsLogWarn],
+        ['info', elements.toolsLogInfo],
+        ['debug', elements.toolsLogDebug],
+        ['trace', elements.toolsLogTrace],
+    ]) {
+        if (button && elements.logOutput) {
+            button.addEventListener('click', () => {
+                const isVisible = {
+                    error: isErrorVisible,
+                    warn: isWarnVisible,
+                    info: isInfoVisible,
+                    debug: isDebugVisible,
+                    trace: isTraceVisible,
+                }[level];
+                setLevelVisible(level, !isVisible);
+            });
+        }
     }
 
     if (elements.toolsLogMaximize) {
@@ -425,14 +496,18 @@ export function initNotesLogPanel(elements, eventsOn, maxLogLines = DEFAULT_MAX_
         });
     }
 
-    // No-wrap and hidden timestamps by default. Trace lines are hidden by default too.
+    // Keep existing log visibility defaults: ordinary levels on, debug/trace off.
     setWordWrap(false);
     setTimestampVisible(false);
-    setTraceVisible(false);
+    setLevelVisible('error', true);
+    setLevelVisible('warn', true);
+    setLevelVisible('info', true);
+    setLevelVisible('debug', false);
+    setLevelVisible('trace', false);
 
     if (elements.toolsLogMaximize) {
         elements.toolsLogMaximize.dataset.enabled = 'false';
-        elements.toolsLogMaximize.textContent = 'Maximize';
+        elements.toolsLogMaximize.textContent = String.fromCodePoint(0xf065);
     }
 
     eventsOn('notesLog', (message) => {

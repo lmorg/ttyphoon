@@ -1,4 +1,9 @@
 Creates new files.
+Parent directories are created automatically when they do not exist. The write
+authorization prompt identifies which parent directories will be created.
+Bare filenames and relative paths resolve under the agent's owning terminal
+pane's current project root, resolved dynamically. Absolute paths must remain
+inside that root.
 Useful for writing new code and configuration.
 Use the `patchFile` or `insertLines` tool to edit a file that already exists: this tool overwrites the whole file, which wastes tokens and risks discarding content you did not intend to change.
 File contents should contain the entire file.

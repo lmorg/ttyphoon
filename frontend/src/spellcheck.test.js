@@ -1,15 +1,17 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { disableNativeTextAssistanceIn } from './text-input.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const notesSpellCheckMock = vi.fn(() => Promise.resolve([]));
+const showLocalMenuMock = vi.fn();
 
-vi.mock('../wailsjs/go/main/WApp', () => ({
+vi.mock('./wails-bindings.js', () => ({
     NotesSpellCheck: notesSpellCheckMock,
 }));
 
 vi.mock('./popup_menu', () => ({
-    showLocalMenu: vi.fn(),
+    showLocalMenu: showLocalMenuMock,
 }));
 
 // Canvas context mock — jsdom does not implement canvas drawing.
@@ -76,6 +78,85 @@ afterEach(() => {
     vi.restoreAllMocks();
     delete Range.prototype.getBoundingClientRect;
     document.body.innerHTML = '';
+});
+
+describe('spellcheck — suggestion interaction', () => {
+    it('disables native text assistance on text controls without adding dictionary checking', () => {
+        document.body.innerHTML = '<input id="plain"><input id="filter" type="search"><textarea id="path"></textarea><div id="cell" contenteditable="true"></div><input id="checkbox" type="checkbox">';
+        disableNativeTextAssistanceIn(document.body);
+        for (const id of ['plain', 'filter', 'path', 'cell']) {
+            const control = document.getElementById(id);
+            for (const [attribute, value] of [
+                ['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'],
+                ['spellcheck', 'false'], ['writingsuggestions', 'false'],
+            ]) expect(control.getAttribute(attribute)).toBe(value);
+        }
+        expect(document.getElementById('checkbox').hasAttribute('spellcheck')).toBe(false);
+        expect(document.querySelector('canvas')).toBeNull();
+        expect(notesSpellCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('checks single-line inputs with native text assistance disabled', async () => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = 'helo';
+        document.body.appendChild(input);
+        notesSpellCheckMock.mockResolvedValue([
+            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
+        ]);
+        const handle = attachSpellCheck(input);
+        await flush(900);
+        expect(notesSpellCheckMock).toHaveBeenCalledWith('helo');
+        for (const [attribute, value] of [
+            ['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'],
+            ['spellcheck', 'false'], ['writingsuggestions', 'false'],
+        ]) expect(input.getAttribute(attribute)).toBe(value);
+        expect(document.querySelector('canvas')).not.toBeNull();
+        handle.detach();
+        expect(document.querySelector('canvas')).toBeNull();
+    });
+
+    it('opens suggestions on right-click over a misspelling, not left-click', async () => {
+        const textarea = makeTextarea('helo');
+        notesSpellCheckMock.mockResolvedValue([
+            { misspeltWord: 'helo', wordStart: 0, wordLength: 4, suggestions: ['hello'] },
+        ]);
+        attachSpellCheck(textarea);
+        await flush(900);
+
+        textarea.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 0, clientY: 1 }));
+        expect(showLocalMenuMock).not.toHaveBeenCalled();
+
+        let bubbledContextMenu = false;
+        document.body.addEventListener('contextmenu', () => { bubbledContextMenu = true; }, { once: true });
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 0, clientY: 1 });
+        textarea.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(bubbledContextMenu).toBe(false);
+        expect(showLocalMenuMock).toHaveBeenCalledWith(expect.objectContaining({
+            title: 'helo',
+            options: ['hello'],
+            x: 0,
+            y: 18,
+            showNextToMouseCursor: true,
+        }));
+    });
+
+    it('leaves right-clicks outside misspellings to the normal context menu', async () => {
+        const textarea = makeTextarea('hello');
+        notesSpellCheckMock.mockResolvedValue([]);
+        attachSpellCheck(textarea);
+        await flush(900);
+        let bubbledContextMenu = false;
+        document.body.addEventListener('contextmenu', () => { bubbledContextMenu = true; }, { once: true });
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 0, clientY: 1 });
+        textarea.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(false);
+        expect(bubbledContextMenu).toBe(true);
+        expect(showLocalMenuMock).not.toHaveBeenCalled();
+    });
 });
 
 // ─── Tests ──────────────────────────────────────────────────────────────

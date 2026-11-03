@@ -10,6 +10,12 @@ import (
 	"github.com/lmorg/ttyphoon/window/backend/cursor"
 )
 
+var (
+	globalState = make(map[string]string)
+	previous    = make(map[string]string)
+	prevMutex   sync.Mutex
+)
+
 type ElementContentEditable struct {
 	renderer    types.Renderer
 	tile        types.Tile
@@ -32,6 +38,13 @@ func New(renderer types.Renderer, tile types.Tile, spellingExc map[string]bool) 
 		el.spellingExc = map[string]bool{}
 	}
 
+	prevMutex.Lock()
+	if previous[tile.Id()] != "" {
+		el.update(previous[tile.Id()])
+		previous[tile.Id()] = ""
+	}
+	prevMutex.Unlock()
+
 	return el
 }
 
@@ -41,6 +54,11 @@ func (el *ElementContentEditable) Generate(apc *types.ApcSlice) error {
 	el.mu.RLock()
 
 	el.text = apc.Index(2)
+
+	prevMutex.Lock()
+	globalState[el.tile.Id()] = el.text
+	prevMutex.Unlock()
+
 	line := (&types.Row{Cells: el.cells}).String()
 	el.mu.RUnlock()
 
@@ -79,10 +97,6 @@ func (el *ElementContentEditable) Generate(apc *types.ApcSlice) error {
 }
 
 func (el *ElementContentEditable) Write(r rune) error {
-	/*if r == '\n' {
-		return nil
-	}*/
-
 	el.mu.Lock()
 	el.cells = append(el.cells, &types.Cell{Char: r, Sgr: el.tile.GetTerm().GetSgr().Copy()})
 	el.mu.Unlock()
@@ -109,7 +123,7 @@ func (el *ElementContentEditable) Rune(pos *types.XY) rune {
 }
 
 func (el *ElementContentEditable) MouseClick(pos *types.XY, button types.MouseButtonT, count uint8, state types.ButtonStateT, callback types.EventIgnoredCallback) {
-	if state != types.BUTTON_RELEASED || button != types.MOUSE_BUTTON_LEFT || pos == nil || pos.X < 0 {
+	if state != types.BUTTON_RELEASED || button != types.MOUSE_BUTTON_RIGHT || pos == nil || pos.X < 0 {
 		callback()
 		return
 	}
@@ -135,7 +149,7 @@ func (el *ElementContentEditable) MouseClick(pos *types.XY, button types.MouseBu
 			menu.Append(types.MenuItem{
 				Title: replacement,
 				Fn: func() {
-					el.reply(el.replaceWord(start, length, replacement))
+					el.update(el.replaceWord(start, length, replacement))
 				},
 				Icon: 0xf040,
 			})
@@ -240,9 +254,22 @@ const (
 	seqST  = "\x1b\\"
 )
 
-func (el *ElementContentEditable) reply(s string) {
+func (el *ElementContentEditable) update(s string) {
+	Update(el.tile.GetTerm(), s)
+}
+
+func Update(term types.Term, s string) {
 	reply := fmt.Sprintf("%sreply;content-editable;%s%s", seqApc, s, seqST)
-	el.tile.GetTerm().Reply([]byte(reply))
+	term.Reply([]byte(reply))
+}
+
+func Reply(term types.Term, s string) {
+	prevMutex.Lock()
+	previous[term.Tile().Id()] = globalState[term.Tile().Id()]
+	prevMutex.Unlock()
+
+	reply := fmt.Sprintf("%sreply;content-editable;%s%s\n", seqApc, s, seqST)
+	term.Reply([]byte(reply))
 }
 
 func (el *ElementContentEditable) visualEditor() {
@@ -250,5 +277,5 @@ func (el *ElementContentEditable) visualEditor() {
 	text := el.text
 	el.mu.RUnlock()
 	text = rxAnsiSgr.ReplaceAllString(text, "")
-	el.renderer.DisplayInputBox("Visual editor", text, func(v *types.InputBoxCallbackResultT) { el.reply(v.String()) }, nil)
+	el.renderer.DisplayInputBox("Visual editor", text, func(v *types.InputBoxCallbackResultT) { el.update(v.String()) }, nil)
 }

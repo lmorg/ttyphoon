@@ -2,6 +2,9 @@ Search project files for text containing a query phrase. Returns matching file
 names, absolute paths, line numbers, and one line of context before and after
 each match. Results are paged at up to 50 matches per page.
 
+The project root is resolved dynamically from the agent's owning terminal pane.
+If that root changes, start a new search before requesting further cached pages.
+
 Input: pass this JSON object directly as tool arguments; do not wrap it in an
 `input` property.
 ```json

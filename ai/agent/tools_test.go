@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"testing"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
@@ -15,9 +14,6 @@ func (t *toolStateTestTool) Toggle()                                 {}
 func (t *toolStateTestTool) Name() string                            { return t.name }
 func (t *toolStateTestTool) Path() string                            { return "internal" }
 func (t *toolStateTestTool) Description() string                     { return "test tool" }
-func (t *toolStateTestTool) Call(context.Context, string) (string, error) {
-	return "", nil
-}
 
 func (t *toolStateTestTool) DefaultPermissions() aitypes.DefaultPermissions {
 	return aitypes.DefaultPermissions{Invocation: "askPermission", Subagents: "allow"}

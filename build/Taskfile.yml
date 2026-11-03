@@ -1,0 +1,51 @@
+version: '3'
+
+tasks:
+  go:mod:tidy:
+    summary: Tidy Go dependencies
+    run: once
+    cmds:
+      - go mod tidy
+
+  generate:bindings:
+    summary: Generate frontend bindings
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - frontend/bindings/**/*
+    cmds:
+      - wails generate bindings -clean=true
+
+  install:frontend:deps:
+    summary: Install frontend dependencies
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules
+    cmds:
+      - npm install
+
+  build:frontend:
+    summary: Build the frontend
+    deps:
+      - task: install:frontend:deps
+      - task: generate:bindings
+    dir: frontend
+    cmds:
+      - npm run build
+
+  generate:icons:
+    summary: Generate platform icons from appicon.png
+    dir: build
+    cmds:
+      - wails generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
+
+  dev:frontend:
+    summary: Run the frontend development server
+    dir: frontend
+    cmds:
+      - npm run dev -- --host 127.0.0.1 --port {{.VITE_PORT}}

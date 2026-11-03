@@ -83,7 +83,7 @@ func TestGrepObservationRecordsSearchSummary(t *testing.T) {
 }
 
 func TestGrepStructuredToolInputAndObservation(t *testing.T) {
-	tool := &Grep{}
+	tool := &Grep{agent: &pathTestAgent{projectRoot: t.TempDir()}}
 	if got := tool.InputType(); got != reflect.TypeOf(grepInputT{}) {
 		t.Fatalf("InputType() = %v, want grepInputT", got)
 	}

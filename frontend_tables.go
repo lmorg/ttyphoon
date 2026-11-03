@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"log"
 
 	"github.com/lmorg/ttyphoon/utils/graphs"
@@ -60,8 +61,9 @@ type NotesTableGraphSpecT struct {
 }
 
 type NotesTableGraphResultT struct {
-	SVG   string `json:"svg"`
-	Error string `json:"error"`
+	SVG        string `json:"svg"`
+	PNGDataURL string `json:"pngDataURL"`
+	Error      string `json:"error"`
 }
 
 // NotesTableSort applies the terminal's heading-click rule to column (1-based).
@@ -188,7 +190,7 @@ func (a *WApp) NotesTableSetGraph(req NotesTableRequestT, graph *NotesTableGraph
 	return NotesTableResultT{Graph: graph}
 }
 
-// NotesTableRenderGraph renders the rows supplied by the caller as an SVG.
+// NotesTableRenderGraph renders the rows supplied by the caller as SVG or PNG.
 func (a *WApp) NotesTableRenderGraph(req NotesTableRequestT, graph *NotesTableGraphSpecT) NotesTableGraphResultT {
 	if req.Seed == nil {
 		return NotesTableGraphResultT{Error: "table data was not supplied"}
@@ -231,10 +233,16 @@ func (a *WApp) NotesTableRenderGraph(req NotesTableRequestT, graph *NotesTableGr
 	}
 	spec := graph.toGraphsSpec()
 	spec.Format = graphs.SVG
+	if graph.Format == string(graphs.PNG) {
+		spec.Format = graphs.PNG
+	}
 	spec.RowIndices = nil
 	data, err := graphs.RenderTable(graphs.Table{Headings: req.Seed.Headings, Rows: rows}, spec)
 	if err != nil {
 		return NotesTableGraphResultT{Error: err.Error()}
+	}
+	if spec.Format == graphs.PNG {
+		return NotesTableGraphResultT{PNGDataURL: "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)}
 	}
 	return NotesTableGraphResultT{SVG: string(data)}
 }

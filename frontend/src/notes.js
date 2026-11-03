@@ -1,24 +1,29 @@
 import {
     GetWindowStyle, GetNotesMaxLogLines, GetNotesColumnWidths, SetNotesColumnWidths, GetFile,
+    GetGitStatus, GetGitBrowserLink, GetGitBranchDiffFiles, GetGitDiff, GetGitDiffAgainstBranch,
+    RefreshGitStatus, SetGitStatusWatch, StageGitFile, StageAllGitFiles, UnstageGitFile, RunGitAction, ConfirmGitPush,
+        ListGitWorktrees, ListGitBranches, ListGitTags, ListGitCommits, ListGitCommitsWithFiles, GetDefaultGitWorktreePath, CreateGitWorktree, CreateGitTagWorktree,
+    CheckoutGitBranch, DeleteGitBranch,
+        CreateGitTag, DeleteGitTag, CheckoutGitTag,
+    SwitchGitWorktree, RemoveGitWorktree, ShowGitWorktreeInfo, ShowGitRefInfo,
     NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableRestore, NotesTableSetGraph, NotesTableRenderGraph, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
-    ListFiles, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
-    CancelNotesListFiles,
+    GetNotesContext, GetNotesFilesSnapshot, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu,
-    SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, SwaggerRequest, NotesKeyPress,
+    SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, ClipboardSetFormatted, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
     GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
     ListAIPromptLogs, GetAIPromptLog,
-    ListAIStreamBlocks, GetAIStreamBlockContent, ListAILiveStreamBlocks,
-    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
+    ListAIStreamBlocks, GetAIStreamBlockContent, GetAISessionPrompt, ListAILiveStreamBlocks,
+    GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, PromptAIToolPermissionReason, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
-    NotesHistoryPrevious, NotesHistoryNext, NotesHistoryAdd, NotesHistoryCurrent, NotesGrepStream,
+    NotesHistoryPreviousPosition, NotesHistoryNextPosition, NotesHistoryAddPosition, NotesHistoryCurrentPosition, NotesGrepStream,
     GetProjectCache, SetProjectCache,
     GetNotesFindFieldValues, AddNotesFindFieldValue,
     GetDocumentCache, SetDocumentCache, FormatCodeBlock, FormatNotesContent, CompleteSyntax,
@@ -34,21 +39,26 @@ import {
     NotesLspPrepareRename, NotesLspRename,
     FilterStrings,
     ResolveAIUserQuestion,
-} from '../wailsjs/go/main/WApp';
-import { EventsOn, EventsOff, ClipboardSetText } from '../wailsjs/runtime/runtime';
+} from './wails-bindings.js';
+import { EventsOn, EventsOff, ClipboardSetText, BrowserOpenURL } from './wails-runtime.js';
 
 import {
     showLocalMenu,
 } from './popup_menu';
 import { initNotesLogPanel } from './notes-log-panel';
+import { discardPrintDocument, printDocument } from './notes-print.js';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
+import { disableNativeTextAssistance, disableNativeTextAssistanceIn } from './text-input.js';
 import { createEditorUndoManager } from './editor_undo_manager';
 import { createEditorMutationAdapter } from './editor_mutation_adapter';
-import { createMonacoAdapter } from './monaco_adapter';
+import { createMonacoAdapter, createMonacoDiffAdapter } from './monaco_adapter';
+import { initNotesGitPanel } from './notes-git-panel.js';
+import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
+import notesTemplate from './notes.html?raw';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -405,6 +415,7 @@ import {
 } from './table-expressions.js';
 import { createAIPipelineFormatter } from './ai_pipeline_formatter.js';
 import { initLineNavigationKeys } from './line-navigation.js';
+import { restoreLayoutRatio, saveLayoutRatio } from './layout-sizing.js';
 
 const CONTEXT_ICON_COPY = 0xf0c5;
 const CONTEXT_ICON_PASTE = 0xf0ea;
@@ -445,250 +456,18 @@ document.title = 'Notes';
 
 initLineNavigationKeys(document);
 
-app.innerHTML = `
-    <div id="notes-app">
-        <aside id="notes-sidebar">
-            <div id="notes-sidebar-header">
-                <div id="notes-title-group">
-                    <div id="notes-title">Notes</div>
-                    <div id="notes-current-file" hidden></div>
-                </div>
-                <div id="notes-list-filter-wrap">
-                    <input id="notes-list-filter" type="text" placeholder="Filter files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                    <button id="notes-list-filter-clear" type="button" title="Clear filter" aria-label="Clear filter">&#xf410;</button>
-                </div>
-            </div>
-            <div id="notes-list" role="list"></div>
-        </aside>
-        <div id="notes-splitter"></div>
-        <main id="notes-main">
-            <div id="notes-tabs" role="tablist">
-                <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
-                <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
-                <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
-                <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
-                <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
-                <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
-                <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
-                <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
-                <button id="notes-tab-csv-run"    type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Run</button>
-                <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
-                <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
-                <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
-                <div id="notes-toolbar" class="notes-toolbar">
-                    <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
-                    <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
-                    <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
-                    <button id="notes-fullsize-btn" type="button" class="notes-toolbar-btn" title="Full size" aria-label="Full size">&#xf065;</button>
-                </div>
-            </div>
-            <div id="notes-panel">
-                <div id="notes-editor-wrap" role="tabpanel">
-                    <div id="notes-editor-shell" data-code-view="false">
-                        <div id="notes-editor-scroll">
-                            <textarea id="notes-editor" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
-                            <div id="notes-monaco-editor" aria-hidden="true"></div>
-                        </div>
-                    </div>
-                </div>
-                <div id="notes-hex-wrap" role="tabpanel">
-                    <div id="notes-hex"></div>
-                </div>
-                <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-preview"></div>
-                </div>
-                <div id="notes-html-view-wrap" role="tabpanel">
-                    <iframe id="notes-html-view-frame" title="HTML preview" sandbox=""></iframe>
-                </div>
-                <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-jupyter"></div>
-                </div>
-                <div id="notes-csv-view-wrap" role="tabpanel">
-                    <div id="notes-csv-view" class="markdown-body"></div>
-                </div>
-                <div id="notes-image-view-wrap" role="tabpanel">
-                    <img id="notes-image-view-img" alt="" />
-                </div>
-                <div id="notes-meta-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-meta"></div>
-                </div>
-                <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
-                    <div id="notes-swagger-view" class="json-viewer"></div>
-                </div>
-                <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
-                    <div id="notes-swagger-layout" class="swagger-layout">
-                        <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
-                        <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
-                        <section id="notes-swagger-main" class="swagger-main-pane">
-                            <div id="notes-swagger-request-builder"></div>
-                            <div id="notes-swagger-response"></div>
-                        </section>
-                    </div>
-                </div>
-                <div id="notes-tools-panel" class="notes-tools-panel" data-collapsed="true">
-                    <div class="notes-tools-header">
-                        <div id="notes-tools-tabs" role="tablist" class="tools-tabs-container">
-                            <button id="notes-tools-tab-toc" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-toc-pane" data-tab="toc" style="display: none;">ToC</button>
-                            <button id="notes-tools-tab-frontmatter" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-frontmatter-pane" data-tab="frontmatter" style="display: none;">Frontmatter</button>
-                            <button id="notes-tools-tab-find" type="button" class="tools-tab" role="tab" aria-selected="true" aria-controls="notes-tools-find-pane" data-tab="find">Find</button>
-                            <button id="notes-tools-tab-ai"  type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-ai-pane" data-tab="ai">AI</button>
-                            <button id="notes-tools-tab-log" type="button" class="tools-tab" role="tab" aria-selected="false" aria-controls="notes-tools-log-pane" data-tab="log">Log</button>
-                        </div>
-                        <button id="notes-tools-minimize" type="button" class="notes-tools-minimize" title="Minimize Tools panel"></button>
-                    </div>
-                    <div id="notes-tools-content" class="notes-tools-content">
-                        <div id="notes-tools-ai-pane" class="notes-tools-pane" data-tab="ai" data-active="false">
-                            <div class="notes-tools-pane-header">
-                                <button id="notes-tools-ai-prompt-jump" type="button" class="notes-ai-model-picker" title="Prompt">Prompt</button>
-                                <button id="notes-tools-ai-ask" type="button" class="notes-tools-clear" title="Ask AI">Ask…</button>
-                                <button id="notes-tools-ai-skills" type="button" class="notes-tools-clear" title="Ask AI with a skill">Skills</button>
-                                <button id="notes-tools-ai-maximize" type="button" class="notes-tools-clear" title="Maximize AI view">Maximize</button>
-                                <button id="notes-tools-ai-settings" type="button" class="notes-tools-clear" title="AI session management">Settings</button>
-                            </div>
-                            <div id="notes-ai-output" class="notes-ai-output"></div>
-                            <button id="notes-ai-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest AI output">Latest</button>
-                        </div>
-                        <div id="notes-tools-toc-pane" class="notes-tools-pane" data-tab="toc" data-active="false">
-                            <div id="notes-tools-toc" class="notes-tools-toc"></div>
-                        </div>
-                        <div id="notes-tools-frontmatter-pane" class="notes-tools-pane" data-tab="frontmatter" data-active="false">
-                            <div id="notes-tools-frontmatter" class="notes-tools-frontmatter"></div>
-                        </div>
-                        <div id="notes-tools-find-pane" class="notes-tools-pane" data-tab="find" data-active="true">
-                            <div class="notes-tools-find-wrap markdown-body">
-                                <h1 class="notes-find-heading">In open file</h1>
-                                <div id="notes-find-controls" data-disabled="false">
-                                    <div id="notes-find-row">
-                                        <div id="notes-find-input-wrap">
-                                            <input id="notes-find-input" type="text" placeholder="Find..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                                            <button id="notes-find-input-clear" type="button" title="Clear find" aria-label="Clear find">&#xf410;</button>
-                                        </div>
-                                        <div id="notes-find-doc-options" class="notes-find-options">
-                                            <button id="notes-find-doc-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
-                                            <button id="notes-find-doc-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
-                                            <button id="notes-find-doc-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
-                                        </div>
-                                    </div>
-                                    <div id="notes-find-actions">
-                                        <span id="notes-find-counter"></span>
-                                        <button id="notes-find-prev" type="button" title="Previous match">↑</button>
-                                        <button id="notes-find-next" type="button" title="Next match">↓</button>
-                                    </div>
-                                </div>
-                                <div id="notes-replace-controls" data-disabled="true">
-                                    <div id="notes-replace-input-wrap">
-                                        <input id="notes-replace-input" type="text" placeholder="Replace..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                                        <button id="notes-replace-input-clear" type="button" title="Clear replace" aria-label="Clear replace">&#xf410;</button>
-                                    </div>
-                                    <div id="notes-replace-actions">
-                                        <button id="notes-replace-one" type="button" title="Replace current match">Replace</button>
-                                        <button id="notes-replace-all" type="button" title="Replace all matches">Replace all</button>
-                                    </div>
-                                </div>
-                                <h1 id="notes-find-files-heading" class="notes-find-heading">For files containing</h1>
-                                <div id="notes-find-files-row">
-                                    <div id="notes-find-files-input-wrap">
-                                        <input id="notes-find-files-input" type="text" placeholder="Search project files..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                                        <button id="notes-find-files-clear" type="button" title="Close results" aria-label="Close results">&#xf410;</button>
-                                    </div>
-                                    <div id="notes-find-options" class="notes-find-options">
-                                        <button id="notes-find-references" type="button" class="notes-find-option-btn" title="LSP references" aria-label="Find references">&#xf121;</button>
-                                        <button id="notes-find-option-case" type="button" class="notes-find-option-btn" title="Case sensitive" data-active="false">Aa</button>
-                                        <button id="notes-find-option-regex" type="button" class="notes-find-option-btn" title="Regex" data-active="false">.*</button>
-                                        <button id="notes-find-option-word" type="button" class="notes-find-option-btn" title="Whole word" data-active="false">␣W</button>
-                                    </div>
-                                </div>
-                                <div id="notes-find-files-results"></div>
-                            </div>
-                        </div>
-                        <div id="notes-tools-log-pane" class="notes-tools-pane" data-tab="log" data-active="false">
-                            <div class="notes-tools-pane-header">
-                                <button id="notes-tools-log-copy" type="button" class="notes-tools-clear" title="Copy log to clipboard">Copy</button>
-                                <button id="notes-tools-log-deselect" type="button" class="notes-tools-clear" title="Deselect log lines">Deselect</button>
-                                <button id="notes-tools-log-trace" type="button" class="notes-tools-clear" title="Show trace-level log lines">Trace</button>
-                                <button id="notes-tools-log-timestamp" type="button" class="notes-tools-clear" title="Toggle timestamps">Timestamp</button>
-                                <button id="notes-tools-log-wordwrap" type="button" class="notes-tools-clear" title="Toggle word wrap">Wrap</button>
-                                <button id="notes-tools-log-maximize" type="button" class="notes-tools-clear" title="Maximize log view">Maximize</button>
-                                <button id="notes-tools-log-clear" type="button" class="notes-tools-clear" title="Clear log">Clear</button>
-                            </div>
-                            <div id="notes-log-output" class="notes-log-output" style="white-space: pre; overflow-wrap: normal;"></div>
-                            <button id="notes-log-scroll-bottom" type="button" class="notes-ai-scroll-bottom" data-visible="false" title="Scroll to latest log output">Latest</button>
-                        </div>
-                    </div>
-                </div>
-                <button id="notes-tools-restore" type="button" class="notes-tools-restore" title="Show Tools panel">Tools</button>
-            </div>
-        </main>
-    </div>
-    <div id="notes-modal" data-open="false" aria-hidden="true">
-        <div id="notes-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
-            <div id="notes-modal-title">New note name</div>
-            <div id="notes-modal-location-row">
-                <button id="notes-modal-location" type="button" aria-label="Location" title="Select location">$NOTES</button>
-                <input id="notes-modal-input" type="text" placeholder="example-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-            </div>
-            <div id="notes-modal-body"></div>
-            <div id="notes-modal-actions">
-                <button id="notes-modal-cancel" type="button">Cancel</button>
-                <button id="notes-modal-create" type="button">Create</button>
-            </div>
-        </div>
-    </div>
-    <div id="notes-delete-modal" data-open="false" aria-hidden="true">
-        <div id="notes-delete-modal-card" role="dialog" aria-modal="true" aria-labelledby="notes-delete-modal-title">
-            <div id="notes-delete-modal-title">Delete note</div>
-            <div id="notes-delete-modal-body"></div>
-            <div id="notes-delete-modal-actions">
-                <button id="notes-delete-cancel" type="button">Cancel</button>
-                <button id="notes-delete-confirm" type="button">Delete</button>
-            </div>
-        </div>
-    </div>
-    <div id="notes-ai-settings-modal" data-open="false" aria-hidden="true">
-        <div id="notes-ai-settings-card" class="markdown-body" role="dialog" aria-modal="true" aria-labelledby="notes-ai-settings-title">
-            <h1 id="notes-ai-settings-title">AI Session Management</h1>
-
-            <h2>Default Model</h2>
-            <p>Choose the default model for new AI requests.</p>
-            <div class="notes-ai-settings-controls">
-                <button id="notes-ai-settings-model-picker" type="button" class="notes-ai-model-picker" title="Select AI model">Model</button>
-            </div>
-            <dl id="notes-ai-settings-execution-limits" class="notes-ai-settings-execution-limits" aria-label="AI execution limits"></dl>
-
-            <h2>Tools</h2>
-            <p>Enable or disable tools for AI requests.</p>
-            <div id="notes-ai-settings-tools-list" class="notes-ai-settings-tools-list"></div>
-
-            <h2>MCP Servers</h2>
-            <p>Load or unload MCP servers for AI requests.</p>
-            <div id="notes-ai-settings-mcp-list" class="notes-ai-settings-tools-list"></div>
-
-            <h2>Sessions</h2>
-            <p>Create, switch, clear, or delete sessions for this workspace.</p>
-            <div class="notes-ai-settings-controls">
-                <button id="notes-ai-settings-session-new" type="button">New session</button>
-                <button id="notes-ai-settings-history-clear" type="button">Clear active history</button>
-            </div>
-            <div id="notes-ai-settings-sessions-list" class="notes-ai-settings-sessions-list"></div>
-
-            <h2>Active Session Transcript</h2>
-            <p>Recent prompts and responses from the active session.</p>
-            <div id="notes-ai-settings-history-list" class="notes-ai-settings-history-list"></div>
-
-            <div id="notes-ai-tool-meta-modal" data-open="false" aria-hidden="true">
-                <div id="notes-ai-tool-meta-card" class="markdown-body" role="dialog" aria-modal="true" aria-label="Tool metadata" tabindex="-1">
-                    <div id="notes-ai-tool-meta-content"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-`;
+app.innerHTML = notesTemplate;
 
 const elements = {
     appRoot: app,
     title: document.getElementById('notes-title'),
     currentFileTitle: document.getElementById('notes-current-file'),
     list: document.getElementById('notes-list'),
+    gitCommitList: document.getElementById('notes-commits-list'),
+    gitFilterRow: document.getElementById('notes-tools-git-filter-row'),
+    gitFileFilter: document.getElementById('notes-tools-git-file-filter'),
+    gitFilenameSearchRow: document.getElementById('notes-commit-filename-search-row'),
+    gitFilenameSearch: document.getElementById('notes-commit-filename-search'),
     listFilter: document.getElementById('notes-list-filter'),
     listFilterClear: document.getElementById('notes-list-filter-clear'),
     editor: document.getElementById('notes-editor'),
@@ -711,10 +490,16 @@ const elements = {
     tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
     tabImageView: document.getElementById('notes-tab-image-view'),
     tabMeta: document.getElementById('notes-tab-meta'),
+    tabs: document.getElementById('notes-tabs'),
+    tabDiff: document.getElementById('notes-tab-diff'),
     tabCsvView: document.getElementById('notes-tab-csv-view'),
     tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
     tabCsvRun: document.getElementById('notes-tab-csv-run'),
     editorWrap: document.getElementById('notes-editor-wrap'),
+    notesPanel: document.getElementById('notes-panel'),
+    gitDiffWrap: document.getElementById('notes-git-diff-wrap'),
+    gitDiffEditor: document.getElementById('notes-git-diff-editor'),
+    gitDiffMessage: document.getElementById('notes-git-diff-message'),
     hexWrap: document.getElementById('notes-hex-wrap'),
     hex: document.getElementById('notes-hex'),
     previewWrap: document.getElementById('notes-preview-wrap'),
@@ -771,6 +556,26 @@ const elements = {
     toolsTabToC: document.getElementById('notes-tools-tab-toc'),
     toolsTabFrontmatter: document.getElementById('notes-tools-tab-frontmatter'),
     toolsTabLog: document.getElementById('notes-tools-tab-log'),
+    toolsTabGit: document.getElementById('notes-tools-tab-git'),
+    gitTab: document.getElementById('notes-tools-tab-git'),
+    gitPane: document.getElementById('notes-tools-git-pane'),
+    gitToolbar: document.getElementById('notes-tools-git-toolbar'),
+    gitWorkspace: document.getElementById('notes-tools-git-workspace'),
+    gitRemote: document.getElementById('notes-tools-git-remote'),
+    gitBranch: document.getElementById('notes-tools-git-branch'),
+    gitAheadBehind: document.getElementById('notes-tools-git-ahead-behind'),
+    gitCompare: document.getElementById('notes-tools-git-compare'),
+    gitCommits: document.getElementById('notes-tools-git-commits'),
+    gitCommitToggle: document.getElementById('notes-tools-git-commit-toggle'),
+    gitCommitRow: document.getElementById('notes-tools-git-commit-row'),
+    gitCommitMessage: document.getElementById('notes-tools-git-commit-message'),
+    gitCommitSubmit: document.getElementById('notes-tools-git-commit-submit'),
+    gitPush: document.getElementById('notes-tools-git-push'),
+    gitStageAll: document.getElementById('notes-tools-git-stage-all'),
+    gitBranches: document.getElementById('notes-tools-git-branches'),
+    gitTags: document.getElementById('notes-tools-git-tags'),
+    gitRefresh: document.getElementById('notes-tools-git-refresh'),
+    gitFileList: document.getElementById('notes-tools-git-files'),
     toolsFindPane: document.getElementById('notes-tools-find-pane'),
     toolsAIPane: document.getElementById('notes-tools-ai-pane'),
     toolsToCPane: document.getElementById('notes-tools-toc-pane'),
@@ -787,6 +592,7 @@ const elements = {
     toolsAIAsk: document.getElementById('notes-tools-ai-ask'),
     toolsAISkills: document.getElementById('notes-tools-ai-skills'),
     toolsAISettings: document.getElementById('notes-tools-ai-settings'),
+    toolsAISession: document.getElementById('notes-tools-ai-session'),
     aiOutput: document.getElementById('notes-ai-output'),
     aiScrollBottom: document.getElementById('notes-ai-scroll-bottom'),
     aiSettingsModal: document.getElementById('notes-ai-settings-modal'),
@@ -794,7 +600,9 @@ const elements = {
     aiSettingsSessionNew: document.getElementById('notes-ai-settings-session-new'),
     aiSettingsHistoryList: document.getElementById('notes-ai-settings-history-list'),
     aiSettingsToolsList: document.getElementById('notes-ai-settings-tools-list'),
+    aiSettingsToolsFilter: document.getElementById('notes-ai-settings-tools-filter'),
     aiSettingsMcpList: document.getElementById('notes-ai-settings-mcp-list'),
+    aiSettingsMcpFilter: document.getElementById('notes-ai-settings-mcp-filter'),
     aiToolMetaModal: document.getElementById('notes-ai-tool-meta-modal'),
     aiToolMetaCard: document.getElementById('notes-ai-tool-meta-card'),
     aiToolMetaContent: document.getElementById('notes-ai-tool-meta-content'),
@@ -802,9 +610,14 @@ const elements = {
     logOutput: document.getElementById('notes-log-output'),
     toolsLogMaximize: document.getElementById('notes-tools-log-maximize'),
     toolsLogTimestamp: document.getElementById('notes-tools-log-timestamp'),
+    toolsLogDebug: document.getElementById('notes-tools-log-debug'),
     toolsLogTrace: document.getElementById('notes-tools-log-trace'),
+    toolsLogError: document.getElementById('notes-tools-log-error'),
+    toolsLogWarn: document.getElementById('notes-tools-log-warn'),
+    toolsLogInfo: document.getElementById('notes-tools-log-info'),
     toolsLogWordwrap: document.getElementById('notes-tools-log-wordwrap'),
     toolsLogCopy: document.getElementById('notes-tools-log-copy'),
+    toolsLogSelectAll: document.getElementById('notes-tools-log-select-all'),
     toolsLogDeselect: document.getElementById('notes-tools-log-deselect'),
     toolsLogClear: document.getElementById('notes-tools-log-clear'),
     logScrollBottom: document.getElementById('notes-log-scroll-bottom'),
@@ -814,6 +627,7 @@ const elements = {
 const state = {
     files: [],
     currentFile: '',
+    mutatingFile: '',
     currentFileUri: '',
     currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
     currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
@@ -825,9 +639,15 @@ const state = {
     autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
+    renamingFolder: false,
+    historyPositionTimer: null,
+    pendingNewFile: null,
     textPromptHandler: null,
     graphPromptHandler: null,
     graphPromptSubmit: null,
+    graphPromptSpellCheck: null,
+    gitWorktreePrompt: null,
+    gitBranchPromptHandler: null,
     deletingFile: null,
     deleteConfirmAction: null,
     findMatches: [],
@@ -869,7 +689,6 @@ const state = {
     },
     expandedFolders: {},
     currentProjectRoot: '',      // current project root, used to index FileListCollapsed map
-    lastRestoredDocument: null,  // sentinel: LastDocument value at the time it was last restored; null means never restored
     jupyterCodeBlocks: {},
     jupyterBlockCounter: 0,
     lspActiveBlockId: null,
@@ -985,7 +804,14 @@ function isMonacoActive() {
     return state.useMonacoEditor && monacoMainEditor !== null;
 }
 
+function isGitDiffActive() {
+    return Boolean(elements.notesPanel?.dataset.gitDiff === 'true' && activeGitDiff && notesGitDiffAdapter);
+}
+
 function getMainEditorValue() {
+    if (isGitDiffActive()) {
+        return notesGitDiffAdapter.getModifiedValue();
+    }
     if (isMonacoActive()) {
         return monacoMainEditor.getValue();
     }
@@ -1003,9 +829,15 @@ function setMainEditorValue(value) {
         monacoMainEditor.setValue(text);
         suppressMonacoChange = false;
     }
+    if (isGitDiffActive()) {
+        notesGitDiffAdapter.setModifiedValue(text);
+    }
 }
 
 function getMainEditorSelectionRange() {
+    if (isGitDiffActive()) {
+        return notesGitDiffAdapter.getSelectionOffsets();
+    }
     if (isMonacoActive()) {
         return monacoMainEditor.getSelectionOffsets();
     }
@@ -1015,7 +847,55 @@ function getMainEditorSelectionRange() {
     return { start, end };
 }
 
+function lineNumberAtOffset(text, offset) {
+    const boundedOffset = Math.max(0, Math.min(String(text || '').length, Number(offset) || 0));
+    return String(text || '').slice(0, boundedOffset).split('\n').length;
+}
+
+function currentEditorLineForFile(file) {
+    if (!file || file !== state.currentFile) {
+        return 1;
+    }
+    return lineNumberAtOffset(getMainEditorValue(), getMainEditorSelectionRange().end);
+}
+
+function scheduleHistoryPosition(file, offset) {
+    if (!file || file !== state.currentFile || !['editor', 'swagger-edit', 'csv-edit'].includes(state.viewMode)) {
+        return;
+    }
+
+    const line = lineNumberAtOffset(getMainEditorValue(), offset);
+    clearTimeout(state.historyPositionTimer);
+    state.historyPositionTimer = setTimeout(() => {
+        state.historyPositionTimer = null;
+        if (file !== state.currentFile || !['editor', 'swagger-edit', 'csv-edit'].includes(state.viewMode)) {
+            return;
+        }
+        NotesHistoryAddPosition(file, line).catch((err) => {
+            console.error('Failed to save Notes history position:', err);
+        });
+    }, 500);
+}
+
+function addHistoryPosition(file, line = 1) {
+    NotesHistoryAddPosition(file, line).catch((err) => {
+        console.error('Failed to save Notes history position:', err);
+    });
+}
+
+function scheduleCurrentHistoryPosition() {
+    const selection = getMainEditorSelectionRange();
+    const activeOffset = !isMonacoActive() && elements.editor?.selectionDirection === 'backward'
+        ? selection.start
+        : selection.end;
+    scheduleHistoryPosition(state.currentFile, activeOffset);
+}
+
 function setMainEditorSelectionRange(start, end) {
+    if (isGitDiffActive()) {
+        notesGitDiffAdapter.setSelectionOffsets(start, end);
+        return;
+    }
     if (isMonacoActive()) {
         monacoMainEditor.setSelectionOffsets(start, end);
         return;
@@ -1025,6 +905,9 @@ function setMainEditorSelectionRange(start, end) {
 }
 
 function getMainEditorSelectionText() {
+    if (isGitDiffActive()) {
+        return notesGitDiffAdapter.getSelectionText();
+    }
     if (isMonacoActive()) {
         return monacoMainEditor.getSelectionText();
     }
@@ -1034,6 +917,12 @@ function getMainEditorSelectionText() {
 }
 
 function replaceMainEditorRange(start, end, text) {
+    if (isGitDiffActive()) {
+        notesGitDiffAdapter.replaceRange(start, end, text, 'notes-git-diff-context-menu');
+        const nextCursor = Number(start) + String(text || '').length;
+        notesGitDiffAdapter.setSelectionOffsets(nextCursor, nextCursor);
+        return;
+    }
     if (isMonacoActive()) {
         monacoMainEditor.replaceRange(start, end, text, 'notes-main-editor-replace');
         const nextCursor = Number(start) + String(text || '').length;
@@ -1117,12 +1006,13 @@ async function createMonacoMainEditor() {
                 elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
             }
         },
-        onSelectionChange: (start, end) => {
+        onSelectionChange: (start, end, activeOffset) => {
             if (!elements.editor) {
                 return;
             }
             elements.editor.selectionStart = Number(start) || 0;
             elements.editor.selectionEnd = Number(end) || Number(start) || 0;
+            scheduleHistoryPosition(state.currentFile, activeOffset);
             if (isCurrentFileLspEligible() && state.lspOpenFile === state.currentFile) {
                 state.lspHoverLastKey = '';
                 scheduleLspHover();
@@ -1891,7 +1781,7 @@ function setupInteractiveTableCells(container, isEditable, resolveCommit, afterC
 
                 cell.dataset.tableEditing = 'true';
                 cell.setAttribute('contenteditable', 'true');
-                cell.setAttribute('spellcheck', 'false');
+                disableNativeTextAssistance(cell);
                 cell.style.outline = 'none';
                 cell.style.boxShadow = 'inset 0 0 0 1px var(--accent)';
 
@@ -2049,6 +1939,11 @@ function renderCsvView(content, options = {}) {
     if (!interactive) {
         void autoHyperlink(elements.csvView);
     }
+
+    if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery
+        && (state.viewMode === 'csv-view' || state.viewMode === 'csv-run')) {
+        setTimeout(() => performFind(), 0);
+    }
 }
 
 function setCodeEditorMode(enabled) {
@@ -2204,6 +2099,20 @@ function renderTreeNodeItem(container, category, node, depth, continueAtLevels, 
         item.type = 'button';
         item.className = 'notes-file notes-tree-file';
         item.dataset.file = node.file;
+        const projectRoot = state.currentProjectRoot
+            ? `${state.currentProjectRoot.replace(/[\\/]+$/, '')}/`
+            : '(none)';
+        const { relativePath } = splitCategoryPath(node.file);
+        const directory = `/${getPathParts(relativePath).slice(0, -1).join('/')}`;
+        const tooltipCode = (value) => `<code>${escapeHtml(value).replace(
+            /[\\`*_[\]{}()#+.!|~-]/g,
+            (character) => `&#${character.charCodeAt(0)};`,
+        )}</code>`;
+        item.dataset.tooltip = [
+            ['Project', 'f015', projectRoot],
+            ['Path', 'f07b', directory],
+            ['File', 'f15b', node.name],
+        ].map(([label, icon, value]) => `<div class="notes-file-tooltip-row"><span class="notes-file-tooltip-icon" role="img" aria-label="${label}">&#x${icon};</span> ${tooltipCode(value)}</div>`).join('\n');
         item.appendChild(indentForItem);
         item.appendChild(label);
 
@@ -2234,7 +2143,7 @@ function notifyTerminal(message, level = 'info') {
 }
 
 function openStickyProgress(id, message) {
-    SendIpc('terminal-sticky-create', {
+    return SendIpc('terminal-sticky-create', {
         id: String(id),
         message,
         level: 'info',
@@ -2294,7 +2203,7 @@ function parseFrontmatter(markdown) {
 // Parses the current document's frontmatter, updates state, refreshes the
 // Frontmatter tab, and returns the markdown body with the frontmatter stripped.
 function applyDocumentFrontmatter() {
-    const raw = elements.editor?.value || '';
+    const raw = getMainEditorValue();
     if (state.currentFileType !== 'markdown') {
         state.frontmatter = null;
         syncFrontmatterTab();
@@ -2326,10 +2235,9 @@ function syncFrontmatterTab() {
         elements.toolsFrontmatter.innerHTML = '';
     }
 
-    // If the Frontmatter tab was the active tab but is no longer available,
-    // close the Tools panel rather than silently switching tabs.
+    // Fall back only when the selected tab is unavailable in this document.
     if (elements.toolsTabFrontmatter?.getAttribute('aria-selected') === 'true') {
-        setToolsPanelCollapsed(true);
+        setToolsTab('find');
     }
 }
 
@@ -2607,9 +2515,7 @@ function refreshToolsToC() {
         return;
     }
 
-    const markdown = state.viewMode === 'editor'
-        ? String(elements.editor?.value || '')
-        : getMainEditorValue();
+    const markdown = getMainEditorValue();
     const descriptors = state.viewMode === 'editor'
         ? getMarkdownHeadingSourceDescriptors(markdown).map((entry, index, all) => ({
             ...entry,
@@ -2702,13 +2608,11 @@ function updateToolsTabVisibility(fileType) {
         }
     }
 
-    // If the previously-selected tab is no longer available for this document
-    // type, close the Tools panel rather than silently switching tabs. The ToC
-    // and Frontmatter tabs are the only document-type-specific tabs.
+    // Preserve selection unless its document-specific tab is no longer available.
     const tocActive = elements.toolsTabToC?.getAttribute('aria-selected') === 'true';
     const frontmatterActive = elements.toolsTabFrontmatter?.getAttribute('aria-selected') === 'true';
     if (!showToC && (tocActive || frontmatterActive)) {
-        setToolsPanelCollapsed(true);
+        setToolsTab('find');
     }
 
     if (showToC) {
@@ -2820,7 +2724,39 @@ function setCollapsibleHeadingState(heading, collapsed) {
     }
 }
 
-function setupCollapsibleHeadings(container, exclusive = false) {
+function getRenderedSectionHeading(container, target, clientY) {
+    if (state.currentFileType !== 'markdown' || (container !== elements.preview && container !== elements.jupyter)) {
+        return null;
+    }
+    const selector = 'h1, h2, h3, h4, h5, h6';
+    const clickedHeading = target instanceof Element ? target.closest(selector) : null;
+    if (clickedHeading && container.contains(clickedHeading)) {
+        return getCollapsibleSectionWrapper(clickedHeading) ? clickedHeading : null;
+    }
+
+    let precedingHeading = null;
+    for (const heading of container.querySelectorAll(selector)) {
+        const rect = heading.getBoundingClientRect();
+        const precedesClick = rect.height > 0
+            ? rect.top <= clientY
+            : target instanceof Element && Boolean(heading.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (precedesClick) {
+            precedingHeading = heading;
+        }
+    }
+    return getCollapsibleSectionWrapper(precedingHeading) ? precedingHeading : null;
+}
+
+function createCollapseSectionMenuItem(heading) {
+    const collapsed = heading.dataset.collapsed === 'true';
+    return {
+        title: collapsed ? 'Expand section' : 'Collapse section',
+        icon: collapsed ? CONTEXT_ICON_EXPAND_ALL : CONTEXT_ICON_COLLAPSE_ALL,
+        onSelect: () => setCollapsibleHeadingState(heading, !collapsed),
+    };
+}
+
+function setupCollapsibleHeadings(container) {
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
     const headingList = Array.from(headings);
 
@@ -2851,34 +2787,6 @@ function setupCollapsibleHeadings(container, exclusive = false) {
         wrapper.style.opacity = '1';
         heading.insertAdjacentElement('afterend', wrapper);
         sectionEls.forEach((el) => wrapper.appendChild(el));
-
-        heading.style.cursor = 'pointer';
-
-        heading.addEventListener('mouseenter', () => {
-            heading.style.textDecoration = 'underline';
-        });
-        heading.addEventListener('mouseleave', () => {
-            heading.style.textDecoration = '';
-        });
-
-        heading.addEventListener('dblclick', () => {
-            if (exclusive) {
-                headingList.forEach((otherHeading) => {
-                    setCollapsibleHeadingState(otherHeading, otherHeading !== heading);
-                });
-                return;
-            }
-
-            const isCollapsed = heading.dataset.collapsed === 'true';
-
-            if (isCollapsed) {
-                // Expand: animate from 0 → scrollHeight, then release max-height cap.
-                expandCollapsibleHeading(heading);
-            } else {
-                // Collapse: pin to exact current height (no jump), then animate to 0.
-                collapseCollapsibleHeading(heading);
-            }
-        });
     });
 }
 
@@ -3699,12 +3607,12 @@ function collectTableColumnWidths(table) {
     });
 }
 
-async function setupTableColumnResizing(container, wrapped, filename = state.currentFile) {
+async function setupTableColumnResizing(container, wrapped, filename = state.currentFile, viewNameOverride = '') {
     if (!container || filename === null) {
         return;
     }
 
-    const viewName = container === elements.preview
+    const viewName = viewNameOverride || (container === elements.preview
         ? 'view'
         : container === elements.jupyter
             ? 'run'
@@ -3712,7 +3620,7 @@ async function setupTableColumnResizing(container, wrapped, filename = state.cur
                 ? 'csv'
                 : container === elements.aiOutput
                     ? 'ai-panel'
-                    : String(state.viewMode || 'view');
+                    : String(state.viewMode || 'view'));
 
     const tables = Array.from(container.querySelectorAll('table'));
     for (const table of tables) {
@@ -3945,6 +3853,25 @@ function notesGraphField(labelText) {
     return { field, label };
 }
 
+function setNotesModalTitle(text, markdownHeading = true) {
+    const title = elements.modal.querySelector('#notes-modal-title');
+    title.classList.toggle('markdown-body', markdownHeading);
+    title.classList.toggle('notes-graph-title', markdownHeading);
+    if (!markdownHeading) {
+        title.textContent = text;
+        return;
+    }
+
+    setMarkdownModalHeading(title, text);
+}
+
+function setMarkdownModalHeading(container, text) {
+    container.classList.add('markdown-body');
+    const heading = document.createElement('h3');
+    heading.textContent = text;
+    container.replaceChildren(heading);
+}
+
 function openNotesTableGraphPrompt(table) {
     const headings = Array.from(table.querySelectorAll('thead th')).map((cell) => getTableCellTextContent(cell));
     if (headings.length < 2) {
@@ -3970,6 +3897,7 @@ function openNotesTableGraphPrompt(table) {
         type: existing?.type || 'line',
         title: existing?.title || '',
         selectedColumns,
+        columnQuery: '',
         selectedRows: savedRows.length > 0 ? new Set(savedRows) : null,
         rowQuery: '',
         rowLimit: notesGraphRowPageSize,
@@ -3990,8 +3918,9 @@ function openNotesTableGraphPrompt(table) {
     elements.modalLocationRow.style.display = 'none';
     elements.modalBody.style.display = 'flex';
     elements.modalInput.value = '';
-    elements.modal.querySelector('#notes-modal-title').textContent = 'Create graph';
-    elements.modalCreate.textContent = 'Create graph';
+    const graphActionLabel = existing ? 'Modify graph' : 'Create graph';
+    setNotesModalTitle(graphActionLabel, true);
+    elements.modalCreate.textContent = graphActionLabel;
     elements.modalBody.replaceChildren();
 
     const form = document.createElement('div');
@@ -4023,7 +3952,7 @@ function openNotesTableGraphPrompt(table) {
     const titleField = notesGraphField('Title');
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
-    titleInput.className = 'notes-graph-text';
+    titleInput.className = 'notes-graph-text-title';
     titleInput.value = prompt.title;
     titleInput.placeholder = 'Optional chart title';
     titleInput.addEventListener('input', () => { prompt.title = titleInput.value; });
@@ -4047,14 +3976,27 @@ function openNotesTableGraphPrompt(table) {
     });
     columnActions.appendChild(selectAllColumns);
     columnsField.field.appendChild(columnActions);
+    const columnSearch = document.createElement('input');
+    columnSearch.type = 'search';
+    columnSearch.className = 'notes-graph-text';
+    columnSearch.placeholder = 'Find columns…';
+    columnSearch.addEventListener('input', () => {
+        prompt.columnQuery = columnSearch.value.trim().toLowerCase();
+        renderColumns();
+    });
+    columnsField.field.appendChild(columnSearch);
     const columnsList = document.createElement('div');
-    columnsList.className = 'notes-graph-options-list';
+    columnsList.className = 'notes-graph-options-list markdown-body';
     columnsField.field.appendChild(columnsList);
     form.appendChild(columnsField.field);
 
     const renderColumns = () => {
         columnsList.replaceChildren();
         headings.forEach((heading, index) => {
+            const columnName = heading || `Column ${index + 1}`;
+            if (prompt.columnQuery && !`${index + 1} ${columnName}`.toLowerCase().includes(prompt.columnQuery)) {
+                return;
+            }
             const option = document.createElement('label');
             option.className = 'notes-graph-option';
             const checkbox = document.createElement('input');
@@ -4065,7 +4007,7 @@ function openNotesTableGraphPrompt(table) {
                 else prompt.selectedColumns.delete(index);
             });
             const text = document.createElement('span');
-            text.textContent = heading || `Column ${index + 1}`;
+            text.textContent = columnName;
             option.append(checkbox, text);
             columnsList.appendChild(option);
         });
@@ -4104,7 +4046,7 @@ function openNotesTableGraphPrompt(table) {
     });
     rowsField.field.appendChild(rowSearch);
     prompt.rowList = document.createElement('div');
-    prompt.rowList.className = 'notes-graph-options-list notes-graph-row-list';
+    prompt.rowList.className = 'notes-graph-options-list markdown-body';
     rowsField.field.appendChild(prompt.rowList);
     form.appendChild(rowsField.field);
 
@@ -4196,7 +4138,9 @@ function openNotesTableGraphPrompt(table) {
         });
     };
 
-    elements.modalCreate.textContent = 'Create graph';
+    disableNativeTextAssistanceIn(form);
+    state.graphPromptSpellCheck = attachSpellCheck(titleInput);
+    elements.modalCreate.textContent = graphActionLabel;
     setTimeout(() => typeButton.focus(), 0);
 }
 
@@ -4205,10 +4149,13 @@ function finishNotesTableGraphPrompt(spec) {
     const handler = state.graphPromptHandler;
     state.graphPromptHandler = null;
     state.graphPromptSubmit = null;
+    state.graphPromptSpellCheck?.detach();
+    state.graphPromptSpellCheck = null;
     elements.modalLocationRow.style.display = '';
     elements.modalBody.style.display = 'none';
     elements.modalBody.replaceChildren();
     elements.modalInput.placeholder = 'example-note';
+    setNotesModalTitle('New note name');
     elements.modal.dataset.open = 'false';
     elements.modal.setAttribute('aria-hidden', 'true');
     handler(spec);
@@ -4223,6 +4170,22 @@ async function setNotesTableGraph(table, spec) {
     }
     table.dataset.tableGraphSpec = spec ? JSON.stringify(spec) : '';
     await renderNotesTableGraph(table);
+}
+
+async function copyNotesTableGraphPNG(table) {
+    try {
+        const spec = JSON.parse(table.dataset.tableGraphSpec || 'null');
+        if (!spec) {
+            throw new Error('No graph is available to copy.');
+        }
+        const result = await NotesTableRenderGraph(notesTableRequest(table, true), { ...spec, format: 'png' });
+        if (result?.error || !result?.pngDataURL) {
+            throw new Error(result?.error || 'Graph rendering returned no PNG.');
+        }
+        await TerminalCopyImageDataURL(result.pngDataURL);
+    } catch (err) {
+        notifyTerminal(`Failed to copy graph: ${err instanceof Error ? err.message : err}`, 'error');
+    }
 }
 
 async function renderNotesTableGraph(table) {
@@ -4249,6 +4212,10 @@ async function renderNotesTableGraph(table) {
             event.preventDefault();
             event.stopPropagation();
             showNotesLocalMenu([{
+                title: 'Copy graph (PNG)',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: () => void copyNotesTableGraphPNG(table),
+            }, createTableGraphMenuItem(table), { title: '-', icon: 0 }, {
                 title: 'Remove graph',
                 icon: 0,
                 onSelect: () => void setNotesTableGraph(table, null),
@@ -4258,7 +4225,7 @@ async function renderNotesTableGraph(table) {
     const renderID = String(Number(graph.dataset.renderID || '0') + 1);
     graph.dataset.renderID = renderID;
     graph.setAttribute('aria-busy', 'true');
-    const result = await NotesTableRenderGraph(notesTableRequest(table, true), spec);
+    const result = await NotesTableRenderGraph(notesTableRequest(table, true), { ...spec, format: 'svg' });
     if (!graph.isConnected || graph.dataset.renderID !== renderID) {
         return;
     }
@@ -4416,7 +4383,7 @@ function createTableFilterMenuItem(table) {
 
 function createTableGraphMenuItem(table) {
     return {
-        title: 'Create graph...',
+        title: table.dataset.tableGraphSpec ? 'Modify graph...' : 'Create graph...',
         icon: 0xf201,
         onSelect: () => openNotesTableGraphPrompt(table),
     };
@@ -4428,7 +4395,6 @@ function createClearTableSortMenuItem(table) {
         icon: 0,
         onSelect: () => {
             void clearNotesTableSort(table);
-            clearTableHighlight(table);
         },
     };
 }
@@ -5382,6 +5348,7 @@ async function requestLspDefinition() {
             return;
         }
 
+        addHistoryPosition(targetNotesFile, Math.max(0, Number(target.line) || 0) + 1);
         await loadFile(targetNotesFile);
 
         const targetLine = Math.max(0, Number(target.line) || 0);
@@ -5634,6 +5601,7 @@ async function goToWorkspaceLspSymbol() {
                     return;
                 }
 
+                addHistoryPosition(targetNotesFile, Math.max(0, Number(picked.line) || 0) + 1);
                 await loadFile(targetNotesFile);
 
                 const line = Math.max(0, Number(picked.line) || 0);
@@ -6354,9 +6322,6 @@ async function openCurrentLspDocument(content) {
 
         await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
         state.lspOpenFile = state.currentFile;
-        lspSpellCheckExclusions.keywords = (await GetNotesLanguageReservedWords(languageID)) || [];
-        lspSpellCheckExclusions.tokens = [];
-        applyLspSpellCheckExclusions();
 
         if (isMonacoActive()) {
             monacoMainEditor.configureLsp({
@@ -6833,6 +6798,11 @@ function focusActiveEditorForViewMode() {
             return;
         }
 
+        if (isGitDiffActive()) {
+            notesGitDiffAdapter.focus();
+            return;
+        }
+
         if (isMonacoActive()) {
             monacoMainEditor.focus();
             return;
@@ -6851,13 +6821,54 @@ function emitCurrentFileName() {
     app.dataset.currentFileName = fileName;
     elements.currentFileTitle.textContent = fileName;
     elements.currentFileTitle.hidden = !fileName;
-    elements.currentFileTitle.title = fileName;
     window.dispatchEvent(new CustomEvent('notes-current-file', {
         detail: { fileName }
     }));
+    updateGitDiffTabForCurrentFile();
+}
+
+function currentProjectRelativeGitPath() {
+    const currentFile = String(state.currentFile || '').replaceAll('\\', '/');
+    if (currentFile.startsWith('$PROJECT/')) {
+        return currentFile.slice('$PROJECT/'.length);
+    }
+    const root = String(state.currentFileProject || state.currentProjectRoot || '')
+        .replaceAll('\\', '/').replace(/\/+$/, '');
+    return root && currentFile.startsWith(`${root}/`)
+        ? currentFile.slice(root.length + 1)
+        : '';
+}
+
+function updateGitDiffTabForCurrentFile(status, projectRoot) {
+    if (!elements.tabDiff) {
+        return;
+    }
+    if (activeGitDiff) {
+        elements.tabDiff.style.display = '';
+        return;
+    }
+
+    const root = state.currentFileProject || state.currentProjectRoot || projectRoot || notesGitPanel?.getCurrentRoot() || '';
+    const normalizeRoot = (value) => String(value || '').replaceAll('\\', '/').replace(/\/+$/, '');
+    if (projectRoot && root && normalizeRoot(projectRoot) !== normalizeRoot(root)) {
+        return;
+    }
+    const relativePath = currentProjectRelativeGitPath();
+    const snapshot = status || notesGitPanel?.getCachedStatus(root);
+    const hasDiff = Boolean(relativePath && snapshot?.files?.some((file) =>
+        String(file.path || '').replaceAll('\\', '/') === relativePath));
+    elements.tabDiff.style.display = hasDiff ? '' : 'none';
+    if (!hasDiff && elements.tabDiff.getAttribute('aria-selected') === 'true') {
+        setNotesGitDiffTabActive(false);
+        elements.gitDiffWrap.dataset.active = 'false';
+        setViewMode(state.viewMode);
+    }
 }
 
 function setViewMode(mode) {
+    if (activeGitDiff && elements.notesPanel.dataset.gitDiff === 'true') {
+        void closeNotesGitDiff();
+    }
     // Determine the mode based on current file type.
     if (mode === 'meta') {
         state.viewMode = 'meta';
@@ -6903,6 +6914,7 @@ function setViewMode(mode) {
     elements.tabViewer.setAttribute('aria-selected', (isViewer || isHtmlView) ? 'true' : 'false');
     elements.tabJupyter.setAttribute('aria-selected', isJupyter ? 'true' : 'false');
     elements.tabMeta.setAttribute('aria-selected', isMeta ? 'true' : 'false');
+    elements.tabDiff.setAttribute('aria-selected', 'false');
     
     const isStructuredEdit = state.currentFileType === 'json' && state.viewMode === 'swagger-edit';
     elements.editorWrap.dataset.active = (isEditor || isStructuredEdit) ? 'true' : 'false';
@@ -6911,6 +6923,7 @@ function setViewMode(mode) {
     elements.htmlViewWrap.dataset.active = isHtmlView ? 'true' : 'false';
     elements.jupyterWrap.dataset.active = isJupyter ? 'true' : 'false';
     elements.metaWrap.dataset.active = isMeta ? 'true' : 'false';
+    elements.gitDiffWrap.dataset.active = 'false';
     
     // Swagger tabs
     const isSwaggerView = state.viewMode === 'swagger-view';
@@ -6990,6 +7003,9 @@ function setEditorWrapMode(enabled) {
     if (isMonacoActive()) {
         monacoMainEditor.setWordWrap(wrapEnabled);
     }
+    if (isGitDiffActive()) {
+        notesGitDiffAdapter.setWordWrap(wrapEnabled);
+    }
 }
 
 function toggleMarkdownWrapMode() {
@@ -7006,13 +7022,88 @@ function toggleMarkdownWrapMode() {
     renderEditorDecorations();
 }
 
+function collectMarkdownRunSourceBlocks(tokens, source, sourceOffset, blocks) {
+    let searchFrom = 0;
+    for (const token of tokens || []) {
+        const raw = String(token.raw || '');
+        const tokenStart = raw ? source.indexOf(raw, searchFrom) : -1;
+        if (tokenStart < 0) {
+            if (token.type === 'heading' || token.type === 'paragraph' || token.type === 'list') {
+                blocks.push(null);
+            }
+            continue;
+        }
+
+        const absoluteStart = sourceOffset + tokenStart;
+        if (token.type === 'heading' || token.type === 'paragraph' || token.type === 'list') {
+            const trailingLineBreaks = raw.match(/(?:\r\n|\n|\r)+$/)?.[0].length || 0;
+            const end = absoluteStart + raw.length - trailingLineBreaks;
+            blocks.push(end > absoluteStart ? {
+                type: token.type,
+                start: absoluteStart,
+                end,
+            } : null);
+        }
+
+        if (token.type === 'html') {
+            const template = document.createElement('template');
+            template.innerHTML = raw;
+            const selector = 'h1, h2, h3, h4, h5, h6, p, ul, ol';
+            for (const element of template.content.querySelectorAll(selector)) {
+                if (!element.parentElement?.closest(selector)) {
+                    blocks.push(null);
+                }
+            }
+        } else if (Array.isArray(token.tokens)) {
+            collectMarkdownRunSourceBlocks(token.tokens, raw, absoluteStart, blocks);
+        }
+
+        searchFrom = tokenStart + raw.length;
+    }
+}
+
+function markMarkdownRunSourceBlocks(container, markdown, sourceOffset, source) {
+    container.__runMarkdownSource = source;
+    const blocks = [];
+    collectMarkdownRunSourceBlocks(marked.lexer(markdown), markdown, 0, blocks);
+
+    const selector = 'h1, h2, h3, h4, h5, h6, p, ul, ol';
+    const renderedBlocks = Array.from(container.querySelectorAll(selector))
+        .filter((element) => !element.parentElement.closest('ul, ol'));
+    for (let index = 0; index < Math.min(blocks.length, renderedBlocks.length); index += 1) {
+        const block = blocks[index];
+        const element = renderedBlocks[index];
+        if (!block) {
+            continue;
+        }
+        const matchesType = block.type === 'heading'
+            ? /^H[1-6]$/.test(element.tagName)
+            : block.type === 'paragraph'
+                ? element.tagName === 'P'
+                : element.tagName === 'UL' || element.tagName === 'OL';
+        if (!matchesType) {
+            continue;
+        }
+
+        const start = sourceOffset + block.start;
+        const end = sourceOffset + block.end;
+        element.dataset.runMarkdownSourceStart = String(start);
+        element.dataset.runMarkdownSourceEnd = String(end);
+        element.dataset.runMarkdownSourceText = source.slice(start, end);
+    }
+}
+
 async function renderJupyterView() {
     // Reset jupyter state for the new render
     state.jupyterCodeBlocks = {};
     state.jupyterBlockCounter = 0;
     
+    const source = getMainEditorValue();
     const markdown = applyDocumentFrontmatter();
     elements.jupyter.innerHTML = marked.parse(markdown);
+    if (state.currentFileType === 'markdown') {
+        markMarkdownRunSourceBlocks(elements.jupyter, markdown, source.length - markdown.length, source);
+    }
     
     // Apply common markdown processing
     await processMarkdownContainer(elements.jupyter);
@@ -7055,6 +7146,166 @@ async function renderJupyterView() {
                 }, 0);
             }
         });
+}
+
+async function beginMarkdownRunBlockEdit(container, block) {
+    const start = Number.parseInt(block.dataset.runMarkdownSourceStart || '', 10);
+    const end = Number.parseInt(block.dataset.runMarkdownSourceEnd || '', 10);
+    const source = container.__runMarkdownSource;
+    const sourceText = block.dataset.runMarkdownSourceText;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || end < start || typeof source !== 'string' || source.slice(start, end) !== sourceText || getMainEditorValue() !== source) {
+        const file = state.currentFile;
+        await renderJupyterView();
+        if (state.currentFile !== file || state.viewMode !== 'jupyter' || getMainEditorValue() !== container.__runMarkdownSource) {
+            return;
+        }
+        const candidates = Array.from(container.querySelectorAll('[data-run-markdown-source-start]'))
+            .filter((element) => element.tagName === block.tagName && element.dataset.runMarkdownSourceText === sourceText);
+        if (candidates.length === 1) {
+            await beginMarkdownRunBlockEdit(container, candidates[0]);
+        }
+        return;
+    }
+
+    const wasDirty = state.dirty;
+    const wasViewTainted = state.viewTainted;
+    const editor = document.createElement('div');
+    editor.className = 'notes-run-markdown-inline-edit';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'notes-run-markdown-inline-edit-textarea';
+    textarea.setAttribute('aria-label', 'Edit Markdown source');
+    textarea.value = sourceText;
+    disableNativeTextAssistance(textarea);
+    const autoResize = () => {
+        textarea.rows = textarea.value.split('\n').length;
+        textarea.style.height = 'auto';
+        const styles = getComputedStyle(textarea);
+        const borderHeight = (Number.parseFloat(styles.borderTopWidth) || 0)
+            + (Number.parseFloat(styles.borderBottomWidth) || 0);
+        if (textarea.scrollHeight > 0) {
+            textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
+        }
+    };
+    textarea.addEventListener('input', autoResize);
+
+    const actions = document.createElement('div');
+    actions.className = 'notes-run-markdown-inline-edit-actions';
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.textContent = 'Save';
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    actions.append(saveButton, cancelButton);
+    editor.append(textarea, actions);
+    block.replaceWith(editor);
+    autoResize();
+    const spellCheck = attachSpellCheck(textarea);
+    const removalObserver = new MutationObserver(() => {
+        if (!container.contains(editor)) {
+            detachSpellCheck();
+        }
+    });
+    const detachSpellCheck = () => {
+        removalObserver.disconnect();
+        spellCheck.detach();
+    };
+    removalObserver.observe(container, { childList: true, subtree: true });
+
+    let appliedText = sourceText;
+    let sourceApplied = false;
+    let saving = false;
+
+    const cancel = () => {
+        if (saving) {
+            return;
+        }
+        if (sourceApplied) {
+            if (state.autosaveTimer) {
+                clearTimeout(state.autosaveTimer);
+                state.autosaveTimer = null;
+            }
+            setMainEditorValue(source);
+            setDirty(wasDirty);
+            state.viewTainted = wasViewTainted;
+        }
+        detachSpellCheck();
+        editor.replaceWith(block);
+    };
+
+    const save = async () => {
+        if (saving) {
+            return;
+        }
+        saving = true;
+        saveButton.disabled = true;
+        cancelButton.disabled = true;
+
+        const currentSource = getMainEditorValue();
+        const expectedSource = sourceApplied
+            ? source.slice(0, start) + appliedText + source.slice(end)
+            : source;
+        if (currentSource !== expectedSource) {
+            notifyTerminal('Markdown changed while this block was being edited. Cancel and reopen Run.', 'warn');
+            saving = false;
+            saveButton.disabled = false;
+            cancelButton.disabled = false;
+            return;
+        }
+
+        const nextText = textarea.value;
+        if (nextText !== appliedText || !sourceApplied) {
+            const rangeEnd = sourceApplied ? start + appliedText.length : end;
+            if (isMonacoActive()) {
+                suppressMonacoChange = true;
+                try {
+                    monacoMainEditor.replaceRange(start, rangeEnd, nextText, 'notes-run-markdown-edit');
+                } finally {
+                    suppressMonacoChange = false;
+                }
+                if (elements.editor) {
+                    elements.editor.value = monacoMainEditor.getValue();
+                }
+            } else {
+                setMainEditorValue(currentSource.slice(0, start) + nextText + currentSource.slice(rangeEnd));
+            }
+            appliedText = nextText;
+            sourceApplied = true;
+            state.viewTainted = true;
+            setDirty(true);
+        }
+
+        if (state.autosaveTimer) {
+            clearTimeout(state.autosaveTimer);
+            state.autosaveTimer = null;
+        }
+        const saved = await saveFile();
+        if (!saved) {
+            saving = false;
+            saveButton.disabled = false;
+            cancelButton.disabled = false;
+            return;
+        }
+
+        state.viewTainted = false;
+        detachSpellCheck();
+        await renderJupyterView();
+    };
+
+    saveButton.addEventListener('click', () => { void save(); });
+    cancelButton.addEventListener('click', cancel);
+    textarea.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            cancel();
+        } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void save();
+        }
+    });
+
+    textarea.focus();
 }
 
 function convertToJupyterCodeBlocks() {
@@ -7209,6 +7460,7 @@ function convertToJupyterCodeBlocks() {
             
             // Restore LSP mode and other state from document cache
             await restoreJupyterBlockState(blockId);
+            void refreshJupyterReservedWords(blockId);
         })();
 
         runtimeLink.addEventListener('click', () => {
@@ -7220,6 +7472,7 @@ function convertToJupyterCodeBlocks() {
                     onSelect: () => {
                         state.jupyterCodeBlocks[blockId].runtime = desc;
                         runtimeLink.textContent = desc;
+                        void refreshJupyterReservedWords(blockId);
                     },
                 })),
                 rect.left,
@@ -7569,6 +7822,7 @@ function convertToJupyterCodeBlocks() {
         }
         const blockSpellCheck = attachSpellCheck(editableCode);
         jupyterSpellCheckHandles[blockId] = blockSpellCheck;
+        void refreshJupyterReservedWords(blockId);
         const blockForSpell = state.jupyterCodeBlocks[blockId];
         if (blockForSpell && blockForSpell.typosFilePath) {
             blockSpellCheck.setMode('external');
@@ -7648,12 +7902,13 @@ async function runCodeBlockInTerminal(blockId) {
         block.currentContent = editableElement.value;
     }
     
-        try {
-            await SendToTerminal(block.currentContent);
-            window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
-        } catch (err) {
-            console.error('Error sending to terminal:', err);
-        }
+    try {
+        await SendToTerminal(block.currentContent, block.runtime);
+        window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+    } catch (err) {
+        console.error('Error sending to terminal:', err);
+        notifyTerminal(`Failed to send to terminal: ${err}`, 'error');
+    }
 }
 
 async function toggleLspModeForBlock(blockId) {
@@ -7839,17 +8094,87 @@ async function restoreJupyterBlockState(blockId) {
     }
 }
 
+let fileListRefreshSequence = 0;
+let requestedFileContext = null;
+let fileListRefreshInFlight = 0;
+let fileIndexRefreshPending = false;
+let fileIndexRefreshQueued = false;
+let fileIndexRoots = new Map();
+
+function normalizeFileIndexRoot(path) {
+    return String(path || '').replaceAll('\\', '/').replace(/\/+$/, '');
+}
+
+function indexedFileList(context, roots) {
+    const files = [];
+    for (const [field, prefix, recursive] of [
+        ['globalNotes', '$GLOBAL', false], ['userNotes', '$NOTES', false], ['projectRoot', '$PROJECT', true],
+    ]) {
+        const snapshot = roots.get(normalizeFileIndexRoot(context[field]));
+        if (!snapshot) continue;
+        for (const path of snapshot.files || []) {
+            if (recursive || !/[\\/]/.test(path)) files.push(`${prefix}/${path}`);
+        }
+    }
+    return files;
+}
+
+function indexedFileStatus(roots) {
+    const snapshots = Array.from(roots.values());
+    const busy = snapshots.some((root) => root.state === 'scanning' || root.state === 'refreshing');
+    const error = snapshots.map((root) => root.error || '').filter(Boolean).join('\n');
+    const truncated = snapshots.some((root) => root.truncated);
+    return { state: busy ? 'refreshing' : error ? 'error' : truncated ? 'truncated' : 'ready', error, truncated };
+}
+
+function renderFileIndexStatus(snapshot) {
+    const status = document.getElementById('notes-file-index-status');
+    const spinner = document.getElementById('notes-file-index-spinner');
+    const warning = document.getElementById('notes-file-index-warning');
+    const busy = snapshot.state === 'scanning' || snapshot.state === 'refreshing';
+    const problem = Boolean(snapshot.error || snapshot.truncated);
+    spinner.hidden = !busy;
+    warning.hidden = busy || !problem;
+    status.hidden = !busy && !problem;
+    const label = busy ? 'Refreshing files'
+        : snapshot.error || (snapshot.truncated ? 'File list truncated at the filesystem entry limit' : '');
+    status.title = label;
+    status.setAttribute('aria-label', label);
+    elements.list.setAttribute('aria-busy', busy ? 'true' : 'false');
+}
+
+function queueFileIndexRefresh() {
+    fileIndexRefreshPending = true;
+    if (fileIndexRefreshQueued || fileListRefreshInFlight > 0) return;
+    fileIndexRefreshQueued = true;
+    queueMicrotask(() => {
+        fileIndexRefreshQueued = false;
+        if (!fileIndexRefreshPending || fileListRefreshInFlight > 0 || !requestedFileContext) return;
+        fileIndexRefreshPending = false;
+        void refreshFiles({ context: requestedFileContext, skipHistoryRestore: true });
+    });
+}
+
 async function refreshFiles(options = {}) {
+    const sequence = ++fileListRefreshSequence;
+    fileListRefreshInFlight++;
     try {
         const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
         const previousWorkspaceKey = String(state.currentWorkspaceKey || '');
-        const files = await ListFiles();
-        state.files = Array.isArray(files) ? files : [];
-        state.currentProjectRoot = await GetCurrentProject();
-        const workspaceName = await GetCurrentGroupName();
+        const context = options.context || await GetNotesContext();
+        if (sequence !== fileListRefreshSequence) return;
+        requestedFileContext = context;
+        state.currentProjectRoot = context.projectRoot || '';
+        const workspaceName = context.groupName || '';
         const workspaceKey = `${String(state.currentProjectRoot || '')}::${String(workspaceName || '')}`;
         const workspaceChanged = previousWorkspaceKey !== '' && previousWorkspaceKey !== workspaceKey;
         const workspaceScopedRefresh = previousWorkspaceKey === '' || workspaceChanged;
+
+        if (workspaceChanged) {
+            clearTimeout(state.historyPositionTimer);
+            state.historyPositionTimer = null;
+            notesGitPanel?.setCommitsActive(false);
+        }
 
         state.currentWorkspaceName = String(workspaceName || '');
         state.currentWorkspaceKey = workspaceKey;
@@ -7863,24 +8188,63 @@ async function refreshFiles(options = {}) {
             void refreshAIModelPicker();
         }
 
+        const snapshot = await GetNotesFilesSnapshot(context, Boolean(options.refresh));
+        if (sequence !== fileListRefreshSequence) return;
+        renderFileIndexStatus(snapshot);
+        fileIndexRoots = new Map((snapshot.roots || []).map((root) => [normalizeFileIndexRoot(root.root), root]));
+        state.files = Array.isArray(snapshot.files) ? snapshot.files : [];
+        state.filteredFiles = null;
+        renderFileList();
         await loadProjectCache({
             skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh,
+            isCurrent: () => sequence === fileListRefreshSequence,
         });
+        if (sequence !== fileListRefreshSequence) return;
         await applyFileFilter();
 
+        if (sequence !== fileListRefreshSequence) return;
         if (workspaceChanged) {
             scrollActiveFileListItemIntoView();
         }
     } catch (err) {
+        if (sequence !== fileListRefreshSequence) return;
+        if (String(err).includes('context canceled')) {
+            renderFileIndexStatus({ state: 'ready' });
+            return;
+        }
+        renderFileIndexStatus({ state: 'error', error: String(err) });
         notifyTerminal('Failed to load file list', 'error');
         console.error(err);
+    } finally {
+        fileListRefreshInFlight--;
+        if (fileIndexRefreshPending && fileListRefreshInFlight === 0) queueFileIndexRefresh();
     }
 }
+
+function openWorkspaceWindowMenu(event) {
+    const tabs = Array.from(document.querySelectorAll('#terminal-tabs .terminal-tab[data-window-id]'))
+        .filter((tab) => tab.dataset.windowId && tab.textContent.trim());
+    if (tabs.length === 0) {
+        return;
+    }
+
+    showLocalMenu({
+        title: 'Choose a window',
+        options: tabs.map((tab) => tab.textContent.trim()),
+        x: event.clientX,
+        y: event.clientY,
+        showNextToMouseCursor: true,
+        onSelect: (index) => tabs[index]?.click(),
+    });
+}
+
+elements.title.addEventListener('click', openWorkspaceWindowMenu);
 
 async function loadProjectCache(options = {}) {
     try {
         const skipHistoryRestore = Boolean(options?.skipHistoryRestore);
         const cache = await GetProjectCache();
+        if (options.isCurrent && !options.isCurrent()) return;
         const collapsed = cache?.FileListCollapsed?.[state.currentProjectRoot] || [];
         state.expandedFolders = {};
         for (const key of collapsed) {
@@ -7889,46 +8253,52 @@ async function loadProjectCache(options = {}) {
         if (skipHistoryRestore) {
             return;
         }
-        const historyDoc = await NotesHistoryCurrent();
-        const hasHistoryDoc = historyDoc && state.files.includes(historyDoc);
-        if (hasHistoryDoc && historyDoc !== state.lastRestoredDocument) {
-            state.lastRestoredDocument = historyDoc;
+        const historyPosition = await NotesHistoryCurrentPosition();
+        if (options.isCurrent && !options.isCurrent()) return;
+        const historyDoc = historyPosition?.file || '';
+        if (historyDoc) {
             await loadFile(historyDoc);
-        } else if (!hasHistoryDoc) {
-            state.lastRestoredDocument = '';
+            if (options.isCurrent && !options.isCurrent()) return;
+            if (historyPosition.line > 1 && state.viewMode === editViewModeForCurrentFileType()) {
+                await ensureMonacoVisibleAndLaidOut();
+                jumpEditorToLine(historyPosition.line);
+            }
+        } else if (state.currentFile) {
+            await closeOpenLspDocument();
+            await closeCurrentTyposDocument();
+            if (options.isCurrent && !options.isCurrent()) return;
+            state.currentFile = '';
+            state.currentFileUri = '';
+            state.currentFileProject = '';
+            state.currentFileType = 'markdown';
+            state.swaggerSpec = null;
+            state.swaggerRunAvailable = false;
+            emitCurrentFileName();
+            setMainEditorValue('');
+            clearHexSource();
+            clearVisibleLspDiagnostics();
+            hideLspHoverTooltip();
+            updateTabVisibility('markdown');
+            setViewMode('viewer');
+            await renderMarkdown();
+            await renderJupyterView();
+            setDirty(false);
         }
     } catch (err) {
         console.error('Failed to load project cache:', err);
     }
 }
 
-async function restoreDocumentCache(file) {
-    const documentCache = await GetDocumentCache(file);
-    if (!documentCache) {
-        return;
-    }
-
-    if (typeof documentCache.WordWrap === 'boolean') {
+function applyDocumentCache(documentCache, defaultMode) {
+    if (typeof documentCache?.WordWrap === 'boolean') {
         setEditorWrapMode(documentCache.WordWrap === true);
     }
 
-    if (documentCache.DocumentTab) {
-        setViewMode(documentCache.DocumentTab);
-
-        if (documentCache.DocumentTab === 'jupyter') {
-            await renderJupyterView();
-        } else if (documentCache.DocumentTab === 'swagger-view') {
-            renderSwaggerJsonViewLazy();
-        } else if (documentCache.DocumentTab === 'swagger-run') {
-            updateSwaggerLayoutMode();
-            renderSwaggerUI();
-        }
-    }
-
+    setViewMode(documentCache?.DocumentTab || defaultMode);
     // The Tools panel open/closed state and selected tab are intentionally not
     // restored from cache. The panel keeps whatever state it already had; if the
-    // active tab isn't available for the newly loaded document, the panel is
-    // closed (handled by updateToolsTabVisibility).
+    // active tab isn't available for the newly loaded document, select Find
+    // without changing the panel's collapsed state.
 }
 
 function saveProjectCache() {
@@ -7952,7 +8322,13 @@ function getFilteredFiles() {
 }
 
 async function applyFileFilter() {
+    const sequence = fileListRefreshSequence;
     const query = state.fileFilterQuery.trim();
+    if (notesGitPanel?.isCommitsActive()) {
+        updateListFilterClearButtonVisibility();
+        await notesGitPanel.setCommitFilter(query);
+        return;
+    }
     if (!query) {
         state.filteredFiles = null;
         renderFileList();
@@ -7963,12 +8339,14 @@ async function applyFileFilter() {
         // query was malformed or matched nothing, so show the empty (no-match)
         // state rather than falling back to the unfiltered list.
         const result = await FilterStrings(query, state.files);
+        if (sequence !== fileListRefreshSequence || query !== state.fileFilterQuery.trim()) return;
         if (result && result.Error) {
             state.filteredFiles = [];
         } else {
             state.filteredFiles = Array.isArray(result?.List) ? result.List : [];
         }
     } catch {
+        if (sequence !== fileListRefreshSequence) return;
         state.filteredFiles = null;
     }
     renderFileList();
@@ -8173,6 +8551,7 @@ function renderFileList() {
     const projectFindMode = isProjectFindListModeActive();
     const previousScrollTop = elements.list ? elements.list.scrollTop : 0;
 
+    closeSharedTooltip();
     updateListFilterClearButtonVisibility();
     elements.list.innerHTML = '';
 
@@ -8351,6 +8730,89 @@ function findFolderNodeByPath(nodes, path) {
     return null;
 }
 
+async function openFileParentFolderContextMenu(file, x, y) {
+    const { category, relativePath } = splitCategoryPath(file);
+    if (!category) {
+        return;
+    }
+
+    const segments = getPathParts(relativePath);
+    const folderPath = segments.slice(0, -1).join(PRIMARY_PATH_SEPARATOR);
+    const categoryNodes = getCategoryTreeNodes(category);
+    const folderNode = folderPath ? findFolderNodeByPath(categoryNodes, folderPath) : null;
+    const folderKey = folderPath ? `${category}${PRIMARY_PATH_SEPARATOR}${folderPath}` : category;
+    const folderName = folderNode?.name || `${category} folders`;
+    const fileItems = [];
+    try {
+        const resolvedPath = await ResolveFilePath(file);
+        if (resolvedPath) {
+            const fileUrl = `file://${String(resolvedPath).replaceAll('\\', '/')}`;
+            const label = getPathFileName(file);
+            const actions = await GetHyperlinkMenuActions(fileUrl, label);
+            for (const action of actions || []) {
+                fileItems.push({
+                    title: String(action.title || ''),
+                    icon: Number(action.icon) || 0,
+                    onSelect: () => {
+                        RunHyperlinkMenuAction(fileUrl, label, String(action.action || '')).catch((err) => {
+                            notifyTerminal(`Failed to execute file action: ${err}`, 'error');
+                        });
+                    },
+                });
+            }
+        }
+    } catch (err) {
+        notifyTerminal(`Failed to load file actions: ${err}`, 'error');
+    }
+
+    openFolderTreeContextMenu(
+        category,
+        folderNode ? folderNode.children : categoryNodes,
+        x,
+        y,
+        folderName,
+        folderKey,
+        fileItems,
+    );
+}
+
+function findFolderContextRowAbove(clientY) {
+    let closest = null;
+    let closestBottom = -Infinity;
+    const rows = elements.list.querySelectorAll('.notes-tree-folder, .notes-category-header');
+
+    rows.forEach((row) => {
+        const rect = row.getBoundingClientRect();
+        if (rect.height <= 0 || rect.bottom > clientY || rect.bottom <= closestBottom) {
+            return;
+        }
+        closest = row;
+        closestBottom = rect.bottom;
+    });
+
+    return closest;
+}
+
+function openFolderContextForListRow(row, x, y) {
+    if (row.classList.contains('notes-tree-folder')) {
+        const folderKey = row.dataset.folderKey || '';
+        const separatorIndex = folderKey.indexOf(PRIMARY_PATH_SEPARATOR);
+        const category = separatorIndex === -1 ? folderKey : folderKey.slice(0, separatorIndex);
+        const folderPath = separatorIndex === -1 ? '' : folderKey.slice(separatorIndex + 1);
+        const folderNode = findFolderNodeByPath(getCategoryTreeNodes(category), folderPath);
+        const folderName = folderNode ? folderNode.name : folderPath;
+        openFolderTreeContextMenu(category, folderNode?.children || [], x, y, folderName, folderKey, [{
+            title: 'Rename folder...',
+            icon: CONTEXT_ICON_EDIT,
+            onSelect: () => void openRenamePrompt(folderKey, true),
+        }]);
+        return;
+    }
+
+    const category = row.dataset.category || '';
+    openFolderTreeContextMenu(category, getCategoryTreeNodes(category), x, y, `${category} folders`);
+}
+
 function setFolderExpansionState(folderKeys, expanded) {
     folderKeys.forEach((key) => {
         state.expandedFolders[key] = expanded;
@@ -8358,30 +8820,92 @@ function setFolderExpansionState(folderKeys, expanded) {
     saveProjectCache();
 }
 
-function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder actions') {
-    const folderKeys = collectFolderKeys(category, nodes);
-    if (folderKeys.length === 0) {
+function getFolderCreateTarget(folderPath) {
+    const normalized = String(folderPath || '').replaceAll('\\', '/');
+    const separatorIndex = normalized.indexOf('/');
+    if (separatorIndex === -1) {
+        return { location: normalized, pathPrefix: '' };
+    }
+
+    const location = normalized.slice(0, separatorIndex);
+    const relativePath = normalized.slice(separatorIndex + 1).replace(/\/+$/, '');
+    return {
+        location,
+        pathPrefix: relativePath ? `${relativePath}/` : '',
+    };
+}
+
+async function pasteAsNewFile(folderPath) {
+    let payload;
+    try {
+        payload = decodeClipboardPayload(await GetClipboardData());
+    } catch (err) {
+        notifyTerminal('Failed to read clipboard.', 'error');
+        console.error(err);
         return;
     }
 
-    showNotesLocalMenu([
-        {
-            title: 'Collapse Folders',
-            icon: 0xf146,
-            onSelect: () => {
-                setFolderExpansionState(folderKeys, false);
-                renderFileList();
+    const isImage = payload.image !== '';
+    if (!isImage && payload.text === '') {
+        notifyTerminal('Clipboard is empty.', 'info');
+        return;
+    }
+
+    const { location, pathPrefix } = getFolderCreateTarget(folderPath);
+    openNewFilePrompt({
+        location,
+        name: `${pathPrefix}clipboard.${isImage ? 'png' : 'md'}`,
+        pendingFile: isImage
+            ? { imageBase64: payload.image }
+            : { text: payload.text },
+    });
+}
+
+function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder actions', folderPath = category, fileItems = []) {
+    let folderKeys = collectFolderKeys(category, nodes);
+    if (folderKeys.length === 0) {
+        folderKeys = collectFolderKeys(category, getCategoryTreeNodes(category));
+    }
+    const { location, pathPrefix } = getFolderCreateTarget(folderPath);
+    const menuItems = [...fileItems];
+    if (menuItems.length > 0) menuItems.push({ title: '-' });
+
+    if (folderKeys.length > 0) {
+        menuItems.push(
+            {
+                title: 'Collapse Folders',
+                icon: CONTEXT_ICON_COLLAPSE_ALL,
+                onSelect: () => {
+                    setFolderExpansionState(folderKeys, false);
+                    renderFileList();
+                },
             },
+            {
+                title: 'Expand Folders',
+                icon: CONTEXT_ICON_EXPAND_ALL,
+                onSelect: () => {
+                    setFolderExpansionState(folderKeys, true);
+                    renderFileList();
+                },
+            },
+            { title: '-' },
+        );
+    }
+
+    menuItems.push(
+        {
+            title: 'Create new file...',
+            icon: CONTEXT_ICON_ADD,
+            onSelect: () => openNewFilePrompt({ location, name: pathPrefix }),
         },
         {
-            title: 'Expand Folders',
-            icon: 0xf0fe,
-            onSelect: () => {
-                setFolderExpansionState(folderKeys, true);
-                renderFileList();
-            },
+            title: 'Paste as new file...',
+            icon: CONTEXT_ICON_PASTE,
+            onSelect: () => void pasteAsNewFile(folderPath),
         },
-    ], x, y, title);
+    );
+
+    showNotesLocalMenu(menuItems, x, y, title);
 }
 
 /**
@@ -8389,6 +8913,7 @@ function openFolderTreeContextMenu(category, nodes, x, y, title = 'Folder action
  */
 function updateTabVisibility(fileType) {
     updateToolsTabVisibility(fileType);
+    updateGitDiffTabForCurrentFile();
 
     if (fileType === 'error') {
         elements.tabMeta.style.display = '';
@@ -9107,8 +9632,11 @@ function renderSwaggerUI() {
         ${endpointListHtml}
     `;
     
+    disableNativeTextAssistanceIn(elements.swaggerEndpoints);
+
     // Render request builder and response
     elements.swaggerRequestBuilder.innerHTML = generateRequestBuilderHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
+    disableNativeTextAssistanceIn(elements.swaggerRequestBuilder);
     elements.swaggerResponse.innerHTML = generateResponseHTML(state.swaggerSpec, state.swaggerSelectedEndpoint);
 
     // Render parameter descriptions using the same markdown pipeline as preview/info.
@@ -9405,13 +9933,16 @@ async function loadFile(file, options = {}) {
         return;
     }
 
+    if (activeGitDiff && !await closeNotesGitDiff()) {
+        return;
+    }
+
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
     }
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
     const keepFindTabOpen = Boolean(options?.keepFindTabOpen);
-    const switchingDocument = Boolean(state.currentFile && state.currentFile !== file);
 
     state.suspendDocumentCacheSave = true;
 
@@ -9427,10 +9958,6 @@ async function loadFile(file, options = {}) {
         clearVisibleLspDiagnostics();
     }
 
-    if (switchingDocument && !keepFindTabOpen) {
-        setToolsTab('find');
-    }
-
     const fileName = file ? getPathFileName(file) : 'json file';
     let stickyId = null;
 
@@ -9439,6 +9966,12 @@ async function loadFile(file, options = {}) {
 
         // Capture the current project context to prevent autosave issues if user switches projects
         state.currentFileProject = await GetCurrentProject();
+        const documentCachePromise = skipDocumentCacheRestore
+            ? Promise.resolve(null)
+            : GetDocumentCache(file).catch((error) => {
+                console.error('Failed to load document cache:', error);
+                return null;
+            });
 
         const loadingJsonByExtension = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
@@ -9453,6 +9986,7 @@ async function loadFile(file, options = {}) {
         }
 
         if (loadingImage) {
+            const documentCache = await documentCachePromise;
             state.currentFile = file;
             emitCurrentFileName();
             await refreshFileMetaMarkdown(file);
@@ -9462,6 +9996,7 @@ async function loadFile(file, options = {}) {
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
             updateTabVisibility('image');
+            applyDocumentCache(documentCache, 'image-view');
 
             // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
             // GetFile does. The asset handler then streams the file to the webview
@@ -9476,10 +10011,6 @@ async function loadFile(file, options = {}) {
             enableFullscreenImages(elements.imageViewWrap);
             enableImageContextMenus(elements.imageViewWrap);
 
-            setViewMode('image-view');
-            if (!skipDocumentCacheRestore) {
-                await restoreDocumentCache(file);
-            }
             state.suspendDocumentCacheSave = false;
             saveDocumentCache();
             setDirty(false);
@@ -9495,6 +10026,7 @@ async function loadFile(file, options = {}) {
         }*/
 
         const result = await GetFile(file);
+    const documentCache = await documentCachePromise;
 
         state.currentFile = file;
         state.currentFileUri = await resolveNotesFileUri(file);
@@ -9530,7 +10062,7 @@ async function loadFile(file, options = {}) {
                 fontSize: result.fontSize,
                 adjustCellHeight: result.adjustCellHeight,
             });
-            setViewMode('hex');
+            applyDocumentCache(documentCache, 'hex');
 
             if (stickyId) {
                 closeStickyProgress(stickyId);
@@ -9577,6 +10109,7 @@ async function loadFile(file, options = {}) {
             // Set editor content (use regular editor with line numbers for JSON/YAML)
             setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
+            applyDocumentCache(documentCache, 'swagger-edit');
 
             // Render JSON tree view
             updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
@@ -9594,9 +10127,9 @@ async function loadFile(file, options = {}) {
                 elements.swaggerRequestBuilder.innerHTML = '';
                 elements.swaggerEndpoints.innerHTML = '';
             }
-            
-            // Set default view mode to editor for JSON/YAML files
-            setViewMode('swagger-edit');
+            if (state.viewMode === 'swagger-view') {
+                renderSwaggerJsonViewLazy();
+            }
             closeStickyProgress(stickyId);
         } else if (loadingMarkdown) {
             state.currentFileType = 'markdown';
@@ -9613,13 +10146,11 @@ async function loadFile(file, options = {}) {
             // Set editor content
             setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
+            applyDocumentCache(documentCache, 'viewer');
 
             // Render markdown views
             await renderMarkdown();
             await renderJupyterView();
-
-            // Set default view mode to viewer
-            setViewMode('viewer');
         } else if (loadingHtml) {
             state.currentFileType = 'html';
             setCodeEditorMode(true);
@@ -9633,10 +10164,9 @@ async function loadFile(file, options = {}) {
             // Set editor content
             setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
+            applyDocumentCache(documentCache, 'viewer');
 
-            // Render sandboxed preview and default to View first.
-            renderHtmlView();
-            setViewMode('viewer');
+            // Selecting the cached/default view mode renders the sandboxed preview.
         } else if (loadingCsv) {
             state.currentFileType = 'csv';
             setCodeEditorMode(false);
@@ -9649,12 +10179,7 @@ async function loadFile(file, options = {}) {
 
             // Set editor content (raw text for Edit tab)
             setMainEditorValue(doc || '');
-
-            // Render table view
-            renderCsvView(doc || '');
-
-            // Default to the table view
-            setViewMode('csv-view');
+            applyDocumentCache(documentCache, 'csv-view');
         } else {
             state.currentFileType = 'code';
             setCodeEditorMode(true);
@@ -9668,9 +10193,7 @@ async function loadFile(file, options = {}) {
             // Set editor content
             setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
-            
-            // Set default view mode to editor
-            setViewMode('editor');
+            applyDocumentCache(documentCache, 'editor');
         }
         
         setDirty(false);
@@ -9683,16 +10206,13 @@ async function loadFile(file, options = {}) {
             closeFindBar();
         }
 
+        await refreshMainReservedWords(file);
         if (isCurrentFileLspEligible()) {
             await openCurrentLspDocument(elements.editor.value || '');
         }
 
         // Spellcheck via typos-lsp for eligible files (falls back to aspell).
         await openCurrentTyposDocument(elements.editor.value || '');
-
-        if (!skipDocumentCacheRestore) {
-            await restoreDocumentCache(file);
-        }
 
         notesSpellCheckHandle?.check();
         state.suspendDocumentCacheSave = false;
@@ -9712,22 +10232,29 @@ async function loadFile(file, options = {}) {
 async function saveFile() {
     if (!state.currentFile) {
         setStatus('Select a note before saving', true);
-        return;
+        return false;
     }
 
     try {
+        const file = state.currentFile;
         const content = getMainEditorValue();
         
         // Use the saved project context to prevent overwrites if user switched projects
-        await SaveFile(state.currentFile, content, state.currentFileProject || '');
+        await SaveFile(file, content, state.currentFileProject || '');
         if (state.lspOpenFile === state.currentFile && isCurrentFileLspEligible()) {
             await NotesLspSaveDocument(state.currentFile);
         }
+        if (state.currentFile === file && state.currentFileType === 'markdown' && state.viewMode === 'editor') {
+            applyDocumentFrontmatter();
+            refreshToolsToC();
+        }
         setDirty(false);
         maybeRefreshProjectFindAfterSave();
+        return true;
     } catch (err) {
         notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
         console.error(err);
+        return false;
     }
 }
 
@@ -9755,7 +10282,7 @@ function openDeletePrompt(file) {
     state.deleteConfirmAction = null;
     const fileName = getPathFileName(file);
     if (elements.deleteModalTitle) {
-        elements.deleteModalTitle.textContent = 'Delete note';
+        setMarkdownModalHeading(elements.deleteModalTitle, 'Delete note');
     }
     elements.deleteConfirm.textContent = 'Delete';
     elements.deleteModalBody.textContent = `Are you sure you want to delete "${fileName}"?`;
@@ -9772,7 +10299,7 @@ function openConfirmPrompt({ title = 'Confirm', body = 'Are you sure?', confirmL
     state.deletingFile = null;
     state.deleteConfirmAction = typeof onConfirm === 'function' ? onConfirm : null;
     if (elements.deleteModalTitle) {
-        elements.deleteModalTitle.textContent = title;
+        setMarkdownModalHeading(elements.deleteModalTitle, title);
     }
     elements.deleteConfirm.textContent = confirmLabel;
     elements.deleteModalBody.textContent = body;
@@ -9813,10 +10340,12 @@ async function confirmDelete() {
 
     const fileToDelete = state.deletingFile;
     const fileName = getPathFileName(fileToDelete);
+    const deletingCurrentFile = state.currentFile === fileToDelete;
     const fileUri = state.currentFile === fileToDelete
         ? state.currentFileUri
         : await resolveNotesFileUri(fileToDelete);
 
+    state.mutatingFile = fileToDelete;
     try {
         if (state.currentFile === fileToDelete) {
             await closeOpenLspDocument();
@@ -9841,10 +10370,21 @@ async function confirmDelete() {
         }
         closeDeletePrompt();
         await refreshFiles({ skipHistoryRestore: true });
+        if (deletingCurrentFile) {
+            const entry = await NotesHistoryCurrentPosition();
+            if (entry?.file && entry.file !== fileToDelete) {
+                await loadFile(entry.file);
+                setViewMode(editViewModeForCurrentFileType());
+                await ensureMonacoVisibleAndLaidOut();
+                jumpEditorToLine(entry.line);
+            }
+        }
         setStatus(`Deleted ${fileName}`, false);
     } catch (err) {
         notifyTerminal(`Failed to delete ${fileName}`, 'error');
         console.error(err);
+    } finally {
+        state.mutatingFile = '';
     }
 }
 
@@ -10458,7 +10998,7 @@ async function openProjectFindResult(item) {
         state.findFilesSelectedKey = `${file}:${Number.parseInt(String(item?.line), 10) || 1}`;
         renderProjectFindResults();
         renderFileList();
-        await NotesHistoryAdd(file);
+        await NotesHistoryAddPosition(file, Number.parseInt(String(item?.line), 10) || 1);
         await loadFile(file, {
             skipDocumentCacheRestore: true,
             keepFindTabOpen: true,
@@ -10559,7 +11099,7 @@ function buildFindPattern() {
 }
 
 function isMonacoFindProxyActive() {
-    return isMonacoActive() && state.viewMode === 'editor';
+    return isMonacoActive() && Boolean(getActiveFindEditor());
 }
 
 function buildMonacoFindRequest() {
@@ -10685,6 +11225,10 @@ function getActiveFindContainer() {
         return elements.jupyter;
     }
 
+    if (state.viewMode === 'csv-view' || state.viewMode === 'csv-run') {
+        return elements.csvView;
+    }
+
     if (state.viewMode === 'swagger-view') {
         return elements.swaggerView;
     }
@@ -10706,7 +11250,7 @@ function getActiveFindEditor() {
 
 function clearHighlights() {
     // Clear highlights in all rendered panes that support find.
-    [elements.preview, elements.jupyter, elements.swaggerView].forEach((container) => {
+    [elements.preview, elements.jupyter, elements.swaggerView, elements.csvView].forEach((container) => {
         if (!container) {
             return;
         }
@@ -10961,23 +11505,207 @@ function updateFindDocOptionButtons() {
     }
 }
 
-function openNewFilePrompt() {
+function openNewFilePrompt({ location = '$NOTES', name = '', pendingFile = null } = {}) {
     state.renamingFile = null;
+    state.pendingNewFile = pendingFile;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
-    elements.modalInput.value = '';
-    elements.modalLocation.textContent = '$NOTES';
+    elements.modalInput.value = name;
+    elements.modalLocation.textContent = location;
     elements.modalLocation.style.display = '';
-    elements.modal.querySelector('#notes-modal-title').textContent = 'New note name';
+    setNotesModalTitle('New note name', true);
     elements.modalCreate.textContent = 'Create';
     setTimeout(() => {
         elements.modalInput.focus();
     }, 0);
 }
 
-async function openRenamePrompt(file) {
+async function openCreateGitWorktreePrompt(projectRoot) {
+    let branches;
+    let defaultPath;
+    try {
+        [branches, defaultPath] = await Promise.all([
+            ListGitBranches(projectRoot),
+            GetDefaultGitWorktreePath(projectRoot),
+        ]);
+    } catch (error) {
+        notifyTerminal(String(error?.message || error), 'error');
+        return;
+    }
+
+    state.renamingFile = null;
+    state.pendingNewFile = null;
+    state.textPromptHandler = null;
+    const prompt = { branch: '', createBranch: false };
+    state.gitWorktreePrompt = prompt;
+    elements.modal.dataset.open = 'true';
+    elements.modal.setAttribute('aria-hidden', 'false');
+    elements.modal.querySelector('#notes-modal-card').classList.add('notes-worktree-dialog');
+    elements.modalLocationRow.style.display = 'none';
+    elements.modalBody.style.display = 'flex';
+    elements.modalBody.replaceChildren();
+    elements.modalInput.value = '';
+    setNotesModalTitle('Create new worktree', true);
+    elements.modalCreate.textContent = 'Create';
+
+    const form = document.createElement('div');
+    form.className = 'notes-worktree-form';
+    elements.modalBody.appendChild(form);
+
+    const branchField = notesGraphField('Branch');
+    const branchButton = document.createElement('button');
+    branchButton.type = 'button';
+    branchButton.className = 'notes-graph-dropdown';
+    prompt.branchButton = branchButton;
+    branchButton.textContent = 'Select branch';
+    branchField.field.appendChild(branchButton);
+    form.appendChild(branchField.field);
+
+    const pathField = notesGraphField('Path');
+    const pathInput = document.createElement('textarea');
+    pathInput.className = 'notes-worktree-path-input';
+    disableNativeTextAssistance(pathInput);
+    pathInput.rows = 2;
+    pathInput.wrap = 'soft';
+    pathInput.disabled = true;
+    pathInput.addEventListener('input', () => {
+        pathInput.value = pathInput.value.replace(/[\r\n]+/g, ' ');
+    });
+    pathInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void prompt.submit?.();
+        }
+    });
+    pathField.field.appendChild(pathInput);
+    form.appendChild(pathField.field);
+
+    const updateBranch = (branch, createBranch) => {
+        prompt.branch = branch;
+        prompt.createBranch = createBranch;
+        branchButton.textContent = `${branch || 'Select branch'}`;
+        const pathSeparator = defaultPath.includes('\\') ? '\\' : '/';
+        pathInput.value = branch
+            ? `${defaultPath.replace(/[\\/]+$/, '')}${pathSeparator}${branch.split('/').join(pathSeparator)}`
+            : '';
+        pathInput.disabled = !branch;
+        elements.modalCreate.disabled = !branch;
+    };
+
+    branchButton.addEventListener('click', () => {
+        const menuItems = [{
+            title: 'Create new branch',
+            icon: CONTEXT_ICON_ADD,
+            onSelect: async () => {
+                const branch = await openGitBranchPrompt();
+                if (!branch) {
+                    updateBranch('', false);
+                    return;
+                }
+                updateBranch(branch, true);
+            },
+        }, { title: '-', icon: 0 }];
+        menuItems.push(...[...branches].sort((left, right) => left.localeCompare(right)).map((branch) => ({
+            title: branch,
+            icon: prompt.branch === branch && !prompt.createBranch ? CONTEXT_ICON_TICK : 0,
+            onSelect: () => updateBranch(branch, false),
+        })));
+        const rect = branchButton.getBoundingClientRect();
+        showNotesLocalMenu(menuItems, rect.left, rect.bottom, 'Branch');
+    });
+
+    prompt.submit = async () => {
+        if (!prompt.branch) {
+            notifyTerminal('Select a branch for the new worktree.', 'error');
+            return;
+        }
+        const worktreePath = pathInput.value.trim();
+        if (!worktreePath) {
+            notifyTerminal('Enter a path for the new worktree.', 'error');
+            return;
+        }
+        const branch = prompt.branch;
+        const createBranch = prompt.createBranch;
+        finishGitWorktreePrompt();
+        void createNotesGitWorktree(projectRoot, branch, worktreePath, createBranch);
+    };
+
+    elements.modalCreate.disabled = true;
+    setTimeout(() => branchButton.focus(), 0);
+}
+
+async function createNotesGitWorktree(projectRoot, branch, worktreePath, createBranch) {
+    const stickyId = `git-worktree-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await openStickyProgress(stickyId, 'Creating worktree');
+    try {
+        const worktree = await CreateGitWorktree(projectRoot, branch, worktreePath, createBranch);
+        await switchNotesGitWorktree(projectRoot, worktree.path || worktreePath);
+        closeStickyProgress(stickyId);
+    } catch (error) {
+        closeStickyProgress(stickyId, String(error?.message || error), 'error');
+    }
+}
+
+async function switchNotesGitWorktree(projectRoot, worktreePath) {
+    window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
+    await SwitchGitWorktree(projectRoot, worktreePath);
+}
+
+function finishGitWorktreePrompt() {
+    if (!state.gitWorktreePrompt) {
+        return;
+    }
+    state.gitWorktreePrompt = null;
+    elements.modal.querySelector('#notes-modal-card').classList.remove('notes-worktree-dialog');
+    elements.modalBody.replaceChildren();
+    elements.modalBody.style.display = 'none';
+    elements.modalLocationRow.style.display = '';
+    elements.modalLocation.style.display = '';
+    elements.modalInput.placeholder = 'example-note';
+    elements.modal.dataset.open = 'false';
+    elements.modal.setAttribute('aria-hidden', 'true');
+    elements.modalCreate.disabled = false;
+    elements.modalCreate.textContent = 'Create';
+    setNotesModalTitle('New note name');
+}
+
+function openGitBranchPrompt() {
+    return new Promise((resolve) => {
+        state.gitBranchPromptHandler = resolve;
+        elements.modalBody.style.display = 'none';
+        elements.modalLocationRow.style.display = '';
+        elements.modalLocation.style.display = 'none';
+        elements.modalInput.value = '';
+        elements.modalInput.placeholder = 'branch-name';
+        setNotesModalTitle('Create branch', true);
+        elements.modalCreate.textContent = 'Create';
+        elements.modalCreate.disabled = false;
+        setTimeout(() => elements.modalInput.focus(), 0);
+    });
+}
+
+function finishGitBranchPrompt(value) {
+    if (!state.gitBranchPromptHandler) {
+        return;
+    }
+    const handler = state.gitBranchPromptHandler;
+    state.gitBranchPromptHandler = null;
+    elements.modalBody.style.display = 'flex';
+    elements.modalLocationRow.style.display = 'none';
+    elements.modalLocation.style.display = 'none';
+    elements.modalInput.value = '';
+    elements.modalInput.placeholder = 'example-note';
+    setNotesModalTitle('Create new worktree', true);
+    elements.modalCreate.textContent = 'Create';
+    handler(value);
+    setTimeout(() => state.gitWorktreePrompt?.branchButton?.focus(), 0);
+}
+
+async function openRenamePrompt(file, folder = false) {
     const source = String(file || '').trim();
     state.renamingFile = file;
+    state.renamingFolder = folder;
+    state.pendingNewFile = null;
     elements.modal.dataset.open = 'true';
     elements.modal.setAttribute('aria-hidden', 'false');
     let location = '$NOTES';
@@ -10996,7 +11724,7 @@ async function openRenamePrompt(file) {
     elements.modalLocation.textContent = location;
     elements.modalLocation.style.display = '';
     elements.modalInput.value = name;
-    elements.modal.querySelector('#notes-modal-title').textContent = 'Rename note';
+    setNotesModalTitle(folder ? 'Rename folder' : 'Rename note', true);
     elements.modalCreate.textContent = 'Rename';
     setTimeout(() => {
         elements.modalInput.focus();
@@ -11013,6 +11741,15 @@ function closeNewFilePrompt() {
         finishTextPrompt(null);
         return;
     }
+    if (state.gitBranchPromptHandler) {
+        finishGitBranchPrompt(null);
+        return;
+    }
+    if (state.gitWorktreePrompt) {
+        finishGitWorktreePrompt();
+        return;
+    }
+    state.pendingNewFile = null;
     elements.modal.dataset.open = 'false';
     elements.modal.setAttribute('aria-hidden', 'true');
 }
@@ -11029,7 +11766,7 @@ function openTextPrompt({ title = 'Enter value', value = '', confirmLabel = 'OK'
         elements.modalLocation.style.display = 'none';
         elements.modalInput.value = value;
         elements.modalInput.placeholder = placeholder;
-        elements.modal.querySelector('#notes-modal-title').textContent = title;
+        setNotesModalTitle(title);
         elements.modalCreate.textContent = confirmLabel;
         setTimeout(() => {
             elements.modalInput.focus();
@@ -11191,7 +11928,13 @@ function isRelativeMarkdownImagePath(imagePath) {
 function resolveRelativeAssetPath(notePath, relativePath) {
     const slash = notePath.lastIndexOf('/');
     const dir = slash === -1 ? '' : notePath.slice(0, slash + 1);
-    return `${dir}${relativePath}`;
+    let decodedPath = relativePath;
+    try {
+        decodedPath = decodeURIComponent(relativePath);
+    } catch {
+        // Keep malformed escapes literal so existing paths remain deletable.
+    }
+    return `${dir}${decodedPath}`;
 }
 
 function enableImageContextMenus(container) {
@@ -11209,6 +11952,7 @@ function enableImageContextMenus(container) {
             
             const src = img.src;
             if (!src) return;
+            const sectionHeading = getRenderedSectionHeading(container, img, e.clientY);
             
             // Use the original filename from the data attribute if available
             let filename = img.dataset.originalFilename || img.alt || 'Image';
@@ -11232,12 +11976,16 @@ function enableImageContextMenus(container) {
 
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...', ...(sectionHeading ? ['Collapse section'] : [])],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
-                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI],
+                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI, ...(sectionHeading ? [CONTEXT_ICON_COLLAPSE_ALL] : [])],
                 onSelect: async (index) => {
+                    if (index === 3 && sectionHeading) {
+                        collapseCollapsibleHeading(sectionHeading);
+                        return;
+                    }
                     let dataURLToCopy;
                     try {
                         dataURLToCopy = await resolveDataURL();
@@ -11268,55 +12016,6 @@ function copyTextToClipboard(text) {
     }
 
     ClipboardSetText(text).catch(() => {});
-}
-
-async function openFileListContextMenu(file, x, y) {
-    const menuItems = [];
-
-    let fileUrl = '';
-    const fileLabel = getPathFileName(file);
-    try {
-        const resolvedPath = await ResolveFilePath(file);
-        const normalized = String(resolvedPath || '').replaceAll('\\', '/');
-        if (normalized) {
-            if (/^[a-zA-Z]:\//.test(normalized)) {
-                fileUrl = `file:///${normalized}`;
-            } else {
-                fileUrl = `file://${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
-            }
-        }
-    } catch {
-        // Keep local actions available even if path resolution fails.
-    }
-
-    let goMenuItems = [];
-    if (fileUrl) {
-        try {
-            const resolvedMenuItems = await GetHyperlinkMenuActions(fileUrl, fileLabel || fileUrl);
-            goMenuItems = Array.isArray(resolvedMenuItems) ? resolvedMenuItems : [];
-        } catch {
-            setStatus('Failed to load file actions', true);
-        }
-    }
-
-    if (goMenuItems.length > 0) {
-        //menuItems.push({ title: '-', icon: 0 });
-
-        goMenuItems.forEach((item) => {
-            menuItems.push({
-                title: String(item?.title || ''),
-                icon: Number(item?.icon) || 0,
-                onSelect: () => {
-                    RunHyperlinkMenuAction(fileUrl, fileLabel || fileUrl, String(item?.action || ''))
-                        .catch(() => {
-                            setStatus('Failed to execute file action', true);
-                        });
-                },
-            });
-        });
-    }
-
-    showNotesLocalMenu(menuItems, x, y, getPathFileName(file) || 'File actions');
 }
 
 function getLinkTextFromAnchor(anchor) {
@@ -11517,7 +12216,16 @@ function ensureRenderedBlockCopyButton(block) {
             event.preventDefault();
             event.stopPropagation();
             try {
-                await SendToTerminal(getRenderedCopyBlockText(block));
+                const content = getRenderedCopyBlockText(block);
+                const code = block.querySelector('code');
+                const languageClass = Array.from(code?.classList || []).find((name) => name.startsWith('language-'));
+                const language = languageClass ? languageClass.slice('language-'.length) : hljs.highlightAuto(content)?.language || '';
+                const descriptions = language ? await GetLanguageDescriptions(language) : [];
+                const runtime = descriptions?.[0] || language;
+                if (!runtime) {
+                    throw new Error('Cannot determine the runtime; select one in Run mode');
+                }
+                await SendToTerminal(content, runtime);
                 window.dispatchEvent(new CustomEvent('ttyphoon-focus-terminal'));
                 terminalButton.dataset.sent = 'true';
                 setTimeout(() => {
@@ -11525,7 +12233,7 @@ function ensureRenderedBlockCopyButton(block) {
                 }, 700);
             } catch (err) {
                 console.error('Error sending to terminal:', err);
-                notifyTerminal('Failed to send to terminal', 'error');
+                notifyTerminal(`Failed to send to terminal: ${err}`, 'error');
             }
         });
         actions.appendChild(terminalButton);
@@ -11584,14 +12292,44 @@ function createFindMenuItem(title = 'Find text...') {
     };
 }
 
+function reportPrintError(error) {
+    console.error('Failed to print document', error);
+    notifyTerminal('Failed to print document', 'error');
+}
+
+async function renderPrintMarkdown(container, source) {
+    container.innerHTML = marked.parse(source);
+    await processMarkdownContainer(container);
+}
+
 function createPrintMenuItem(title = 'Print...') {
     return {
         title,
         icon: CONTEXT_ICON_PRINT,
         onSelect: () => {
-            WindowPrint();
+            void printCurrentDocument().catch(reportPrintError);
         },
     };
+}
+
+async function printCurrentDocument() {
+    const viewMode = state.viewMode;
+    const printMarkdown = viewMode === 'viewer' || viewMode === 'jupyter';
+    if (!printMarkdown && viewMode !== 'editor') {
+        discardPrintDocument();
+        closeSharedTooltip();
+        await WindowPrint();
+        return;
+    }
+    const file = splitCategoryPath(state.currentFile);
+    const filename = file.category === '$PROJECT' ? file.relativePath : getPathFileName(state.currentFile);
+    await printDocument({
+        source: printMarkdown ? parseFrontmatter(getMainEditorValue()).body : getMainEditorValue(),
+        filename: viewMode === 'editor' ? filename : '',
+        renderMarkdown: printMarkdown ? renderPrintMarkdown : null,
+        dismissMenu: closeSharedTooltip,
+        print: WindowPrint,
+    });
 }
 
 function getCurrentDocumentContentsForAI() {
@@ -11881,11 +12619,37 @@ async function jumpToAIPromptTarget(target) {
                 ? await ListAIStreamBlocks(target.sessionId, target.promptId)
                 : [];
             if (Array.isArray(blocks) && blocks.length > 0 && typeof GetAIStreamBlockContent === 'function') {
-                aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
-                    target.sessionId,
-                    target.promptId,
-                    String(block?.blockId || ''),
-                ));
+                const promptText = typeof GetAISessionPrompt === 'function'
+                    ? await GetAISessionPrompt(target.sessionId, target.promptId)
+                    : '';
+                const historicalBlocks = [...blocks];
+                const hasRequestBlock = historicalBlocks.some((block) => block?.kind === 'request');
+                const requestBlockId = `historical-request-${target.sessionId}-${target.promptId}`;
+                if (promptText && !hasRequestBlock) {
+                    historicalBlocks.unshift({
+                        sessionId: target.sessionId,
+                        promptId: target.promptId,
+                        runId: Number(blocks[0]?.runId) || 0,
+                        blockId: requestBlockId,
+                        parentId: '',
+                        kind: 'request',
+                        label: 'Prompt',
+                        ordinal: Math.min(0, Number(blocks[0]?.ordinal) - 1 || -1),
+                        status: 'closed',
+                        size: promptText.length,
+                        historyPrompt: true,
+                    });
+                }
+                aiPipelineFormatter.setBlocks(historicalBlocks.map((block) => ({ ...block, userPrompt: promptText })), (block) => {
+                    if (block?.historyPrompt) {
+                        return `## Prompt\n\n${promptText}`;
+                    }
+                    return GetAIStreamBlockContent(
+                        target.sessionId,
+                        target.promptId,
+                        String(block?.blockId || ''),
+                    );
+                });
             } else {
                 const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
                 aiPipelineFormatter.clear();
@@ -11936,6 +12700,91 @@ function openAIPromptJumpMenu() {
             }
             void jumpToAIPromptTarget(menuTargets[index]);
         },
+    });
+}
+
+function activateAISession(sessionId) {
+    const id = Number(sessionId) || 0;
+    if (id <= 0) {
+        return;
+    }
+
+    SetActiveAISession(id).then((sessionState) => {
+        applyAISessionManagement(sessionState);
+        renderAISessionManagement();
+        void loadAISessionCache('');
+    }).catch((err) => {
+        notifyTerminal('Failed to switch AI session', 'error');
+        console.error(err);
+    });
+}
+
+async function createNewAISession() {
+    const summary = await openTextPrompt({
+        title: 'New AI session',
+        confirmLabel: 'Create',
+        placeholder: 'Optional session name',
+    });
+    if (summary === null) {
+        return;
+    }
+
+    CreateAISession(summary).then((sessionState) => {
+        applyAISessionManagement(sessionState);
+        renderAISessionManagement();
+        void loadAISessionCache('');
+        notifyTerminal('AI session created', 'info');
+    }).catch((err) => {
+        notifyTerminal('Failed to create AI session', 'error');
+        console.error(err);
+    });
+}
+
+async function openAISessionMenu() {
+    if (!elements.toolsAISession) {
+        return;
+    }
+
+    try {
+        applyAISessionManagement(await GetAISessionManagement());
+    } catch (err) {
+        notifyTerminal('Failed to load AI sessions', 'error');
+        console.error(err);
+        return;
+    }
+
+    const sessions = Array.isArray(state.aiSessionManagement?.sessions)
+        ? state.aiSessionManagement.sessions
+        : [];
+    const items = [{
+        title: 'New session',
+        icon: CONTEXT_ICON_ADD,
+        onSelect: createNewAISession,
+    }];
+
+    if (sessions.length > 0) {
+        items.push({ title: '-', icon: 0 });
+    }
+
+    items.push(...sessions.map((session) => {
+        const sessionId = Number(session?.tableId) || 0;
+        const isActive = session?.active === true || sessionId === state.aiSessionManagement.activeSessionId;
+        return {
+            title: String(session?.summary || `Session ${sessionId}`),
+            icon: isActive ? CONTEXT_ICON_TICK : 0,
+            onSelect: () => activateAISession(sessionId),
+        };
+    }));
+
+    const rect = elements.toolsAISession.getBoundingClientRect();
+    showLocalMenu({
+        title: 'Sessions',
+        options: items.map((item) => item.title),
+        icons: items.map((item) => item.icon),
+        x: rect.left,
+        y: rect.bottom,
+        showNextToMouseCursor: true,
+        onSelect: (index) => items[index]?.onSelect?.(),
     });
 }
 
@@ -12065,15 +12914,23 @@ function renderAIToolsList() {
         return;
     }
 
-    const tools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
-    if (tools.length === 0) {
+    const allTools = Array.isArray(state.aiToolsList) ? state.aiToolsList : [];
+    if (allTools.length === 0) {
         elements.aiSettingsToolsList.textContent = 'No tools available.';
         elements.aiSettingsToolsList.dataset.empty = 'true';
         return;
     }
 
+    const query = String(elements.aiSettingsToolsFilter?.value || '').trim().toLowerCase();
+    const tools = allTools.map((tool, index) => ({ tool, index }))
+        .filter(({ tool }) => `${tool.name || ''}\n${tool.description || ''}`.toLowerCase().includes(query));
+    if (tools.length === 0) {
+        elements.aiSettingsToolsList.textContent = 'No tools match this filter.';
+        elements.aiSettingsToolsList.dataset.empty = 'true';
+        return;
+    }
     elements.aiSettingsToolsList.dataset.empty = 'false';
-    const items = tools.map((tool, index) => {
+    const items = tools.map(({ tool, index }) => {
         const safeName = escapeHtml(tool.name || 'Unknown tool');
         const toolState = String(tool.state || (tool.enabled === true ? 'always' : 'disabled'));
         const state = toolStateDisplay(toolState);
@@ -12127,15 +12984,23 @@ function renderAIMcpServersList() {
         return;
     }
 
-    const servers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
-    if (servers.length === 0) {
+    const allServers = Array.isArray(state.aiMcpServersList) ? state.aiMcpServersList : [];
+    if (allServers.length === 0) {
         elements.aiSettingsMcpList.textContent = 'No MCP servers found in config.';
         elements.aiSettingsMcpList.dataset.empty = 'true';
         return;
     }
 
+    const query = String(elements.aiSettingsMcpFilter?.value || '').trim().toLowerCase();
+    const servers = allServers.map((server, index) => ({ server, index }))
+        .filter(({ server }) => `${getMcpServerDisplayName(server)}\n${server.source || ''}`.toLowerCase().includes(query));
+    if (servers.length === 0) {
+        elements.aiSettingsMcpList.textContent = 'No MCP servers match this filter.';
+        elements.aiSettingsMcpList.dataset.empty = 'true';
+        return;
+    }
     elements.aiSettingsMcpList.dataset.empty = 'false';
-    const items = servers.map((server, index) => {
+    const items = servers.map(({ server, index }) => {
         const safeName = escapeHtml(getMcpServerDisplayName(server));
         const safeKey = escapeHtml(String(server.key || ''));
         const checked = server.loaded === true;
@@ -12408,17 +13273,24 @@ function showNotesLocalMenu(menuItems, x, y, title = 'Select an action', onHighl
     });
 }
 
-function extractTableData(table) {
+function extractTableData(table, options = {}) {
     const getCellContent = (cell) => {
-        // Try to get content from the wrapped span (excludes cell refs)
-        const wrap = cell.querySelector('.notes-table-cell-wrap > span:first-child');
-        if (wrap) return String(wrap.textContent || '').trim();
-        // Otherwise exclude sort icons and cell refs from childNodes
-        return Array.from(cell.childNodes)
-            .filter(n => !n.classList?.contains('notes-sort-icon') && !n.classList?.contains('notes-cellref'))
-            .map(n => n.textContent)
-            .join('')
-            .trim();
+        const source = cell.querySelector('.notes-table-cell-wrap > span:first-child') || cell;
+        const clone = source.cloneNode(true);
+        clone.querySelectorAll('.notes-sort-icon, .notes-table-col-resize-handle, .notes-cellref').forEach((node) => node.remove());
+
+        const breaks = [];
+        clone.querySelectorAll('br').forEach((lineBreak, index) => {
+            const marker = `\uE000NOTES_BR_${index}\uE001`;
+            breaks.push(marker);
+            lineBreak.replaceWith(document.createTextNode(marker));
+        });
+
+        let text = String(clone.textContent || '').trim();
+        breaks.forEach((marker) => {
+            text = text.replaceAll(marker, options.preserveBreakTags ? '<br/>' : '\n');
+        });
+        return text;
     };
 
     const rows = [];
@@ -12426,7 +13298,7 @@ function extractTableData(table) {
     if (headerRow) {
         rows.push(Array.from(headerRow.querySelectorAll('th, td')).map(cell => getCellContent(cell)));
     }
-    Array.from(table.querySelectorAll('tbody tr')).forEach(tr => {
+    Array.from(table.querySelectorAll('tbody tr:not(.notes-table-row-filtered)')).forEach(tr => {
         rows.push(Array.from(tr.querySelectorAll('td, th')).map(cell => getCellContent(cell)));
     });
     return rows;
@@ -12434,6 +13306,10 @@ function extractTableData(table) {
 
 function tableDataToCsv(rows) {
     return (rows || []).map(row => (row || []).map(field => escapeCsvField(field)).join(',')).join('\n');
+}
+
+function tableDataToTabSeparatedText(rows) {
+    return (rows || []).map(row => `${(row || []).join('\t')}\n`).join('');
 }
 
 function tableDataToMarkdown(rows) {
@@ -12444,6 +13320,58 @@ function tableDataToMarkdown(rows) {
     const separatorLine = `| ${header.map(() => '---').join(' | ')} |`;
     const bodyLines = body.map(row => `| ${row.join(' | ')} |`);
     return [headerLine, separatorLine, ...bodyLines].join('\n');
+}
+
+function escapeRtfText(value) {
+    let escaped = '';
+    const text = String(value || '').replace(/\r\n?/g, '\n');
+    for (let index = 0; index < text.length; index++) {
+        const character = text[index];
+        const code = text.charCodeAt(index);
+        if (character === '\\' || character === '{' || character === '}') {
+            escaped += `\\${character}`;
+        } else if (character === '\n') {
+            escaped += '\\line ';
+        } else if (character === '\t') {
+            escaped += '\\tab ';
+        } else if (code >= 128) {
+            escaped += `\\u${code > 32767 ? code - 65536 : code}?`;
+        } else if (code >= 32) {
+            escaped += character;
+        }
+    }
+    return escaped;
+}
+
+function tableDataToRtf(rows) {
+    const columns = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
+    const cellWidth = Math.max(1, Math.floor(9000 / Math.max(1, columns)));
+    const boundaries = Array.from({ length: columns }, (_, column) => `\\cellx${(column + 1) * cellWidth}`).join('');
+    const body = rows.map((row, index) => {
+        const cells = Array.from({ length: columns }, (_, column) => {
+            const text = escapeRtfText(row[column] || '');
+            return `\\pard\\intbl ${index === 0 ? `\\b ${text}\\b0` : text}\\cell `;
+        }).join('');
+        return `\\trowd\\trgaph108\\trleft0${index === 0 ? '\\trhdr' : ''}${boundaries}\n${cells}\\row\n`;
+    }).join('');
+    return `{\\rtf1\\ansi\\ansicpg1252\\deff0\\uc1{\\fonttbl{\\f0\\fswiss Helvetica;}}\\f0\\fs20\n${body}\\pard\n}`;
+}
+
+function tableDataToHtml(table) {
+    const copy = table.cloneNode(true);
+    copy.querySelectorAll('tbody tr.notes-table-row-filtered').forEach((row) => row.remove());
+    copy.querySelectorAll('.notes-sort-icon, .notes-table-col-resize-handle, .notes-cellref').forEach((node) => node.remove());
+    copy.querySelectorAll('.notes-table-cell-wrap').forEach((wrap) => {
+        const content = wrap.querySelector(':scope > span:first-child');
+        if (content) {
+            wrap.replaceWith(...Array.from(content.childNodes));
+        }
+    });
+    copy.querySelectorAll('[contenteditable], [data-formula]').forEach((node) => {
+        node.removeAttribute('contenteditable');
+        node.removeAttribute('data-formula');
+    });
+    return copy.outerHTML;
 }
 
 function createTableCopyMenuItems(table) {
@@ -12460,71 +13388,21 @@ function createTableCopyMenuItems(table) {
             title: 'Copy table (Markdown)',
             icon: CONTEXT_ICON_COPY,
             onSelect: () => {
-                const data = extractTableData(table);
+                const data = extractTableData(table, { preserveBreakTags: true });
                 copyTextToClipboard(tableDataToMarkdown(data));
             },
         },
+        {
+            title: 'Copy table (Formatted)',
+            icon: CONTEXT_ICON_COPY,
+            onSelect: () => {
+                const data = extractTableData(table);
+                ClipboardSetFormatted(tableDataToHtml(table), tableDataToRtf(data), tableDataToTabSeparatedText(data)).catch((err) => {
+                    notifyTerminal(`Failed to copy formatted table: ${err}`, 'error');
+                });
+            },
+        },
     ];
-}
-
-function highlightTableRow(table, rowIndex, isHighlighted) {
-    const rows = table.querySelectorAll('tr');
-    if (rowIndex < 0 || rowIndex >= rows.length) return;
-    const row = rows[rowIndex];
-    if (isHighlighted) {
-        row.style.backgroundColor = 'var(--accent)';
-        row.style.color = 'var(--bg)';
-    } else {
-        row.style.backgroundColor = '';
-        row.style.color = '';
-    }
-}
-
-function highlightTableColumn(table, colIndex, isHighlighted) {
-    table.querySelectorAll('tr').forEach(row => {
-        const cell = row.children[colIndex];
-        if (cell) {
-            if (isHighlighted) {
-                cell.style.backgroundColor = 'var(--accent)';
-                cell.style.color = 'var(--bg)';
-            } else {
-                cell.style.backgroundColor = '';
-                cell.style.color = '';
-            }
-        }
-    });
-}
-
-function clearTableHighlight(table) {
-    table.querySelectorAll('tr').forEach(r => {
-        r.style.backgroundColor = '';
-        r.style.color = '';
-        r.querySelectorAll('td, th').forEach(c => {
-            c.style.backgroundColor = '';
-            c.style.color = '';
-        });
-    });
-}
-
-function highlightEntireTable(table, isHighlighted) {
-    table.querySelectorAll('tr').forEach(row => {
-        if (isHighlighted) {
-            row.style.backgroundColor = 'var(--accent)';
-            row.style.color = 'var(--bg)';
-        } else {
-            row.style.backgroundColor = '';
-            row.style.color = '';
-        }
-        row.querySelectorAll('td, th').forEach(cell => {
-            if (isHighlighted) {
-                cell.style.backgroundColor = 'var(--accent)';
-                cell.style.color = 'var(--bg)';
-            } else {
-                cell.style.backgroundColor = '';
-                cell.style.color = '';
-            }
-        });
-    });
 }
 
 function getCellPosition(target, table) {
@@ -12672,6 +13550,7 @@ function initAIOutputContextMenu(container) {
         const aiBlock = e.target instanceof Element ? e.target.closest('[data-block-kind]') : null;
         const isFinalAIResponse = aiBlock?.dataset.blockKind === 'text'
             && aiBlock?.dataset.blockStatus === 'closed';
+        const copyRoot = e.target instanceof Element ? e.target.closest('.notes-ai-job') : null;
         const tableItems = table && container.contains(table)
             ? [
                 ...createTableCopyMenuItems(table),
@@ -12703,9 +13582,26 @@ function initAIOutputContextMenu(container) {
                 { title: '-' },
             ]
             : [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
                 { title: '-' },
             ];
+        copyItems.splice(copyItems.length - 1, 0,
+            {
+                title: 'Copy prompt',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: async () => {
+                    copyTextToClipboard(await aiPipelineFormatter.promptMarkdown(copyRoot || undefined));
+                },
+            },
+            {
+                title: 'Copy response',
+                icon: CONTEXT_ICON_COPY,
+                onSelect: async () => {
+                    const root = copyRoot || Array.from(container.querySelectorAll('.notes-ai-job')).at(-1);
+                    copyTextToClipboard(await aiPipelineFormatter.outputMarkdown(root));
+                },
+            },
+        );
         const codeSaveItems = codeBlockText && isFinalAIResponse
             ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
             : [];
@@ -12715,25 +13611,28 @@ function initAIOutputContextMenu(container) {
             ...codeSaveItems,
             ...tableItems,
             ...wordWrapItems,
+            {
+                title: 'Print...',
+                icon: CONTEXT_ICON_PRINT,
+                onSelect: () => {
+                    void (async () => {
+                        const source = await aiPipelineFormatter.outputMarkdown();
+                        if (!source.trim()) {
+                            notifyTerminal('No AI output to print', 'info');
+                            return;
+                        }
+                        await printDocument({
+                            source,
+                            renderMarkdown: renderPrintMarkdown,
+                            dismissMenu: closeSharedTooltip,
+                            print: WindowPrint,
+                        });
+                    })().catch(reportPrintError);
+                },
+            },
         ];
 
-        let highlightCallback = null;
-        let cancelCallback = null;
-        if (table && container.contains(table)) {
-            highlightCallback = (itemIndex) => {
-                const item = menuItems[itemIndex];
-                if (!item) {
-                    return;
-                }
-                clearTableHighlight(table);
-                if (item.title === 'Clear sorting' || item.title.startsWith('SQL filter') || item.title.toLowerCase().includes('copy table') || item.title.toLowerCase().includes('word wrap table')) {
-                    highlightEntireTable(table, true);
-                }
-            };
-            cancelCallback = () => clearTableHighlight(table);
-        }
-
-        showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
+        showNotesLocalMenu(menuItems, e.clientX, e.clientY);
     });
 }
 
@@ -12827,9 +13726,31 @@ function initRenderedNotesContextMenu(container, viewMode) {
 
     initRenderedBlockCopyButtons(container);
 
+    container.addEventListener('dblclick', (e) => {
+        if (viewMode !== 'jupyter' || state.viewMode !== 'jupyter' || state.currentFileType !== 'markdown') {
+            return;
+        }
+        const block = e.target instanceof Element
+            ? e.target.closest('[data-run-markdown-source-start]')
+            : null;
+        if (!block || !container.contains(block)) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        beginMarkdownRunBlockEdit(container, block);
+    });
+
     container.addEventListener('contextmenu', (e) => {
+        const sectionHeading = getRenderedSectionHeading(container, e.target, e.clientY);
+        const runMarkdownBlock = viewMode === 'jupyter'
+            && state.currentFileType === 'markdown'
+            && container === elements.jupyter
+            && e.target instanceof Element
+            ? e.target.closest('[data-run-markdown-source-start]')
+            : null;
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
-        if (anchor && container.contains(anchor)) {
+        if (anchor && container.contains(anchor) && !runMarkdownBlock && !sectionHeading) {
             e.preventDefault();
             e.stopPropagation();
             openHyperlinkContextMenu(anchor);
@@ -12882,6 +13803,13 @@ function initRenderedNotesContextMenu(container, viewMode) {
                 createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
                 { title: '-' },
             ];
+        const editMarkdownItems = runMarkdownBlock
+            ? [{
+                title: 'Edit',
+                icon: CONTEXT_ICON_EDIT,
+                onSelect: () => beginMarkdownRunBlockEdit(container, runMarkdownBlock),
+            }, { title: '-' }]
+            : [];
         const codeSaveItems = codeBlockText && viewMode === 'viewer'
             ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
             : [];
@@ -12889,6 +13817,9 @@ function initRenderedNotesContextMenu(container, viewMode) {
         const allMenuItems = [
             ...copyItems,
             ...codeSaveItems,
+            ...editMarkdownItems,
+            ...(sectionHeading ? [createCollapseSectionMenuItem(sectionHeading), { title: '-' }] : []),
+            ...(anchor ? [{ title: 'Link actions', onSelect: () => openHyperlinkContextMenu(anchor) }, { title: '-' }] : []),
             ...tableItems,
             ...wordWrapItems,
             ...insertItems,
@@ -12897,44 +13828,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
             createPrintMenuItem('Print'),
         ];
 
-        // Set up highlight callback for table row/column items if table exists
-        let highlightCallback = null;
-        let cancelCallback = null;
-        if (table) {
-            if (isRunMode) {
-                const pos = getCellPosition(e.target, table);
-                if (pos) {
-                    highlightCallback = (itemIndex) => {
-                        const item = allMenuItems[itemIndex];
-                        if (!item) return;
-                        // Unhighlight all first
-                        clearTableHighlight(table);
-                        // Highlight based on item title
-                        if (item.title === 'Clear sorting' || item.title.startsWith('SQL filter') || item.title.toLowerCase().includes('copy table')) {
-                            highlightEntireTable(table, true);
-                        } else if (item.title.includes('row') && !item.title.includes('column')) {
-                            highlightTableRow(table, pos.row, true);
-                        } else if (item.title.includes('column')) {
-                            highlightTableColumn(table, pos.col, true);
-                        }
-                    };
-                    cancelCallback = () => clearTableHighlight(table);
-                }
-            } else {
-                // Enable highlight for copy table items even when not in Run mode
-                highlightCallback = (itemIndex) => {
-                    const item = allMenuItems[itemIndex];
-                    if (!item) return;
-                    clearTableHighlight(table);
-                    if (item.title === 'Clear sorting' || item.title.startsWith('SQL filter') || item.title.toLowerCase().includes('copy table')) {
-                        highlightEntireTable(table, true);
-                    }
-                };
-                cancelCallback = () => clearTableHighlight(table);
-            }
-        }
-
-        showNotesLocalMenu(allMenuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
+        showNotesLocalMenu(allMenuItems, e.clientX, e.clientY);
     });
 }
 
@@ -13128,6 +14022,14 @@ async function createNewFile() {
         finishTextPrompt((elements.modalInput.value || '').trim());
         return;
     }
+    if (state.gitBranchPromptHandler) {
+        finishGitBranchPrompt((elements.modalInput.value || '').trim());
+        return;
+    }
+    if (state.gitWorktreePrompt) {
+        void state.gitWorktreePrompt.submit?.();
+        return;
+    }
 
     // Handle rename operation
     if (state.renamingFile) {
@@ -13142,17 +14044,34 @@ async function createNewFile() {
             ? await ComposeNoteLocationPath((elements.modalLocation.textContent || '$NOTES').trim(), name)
             : name;
 
+        const oldPath = state.renamingFile;
+        const oldPrefix = `${oldPath}${PRIMARY_PATH_SEPARATOR}`;
+        const renamingCurrent = state.currentFile === oldPath
+            || (state.renamingFolder && state.currentFile.startsWith(oldPrefix));
+        const renamedCurrent = renamingCurrent ? fileName + state.currentFile.slice(oldPath.length) : '';
+        state.mutatingFile = renamingCurrent ? state.currentFile : oldPath;
         try {
-            await RenameFile(state.renamingFile, fileName);
-            await refreshFiles({ skipHistoryRestore: true });
-            if (state.currentFile === state.renamingFile) {
-                await loadFile(fileName);
+            await RenameFile(oldPath, fileName);
+            if (state.renamingFolder) {
+                for (const key of Object.keys(state.expandedFolders)) {
+                    if (key === oldPath || key.startsWith(oldPrefix)) {
+                        state.expandedFolders[fileName + key.slice(oldPath.length)] = state.expandedFolders[key];
+                        delete state.expandedFolders[key];
+                    }
+                }
+                saveProjectCache();
             }
+            if (renamingCurrent) {
+                await loadFile(renamedCurrent);
+            }
+            await refreshFiles({ skipHistoryRestore: true });
             closeNewFilePrompt();
             setStatus(`Renamed to ${fileName}`, false);
         } catch (err) {
-            notifyTerminal(`Failed to rename file: ${err}`, 'error');
+            notifyTerminal(`Failed to rename ${state.renamingFolder ? 'folder' : 'file'}: ${err}`, 'error');
             console.error(err);
+        } finally {
+            state.mutatingFile = '';
         }
         return;
     }
@@ -13172,14 +14091,21 @@ async function createNewFile() {
     if (exists) {
         closeNewFilePrompt();
         await loadFile(fileName);
+        addHistoryPosition(fileName);
         notifyTerminal(`${fileName} already exists`, 'warn');
         return;
     }
 
     try {
-        await SaveFile(fileName, '', '');
+        const pendingFile = state.pendingNewFile;
+        if (pendingFile?.imageBase64) {
+            await SaveBinaryFile(fileName, pendingFile.imageBase64);
+        } else {
+            await SaveFile(fileName, pendingFile?.text || '', '');
+        }
         await refreshFiles();
         await loadFile(fileName);
+        addHistoryPosition(fileName);
         setViewMode('editor');
         closeNewFilePrompt();
         setStatus(`Created ${fileName}`, false);
@@ -13200,6 +14126,7 @@ async function createAndOpenFile(filename, contents) {
         await SaveFile(fileName, contents || '', '');
         await refreshFiles();
         await loadFile(fileName);
+        addHistoryPosition(fileName);
         //setViewMode('editor');
         setViewMode('viewer');
         setStatus(`Created ${fileName}`, false);
@@ -13238,14 +14165,46 @@ EventsOn("notesCreateAndOpen", params => {
     createAndOpenFile(params.filename, params.contents);
 });
 
-EventsOn("notesUpdate", () => {
-    CancelNotesListFiles().catch(() => {}).finally(() => {
-        refreshFiles();
+EventsOn("notesContextChanged", (context) => {
+    if (!context || typeof context !== 'object') return;
+    if (activeGitDiff && context.projectRoot !== activeGitDiff.root) {
+        closeNotesGitDiff();
+    }
+    if (requestedFileContext && ['projectRoot', 'globalNotes', 'userNotes', 'groupName']
+        .every((field) => context[field] === requestedFileContext[field])) return;
+    void refreshFiles({ context });
+});
+
+EventsOn('notesFileIndexChanged', (event) => {
+    if (!event?.root || !requestedFileContext) return;
+    const root = normalizeFileIndexRoot(event.root);
+    if (!['projectRoot', 'globalNotes', 'userNotes'].some((field) =>
+        normalizeFileIndexRoot(requestedFileContext[field]) === root)) return;
+    const snapshot = fileIndexRoots.get(root);
+    if (snapshot && event.revision <= snapshot.revision) return;
+    if (fileListRefreshInFlight > 0 || !snapshot || !event.state || event.baseVersion !== snapshot.version
+        || event.version < snapshot.version || event.version > snapshot.version + 1) {
+        queueFileIndexRefresh();
+        return;
+    }
+    const files = new Set(snapshot.files || []);
+    for (const path of event.removed || []) files.delete(path);
+    for (const path of event.added || []) files.add(path);
+    fileIndexRoots.set(root, {
+        root: event.root, files: Array.from(files).sort(), version: event.version,
+        revision: event.revision, state: event.state, stale: event.stale,
+        truncated: event.truncated, error: event.error,
     });
+    renderFileIndexStatus(indexedFileStatus(fileIndexRoots));
+    if (event.version !== snapshot.version) {
+        fileListRefreshSequence++;
+        state.files = indexedFileList(requestedFileContext, fileIndexRoots);
+        void applyFileFilter();
+    }
 });
 
 EventsOn("notesFileChanged", async () => {
-    if (!state.currentFile) {
+    if (!state.currentFile || state.currentFile === state.mutatingFile) {
         return;
     }
 
@@ -13381,6 +14340,8 @@ EventsOn("noteComplete", (data) => {
 function setToolsPanelCollapsed(collapsed) {
     const isCollapsed = collapsed === true;
     elements.toolsPanel.dataset.collapsed = isCollapsed ? 'true' : 'false';
+    notesGitPanel?.setWatchActive(!isCollapsed && elements.toolsTabGit?.getAttribute('aria-selected') === 'true');
+    window.dispatchEvent(new CustomEvent('ttyphoon-notes-layout'));
     if (elements.toolsRestore) {
         elements.toolsRestore.style.display = isCollapsed ? 'inline-flex' : 'none';
     }
@@ -13425,6 +14386,8 @@ function setToolsTab(tabName) {
         const isActive = pane.dataset.tab === nextTab;
         pane.dataset.active = isActive ? 'true' : 'false';
     }
+
+    notesGitPanel?.setWatchActive(nextTab === 'git' && elements.toolsPanel?.dataset.collapsed !== 'true');
 
     if (nextTab === 'ai' && state.aiStickToBottom) {
         // Switching to AI can reveal previously hidden content; scroll after layout.
@@ -13487,6 +14450,8 @@ function startAIJob(title) {
 }
 
 let aiActiveRunId = null;
+let aiCompletionRevealVersion = 0;
+let aiCompletionRevealPending = false;
 
 // Tells Go whether the panel is following live output; guarded so stale
 // generated bindings can't throw.
@@ -13503,6 +14468,8 @@ function setAIPanelLive(live) {
 }
 
 function startAIStreamJob(payload) {
+    aiCompletionRevealVersion++;
+    aiCompletionRevealPending = false;
     // A new job always follows live output, whichever surface triggered it.
     setAIPanelLive(true);
 
@@ -13512,9 +14479,33 @@ function startAIStreamJob(payload) {
     void refreshAIPromptJumpFromBackend();
 }
 
-function finishAIJob() {
-    aiPipelineFormatter.finishJob();
-    void refreshAIPromptJumpFromBackend();
+async function finishAIJob() {
+    const following = state.aiStickToBottom && state.aiPanelLive;
+    const runId = aiActiveRunId;
+    const version = ++aiCompletionRevealVersion;
+    aiCompletionRevealPending = following;
+    if (following) {
+        state.aiStickToBottom = false;
+        clearAIBottomScrollRetries();
+    }
+    try {
+        await aiPipelineFormatter.finishJob({ scrollToBottom: false });
+        if (version !== aiCompletionRevealVersion || runId !== aiActiveRunId || !following || !state.aiPanelLive) return;
+        const response = aiPipelineFormatter.finalResponseElement();
+        if (response) {
+            const output = elements.aiOutput;
+            output.scrollTop = Math.max(0, output.scrollTop + response.getBoundingClientRect().top
+                - output.getBoundingClientRect().top - output.clientTop);
+        } else {
+            state.aiStickToBottom = true;
+        }
+    } catch (err) {
+        console.error('Failed to finalize AI output:', err);
+    } finally {
+        if (version === aiCompletionRevealVersion) aiCompletionRevealPending = false;
+        updateAIScrollBottomButton();
+        void refreshAIPromptJumpFromBackend();
+    }
 }
 
 function setAIFinalOutput(text, options = {}) {
@@ -13589,6 +14580,8 @@ function scheduleAIStreamScrollToBottom() {
 }
 
 function requestAIScrollToBottom() {
+    aiCompletionRevealVersion++;
+    aiCompletionRevealPending = false;
     if (!elements.aiOutput) {
         return;
     }
@@ -13612,13 +14605,11 @@ function requestAIScrollToBottom() {
 }
 
 function scrollAIOutputToBottom() {
-    if (!elements.aiOutput) {
+    if (!elements.aiOutput || !state.aiStickToBottom) {
         return;
     }
 
     const output = elements.aiOutput;
-    state.aiStickToBottom = true;
-
     // Streaming calls this once per chunk. Extend the deadline of the chase
     // that's already in flight instead of starting another: overlapping rAF
     // loops would each force a layout every frame and stall the main thread.
@@ -13762,15 +14753,13 @@ const aiPipelineFormatter = createAIPipelineFormatter(elements.aiOutput, {
 // Event emitted by Go when an AI job begins (before first chunk)
 EventsOn("aiJobStart", (title) => {
     startAIStreamJob(title);
-    setToolsTab('ai');
-    if (elements.toolsPanel.dataset.collapsed === 'true') {
-        toggleToolsPanel();
-    }
 });
 
 // Event emitted by Go when an AI job finishes
 EventsOn("aiJobFinish", (payload) => {
-    finishAIJob();
+    const runId = Number(payload?.runId);
+    if (Number.isSafeInteger(runId) && runId > 0 && runId !== aiActiveRunId) return;
+    void finishAIJob();
 });
 
 EventsOn("aiStreamBlock", (payload) => {
@@ -13827,8 +14816,40 @@ document.addEventListener('ttyphoon-ai-prompt', async (e) => {
     }
 });
 
+function markAIToolPermissionResolved(requestId, decision, anchor) {
+    if (!elements.aiOutput) {
+        return;
+    }
+    for (const link of elements.aiOutput.querySelectorAll('a[href^="ttyphoon://ai-tool-permission"]')) {
+        const href = link.getAttribute('href') || '';
+        const query = href.includes('?') ? href.slice(href.indexOf('?') + 1) : '';
+        const params = new URLSearchParams(query);
+        if (params.get('request') !== requestId) {
+            continue;
+        }
+        link.classList.add('ai-tool-permission-resolved');
+        link.removeAttribute('href');
+        if (link === anchor || params.get('decision') === decision) {
+            link.classList.add('ai-tool-permission-chosen');
+        }
+    }
+}
+
+EventsOn('aiToolPermissionResolved', (payload) => {
+    const requestId = String(payload?.requestId || '');
+    const decision = String(payload?.decision || '');
+    if (requestId && decision) {
+        markAIToolPermissionResolved(requestId, decision, null);
+    }
+});
+
+EventsOn('aiToolPermissionResolutionError', (payload) => {
+    const message = String(payload?.error || 'Could not resolve tool access request');
+    notifyTerminal(message, 'error');
+});
+
 // Access-request options rendered in the AI panel output (see
-// agent.RequestWritePermission) resolve here rather than via a native/context menu.
+// agent.RequestToolPermission) resolve here rather than via a native/context menu.
 document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
     const requestId = String(e.detail?.requestId || '');
     const decision = String(e.detail?.decision || '');
@@ -13837,21 +14858,19 @@ document.addEventListener('ttyphoon-ai-tool-permission', async (e) => {
         return;
     }
 
-    if (elements.aiOutput) {
-        Array.from(elements.aiOutput.querySelectorAll('a')).forEach((link) => {
-            const href = link.getAttribute('href') || '';
-            if (href.startsWith('ttyphoon://ai-tool-permission') && href.includes(`request=${requestId}`)) {
-                link.classList.add('ai-tool-permission-resolved');
-                link.removeAttribute('href');
-            }
-        });
-    }
-    if (anchor instanceof HTMLElement) {
-        anchor.classList.add('ai-tool-permission-chosen');
+    if (decision.startsWith('deny-')) {
+        try {
+            await PromptAIToolPermissionReason(requestId, decision);
+        } catch (err) {
+            notifyTerminal('Failed to open tool denial input', 'error');
+            console.error(err);
+        }
+        return;
     }
 
     try {
         await ResolveAIToolPermission(requestId, decision);
+        markAIToolPermissionResolved(requestId, decision, anchor);
     } catch (err) {
         notifyTerminal('Failed to resolve tool access request', 'error');
         console.error(err);
@@ -13892,11 +14911,12 @@ document.addEventListener('ttyphoon-ai-user-question', async (e) => {
 // Event emitted by Go after the user selects a file from the ViewFileInNotes menu.
 // Opens the file and selects the first (default) tab for the file type.
 EventsOn('viewFileInNotesOpen', async (payload) => {
-    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    const file = typeof payload === 'string' ? payload : String(payload?.file || payload?.filename || '');
+    const line = typeof payload === 'object' ? Number.parseInt(String(payload?.line), 10) || 1 : 1;
     if (!file) return;
 
     try {
-        NotesHistoryAdd(file).catch(() => {});
+        addHistoryPosition(file, line);
         await loadFile(file);
     } catch (err) {
         notifyTerminal(`Failed to load file: ${file}`, 'warn');
@@ -13906,11 +14926,12 @@ EventsOn('viewFileInNotesOpen', async (payload) => {
 
 // Event emitted by Go to open a file directly in the Edit tab.
 EventsOn('viewFileInNotesEdit', async (payload) => {
-    const file = typeof payload === 'string' ? payload : String(payload ?? '');
+    const file = typeof payload === 'string' ? payload : String(payload?.file || payload?.filename || '');
+    const line = typeof payload === 'object' ? Number.parseInt(String(payload?.line), 10) || 1 : 1;
     if (!file) return;
 
     try {
-        NotesHistoryAdd(file).catch(() => {});
+        addHistoryPosition(file, line);
         await loadFile(file);
         setViewMode('editor');
     } catch (err) {
@@ -13955,6 +14976,11 @@ if (elements.toolsAIPromptJump) {
         openAIPromptJumpMenu();
     });
 }
+if (elements.toolsAISession) {
+    elements.toolsAISession.addEventListener('click', () => {
+        void openAISessionMenu();
+    });
+}
 if (elements.aiSettingsModelPicker) {
     elements.aiSettingsModelPicker.addEventListener('click', () => {
         openAIModelPickerMenu();
@@ -13963,12 +14989,22 @@ if (elements.aiSettingsModelPicker) {
 if (elements.aiOutput) {
     elements.aiOutput.addEventListener('wheel', (event) => {
         if (event.deltaY !== 0) {
+            aiCompletionRevealVersion++;
+            aiCompletionRevealPending = false;
             pauseAIAutoScroll();
         }
     }, { passive: true });
     elements.aiOutput.addEventListener('touchmove', () => {
+        aiCompletionRevealVersion++;
+        aiCompletionRevealPending = false;
         pauseAIAutoScroll();
     }, { passive: true });
+    elements.aiOutput.addEventListener('pointerdown', () => {
+        if (aiCompletionRevealPending) {
+            aiCompletionRevealVersion++;
+            aiCompletionRevealPending = false;
+        }
+    });
     elements.aiOutput.addEventListener('scroll', () => {
         // Programmatic bottom writes stay in follow mode; moving away from the
         // bottom is user intent and requires Latest to resume following.
@@ -14067,14 +15103,7 @@ if (elements.aiSettingsSessionsList) {
                 return; // Don't activate if clicking a button inside the item
             }
 
-            SetActiveAISession(sessionId).then((sessionState) => {
-                applyAISessionManagement(sessionState);
-                renderAISessionManagement();
-                void loadAISessionCache('');
-            }).catch((err) => {
-                notifyTerminal('Failed to switch AI session', 'error');
-                console.error(err);
-            });
+            activateAISession(sessionId);
             return;
         }
     });
@@ -14105,15 +15134,7 @@ if (elements.aiSettingsHistoryList) {
 }
 if (elements.aiSettingsSessionNew) {
     elements.aiSettingsSessionNew.addEventListener('click', () => {
-        CreateAISession().then((sessionState) => {
-            applyAISessionManagement(sessionState);
-            renderAISessionManagement();
-            void loadAISessionCache('');
-            notifyTerminal('AI session created', 'info');
-        }).catch((err) => {
-            notifyTerminal('Failed to create AI session', 'error');
-            console.error(err);
-        });
+        createNewAISession();
     });
 }
 if (elements.aiSettingsModal) {
@@ -14123,6 +15144,8 @@ if (elements.aiSettingsModal) {
         }
     });
 }
+elements.aiSettingsToolsFilter?.addEventListener('input', renderAIToolsList);
+elements.aiSettingsMcpFilter?.addEventListener('input', renderAIMcpServersList);
 if (elements.aiSettingsToolsList) {
     elements.aiSettingsToolsList.addEventListener('click', (event) => {
         const stateButton = event.target instanceof HTMLButtonElement
@@ -14161,7 +15184,7 @@ if (elements.aiSettingsToolsList) {
 if (elements.aiSettingsMcpList) {
     elements.aiSettingsMcpList.addEventListener('change', (event) => {
         const checkbox = event.target instanceof HTMLInputElement ? event.target : null;
-        if (!checkbox || checkbox.type !== 'checkbox') {
+        if (!checkbox || checkbox.type !== 'checkbox' || checkbox.disabled) {
             return;
         }
 
@@ -14171,15 +15194,17 @@ if (elements.aiSettingsMcpList) {
         }
 
         const enabled = checkbox.checked;
+        checkbox.disabled = true;
         SetAIMcpServerEnabled(serverKey, enabled).then(() => {
             void loadAISessionManagement().then(() => {
                 renderAISessionManagement();
             });
         }).catch((err) => {
-            notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
+            notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server: ${err?.message || err}`, 'error');
             console.error(err);
             checkbox.checked = !enabled;
-        });
+            void loadAISessionManagement().then(renderAISessionManagement);
+        }).finally(() => { checkbox.disabled = false; });
     });
 
     elements.aiSettingsMcpList.addEventListener('click', (event) => {
@@ -14237,21 +15262,24 @@ if (elements.aiToolMetaContent) {
 
         const configType = String(checkbox.dataset.configType || '').trim();
         if (configType === 'mcp') {
+            if (checkbox.disabled) return;
             const serverKey = String(checkbox.dataset.mcpKey || '').trim();
             if (!serverKey) {
                 return;
             }
 
             const enabled = checkbox.checked;
+            checkbox.disabled = true;
             SetAIMcpServerEnabled(serverKey, enabled).then(() => {
                 void loadAISessionManagement().then(() => {
                     renderAISessionManagement();
                 });
             }).catch((err) => {
-                notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server`, 'error');
+                notifyTerminal(`Failed to ${enabled ? 'load' : 'unload'} MCP server: ${err?.message || err}`, 'error');
                 console.error(err);
                 checkbox.checked = !enabled;
-            });
+                void loadAISessionManagement().then(renderAISessionManagement);
+            }).finally(() => { checkbox.disabled = false; });
             return;
         }
 
@@ -14331,6 +15359,555 @@ GetNotesStructViewMaxSizeKB().then((maxSizeKb) => {
     }
 }).catch((err) => {
     console.error('Failed to load notes structured view size limit:', err);
+});
+
+let notesGitPanel = null;
+let notesGitDiffAdapter = null;
+let activeGitDiff = null;
+
+async function ensureNotesGitDiffAdapter() {
+    if (notesGitDiffAdapter) {
+        return notesGitDiffAdapter;
+    }
+    notesGitDiffAdapter = await createMonacoDiffAdapter(elements.gitDiffEditor, {
+        ...getMonacoTypographyOptions(),
+        themeColors: latestWindowStyle?.colors || null,
+        onChange: (value) => {
+            if (activeGitDiff?.diff?.readOnly) {
+                return;
+            }
+            const text = String(value || '');
+            if (elements.editor.value !== text) {
+                elements.editor.value = text;
+                elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        },
+        onSelectionChange: (start, end, activeOffset) => {
+            elements.editor.selectionStart = Number(start) || 0;
+            elements.editor.selectionEnd = Number(end) || Number(start) || 0;
+            if (isMonacoActive()) {
+                monacoMainEditor.setSelectionOffsets(start, end);
+            }
+            scheduleHistoryPosition(state.currentFile, activeOffset);
+        },
+        onPaste: (event) => {
+            handleEditorImagePaste(event);
+        },
+        onPrimaryPaste: () => {
+            if (state.viewMode !== 'editor' || state.currentFileType !== 'markdown') {
+                return false;
+            }
+            void pasteFromGoClipboard(elements.editor, true);
+            return true;
+        },
+        onContextMenu: (event) => {
+            openMainEditorContextMenu(event);
+        },
+        onCompletionRequest: (payload) => {
+            return handleMonacoCompletionRequest(payload);
+        },
+    });
+    return notesGitDiffAdapter;
+}
+
+async function openNotesGitDiff({ root, file, diff }) {
+    if (activeGitDiff && !await closeNotesGitDiff()) {
+        return;
+    }
+    if (state.dirty && !await saveFile()) {
+        return;
+    }
+
+    const relativePath = String(file.path || '').replaceAll('\\', '/');
+    const notesFilePath = `$PROJECT/${relativePath}`;
+    if (diff.deleted) {
+        await closeOpenLspDocument();
+        await closeCurrentTyposDocument();
+        clearVisibleLspDiagnostics();
+        state.currentFileUri = '';
+        state.currentFileProject = root;
+        state.currentFile = notesFilePath;
+        state.currentFileType = 'code';
+        elements.editorShell.dataset.fileType = 'code';
+        state.swaggerSpec = null;
+        state.swaggerRunAvailable = false;
+        setCodeEditorMode(true);
+        setMainEditorValue('');
+        refreshEditorLanguage(notesFilePath, '');
+        updateTabVisibility('code');
+        setViewMode('editor');
+        emitCurrentFileName();
+        setDirty(false);
+    } else {
+        await loadFile(notesFilePath);
+        if (state.currentFile !== notesFilePath) {
+            return;
+        }
+    }
+    await NotesHistoryAddPosition(notesFilePath, 1);
+
+    if (!state.useMonacoEditor) {
+        notifyTerminal('The selected file is open; side-by-side Git diff requires Monaco.', 'warn');
+        return;
+    }
+
+    activeGitDiff = { root, file, diff, notesFilePath };
+    setNotesGitDiffTabActive(true);
+    elements.gitDiffMessage.hidden = !diff.binary && !diff.readOnly;
+    elements.gitDiffEditor.hidden = diff.binary;
+
+    if (diff.binary) {
+        elements.gitDiffMessage.textContent = 'Binary file; text diff is unavailable.';
+    } else if (diff.readOnly) {
+        elements.gitDiffMessage.textContent = 'Symbolic link; diff is read-only.';
+        const editor = await ensureNotesGitDiffAdapter();
+        editor.setDiff(diff);
+        notesGitDiffAdapter = editor;
+    } else {
+        const editor = await ensureNotesGitDiffAdapter();
+        editor.setDiff(diff);
+        editor.setModifiedValue(String(diff.working || ''));
+        editor.setWordWrap(Boolean(state.markdownWrapMode));
+        editor.focus();
+    }
+
+    requestAnimationFrame(() => notesGitDiffAdapter?.layout());
+}
+
+async function saveActiveGitDiff() {
+    if (!activeGitDiff || activeGitDiff.diff.readOnly) {
+        return false;
+    }
+    return saveFile();
+}
+
+async function closeNotesGitDiff() {
+    if (!activeGitDiff) {
+        return true;
+    }
+    if (state.dirty && !await saveFile()) {
+        return false;
+    }
+    const wasSelected = elements.tabDiff.getAttribute('aria-selected') === 'true';
+    activeGitDiff = null;
+    setNotesGitDiffTabActive(false);
+    updateGitDiffTabForCurrentFile();
+    if (wasSelected) {
+        setViewMode(state.viewMode);
+    }
+    return true;
+}
+
+function setNotesGitDiffTabActive(active) {
+    const isActive = active === true;
+    elements.notesPanel.dataset.gitDiff = isActive ? 'true' : 'false';
+    elements.gitDiffWrap.dataset.active = isActive ? 'true' : 'false';
+    elements.tabDiff.style.display = activeGitDiff ? '' : 'none';
+    const tabs = elements.tabs.querySelectorAll('[role="tab"]');
+    for (const tab of tabs) {
+        tab.setAttribute('aria-selected', tab === elements.tabDiff && isActive ? 'true' : 'false');
+    }
+}
+
+async function checkoutNotesGitBranch(root, branch, create = false) {
+    try {
+        await CheckoutGitBranch(root, branch, create);
+        notifyTerminal(`Switched to ${branch}`, 'info');
+    } catch (error) {
+        notifyTerminal(String(error?.message || error), 'error');
+    }
+}
+
+function notifyGitTransfer(output, successMessage) {
+    if (output.error) {
+        notifyTerminal(output.stderr || output.stdout || output.error, 'error');
+        return;
+    }
+    notifyTerminal(successMessage, 'info');
+}
+
+async function createNotesGitTagWorktree(root, tag, worktreePath) {
+    const stickyId = `git-tag-worktree-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await openStickyProgress(stickyId, 'Creating worktree');
+    try {
+        const worktree = await CreateGitTagWorktree(root, tag, worktreePath);
+        await switchNotesGitWorktree(root, worktree.path || worktreePath);
+        closeStickyProgress(stickyId);
+    } catch (error) {
+        closeStickyProgress(stickyId, String(error?.message || error), 'error');
+    }
+}
+
+elements.gitTags.addEventListener('click', async () => {
+    const root = notesGitPanel?.getCurrentRoot();
+    if (!root) return;
+    try {
+        const tags = await ListGitTags(root);
+        const rect = elements.gitTags.getBoundingClientRect();
+        const items = [
+            {
+                title: 'Create new tag', icon: CONTEXT_ICON_ADD,
+                onSelect: async () => {
+                    const tag = await openTextPrompt({ title: 'Create new tag', confirmLabel: 'Create', placeholder: 'v1.2.3' });
+                    if (!tag?.trim()) return;
+                    try {
+                        await CreateGitTag(root, tag.trim());
+                        notifyTerminal(`Created tag ${tag.trim()}`, 'info');
+                    } catch (error) {
+                        notifyTerminal(String(error?.message || error), 'error');
+                    }
+                },
+            },
+            { title: '-', icon: 0 },
+            {
+                title: 'Pull tags', icon: 0xf019,
+                onSelect: async () => {
+                    try {
+                        notifyGitTransfer(await RunGitAction(root, 'pull-tags', {}), 'Tags pulled');
+                    } catch (error) {
+                        notifyTerminal(String(error?.message || error), 'error');
+                    }
+                },
+            },
+            { title: '-', icon: 0 },
+            ...tags.map((tag) => ({
+                title: tag,
+                icon: 0,
+                onSelect: () => showNotesLocalMenu([
+                    {
+                        title: 'Info', icon: 0xf129,
+                        onSelect: async () => {
+                            try {
+                                await ShowGitRefInfo(root, tag, true);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    { title: 'Copy tag name', icon: CONTEXT_ICON_COPY, onSelect: () => { void ClipboardSetText(tag).catch((error) => notifyTerminal(String(error), 'error')); } },
+                    {
+                        title: 'Push tag', icon: 0xf093,
+                        onSelect: async () => {
+                            try {
+                                notifyGitTransfer(await RunGitAction(root, 'push-tag', { tag }), `Pushed tag ${tag}`);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    { title: '-', icon: 0 },
+                    {
+                        title: 'Checkout', icon: 0xf126,
+                        onSelect: async () => {
+                            try {
+                                await CheckoutGitTag(root, tag);
+                                notifyTerminal(`Checked out tag ${tag}`, 'info');
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    {
+                        title: 'Create new worktree', icon: CONTEXT_ICON_ADD,
+                        onSelect: async () => {
+                            try {
+                                const base = await GetDefaultGitWorktreePath(root);
+                                const path = `${String(base).replace(/[\\/]+$/, '')}/${tag}`;
+                                await createNotesGitTagWorktree(root, tag, path);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    { title: '-', icon: 0 },
+                    {
+                        title: 'Delete tag', icon: 0xf2ed,
+                        onSelect: async () => {
+                            try {
+                                await DeleteGitTag(root, tag);
+                                notifyTerminal(`Deleted tag ${tag}`, 'info');
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                ], rect.left, rect.bottom, tag),
+            })),
+        ];
+        showNotesLocalMenu(items, rect.left, rect.bottom, 'Tags');
+    } catch (error) {
+        notifyTerminal(String(error?.message || error), 'error');
+    }
+});
+
+elements.gitBranches.addEventListener('click', async () => {
+    const root = notesGitPanel?.getCurrentRoot();
+    if (!root) return;
+    try {
+        const branches = await ListGitBranches(root);
+        const rect = elements.gitBranches.getBoundingClientRect();
+        const items = [
+            {
+                title: 'Create new branch', icon: CONTEXT_ICON_ADD,
+                onSelect: async () => {
+                    const branch = await openTextPrompt({ title: 'Create new branch', confirmLabel: 'Create', placeholder: 'branch-name' });
+                    if (branch?.trim()) await checkoutNotesGitBranch(root, branch.trim(), true);
+                },
+            },
+            { title: '-', icon: 0 },
+            ...[...branches].sort((left, right) => left.localeCompare(right)).map((branch) => ({
+                title: branch,
+                icon: branch === notesGitPanel?.getCurrentStatus()?.branch ? CONTEXT_ICON_TICK : 0,
+                onSelect: () => showNotesLocalMenu([
+                    {
+                        title: 'Info', icon: 0xf129,
+                        onSelect: async () => {
+                            try {
+                                await ShowGitRefInfo(root, branch, false);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    { title: 'Copy branch name', icon: CONTEXT_ICON_COPY, onSelect: () => { void ClipboardSetText(branch).catch((error) => notifyTerminal(String(error), 'error')); } },
+                    { title: '-', icon: 0 },
+                    { title: 'Checkout', icon: 0xf126, onSelect: () => checkoutNotesGitBranch(root, branch) },
+                    {
+                        title: 'Fetch latest', icon: 0xf019,
+                        onSelect: async () => {
+                            try {
+                                const output = await RunGitAction(root, 'fetch-branch', { branch });
+                                notifyGitTransfer(output, `Fetch completed for ${branch}`);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    {
+                        title: 'Create new worktree', icon: CONTEXT_ICON_ADD,
+                        onSelect: async () => {
+                            try {
+                                const base = await GetDefaultGitWorktreePath(root);
+                                await createNotesGitWorktree(root, branch, `${String(base).replace(/[\\/]+$/, '')}/${branch}`, false);
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                    { title: '-', icon: 0 },
+                    {
+                        title: 'Delete branch', icon: 0xf2ed,
+                        onSelect: async () => {
+                            try {
+                                await DeleteGitBranch(root, branch);
+                                notifyTerminal(`Deleted branch ${branch}`, 'info');
+                            } catch (error) {
+                                notifyTerminal(String(error?.message || error), 'error');
+                            }
+                        },
+                    },
+                ], rect.left, rect.bottom, branch),
+            })),
+        ];
+        showNotesLocalMenu(items, rect.left, rect.bottom, 'Branches');
+    } catch (error) {
+        notifyTerminal(String(error?.message || error), 'error');
+    }
+});
+
+elements.toolsTabGit.addEventListener('click', () => {
+    setToolsPanelCollapsed(false);
+    setToolsTab('git');
+});
+
+disableNativeTextAssistanceIn(document);
+attachSpellCheck(elements.gitCommitMessage);
+
+notesGitPanel = initNotesGitPanel(elements, {
+    getStatus: GetGitStatus,
+    getBrowserLink: GetGitBrowserLink,
+    getBranchDiffFiles: GetGitBranchDiffFiles,
+    listCommits: ListGitCommits,
+    listCommitsWithFiles: ListGitCommitsWithFiles,
+    filterStrings: FilterStrings,
+    openRemote: BrowserOpenURL,
+    refreshStatus: RefreshGitStatus,
+    setStatusWatch: SetGitStatusWatch,
+    getDiff: GetGitDiff,
+    getDiffAgainstBranch: GetGitDiffAgainstBranch,
+    stageFile: StageGitFile,
+    stageAll: StageAllGitFiles,
+    unstageFile: UnstageGitFile,
+    runGitAction: RunGitAction,
+    confirmGitPush: ConfirmGitPush,
+    getCurrentProject: GetCurrentProject,
+    eventsOn: EventsOn,
+}, {
+    showTooltip: (text) => { void showSharedTooltip(text); },
+    hideTooltip: closeSharedTooltip,
+    notify: notifyTerminal,
+    notifyTransfer: notifyGitTransfer,
+    onOpenDiff: openNotesGitDiff,
+    showCommitMenu: ({ root, commit, x, y, compare }) => {
+        const fullHash = commit.fullHash || commit.hash;
+        const items = [
+            {
+                title: 'Info', icon: 0xf129,
+                onSelect: async () => {
+                    try {
+                        await ShowGitRefInfo(root, fullHash, false);
+                    } catch (error) {
+                        notifyTerminal(String(error?.message || error), 'error');
+                    }
+                },
+            },
+            { title: 'Copy commit hash', icon: CONTEXT_ICON_COPY, onSelect: () => ClipboardSetText(fullHash) },
+            { title: '-', icon: 0 },
+            { title: 'Compare commit', icon: 0xe13a, onSelect: compare },
+            {
+                title: 'Create worktree', icon: CONTEXT_ICON_ADD,
+                onSelect: async () => {
+                    try {
+                        const defaultPath = await GetDefaultGitWorktreePath(root);
+                        const worktreePath = `${String(defaultPath).replace(/[\\/]+$/, '')}/${commit.hash}`;
+                        await createNotesGitWorktree(root, fullHash, worktreePath, false);
+                    } catch (error) {
+                        notifyTerminal(String(error?.message || error), 'error');
+                    }
+                },
+            },
+        ];
+        showNotesLocalMenu(items, x, y, commit.hash);
+    },
+    getCommitFilter: () => state.fileFilterQuery,
+    onCommitsChange: (active) => {
+        const wasActive = !elements.gitCommitList.hidden;
+        elements.list.hidden = active;
+        elements.gitCommitList.hidden = !active;
+        elements.listFilter.placeholder = active
+            ? elements.gitFilenameSearch.checked ? 'Filter commits by filename...' : 'Filter commits...'
+            : 'Filter files...';
+        if (!active && wasActive) {
+            if (isProjectFindListModeActive()) scheduleProjectFindSearch();
+            else void applyFileFilter();
+        }
+    },
+    beforeFileAction: async ({ root, path }) => {
+        if (!activeGitDiff || activeGitDiff.root !== root || activeGitDiff.file.path !== path || !state.dirty) {
+            return true;
+        }
+        return saveActiveGitDiff();
+    },
+    onStatusChange: (status, root) => {
+        updateGitDiffTabForCurrentFile(status, root);
+    },
+    showWorkspaceMenu: async (root, button) => {
+        let worktrees;
+        try {
+            worktrees = await ListGitWorktrees(root);
+        } catch (error) {
+            notifyTerminal(String(error?.message || error), 'error');
+            return;
+        }
+        const rect = button.getBoundingClientRect();
+        const activeRoot = String(notesGitPanel?.getCurrentRoot() || root).replace(/\\/g, '/').replace(/\/$/, '');
+        const items = [{ title: 'New worktree', icon: CONTEXT_ICON_ADD, onSelect: () => void openCreateGitWorktreePrompt(root) }, { title: '-', icon: 0 }];
+        items.push(...[...worktrees]
+            .sort((left, right) => left.branch.localeCompare(right.branch))
+            .map((worktree) => ({
+                title: worktree.branch || '(detached HEAD)',
+                icon: String(worktree.path || '').replace(/\\/g, '/').replace(/\/$/, '') === activeRoot ? CONTEXT_ICON_TICK : 0,
+                onSelect: () => {
+                    const actionItems = [
+                        {
+                            title: 'Info',
+                            icon: 0xf129,
+                            onSelect: async () => {
+                                try {
+                                    await ShowGitWorktreeInfo(root, worktree.path);
+                                } catch (error) {
+                                    notifyTerminal(String(error?.message || error), 'error');
+                                }
+                            },
+                        },
+                        {
+                            title: 'Switch',
+                            icon: 0xf204,
+                            onSelect: async () => {
+                                try {
+                                    await switchNotesGitWorktree(root, worktree.path);
+                                } catch (error) {
+                                    notifyTerminal(String(error?.message || error), 'error');
+                                }
+                            },
+                        },
+                        { title: '-', icon: 0 },
+                        {
+                            title: 'Remove',
+                            icon: CONTEXT_ICON_DELETE,
+                            onSelect: async () => {
+                                try {
+                                    await RemoveGitWorktree(root, worktree.path);
+                                    notifyTerminal(`Worktree removed: ${worktree.branch || worktree.path}`, 'info');
+                                } catch (error) {
+                                    notifyTerminal(String(error?.message || error), 'error');
+                                }
+                            },
+                        },
+                    ];
+                    showLocalMenu({
+                        title: worktree.branch || '(detached HEAD)',
+                        options: actionItems.map((item) => item.title),
+                        icons: actionItems.map((item) => item.icon),
+                        x: rect.left,
+                        y: rect.bottom,
+                        showNextToMouseCursor: true,
+                        onSelect: (index) => actionItems[index]?.onSelect?.(),
+                    });
+                },
+            })));
+        showLocalMenu({
+            title: 'Worktrees',
+            options: items.map((item) => item.title),
+            icons: items.map((item) => item.icon),
+            x: rect.left,
+            y: rect.bottom,
+            showNextToMouseCursor: true,
+            onSelect: (index) => items[index]?.onSelect?.(),
+        });
+    },
+    showCompareMenu: async (root, currentBranch, selectedBranch, button, selectBranch) => {
+        let branches;
+        try {
+            branches = await ListGitBranches(root);
+        } catch (error) {
+            notifyTerminal(String(error?.message || error), 'error');
+            return;
+        }
+        const rect = button.getBoundingClientRect();
+        const items = [
+            {
+                title: `HEAD (${currentBranch || 'Detached HEAD'})`,
+                icon: selectedBranch === '' ? CONTEXT_ICON_TICK : 0,
+                onSelect: () => void selectBranch(''),
+            },
+            { title: '-', icon: 0 },
+            ...branches.filter((branch) => branch !== currentBranch).sort((left, right) => left.localeCompare(right)).map((branch) => ({
+                title: branch,
+                icon: branch === selectedBranch ? CONTEXT_ICON_TICK : 0,
+                onSelect: () => void selectBranch(branch),
+            })),
+        ];
+        showLocalMenu({
+            title: 'Compare against',
+            options: items.map((item) => item.title),
+            icons: items.map((item) => item.icon),
+            x: rect.left,
+            y: rect.bottom,
+            showNextToMouseCursor: true,
+            onSelect: (index) => items[index]?.onSelect?.(),
+        });
+    },
 });
 
 initNotesAIPanel(elements);
@@ -14696,7 +16273,8 @@ async function savePastedImageDataUrl(dataUrl, mimeType) {
         await SaveBinaryFile(paths.imagePath, base64Payload);
 
         const alt = String(epoch);
-        const markdownImage = `![${alt}](${paths.imageFileName})`;
+        const markdownPath = paths.imageFileName.split('/').map(encodeURIComponent).join('/');
+        const markdownImage = `![${alt}](${markdownPath})`;
         insertTextInMainEditor(markdownImage);
         notifyTerminal(`Saved image ${paths.imageFileName}`, 'info');
     } catch (err) {
@@ -14787,6 +16365,43 @@ const lspSpellCheckExclusions = { symbols: [], tokens: [], keywords: [] };
 function applyLspSpellCheckExclusions() {
     const merged = Array.from(getLspSpellCheckExclusionSet());
     notesSpellCheckHandle?.setExclusions(merged);
+}
+
+async function refreshMainReservedWords(file) {
+    let words = [];
+    try {
+        const language = await ResolveNotesLspLanguage(file);
+        words = language ? (await GetNotesLanguageReservedWords(language)) || [] : [];
+    } catch (error) {
+        console.error('Loading document reserved words failed:', error);
+    }
+    if (state.currentFile !== file) {
+        return;
+    }
+    lspSpellCheckExclusions.keywords = Array.isArray(words) ? words : [];
+    lspSpellCheckExclusions.tokens = [];
+    applyLspSpellCheckExclusions();
+}
+
+async function refreshJupyterReservedWords(blockId) {
+    const block = state.jupyterCodeBlocks[blockId];
+    const handle = jupyterSpellCheckHandles[blockId];
+    if (!block || !handle) {
+        return;
+    }
+    const sequence = (block.reservedWordsSequence || 0) + 1;
+    block.reservedWordsSequence = sequence;
+    const language = block.runtime || block.language;
+    let words = [];
+    try {
+        words = language ? (await GetNotesLanguageReservedWords(language)) || [] : [];
+    } catch (error) {
+        console.error('Loading code-block reserved words failed:', error);
+    }
+    if (state.jupyterCodeBlocks[blockId] !== block || jupyterSpellCheckHandles[blockId] !== handle || block.reservedWordsSequence !== sequence) {
+        return;
+    }
+    handle.setExclusions(Array.isArray(words) ? words : []);
 }
 
 if (elements.editor) {
@@ -14984,6 +16599,9 @@ if (elements.editor) {
                 suppressMonacoChange = false;
             }
         }
+        if (isGitDiffActive()) {
+            notesGitDiffAdapter.setModifiedValue(String(elements.editor.value || ''));
+        }
 
         editorInputSequence += 1;
         state.lastEditorInputAt = Date.now();
@@ -15124,6 +16742,10 @@ elements.editor.addEventListener('mousedown', (e) => {
             end: elements.editor.selectionEnd,
         };
     }
+});
+
+['click', 'input', 'keyup', 'mouseup', 'select'].forEach((eventName) => {
+    elements.editor.addEventListener(eventName, scheduleCurrentHistoryPosition);
 });
 
 function openMainEditorContextMenu(e) {
@@ -15281,7 +16903,11 @@ function openMainEditorContextMenu(e) {
                 icon: CONTEXT_ICON_CODE,
                 onSelect: () => {
                     setTimeout(() => {
-                        monacoMainEditor?.openCommandPalette?.();
+                        if (isGitDiffActive()) {
+                            notesGitDiffAdapter?.openCommandPalette?.();
+                        } else {
+                            monacoMainEditor?.openCommandPalette?.();
+                        }
                     }, 0);
                 },
         });
@@ -15300,6 +16926,27 @@ initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initRenderedNotesContextMenu(lspHoverTooltipEl, 'viewer');
 initRenderedNotesContextMenu(lspTooltipEl, 'viewer');
 initAIOutputContextMenu(elements.aiOutput);
+
+// The caller's modal ID keys saved table state, as a file path does for documents.
+initMarkdownModal({
+    onPrint: (markdown) => {
+        void printDocument({
+            source: markdown,
+            renderMarkdown: renderPrintMarkdown,
+            dismissMenu: closeSharedTooltip,
+            print: WindowPrint,
+        }).catch(reportPrintError);
+    },
+    onTablesRendered: (container, { id, wrapped }) => {
+        void setupTableColumnResizing(container, wrapped, id, 'markdown-modal');
+        setupNotesTableQueries(container, 'markdown-modal', id);
+    },
+    tableMenuItems: (table) => [
+        createClearTableSortMenuItem(table),
+        createTableFilterMenuItem(table),
+        createTableGraphMenuItem(table),
+    ],
+});
 
 elements.csvView.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -15322,41 +16969,7 @@ elements.csvView.addEventListener('contextmenu', (e) => {
 
     menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
 
-    let highlightCallback = null;
-    let cancelCallback = null;
-    if (isRunMode) {
-        const pos = getCellPosition(e.target, table);
-        if (pos) {
-            highlightCallback = (itemIndex) => {
-                const item = menuItems[itemIndex];
-                if (!item) return;
-                // Unhighlight all first
-                clearTableHighlight(table);
-                // Highlight based on item title
-                if (item.title.toLowerCase().includes('copy table')) {
-                    highlightEntireTable(table, true);
-                } else if (item.title.includes('row') && !item.title.includes('column')) {
-                    highlightTableRow(table, pos.row, true);
-                } else if (item.title.includes('column')) {
-                    highlightTableColumn(table, pos.col, true);
-                }
-            };
-            cancelCallback = () => clearTableHighlight(table);
-        }
-    } else {
-        // Enable highlight for copy table items even when not in Run mode
-        highlightCallback = (itemIndex) => {
-            const item = menuItems[itemIndex];
-            if (!item) return;
-            clearTableHighlight(table);
-            if (item.title.toLowerCase().includes('copy table')) {
-                highlightEntireTable(table, true);
-            }
-        };
-        cancelCallback = () => clearTableHighlight(table);
-    }
-
-    showNotesLocalMenu(menuItems, e.clientX, e.clientY, 'Select an action', highlightCallback, cancelCallback);
+    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 });
 initStructuredDataTreeContextMenu(elements.swaggerView, {
     isActive: () => state.viewMode === 'swagger-view',
@@ -15426,41 +17039,64 @@ elements.tabMeta.addEventListener('click', () => {
     setViewMode('meta');
 });
 
+elements.tabDiff.addEventListener('click', () => {
+    if (activeGitDiff) {
+        setNotesGitDiffTabActive(true);
+        notesGitDiffAdapter?.focus();
+        return;
+    }
+    const filePath = currentProjectRelativeGitPath();
+    const projectRoot = state.currentFileProject || notesGitPanel?.getCurrentRoot();
+    if (filePath && projectRoot) {
+        void notesGitPanel?.openFileDiff(filePath, projectRoot);
+    }
+});
+
+async function openRecentFilesMenu(x, y) {
+    try {
+        const recentFiles = await NotesRecentFiles();
+        const files = Array.isArray(recentFiles) ? recentFiles : [];
+        if (files.length === 0) {
+            setStatus('No recent files', false);
+            return;
+        }
+
+        const menuItems = files.map((file) => ({
+            title: file,
+            icon: file === state.currentFile ? CONTEXT_ICON_TICK : 0,
+            onSelect: () => {
+                addHistoryPosition(file, currentEditorLineForFile(file));
+                loadFile(file).catch((err) => {
+                    notifyTerminal(`Failed to load file: ${file}`, 'warn');
+                    console.error(err);
+                });
+            },
+        }));
+
+        showNotesLocalMenu(menuItems, x, y, 'Recent files');
+    } catch {
+        setStatus('Failed to open recent files menu', true);
+    }
+}
+
+elements.currentFileTitle.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (event.detail === 0) {
+        const rect = elements.currentFileTitle.getBoundingClientRect();
+        void openRecentFilesMenu(rect.left, rect.bottom);
+        return;
+    }
+    void openRecentFilesMenu(event.clientX, event.clientY);
+});
+
 if (elements.status) {
     elements.status.title = 'Recent files';
     elements.status.tabIndex = 0;
     elements.status.setAttribute('role', 'button');
 
-    const openRecentFilesMenu = async (x, y) => {
-        try {
-            const recentFiles = await NotesRecentFiles();
-            const files = Array.isArray(recentFiles) ? recentFiles : [];
-            if (files.length === 0) {
-                setStatus('No recent files', false);
-                return;
-            }
-
-            const menuItems = files.map((file) => ({
-                title: file,
-                icon: file === state.currentFile ? CONTEXT_ICON_TICK : 0,
-                onSelect: () => {
-                    NotesHistoryAdd(file).catch(() => {});
-                    loadFile(file).catch((err) => {
-                        notifyTerminal(`Failed to load file: ${file}`, 'warn');
-                        console.error(err);
-                    });
-                },
-            }));
-
-            showNotesLocalMenu(menuItems, x, y, 'Recent files');
-        } catch {
-            setStatus('Failed to open recent files menu', true);
-        }
-    };
-
     elements.status.addEventListener('click', (event) => {
         event.preventDefault();
-        openRecentFilesMenu(event.clientX, event.clientY);
+        void openRecentFilesMenu(event.clientX, event.clientY);
     });
 
     elements.status.addEventListener('keydown', (event) => {
@@ -15470,7 +17106,7 @@ if (elements.status) {
 
         event.preventDefault();
         const rect = elements.status.getBoundingClientRect();
-        openRecentFilesMenu(rect.left, rect.bottom);
+        void openRecentFilesMenu(rect.left, rect.bottom);
     });
 }
 
@@ -15519,8 +17155,11 @@ function cycleNotesTabs(direction = 1) {
 
 elements.historyPrev.addEventListener('click', async () => {
     try {
-        const file = await NotesHistoryPrevious();
-        await loadFile(file);
+        const entry = await NotesHistoryPreviousPosition();
+        await loadFile(entry.file);
+        setViewMode(editViewModeForCurrentFileType());
+        await ensureMonacoVisibleAndLaidOut();
+        jumpEditorToLine(entry.line);
     } catch (err) {
         notifyTerminal(String(err && err.message ? err.message : err), 'info');
         focusActiveEditorForViewMode();
@@ -15529,8 +17168,11 @@ elements.historyPrev.addEventListener('click', async () => {
 
 elements.historyNext.addEventListener('click', async () => {
     try {
-        const file = await NotesHistoryNext();
-        await loadFile(file);
+        const entry = await NotesHistoryNextPosition();
+        await loadFile(entry.file);
+        setViewMode(editViewModeForCurrentFileType());
+        await ensureMonacoVisibleAndLaidOut();
+        jumpEditorToLine(entry.line);
     } catch (err) {
         notifyTerminal(String(err && err.message ? err.message : err), 'info');
         focusActiveEditorForViewMode();
@@ -15543,6 +17185,12 @@ elements.newFile.addEventListener('click', () => {
 
 elements.modalCancel.addEventListener('click', () => {
     closeNewFilePrompt();
+});
+
+elements.modal.addEventListener('click', (event) => {
+    if (event.target === elements.modal) {
+        closeNewFilePrompt();
+    }
 });
 
 elements.modalCreate.addEventListener('click', () => {
@@ -15721,6 +17369,10 @@ if (elements.replaceAll) {
 if (elements.listFilter) {
     elements.listFilter.addEventListener('input', (event) => {
         state.fileFilterQuery = event.target.value || '';
+        if (notesGitPanel?.isCommitsActive()) {
+            void applyFileFilter();
+            return;
+        }
         if (isProjectFindListModeActive()) {
             scheduleProjectFindSearch();
             return;
@@ -15733,6 +17385,10 @@ if (elements.listFilter) {
             event.preventDefault();
             elements.listFilter.value = '';
             state.fileFilterQuery = '';
+            if (notesGitPanel?.isCommitsActive()) {
+                void applyFileFilter();
+                return;
+            }
             if (isProjectFindListModeActive()) {
                 scheduleProjectFindSearch();
                 return;
@@ -15743,7 +17399,9 @@ if (elements.listFilter) {
 
         if (event.key === 'ArrowDown') {
             event.preventDefault();
-            const items = Array.from(elements.list.querySelectorAll('.notes-file'));
+            const items = notesGitPanel?.isCommitsActive()
+                ? Array.from(elements.gitCommitList.querySelectorAll('.notes-git-commit'))
+                : Array.from(elements.list.querySelectorAll('.notes-file'));
             if (items.length > 0) {
                 items[0].focus();
             }
@@ -15787,7 +17445,28 @@ if (elements.listFilter) {
 }
 
 if (elements.list) {
+    const showFileTooltip = (event) => {
+        const row = event.target.closest('[data-tooltip]');
+        if (!row || row.contains(event.relatedTarget)) {
+            return;
+        }
+        if (event.type === 'mouseover') {
+            updateSharedTooltipPointer(event.clientX, event.clientY);
+        }
+        void showSharedTooltip(row.dataset.tooltip);
+    };
+    const hideFileTooltip = (event) => {
+        const row = event.target.closest('[data-tooltip]');
+        if (row && !row.contains(event.relatedTarget)) {
+            closeSharedTooltip();
+        }
+    };
+    elements.list.addEventListener('mouseover', showFileTooltip);
+    elements.list.addEventListener('mouseout', hideFileTooltip);
+    elements.list.addEventListener('focusin', showFileTooltip);
+    elements.list.addEventListener('focusout', hideFileTooltip);
     elements.list.addEventListener('scroll', () => {
+        closeSharedTooltip();
         if (!isProjectFindListModeActive()) {
             return;
         }
@@ -15800,9 +17479,10 @@ if (elements.list) {
     // one-to-several closures per file/folder on every render. A single delegated
     // listener per event type avoids that cost regardless of tree size.
     elements.list.addEventListener('click', (event) => {
+        closeSharedTooltip();
         const fileItem = event.target.closest('.notes-file');
         if (fileItem) {
-            NotesHistoryAdd(fileItem.dataset.file).catch(() => {});
+            addHistoryPosition(fileItem.dataset.file, currentEditorLineForFile(fileItem.dataset.file));
             loadFile(fileItem.dataset.file);
             return;
         }
@@ -15828,12 +17508,13 @@ if (elements.list) {
         void openRenamePrompt(fileItem.dataset.file);
     });
 
-    elements.list.addEventListener('contextmenu', async (event) => {
+    elements.list.addEventListener('contextmenu', (event) => {
+        closeSharedTooltip();
         const fileItem = event.target.closest('.notes-file');
         if (fileItem) {
             event.preventDefault();
             event.stopPropagation();
-            await openFileListContextMenu(fileItem.dataset.file, event.clientX, event.clientY);
+            void openFileParentFolderContextMenu(fileItem.dataset.file, event.clientX, event.clientY);
             return;
         }
 
@@ -15841,13 +17522,7 @@ if (elements.list) {
         if (folderButton) {
             event.preventDefault();
             event.stopPropagation();
-            const folderKey = folderButton.dataset.folderKey || '';
-            const separatorIndex = folderKey.indexOf(PRIMARY_PATH_SEPARATOR);
-            const category = separatorIndex === -1 ? folderKey : folderKey.slice(0, separatorIndex);
-            const folderPath = separatorIndex === -1 ? '' : folderKey.slice(separatorIndex + 1);
-            const folderNode = findFolderNodeByPath(getCategoryTreeNodes(category), folderPath);
-            const folderName = folderNode ? folderNode.name : folderPath;
-            openFolderTreeContextMenu(category, folderNode?.children || [], event.clientX, event.clientY, folderName);
+            openFolderContextForListRow(folderButton, event.clientX, event.clientY);
             return;
         }
 
@@ -15855,8 +17530,15 @@ if (elements.list) {
         if (categoryHeader) {
             event.preventDefault();
             event.stopPropagation();
-            const category = categoryHeader.dataset.category;
-            openFolderTreeContextMenu(category, getCategoryTreeNodes(category), event.clientX, event.clientY, `${category} folders`);
+            openFolderContextForListRow(categoryHeader, event.clientX, event.clientY);
+            return;
+        }
+
+        const folderContextRow = findFolderContextRowAbove(event.clientY);
+        if (folderContextRow) {
+            event.preventDefault();
+            event.stopPropagation();
+            openFolderContextForListRow(folderContextRow, event.clientX, event.clientY);
         }
     });
 
@@ -15864,6 +17546,11 @@ if (elements.listFilterClear && elements.listFilter) {
     elements.listFilterClear.addEventListener('click', () => {
         elements.listFilter.value = '';
         state.fileFilterQuery = '';
+        if (notesGitPanel?.isCommitsActive()) {
+            void applyFileFilter();
+            elements.listFilter.focus();
+            return;
+        }
         if (isProjectFindListModeActive()) {
             scheduleProjectFindSearch();
             return;
@@ -15893,20 +17580,30 @@ elements.findPrev.addEventListener('mousedown', (event) => {
     const minPaneWidth = 200;
     let isResizing = false;
     let hasManualSplit = false;
-    let manualSplitRatio = 0.33;
+    let manualSplitRatio = 1 / 3;
+    let resizeChanged = false;
+    splitter.setAttribute('role', 'separator');
+    splitter.setAttribute('aria-orientation', 'vertical');
+    splitter.setAttribute('aria-label', 'Resize file list');
+    splitter.tabIndex = 0;
+
+    function canResize() {
+        return app.isConnected && !app.closest('[data-ai-maximized="true"], [data-log-maximized="true"]');
+    }
 
     function clampLeftWidth(totalWidth, leftWidth) {
-        const maxWidth = totalWidth - minPaneWidth - splitterWidth;
-        return Math.min(Math.max(leftWidth, minPaneWidth), maxWidth);
+        const available = totalWidth - splitterWidth;
+        const minimum = Math.min(minPaneWidth, available / 2);
+        return Math.min(Math.max(leftWidth, minimum), available - minimum);
     }
 
     function applyManualSplitToCurrentWidth() {
-        if (!hasManualSplit) {
+        if (!hasManualSplit || !canResize()) {
             return;
         }
 
         const appRect = app.getBoundingClientRect();
-        if (appRect.width <= splitterWidth + (minPaneWidth * 2)) {
+        if (appRect.width <= splitterWidth) {
             return;
         }
 
@@ -15916,18 +17613,20 @@ elements.findPrev.addEventListener('mousedown', (event) => {
         const rightWidth = appRect.width - leftWidth - splitterWidth;
 
         app.style.gridTemplateColumns = `${leftWidth}px ${splitterWidth}px ${rightWidth}px`;
-        manualSplitRatio = leftWidth / availableWidth;
+        splitter.setAttribute('aria-valuenow', String(Math.round(manualSplitRatio * 100)));
     }
 
     splitter.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || !canResize() || app.getBoundingClientRect().width <= minPaneWidth * 2 + splitterWidth) return;
         e.preventDefault();
         isResizing = true;
+        resizeChanged = false;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
     });
 
     document.addEventListener('mousemove', (e) => {
-        if (!isResizing) return;
+        if (!isResizing || !canResize()) return;
 
         const appRect = app.getBoundingClientRect();
         const newLeftWidth = e.clientX - appRect.left;
@@ -15939,11 +17638,14 @@ elements.findPrev.addEventListener('mousedown', (event) => {
             app.style.gridTemplateColumns = `${newLeftWidth}px ${splitterWidth}px ${rightWidth}px`;
             hasManualSplit = true;
             manualSplitRatio = newLeftWidth / (appRect.width - splitterWidth);
+            resizeChanged = true;
+            splitter.setAttribute('aria-valuenow', String(Math.round(manualSplitRatio * 100)));
         }
     });
 
     document.addEventListener('mouseup', () => {
         if (isResizing) {
+            if (resizeChanged && canResize()) void saveLayoutRatio('fileListRatio', manualSplitRatio);
             isResizing = false;
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
@@ -15957,7 +17659,138 @@ elements.findPrev.addEventListener('mousedown', (event) => {
 
         applyManualSplitToCurrentWidth();
     });
+
+    splitter.addEventListener('keydown', (event) => {
+        if (!canResize() || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const width = app.getBoundingClientRect().width - splitterWidth;
+        if (width <= minPaneWidth * 2) return;
+        manualSplitRatio = clampLeftWidth(width + splitterWidth, width * manualSplitRatio + (event.key === 'ArrowRight' ? 16 : -16)) / width;
+        hasManualSplit = true;
+        applyManualSplitToCurrentWidth();
+        void saveLayoutRatio('fileListRatio', manualSplitRatio);
+    });
+    splitter.addEventListener('dblclick', () => {
+        if (!canResize()) return;
+        manualSplitRatio = 1 / 3;
+        hasManualSplit = true;
+        applyManualSplitToCurrentWidth();
+        void saveLayoutRatio('fileListRatio', 0);
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(applyManualSplitToCurrentWidth);
+        observer.observe(app);
+    }
+    window.addEventListener('ttyphoon-notes-layout', applyManualSplitToCurrentWidth);
+    void restoreLayoutRatio('fileListRatio', 1 / 3).then((ratio) => {
+        if (hasManualSplit) return;
+        manualSplitRatio = ratio;
+        hasManualSplit = true;
+        applyManualSplitToCurrentWidth();
+    });
 })();
+
+(function initToolsResizer() {
+    const handle = document.getElementById('notes-tools-resizer');
+    const panel = document.getElementById('notes-panel');
+    const tools = elements.toolsPanel;
+    let ratio = 0.35;
+    let edited = false;
+    let dragging = false;
+    let changed = false;
+
+    function enabled() {
+        return panel.isConnected && tools.dataset.collapsed === 'false'
+            && !tools.closest('[data-ai-maximized="true"], [data-log-maximized="true"]');
+    }
+    function apply() {
+        handle.dataset.enabled = enabled() ? 'true' : 'false';
+        if (!enabled()) return;
+        const available = panel.getBoundingClientRect().height - 4;
+        if (available <= 0) return;
+        const minimum = Math.min(120, available / 2);
+        const maximum = available - Math.min(140, available / 2);
+        const height = Math.min(Math.max(available * ratio, minimum), maximum);
+        tools.style.setProperty('--notes-tools-size', `${height}px`);
+        handle.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+    }
+    function resize(height) {
+        const available = panel.getBoundingClientRect().height - 4;
+        if (available < 260) return false;
+        ratio = Math.min(Math.max(height, 120), available - 140) / available;
+        edited = true;
+        apply();
+        return true;
+    }
+    handle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !enabled()) return;
+        event.preventDefault();
+        dragging = true;
+        changed = false;
+        handle.dataset.dragging = 'true';
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (event) => {
+        if (!dragging || !enabled()) return;
+        changed = resize(panel.getBoundingClientRect().bottom - event.clientY) || changed;
+    });
+    document.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.dataset.dragging = 'false';
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        if (changed && enabled()) void saveLayoutRatio('toolsRatio', ratio);
+    });
+    handle.addEventListener('keydown', (event) => {
+        if (!enabled() || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const height = tools.getBoundingClientRect().height + (event.key === 'ArrowUp' ? 16 : -16);
+        if (resize(height)) void saveLayoutRatio('toolsRatio', ratio);
+    });
+    handle.addEventListener('dblclick', () => {
+        if (!enabled()) return;
+        ratio = 0.35;
+        edited = true;
+        apply();
+        void saveLayoutRatio('toolsRatio', 0);
+    });
+    window.addEventListener('resize', apply);
+    window.addEventListener('ttyphoon-notes-layout', apply);
+    if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(apply);
+        observer.observe(panel);
+    }
+    const maximizeRoot = tools.closest('#notes-pane') || document.getElementById('notes-app');
+    const observer = new MutationObserver(() => { apply(); window.dispatchEvent(new CustomEvent('ttyphoon-notes-layout')); });
+    observer.observe(maximizeRoot, { attributes: true, attributeFilter: ['data-ai-maximized', 'data-log-maximized'] });
+    void restoreLayoutRatio('toolsRatio', 0.35).then((restored) => {
+        if (!edited) ratio = restored;
+        apply();
+    });
+})();
+
+document.addEventListener('keydown', (event) => {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'f') {
+        return;
+    }
+    if (document.getElementById('fullscreen-image-overlay')
+        || window.ttyphoonInputboxOpen === true
+        || window.terminalFocusedState === true) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const findTabActive = elements.toolsTabFind?.getAttribute('aria-selected') === 'true';
+    const panelVisible = elements.toolsPanel?.dataset.collapsed !== 'true';
+    if (findTabActive && panelVisible) {
+        setToolsPanelCollapsed(true);
+    } else {
+        openFindBar();
+    }
+}, true);
 
 document.addEventListener('keydown', (event) => {
     // Block keyboard shortcuts if fullscreen image overlay is open
@@ -15987,19 +17820,10 @@ document.addEventListener('keydown', (event) => {
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        saveAndFormat();
-        return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        const findTabActive = elements.toolsTabFind?.getAttribute('aria-selected') === 'true';
-        const panelVisible = elements.toolsPanel?.dataset.collapsed !== 'true';
-        if (findTabActive && panelVisible) {
-            setToolsPanelCollapsed(true);
-        } else {
-            openFindBar();
+        if (activeGitDiff?.diff.readOnly) {
+            return;
         }
+            saveAndFormat();
         return;
     }
 
@@ -16132,7 +17956,7 @@ hydrateFindFieldHistory(elements.findInput);
 hydrateFindFieldHistory(elements.replaceInput);
 hydrateFindFieldHistory(elements.findFilesInput);
 
-// Load initial notes list on startup; later notesUpdate events will refresh it.
+// Initial scan is followed by context-change events, not terminal focus scans.
 refreshFiles();
 
 if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {

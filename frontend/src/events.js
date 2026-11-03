@@ -4,7 +4,7 @@ import {
     TerminalMouseButton,
     TerminalMouseMotion,
     TerminalMouseWheel,
-} from '../wailsjs/go/main/WApp';
+} from './wails-bindings.js';
 
 function mouseButtonToGo(button) {
     if (!Number.isInteger(button) || button < 0 || button > 4) return 1;

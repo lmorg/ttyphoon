@@ -25,9 +25,10 @@ The shell integration must therefore report it explicitly. The environment
 arrives on the `\033_begin;output-block;…` APC sequence and is stored on the
 block by `beginOutputBlock`.
 
-Note the bundled `integrations/shell.bash` and `integrations/shell.zsh` send only
-the command line, so `EnvVars` is empty for those shells. A shell that does send
-the environment (e.g. murex) populates it.
+The bundled Bash and Zsh integrations now send the command line and a base64
+encoded NUL-delimited snapshot of exported environment variables. Other shell
+integrations must report their environment in the same output-block metadata to
+support environment-preserving cloned panes; otherwise `EnvVars` remains empty.
 
 ## Decision
 

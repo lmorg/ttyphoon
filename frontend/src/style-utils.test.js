@@ -34,7 +34,11 @@ describe('style-utils', () => {
 
         expect(css).toContain('.swagger-method-selector');
         expect(css).toContain('.swagger-header-dropdown');
-        expect(css).toContain('Font Awesome Solid');
+        const regularFontIndex = css.indexOf('Font Awesome Regular');
+        const solidFontIndex = css.indexOf('Font Awesome Solid');
+        expect(regularFontIndex).toBeGreaterThanOrEqual(0);
+        expect(solidFontIndex).toBeGreaterThan(regularFontIndex);
+        expect(css).toContain('font-weight: 400;');
         expect(css).toContain('.swagger-endpoint-filter');
     });
 });

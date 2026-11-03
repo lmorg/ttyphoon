@@ -34,6 +34,26 @@ Treat auto-follow as an explicit mode:
 - Historical prompt navigation continues to use an explicit forced-bottom
   action where appropriate.
 
+### Completion Reveals the Final Answer
+
+When the active agent run completes while the live panel is following, cancel
+all pending bottom-chase frames/retries and wait for its final block rendering
+and Markdown processing. Then position the AI output scroll container at the
+start of the current job's last nonempty top-level closed `text` block. This
+excludes thinking, tool calls/output, nested subagent text, and earlier jobs.
+The viewport remains there rather than being pulled back to the tail; `Latest`
+remains the explicit way to return to the bottom if the answer is longer than
+the viewport.
+
+If the user already paused following, preserve their viewport throughout
+completion. Wheel/touch/pointer interaction during asynchronous finalization,
+an explicit Latest action, a new run, or switching away from the live panel
+invalidates the pending reveal. Completion events with a different run ID are
+ignored. The formatter accepts `scrollToBottom: false` so completion does not
+silently override this policy. Low-level bottom scrolling checks follow mode
+again when delayed callbacks execute. If there is no final text block, do not
+reposition to a tool or reasoning block.
+
 This is implemented in `frontend/src/notes.js` by keeping
 `state.aiStickToBottom` false after user scrolling, removing the implicit
 `isAIOutputNearBottom()` fallback from final-output updates, and adding wheel,
@@ -52,6 +72,9 @@ state stops them safely.
   visible `Latest` affordance is the indicator that newer content exists.
 - This policy is separate from the scroll-synced transforms used to pin code
   and quote block toolbars (ADR 0034).
+- Following users see the beginning of the completed answer instead of its
+  last lines, while paused readers are not moved. Tests cover both cases,
+  stale-run completion, and user scrolling during final rendering.
 
 ## References
 

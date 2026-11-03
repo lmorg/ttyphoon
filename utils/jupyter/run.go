@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,49 @@ func tempDir(bookId string) string {
 
 func fileName(codeId string, binding *LanguageBindingT) string {
 	return fmt.Sprintf("%s.%s", codeId, binding.FileExtension)
+}
+
+func PrepareTerminalCommand(code, language, pwd string) (string, func(), error) {
+	binding := resolveFormatBinding(language)
+	if binding == nil {
+		return "", nil, fmt.Errorf("unsupported language: %s", language)
+	}
+	if len(binding.ExecuteCommand) == 0 {
+		return "", nil, fmt.Errorf("no execution command for %s", binding.Description)
+	}
+	directory, err := os.MkdirTemp("", app.DirName+"-terminal-")
+	if err != nil {
+		return "", nil, errCreatingTempFile(err)
+	}
+	cleanup := func() { _ = os.RemoveAll(directory) }
+	name := fileName("Main", binding)
+	if err := writeRenderedSource(directory, name, code, binding); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	path := filepath.Join(directory, name)
+	var lines, commands []string
+	if pwd != "" {
+		lines = append(lines, "cd -- "+terminalShellCommand([]string{pwd})+" || exit $?")
+	}
+	if format := expandVars(binding.FormatCommand, path); len(format) > 0 {
+		lines = append(lines, terminalShellCommand(format)+" || :")
+	}
+	for _, argv := range [][]string{binding.BuildCommand, binding.BuildCommand2, binding.ExecuteCommand} {
+		if len(argv) > 0 {
+			commands = append(commands, terminalShellCommand(expandVars(argv, path)))
+		}
+	}
+	lines = append(lines, strings.Join(commands, " && "))
+	return "(\n" + strings.Join(lines, "\n") + "\n)", cleanup, nil
+}
+
+func terminalShellCommand(argv []string) string {
+	quoted := make([]string, len(argv))
+	for index, argument := range argv {
+		quoted[index] = "'" + strings.ReplaceAll(argument, "'", "'\\''") + "'"
+	}
+	return strings.Join(quoted, " ")
 }
 
 func runNote(ctx context.Context, bookId, codeId, pwd, code string, ch chan *OutputT, binding *LanguageBindingT, parameters ...string) {
@@ -188,6 +232,13 @@ func execute(ctx context.Context, codeId, pwd string, argv []string, ch chan *Ou
 var _LOG_TYPE = map[bool]string{true: "warn", false: "info"}
 
 func readAndEmit(id string, ch chan *OutputT, reader io.Reader, isStderr bool) {
+	defer func() {
+		if recover := recover(); recover != nil {
+			log.Printf("[error] panic caught in jupyter/readAndEmit(): %v", recover)
+			_, _ = os.Stderr.Write(debug.Stack())
+		}
+	}()
+
 	if ch == nil {
 		ch = make(chan *OutputT)
 

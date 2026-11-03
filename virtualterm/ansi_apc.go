@@ -2,6 +2,7 @@ package virtualterm
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/codes"
 	"github.com/lmorg/ttyphoon/types"
@@ -158,8 +159,41 @@ func (term *Term) parseApcCodes() {
 				fmt.Sprintf("Unknown mxAPC `config` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
 		}
 
+	case "ttyphoon":
+		if apc.Index(1) == "interactive-action-complete" {
+			term.mxapcInteractiveActionComplete(apc)
+		}
+
 	default:
 		term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
 			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(0), string(text[:len(text)-1])))
 	}
+}
+
+type interactiveActionCompletion struct {
+	ID       string `json:"id"`
+	ExitCode int    `json:"exitCode"`
+}
+
+func (term *Term) mxapcInteractiveActionComplete(apc *types.ApcSlice) {
+	completion, err := parseInteractiveActionCompletion(apc.Index(2))
+	if err != nil {
+		return
+	}
+	term.pendingInteractiveAction = &completion
+}
+
+func parseInteractiveActionCompletion(payload string) (interactiveActionCompletion, error) {
+	apc := types.NewApcSlice([]rune("ttyphoon;interactive-action-complete;" + strings.TrimSpace(payload)))
+	var decoded struct {
+		ID       string `json:"id"`
+		ExitCode *int   `json:"exitCode"`
+	}
+	if err := apc.Parameters(&decoded); err != nil {
+		return interactiveActionCompletion{}, err
+	}
+	if decoded.ID == "" || decoded.ExitCode == nil || *decoded.ExitCode < 0 || *decoded.ExitCode > 255 {
+		return interactiveActionCompletion{}, fmt.Errorf("invalid interactive action completion")
+	}
+	return interactiveActionCompletion{ID: decoded.ID, ExitCode: *decoded.ExitCode}, nil
 }

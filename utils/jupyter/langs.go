@@ -156,6 +156,17 @@ func FileExtensionForLanguage(language string) string {
 	return strings.TrimPrefix(binding.FileExtension, ".")
 }
 
+func LanguageAliases(language string) []string {
+	binding := resolveFormatBinding(language)
+	if binding == nil {
+		binding = resolveFormatBinding(normalizeLanguage(language))
+	}
+	if binding == nil {
+		return nil
+	}
+	return slices.Clone(binding.Aliases)
+}
+
 func normalizeLanguage(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }

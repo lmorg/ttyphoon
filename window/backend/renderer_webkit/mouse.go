@@ -1,6 +1,9 @@
 package rendererwebkit
 
-import "github.com/lmorg/ttyphoon/types"
+import (
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/backend/cursor"
+)
 
 // activatePane tells tmux which pane we've switched to and updates the app title
 func (wr *webkitRender) activatePane(tile types.Tile) {
@@ -106,6 +109,20 @@ func (wr *webkitRender) HandleMouseMotion(cellX, cellY, relX, relY, state int32)
 
 	tile.GetTerm().MouseMotion(pos, &types.XY{X: relX, Y: relY}, callback)
 
+	wr.TriggerRedraw()
+}
+
+func (wr *webkitRender) HandleMouseLeave() {
+	wr.lastMouseValid.Store(false)
+	if wr.termWin != nil {
+		for _, tile := range wr.termWin.Tiles {
+			if tile != nil && tile.GetTerm() != nil {
+				tile.GetTerm().MouseLeave()
+			}
+		}
+	}
+	cursor.Arrow()
+	wr.StatusBarText("")
 	wr.TriggerRedraw()
 }
 

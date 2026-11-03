@@ -149,7 +149,7 @@
   Template: |-
     {{ .Code }}
   FileExtension: Dockerfile
-  BuildCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "${DIR}" ]
+  BuildCommand: [ docker, build, -t, ttyphoon-jupyter:latest, -f, "${FILE}", "." ]
   ExecuteCommand: [ docker, run, --rm, ttyphoon-jupyter:latest ]
   ExecuteParameters: [ docker, run, --rm, ttyphoon-jupyter:latest, "${PARAMETERS}"]
 
