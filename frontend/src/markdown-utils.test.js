@@ -43,6 +43,20 @@ describe('wails image asset rewriting', () => {
         expect(getImageMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        'wails://localhost/images/diagram.png',
+        'wails://localhost:34115/images/diagram.png',
+        'http://wails.localhost/images/diagram.png',
+        'http://wails.localhost:34115/images/diagram.png',
+    ])('rewrites v3 image origin %s', (source) => {
+        const container = containerWith(source);
+
+        processWailsImages(container);
+
+        expect(container.querySelector('img').getAttribute('src'))
+            .toBe('/__asset?path=images%2Fdiagram.png');
+    });
+
     it('decodes percent escapes so the handler receives the real filename', () => {
         const container = containerWith('wails://wails/my%20diagram.png');
 

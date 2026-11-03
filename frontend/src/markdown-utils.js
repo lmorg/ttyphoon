@@ -83,8 +83,8 @@ export function configureMarked() {
 /**
  * Regular expressions for Wails URLs
  */
-const rxWailsUrl = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)/;
-const rxBookmark = /^(wails:\/\/wails\/|wails:\/\/wails.localhost:[0-9]+\/)#/;
+const rxWailsUrl = /^(?:(?:wails:\/\/(?:wails|localhost|wails\.localhost)|https?:\/\/wails\.localhost)(?::[0-9]+)?\/)/;
+const rxBookmark = /^(?:(?:wails:\/\/(?:wails|localhost|wails\.localhost)|https?:\/\/wails\.localhost)(?::[0-9]+)?\/)#/;
 
 /**
  * Render Mermaid diagrams in a container

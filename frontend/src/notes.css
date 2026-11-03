@@ -4594,6 +4594,57 @@ body {
     border-color: var(--accent);
 }
 
+.notes-run-markdown-inline-edit {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.notes-run-markdown-inline-edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 0;
+    resize: none;
+    overflow-y: hidden;
+    padding: 6px;
+    border: 1px solid rgba(var(--selection-rgb), 0.55);
+    border-radius: 3px;
+    background: rgba(var(--bg-rgb), 0.98);
+    color: var(--fg);
+    font: inherit;
+    line-height: inherit;
+    outline: none;
+}
+
+.notes-run-markdown-inline-edit-textarea:focus {
+    border-color: var(--accent);
+}
+
+.notes-run-markdown-inline-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.notes-run-markdown-inline-edit-actions button {
+    padding: 4px 10px;
+    border: 1px solid rgba(var(--fg-rgb), 0.25);
+    border-radius: 3px;
+    background: rgba(var(--bg-rgb), 0.9);
+    color: var(--fg);
+    cursor: pointer;
+}
+
+.notes-run-markdown-inline-edit-actions button:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: rgba(var(--selection-rgb), 0.2);
+}
+
+.notes-run-markdown-inline-edit-actions button:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
 .json-colon,
 .json-brace {
     color: rgba(var(--fg-rgb), 0.85);

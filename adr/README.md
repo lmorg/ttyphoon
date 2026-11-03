@@ -100,6 +100,7 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0083](0083-ai-skills-support-manual-and-model-invocation.md) | AI skills support independent manual and automatic invocation | AI |
 | [0084](0084-ai-skills-read-selected-supporting-files.md) | AI skills can read selected supporting files | AI |
 | [0085](0085-wails-v3-migration.md) | Migrate the desktop application to Wails v3 | Platform |
+| [0086](0086-markdown-run-edits-preserve-source.md) | Markdown Run edits preserve source | Notes |
 
 ## Recurring themes
 

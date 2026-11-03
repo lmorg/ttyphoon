@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@wailsio/runtime": "3.0.0",
-    "highlight-js-murex": "github:lmorg/highlight.js-murex",
-    "highlight-js-terraform": "github:lmorg/highlight.js-terraform",
+    "highlight-js-murex": "git+https://github.com/lmorg/highlight.js-murex.git",
+    "highlight-js-terraform": "git+https://github.com/lmorg/highlight.js-terraform.git",
     "highlight.js": "^11.11.1",
     "jsonc-parser": "^3.3.1",
     "marked-gfm-heading-id": "^4.1.3",

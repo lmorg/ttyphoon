@@ -2724,7 +2724,39 @@ function setCollapsibleHeadingState(heading, collapsed) {
     }
 }
 
-function setupCollapsibleHeadings(container, exclusive = false) {
+function getRenderedSectionHeading(container, target, clientY) {
+    if (state.currentFileType !== 'markdown' || (container !== elements.preview && container !== elements.jupyter)) {
+        return null;
+    }
+    const selector = 'h1, h2, h3, h4, h5, h6';
+    const clickedHeading = target instanceof Element ? target.closest(selector) : null;
+    if (clickedHeading && container.contains(clickedHeading)) {
+        return getCollapsibleSectionWrapper(clickedHeading) ? clickedHeading : null;
+    }
+
+    let precedingHeading = null;
+    for (const heading of container.querySelectorAll(selector)) {
+        const rect = heading.getBoundingClientRect();
+        const precedesClick = rect.height > 0
+            ? rect.top <= clientY
+            : target instanceof Element && Boolean(heading.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (precedesClick) {
+            precedingHeading = heading;
+        }
+    }
+    return getCollapsibleSectionWrapper(precedingHeading) ? precedingHeading : null;
+}
+
+function createCollapseSectionMenuItem(heading) {
+    const collapsed = heading.dataset.collapsed === 'true';
+    return {
+        title: collapsed ? 'Expand section' : 'Collapse section',
+        icon: collapsed ? CONTEXT_ICON_EXPAND_ALL : CONTEXT_ICON_COLLAPSE_ALL,
+        onSelect: () => setCollapsibleHeadingState(heading, !collapsed),
+    };
+}
+
+function setupCollapsibleHeadings(container) {
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
     const headingList = Array.from(headings);
 
@@ -2755,34 +2787,6 @@ function setupCollapsibleHeadings(container, exclusive = false) {
         wrapper.style.opacity = '1';
         heading.insertAdjacentElement('afterend', wrapper);
         sectionEls.forEach((el) => wrapper.appendChild(el));
-
-        heading.style.cursor = 'pointer';
-
-        heading.addEventListener('mouseenter', () => {
-            heading.style.textDecoration = 'underline';
-        });
-        heading.addEventListener('mouseleave', () => {
-            heading.style.textDecoration = '';
-        });
-
-        heading.addEventListener('dblclick', () => {
-            if (exclusive) {
-                headingList.forEach((otherHeading) => {
-                    setCollapsibleHeadingState(otherHeading, otherHeading !== heading);
-                });
-                return;
-            }
-
-            const isCollapsed = heading.dataset.collapsed === 'true';
-
-            if (isCollapsed) {
-                // Expand: animate from 0 → scrollHeight, then release max-height cap.
-                expandCollapsibleHeading(heading);
-            } else {
-                // Collapse: pin to exact current height (no jump), then animate to 0.
-                collapseCollapsibleHeading(heading);
-            }
-        });
     });
 }
 
@@ -7018,13 +7022,88 @@ function toggleMarkdownWrapMode() {
     renderEditorDecorations();
 }
 
+function collectMarkdownRunSourceBlocks(tokens, source, sourceOffset, blocks) {
+    let searchFrom = 0;
+    for (const token of tokens || []) {
+        const raw = String(token.raw || '');
+        const tokenStart = raw ? source.indexOf(raw, searchFrom) : -1;
+        if (tokenStart < 0) {
+            if (token.type === 'heading' || token.type === 'paragraph' || token.type === 'list') {
+                blocks.push(null);
+            }
+            continue;
+        }
+
+        const absoluteStart = sourceOffset + tokenStart;
+        if (token.type === 'heading' || token.type === 'paragraph' || token.type === 'list') {
+            const trailingLineBreaks = raw.match(/(?:\r\n|\n|\r)+$/)?.[0].length || 0;
+            const end = absoluteStart + raw.length - trailingLineBreaks;
+            blocks.push(end > absoluteStart ? {
+                type: token.type,
+                start: absoluteStart,
+                end,
+            } : null);
+        }
+
+        if (token.type === 'html') {
+            const template = document.createElement('template');
+            template.innerHTML = raw;
+            const selector = 'h1, h2, h3, h4, h5, h6, p, ul, ol';
+            for (const element of template.content.querySelectorAll(selector)) {
+                if (!element.parentElement?.closest(selector)) {
+                    blocks.push(null);
+                }
+            }
+        } else if (Array.isArray(token.tokens)) {
+            collectMarkdownRunSourceBlocks(token.tokens, raw, absoluteStart, blocks);
+        }
+
+        searchFrom = tokenStart + raw.length;
+    }
+}
+
+function markMarkdownRunSourceBlocks(container, markdown, sourceOffset, source) {
+    container.__runMarkdownSource = source;
+    const blocks = [];
+    collectMarkdownRunSourceBlocks(marked.lexer(markdown), markdown, 0, blocks);
+
+    const selector = 'h1, h2, h3, h4, h5, h6, p, ul, ol';
+    const renderedBlocks = Array.from(container.querySelectorAll(selector))
+        .filter((element) => !element.parentElement.closest('ul, ol'));
+    for (let index = 0; index < Math.min(blocks.length, renderedBlocks.length); index += 1) {
+        const block = blocks[index];
+        const element = renderedBlocks[index];
+        if (!block) {
+            continue;
+        }
+        const matchesType = block.type === 'heading'
+            ? /^H[1-6]$/.test(element.tagName)
+            : block.type === 'paragraph'
+                ? element.tagName === 'P'
+                : element.tagName === 'UL' || element.tagName === 'OL';
+        if (!matchesType) {
+            continue;
+        }
+
+        const start = sourceOffset + block.start;
+        const end = sourceOffset + block.end;
+        element.dataset.runMarkdownSourceStart = String(start);
+        element.dataset.runMarkdownSourceEnd = String(end);
+        element.dataset.runMarkdownSourceText = source.slice(start, end);
+    }
+}
+
 async function renderJupyterView() {
     // Reset jupyter state for the new render
     state.jupyterCodeBlocks = {};
     state.jupyterBlockCounter = 0;
     
+    const source = getMainEditorValue();
     const markdown = applyDocumentFrontmatter();
     elements.jupyter.innerHTML = marked.parse(markdown);
+    if (state.currentFileType === 'markdown') {
+        markMarkdownRunSourceBlocks(elements.jupyter, markdown, source.length - markdown.length, source);
+    }
     
     // Apply common markdown processing
     await processMarkdownContainer(elements.jupyter);
@@ -7067,6 +7146,166 @@ async function renderJupyterView() {
                 }, 0);
             }
         });
+}
+
+async function beginMarkdownRunBlockEdit(container, block) {
+    const start = Number.parseInt(block.dataset.runMarkdownSourceStart || '', 10);
+    const end = Number.parseInt(block.dataset.runMarkdownSourceEnd || '', 10);
+    const source = container.__runMarkdownSource;
+    const sourceText = block.dataset.runMarkdownSourceText;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || end < start || typeof source !== 'string' || source.slice(start, end) !== sourceText || getMainEditorValue() !== source) {
+        const file = state.currentFile;
+        await renderJupyterView();
+        if (state.currentFile !== file || state.viewMode !== 'jupyter' || getMainEditorValue() !== container.__runMarkdownSource) {
+            return;
+        }
+        const candidates = Array.from(container.querySelectorAll('[data-run-markdown-source-start]'))
+            .filter((element) => element.tagName === block.tagName && element.dataset.runMarkdownSourceText === sourceText);
+        if (candidates.length === 1) {
+            await beginMarkdownRunBlockEdit(container, candidates[0]);
+        }
+        return;
+    }
+
+    const wasDirty = state.dirty;
+    const wasViewTainted = state.viewTainted;
+    const editor = document.createElement('div');
+    editor.className = 'notes-run-markdown-inline-edit';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'notes-run-markdown-inline-edit-textarea';
+    textarea.setAttribute('aria-label', 'Edit Markdown source');
+    textarea.value = sourceText;
+    disableNativeTextAssistance(textarea);
+    const autoResize = () => {
+        textarea.rows = textarea.value.split('\n').length;
+        textarea.style.height = 'auto';
+        const styles = getComputedStyle(textarea);
+        const borderHeight = (Number.parseFloat(styles.borderTopWidth) || 0)
+            + (Number.parseFloat(styles.borderBottomWidth) || 0);
+        if (textarea.scrollHeight > 0) {
+            textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
+        }
+    };
+    textarea.addEventListener('input', autoResize);
+
+    const actions = document.createElement('div');
+    actions.className = 'notes-run-markdown-inline-edit-actions';
+    const saveButton = document.createElement('button');
+    saveButton.type = 'button';
+    saveButton.textContent = 'Save';
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    actions.append(saveButton, cancelButton);
+    editor.append(textarea, actions);
+    block.replaceWith(editor);
+    autoResize();
+    const spellCheck = attachSpellCheck(textarea);
+    const removalObserver = new MutationObserver(() => {
+        if (!container.contains(editor)) {
+            detachSpellCheck();
+        }
+    });
+    const detachSpellCheck = () => {
+        removalObserver.disconnect();
+        spellCheck.detach();
+    };
+    removalObserver.observe(container, { childList: true, subtree: true });
+
+    let appliedText = sourceText;
+    let sourceApplied = false;
+    let saving = false;
+
+    const cancel = () => {
+        if (saving) {
+            return;
+        }
+        if (sourceApplied) {
+            if (state.autosaveTimer) {
+                clearTimeout(state.autosaveTimer);
+                state.autosaveTimer = null;
+            }
+            setMainEditorValue(source);
+            setDirty(wasDirty);
+            state.viewTainted = wasViewTainted;
+        }
+        detachSpellCheck();
+        editor.replaceWith(block);
+    };
+
+    const save = async () => {
+        if (saving) {
+            return;
+        }
+        saving = true;
+        saveButton.disabled = true;
+        cancelButton.disabled = true;
+
+        const currentSource = getMainEditorValue();
+        const expectedSource = sourceApplied
+            ? source.slice(0, start) + appliedText + source.slice(end)
+            : source;
+        if (currentSource !== expectedSource) {
+            notifyTerminal('Markdown changed while this block was being edited. Cancel and reopen Run.', 'warn');
+            saving = false;
+            saveButton.disabled = false;
+            cancelButton.disabled = false;
+            return;
+        }
+
+        const nextText = textarea.value;
+        if (nextText !== appliedText || !sourceApplied) {
+            const rangeEnd = sourceApplied ? start + appliedText.length : end;
+            if (isMonacoActive()) {
+                suppressMonacoChange = true;
+                try {
+                    monacoMainEditor.replaceRange(start, rangeEnd, nextText, 'notes-run-markdown-edit');
+                } finally {
+                    suppressMonacoChange = false;
+                }
+                if (elements.editor) {
+                    elements.editor.value = monacoMainEditor.getValue();
+                }
+            } else {
+                setMainEditorValue(currentSource.slice(0, start) + nextText + currentSource.slice(rangeEnd));
+            }
+            appliedText = nextText;
+            sourceApplied = true;
+            state.viewTainted = true;
+            setDirty(true);
+        }
+
+        if (state.autosaveTimer) {
+            clearTimeout(state.autosaveTimer);
+            state.autosaveTimer = null;
+        }
+        const saved = await saveFile();
+        if (!saved) {
+            saving = false;
+            saveButton.disabled = false;
+            cancelButton.disabled = false;
+            return;
+        }
+
+        state.viewTainted = false;
+        detachSpellCheck();
+        await renderJupyterView();
+    };
+
+    saveButton.addEventListener('click', () => { void save(); });
+    cancelButton.addEventListener('click', cancel);
+    textarea.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            cancel();
+        } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void save();
+        }
+    });
+
+    textarea.focus();
 }
 
 function convertToJupyterCodeBlocks() {
@@ -11713,6 +11952,7 @@ function enableImageContextMenus(container) {
             
             const src = img.src;
             if (!src) return;
+            const sectionHeading = getRenderedSectionHeading(container, img, e.clientY);
             
             // Use the original filename from the data attribute if available
             let filename = img.dataset.originalFilename || img.alt || 'Image';
@@ -11736,12 +11976,16 @@ function enableImageContextMenus(container) {
 
             showLocalMenu({
                 title: filename,
-                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...'],
+                options: ['Copy image to clipboard', 'Save image...', 'Ask AI (image)...', ...(sectionHeading ? ['Collapse section'] : [])],
                 x: e.clientX,
                 y: e.clientY,
                 showNextToMouseCursor: true,
-                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI],
+                icons: [0xf0c5, 0xf0c7, CONTEXT_ICON_ASK_AI, ...(sectionHeading ? [CONTEXT_ICON_COLLAPSE_ALL] : [])],
                 onSelect: async (index) => {
+                    if (index === 3 && sectionHeading) {
+                        collapseCollapsibleHeading(sectionHeading);
+                        return;
+                    }
                     let dataURLToCopy;
                     try {
                         dataURLToCopy = await resolveDataURL();
@@ -13482,9 +13726,31 @@ function initRenderedNotesContextMenu(container, viewMode) {
 
     initRenderedBlockCopyButtons(container);
 
+    container.addEventListener('dblclick', (e) => {
+        if (viewMode !== 'jupyter' || state.viewMode !== 'jupyter' || state.currentFileType !== 'markdown') {
+            return;
+        }
+        const block = e.target instanceof Element
+            ? e.target.closest('[data-run-markdown-source-start]')
+            : null;
+        if (!block || !container.contains(block)) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        beginMarkdownRunBlockEdit(container, block);
+    });
+
     container.addEventListener('contextmenu', (e) => {
+        const sectionHeading = getRenderedSectionHeading(container, e.target, e.clientY);
+        const runMarkdownBlock = viewMode === 'jupyter'
+            && state.currentFileType === 'markdown'
+            && container === elements.jupyter
+            && e.target instanceof Element
+            ? e.target.closest('[data-run-markdown-source-start]')
+            : null;
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
-        if (anchor && container.contains(anchor)) {
+        if (anchor && container.contains(anchor) && !runMarkdownBlock && !sectionHeading) {
             e.preventDefault();
             e.stopPropagation();
             openHyperlinkContextMenu(anchor);
@@ -13537,6 +13803,13 @@ function initRenderedNotesContextMenu(container, viewMode) {
                 createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
                 { title: '-' },
             ];
+        const editMarkdownItems = runMarkdownBlock
+            ? [{
+                title: 'Edit',
+                icon: CONTEXT_ICON_EDIT,
+                onSelect: () => beginMarkdownRunBlockEdit(container, runMarkdownBlock),
+            }, { title: '-' }]
+            : [];
         const codeSaveItems = codeBlockText && viewMode === 'viewer'
             ? [createSaveCodeBlockMenuItem(codeBlockText, codeBlockLanguage), { title: '-' }]
             : [];
@@ -13544,6 +13817,9 @@ function initRenderedNotesContextMenu(container, viewMode) {
         const allMenuItems = [
             ...copyItems,
             ...codeSaveItems,
+            ...editMarkdownItems,
+            ...(sectionHeading ? [createCollapseSectionMenuItem(sectionHeading), { title: '-' }] : []),
+            ...(anchor ? [{ title: 'Link actions', onSelect: () => openHyperlinkContextMenu(anchor) }, { title: '-' }] : []),
             ...tableItems,
             ...wordWrapItems,
             ...insertItems,

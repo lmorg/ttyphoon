@@ -1426,6 +1426,316 @@ describe('notes rendering', () => {
         }
     });
 
+    it.each(['viewer', 'jupyter'])('collapses the clicked section or nearest preceding heading in %s', async (mode) => {
+        listFilesMock.mockResolvedValue(['$NOTES/collapse.md']);
+        getFileMock.mockResolvedValue({ contents: 'Before headings.\n\n# Outer\n\nOuter text.\n\n## Inner\n\nInner *text*.\n\n- Item\n\n[Link](https://example.com)\n\n![Image](example.png)\n\n# Next\n\nNext text.', text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/collapse.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        if (mode === 'jupyter') {
+            document.getElementById('notes-tab-jupyter').click();
+            await flushPromises();
+        }
+        const container = document.getElementById(mode === 'viewer' ? 'notes-preview' : 'notes-jupyter');
+        const outer = container.querySelector('h1');
+        const inner = container.querySelector('h2');
+        const next = container.querySelectorAll('h1')[1];
+        for (const heading of [outer, inner, next]) {
+            heading.dispatchEvent(new MouseEvent('mouseenter'));
+            expect(heading.style.textDecoration).toBe('');
+            expect(heading.style.cursor).toBe('');
+            heading.dispatchEvent(new MouseEvent('mouseleave'));
+            expect(heading.style.textDecoration).toBe('');
+        }
+        if (mode === 'viewer') {
+            inner.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            expect(inner.dataset.collapsed).not.toBe('true');
+            expect(container.querySelector('.notes-run-markdown-inline-edit')).toBeNull();
+        }
+        container.querySelector('p').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+        expect(showLocalMenuMock.mock.calls.at(-1)[0].options).not.toContain('Collapse section');
+        const targets = [inner, container.querySelector('em'), container.querySelector('li'), container.querySelector('a'), container.querySelector('img')];
+        for (const target of targets) {
+            inner.dataset.collapsed = 'false';
+            target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            expect(menu.options).toContain('Collapse section');
+            menu.onSelect(menu.options.indexOf('Collapse section'));
+            expect(inner.dataset.collapsed).toBe('true');
+            expect(outer.dataset.collapsed).not.toBe('true');
+            expect(next.dataset.collapsed).not.toBe('true');
+        }
+        for (const [heading, top] of [[outer, 20], [inner, 60], [next, 120]]) {
+            vi.spyOn(heading, 'getBoundingClientRect').mockReturnValue({ top, height: 20 });
+        }
+        inner.dataset.collapsed = 'false';
+        container.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientY: 100 }));
+        const blankMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        blankMenu.onSelect(blankMenu.options.indexOf('Collapse section'));
+        expect(inner.dataset.collapsed).toBe('true');
+        expect(next.dataset.collapsed).not.toBe('true');
+
+        inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const expandMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        expect(expandMenu.options).toContain('Expand section');
+        expect(expandMenu.options).not.toContain('Collapse section');
+        expandMenu.onSelect(expandMenu.options.indexOf('Expand section'));
+        expect(inner.dataset.collapsed).toBe('false');
+        expect(inner.style.fontStyle).toBe('');
+        expect(inner.nextElementSibling.style.opacity).toBe('1');
+        if (mode === 'viewer') {
+            inner.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            expect(inner.dataset.collapsed).toBe('false');
+        }
+        inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+        expect(showLocalMenuMock.mock.calls.at(-1)[0].options).toContain('Collapse section');
+        expect(showLocalMenuMock.mock.calls.at(-1)[0].options).not.toContain('Expand section');
+    });
+
+    it.each(['\n', '\r\n'])('edits a Markdown heading from Run as source and rerenders the updated Markdown with %j line endings', async (lineEnding) => {
+        const source = '---\ntitle: Metadata\n---\n\n# Duplicate\n\n> Keep *this* paragraph.\n\n- Alpha\n\n- Beta\n\n1. First\n\n2. Second\n\n# Duplicate\n\nLast paragraph.\n'.replaceAll('\n', lineEnding);
+        const replacement = '# Updated heading\n\n```text\nRendered from Markdown\n```';
+        const secondHeadingStart = source.lastIndexOf('# Duplicate');
+        const expectedSource = (source.slice(0, secondHeadingStart) + replacement + source.slice(secondHeadingStart + '# Duplicate'.length)).replaceAll('\r\n', '\n');
+        listFilesMock.mockResolvedValue(['$NOTES/run-edit.md']);
+        getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/run-edit.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const preview = document.getElementById('notes-preview');
+        preview.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        expect(showLocalMenuMock.mock.calls.at(-1)[0].options).not.toContain('Edit');
+
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+        const runView = document.getElementById('notes-jupyter');
+        const headings = runView.querySelectorAll('h1');
+        headings[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        let inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        expect(inlineEditor.querySelector('textarea').value).toBe('# Duplicate');
+        inlineEditor.querySelectorAll('button')[1].click();
+        expect(headings[1].dataset.collapsed).not.toBe('true');
+
+        headings[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        const editIndex = menu.options.indexOf('Edit');
+        expect(editIndex).toBeGreaterThanOrEqual(0);
+        menu.onSelect(editIndex);
+
+        inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        const textarea = inlineEditor.querySelector('textarea');
+        expect(textarea.value).toBe('# Duplicate');
+        textarea.value = replacement;
+        inlineEditor.querySelector('button').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalledWith('$NOTES/run-edit.md', expectedSource, '');
+        const renderedHeadings = runView.querySelectorAll('h1');
+        expect(renderedHeadings[0]?.textContent).toBe('Duplicate');
+        expect(renderedHeadings[1]?.textContent).toBe('Updated heading');
+        expect(Array.from(runView.querySelectorAll('.jupyter-code-editable'))
+            .some((editor) => editor.value.includes('Rendered from Markdown'))).toBe(true);
+
+        const secondListItem = runView.querySelectorAll('li')[1];
+        secondListItem.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        expect(inlineEditor.querySelector('textarea').value).toBe('- Alpha\n\n- Beta');
+        inlineEditor.querySelector('textarea').value = '- Alpha\n\n- Beta updated';
+        inlineEditor.querySelector('button').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+        const secondListItemStart = expectedSource.indexOf('- Beta');
+        const expectedSourceAfterListEdit = expectedSource.slice(0, secondListItemStart)
+            + '- Beta updated'
+            + expectedSource.slice(secondListItemStart + '- Beta'.length);
+        expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/run-edit.md', expectedSourceAfterListEdit, '');
+
+        runView.querySelector('ol li:last-child p').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const numberedMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        expect(numberedMenu.options).toContain('Edit');
+        numberedMenu.onSelect(numberedMenu.options.indexOf('Edit'));
+        inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        expect(inlineEditor.querySelector('textarea').value).toBe('1. First\n\n2. Second');
+        inlineEditor.querySelector('textarea').blur();
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(runView.contains(inlineEditor)).toBe(true);
+        inlineEditor.querySelectorAll('button')[1].click();
+
+        const paragraph = Array.from(runView.querySelectorAll('p'))
+            .find((element) => element.textContent.includes('Keep this paragraph'));
+        paragraph.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const paragraphMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        paragraphMenu.onSelect(paragraphMenu.options.indexOf('Edit'));
+        const paragraphEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        paragraphEditor.querySelector('textarea').value = 'Discard this edit';
+        const savesBeforeCancel = saveFileMock.mock.calls.length;
+        paragraphEditor.querySelectorAll('button')[1].click();
+        expect(runView.querySelector('.notes-run-markdown-inline-edit')).toBeNull();
+        expect(runView.textContent).toContain('Keep this paragraph');
+        expect(saveFileMock).toHaveBeenCalledTimes(savesBeforeCancel);
+    });
+
+    it('sizes the Run Markdown editor to its content and grows and shrinks on input', async () => {
+        const source = Array.from({ length: 12 }, (_, index) => `- Item ${index + 1}`).join('\n');
+        listFilesMock.mockResolvedValue(['$NOTES/sizing.md']);
+        getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/sizing.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        const scrollHeight = vi.spyOn(Element.prototype, 'scrollHeight', 'get')
+            .mockImplementation(function () {
+                expect(this.isConnected).toBe(true);
+                expect(this.style.height).toBe('auto');
+                return this.value.split('\n').length * 20 + 12;
+            });
+        try {
+            const runView = document.getElementById('notes-jupyter');
+            runView.querySelector('li').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            const textarea = runView.querySelector('.notes-run-markdown-inline-edit textarea');
+            expect(textarea.rows).toBe(12);
+            expect(textarea.style.height).toBe('254px');
+            expect(attachSpellCheck).toHaveBeenCalledWith(textarea);
+            textarea.style.borderWidth = '1px';
+            textarea.value += '\n- Added\n';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            expect(textarea.rows).toBe(14);
+            expect(textarea.style.height).toBe('294px');
+            textarea.value = 'One line';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            expect(textarea.rows).toBe(1);
+            expect(textarea.style.height).toBe('34px');
+            scrollHeight.mockReturnValue(92);
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            expect(textarea.style.height).toBe('94px');
+            textarea.value = '';
+            scrollHeight.mockReturnValue(32);
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            expect(textarea.rows).toBe(1);
+            expect(textarea.style.height).toBe('34px');
+            runView.querySelectorAll('.notes-run-markdown-inline-edit button')[1].click();
+        } finally {
+            scrollHeight.mockRestore();
+        }
+    });
+
+    it.each(['cancel', 'save', 'reload'])('uses bespoke spellchecking and disables text assistance in the Run editor until %s', async (finish) => {
+        listFilesMock.mockResolvedValue(['$NOTES/spelling.md']);
+        getFileMock.mockResolvedValue({ contents: '# Heading\n\nSome prose.', text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/spelling.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        const runView = document.getElementById('notes-jupyter');
+        runView.querySelector('p').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        const editor = runView.querySelector('.notes-run-markdown-inline-edit');
+        const textarea = editor.querySelector('textarea');
+        for (const [attribute, value] of [
+            ['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'],
+            ['spellcheck', 'false'], ['writingsuggestions', 'false'], ['data-gramm', 'false'],
+            ['data-gramm_editor', 'false'], ['data-enable-grammarly', 'false'],
+        ]) expect(textarea.getAttribute(attribute)).toBe(value);
+        const callIndex = attachSpellCheck.mock.calls.findIndex(([target]) => target === textarea);
+        expect(callIndex).toBeGreaterThanOrEqual(0);
+        const handle = attachSpellCheck.mock.results[callIndex].value;
+        expect(handle.detach).not.toHaveBeenCalled();
+        if (finish === 'save') {
+            saveFileMock.mockRejectedValueOnce(new Error('Save failed'));
+            editor.querySelector('button').click();
+            await flushPromises();
+            expect(handle.detach).not.toHaveBeenCalled();
+            expect(runView.contains(editor)).toBe(true);
+            editor.querySelector('button').click();
+        } else if (finish === 'cancel') {
+            editor.querySelectorAll('button')[1].click();
+        } else {
+            await getEventHandler('notesFileChanged')();
+        }
+        await flushPromises();
+        await flushPromises();
+        expect(handle.detach).toHaveBeenCalledOnce();
+        expect(runView.contains(editor)).toBe(false);
+    });
+
+    it.each([
+        ['# Intro\n\n# Target\n\nUpdated paragraph.\n', true],
+        ['# Renamed\n\nUpdated paragraph.\n', false],
+        ['# Target\n\n# Target\n\nUpdated paragraph.\n', false],
+    ])('refreshes stale Run source before editing without a warning: %s', async (updatedSource, resumesEdit) => {
+        listFilesMock.mockResolvedValue(['$NOTES/stale-run.md']);
+        getFileMock.mockResolvedValue({ contents: '# Target\n\nOriginal paragraph.\n', text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/stale-run.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        const runView = document.getElementById('notes-jupyter');
+        const staleHeading = runView.querySelector('h1');
+        document.getElementById('notes-editor').value = updatedSource;
+        sendIpcMock.mockClear();
+        saveFileMock.mockClear();
+        staleHeading.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        await flushPromises();
+        await flushPromises();
+        expect(runView.textContent).toContain('Updated paragraph.');
+        const inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
+        expect(Boolean(inlineEditor)).toBe(resumesEdit);
+        expect(sendIpcMock.mock.calls.some(([event, payload]) => event === 'terminal-notify' && payload.level === 'warn')).toBe(false);
+        expect(saveFileMock).not.toHaveBeenCalled();
+        if (resumesEdit) {
+            expect(inlineEditor.querySelector('textarea').value).toBe('# Target');
+            inlineEditor.querySelector('textarea').value = '# Edited target';
+            inlineEditor.querySelector('button').click();
+            await flushPromises();
+            await flushPromises();
+            expect(saveFileMock).toHaveBeenCalledWith('$NOTES/stale-run.md', updatedSource.replace('# Target', '# Edited target'), '');
+        }
+    });
+
+    it('maps README Run paragraphs and entire nested lists without losing later blocks', async () => {
+        const source = readFileSync('../README.md', 'utf8');
+        listFilesMock.mockResolvedValue(['$NOTES/README.md']);
+        getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/README.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+        const runView = document.getElementById('notes-jupyter');
+        const contentsLink = runView.querySelector('ul a');
+        contentsLink.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const linkMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        expect(linkMenu.options).toContain('Edit');
+        expect(linkMenu.options).toContain('Link actions');
+        linkMenu.onSelect(linkMenu.options.indexOf('Link actions'));
+        expect(displayHyperlinkMenuMock).toHaveBeenCalled();
+        const targets = Array.from(runView.querySelectorAll('h2, h3, h4, p, ul, ol'))
+            .filter((element) => !element.parentElement.closest('ul, ol, table, pre'));
+        expect(targets.length).toBeGreaterThan(30);
+        for (const block of targets) {
+            expect(block.dataset.runMarkdownSourceStart, block.textContent.slice(0, 80)).toBeDefined();
+            block.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            const editor = runView.querySelector('.notes-run-markdown-inline-edit');
+            expect(editor, block.textContent.slice(0, 80)).not.toBeNull();
+            expect(editor.querySelector('textarea').value).toBe(block.dataset.runMarkdownSourceText);
+            editor.querySelectorAll('button')[1].click();
+        }
+    });
+
     it('prints the Markdown modal original content through the shared print pipeline', async () => {
         await importNotesModule();
         getEventHandler('showMarkdownModal')({ id: 'command-meta', markdown: '# Modal document\n\nFull original content' });
