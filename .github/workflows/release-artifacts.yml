@@ -1,0 +1,136 @@
+name: Release Artifacts
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            artifact: ttyphoon-macos-arm64
+            arch: arm64
+          - runner: macos-15-intel
+            artifact: ttyphoon-macos-amd64
+            arch: amd64
+          - runner: ubuntu-24.04
+            artifact: ttyphoon-linux-amd64
+            arch: amd64
+    defaults:
+      run:
+        shell: bash
+    env:
+      ARTIFACT_NAME: ${{ matrix.artifact }}
+      CGO_ENABLED: '1'
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=2'
+      npm_config_allow_git: root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set Up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux Build Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo -n apt-get update
+          sudo -n apt-get install -y --no-install-recommends \
+            build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev
+
+      - name: Configure GitHub HTTPS Fetches
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global --add url."https://github.com/".insteadOf git@github.com:
+
+      - name: Install Wails CLI
+        run: |
+          wails_version=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@${wails_version}"
+          ln -s "$(go env GOPATH)/bin/wails3" "$(go env GOPATH)/bin/wails"
+
+      - name: Generate Bindings and Icons
+        run: wails task -C 1 common:generate:bindings common:generate:icons
+
+      - name: Install Frontend Dependencies
+        run: npm --prefix frontend ci
+
+      - name: Test Frontend
+        run: npm --prefix frontend run test:run -- --reporter=dot
+
+      - name: Build Frontend
+        run: |
+          npm --prefix frontend run build
+          test -s frontend/dist/index.html
+
+      - name: Build Native Executable
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export MACOSX_DEPLOYMENT_TARGET=12.0
+            export CGO_CFLAGS="-mmacosx-version-min=12.0"
+            export CGO_LDFLAGS="-mmacosx-version-min=12.0"
+          fi
+          mkdir -p build/bin
+          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" \
+            -o build/bin/ttyphoon .
+          test -x build/bin/ttyphoon
+
+      - name: Archive macOS App
+        if: runner.os == 'macOS'
+        run: |
+          app=build/bin/ttyphoon.app
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" artifacts
+          cp build/bin/ttyphoon "$app/Contents/MacOS/"
+          cp build/darwin/Info.plist "$app/Contents/"
+          cp build/darwin/icons.icns "$app/Contents/Resources/"
+          codesign --force --sign - "$app"
+          codesign --verify --strict "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "artifacts/$ARTIFACT_NAME.zip"
+          cd artifacts
+          shasum -a 256 "$ARTIFACT_NAME.zip" > "$ARTIFACT_NAME.zip.sha256"
+
+      - name: Archive Linux Executable
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p artifacts
+          tar -C build/bin -czf "artifacts/$ARTIFACT_NAME.tar.gz" ttyphoon
+          cd artifacts
+          sha256sum "$ARTIFACT_NAME.tar.gz" > "$ARTIFACT_NAME.tar.gz.sha256"
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

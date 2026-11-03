@@ -13,6 +13,29 @@ The structure is:
 * Taskfile.yml - Shared frontend build and asset-generation tasks
 * darwin, linux, windows - Platform build tasks and assets
 
+## CI Artifacts
+
+`.github/workflows/release-artifacts.yml` builds on every push to `main`
+(including merges) and supports manual runs from GitHub Actions. It follows
+the [Wails native-runner CI guidance](https://wails.io/guides/build/cross-platform/#cicd-integration).
+
+Download artifacts from the completed **Release Artifacts** workflow run:
+
+* `ttyphoon-macos-arm64` - Apple Silicon `.app` bundle in a ZIP archive
+* `ttyphoon-macos-amd64` - Intel `.app` bundle in a ZIP archive
+* `ttyphoon-linux-amd64` - x86-64 executable in a `.tar.gz` archive
+
+Each artifact contains an archive and a separate SHA-256 checksum file.
+Artifacts are retained for 30 days; the workflow does not publish GitHub
+Releases. macOS bundles are ad-hoc signed, not Developer ID signed or notarized,
+so Gatekeeper may require explicit approval. Linux builds target Ubuntu 24.04
+and require GTK4, WebKitGTK 6.0, and X11 runtime libraries on the destination
+machine.
+
+CI uses the Go version from `go.mod`, Node 24, and the project's Wails version.
+Generation, frontend compilation, and native compilation run sequentially;
+Go compilation is limited to two concurrent workers to reduce peak memory.
+
 ## Mac
 
 The `darwin` directory holds files specific to macOS builds.
