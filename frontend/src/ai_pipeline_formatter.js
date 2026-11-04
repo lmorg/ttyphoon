@@ -200,10 +200,12 @@ export function createAIPipelineFormatter(container, options = {}) {
     const requestTitles = new WeakMap();
     let renderVersion = 0;
     let jobRoot = null;
+    let historicalStreamRoot = null;
     let isRendering = false;
     let needsRender = false;
     let lazyChunkObserver = null;
     let legacyRender = false;
+    let historicalResponseBlockId = '';
     const streamBlocks = new Map();
     const pendingBlockChildren = new Map();
     // Per markdown root: how much of its text is already committed to the DOM.
@@ -329,6 +331,8 @@ export function createAIPipelineFormatter(container, options = {}) {
         streamText = '';
         requestTitle = '';
         jobRoot = null;
+        historicalStreamRoot = null;
+        historicalResponseBlockId = '';
         isRendering = false;
         needsRender = false;
         container.textContent = '';
@@ -350,6 +354,8 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
         streamText = '';
         renderVersion += 1;
+        historicalStreamRoot = null;
+        historicalResponseBlockId = '';
         isRendering = false;
         needsRender = false;
         resetSectionCache();
@@ -505,8 +511,8 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
 
         const root = ensureJobRoot();
-        const wrapper = document.createElement('div');
         const kind = String(block?.kind || 'text');
+        const wrapper = document.createElement('div');
         const parentId = String(block?.parentId || '');
         const rawSubagent = kind === 'subagent' && !String(block?.label || '');
         let outputToggle = null;
@@ -520,7 +526,6 @@ export function createAIPipelineFormatter(container, options = {}) {
         wrapper.dataset.parentId = parentId;
         wrapper.dataset.blockKind = kind;
         wrapper.dataset.blockStatus = closed ? 'closed' : 'open';
-
         let contentRoot;
         if (isRawBlock(kind)) {
             wrapper.classList.add('notes-ai-markdown', 'markdown-body');
@@ -587,7 +592,9 @@ export function createAIPipelineFormatter(container, options = {}) {
             waiting.push(wrapper);
             pendingBlockChildren.set(parentId, waiting);
         } else {
-            root.appendChild(wrapper);
+            (historicalStreamRoot && kind !== 'request' && blockId !== historicalResponseBlockId
+                ? historicalStreamRoot
+                : root).appendChild(wrapper);
         }
 
         const entry = {
@@ -942,6 +949,8 @@ export function createAIPipelineFormatter(container, options = {}) {
         // once would lock the UI for large session logs (hljs highlighting,
         // mermaid, hyperlink scanning, table + image setup on N sections).
         legacyRender = options.legacy === true;
+        historicalStreamRoot = null;
+        historicalResponseBlockId = '';
         streamText = String(text || '');
         renderVersion += 1;
 
@@ -1131,27 +1140,74 @@ export function createAIPipelineFormatter(container, options = {}) {
         }
     }
 
-    function setBlocks(blocks, loadContent) {
+    function setBlocks(blocks, loadContent, {
+        collapseIntermediate = false,
+        prompt = '',
+        timestamp = '',
+    } = {}) {
         destroyLazyObserver();
         streamBlocks.clear();
+        const entries = Array.isArray(blocks) ? blocks : [];
         legacyRender = false;
         container.textContent = '';
         streamText = '';
         renderVersion += 1;
+        historicalStreamRoot = null;
+        historicalResponseBlockId = collapseIntermediate
+            ? String([...entries].reverse().find((block) =>
+                block?.kind === 'text' && !block?.parentId && Number(block?.size) > 0)?.blockId || '')
+            : '';
+        if (collapseIntermediate) {
+            const promptEl = document.createElement('div');
+            promptEl.className = 'notes-ai-prefix markdown-body';
+            promptEl.innerHTML = markedInstance
+                ? markedInstance.parse(`# Prompt\n\n${String(prompt || '')}`)
+                : `# Prompt\n\n${String(prompt || '')}`;
+            container.appendChild(promptEl);
+            if (processMarkdownContainer) {
+                void Promise.resolve(processMarkdownContainer(promptEl)).catch((err) => {
+                    console.error('Failed to render historical AI prompt:', err);
+                });
+            }
+            const timestampEl = document.createElement('p');
+            timestampEl.className = 'notes-ai-timestamp';
+            timestampEl.textContent = String(timestamp || '');
+            container.appendChild(timestampEl);
+        }
         jobRoot = document.createElement('div');
         jobRoot.className = 'notes-ai-job';
         container.appendChild(jobRoot);
 
-        const entries = Array.isArray(blocks) ? blocks : [];
-        const shells = entries.map((block) => {
-            const entry = openBlock(block);
-            if (entry) {
-                entry.loadPrintContent = () => loadContent(block);
-                entry.root.dataset.blockLoaded = 'false';
-                entry.root.textContent = '';
-            }
-            return { block, entry };
-        }).filter((item) => item.entry);
+        if (collapseIntermediate) {
+            const disclosure = document.createElement('details');
+            disclosure.className = 'notes-ai-historical-disclosure';
+            disclosure.dataset.historicalStream = 'true';
+            const summary = document.createElement('summary');
+            summary.className = 'notes-ai-historical-summary';
+            summary.textContent = 'AI thought processes';
+            historicalStreamRoot = document.createElement('div');
+            historicalStreamRoot.className = 'notes-ai-historical-stream';
+            disclosure.append(summary, historicalStreamRoot);
+            jobRoot.appendChild(disclosure);
+        }
+
+        const shells = entries
+            .filter((block) => !(collapseIntermediate && block?.kind === 'request'))
+            .map((block) => {
+                const entry = openBlock(block);
+                if (entry) {
+                    entry.loadPrintContent = () => loadContent(block);
+                    entry.root.dataset.blockLoaded = 'false';
+                    entry.root.textContent = '';
+                }
+                return { block, entry };
+            }).filter((item) => item.entry);
+        const groupedShells = collapseIntermediate
+            ? shells.filter((item) => item.block?.kind !== 'request'
+                && String(item.block?.blockId || '') !== historicalResponseBlockId)
+            : [];
+        const groupedEntries = new Set(groupedShells);
+        const ungroupedShells = shells.filter((item) => !groupedEntries.has(item));
 
         const load = async (item) => {
             if (!item.entry || item.entry.root.dataset.blockLoaded === 'pending'
@@ -1172,14 +1228,26 @@ export function createAIPipelineFormatter(container, options = {}) {
             }
         };
 
+        const historicalDisclosure = jobRoot.querySelector('details[data-historical-stream="true"]');
+        if (historicalDisclosure) {
+            historicalDisclosure.addEventListener('toggle', () => {
+                if (historicalDisclosure.open) {
+                    groupedShells.forEach((item) => { void load(item); });
+                }
+            });
+        }
+
         if (typeof IntersectionObserver !== 'function') {
-            shells.forEach((item) => { void load(item); });
+            (collapseIntermediate ? ungroupedShells : shells).forEach((item) => { void load(item); });
             return;
         }
 
         // A still-open block can receive live deltas, so it must not wait for scroll.
-        const openShells = shells.filter((item) => String(item.block?.status || '') === 'open');
+        const openShells = ungroupedShells.filter((item) => String(item.block?.status || '') === 'open');
         openShells.forEach((item) => { void load(item); });
+        ungroupedShells
+            .filter((item) => String(item.block?.blockId || '') === historicalResponseBlockId)
+            .forEach((item) => { void load(item); });
 
         lazyChunkObserver = new IntersectionObserver((observed) => {
             for (const item of observed) {
@@ -1194,13 +1262,13 @@ export function createAIPipelineFormatter(container, options = {}) {
             }
         }, { root: container, rootMargin: '1200px 0px' });
 
-        shells.forEach((item) => {
+        ungroupedShells.forEach((item) => {
             const wrapper = item.entry.root.closest('[data-block-id]');
             if (wrapper) {
                 lazyChunkObserver.observe(wrapper);
             }
         });
-        shells.slice(0, 3).forEach((item) => { void load(item); });
+        ungroupedShells.slice(0, 3).forEach((item) => { void load(item); });
     }
 
     return {

@@ -717,6 +717,8 @@ const state = {
     aiCurrentModelSelection: '',
     // Whether the panel is following live output or showing a historical prompt.
     aiPanelLive: true,
+    aiRunActive: false,
+    aiSelectedPrompt: null,
     // AI logs are loaded lazily: on workspace switch we mark them pending and
     // only actually fetch/render once the AI tab is selected, so the (possibly
     // large) log never blocks file/workspace switching.
@@ -2922,6 +2924,19 @@ function findMarkdownTableBlocks(markdown) {
     return blocks;
 }
 
+function commitMarkdownTableEdit(lines, label) {
+    notesMutationAdapter.replaceDocumentText(elements.editor, {
+        text: lines.join('\n'),
+        selectionStart: Number(elements.editor.selectionStart) || 0,
+        selectionEnd: Number(elements.editor.selectionEnd) || 0,
+        source: 'markdown-table-edit',
+        label,
+        emit: true,
+    });
+    state.viewTainted = true;
+    void saveFile();
+}
+
 function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
     if (!block || !Array.isArray(block.rowLineIndexes)) {
         return false;
@@ -2932,7 +2947,7 @@ function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
         return false;
     }
 
-    const lines = String(elements.editor.value || '').split('\n');
+    const lines = getMainEditorValue().split('\n');
     if (lineIndex < 0 || lineIndex >= lines.length) {
         return false;
     }
@@ -2944,12 +2959,7 @@ function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
 
     parsed.cells[columnIndex] = String(value ?? '').trim();
     lines[lineIndex] = serializeMarkdownTableRow(parsed.cells, parsed.hasLeadingPipe, parsed.hasTrailingPipe);
-    elements.editor.value = lines.join('\n');
-
-    setDirty(true);
-    scheduleRender();
-    scheduleAutoSave();
-    saveFile();
+    commitMarkdownTableEdit(lines, 'Edit markdown table cell');
 
     return true;
 }
@@ -2957,7 +2967,7 @@ function updateMarkdownTableCell(block, sourceRowIndex, columnIndex, value) {
 function insertMarkdownRowAfter(block, sourceRowIndex) {
     if (!block || !Array.isArray(block.rowLineIndexes)) return;
 
-    const lines = String(elements.editor.value || '').split('\n');
+    const lines = getMainEditorValue().split('\n');
     // Determine column count from the header row
     const headerParsed = parseMarkdownTableRow(lines[block.rowLineIndexes[0]]);
     const colCount = headerParsed.cells.length;
@@ -2972,19 +2982,14 @@ function insertMarkdownRowAfter(block, sourceRowIndex) {
     // If inserting after header (sourceRowIndex === 0), insert after separator
     const insertAfterLine = sourceRowIndex === 0 ? block.separatorLineIndex : lastRowIdx;
     lines.splice(insertAfterLine + 1, 0, newRow);
-    elements.editor.value = lines.join('\n');
-
-    setDirty(true);
-    scheduleRender();
-    scheduleAutoSave();
-    saveFile();
+    commitMarkdownTableEdit(lines, 'Insert markdown table row');
     renderJupyterView();
 }
 
 function insertMarkdownColumnAfter(block, columnIndex) {
     if (!block || !Array.isArray(block.rowLineIndexes)) return;
 
-    const lines = String(elements.editor.value || '').split('\n');
+    const lines = getMainEditorValue().split('\n');
 
     // Insert into each data/header row
     block.rowLineIndexes.forEach(lineIdx => {
@@ -3000,12 +3005,7 @@ function insertMarkdownColumnAfter(block, columnIndex) {
     sepParsed.cells.splice(columnIndex + 1, 0, '---');
     lines[block.separatorLineIndex] = serializeMarkdownTableRow(sepParsed.cells, sepParsed.hasLeadingPipe, sepParsed.hasTrailingPipe);
 
-    elements.editor.value = lines.join('\n');
-
-    setDirty(true);
-    scheduleRender();
-    scheduleAutoSave();
-    saveFile();
+    commitMarkdownTableEdit(lines, 'Insert markdown table column');
     renderJupyterView();
 }
 
@@ -3019,19 +3019,14 @@ function deleteMarkdownRow(block, sourceRowIndex) {
         return;
     }
 
-    const lines = String(elements.editor.value || '').split('\n');
+    const lines = getMainEditorValue().split('\n');
     const lineIndex = block.rowLineIndexes[sourceRowIndex];
     if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
         return;
     }
 
     lines.splice(lineIndex, 1);
-    elements.editor.value = lines.join('\n');
-
-    setDirty(true);
-    scheduleRender();
-    scheduleAutoSave();
-    saveFile();
+    commitMarkdownTableEdit(lines, 'Delete markdown table row');
     renderJupyterView();
 }
 
@@ -3040,7 +3035,7 @@ function deleteMarkdownColumn(block, columnIndex) {
         return;
     }
 
-    const lines = String(elements.editor.value || '').split('\n');
+    const lines = getMainEditorValue().split('\n');
     const headerParsed = parseMarkdownTableRow(lines[block.rowLineIndexes[0]]);
     if (columnIndex < 0 || columnIndex >= headerParsed.cells.length || headerParsed.cells.length <= 1) {
         return;
@@ -3060,12 +3055,7 @@ function deleteMarkdownColumn(block, columnIndex) {
     }
     lines[block.separatorLineIndex] = serializeMarkdownTableRow(sepParsed.cells, sepParsed.hasLeadingPipe, sepParsed.hasTrailingPipe);
 
-    elements.editor.value = lines.join('\n');
-
-    setDirty(true);
-    scheduleRender();
-    scheduleAutoSave();
-    saveFile();
+    commitMarkdownTableEdit(lines, 'Delete markdown table column');
     renderJupyterView();
 }
 
@@ -3490,7 +3480,7 @@ async function evaluateTableFormulasInPlace(container) {
 }
 
 function setupInteractiveMarkdownTables(container, isEditable) {
-    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+    const blocks = findMarkdownTableBlocks(getMainEditorValue());
 
     setupInteractiveTableCells(
         container,
@@ -7332,6 +7322,9 @@ function convertToJupyterCodeBlocks() {
         const wrapper = document.createElement('div');
         wrapper.className = 'jupyter-code-block';
         wrapper.dataset.blockId = blockId;
+        wrapper.addEventListener('dblclick', (event) => {
+            event.stopPropagation();
+        });
         
         const toolbar = document.createElement('div');
         toolbar.className = 'jupyter-toolbar';
@@ -12486,6 +12479,13 @@ function summarizePromptText(value, fallback) {
     return `${normalized.slice(0, 87).trimEnd()}...`;
 }
 
+function extractAIPromptLogContext(markdown) {
+    const text = String(markdown || '');
+    const timestamp = text.match(/<!-- start request:\s*([^>]+?)\s*-->/)?.[1]?.trim() || '';
+    const prompt = text.match(/### Prompt[ \t]*\r?\n+([\s\S]*?)(?=\r?\n### (?:Command|Output|Stream Trace)\b|$)/)?.[1]?.trim() || '';
+    return { prompt, timestamp };
+}
+
 function collectAIPromptTargets() {
     // Deprecated: legacy DOM-based prompt collector kept as a fallback for the
     // initial refresh before the async backend list resolves.
@@ -12528,7 +12528,7 @@ function collectAIPromptTargets() {
 // captured when the prompt started; summary is the rendered dropdown label.
 async function refreshAIPromptJumpFromBackend() {
     if (!elements.toolsAIPromptJump) {
-        return;
+        return [];
     }
 
     let metas = [];
@@ -12544,21 +12544,22 @@ async function refreshAIPromptJumpFromBackend() {
         source: 'backend',
         sessionId: Number(meta?.sessionId) || 0,
         promptId: Number(meta?.promptId) || 0,
+        status: String(meta?.status || 'success'),
+        started: String(meta?.started || ''),
         summary: summarizePromptText(String(meta?.heading || ''), `Prompt ${index + 1}`),
     })).filter((entry) => entry.sessionId > 0 && entry.promptId > 0);
 
     state.aiPromptJumpTargets = targets;
     updateAIPromptJumpAvailability();
+    return targets;
 }
 
-// The menu always offers a "Live output" entry, so the button must stay
-// clickable: a run with no finalized prompts yet would otherwise leave no way
-// back to the live feed.
 function updateAIPromptJumpAvailability() {
     if (!elements.toolsAIPromptJump) {
         return;
     }
-    elements.toolsAIPromptJump.disabled = false;
+    elements.toolsAIPromptJump.disabled = !state.aiRunActive
+        && (!Array.isArray(state.aiPromptJumpTargets) || state.aiPromptJumpTargets.length === 0);
 }
 
 function renderAIPromptJumpDropdown() {
@@ -12596,6 +12597,10 @@ function scheduleAIPromptJumpRefresh() {
 }
 
 async function resumeLiveAIOutput() {
+    if (!state.aiRunActive) {
+        return;
+    }
+    state.aiSelectedPrompt = { source: 'live' };
     setAIPanelLive(true);
     await loadAISessionCache('');
 }
@@ -12606,49 +12611,44 @@ async function jumpToAIPromptTarget(target) {
     }
 
     if (target.source === 'live') {
+        if (!state.aiRunActive) {
+            return;
+        }
         await resumeLiveAIOutput();
         return;
     }
 
     if (target.source === 'backend' && target.sessionId > 0 && target.promptId > 0) {
+        state.aiSelectedPrompt = target;
+        updateAIPromptJumpAvailability();
         try {
             // Showing history: suspend live emits so a running agent can't append here.
             setAIPanelLive(false);
-            aiActiveRunId = null;
             const blocks = typeof ListAIStreamBlocks === 'function'
                 ? await ListAIStreamBlocks(target.sessionId, target.promptId)
                 : [];
             if (Array.isArray(blocks) && blocks.length > 0 && typeof GetAIStreamBlockContent === 'function') {
-                const promptText = typeof GetAISessionPrompt === 'function'
+                let promptText = typeof GetAISessionPrompt === 'function'
                     ? await GetAISessionPrompt(target.sessionId, target.promptId)
                     : '';
-                const historicalBlocks = [...blocks];
-                const hasRequestBlock = historicalBlocks.some((block) => block?.kind === 'request');
-                const requestBlockId = `historical-request-${target.sessionId}-${target.promptId}`;
-                if (promptText && !hasRequestBlock) {
-                    historicalBlocks.unshift({
-                        sessionId: target.sessionId,
-                        promptId: target.promptId,
-                        runId: Number(blocks[0]?.runId) || 0,
-                        blockId: requestBlockId,
-                        parentId: '',
-                        kind: 'request',
-                        label: 'Prompt',
-                        ordinal: Math.min(0, Number(blocks[0]?.ordinal) - 1 || -1),
-                        status: 'closed',
-                        size: promptText.length,
-                        historyPrompt: true,
-                    });
+                let timestamp = target.started;
+                if (!promptText || !timestamp) {
+                    const legacyContext = extractAIPromptLogContext(
+                        await GetAIPromptLog(target.sessionId, target.promptId),
+                    );
+                    promptText ||= legacyContext.prompt;
+                    timestamp ||= legacyContext.timestamp;
                 }
-                aiPipelineFormatter.setBlocks(historicalBlocks.map((block) => ({ ...block, userPrompt: promptText })), (block) => {
-                    if (block?.historyPrompt) {
-                        return `## Prompt\n\n${promptText}`;
-                    }
+                aiPipelineFormatter.setBlocks(blocks.map((block) => ({ ...block, userPrompt: promptText })), (block) => {
                     return GetAIStreamBlockContent(
                         target.sessionId,
                         target.promptId,
                         String(block?.blockId || ''),
                     );
+                }, {
+                    collapseIntermediate: true,
+                    prompt: promptText || target.summary,
+                    timestamp,
                 });
             } else {
                 const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
@@ -12681,11 +12681,24 @@ function openAIPromptJumpMenu() {
     const targets = Array.isArray(state.aiPromptJumpTargets) ? state.aiPromptJumpTargets : [];
 
     const menuTargets = [
-        { source: 'live', summary: state.aiPanelLive ? 'Live output (following)' : 'Live output' },
+        ...(state.aiRunActive ? [{ source: 'live', summary: 'Live output' }] : []),
         ...[...targets].reverse(),
     ];
-    const options = menuTargets.map((target) => target.summary);
-    const icons = menuTargets.map((target) => target.source === 'live' && state.aiPanelLive ? CONTEXT_ICON_TICK : 0x20);
+    const prefix = (target) => {
+        if (target.source === 'live' || target.status === 'running') return '💭';
+        if (target.status === 'failed') return '‼️';
+        if (target.status === 'cancelled') return '🚫';
+        return '✅';
+    };
+    const selected = (target) => {
+        const current = state.aiSelectedPrompt;
+        return current?.source === target.source
+            && (target.source === 'live'
+                || (Number(current?.sessionId) === Number(target.sessionId)
+                    && Number(current?.promptId) === Number(target.promptId)));
+    };
+    const options = menuTargets.map((target) => `${prefix(target)} ${target.summary}`);
+    const icons = menuTargets.map((target) => selected(target) ? CONTEXT_ICON_TICK : 0x20);
     const rect = elements.toolsAIPromptJump.getBoundingClientRect();
     showLocalMenu({
         title: 'Prompts',
@@ -13045,7 +13058,7 @@ function formatAIMcpServerMetadataMarkdown(server) {
         ? `\n\n> This server name is already loaded from:\n> ${loadedFrom}`
         : '';
 
-    return `## ${name}\n\n- [${loaded ? 'x' : ' '}] Loaded\n- [${loadable ? 'x' : ' '}] Loadable\n- Source: ${source}\n- Type: ${serverType}${conflict}\n\n### Config\n\n\`\`\`json\n${config}\n\`\`\``;
+    return `## ${name}\n\n- [${loaded ? 'x' : ' '}] Loaded\n- Source: ${source}\n- Type: ${serverType}${conflict}\n\n### Config\n\n\`\`\`json\n${config}\n\`\`\``;
 }
 
 async function openAIToolMetadataModal(index) {
@@ -13431,7 +13444,7 @@ function createTableInsertMenuItems(table, target, tableIndex) {
                 if (isCsv) {
                     insertCsvRowAfter(pos.row);
                 } else {
-                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const blocks = findMarkdownTableBlocks(getMainEditorValue());
                     const block = blocks[tableIndex];
                     if (block) insertMarkdownRowAfter(block, pos.row);
                 }
@@ -13444,7 +13457,7 @@ function createTableInsertMenuItems(table, target, tableIndex) {
                 if (isCsv) {
                     insertCsvColumnAfter(pos.col);
                 } else {
-                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const blocks = findMarkdownTableBlocks(getMainEditorValue());
                     const block = blocks[tableIndex];
                     if (block) insertMarkdownColumnAfter(block, pos.col);
                 }
@@ -13458,7 +13471,7 @@ function createTableInsertMenuItems(table, target, tableIndex) {
                 if (isCsv) {
                     deleteCsvRow(pos.row);
                 } else {
-                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const blocks = findMarkdownTableBlocks(getMainEditorValue());
                     const block = blocks[tableIndex];
                     if (block) deleteMarkdownRow(block, pos.row);
                 }
@@ -13471,7 +13484,7 @@ function createTableInsertMenuItems(table, target, tableIndex) {
                 if (isCsv) {
                     deleteCsvColumn(pos.col);
                 } else {
-                    const blocks = findMarkdownTableBlocks(elements.editor?.value || '');
+                    const blocks = findMarkdownTableBlocks(getMainEditorValue());
                     const block = blocks[tableIndex];
                     if (block) deleteMarkdownColumn(block, pos.col);
                 }
@@ -14450,6 +14463,7 @@ function startAIJob(title) {
 }
 
 let aiActiveRunId = null;
+let aiRunGeneration = 0;
 let aiCompletionRevealVersion = 0;
 let aiCompletionRevealPending = false;
 
@@ -14470,18 +14484,22 @@ function setAIPanelLive(live) {
 function startAIStreamJob(payload) {
     aiCompletionRevealVersion++;
     aiCompletionRevealPending = false;
-    // A new job always follows live output, whichever surface triggered it.
-    setAIPanelLive(true);
-
     const runId = Number(payload?.runId);
     aiActiveRunId = Number.isSafeInteger(runId) && runId > 0 ? runId : null;
+    aiRunGeneration++;
+    state.aiRunActive = true;
+    state.aiSelectedPrompt = { source: 'live' };
+    // A new job always follows live output, whichever surface triggered it.
+    setAIPanelLive(true);
     startAIJob(payload?.title ?? payload);
     void refreshAIPromptJumpFromBackend();
 }
 
-async function finishAIJob() {
-    const following = state.aiStickToBottom && state.aiPanelLive;
+async function finishAIJob(payload = {}) {
+    const generation = aiRunGeneration;
     const runId = aiActiveRunId;
+    const wasViewingLive = state.aiPanelLive && state.aiSelectedPrompt?.source === 'live';
+    const following = wasViewingLive && state.aiStickToBottom;
     const version = ++aiCompletionRevealVersion;
     aiCompletionRevealPending = following;
     if (following) {
@@ -14489,22 +14507,43 @@ async function finishAIJob() {
         clearAIBottomScrollRetries();
     }
     try {
-        await aiPipelineFormatter.finishJob({ scrollToBottom: false });
-        if (version !== aiCompletionRevealVersion || runId !== aiActiveRunId || !following || !state.aiPanelLive) return;
-        const response = aiPipelineFormatter.finalResponseElement();
-        if (response) {
-            const output = elements.aiOutput;
-            output.scrollTop = Math.max(0, output.scrollTop + response.getBoundingClientRect().top
-                - output.getBoundingClientRect().top - output.clientTop);
-        } else {
-            state.aiStickToBottom = true;
+        if (wasViewingLive) {
+            await aiPipelineFormatter.finishJob({ scrollToBottom: false });
+            if (version === aiCompletionRevealVersion && runId === aiActiveRunId && following && state.aiPanelLive) {
+                const response = aiPipelineFormatter.finalResponseElement();
+                if (response) {
+                    const output = elements.aiOutput;
+                    output.scrollTop = Math.max(0, output.scrollTop + response.getBoundingClientRect().top
+                        - output.getBoundingClientRect().top - output.clientTop);
+                } else {
+                    state.aiStickToBottom = true;
+                }
+            }
+        }
+        if (generation !== aiRunGeneration || runId !== aiActiveRunId) return;
+        state.aiRunActive = false;
+        aiActiveRunId = null;
+        state.aiSelectedPrompt = null;
+        setAIPanelLive(false);
+        const targets = await refreshAIPromptJumpFromBackend();
+        if (generation !== aiRunGeneration) return;
+        const promptId = Number(payload?.promptId) || 0;
+        const completedTarget = (promptId > 0
+            ? targets.find((target) => target.promptId === promptId)
+            : null) || (promptId > 0 ? null : targets.at(-1));
+        if (completedTarget) {
+            state.aiSelectedPrompt = completedTarget;
+            updateAIPromptJumpAvailability();
+            if (!wasViewingLive) {
+                await jumpToAIPromptTarget(completedTarget);
+            }
         }
     } catch (err) {
         console.error('Failed to finalize AI output:', err);
     } finally {
         if (version === aiCompletionRevealVersion) aiCompletionRevealPending = false;
         updateAIScrollBottomButton();
-        void refreshAIPromptJumpFromBackend();
+        if (generation === aiRunGeneration) void refreshAIPromptJumpFromBackend();
     }
 }
 
@@ -14665,16 +14704,26 @@ async function restoreAILiveBlocks(workspaceName) {
         return false;
     }
 
+    const active = blocks.some((block) => block?.active === true
+        || (block?.promptId !== undefined && Number(block.promptId) === 0));
+    state.aiRunActive = active;
     aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
         Number(block?.sessionId) || 0,
         Number(block?.promptId) || 0,
         String(block?.blockId || ''),
-    ));
+    ), { collapseIntermediate: !active });
 
-    // Adopt the restored run so a still-running agent streams into this view
-    // rather than being dropped as a stale run.
-    const runId = Number(blocks[blocks.length - 1]?.runId) || 0;
-    aiActiveRunId = runId > 0 ? runId : null;
+    const lastBlock = blocks.at(-1);
+    const runId = Number(lastBlock?.runId) || 0;
+    aiActiveRunId = active && runId > 0 ? runId : null;
+    state.aiSelectedPrompt = active
+        ? { source: 'live' }
+        : {
+            source: 'backend',
+            sessionId: Number(lastBlock?.sessionId) || 0,
+            promptId: Number(lastBlock?.promptId) || 0,
+        };
+    setAIPanelLive(active);
     requestAIScrollToBottom();
     return true;
 }
@@ -14684,18 +14733,28 @@ async function loadAISessionCache(workspaceName) {
         const restored = await restoreAILiveBlocks(workspaceName);
 
         if (!restored) {
-            // Reaching here means the workspace has no blocks at all, so whatever
-            // the session log returns predates block storage.
-            const cache = String(await GetAISessionCache(String(workspaceName || '')) || '');
-            // Fully reset the panel before rendering so content from a previously
-            // active workspace cannot persist across a workspace (tmux tab) switch.
-            aiPipelineFormatter.clear();
-            if (cache) {
-                setAIFinalOutput(cache, { forceBottom: true, legacy: true });
+            if (state.aiRunActive) {
+                setAIPanelLive(true);
+            } else {
+                // Reaching here means the workspace has no blocks at all, so
+                // whatever the session log returns predates block storage.
+                const cache = String(await GetAISessionCache(String(workspaceName || '')) || '');
+                // Fully reset the panel before rendering so content from a previously
+                // active workspace cannot persist across a workspace (tmux tab) switch.
+                aiPipelineFormatter.clear();
+                aiActiveRunId = null;
+                state.aiSelectedPrompt = null;
+                setAIPanelLive(false);
+                if (cache) {
+                    setAIFinalOutput(cache, { forceBottom: true, legacy: true });
+                }
             }
         }
 
-        void refreshAIPromptJumpFromBackend();
+        const targets = await refreshAIPromptJumpFromBackend();
+        if (!state.aiRunActive && !state.aiSelectedPrompt) {
+            state.aiSelectedPrompt = targets.at(-1) || null;
+        }
         if (elements.aiSettingsModal?.dataset?.open === 'true') {
             void loadAISessionManagement().then(() => {
                 renderAISessionManagement();
@@ -14717,6 +14776,10 @@ function markAISessionCachePending(workspaceName) {
     // The run being left belongs to the old workspace; restoring the new one
     // re-adopts whichever run is live there.
     aiActiveRunId = null;
+    aiRunGeneration++;
+    state.aiRunActive = false;
+    state.aiPromptJumpTargets = [];
+    state.aiSelectedPrompt = null;
     // A workspace switch resets the panel, so stop showing a stale historical
     // prompt from the workspace being left.
     setAIPanelLive(true);
@@ -14759,7 +14822,7 @@ EventsOn("aiJobStart", (title) => {
 EventsOn("aiJobFinish", (payload) => {
     const runId = Number(payload?.runId);
     if (Number.isSafeInteger(runId) && runId > 0 && runId !== aiActiveRunId) return;
-    void finishAIJob();
+    void finishAIJob(payload);
 });
 
 EventsOn("aiStreamBlock", (payload) => {

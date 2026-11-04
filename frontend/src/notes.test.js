@@ -20,6 +20,7 @@ function getNotesStyleProperties(selector) {
         if (!rule.selectors.some((candidate) => normalizeSelector(candidate) === normalizeSelector(selector))) return;
         rule.walkDecls((declaration) => { properties[declaration.prop] = declaration.value; });
     });
+
     return properties;
 }
 
@@ -856,6 +857,46 @@ describe('notes rendering', () => {
         expect(servers.querySelectorAll('[data-mcp-index]')).toHaveLength(1);
     });
 
+    it.each([
+        [false, true, ''],
+        [true, true, '/fixture/mcp.json'],
+        [false, false, '/other/mcp.json'],
+    ])('shows only the Loaded checkbox in MCP metadata (loaded=%s, loadable=%s)', async (loaded, loadable, loadedFrom) => {
+        getAIMcpServersMock.mockResolvedValue([{
+            name: 'example',
+            key: 'example-key',
+            source: '/fixture/mcp.json',
+            loaded,
+            loadable,
+            loadedFrom,
+            config: '{"command":"example"}',
+        }]);
+        await importNotesModule();
+        document.getElementById('notes-tools-ai-settings').click();
+        await flushPromises();
+        await flushPromises();
+
+        const listCheckbox = document.querySelector('#notes-ai-settings-mcp-list input');
+        expect(listCheckbox.disabled).toBe(!loadable);
+        document.querySelector('#notes-ai-settings-mcp-list .notes-ai-settings-tool-name').click();
+        await flushPromises();
+        await flushPromises();
+
+        const content = document.getElementById('notes-ai-tool-meta-content');
+        const checkboxes = content.querySelectorAll('input[type="checkbox"]');
+        expect(checkboxes).toHaveLength(1);
+        expect(checkboxes[0].getAttribute('aria-label')).toBe('Loaded');
+        expect(checkboxes[0].checked).toBe(loaded);
+        expect(checkboxes[0].disabled).toBe(!loadable);
+        expect(content.textContent).not.toContain('Loadable');
+        expect(content.textContent).toContain('/fixture/mcp.json');
+        expect(content.textContent).toContain('"command"');
+        if (!loadable) {
+            expect(content.textContent).toContain('This server name is already loaded from:');
+            expect(content.textContent).toContain(loadedFrom);
+        }
+    });
+
     it('shows MCP authorization failure details and refreshes state without restarting the session', async () => {
         getAIMcpServersMock.mockResolvedValue([{ name: 'notion', key: 'notion-key', source: '/fixture/mcp.json', loaded: false }]);
         setAIMcpServerEnabledMock.mockRejectedValueOnce(new Error('OAuth authorization was cancelled'));
@@ -1492,6 +1533,43 @@ describe('notes rendering', () => {
         inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
         expect(showLocalMenuMock.mock.calls.at(-1)[0].options).toContain('Collapse section');
         expect(showLocalMenuMock.mock.calls.at(-1)[0].options).not.toContain('Expand section');
+    });
+
+    it('keeps code-block double-clicks inside the cell rather than editing its enclosing Markdown list', async () => {
+        const source = '- A list with code\n\n  ```bash\n  printf hello\n  ```\n\n  More list text.\n';
+        listFilesMock.mockResolvedValue(['$NOTES/run-code.md']);
+        getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/run-code.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+
+        const runView = document.getElementById('notes-jupyter');
+        const codeBlock = runView.querySelector('.jupyter-code-block');
+        expect(codeBlock.closest('[data-run-markdown-source-start]')?.tagName).toBe('UL');
+        const bubbled = vi.fn();
+        runView.addEventListener('dblclick', bubbled);
+        for (const target of [
+            codeBlock.querySelector('.jupyter-code-editable'),
+            codeBlock.querySelector('.jupyter-highlight code'),
+            codeBlock.querySelector('.jupyter-toolbar'),
+            codeBlock.querySelector('.jupyter-output'),
+            codeBlock,
+        ]) {
+            expect(target).not.toBeNull();
+            const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+            target.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(false);
+            expect(runView.querySelector('.notes-run-markdown-inline-edit')).toBeNull();
+        }
+        expect(bubbled).not.toHaveBeenCalled();
+        expect(runView.querySelector('.jupyter-code-editable')?.value).toContain('printf hello');
+
+        runView.querySelector('li > p').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+        expect(runView.querySelector('.notes-run-markdown-inline-edit textarea')?.value).toContain('- A list with code');
     });
 
     it.each(['\n', '\r\n'])('edits a Markdown heading from Run as source and rerenders the updated Markdown with %j line endings', async (lineEnding) => {
@@ -4523,13 +4601,17 @@ describe('notes rendering', () => {
 
     it('shows the stored user prompt before historical stream and tool blocks', async () => {
         listAIPromptLogsMock.mockResolvedValue([
-            { sessionId: 12, promptId: 7, heading: 'Explain the failure' },
+            { sessionId: 12, promptId: 7, heading: 'Explain the failure', status: 'success', started: '02-11-26 13:15' },
         ]);
         listAIStreamBlocksMock.mockResolvedValue([
-            { blockId: 'tool-call', kind: 'tool-call', status: 'closed', ordinal: 0 },
-            { blockId: 'answer', kind: 'text', status: 'closed', ordinal: 1 },
+            { blockId: 'thinking', kind: 'thinking', status: 'closed', ordinal: 0, size: 10 },
+            { blockId: 'tool-call', kind: 'tool-call', status: 'closed', ordinal: 1, size: 2 },
+            { blockId: 'answer', kind: 'text', status: 'closed', ordinal: 2, size: 20 },
         ]);
-        getAISessionPromptMock.mockResolvedValue('Why did this command fail?');
+        getAISessionPromptMock.mockResolvedValue('');
+        getAIPromptLogMock.mockResolvedValue(
+            '<!-- start request: 02-11-26 13:15 -->\n\n## Request\n\n### Prompt\n\nWhy did this command fail?\n\n### Stream Trace',
+        );
         getAIStreamBlockContentMock.mockImplementation((_sessionId, _promptId, blockId) => Promise.resolve(
             blockId === 'tool-call' ? '{"command":"go test"}' : 'The command failed because a test failed.',
         ));
@@ -4537,24 +4619,52 @@ describe('notes rendering', () => {
         await importNotesModule();
         await flushPromises();
 
-        document.getElementById('notes-tools-ai-prompt-jump').click();
+        const promptButton = document.getElementById('notes-tools-ai-prompt-jump');
+        await vi.waitFor(() => expect(promptButton.disabled).toBe(false));
+        promptButton.click();
         await flushPromises();
         const menu = showLocalMenuMock.mock.calls.at(-1)[0];
-        menu.onSelect(1);
+        expect(menu.options).toEqual(['✅ Explain the failure']);
+        menu.onSelect(0);
         await flushPromises();
         await flushPromises();
         await flushPromises();
 
         expect(getAISessionPromptMock).toHaveBeenCalledWith(12, 7);
         const output = document.getElementById('notes-ai-output');
-        expect(output.textContent).toContain('Prompt');
-        expect(output.textContent).toContain('Why did this command fail?');
-        expect(output.textContent).toContain('Tool call');
+        const timestamp = output.querySelector('.notes-ai-timestamp');
+        const prompt = output.querySelector('.notes-ai-prefix');
+        const disclosure = output.querySelector('details[data-historical-stream="true"]');
+        expect(prompt?.querySelector('h1')?.textContent).toBe('Prompt');
+        expect(prompt?.textContent).toContain('Why did this command fail?');
+        expect(timestamp?.textContent).toBe('02-11-26 13:15');
+        expect(prompt.compareDocumentPosition(timestamp) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(timestamp.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(disclosure?.querySelector(':scope > summary')?.textContent).toBe('AI thought processes');
+        expect(disclosure?.open).toBe(false);
         expect(output.textContent).toContain('The command failed because a test failed.');
+        expect(output.querySelectorAll('details')).toHaveLength(1);
+        const answer = output.querySelector('[data-block-id="answer"]');
+        expect(answer).not.toBeNull();
+        expect(disclosure.contains(answer)).toBe(false);
+        expect(disclosure.querySelector('[data-block-id="thinking"]')).not.toBeNull();
+        expect(disclosure.querySelector('[data-block-id="tool-call"]')).not.toBeNull();
+        expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'answer');
+
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event('toggle'));
+        await flushPromises();
+        await flushPromises();
         const blocks = Array.from(output.querySelectorAll('[data-block-id]'));
-        expect(blocks[0]?.dataset.blockId).toBe('historical-request-12-7');
+        expect(blocks).toHaveLength(3);
+        expect(blocks.map((block) => block.dataset.blockId)).toEqual(['thinking', 'tool-call', 'answer']);
+        expect(blocks.filter((block) => disclosure.contains(block)).map((block) => block.dataset.blockId))
+            .toEqual(['thinking', 'tool-call']);
+        expect(disclosure.contains(output.querySelector('[data-block-id="answer"]'))).toBe(false);
+        expect(output.querySelectorAll('details')).toHaveLength(1);
         expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'tool-call');
         expect(getAIStreamBlockContentMock).toHaveBeenCalledWith(12, 7, 'answer');
+        expect(output.textContent).toContain('The command failed because a test failed.');
         output.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
         const copyMenu = showLocalMenuMock.mock.calls.at(-1)[0];
         copyMenu.onSelect(copyMenu.options.indexOf('Copy prompt'));
@@ -4565,6 +4675,80 @@ describe('notes rendering', () => {
         await vi.waitFor(() => {
             expect(clipboardSetTextMock).toHaveBeenLastCalledWith('The command failed because a test failed.');
         });
+    });
+
+    it('prefixes prompt outcomes and removes live output when an agent finishes', async () => {
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 12, promptId: 1, heading: 'Succeeded', status: 'success' },
+            { sessionId: 12, promptId: 2, heading: 'Failed', status: 'failed' },
+            { sessionId: 12, promptId: 3, heading: 'Cancelled', status: 'cancelled' },
+        ]);
+        await importNotesModule();
+        await flushPromises();
+        getEventHandler('aiJobStart')({ runId: 811, title: '' });
+        const promptButton = document.getElementById('notes-tools-ai-prompt-jump');
+        await vi.waitFor(() => expect(promptButton.disabled).toBe(false));
+        promptButton.click();
+        let menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+        expect(menu.options).toEqual([
+            '💭 Live output',
+            '🚫 Cancelled',
+            '‼️ Failed',
+            '✅ Succeeded',
+        ]);
+        expect(menu.icons[0]).not.toBe(0x20);
+
+        getEventHandler('aiJobFinish')({ runId: 811, promptId: 4, status: 'failed' });
+        await flushPromises();
+        await flushPromises();
+        promptButton.click();
+        menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+        expect(menu.options).toEqual(['🚫 Cancelled', '‼️ Failed', '✅ Succeeded']);
+        expect(setAIPanelLiveMock).toHaveBeenLastCalledWith(expect.any(String), false);
+    });
+
+    it('switches from a historical prompt to the just-completed prompt', async () => {
+        let promptLogs = [
+            { sessionId: 12, promptId: 1, heading: 'Earlier', status: 'success' },
+        ];
+        listAIPromptLogsMock.mockImplementation(() => Promise.resolve(promptLogs));
+        listAIStreamBlocksMock.mockImplementation((_sessionId, promptId) => Promise.resolve([
+            { blockId: `answer-${promptId}`, kind: 'text', status: 'closed', size: 12 },
+        ]));
+        getAIStreamBlockContentMock.mockResolvedValue('Stored response');
+        await importNotesModule();
+        await flushPromises();
+        getEventHandler('aiJobStart')({ runId: 812, title: '' });
+
+        const promptButton = document.getElementById('notes-tools-ai-prompt-jump');
+        await vi.waitFor(() => expect(promptButton.disabled).toBe(false));
+        promptButton.click();
+        let menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+        menu.onSelect(1);
+        await flushPromises();
+
+        promptLogs = [
+            ...promptLogs,
+            { sessionId: 12, promptId: 2, heading: 'Just completed', status: 'failed' },
+        ];
+        getEventHandler('aiJobFinish')({ runId: 812, promptId: 2, status: 'failed' });
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(listAIStreamBlocksMock).toHaveBeenLastCalledWith(12, 2);
+        const output = document.getElementById('notes-ai-output');
+        const disclosure = output.querySelector('details[data-historical-stream="true"]');
+        expect(disclosure).not.toBeNull();
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event('toggle'));
+        await flushPromises();
+        await flushPromises();
+        expect(disclosure.textContent).not.toContain('Stored response');
+        expect(output.querySelector('[data-block-id^="answer-"]')?.textContent).toContain('Stored response');
+        promptButton.click();
+        menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+        expect(menu.options).toEqual(['‼️ Just completed', '✅ Earlier']);
     });
 
     it('places Prompt after Skills and provides a session menu for creating and switching sessions', async () => {
@@ -5325,6 +5509,51 @@ describe('notes rendering', () => {
         expect(blocks[1].querySelector('code').textContent).toBe('<b>two</b>');
         expect(blocks[0].querySelector('b')).toBeNull();
         expect(blocks[1].querySelector('b')).toBeNull();
+    });
+
+    it('groups all historical stream blocks in one disclosure below the prompt and timestamp', async () => {
+        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
+        const wrapper = document.createElement('div');
+        const fmt = createAIPipelineFormatter(wrapper);
+        const blocks = [
+            { blockId: 'request', kind: 'request', status: 'closed', size: 12 },
+            { blockId: 'thinking', kind: 'thinking', status: 'closed', size: 8 },
+            { blockId: 'intermediate', kind: 'text', status: 'closed', size: 14 },
+            { blockId: 'tool', kind: 'tool-call', status: 'closed', size: 2 },
+            { blockId: 'answer', kind: 'text', status: 'closed', size: 7 },
+        ];
+        const loadContent = vi.fn((block) => Promise.resolve(`content-${block.blockId}`));
+        fmt.setBlocks(blocks, loadContent, {
+            collapseIntermediate: true,
+            prompt: 'Original request',
+            timestamp: '02-11-26 13:15',
+        });
+        await flushPromises();
+        await flushPromises();
+
+        const timestamp = wrapper.querySelector('.notes-ai-timestamp');
+        const prompt = wrapper.querySelector('.notes-ai-prefix');
+        const disclosure = wrapper.querySelector('details[data-historical-stream="true"]');
+        expect(timestamp?.textContent).toBe('02-11-26 13:15');
+        expect(prompt?.textContent).toContain('Original request');
+        const children = Array.from(wrapper.children);
+        expect(children.indexOf(prompt)).toBeLessThan(children.indexOf(timestamp));
+        expect(children.indexOf(timestamp)).toBeLessThan(children.indexOf(disclosure.closest('.notes-ai-job')));
+        expect(wrapper.querySelectorAll('details')).toHaveLength(1);
+        expect(disclosure?.open).toBe(false);
+        expect(disclosure.querySelectorAll('[data-block-id]')).toHaveLength(3);
+        expect(loadContent).toHaveBeenCalledWith(expect.objectContaining({ blockId: 'answer' }));
+        expect(loadContent).toHaveBeenCalledTimes(1);
+        expect(disclosure.parentElement.querySelector('[data-block-id="answer"]')).not.toBeNull();
+
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event('toggle'));
+        await flushPromises();
+        expect(loadContent).toHaveBeenCalledTimes(4);
+        expect(loadContent).toHaveBeenCalledWith(expect.objectContaining({ blockId: 'thinking' }));
+        expect(disclosure.textContent).toContain('content-thinking');
+        expect(disclosure.textContent).not.toContain('content-answer');
+        expect(wrapper.querySelector('[data-block-id="answer"]')?.textContent).toContain('content-answer');
     });
 
     it('renders agent notices as formatted prose rather than code or quotes', async () => {
@@ -7725,6 +7954,110 @@ describe('notes rendering', () => {
 
         const notesEditor = document.getElementById('notes-editor');
         expect(notesEditor.value).toContain('| Gamma | 1 |');
+    });
+
+    it.each([
+        ['cell Enter', '# Table\n\n| Name | Value |\n| --- | --- |\n| Gamma | 1 |\n| Beta | 2 |'],
+        ['cell blur', '# Table\n\n| Name | Value |\n| --- | --- |\n| Gamma | 1 |\n| Beta | 2 |'],
+        ['Insert row (after)', '# Table\n\n| Name | Value |\n| --- | --- |\n| Alpha | 1 |\n|  |  |\n| Beta | 2 |'],
+        ['Insert column (after)', '# Table\n\n| Name |  | Value |\n| --- | --- | --- |\n| Alpha |  | 1 |\n| Beta |  | 2 |'],
+        ['Delete row', '# Table\n\n| Name | Value |\n| --- | --- |\n| Beta | 2 |'],
+        ['Delete column', '# Table\n\n| Value |\n| --- |\n| 1 |\n| 2 |'],
+    ])('keeps Monaco, saved content, Run and View synchronized after %s', async (action, expected) => {
+        const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Monaco table regression test');
+        const initial = '# Table\n\n| Name | Value |\n| --- | --- |\n| Alpha | 1 |\n| Beta | 2 |';
+        let value = initial;
+        const adapter = {
+            getValue: () => value,
+            setValue: (next) => { value = next; },
+            getSelectionOffsets: () => ({ start: 0, end: 0 }),
+            setSelectionOffsets: vi.fn(),
+            revealOffset: vi.fn(), focus: vi.fn(), layout: vi.fn(),
+            setLanguage: vi.fn(), setWordWrap: vi.fn(), setTypography: vi.fn(),
+            applyTheme: vi.fn(), configureLsp: vi.fn(), setDiagnostics: vi.fn(),
+            setTyposMisspellings: vi.fn(),
+        };
+        createMonacoAdapterMock.mockResolvedValue(adapter);
+        listFilesMock.mockResolvedValue(['$NOTES/table.md']);
+        getFileMock.mockResolvedValue({ contents: initial, text: '', error: '' });
+
+        try {
+            await importNotesModule();
+            document.querySelector('[data-file="$NOTES/table.md"]').click();
+            await flushPromises();
+            await flushPromises();
+            document.getElementById('notes-tab-editor').click();
+            await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+            const editor = document.getElementById('notes-editor');
+            const runTab = document.getElementById('notes-tab-jupyter');
+            const viewTab = document.getElementById('notes-tab-viewer');
+            runTab.click();
+            await flushPromises();
+            await flushPromises();
+            const cell = document.querySelector('#notes-jupyter tbody tr td');
+            expect(cell).not.toBeNull();
+            saveFileMock.mockClear();
+
+            if (action.startsWith('cell')) {
+                cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+                cell.textContent = 'Gamma';
+                cell.dispatchEvent(action === 'cell blur'
+                    ? new Event('blur')
+                    : new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            } else {
+                cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+                await flushPromises();
+                const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+                const index = menu.options.indexOf(action);
+                expect(index).toBeGreaterThanOrEqual(0);
+                menu.onSelect(index);
+            }
+            await flushPromises();
+            await flushPromises();
+            expect(value).toBe(expected);
+            expect(editor.value).toBe(expected);
+            expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/table.md', expected, '');
+
+            const run = document.getElementById('notes-jupyter');
+            const preview = document.getElementById('notes-preview');
+            const runTable = run.querySelector('table')?.outerHTML;
+            if (action.startsWith('cell')) {
+                expect(run.querySelector('tbody tr td')?.textContent).toContain('Gamma');
+            } else if (action === 'Insert row (after)') {
+                expect(run.querySelectorAll('tbody tr')).toHaveLength(3);
+            } else if (action === 'Insert column (after)') {
+                expect(run.querySelectorAll('thead th')).toHaveLength(3);
+            } else if (action === 'Delete row') {
+                expect(run.querySelectorAll('tbody tr')).toHaveLength(1);
+                expect(run.textContent).not.toContain('Alpha');
+            } else {
+                expect(run.querySelectorAll('thead th')).toHaveLength(1);
+                expect(run.textContent).not.toContain('Alpha');
+            }
+
+            viewTab.click();
+            await vi.waitFor(() => {
+                const headers = Array.from(preview.querySelectorAll('thead th')).map((header) => header.textContent);
+                expect(headers).toEqual(Array.from(run.querySelectorAll('thead th'))
+                    .map((header) => header.querySelector('.notes-table-cell-wrap > span')?.textContent ?? header.textContent));
+                expect(preview.querySelectorAll('tbody tr')).toHaveLength(run.querySelectorAll('tbody tr').length);
+                expect(preview.textContent.includes('Gamma')).toBe(action.startsWith('cell'));
+                expect(preview.textContent.includes('Alpha')).toBe(!action.startsWith('cell')
+                    && action !== 'Delete row' && action !== 'Delete column');
+            });
+            document.getElementById('notes-tab-editor').click();
+            await flushPromises();
+            expect(value).toBe(expected);
+            expect(editor.value).toBe(expected);
+            runTab.click();
+            await flushPromises();
+            await flushPromises();
+            expect(run.querySelector('table')?.outerHTML).toBe(runTable);
+            expect(value).toBe(expected);
+            expect(editor.value).toBe(expected);
+        } finally {
+            userAgent.mockRestore();
+        }
     });
 
     it('renders Markdown in Run table cells without creating hyperlinks', async () => {

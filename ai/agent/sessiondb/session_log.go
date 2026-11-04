@@ -29,6 +29,7 @@ type SessionLogContext struct {
 	CommandLine     string
 	OutputBlock     string
 	PromptID        int64
+	Status          string
 	WorkspaceActive bool
 	Emit            func(event string, payload any)
 }
@@ -39,7 +40,9 @@ type AIJobStart struct {
 }
 
 type AIJobFinish struct {
-	RunID uint64 `json:"runId"`
+	RunID    uint64 `json:"runId"`
+	PromptID int64  `json:"promptId"`
+	Status   string `json:"status"`
 }
 
 // sessionLogState tracks the currently-streaming prompt for compatibility
@@ -50,7 +53,10 @@ type sessionLogState struct {
 	pendingPath string
 	streamed    strings.Builder
 	requestOpen bool
+	active      bool
 	runID       uint64
+	promptID    int64
+	status      string
 }
 
 var aiSessionLogStore = struct {
@@ -353,7 +359,7 @@ func GetActiveStreamIdentity(workspace string) ActiveStreamIdentity {
 	defer aiSessionLogStore.Unlock()
 
 	state := aiSessionLogStore.byWorkspace[ws]
-	if state == nil || !state.requestOpen {
+	if state == nil || !state.active {
 		return ActiveStreamIdentity{}
 	}
 
@@ -380,13 +386,15 @@ func GetPromptLog(workspace string, sessionID, promptID int64) string {
 	return string(b)
 }
 
-// PromptLogMeta describes a single per-prompt log file. Emitted to the
-// frontend so the AI panel can populate its Prompt dropdown.
+// PromptLogMeta describes a prompt in the active session for the AI panel's
+// Prompt dropdown.
 type PromptLogMeta struct {
 	SessionID int64  `json:"sessionId"`
 	PromptID  int64  `json:"promptId"`
 	Heading   string `json:"heading"`
+	Started   string `json:"started"`
 	SizeBytes int64  `json:"sizeBytes"`
+	Status    string `json:"status"`
 }
 
 var promptLogFilenameRx = regexp.MustCompile(`^session-log\..+\.(\d+)\.(\d+)\.md$`)
@@ -434,7 +442,9 @@ func listPromptLogMetas(workspace string, sessionID int64) []PromptLogMeta {
 			SessionID: sid,
 			PromptID:  pid,
 			Heading:   readRequestHeadingComment(path),
+			Started:   readPromptLogStarted(path),
 			SizeBytes: info.Size(),
+			Status:    PromptStatusSuccess,
 		})
 	}
 
@@ -448,6 +458,8 @@ func listPromptLogMetas(workspace string, sessionID int64) []PromptLogMeta {
 }
 
 var requestHeadingCommentRx = regexp.MustCompile(`(?m)^<!-- request heading: (.*) -->`)
+var promptLogRequestStartedRx = regexp.MustCompile(`(?m)^<!-- start request: (.*) -->`)
+var promptLogStartedRx = regexp.MustCompile(`(?m)^Started: (.*)$`)
 
 // readRequestHeadingComment extracts the "<!-- request heading: ... -->" tag
 // written by buildSessionLogRequestPrefix so the dropdown can show the prompt
@@ -462,6 +474,25 @@ func readRequestHeadingComment(path string) string {
 	buf := make([]byte, 4096)
 	n, _ := f.Read(buf)
 	m := requestHeadingCommentRx.FindStringSubmatch(string(buf[:n]))
+	if len(m) != 2 {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
+}
+
+func readPromptLogStarted(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 4096)
+	n, _ := f.Read(buf)
+	content := string(buf[:n])
+	m := promptLogRequestStartedRx.FindStringSubmatch(content)
+	if len(m) != 2 {
+		m = promptLogStartedRx.FindStringSubmatch(content)
+	}
 	if len(m) != 2 {
 		return ""
 	}
@@ -603,6 +634,9 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 						ref.requestOpen = false
 					}
 					ref.runID = allocatedRunID
+					ref.promptID = 0
+					ref.status = PromptStatusRunning
+					ref.active = true
 					runID = ref.runID
 					prefix = ensureRequestOpenLocked(ref, ctx, now)
 				}
@@ -622,17 +656,25 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		var suffix string
 		var sessionID int64
 		var runID uint64
+		status := ctx.Status
+		if status == "" {
+			status = PromptStatusSuccess
+		}
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
 			ensureRequestOpenLocked(ref, ctx, now)
 			sessionID = ref.sessionID
 			runID = ref.runID
+			ref.promptID = ctx.PromptID
+			ref.status = status
 			suffix = buildSessionLogFinalizeSuffix(ref.streamed.String(), payload, now)
 			finalizePromptLogLocked(ref, suffix, ctx.PromptID)
 		}
 		aiSessionLogStore.Unlock()
 		if sessionID > 0 && runID > 0 && ctx.PromptID > 0 {
-			_ = FinalizeStreamPrompt(workspace, sessionID, runID, ctx.PromptID, formatSessionLogTimestamp(now))
+			if err := FinalizeStreamPrompt(workspace, sessionID, runID, ctx.PromptID, formatSessionLogTimestamp(now), status); err != nil {
+				log.Printf("cannot finalize AI stream prompt %d for workspace %q: %v", ctx.PromptID, workspace, err)
+			}
 		}
 
 	case SESSION_LOG_FINISH_JOB:
@@ -640,7 +682,11 @@ func WriteToSessionLog(ctx SessionLogContext, state int, payload string) {
 		streaming := false
 		aiSessionLogStore.Lock()
 		if ref, err := activeSessionLogStateLocked(workspace); err == nil && ref != nil {
-			finish = AIJobFinish{RunID: ref.runID}
+			if ctx.Status == PromptStatusSuccess || ctx.Status == PromptStatusFailed || ctx.Status == PromptStatusCancelled {
+				ref.status = ctx.Status
+			}
+			finish = AIJobFinish{RunID: ref.runID, PromptID: ref.promptID, Status: ref.status}
+			ref.active = false
 			streaming = true
 		}
 		aiSessionLogStore.Unlock()

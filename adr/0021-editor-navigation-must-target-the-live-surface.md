@@ -94,6 +94,14 @@ the live editor value rather than the hidden textarea. This refresh does not
 regenerate the Markdown preview or Jupyter view; those retain their deferred
 rendering behavior. Adding or removing Frontmatter also updates tab visibility.
 
+Updated 2026-11-04: Markdown Run table cell edits and row/column insertion or
+deletion read the live editor value and commit through the shared mutation
+adapter with an input event. This synchronizes Monaco before saving or
+rerendering Run, and marks View stale so selecting it regenerates the preview.
+Writing only the hidden textarea caused stale Monaco contents to be rendered
+and saved instead. Regression tests enable Monaco and cover Enter/blur commits,
+structural table edits, saved contents, and Run/View/Edit transitions.
+
 Rendered Find must likewise target the visible surface: CSV View and CSV Run
 search `elements.csvView`, not the hidden Markdown preview. Highlight cleanup
 includes the CSV pane, and active queries are reapplied when that pane rerenders.

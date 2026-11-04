@@ -50,6 +50,9 @@ Markdown would lose source formatting and could rewrite unrelated content.
   text; changed, removed, or ambiguous targets leave the refreshed view visible.
 - Cancel leaves the source unchanged. Code cells, tables, runtime output, and
   blocks without a reliable source mapping do not get this action.
+- Jupyter code blocks stop double-click propagation without preventing native
+  selection, so code cells nested in editable lists cannot open the enclosing
+  Markdown editor.
 - Preserve separators after the selected block so edits do not consume adjacent
   Markdown structure. Account for stripped frontmatter when calculating source
   offsets, and map blockquote text only when Marked provides an exact raw span.

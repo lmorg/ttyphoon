@@ -36,6 +36,12 @@ do not register the scheme with the operating system.
 the custom v2 macOS About content is not carried forward.
 - Preserve maximized startup, hidden macOS title bar, hide-on-close behavior,
 the notes asset handler, and the product identifier `com.lmorg.ttyphoon`.
+- Suppress the native browser context menu in a window capture-phase
+`contextmenu` listener, without stopping propagation to application menus.
+Wails v3 permits native menus in debug builds and on editable/selected content;
+its `DefaultContextMenuDisabled` option is only consumed by the Windows backend
+in the pinned version. The frontend guard applies on all platforms and in both
+debug and production builds, including targets whose handlers stop bubbling.
 
 ## Consequences
 

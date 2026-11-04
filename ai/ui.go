@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -216,6 +217,7 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 
 		result, err := agt.RunLLMWithMessageStream(ctx, promptMessages, nil)
 		sticky.Close()
+		status := aiPromptOutcome(err)
 		if err != nil {
 			agt.Renderer().DisplayNotification(types.NOTIFY_ERROR, err.Error())
 			result = err.Error()
@@ -226,8 +228,8 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 			agt.Renderer().DisplayNotification(types.NOTIFY_WARN, storeErr.Error())
 		}
 
-		emitAIFinalResponse(agt, result, promptID)
-		finishAIJob(agt)
+		emitAIFinalResponse(agt, result, promptID, status)
+		finishAIJob(agt, status)
 
 		endTime := time.Now()
 		data := &historymd.TemplateFieldsT{
@@ -257,6 +259,16 @@ func askAI(agt *agent.Agent, promptMessages []*schema.Message, query string) {
 	}()
 }
 
+func aiPromptOutcome(err error) string {
+	if err == nil {
+		return sessiondb.PromptStatusSuccess
+	}
+	if errors.Is(err, context.Canceled) {
+		return sessiondb.PromptStatusCancelled
+	}
+	return sessiondb.PromptStatusFailed
+}
+
 func SaveMarkdownToggle(Default bool) types.InputBoxWTVariables {
 	return types.InputBoxWTVariables{
 		Name:        SAVE_RESPONSE,
@@ -280,12 +292,13 @@ func startAIJob(agt *agent.Agent, title string) {
 	}, sessiondb.SESSION_LOG_START_JOB, title)
 }
 
-func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64) {
+func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64, status string) {
 	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
 		Workspace:       agt.Workspace(),
 		CommandLine:     agt.Meta.CmdLine,
 		OutputBlock:     agt.Meta.OutputBlock,
 		PromptID:        promptID,
+		Status:          status,
 		WorkspaceActive: agt.IsWorkspaceActive(),
 		Emit: func(event string, payload any) {
 			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)
@@ -293,9 +306,10 @@ func emitAIFinalResponse(agt *agent.Agent, output string, promptID int64) {
 	}, sessiondb.SESSION_LOG_FINALIZE_JOB, output)
 }
 
-func finishAIJob(agt *agent.Agent) {
+func finishAIJob(agt *agent.Agent, status string) {
 	sessiondb.WriteToSessionLog(sessiondb.SessionLogContext{
 		Workspace:       agt.Workspace(),
+		Status:          status,
 		WorkspaceActive: agt.IsWorkspaceActive(),
 		Emit: func(event string, payload any) {
 			runtime.EventsEmit(agt.Renderer().GetWindowContext(), event, payload)

@@ -5,10 +5,9 @@ All improvements should consider if actions are blocking the UI -- particularly 
 ## features
 
 - [ ] Notes, Hex mode: should support editing and saving
-- [ ] AI panel: export output to Markdown (ie in case you forget to tick the save output checkbox when submitting the prompt)
+- [x] AI panel: export output to Markdown (ie in case you forget to tick the save output checkbox when submitting the prompt)
 - [ ] Spellcheck: user dictionaries:
   - [ ] global (across every document in every project)
-  - [ ] language (similar to reserved words, so language specific but applied across every project)
   - [ ] workspace (specific to workspace name, ie terminal tab name)
 - [ ] File list: support to move files by drag and dropping
 - [ ] Notes: support for displaying video files
@@ -17,6 +16,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes, git panel: hide and disable the commit toolbar button when there are no changes to commit and nothing to stage (clean work tree)
 - [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
 - [ ] Terminal: kitty graphics support (this should be a new ADR)
+- [x] AI, panel: collapse intermediate blocks when viewing historical prompts, and distinguish live, successful, failed, and cancelled prompts in the prompt menu ([ADR 0088](0088-ai-prompt-status-and-historical-disclosures.md))
 
 ## refactors
 
@@ -24,7 +24,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## functional tweaks
 
-- [ ] Window UI: disable the custom titlebar on non-macOS platforms
+- [x] Window UI: disable the custom titlebar on non-macOS platforms
 
 ## bugfixes
 
@@ -33,13 +33,15 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Languages: closing tags pairs should support overtyping. eg typing `(` auto completes with `)` but if you type `(` followed by `)` then you end up with `())`. Ideally the last `)` should overwrite the existing `)`
 - [ ] Notes: when AI opens a document, that document should be added to document history for that workspace
 - [ ] Window UI, titlebar: in macOS with the custom titlebar, sometimes resizing, dragging, double click to maximize and similar actions case the window to become highlighted as if you've dragged the caret to highlight text. This shouldn't happen
+- [x] AI, session manager modal: remove the redundant read-only `Loadable` checkbox; retain the Loaded toggle and loading restrictions
+- [x] Since migrating to wails3, right clicking on elements that don't have any click events defined now shows the system default menu in at least webkit on macOS (though it might do too for other untested platforms). Why is that? It shouldn't show the system menu. Suppress native context menus globally while preserving application menus ([ADR 0085](0085-wails-v3-migration.md)).
 
 ## future ambitions
 
 - [ ] Notes: support having multiple documents open at a time
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)
 - [ ] Notes, image: support for annotating images. Add text, highlights, ovals and rounded rectangles, with an option to export the annotations flattened onto a PNG while preserving the original image.
-- [ ] AI: run agents inside a docker container. $GLOBAL, $PROJECT and $NOTES should all be mounted directories. Tools and MCP should still work but inside the docker container.
+- [ ] AI: run agents inside a docker container. $GLOBAL, $PROJECT and $NOTES should all be mounted directories. Tools and MCP should still work but inside the docker container. We should use the dev containers specification
 
 # Completed
 

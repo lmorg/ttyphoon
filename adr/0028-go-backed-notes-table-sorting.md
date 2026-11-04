@@ -20,6 +20,14 @@ state to `window/elements/element_table/tablecore` through Wails bindings.
 The frontend only reorders existing rows and preserves the DOM needed for
 formulas, editing, resizing and word wrap.
 
+Rendered tables use separate borders with zero spacing, not collapsed borders.
+Cells draw only their right and bottom separators; the table supplies the outer
+border, and the last column and row omit redundant edges. This avoids shared
+collapsed-border painting around relatively positioned cells in horizontal
+scroll containers. In particular, headers have no dark top edge to appear above
+individual headings. Resize handles, sorting and cell editing keep their
+existing DOM and event handling.
+
 The two behave differently in almost every respect:
 
 | | Terminal | Notes before this decision |

@@ -1892,7 +1892,6 @@ body {
 #notes-csv-view table {
     width: max-content;
     min-width: 100%;
-    border-collapse: collapse;
 }
 
 #notes-csv-view th,
@@ -2813,6 +2812,23 @@ body {
     margin: 0;
     font-size: inherit;
     line-height: 1.5;
+}
+
+#notes-ai-output details.notes-ai-historical-disclosure {
+    margin: 6px 0;
+    padding-left: 8px;
+    border-left: 2px solid var(--darken-background-overlay);
+}
+
+#notes-ai-output .notes-ai-historical-summary {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: var(--notes-font-size-minus-1);
+    line-height: 1.4;
+}
+
+#notes-ai-output .notes-ai-historical-disclosure[open] > .notes-ai-historical-summary {
+    margin-bottom: 4px;
 }
 
 #notes-ai-output .notes-ai-raw-text {

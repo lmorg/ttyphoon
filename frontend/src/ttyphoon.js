@@ -1,14 +1,9 @@
 import './style.css';
 import './app.css';
 import {
-    ScreenGetAll,
-    WindowGetPosition,
-    WindowGetSize,
     WindowIsMaximised,
     WindowMaximise,
     WindowUnmaximise,
-    WindowSetPosition,
-    WindowSetSize,
 } from './wails-runtime.js';
 import { GetWindowStyle, GetAppTitle, TerminalGetPanes, TerminalPaneZoom, TerminalSetFocus } from './wails-bindings.js';
 import { EventsOn } from './wails-runtime.js';
@@ -17,6 +12,11 @@ import { restoreLayoutRatio, saveLayoutRatio } from './layout-sizing.js';
 
 // Global terminal focus state for canvas dimming
 window.terminalFocusedState = true;
+
+// Suppress native menus even when a child stops bubbling or Wails is in debug mode.
+window.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+}, { capture: true });
 
 // Remove any body margin/padding immediately so there is no layout flash.
 document.body.style.margin = '0';
@@ -537,6 +537,7 @@ function setTerminalJupyterMode(enabled) {
         notesPane.style.overflow = 'hidden';
         notesPane.style.position = 'relative';
         notesPane.style.flexShrink = '1';
+        setNotesMaximizeButtonState(true);
         host.style.display = 'none';
         window.dispatchEvent(new CustomEvent('ttyphoon-jupyter-tab-mode', {
             detail: {
@@ -571,6 +572,7 @@ function setTerminalJupyterMode(enabled) {
         notesPane.style.flexShrink = notesOriginalStyle.flexShrink;
     }
 
+    setNotesMaximizeButtonState(false);
     window.dispatchEvent(new CustomEvent('ttyphoon-jupyter-tab-mode', {
         detail: {
             enabled: false,
@@ -644,39 +646,17 @@ function collapseNotesIntoTerminal() {
     refreshStatusBarLayout();
 }
 
-function getScreenBounds(screen) {
-    const x = Number.isFinite(screen?.x) ? screen.x : 0;
-    const y = Number.isFinite(screen?.y) ? screen.y : 0;
-    const width = Number.isFinite(screen?.width) ? screen.width : window.screen.availWidth;
-    const height = Number.isFinite(screen?.height) ? screen.height : window.screen.availHeight;
-    return { x, y, width, height };
+function setNotesMaximizeButtonState(enabled) {
+    const button = document.getElementById('notes-fullsize-btn');
+    if (!button) return;
+    button.dataset.enabled = String(enabled);
+    button.setAttribute('aria-pressed', String(enabled));
+    button.title = enabled ? 'Restore Notes split' : 'Maximize Notes';
+    button.setAttribute('aria-label', button.title);
 }
 
-function clampToScreenX(x, width, bounds) {
-    const minX = bounds.x;
-    const maxX = bounds.x + Math.max(0, bounds.width - width);
-    return Math.min(Math.max(x, minX), maxX);
-}
-
-async function getCurrentWindowAndScreen() {
-    const [size, pos, screens] = await Promise.all([
-        WindowGetSize(),
-        WindowGetPosition(),
-        ScreenGetAll().catch(() => []),
-    ]);
-
-    const width = Number.isFinite(size?.w) ? size.w : window.innerWidth;
-    const height = Number.isFinite(size?.h) ? size.h : window.innerHeight;
-    const x = Number.isFinite(pos?.x) ? pos.x : window.screenX;
-    const y = Number.isFinite(pos?.y) ? pos.y : window.screenY;
-
-    const allScreens = Array.isArray(screens) ? screens : [];
-    const currentScreen = allScreens.find((s) => s?.isCurrent) || allScreens.find((s) => s?.isPrimary) || allScreens[0];
-    const bounds = getScreenBounds(currentScreen);
-    return { width, height, x, y, bounds };
-}
-
-async function toggleNotesPaneCollapsed() {
+function toggleNotesPaneCollapsed() {
+    if (fullsizeActive) exitFullsize();
     const rect = app.getBoundingClientRect();
     if (rect.width <= 0) {
         return;
@@ -690,27 +670,14 @@ async function toggleNotesPaneCollapsed() {
             lastNotesWidthPercent = (currentPx / rect.width) * 100;
         }
 
-        const frame = await getCurrentWindowAndScreen();
-        const collapsedWidth = Math.max(480, Math.round(frame.width / 2));
-        const rightEdge = frame.x + frame.width;
-        const collapsedX = clampToScreenX(rightEdge - collapsedWidth, collapsedWidth, frame.bounds);
-
         collapseNotesIntoTerminal();
-        WindowSetSize(collapsedWidth, frame.height);
-        WindowSetPosition(collapsedX, frame.y);
         requestAnimationFrame(() => {
             refreshStatusBarLayout();
         });
     } else {
-        const frame = await getCurrentWindowAndScreen();
-        const expandedWidth = Math.min(frame.bounds.width, Math.max(480, Math.round(frame.width * 2)));
-        const expandedX = clampToScreenX(frame.x, expandedWidth, frame.bounds);
-
         setTerminalJupyterMode(false);
         notesCollapsed = false;
         updateSplitHandleTooltip();
-        WindowSetSize(expandedWidth, frame.height);
-        WindowSetPosition(expandedX, frame.y);
 
         requestAnimationFrame(() => {
             applyPreferredNotesSplit();
@@ -1052,7 +1019,7 @@ function toggleFullsize(kind) {
 }
 
 window.addEventListener('ttyphoon-notes-fullsize-toggle', () => {
-    toggleFullsize('notes');
+    toggleNotesPaneCollapsed();
 });
 
 window.addEventListener('ttyphoon-terminal-fullsize-toggle', () => {

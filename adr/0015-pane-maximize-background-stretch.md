@@ -46,6 +46,14 @@ width was always honoured; the bug was invisible on that side.
 
 ## Decision
 
+Updated 2026-11-04: Notes maximize no longer uses the dimmed overlay described
+below. Its toolbar button and a double-click on the Notes/terminal divider both
+toggle Notes into the terminal tab area and back to the saved split layout.
+Neither action changes the native window's size or position. The button's active
+state follows tab mode, including when entered through the divider or dragging.
+Terminal zoom and image/Tools fullscreen behavior remain unchanged; the overlay
+geometry below continues to apply to terminal zoom.
+
 Maximizing is one parameterised implementation, `enterFullsize(kind)` /
 `exitFullsize()` / `toggleFullsize(kind)`, keyed by `'notes'` or `'terminal'`.
 
@@ -105,5 +113,5 @@ layout cache.
   `#terminal-zoom-btn[data-enabled="true"]`
 - `frontend/src/terminal.js` — zoom button, which also calls `TerminalPaneZoom()`
 - Tests: `neutralises flex growth on a maximized pane so its width applies`,
-  `maximizes notes with the same geometry as the terminal`
+  `toggles Notes tab mode from the %s without changing window geometry`
   (`frontend/src/ttyphoon.test.js`)

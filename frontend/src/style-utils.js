@@ -156,21 +156,32 @@ export function getMarkdownContentStyles(colors, fontSize, classPrefix = '') {
         ${prefix}table {
             width: max-content;
             min-width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             border: 2px solid var(--fg);
         }
 
         ${prefix}th,
         ${prefix}td {
             border: 1px solid ${classPrefix ? 'color-mix(in srgb, var(--fg) 18%, transparent)' : `rgba(${colors.fg.Red}, ${colors.fg.Green}, ${colors.fg.Blue}, 0.18)`};
+            border-width: 0 1px 1px 0;
             padding: 4px 8px;
         }
 
         ${prefix}thead th {
-            border: 1px solid var(--bg);
+            border-color: var(--bg);
             color: var(--bg);
             background: var(--fg);
             text-align: left;
+        }
+
+        ${prefix}tr > :last-child {
+            border-right-width: 0;
+        }
+
+        ${prefix}table > :last-child > tr:last-child > th,
+        ${prefix}table > :last-child > tr:last-child > td {
+            border-bottom-width: 0;
         }
     `;
 }

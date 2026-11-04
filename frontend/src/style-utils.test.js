@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getAllMarkdownStyles, getSwaggerUIStyles } from './style-utils';
+import { getAllMarkdownStyles, getMarkdownContentStyles, getSwaggerUIStyles } from './style-utils';
 
 const colors = {
     fg: { Red: 230, Green: 237, Blue: 243 },
@@ -40,5 +40,31 @@ describe('style-utils', () => {
         expect(solidFontIndex).toBeGreaterThan(regularFontIndex);
         expect(css).toContain('font-weight: 400;');
         expect(css).toContain('.swagger-endpoint-filter');
+    });
+
+    it.each(['', 'markdown-body'])('uses a single grid without collapsed header borders with prefix "%s"', (classPrefix) => {
+        const css = getMarkdownContentStyles(colors, 14, classPrefix);
+        const prefix = classPrefix ? `.${classPrefix} ` : '';
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.appendChild(style);
+        const rules = Array.from(style.sheet.cssRules);
+        style.remove();
+        const tableRule = rules.find((rule) => rule.selectorText === `${prefix}table`);
+        const cellRule = rules.find((rule) => {
+            const selectors = rule.selectorText.split(',').map((selector) => selector.trim());
+            return selectors.length === 2 && selectors.includes(`${prefix}th`) && selectors.includes(`${prefix}td`);
+        });
+        const headerRule = rules.find((rule) => rule.selectorText === `${prefix}thead th`);
+        const lastColumnRule = rules.find((rule) => rule.selectorText === `${prefix}tr > :last-child`);
+        const lastRowRule = rules.find((rule) => rule.selectorText.includes('table > :last-child > tr:last-child'));
+
+        expect(tableRule.style.getPropertyValue('border-collapse')).toBe('separate');
+        expect(tableRule.style.getPropertyValue('border-spacing')).toBe('0');
+        expect(cellRule.style.getPropertyValue('border-width')).toBe('0 1px 1px 0');
+        expect(headerRule.style.getPropertyValue('border-color')).toBe('var(--bg)');
+        expect(headerRule.style.getPropertyValue('border-width')).toBe('');
+        expect(lastColumnRule.style.getPropertyValue('border-right-width')).toBe('0');
+        expect(lastRowRule.style.getPropertyValue('border-bottom-width')).toBe('0');
     });
 });

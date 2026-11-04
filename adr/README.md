@@ -92,6 +92,8 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0078](0078-mcp-oauth-failures-must-be-retryable.md) | MCP OAuth cancellation, registration and retries preserve usable state | MCP |
 | [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
+| [0087](0087-native-ci-release-artifacts.md) | Build versioned release artifacts on native CI runners | CI/CD |
+| [0088](0088-ai-prompt-status-and-historical-disclosures.md) | Persist AI prompt outcomes and collapse historical stream details | AI panel |
 
 ## Recurring themes
 

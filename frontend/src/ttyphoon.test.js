@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const eventHandlers = new Map();
 
@@ -87,7 +87,10 @@ async function importTtyphoon() {
 }
 
 describe('ttyphoon focus handoff', () => {
+    let windowListeners;
+
     beforeEach(() => {
+        windowListeners = vi.spyOn(window, 'addEventListener');
         document.body.innerHTML = '<div id="app"></div>';
 
         eventHandlers.clear();
@@ -127,6 +130,42 @@ describe('ttyphoon focus handoff', () => {
             }
             return rect(1200, 800);
         });
+    });
+
+    afterEach(() => {
+        for (const [type, listener, options] of windowListeners.mock.calls) {
+            window.removeEventListener(type, listener, options);
+        }
+        windowListeners.mockRestore();
+    });
+
+    it.each(['div', 'input', 'textarea', 'canvas'])('suppresses the native context menu on %s', async (tag) => {
+        await importTtyphoon();
+
+        const target = document.createElement(tag);
+        document.body.appendChild(target);
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+
+        expect(target.dispatchEvent(event)).toBe(false);
+        expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('preserves custom context-menu handlers even when they stop propagation', async () => {
+        await importTtyphoon();
+
+        const target = document.createElement('div');
+        target.contentEditable = 'true';
+        document.body.appendChild(target);
+        const customMenu = vi.fn((event) => {
+            event.stopPropagation();
+        });
+        target.addEventListener('contextmenu', customMenu);
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+
+        target.dispatchEvent(event);
+
+        expect(customMenu).toHaveBeenCalledOnce();
+        expect(event.defaultPrevented).toBe(true);
     });
 
     it('clears terminal focus when collapsing notes into terminal tab mode', async () => {
@@ -255,24 +294,63 @@ describe('ttyphoon focus handoff', () => {
         expect(terminalPane.style.flex).toBe('1');
     });
 
-    it('maximizes notes with the same geometry as the terminal', async () => {
+    it.each(['button', 'divider'])('toggles Notes tab mode from the %s without changing window geometry', async (trigger) => {
+        getNotesLayoutSizingMock.mockResolvedValue({ notesRatio: 0.65 });
         await importTtyphoon();
 
         const notesPane = document.getElementById('notes-pane');
         const terminalPane = document.getElementById('terminal-pane');
+        const viewport = document.createElement('div');
+        viewport.id = 'terminal-viewport';
+        terminalPane.appendChild(viewport);
+        const button = document.createElement('button');
+        button.id = 'notes-fullsize-btn';
+        notesPane.appendChild(button);
+        const splitter = document.getElementById('notes-terminal-split');
+        const tabMode = vi.fn();
+        window.addEventListener('ttyphoon-jupyter-tab-mode', tabMode);
+        const toggle = (source) => {
+            if (source === 'button') {
+                window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
+            } else {
+                splitter.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            }
+        };
 
-        window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
-        await flushPromises();
+        try {
+            toggle(trigger);
+            await flushPromises();
+            await flushPromises();
 
-        expect(notesPane.style.width).toBe('calc(100vw - 100px)');
-        expect(notesPane.style.height).toBe('calc(100vh - 100px)');
-        expect(notesPane.style.flex).toBe('0 0 auto');
-        expect(terminalPane.style.width).toBe('100%');
+            expect(notesPane.parentElement.id).toBe('terminal-jupyter-host');
+            expect(notesPane.style.width).toBe('100%');
+            expect(notesPane.style.height).toBe('100%');
+            expect(document.getElementById('notes-fullsize-overlay')).toBeNull();
+            expect(button.dataset.enabled).toBe('true');
+            expect(button.getAttribute('aria-pressed')).toBe('true');
+            expect(button.getAttribute('aria-label')).toBe('Restore Notes split');
+            expect(tabMode.mock.calls.at(-1)[0].detail).toMatchObject({ enabled: true, active: true });
+            expect(terminalSetFocusMock).toHaveBeenLastCalledWith(false);
 
-        window.dispatchEvent(new CustomEvent('ttyphoon-notes-fullsize-toggle'));
-        await flushPromises();
+            toggle(trigger === 'button' ? 'divider' : 'button');
+            await flushPromises();
+            await flushPromises();
 
-        expect(notesPane.style.width).toBe('50%');
+            expect(notesPane.parentElement.id).toBe('content-wrapper');
+            expect(notesPane.nextElementSibling).toBe(splitter);
+            expect(Number.parseFloat(notesPane.style.width)).toBeCloseTo(65);
+            expect(button.dataset.enabled).toBe('false');
+            expect(button.getAttribute('aria-pressed')).toBe('false');
+            expect(button.getAttribute('aria-label')).toBe('Maximize Notes');
+            expect(tabMode.mock.calls.at(-1)[0].detail).toMatchObject({ enabled: false, active: false });
+            expect(setNotesLayoutRatioMock).not.toHaveBeenCalled();
+            expect(windowSetSizeMock).not.toHaveBeenCalled();
+            expect(windowSetPositionMock).not.toHaveBeenCalled();
+            expect(windowMaximiseMock).not.toHaveBeenCalled();
+            expect(windowUnmaximiseMock).not.toHaveBeenCalled();
+        } finally {
+            window.removeEventListener('ttyphoon-jupyter-tab-mode', tabMode);
+        }
     });
 
     it('does not re-focus terminal when clicking embedded notes content', async () => {

@@ -10,6 +10,13 @@ import (
 type StreamBlockKind string
 
 const (
+	PromptStatusRunning   = "running"
+	PromptStatusSuccess   = "success"
+	PromptStatusFailed    = "failed"
+	PromptStatusCancelled = "cancelled"
+)
+
+const (
 	StreamBlockRequest    StreamBlockKind = "request"
 	StreamBlockText       StreamBlockKind = "text"
 	StreamBlockThinking   StreamBlockKind = "thinking"
@@ -42,6 +49,7 @@ type StreamBlockMeta struct {
 	SessionID int64           `json:"sessionId"`
 	PromptID  int64           `json:"promptId"`
 	RunID     uint64          `json:"runId"`
+	Active    bool            `json:"active,omitempty"`
 	BlockID   string          `json:"blockId"`
 	ParentID  string          `json:"parentId"`
 	Kind      StreamBlockKind `json:"kind"`
@@ -59,12 +67,12 @@ func ListStreamPromptMetas(workspace string, sessionID int64) ([]PromptLogMeta, 
 	var prompts []PromptLogMeta
 	err := withStreamDB(workspace, func(db *sql.DB) error {
 		rows, err := db.Query(`
-			SELECT p.sessionId, p.promptId, p.heading, COALESCE(SUM(length(b.content)), 0)
+			SELECT p.sessionId, p.promptId, p.heading, p.started, COALESCE(SUM(length(b.content)), 0), p.status
 			FROM stream_prompts p
 			LEFT JOIN stream_blocks b
 				ON b.sessionId = p.sessionId AND b.promptId = p.promptId
 			WHERE p.sessionId = ? AND p.promptId > 0
-			GROUP BY p.sessionId, p.promptId, p.heading
+			GROUP BY p.sessionId, p.promptId, p.heading, p.started, p.status
 			ORDER BY p.promptId
 		`, sessionID)
 		if err != nil {
@@ -74,7 +82,7 @@ func ListStreamPromptMetas(workspace string, sessionID int64) ([]PromptLogMeta, 
 
 		for rows.Next() {
 			var prompt PromptLogMeta
-			if err := rows.Scan(&prompt.SessionID, &prompt.PromptID, &prompt.Heading, &prompt.SizeBytes); err != nil {
+			if err := rows.Scan(&prompt.SessionID, &prompt.PromptID, &prompt.Heading, &prompt.Started, &prompt.SizeBytes, &prompt.Status); err != nil {
 				return fmt.Errorf("cannot scan stream prompt metadata: %w", err)
 			}
 			prompts = append(prompts, prompt)
@@ -158,7 +166,11 @@ func ListLiveStreamBlockMeta(workspace string) ([]StreamBlockMeta, error) {
 	}
 
 	if identity := GetActiveStreamIdentity(ws); identity.SessionID == sessionID && identity.RunID > 0 {
-		return listStreamBlockMetaByRun(ws, sessionID, identity.RunID)
+		blocks, err := listStreamBlockMetaByRun(ws, sessionID, identity.RunID)
+		for i := range blocks {
+			blocks[i].Active = true
+		}
+		return blocks, err
 	}
 
 	metas := listPromptLogMetasMerged(ws, sessionID)
@@ -393,9 +405,12 @@ func AppendStreamBlock(workspace string, sessionID int64, runID uint64, blockID,
 	})
 }
 
-func FinalizeStreamPrompt(workspace string, sessionID int64, runID uint64, promptID int64, finished string) error {
+func FinalizeStreamPrompt(workspace string, sessionID int64, runID uint64, promptID int64, finished, status string) error {
 	if sessionID <= 0 || promptID <= 0 {
 		return fmt.Errorf("stream prompt session and prompt ids must be positive")
+	}
+	if status != PromptStatusSuccess && status != PromptStatusFailed && status != PromptStatusCancelled {
+		return fmt.Errorf("invalid stream prompt status %q", status)
 	}
 
 	return withStreamDB(workspace, func(db *sql.DB) error {
@@ -414,11 +429,11 @@ func FinalizeStreamPrompt(workspace string, sessionID int64, runID uint64, promp
 		}
 		if _, err := tx.Exec(`
 			UPDATE stream_prompts
-			SET promptId = ?, finished = ?, blockCount = (
+			SET promptId = ?, finished = ?, status = ?, blockCount = (
 				SELECT COUNT(*) FROM stream_blocks WHERE sessionId = ? AND runId = ?
 			)
 			WHERE sessionId = ? AND promptId = 0 AND runId = ?
-		`, promptID, finished, sessionID, runID, sessionID, runID); err != nil {
+		`, promptID, finished, status, sessionID, runID, sessionID, runID); err != nil {
 			return fmt.Errorf("cannot finalize stream prompt: %w", err)
 		}
 

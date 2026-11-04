@@ -49,6 +49,11 @@ so metadata, permissions and load/unload actions keep targeting the correct
 items. Filter values survive list refreshes and do not alter session/history
 ordering or persisted settings.
 
+Updated 2026-11-04: MCP metadata shows only the actionable Loaded checkbox,
+not the redundant read-only Loadable checkbox. The backend `loadable` flag
+still disables loading unavailable servers in both the list and metadata modal;
+duplicate-name conflicts retain their source explanation.
+
 ## Consequences
 
 - Switching sessions to look at old history no longer reorders the session

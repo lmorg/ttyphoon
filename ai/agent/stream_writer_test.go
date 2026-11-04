@@ -93,7 +93,7 @@ func TestAIStreamBlockWriter_ConcurrentParentedBlocks(t *testing.T) {
 		t.Fatalf("child emitted delta = %q, want 20 child chunks", deltas[child.block.BlockID])
 	}
 
-	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 99, 42, "finish"); err != nil {
+	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 99, 42, "finish", sessiondb.PromptStatusSuccess); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)
 	}
 
@@ -193,7 +193,7 @@ func TestAIStreamBlockWriter_ScopedThinkingSurvivesSiblingAgentBlocks(t *testing
 	alpha.Close()
 	bravo.Close()
 
-	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 101, 43, "finish"); err != nil {
+	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 101, 43, "finish", sessiondb.PromptStatusSuccess); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)
 	}
 	alphaContent, err := sessiondb.GetStreamBlockContent(workspace, state.ActiveSessionID, 43, alphaThinking.block.BlockID)
@@ -249,7 +249,7 @@ func TestAIStreamBlockWriter_ConcurrentScopedThinkingKeepsEveryDelta(t *testing.
 	wg.Wait()
 	writer.CloseAll()
 
-	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 102, 44, "finish"); err != nil {
+	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 102, 44, "finish", sessiondb.PromptStatusSuccess); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)
 	}
 	blocks, err := sessiondb.ListStreamBlockMeta(workspace, state.ActiveSessionID, 44)
@@ -447,7 +447,7 @@ func TestSubagentToolActivityUsesNestedTypedBlocks(t *testing.T) {
 	if response.String() != "subagent answer" {
 		t.Fatalf("subagent response = %q, want callback text", response.String())
 	}
-	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 101, 43, "finish"); err != nil {
+	if err := sessiondb.FinalizeStreamPrompt(workspace, state.ActiveSessionID, 101, 43, "finish", sessiondb.PromptStatusSuccess); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)
 	}
 	blocks, err := sessiondb.ListStreamBlockMeta(workspace, state.ActiveSessionID, 43)

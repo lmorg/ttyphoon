@@ -39,7 +39,7 @@ func TestStreamBlockLifecycle(t *testing.T) {
 	if err := AppendStreamBlock(workspace, 1, 7, "7-1", " world", "closed", "finish"); err != nil {
 		t.Fatalf("AppendStreamBlock: %v", err)
 	}
-	if err := FinalizeStreamPrompt(workspace, 1, 7, 42, "finish"); err != nil {
+	if err := FinalizeStreamPrompt(workspace, 1, 7, 42, "finish", PromptStatusFailed); err != nil {
 		t.Fatalf("FinalizeStreamPrompt: %v", err)
 	}
 
@@ -53,6 +53,13 @@ func TestStreamBlockLifecycle(t *testing.T) {
 	}
 	if promptID != 42 || blockPromptID != 42 || content != "hello world" || status != "closed" {
 		t.Fatalf("prompt=%d blockPrompt=%d content=%q status=%q", promptID, blockPromptID, content, status)
+	}
+	prompts, err := ListStreamPromptMetas(workspace, 1)
+	if err != nil {
+		t.Fatalf("ListStreamPromptMetas: %v", err)
+	}
+	if len(prompts) != 1 || prompts[0].Status != PromptStatusFailed {
+		t.Fatalf("prompt metadata = %+v, want failed status", prompts)
 	}
 }
 

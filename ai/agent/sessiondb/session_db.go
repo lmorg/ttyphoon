@@ -680,10 +680,46 @@ func initDB(db *sql.DB) error {
 	if err := initStreamTables(db); err != nil {
 		return err
 	}
+	if err := migrateStreamPromptStatusColumn(db); err != nil {
+		return err
+	}
 	if err := migrateStreamBlockLabelColumn(db); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func migrateStreamPromptStatusColumn(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(stream_prompts)`)
+	if err != nil {
+		return fmt.Errorf("cannot inspect stream prompt schema: %w", err)
+	}
+	defer rows.Close()
+	hasStatus := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, ctype string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("cannot read stream prompt schema: %w", err)
+		}
+		if name == "status" {
+			hasStatus = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if hasStatus {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE stream_prompts ADD COLUMN status TEXT NOT NULL DEFAULT 'running'`); err != nil {
+		return fmt.Errorf("cannot add stream prompt status column: %w", err)
+	}
+	if _, err := db.Exec(`UPDATE stream_prompts SET status = ? WHERE finished <> ''`, PromptStatusSuccess); err != nil {
+		return fmt.Errorf("cannot migrate completed stream prompt statuses: %w", err)
+	}
 	return nil
 }
 
@@ -726,6 +762,7 @@ func initStreamTables(db *sql.DB) error {
 			heading TEXT NOT NULL,
 			started TEXT NOT NULL,
 			finished TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'running',
 			blockCount INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (sessionId, promptId)
 		);

@@ -32,8 +32,9 @@ in SQLite and in the panel when requested.
 - Clicking the checkbox reveals or collapses output and summaries without
   changing its status. Revealing an open summary shows its existing live stream,
   including deltas received after expansion.
-- Do not change stream persistence or typed-block transport. Live and historical
-  views use the same formatter behavior.
+- Do not change stream persistence or typed-block transport. Tool-level output
+  disclosures apply in both views; ADR 0088 additionally collapses historical
+  intermediate blocks.
 
 ## Consequences
 
