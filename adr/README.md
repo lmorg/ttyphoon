@@ -6,10 +6,7 @@ on them rather than rediscover them.
 Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 **Reference**.
 
-`0000-high-level-project-context-for-ai.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
-If you're an AI, please read this first for new sessions to gain context into the application.
-
-`improvements.md` is a catalogue of known feature requests and bugs.
+`0000-high-level-project-context.md` provides a high level architectural description of the project and should be read to provide context required for all other ADRs.
 
 ## Index
 
@@ -95,12 +92,6 @@ If you're an AI, please read this first for new sessions to gain context into th
 | [0078](0078-mcp-oauth-failures-must-be-retryable.md) | MCP OAuth cancellation, registration and retries preserve usable state | MCP |
 | [0079](0079-document-printing-uses-isolated-snapshots.md) | Document printing uses isolated snapshots and platform backends | Printing |
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
-| [0081](0081-ai-prompt-effort-and-feedback-cadence.md) | Per-prompt effort guides investigation and user-feedback cadence | AI |
-| [0082](0082-ai-read-only-git-tool.md) | AI Git inspection uses a permission-gated read-only action whitelist | AI tools |
-| [0083](0083-ai-skills-support-manual-and-model-invocation.md) | AI skills support independent manual and automatic invocation | AI |
-| [0084](0084-ai-skills-read-selected-supporting-files.md) | AI skills can read selected supporting files | AI |
-| [0085](0085-wails-v3-migration.md) | Migrate the desktop application to Wails v3 | Platform |
-| [0086](0086-markdown-run-edits-preserve-source.md) | Markdown Run edits preserve source | Notes |
 
 ## Recurring themes
 

@@ -13,6 +13,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(app.Version())
+		return
+	}
+
 	if runtime.GOOS == "darwin" {
 		err := os.Setenv("PATH", "PATH="+os.Getenv("PATH")+":/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin")
 		if err != nil {

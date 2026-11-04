@@ -21,9 +21,9 @@ the [Wails native-runner CI guidance](https://wails.io/guides/build/cross-platfo
 
 Download artifacts from the completed **Release Artifacts** workflow run:
 
-* `ttyphoon-macos-arm64` - Apple Silicon `.app` bundle in a ZIP archive
-* `ttyphoon-macos-amd64` - Intel `.app` bundle in a ZIP archive
-* `ttyphoon-linux-amd64` - x86-64 executable in a `.tar.gz` archive
+* `ttyphoon-<version>-macos-arm64` - Apple Silicon `.app` bundle in a ZIP archive
+* `ttyphoon-<version>-macos-amd64` - Intel `.app` bundle in a ZIP archive
+* `ttyphoon-<version>-linux-amd64` - x86-64 executable in a `.tar.gz` archive
 
 Each artifact contains an archive and a separate SHA-256 checksum file.
 Artifacts are retained for 30 days; the workflow does not publish GitHub
@@ -32,9 +32,6 @@ so Gatekeeper may require explicit approval. Linux builds target Ubuntu 24.04
 and require GTK4, WebKitGTK 6.0, and X11 runtime libraries on the destination
 machine.
 
-CI uses the Go version from `go.mod`, Node 24, and the project's Wails version.
-Generation, frontend compilation, and native compilation run sequentially;
-Go compilation is limited to two concurrent workers to reduce peak memory.
 
 ## Mac
 

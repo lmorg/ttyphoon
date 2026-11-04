@@ -3,12 +3,10 @@ package app
 // DirName is the name in which config files et al are stored
 const DirName = "ttyphoon"
 
-const undefined = "undef"
-
 var (
 	name      = "Ttyphoon"
 	tagLine   = "The Next Generation Terminal Emulator"
-	version   = "0.52.1000"
+	version   = "1.0.1000"
 	branch    = "unknown"
 	buildDate = "unknown"
 	copyright = "2023-2026 Laurence Morgan"

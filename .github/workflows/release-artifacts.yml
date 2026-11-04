@@ -104,6 +104,19 @@ jobs:
             -o build/bin/ttyphoon .
           test -x build/bin/ttyphoon
 
+      - name: Read Built Artifact Version
+        id: artifact
+        run: |
+          version=$(build/bin/ttyphoon --version)
+          if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            printf 'Invalid version from built executable: %q\n' "$version" >&2
+            exit 1
+          fi
+          name="ttyphoon-${version}-${ARTIFACT_NAME#ttyphoon-}"
+          printf 'ARTIFACT_NAME=%s\n' "$name" >> "$GITHUB_ENV"
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+          printf 'Release artifact: %s\n' "$name"
+
       - name: Archive macOS App
         if: runner.os == 'macOS'
         run: |
@@ -129,7 +142,7 @@ jobs:
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: ${{ steps.artifact.outputs.name }}
           path: artifacts/*
           if-no-files-found: error
           compression-level: 0
