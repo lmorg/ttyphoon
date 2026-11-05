@@ -24,6 +24,15 @@ func (term *Term) mxapcBegin(element types.ElementID) {
 	term._activeElement = term.renderer.NewElement(term.tile, element)
 }
 
+func (term *Term) beginTextElement(element types.ElementID, parameters *types.ApcSlice) error {
+	el := term.renderer.NewElement(term.tile, element)
+	if err := el.Generate(parameters); err != nil {
+		return err
+	}
+	term._activeTextElement = &types.TextElement{Element: el}
+	return nil
+}
+
 func (term *Term) mxapcBeginContentEditable(element types.ElementID) {
 	term._activeElement = term.renderer.NewElement(term.tile, element, term._spellingExc)
 }

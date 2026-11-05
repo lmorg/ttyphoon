@@ -13,9 +13,18 @@ func (c *Cell) Clear() {
 	c.Element = nil
 }
 
+func (c *Cell) HasTextElement() bool {
+	_, ok := c.Element.(*TextElement)
+	return ok
+}
+
+func (c *Cell) HasDrawableElement() bool {
+	return c.Element != nil && !c.HasTextElement()
+}
+
 func (c *Cell) Rune() rune {
 	switch {
-	case c.Element != nil:
+	case c.HasDrawableElement():
 		return c.Element.Rune(c.GetElementXY())
 
 	case c.Char == 0:
@@ -39,6 +48,9 @@ func SetElementXY(xy *XY) rune {
 }
 
 func (c *Cell) GetElementXY() *XY {
+	if c.HasTextElement() {
+		return &XY{}
+	}
 	return &XY{
 		X: c.Char >> 16,
 		Y: c.Char &^ _CELL_ELEMENTXY_MASK,

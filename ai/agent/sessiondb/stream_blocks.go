@@ -92,44 +92,6 @@ func ListStreamPromptMetas(workspace string, sessionID int64) ([]PromptLogMeta, 
 	return prompts, err
 }
 
-func GetStreamPromptContent(workspace string, sessionID, promptID int64) (string, error) {
-	if sessionID <= 0 || promptID <= 0 {
-		return "", fmt.Errorf("stream prompt session and prompt ids must be positive")
-	}
-
-	var content strings.Builder
-	err := withStreamDB(workspace, func(db *sql.DB) error {
-		rows, err := db.Query(`
-			SELECT content
-			FROM stream_blocks
-			WHERE sessionId = ? AND promptId = ?
-			ORDER BY ordinal, id
-		`, sessionID, promptID)
-		if err != nil {
-			return fmt.Errorf("cannot load stream prompt blocks: %w", err)
-		}
-		defer rows.Close()
-
-		found := false
-		for rows.Next() {
-			var blockContent string
-			if err := rows.Scan(&blockContent); err != nil {
-				return fmt.Errorf("cannot scan stream prompt block: %w", err)
-			}
-			found = true
-			content.WriteString(blockContent)
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("stream prompt %d was not found", promptID)
-		}
-		return nil
-	})
-	return content.String(), err
-}
-
 func ListStreamBlockMeta(workspace string, sessionID, promptID int64) ([]StreamBlockMeta, error) {
 	if sessionID <= 0 || promptID <= 0 {
 		return nil, fmt.Errorf("stream block session and prompt ids must be positive")
@@ -173,7 +135,10 @@ func ListLiveStreamBlockMeta(workspace string) ([]StreamBlockMeta, error) {
 		return blocks, err
 	}
 
-	metas := listPromptLogMetasMerged(ws, sessionID)
+	metas, err := ListStreamPromptMetas(ws, sessionID)
+	if err != nil {
+		return nil, err
+	}
 	if len(metas) == 0 {
 		return nil, nil
 	}

@@ -33,10 +33,10 @@ effort guidance must not assume a coding task.
   the result or safe next step.
 - Treat effort as portable behavioral guidance, not a time budget, harness
   max-step limit, or provider API parameter. It does set a recovery-attempt
-  budget for stalled work: Quick allows one distinct safe alternative,
-  Balanced two, and Thorough three. All modes stop sooner when attempts become
-  repetitive, unsafe, or stop producing evidence, then askUser for specific
-  help if still blocked. Provider-specific reasoning controls can be added
+  budget for stalled work: Quick allows no retries and asks the user promptly,
+  Balanced allows one distinct safe alternative, and Thorough allows three. All
+  modes stop sooner when attempts become repetitive, unsafe, or stop producing
+  evidence, then askUser for specific help if still blocked. Provider-specific reasoning controls can be added
   separately when they can be mapped reliably.
 
 ## Consequences

@@ -2,6 +2,13 @@ package menuhyperlink
 
 import "testing"
 
+func TestMakeLinkOpaqueURI(t *testing.T) {
+	link := makeLink(nil, "mailto:someone@example.com", "Email")
+	if link.scheme != "mailto" || link.path != "someone@example.com" || schemaOrPath(link) != "mailto:someone@example.com" {
+		t.Fatalf("non-hierarchical URI was not preserved: %+v", link)
+	}
+}
+
 func TestMakeLink_FilePathAndFileName(t *testing.T) {
 	tests := []struct {
 		name         string

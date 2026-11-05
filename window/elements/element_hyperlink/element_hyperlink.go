@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/url"
 	"path"
 	"strings"
 
@@ -45,11 +46,20 @@ func (el *ElementHyperlink) Generate(apc *types.ApcSlice) error {
 		return errors.New("empty url in hyperlink")
 	}
 
-	split := strings.SplitN(el.url, "://", 2)
-	if len(split) != 2 {
-		return fmt.Errorf("invalid url, missing schema: '://': %s", el.url)
+	scheme, target, found := strings.Cut(el.url, ":")
+	if !found || scheme == "" {
+		return fmt.Errorf("invalid hyperlink URL, missing scheme: %q", el.url)
 	}
-	el.scheme, el.path = strings.ToLower(split[0]), split[1]
+	// Auto-detected file paths may contain unescaped spaces or percent signs.
+	parsed, err := url.Parse(scheme + ":")
+	if err != nil {
+		return fmt.Errorf("invalid hyperlink URL: %w", err)
+	}
+	if parsed.Scheme == "" || strings.IndexFunc(el.url, func(r rune) bool { return r < ' ' || r == 127 }) >= 0 {
+		return fmt.Errorf("invalid hyperlink URL: %q", el.url)
+	}
+	el.scheme = strings.ToLower(parsed.Scheme)
+	el.path = strings.TrimPrefix(target, "//")
 
 	return nil
 }

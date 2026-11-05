@@ -30,10 +30,10 @@ func makeLink(renderer types.Renderer, url, label string) *link {
 
 	scheme := ""
 	path := ""
-	split := strings.SplitN(url, "://", 2)
+	split := strings.SplitN(url, ":", 2)
 	if len(split) == 2 {
 		scheme = strings.ToLower(strings.TrimSpace(split[0]))
-		path = split[1]
+		path = strings.TrimPrefix(split[1], "//")
 	}
 
 	link := &link{

@@ -16,10 +16,9 @@ import {
     SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, ClipboardSetFormatted, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
-    GetAISessionCache,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
     ListAIModelSelections, GetCurrentAIModelSelection, GetAIExecutionLimits, SetCurrentAIModelSelection, SetAIPanelLive,
-    ListAIPromptLogs, GetAIPromptLog,
+    ListAIPromptLogs,
     ListAIStreamBlocks, GetAIStreamBlockContent, GetAISessionPrompt, ListAILiveStreamBlocks,
     GetAIToolsList, SetAIToolSubagentAllowed, SetAIToolState, ShowAIToolStateMenu, ShowAIToolSubagentMenu, ResolveAIToolPermission, PromptAIToolPermissionReason, GetAIMcpServers, SetAIMcpServerEnabled, ClearAISessionHistory, ClearAILog,
     ResolveNotesLspLanguage, NotesLspAvailableForRuntime, NotesRecentFiles, ResolveNoteLocation, ComposeNoteLocationPath,
@@ -12479,53 +12478,9 @@ function summarizePromptText(value, fallback) {
     return `${normalized.slice(0, 87).trimEnd()}...`;
 }
 
-function extractAIPromptLogContext(markdown) {
-    const text = String(markdown || '');
-    const timestamp = text.match(/<!-- start request:\s*([^>]+?)\s*-->/)?.[1]?.trim() || '';
-    const prompt = text.match(/### Prompt[ \t]*\r?\n+([\s\S]*?)(?=\r?\n### (?:Command|Output|Stream Trace)\b|$)/)?.[1]?.trim() || '';
-    return { prompt, timestamp };
-}
-
-function collectAIPromptTargets() {
-    // Deprecated: legacy DOM-based prompt collector kept as a fallback for the
-    // initial refresh before the async backend list resolves.
-    if (!elements.aiOutput) {
-        return [];
-    }
-
-    const targets = [];
-
-    const prefixPromptHeadings = elements.aiOutput.querySelectorAll('.notes-ai-prefix h2, .notes-ai-prefix h3');
-    for (const heading of prefixPromptHeadings) {
-        const label = String(heading.textContent || '').trim().toLowerCase();
-        if (label !== 'prompt') {
-            continue;
-        }
-
-        let summaryText = '';
-        let sibling = heading.nextElementSibling;
-        while (sibling) {
-            summaryText = summarizePromptText(sibling.textContent, '');
-            if (summaryText) {
-                break;
-            }
-            sibling = sibling.nextElementSibling;
-        }
-
-        targets.push({
-            source: 'dom',
-            element: heading,
-            summary: summarizePromptText(summaryText, `Prompt ${targets.length + 1}`),
-        });
-    }
-
-    return targets;
-}
-
 // Backend-provided prompt log metadata, refreshed on aiJobFinish / panel init.
 // Each entry is { sessionId, promptId, heading, summary } from Go via
-// ListAIPromptLogs. The heading is the "<!-- request heading: … -->" comment
-// captured when the prompt started; summary is the rendered dropdown label.
+// ListAIPromptLogs. The heading is stored in SQLite when the prompt starts.
 async function refreshAIPromptJumpFromBackend() {
     if (!elements.toolsAIPromptJump) {
         return [];
@@ -12563,14 +12518,8 @@ function updateAIPromptJumpAvailability() {
 }
 
 function renderAIPromptJumpDropdown() {
-    // Initial synchronous render uses any DOM-collected prompts, then the
-    // backend list overrides asynchronously.
     if (!elements.toolsAIPromptJump) {
         return;
-    }
-    const domTargets = collectAIPromptTargets();
-    if (!Array.isArray(state.aiPromptJumpTargets) || state.aiPromptJumpTargets.length === 0) {
-        state.aiPromptJumpTargets = domTargets;
     }
     updateAIPromptJumpAvailability();
     void refreshAIPromptJumpFromBackend();
@@ -12605,6 +12554,16 @@ async function resumeLiveAIOutput() {
     await loadAISessionCache('');
 }
 
+async function renderAIStoredPrompt(blocks, target) {
+    const promptText = await GetAISessionPrompt(target.sessionId, target.promptId);
+    aiPipelineFormatter.setBlocks(blocks.map((block) => ({ ...block, userPrompt: promptText })), (block) =>
+        GetAIStreamBlockContent(target.sessionId, target.promptId, String(block?.blockId || '')), {
+        collapseIntermediate: true,
+        prompt: promptText || target.summary,
+        timestamp: target.started,
+    });
+}
+
 async function jumpToAIPromptTarget(target) {
     if (!target) {
         return;
@@ -12628,49 +12587,15 @@ async function jumpToAIPromptTarget(target) {
                 ? await ListAIStreamBlocks(target.sessionId, target.promptId)
                 : [];
             if (Array.isArray(blocks) && blocks.length > 0 && typeof GetAIStreamBlockContent === 'function') {
-                let promptText = typeof GetAISessionPrompt === 'function'
-                    ? await GetAISessionPrompt(target.sessionId, target.promptId)
-                    : '';
-                let timestamp = target.started;
-                if (!promptText || !timestamp) {
-                    const legacyContext = extractAIPromptLogContext(
-                        await GetAIPromptLog(target.sessionId, target.promptId),
-                    );
-                    promptText ||= legacyContext.prompt;
-                    timestamp ||= legacyContext.timestamp;
-                }
-                aiPipelineFormatter.setBlocks(blocks.map((block) => ({ ...block, userPrompt: promptText })), (block) => {
-                    return GetAIStreamBlockContent(
-                        target.sessionId,
-                        target.promptId,
-                        String(block?.blockId || ''),
-                    );
-                }, {
-                    collapseIntermediate: true,
-                    prompt: promptText || target.summary,
-                    timestamp,
-                });
+                await renderAIStoredPrompt(blocks, target);
             } else {
-                const markdown = await GetAIPromptLog(target.sessionId, target.promptId);
                 aiPipelineFormatter.clear();
-                if (markdown) {
-                    setAIFinalOutput(String(markdown), { forceBottom: true, legacy: true });
-                }
             }
         } catch (err) {
             console.error('Failed to load AI prompt log:', err);
         }
         return;
     }
-
-    if (!elements.aiOutput || !(target.element instanceof Element)) {
-        return;
-    }
-
-    const nextTop = Math.max(0, Number(target.element.offsetTop) - 8);
-    elements.aiOutput.scrollTo({ top: nextTop, behavior: 'smooth' });
-    state.aiStickToBottom = false;
-    updateAIScrollBottomButton();
 }
 
 function openAIPromptJumpMenu() {
@@ -14453,7 +14378,7 @@ function startAIJob(title) {
     state.aiSessionCachePending = false;
     state.aiSessionCachePendingWorkspace = '';
 
-    // Per-prompt log files: clear the panel so only the new prompt renders.
+    // Clear the panel so only the new prompt renders.
     aiPipelineFormatter.clear();
     aiPipelineFormatter.startJob(String(title || ''));
     scheduleAIPromptJumpRefresh();
@@ -14544,20 +14469,6 @@ async function finishAIJob(payload = {}) {
         if (version === aiCompletionRevealVersion) aiCompletionRevealPending = false;
         updateAIScrollBottomButton();
         if (generation === aiRunGeneration) void refreshAIPromptJumpFromBackend();
-    }
-}
-
-function setAIFinalOutput(text, options = {}) {
-    const forceBottom = options.forceBottom === true;
-    const shouldStick = forceBottom || state.aiStickToBottom;
-    aiPipelineFormatter.setText(String(text || ''), { legacy: options.legacy === true });
-    scheduleAIPromptJumpRefresh();
-    if (shouldStick) {
-        requestAIScrollToBottom();
-    } else {
-        requestAnimationFrame(() => {
-            updateAIScrollBottomButton();
-        });
     }
 }
 
@@ -14707,18 +14618,29 @@ async function restoreAILiveBlocks(workspaceName) {
     const active = blocks.some((block) => block?.active === true
         || (block?.promptId !== undefined && Number(block.promptId) === 0));
     state.aiRunActive = active;
-    aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
-        Number(block?.sessionId) || 0,
-        Number(block?.promptId) || 0,
-        String(block?.blockId || ''),
-    ), { collapseIntermediate: !active });
-
     const lastBlock = blocks.at(-1);
+    const storedTarget = !active
+        ? state.aiPromptJumpTargets.find((target) =>
+            target.sessionId === Number(lastBlock?.sessionId)
+            && target.promptId === Number(lastBlock?.promptId))
+        : null;
+    if (active) {
+        aiPipelineFormatter.setBlocks(blocks, (block) => GetAIStreamBlockContent(
+            Number(block?.sessionId) || 0,
+            Number(block?.promptId) || 0,
+            String(block?.blockId || ''),
+        ));
+    } else {
+        await renderAIStoredPrompt(blocks, storedTarget || {
+            sessionId: Number(lastBlock?.sessionId) || 0,
+            promptId: Number(lastBlock?.promptId) || 0,
+        });
+    }
     const runId = Number(lastBlock?.runId) || 0;
     aiActiveRunId = active && runId > 0 ? runId : null;
     state.aiSelectedPrompt = active
         ? { source: 'live' }
-        : {
+        : storedTarget || {
             source: 'backend',
             sessionId: Number(lastBlock?.sessionId) || 0,
             promptId: Number(lastBlock?.promptId) || 0,
@@ -14730,28 +14652,22 @@ async function restoreAILiveBlocks(workspaceName) {
 
 async function loadAISessionCache(workspaceName) {
     try {
+        const targets = await refreshAIPromptJumpFromBackend();
         const restored = await restoreAILiveBlocks(workspaceName);
 
         if (!restored) {
             if (state.aiRunActive) {
                 setAIPanelLive(true);
             } else {
-                // Reaching here means the workspace has no blocks at all, so
-                // whatever the session log returns predates block storage.
-                const cache = String(await GetAISessionCache(String(workspaceName || '')) || '');
                 // Fully reset the panel before rendering so content from a previously
                 // active workspace cannot persist across a workspace (tmux tab) switch.
                 aiPipelineFormatter.clear();
                 aiActiveRunId = null;
                 state.aiSelectedPrompt = null;
                 setAIPanelLive(false);
-                if (cache) {
-                    setAIFinalOutput(cache, { forceBottom: true, legacy: true });
-                }
             }
         }
 
-        const targets = await refreshAIPromptJumpFromBackend();
         if (!state.aiRunActive && !state.aiSelectedPrompt) {
             state.aiSelectedPrompt = targets.at(-1) || null;
         }

@@ -33,10 +33,12 @@ func (term *Term) csiCallback(format string, v ...any) {
 */
 
 func (term *Term) csiScreenBufferAlternative() {
+	term._activeTextElement = nil
 	term.screen = &term._altBuf
 }
 
 func (term *Term) csiScreenBufferNormal() {
+	term._activeTextElement = nil
 	term.screen = &term._normBuf
 	for i := range term._altBuf {
 		term._altBuf[i] = term.makeRow()

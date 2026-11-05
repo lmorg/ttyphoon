@@ -115,6 +115,14 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link
 
 	autoHyperlinkUnicodeOffset(rows, &pos)
 
+	// Elements redraw their entire label, so never partially overlay an explicit link.
+	for i := pos[0]; i < pos[1]; i++ {
+		y, x := i/int(term.size.X), i%int(term.size.X)
+		if rows[y].Cells[x].Element != nil {
+			return
+		}
+	}
+
 	acp := types.NewApcSliceNoParse([]string{label, link})
 	el := term.renderer.NewElement(term.tile, types.ELEMENT_ID_HYPERLINK)
 	err := el.Generate(acp)
@@ -123,7 +131,7 @@ func _autoHyperlinkElement(term *Term, rows []*types.Row, pos []int, label, link
 		return
 	}
 
-	x, y, z := int32(pos[0]), int32(0), int32(0)
+	x, y, z := int32(pos[0])%term.size.X, int32(pos[0])/term.size.X, int32(0)
 	for i := pos[0]; i < pos[1]; i++ {
 		if x >= term.size.X {
 			y++

@@ -1,323 +1,192 @@
-# 0037 - The AI stream is a set of addressable blocks persisted in sqlite
+# 0037 - The AI stream is a set of addressable blocks persisted in SQLite
 
 ## Status
 
-In progress. Amended by 0038, which fixes the emit gating this record's
-`aiStreamBlock` transport omitted, and the flattened live-restore path.
-The legacy fallbacks retained below are scheduled for removal by 0039.
+Accepted and implemented. Reconciled against the code on 2026-11-04.
 
-The SQLite schema foundation and idempotent initialization are
-implemented. The runtime now owns typed SQLite blocks for text, reasoning, and
-tool progress, and prompt finalization assigns the database prompt ID
-transactionally. The runtime emits `aiStreamBlock` lifecycle events, and the
-frontend renders each block in an isolated DOM root. The legacy markdown
-transport remains active as a fallback for runs that do not produce blocks.
-Tool calls, outputs, errors, summaries, questions, permissions, and completed
-sub-agent output now receive dedicated block kinds rather than sharing a text
-sink. Typed block content is raw; markdown fences, quote prefixes, and
-sub-agent labels are generated only for the legacy compatibility stream.
-Historical prompts now use `ListAIStreamBlocks(sessionID, promptID)` for a
-metadata-only index and `GetAIStreamBlockContent(sessionID, promptID, blockID)`
-for viewport-driven lazy hydration through the Wails bindings. Legacy markdown
-prompt loading remains the fallback for prompts without block rows.
-The frontend formatter now maintains a separate render queue and DOM root per
-`blockId`; raw tool blocks use `textContent` in `<pre><code>`, while markdown
-blocks are incrementally rendered within their own root.
-`ParentID` is now propagated through the runtime context: a tool-call block is
-the parent of its output, error, summary, and nested sub-agent blocks. The
-frontend attaches child wrappers under a parent's dedicated children container,
-including when the child event arrives before the parent event.
-Continuous reasoning chunks share one `thinking` block, but opening any
-non-thinking logical block closes it first. Reasoning after a tool call therefore
-opens a new block instead of being appended to the earlier thinking block.
-Tool-call blocks persist their tool name as separate metadata and render it as a
-`Tool call: \`name.of.tool\`` heading above the untouched input payload.
-The frontend no longer maintains a global stream sequence cursor or gap
-recovery timer. Typed block events update their own roots directly; the legacy
-`aiResponseStream` event is a direct-delivery compatibility fallback only.
-Prompt metadata and assembled prompt content are now read from
-`stream_prompts`/`stream_blocks` first. Existing markdown prompt files remain a
-read fallback for pre-migration prompts that have no SQLite stream rows.
-Prompt deletion removes its stream rows in the same transaction as the history
-row. Session deletion and clear-history remove both stream tables in their
-existing transactions; direct log-clearing APIs also remove SQLite rows before
-cleaning up legacy files.
-New runs no longer create, append, finalize, or rename static markdown session
-logs. The old file format remains read-only compatibility storage for prompts
-created before this cutover and is still removed by cleanup operations.
-Lazy historical loading is covered by formatter tests: a small initial set is
-prewarmed, off-screen blocks remain metadata shells, intersection hydrates one
-block asynchronously, and repeated intersection does not refetch it.
-Final verification includes a race-tested concurrent parent/child block writer,
-SQLite prompt deletion coverage, nested DOM hierarchy coverage, and full Go and
-frontend suites. These cover the parallel-tool/sub-agent ownership path without
-reintroducing a shared markdown sink.
-The final audit also verifies mixed legacy-file and SQLite prompt histories, with
-SQLite taking precedence for duplicate prompt IDs. Full Go tests, AI race tests,
-and the frontend suite pass. `go vet ./...` still reports unrelated existing
-diagnostics in other packages and the pre-existing `frontend.go` timeout warning.
+The addressable-block migration is complete; it is not an outstanding feature.
+Later decisions refine its implementation:
+
+- [0038](0038-typed-stream-blocks-must-honour-panel-scope.md) implements
+  workspace/live-history gating and structured restore.
+- [0039](0039-remove-legacy-markdown-compatibility-layer.md) removes the
+  duplicate live transport and all pre-cutover Markdown transcript compatibility.
+- [0042](0042-large-ai-stream-footprint-and-ui-responsiveness.md) owns subsequent
+  performance work, including its explicitly outstanding optimizations.
+- [0050](0050-nested-subagent-output-uses-typed-blocks.md) preserves typed
+  ownership through nested subagent execution.
+- [0088](0088-ai-prompt-status-and-historical-disclosures.md) records prompt
+  outcomes and historical intermediate-output disclosures.
 
 Supersedes 0006. Amends 0005.
 
 ## Context
 
-The AI panel's live output is a **single linear markdown string**. Every producer
-appends to it:
+Before this migration, the panel consumed one linear Markdown stream. Main-agent
+text, reasoning, parallel tool output, summaries, subagents, questions and
+permission requests all appended to the same sink.
 
-- the main agent's text and reasoning (`aiStreamEmitter.emitText` / `emitReasoning`)
-- each tool call, tool output and tool error (`einoAgentTool.InvokableRun`)
-- the tool-output summariser (`summariseToolOutput`)
-- sub-agents (`ai/tools/subagents`, `ai/subagent`)
-- permission and `askUser` prompts
+Each producer supplied its own fences or blockquote prefixes. Atomic individual
+writes did not make those multi-chunk constructs atomic: reasoning could arrive
+inside another producer's open code fence. Buffering each subagent's whole
+response, as in ADR 0006, mitigated one producer but sacrificed live feedback
+and did not solve tool or summarizer interleaving.
 
-Each producer frames its own content *in markdown*: `~~~~` fences for tool
-output, `> **Thinking:** ` blockquote prefixes for reasoning, `> **Sub-agent X:** `
-for sub-agents. Framing is therefore **stateful across many chunks** — a
-summariser opens a fence, streams for seconds, then closes it.
-
-`aiStreamChunk.Sequence` guarantees *delivery order*, not *logical grouping*, and
-`aiStreamEmitter.mu` guarantees each individual write is atomic but nothing more.
-So a reasoning flush timer (`time.AfterFunc(aiStreamEmitInterval, …)`) firing
-between two summariser chunks lands a blockquote **inside an open code fence**:
-
-```
-| Summaring tool output:
-
-> **Summaring tool output:** [HAP-13379](…): "Team review of the
-
-> Thinking: I
-
-Web
-
-> Thinking: need to distill this down to the key facts while keeping it concise.
-```
-
-This is the same defect 0006 identified for sub-agents. 0006 solved it by
-abandoning live streaming for sub-agents and flushing each job as one contiguous
-block on completion. That mitigates one producer; it does not fix parallel tool
-calls, the summariser, or reasoning racing tool output, and it costs live
-feedback and unbounded per-job memory. Nested sub-agents make it worse still:
-their markdown framing nests blockquotes inside blockquotes inside fences.
-
-Secondary problems with the current design, all downstream of "the stream is one
-string":
-
-- **Persistence is a markdown file per prompt.** `session-log.{ws}.{sid}.{pid}.md`,
-  with the prompt heading scraped back out of an HTML comment by regex, and the
-  prompt list built by `filepath.Glob` + `os.Stat`.
-- **File and DB can diverge.** `DeleteAIHistoryEntry` deletes the sqlite row and
-  then best-effort `os.Remove`s the file. Either can fail alone.
-- **One missing chunk stalls the panel permanently.** The old frontend cursor
-  required contiguous sequences; addressable blocks remove that dependency.
-- **History loads as one blocking parse.** `setText` reads the whole file and
-  calls `marked.parse` on all of it before lazy post-processing can begin.
+Per-prompt Markdown files also required filesystem scans and heading extraction
+for the prompt menu. File deletion could diverge from session-history deletion,
+and loading a transcript required a full-document parse.
 
 ## Decision
 
-Stop treating the panel stream as text. Model it as an **ordered set of
-addressable blocks**, persisted in the existing per-workspace sqlite database,
-and delete the static markdown log.
+### 1. Addressable blocks and scoped ownership
 
-### 1. A block is the unit of streaming, and has exactly one writer
+Represent output as ordered typed blocks, each with its own destination:
 
 | Field | Meaning |
 |---|---|
-| `BlockID` | SQLite-assigned `stream_blocks.id`, serialized as a decimal string. |
-| `ParentID` | Empty, or the owning block (a sub-agent's children, a summary under its tool call). |
-| `Kind` | `request`, `text`, `thinking`, `tool-call`, `tool-output`, `tool-error`, `tool-summary`, `subagent`, `notice`, `question`. |
-| `Ordinal` | Monotonic position within the prompt, allocated under the run lock. |
-| `Seq` | Per-block revision, so a late delta for one block cannot stall another. |
-| `Status` | `open` or `closed`. |
-| `Content` | The block's own markdown body, **without framing**. |
+| `RunID` | SQLite-allocated run identity. |
+| `BlockID` | SQLite-assigned block row ID, serialized as a decimal string. |
+| `ParentID` | Owning tool-call or subagent block, or empty for a root block. |
+| `Kind` | Text, thinking, tool call/output/error/summary, subagent, notice or question. |
+| `Label` | Separate display metadata, such as a tool name. |
+| `Ordinal` | Position allocated by the shared run writer. |
+| `Status` | Block lifecycle: `open` or `closed`. |
+| `Content` / `Delta` | Stored body / incremental content, without cross-block framing. |
 
-The invariant that makes concurrency safe is **one writer per block**. A block
-is opened at the point a logical unit begins and closed when it ends:
+The original design proposed a per-block `Seq` revision. The implemented event
+does not contain it: there is no global sequence cursor or gap-recovery timer.
+The panel applies lifecycle events and deltas directly to the identified block.
 
-The block writer itself is scoped to the full run and reused across bounded
-model windows and continuations. SQLite allocates the persistent `RunID` and
-the `BlockID`; the run sequence is seeded above IDs already present in older
-databases, and each block ID comes from the `stream_blocks.id` primary key. This
-avoids collisions when an app process or model window restarts its local state.
+The run owns a shared typed writer, reused across bounded model windows and
+continuations. Rolling text and thinking blocks are keyed by both kind and
+owning scope. A tool call owns its output, error and summary blocks; nested
+subagents share the writer while retaining their own parent scope.
 
-- `einoAgentTool.InvokableRun` opens a `tool-call` block, and a `tool-output`
-  child. Parallel tool calls own disjoint blocks, so they cannot interleave.
-- `summariseToolOutput` opens a `tool-summary` block parented to its tool call.
-- `aiStreamEmitter` splits into two writers: a `text` block per contiguous text
-  run and a `thinking` block per contiguous reasoning run. The `inThinking`
-  flag disappears — "am I inside a blockquote" becomes "which block is open".
-- Sub-agents open a `subagent` block and stream into it **live**. Nested
-  sub-agents parent their blocks to it.
+Opening a non-thinking block closes current reasoning in that scope, not in
+sibling scopes. Parallel producers do not append framing to a shared string.
 
-The writer handle is carried in `context.Context`, replacing the existing
-`*aiStreamEmitter` stored under `aiStreamCallbackCtxKey{}`. That plumbing already
-exists and already reaches every call site.
+### 2. Presentation belongs to the frontend
 
-### 2. Framing is presentation, not content
+The formatter maintains independent DOM roots and render queues per block.
+Children attach to their parent's child container, including when a child's
+event arrives before the parent's event.
 
-`formatToolCallMarkdown`, `formatToolOutputMarkdown`, `summariserStreamOpenMarkdown`,
-`StreamPrefix`/`StreamSuffix` and the `> ` prefixing in `emitReasoning` are
-deleted. The frontend renders framing from `Kind`:
+- Raw tool-call/output/error/summary payloads render as text in code containers,
+  not as Markdown.
+- Thinking uses a dedicated DOM structure; its blockquote appearance is
+  presentation, not prefixes inserted into stored content.
+- Text and other Markdown-capable blocks use incremental rendering scoped to
+  their own roots.
+- Subagent responses and nested tool activity retain their typed hierarchy.
+- Question and permission blocks retain actionable `ttyphoon://` links.
 
-- `tool-output` / `tool-error` / `tool-summary` render into a `<pre><code>` via
-  `textContent`. They are **never** passed to `marked`.
-- `thinking` renders into a styled container, not a markdown blockquote.
-- `subagent` renders a container whose children are DOM children.
+The runtime still supports callback-only consumers when there is no typed
+writer. That API is not a second panel transport and does not restore old logs.
 
-This structurally removes the entire class of "fence leaked", "blockquote
-interleaved" and "nested fence" defects: two producers' text is never
-concatenated, and untrusted tool output is never parsed as markdown.
+### 3. Transport and prompt lifecycle
 
-### 3. Transport
+`aiStreamBlock` is the sole live panel content transport. Open/close events and
+delta updates identify their owning block; ordinary updates do not resend a
+full accumulated snapshot. `aiJobStart` and `aiJobFinish` identify the run.
 
-Replace `AIStreamChunk` with one event carrying an open/delta/close:
+Workspace and live/history gating applies to emitted content, not persistence.
+Lifecycle notifications still reach the active workspace while its user reads
+history, so the UI can track completion without appending to the selected
+historical prompt.
 
-```go
-type AIStreamBlock struct {
-	RunID    uint64 `json:"runId"`
-	BlockID  string `json:"blockId"`
-	ParentID string `json:"parentId"`
-	Kind     string `json:"kind"`
-	Ordinal  int64  `json:"ordinal"`
-	Seq      uint64 `json:"seq"`
-	Delta    string `json:"delta"`
-	Status   string `json:"status"` // open | closed
-}
-```
+**Explicit retained deviation:** the live prompt/command/output header still
+travels in `AIJobStart.Title`. Although `StreamBlockRequest` is declared and the
+formatter recognizes request blocks, the backend does not emit one. Replacing
+the header with persisted request data is a separate refactor, not a missing
+piece of addressable output storage or old-log compatibility. Preserve this
+header until a replacement is wired through live rendering, restore and export.
 
-`aiJobStart` / `aiJobFinish` survive unchanged in spirit; the request
-header currently smuggled through `AIJobStart.Title` becomes a `request` block.
+### 4. SQLite persistence and deletion
 
-Gap-free *global* sequencing is no longer required — only per-block contiguity,
-which single-writer ownership makes automatic. The old snapshot and
-gap-recovery path is deleted; the panel updates each block directly.
+The per-workspace database owns:
 
-### 4. Persistence: sqlite, not files
+- `stream_run_ids`: durable run ID allocation, seeded above pre-existing IDs.
+- `stream_prompts`: session/prompt/run identity, heading, timestamps, outcome
+  status and block count.
+- `stream_blocks`: block identity, hierarchy, ordering, lifecycle and content.
 
-Two new tables in the existing `session.{workspace}.db`:
+In-flight blocks use prompt ID zero; finalization transactionally assigns the
+session-history prompt ID and records the outcome. Block appends accumulate
+pending deltas and flush on the configured stream interval and on close.
+The database enables WAL and a busy timeout.
 
-```sql
-CREATE TABLE IF NOT EXISTS stream_blocks (
-	id        INTEGER PRIMARY KEY AUTOINCREMENT,
-	sessionId INTEGER NOT NULL,
-	promptId  INTEGER NOT NULL DEFAULT 0,  -- 0 until the run is finalized
-	runId     INTEGER NOT NULL,
-	blockId   TEXT    NOT NULL,
-	parentId  TEXT    NOT NULL DEFAULT '',
-	kind      TEXT    NOT NULL,
-	ordinal   INTEGER NOT NULL,
-	status    TEXT    NOT NULL DEFAULT 'open',
-	content   TEXT    NOT NULL DEFAULT '',
-	created   TEXT    NOT NULL,
-	updated   TEXT    NOT NULL,
-	UNIQUE(sessionId, runId, blockId)
-);
-CREATE INDEX IF NOT EXISTS stream_blocks_prompt_idx
-	ON stream_blocks(sessionId, promptId, ordinal);
+Prompt deletion removes stream rows in the same transaction as the history row.
+Session deletion and clear-history likewise remove the relevant stream data in
+their existing transactions. Direct transcript-clear operations delete stream
+rows without deleting independently stored session prompts/final responses.
 
-CREATE TABLE IF NOT EXISTS stream_prompts (
-	sessionId  INTEGER NOT NULL,
-	promptId   INTEGER NOT NULL,
-	runId      INTEGER NOT NULL,
-	heading    TEXT    NOT NULL,
-	started    TEXT    NOT NULL,
-	finished   TEXT    NOT NULL DEFAULT '',
-	blockCount INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (sessionId, promptId)
-);
-```
+The session-history response remains independently persisted; the UI transcript
+is not its only copy.
 
-`stream_prompts` replaces `listPromptLogMetas`' glob + `os.Stat` + the
-`<!-- request heading: … -->` regex scrape. The heading is a column.
+### 5. Structured restore and lazy history
 
-**Do not write a row per token.** An open block keeps its content in a
-`strings.Builder` (as `sessionLogState.streamed` does today) and flushes on a
-~250ms debounce, and unconditionally on block close and on run finish. Crash
-exposure is bounded to one debounce window, which is acceptable: this is a UI
-transcript, and `sessions_{n}.llm_response` remains the authoritative record of
-the final answer. Enable `PRAGMA journal_mode=WAL` and `busy_timeout`, since the
-write rate is now materially higher than the current schema's.
+`ListPromptLogs` reads SQLite prompt metadata only.
 
-Deletion becomes atomic and uses the transaction that already exists:
+- `ListAIStreamBlocks(sessionID, promptID)` supplies a metadata-only block index.
+- `GetAIStreamBlockContent(sessionID, promptID, blockID)` hydrates individual
+  bodies.
+- `ListAILiveStreamBlocks(workspace)` selects the active run, or the newest
+  finalized prompt when no run is active.
 
-- `DeleteAIHistoryEntry` → `DELETE FROM stream_blocks WHERE sessionId=? AND promptId=?`
-  plus the `stream_prompts` row, **in the same tx** as the history row delete.
-- `DeleteAISession` → delete by `sessionId` in the tx that drops `session_{n}`.
-- `ClearAISessionHistory` / `ClearAILog` → delete all blocks for the active session.
+The formatter creates shells before hydration and uses an `IntersectionObserver`
+to load nearby blocks. Open blocks and the selected historical final answer
+hydrate without waiting for intersection. Historical intermediate content
+hydrates when its disclosure opens. Already-loaded blocks are not refetched
+merely because they intersect again.
 
-`ClearSessionLog`, `DeleteSessionLog`, `DeletePromptLog`, `ClearActiveSessionLog`
-keep their names and signatures so `frontend.go` call sites are unchanged; only
-their bodies move from `os.Remove` to SQL.
+This avoids parsing a whole flat transcript at startup. It does **not** imply a
+strict viewport-sized memory bound: loaded content remains resident until the
+view is cleared or replaced. Further performance work belongs to ADR 0042.
 
-### 5. Lazy history loading
+Historical prompt text is read from session history and timestamps from prompt
+metadata. See ADR 0088 for final-answer placement and status-menu behaviour.
 
-`ListPromptLogs` returns `stream_prompts` rows. Selecting an older prompt:
+### 6. Retired Markdown transcripts
 
-1. `GetAIPromptBlockIndex(sessionId, promptId)` returns `{blockId, kind, ordinal,
-   parentId, size}` for every block — metadata only, no content.
-2. The frontend immediately renders an empty shell per block. Scroll height is
-   right and the UI never blocks.
-3. An `IntersectionObserver` — the existing `lazyChunkObserver` pattern in
-   `ai_pipeline_formatter.js` — calls `GetAIBlockContent(blockId)` as blocks
-   approach the viewport, rendering each in its own async task.
+New runs do not write Markdown transcript files. Following ADR 0039, old
+`session-log.*.md` files are no longer discovered, read, merged, rendered or
+deleted by transcript cleanup.
 
-This is strictly better than `setText`, which reads and `marked.parse`s an entire
-session log synchronously before any lazy work begins, and it caps resident
-memory at the blocks actually on screen.
-
-### 6. Legacy markdown logs
-
-The file **writer** is removed immediately. Existing `session-log.*.md` files are
-left on disk and read as a fallback when a prompt has no rows in `stream_blocks`,
-rendered as a single legacy `text` block. No migration step, no data loss, and
-the files age out as sessions are deleted.
+Those files remain untouched on disk. Pre-cutover transcripts are intentionally
+unavailable in the panel; their independently stored session-history records
+are not removed. There is no migration or flat-rendering fallback.
 
 ## Consequences
 
-- Concurrent producers cannot corrupt each other's output, by construction rather
-  than by buffering. Parallel tool calls, the summariser, reasoning and
-  sub-agents are all covered by the same mechanism.
-- **0006 is superseded**: sub-agents stream live again, and their memory no longer
-  grows with total job output.
-- Nested sub-agents nest in the DOM, not in markdown. Blockquote-in-fence-in-
-  blockquote is not representable.
-- Tool output is never parsed as markdown, which is also the correct security
-  posture for content returned by an MCP server.
-- **0005 is amended**: the `panelView` live/history gate stays, but dropped emits
-  no longer desync anything, so the snapshot/gap-recovery machinery it justified
-  is removed. Persistence remains separate from presentation — the target is now
-  sqlite rather than a file.
-- Deleting a prompt or session is atomic. The transcript can no longer diverge
-  from the history row.
-- sqlite write volume rises. Mitigated by the debounce, WAL, and batching a run's
-  flushes; but note `sessiondb`'s single global `mu` now guards a hotter path and
-  should be measured, and the debounce flush must not hold it across a render.
-- Blocks left `open` by a crashed or cancelled run must be swept closed on
-  `SESSION_LOG_FINISH_JOB`, else the panel shows a permanent spinner.
-- The transport change is not backwards compatible: backend and frontend must
-  land together (see 0013 for the three-edit binding checklist).
+- Parallel output cannot corrupt another block's Markdown framing.
+- Subagents can stream live while keeping nested output independently
+  addressable.
+- Persistence remains separate from panel visibility and selection.
+- Prompt menus and restore use one SQLite-backed transcript model.
+- The frontend and backend must agree on block kinds, identity and lifecycle;
+  binding changes must follow ADR 0013.
+- The block migration's completion does not claim that all performance work is
+  finished or that the live request header is already persisted as a block.
 
-## Suggested sequencing
+## Verification
 
-1. `sessiondb/stream_blocks.go` — schema, migration, block writer, queries + tests.
-2. Block writer in `context`, replacing `aiStreamEmitter`; update `InvokableRun`,
-   `summariseToolOutput`, `ai/subagent`, `user_question.go`, permission prompts.
-   Delete the `format*Markdown` framing helpers.
-3. Wails bindings and events.
-4. `ai_pipeline_formatter.js` → block-addressed rendering, `renderIncremental`
-   scoped per block (its `WeakMap` keying already supports this).
-5. Delete the file writer and the snapshot/gap-recovery path. (Complete.)
+Existing tests cover concurrent scoped writers, persistent IDs, nested
+parent/child output, prompt finalization and deletion, metadata-only queries,
+lazy hydration, typed printing/export, historical disclosures, ignoring retired
+files and clearing stale output when a workspace has no typed transcript.
 
-## Reference
+For the ADR 0039 cleanup on 2026-11-04, the application and AI Go package tests,
+280 Notes tests, and the frontend build passed. This is focused validation,
+not a claim that every repository-wide test or vet diagnostic is clean.
 
-- `ai/agent/sessiondb/session_log.go` — `WriteToSessionLog`, `sessionLogState`,
-  `AIStreamChunk`, `listPromptLogMetas`
-- `ai/agent/sessiondb/session_db.go` — `openDB`, `initDB`, `mu`, per-session tables
-- `ai/agent/runtime_eino.go` — `aiStreamEmitter`, `format*Markdown`,
-  `aiStreamCallbackCtxKey`
-- `ai/agent/summariser.go` — `StreamPrefix` / `StreamSuffix` framing
-- `ai/subagent/subagent.go`, `ai/tools/subagents/subagent.go` — 0006's buffering
-- `frontend/src/ai_pipeline_formatter.js` — `renderIncremental`, `planSplit`,
-  `openFenceTail`, `setText`, lazy chunks
-- `frontend/src/notes.js` — direct block event handling and legacy fallback
-- `frontend.go` — `GetAISessionCache`, `GetAIPromptLog`, `ListAIPromptLogs`,
-  `DeleteAIHistoryEntry`, `DeleteAISession`, `ClearAISessionHistory`
+## References
+
+- `ai/agent/stream_writer.go`, `stream_writer_test.go` - typed writer and ownership
+- `ai/agent/runtime_eino.go`, `subagent_runner.go` - emitter and nested scopes
+- `ai/agent/sessiondb/session_db.go`, `stream_blocks.go`, `stream_blocks_delete.go`
+  - schema, allocation, queries, finalization and deletion
+- `ai/agent/sessiondb/session_log.go`, `session_log_test.go` - lifecycle and
+  SQLite-only prompt listing
+- `frontend.go` - block metadata/content bindings
+- `frontend/src/ai_pipeline_formatter.js`, `notes.js`, `notes.test.js` -
+  rendering, hydration, restore and panel lifecycle

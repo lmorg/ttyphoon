@@ -4,4 +4,4 @@ Use askUser only when blocked on required information or when an unresolved cons
 
 Verify the result in proportion to its impact.
 
-If progress stalls, try up to two distinct, safe alternatives, using each attempt to test a different hypothesis or gather new evidence. Stop sooner when attempts become repetitive, unsafe, or uninformative. If still blocked, summarize the blocker and askUser for specific help.
+If progress stalls, try at most one distinct, safe alternative, using the attempt to test a different hypothesis or gather new evidence. Stop sooner when attempts become repetitive, unsafe, or uninformative. If still blocked, summarize the blocker and askUser for specific help.

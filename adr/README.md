@@ -50,7 +50,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0036](0036-multiple-notes-surfaces-with-shared-workspace-services.md) | (design reverted) Multiple Notes surfaces with shared workspace services | Notes |
 | [0037](0037-ai-stream-is-addressable-blocks-in-sqlite.md) | The AI stream is a set of addressable blocks persisted in sqlite | AI panel |
 | [0038](0038-typed-stream-blocks-must-honour-panel-scope.md) | Typed stream blocks must honour workspace and prompt scope | AI panel |
-| [0039](0039-remove-legacy-markdown-compatibility-layer.md) | Scheduled removal of the legacy markdown compatibility layer | AI panel |
+| [0039](0039-remove-legacy-markdown-compatibility-layer.md) | Remove the legacy Markdown transcript compatibility layer | AI panel |
 | [0040](0040-transient-model-stream-disconnects-use-checkpoint-retry.md) | Transient model stream disconnects use checkpoint retry | AI runtime |
 | [0041](0041-rerun-failed-ai-prompts-from-persisted-checkpoints.md) | Rerun failed AI prompts from persisted checkpoints | AI runtime |
 | [0042](0042-large-ai-stream-footprint-and-ui-responsiveness.md) | Large AI streams must preserve UI responsiveness | AI panel |
@@ -94,6 +94,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0080](0080-reporting-terminal-capabilities.md) | Reporting terminal capabilities and tmux query-response ownership | Terminal |
 | [0087](0087-native-ci-release-artifacts.md) | Build versioned release artifacts on native CI runners | CI/CD |
 | [0088](0088-ai-prompt-status-and-historical-disclosures.md) | Persist AI prompt outcomes and collapse historical stream details | AI panel |
+| [0089](0089-osc8-terminal-hyperlinks.md) | OSC 8 terminal hyperlinks reuse Go hyperlink actions | Terminal |
 
 ## Recurring themes
 

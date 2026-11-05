@@ -3,7 +3,29 @@ package element_hyperlink
 import (
 	"strings"
 	"testing"
+
+	"github.com/lmorg/ttyphoon/types"
 )
+
+func TestGenerateHyperlinkURIs(t *testing.T) {
+	for _, uri := range []string{
+		"https://example.com/a;b?q=c;d", "file:///tmp/a.txt",
+		"mailto:someone@example.com", "ssh:host", "custom+scheme:value", "file:///tmp/100% done.txt",
+	} {
+		element := &ElementHyperlink{}
+		if err := element.Generate(types.NewApcSliceNoParse([]string{"label", uri})); err != nil {
+			t.Errorf("%s: %v", uri, err)
+		}
+		if element.Url() != uri || element.Label() != "label" || element.Scheme() == "" {
+			t.Errorf("URI or label not preserved: %#v", element)
+		}
+	}
+	for _, uri := range []string{"", "relative/path", "1bad:value", "https://example.com/\n"} {
+		if err := (&ElementHyperlink{}).Generate(types.NewApcSliceNoParse([]string{"label", uri})); err == nil {
+			t.Errorf("invalid URI accepted: %q", uri)
+		}
+	}
+}
 
 func TestTooltipText(t *testing.T) {
 	for _, test := range []struct {

@@ -132,7 +132,8 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 		return
 	}
 
-	if screen[pos.Y].Cells[pos.X].Element == nil {
+	cell := interactiveCell(screen, pos)
+	if cell.Element == nil {
 		if button != types.MOUSE_BUTTON_LEFT {
 			callback()
 			return
@@ -149,7 +150,7 @@ func (term *Term) MouseClick(pos *types.XY, button types.MouseButtonT, clicks ui
 		return
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseClick(screen[pos.Y].Cells[pos.X].GetElementXY(), button, clicks, state, callback)
+	cell.Element.MouseClick(cell.GetElementXY(), button, clicks, state, callback)
 }
 
 func notesCreateAndOpen(term *Term, absBlockPos [2]int) {
@@ -236,13 +237,14 @@ func (term *Term) MouseWheel(pos *types.XY, movement *types.XY) {
 
 	screen := term.visibleScreen()
 
-	if screen[pos.Y].Cells[pos.X].Element == nil {
+	cell := interactiveCell(screen, pos)
+	if cell.Element == nil {
 		term._mouseWheelCallback(movement)
 		return
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseWheel(
-		screen[pos.Y].Cells[pos.X].GetElementXY(),
+	cell.Element.MouseWheel(
+		cell.GetElementXY(),
 		movement,
 		func() { term._mouseWheelCallback(movement) },
 	)
@@ -298,6 +300,7 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 	if pos.X < 0 {
 		if term._mouseIn != nil {
 			term._mouseIn.MouseOut()
+			term._mouseIn = nil
 		}
 
 		if len(screen[pos.Y].Hidden) > 0 {
@@ -320,9 +323,11 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		cursor.Arrow()
 	}
 
-	if screen[pos.Y].Cells[pos.X].Element == nil {
+	cell := interactiveCell(screen, pos)
+	if cell.Element == nil {
 		if term._mouseIn != nil {
 			term._mouseIn.MouseOut()
+			term._mouseIn = nil
 		}
 
 		term.autoHyperlink(screen.ContinuousRows(int(pos.Y)))
@@ -331,14 +336,14 @@ func (term *Term) MouseMotion(pos *types.XY, movement *types.XY, callback types.
 		return
 	}
 
-	if screen[pos.Y].Cells[pos.X].Element != term._mouseIn {
+	if cell.Element != term._mouseIn {
 		if term._mouseIn != nil {
 			term._mouseIn.MouseOut()
 		}
-		term._mouseIn = screen[pos.Y].Cells[pos.X].Element
+		term._mouseIn = cell.Element
 	}
 
-	screen[pos.Y].Cells[pos.X].Element.MouseMotion(screen[pos.Y].Cells[pos.X].GetElementXY(), movement, callback)
+	cell.Element.MouseMotion(cell.GetElementXY(), movement, callback)
 }
 
 func (term *Term) MouseLeave() {
@@ -351,7 +356,7 @@ func (term *Term) MouseLeave() {
 }
 
 func (term *Term) MouseHover(pos *types.XY) {
-	if term.IsAltBuf() {
+	if term.IsAltBuf() && (!term.mouseWithinBounds(pos) || !interactiveCell(term.visibleScreen(), pos).HasTextElement()) {
 		return
 	}
 
@@ -397,6 +402,12 @@ func (term *Term) MouseHover(pos *types.XY) {
 				colour, true, true,
 			)
 		})
+		return
+	}
+
+	cell := interactiveCell(screen, pos)
+	if cell.HasTextElement() {
+		term._mousePosRenderer.Set(term.textElementHover(screen, cell.Element))
 		return
 	}
 

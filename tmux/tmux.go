@@ -183,6 +183,14 @@ const (
 	START_NEW_SESSION    = "new-session"
 )
 
+func sessionCommand(startCommand string) *exec.Cmd {
+	args := []string{"-CC"}
+	if config.Config.Terminal.OSC8Hyperlinks {
+		args = append(args, "-T", "hyperlinks")
+	}
+	return exec.Command("tmux", append(args, startCommand)...)
+}
+
 func NewStartSession(renderer types.Renderer, size *types.XY, startCommand string) (*Tmux, error) {
 	debug.Log(startCommand)
 	initialEnvironment := config.SetEnv()
@@ -199,7 +207,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 	var err error
 	debug.Log("tmux tty Start()... ")
 	tmux._resp = new(tmuxResponseT)
-	tmux.cmd = exec.Command("tmux", "-CC", startCommand)
+	tmux.cmd = sessionCommand(startCommand)
 	tmux.cmd.Env = initialEnvironment
 	tmux.tty, err = pty.Start(tmux.cmd)
 	debug.Log(fmt.Sprintf("tmux tty Start() err == %v", err))

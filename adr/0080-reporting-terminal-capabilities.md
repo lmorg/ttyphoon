@@ -4,9 +4,10 @@ Date: 2026-10-28
 
 ## Status
 
-Accepted as capability-reporting and investigation guidance. This record does
-not implement OSC 8, Kitty graphics, a new terminfo entry, or changes to tmux's
-response handling.
+Accepted as capability-reporting and investigation guidance. OSC 8 rendering
+and its configuration gate are now implemented by ADR 0089. Kitty graphics, a
+new terminfo entry, and changes to tmux's response handling remain outside this
+record's implementation scope.
 
 ## Context
 
@@ -53,7 +54,10 @@ the actual opening/closing hyperlink sequences and configure tmux's hyperlink
 capabilities only when the end-to-end implementation supports them. The tmux
 manual documents the `hyperlinks` feature and the `Hls` terminfo extension;
 neither means every application will automatically recognize a new emulator.
-Ttyphoon's `sessionSetOptions` currently comments out `hyperlinks`.
+Ttyphoon now declares `hyperlinks` for its own tmux client using `-T` when
+`Terminal.OSC8Hyperlinks` is enabled, rather than forcing it for other clients
+through server-wide terminal patterns. This does not change terminal identity
+or introduce an OSC 8 discovery response.
 
 Kitty graphics defines an explicit probe. In C-style escape notation, a client
 can send this direct-transmission query followed by primary device attributes:

@@ -60,7 +60,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 	for ; pos.Y < term.size.Y; pos.Y++ {
 		for pos.X = 0; pos.X < term.size.X; pos.X++ {
 			switch {
-			case screen[pos.Y].Cells[pos.X].Element != nil:
+			case screen[pos.Y].Cells[pos.X].HasDrawableElement():
 				_, ok := elementStack[screen[pos.Y].Cells[pos.X].Element]
 				if !ok {
 					elementStack[screen[pos.Y].Cells[pos.X].Element] = true
@@ -78,7 +78,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term.renderer.GetBlinkState() {
 					continue // blink
 				}
-				term.renderer.PrintCell(term.tile, screen[pos.Y].Cells[pos.X], pos)
+				term.renderer.PrintCell(term.tile, term.textElementRenderCell(screen[pos.Y].Cells[pos.X]), pos)
 			}
 		}
 	}
@@ -92,7 +92,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 	for ; pos.Y < term.size.Y; pos.Y++ {
 		for ; pos.X < term.size.X; pos.X++ {
 			switch {
-			case screen[pos.Y].Cells[pos.X].Element != nil:
+			case screen[pos.Y].Cells[pos.X].HasDrawableElement():
 				_, ok := elementStack[screen[pos.Y].Cells[pos.X].Element]
 				if !ok {
 					elementStack[screen[pos.Y].Cells[pos.X].Element] = true
@@ -112,7 +112,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 					row[pos.X] = nil // blink
 					continue
 				}
-				row[pos.X] = screen[pos.Y].Cells[pos.X]
+				row[pos.X] = term.textElementRenderCell(screen[pos.Y].Cells[pos.X])
 			}
 		}
 		pos.X = 0

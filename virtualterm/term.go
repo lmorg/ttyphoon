@@ -73,20 +73,21 @@ type Term struct {
 	_scrollRegion *scrollRegionT
 
 	// state
-	_vtMode          _stateVtMode
-	_termState       atomic.Int32
-	_insertOrReplace _stateIrmT
-	_isFocused       bool
-	_activeElement   types.Element
-	_mouseIn         types.Element
-	_mouseButtonDown bool
-	_mouseButton     types.MouseButtonT
-	_mouseTracking   codes.MouseTrackingMode
-	_mouseEncoding   codes.MouseEncodingMode
-	_rowSource       *types.RowSource
-	_blockMeta       *types.BlockMeta
-	_blockMetaId     atomic.Int64
-	_spellingExc     map[string]bool
+	_vtMode            _stateVtMode
+	_termState         atomic.Int32
+	_insertOrReplace   _stateIrmT
+	_isFocused         bool
+	_activeElement     types.Element
+	_activeTextElement *types.TextElement
+	_mouseIn           types.Element
+	_mouseButtonDown   bool
+	_mouseButton       types.MouseButtonT
+	_mouseTracking     codes.MouseTrackingMode
+	_mouseEncoding     codes.MouseEncodingMode
+	_rowSource         *types.RowSource
+	_blockMeta         *types.BlockMeta
+	_blockMetaId       atomic.Int64
+	_spellingExc       map[string]bool
 
 	_apcStack                uint
 	pendingInteractiveAction *interactiveActionCompletion
@@ -187,6 +188,7 @@ func NewRowBlockMeta(term *Term) *types.BlockMeta {
 func (term *Term) reset(size *types.XY) {
 	term._termState.Store(int32(types.TermStateUnknown))
 	term.size = size
+	term._activeTextElement = nil
 	term._synchronizedUpdateDeadline = time.Time{}
 	term.resizePty()
 	term._curPos = types.XY{}

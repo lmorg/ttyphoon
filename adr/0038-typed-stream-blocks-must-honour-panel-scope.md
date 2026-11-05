@@ -4,8 +4,9 @@
 
 Accepted. Fixes A, B, C and D are implemented.
 
-Amends 0005 and 0037. The compatibility layer D preserves is scheduled for
-removal by 0039.
+Amends 0005 and 0037. Updated 2026-11-04: ADR 0039 has removed the compatibility
+layer that fix D originally preserved. Its descriptions below are historical;
+current restore uses typed SQLite blocks only.
 
 ## Context
 

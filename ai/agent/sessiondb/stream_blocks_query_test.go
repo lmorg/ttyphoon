@@ -31,14 +31,6 @@ func TestStreamBlockQueriesReturnMetadataWithoutContent(t *testing.T) {
 		t.Fatalf("prompts = %+v, want one SQLite prompt metadata row", prompts)
 	}
 
-	promptContent, err := GetStreamPromptContent(workspace, 1, 42)
-	if err != nil {
-		t.Fatalf("GetStreamPromptContent: %v", err)
-	}
-	if promptContent != "private output" {
-		t.Fatalf("prompt content = %q, want %q", promptContent, "private output")
-	}
-
 	meta, err := ListStreamBlockMeta(workspace, 1, 42)
 	if err != nil {
 		t.Fatalf("ListStreamBlockMeta: %v", err)

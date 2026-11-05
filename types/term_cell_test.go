@@ -2,6 +2,44 @@ package types
 
 import "testing"
 
+type cellTestElement struct {
+	Element
+	position XY
+}
+
+func (element *cellTestElement) Rune(pos *XY) rune {
+	element.position = *pos
+	return 'E'
+}
+
+func TestCellElementModes(t *testing.T) {
+	element := &cellTestElement{}
+	drawable := &Cell{Char: SetElementXY(&XY{X: 2, Y: 3}), Element: element}
+	if !drawable.HasDrawableElement() || drawable.HasTextElement() || drawable.Rune() != 'E' ||
+		element.position != (XY{X: 2, Y: 3}) {
+		t.Fatal("drawable element lost its encoded coordinates or rune delegation")
+	}
+
+	text := &Cell{Char: '界', Element: &TextElement{Element: element}}
+	if text.HasDrawableElement() || !text.HasTextElement() || text.Rune() != '界' ||
+		*text.GetElementXY() != (XY{}) {
+		t.Fatal("text element did not preserve the character or used it as coordinates")
+	}
+	text.Char = 0
+	if text.Rune() != ' ' {
+		t.Fatal("text element did not preserve blank-cell semantics")
+	}
+	text.Clear()
+	if text.Element != nil || text.HasTextElement() || text.HasDrawableElement() {
+		t.Fatal("clearing a cell retained its element mode")
+	}
+
+	plain := &Cell{Char: 'P'}
+	if plain.HasDrawableElement() || plain.HasTextElement() || plain.Rune() != 'P' {
+		t.Fatal("plain-cell behaviour changed")
+	}
+}
+
 func TestCellGetSetElementXY(t *testing.T) {
 	tests := []*XY{
 		{0, 0},

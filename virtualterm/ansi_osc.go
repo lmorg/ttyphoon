@@ -76,6 +76,9 @@ parsed:
 		// Update path
 		term.osc7UpdatePath(stack[1:])
 
+	case "8":
+		term.osc8Hyperlink(string(text))
+
 	case "9":
 		// Post a notification
 		term.osc9PostNotification(stack[1:])

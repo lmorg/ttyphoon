@@ -54,6 +54,7 @@ func TestPendingPaneOutputPreservesSplitAnsiSequenceOrder(t *testing.T) {
 		pendingPaneOutput: make(map[string][][]byte),
 		renderer:          &pendingPaneOutputTestRenderer{refresh: func() {}},
 	}
+
 	const paneId = "%7"
 
 	chunks := []string{
@@ -100,5 +101,40 @@ func TestPendingPaneOutputPreservesSplitAnsiSequenceOrder(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out reading flushed pane output")
+	}
+}
+
+func TestPaneOutputPreservesOsc8Sequences(t *testing.T) {
+	client := &Tmux{panes: newPaneMap()}
+	pane := &PaneT{id: "%0", buf: runebuf.New()}
+	t.Cleanup(pane.buf.Close)
+	client.panes.Set(pane.id, pane)
+	for _, notification := range []string{
+		`%output %0 \033]8;id=test;https://example.com/a;b\033`,
+		`%output %0 \134Label\033]8;;\007Z`,
+	} {
+		_respOutput(client, []byte(notification))
+	}
+	const want = "\x1b]8;id=test;https://example.com/a;b\x1b\\Label\x1b]8;;\aZ"
+	result := make(chan string, 1)
+	go func() {
+		var got strings.Builder
+		for range []rune(want) {
+			r, err := pane.Read()
+			if err != nil {
+				result <- ""
+				return
+			}
+			got.WriteRune(r)
+		}
+		result <- got.String()
+	}()
+	select {
+	case got := <-result:
+		if got != want {
+			t.Fatalf("OSC 8 control-mode output changed: got %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("OSC 8 control-mode output stalled")
 	}
 }

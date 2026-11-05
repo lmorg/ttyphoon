@@ -2777,10 +2777,6 @@ body {
 
 }
 
-#notes-ai-output .notes-ai-section {
-    margin-bottom: 14px;
-}
-
 #notes-ai-output .notes-ai-heading {
     margin: 10px 0 4px 0;
     font-size: 1.05em;
@@ -2912,23 +2908,6 @@ body {
 
 #notes-ai-output [data-block-kind='notice'] .notes-ai-markdown p {
     margin: 4px 0;
-}
-
-/* Transcripts recorded before block storage, flagged so they are not mistaken
-   for current output. */
-#notes-ai-output .notes-ai-legacy {
-    border-left: 2px solid rgba(var(--fg-rgb), 0.25);
-    padding-left: 10px;
-}
-
-#notes-ai-output .notes-ai-legacy::before {
-    content: 'Legacy transcript';
-    display: block;
-    margin-bottom: 8px;
-    font-size: var(--notes-font-size-minus-2);
-    opacity: 0.6;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
 .notes-copy-block {
@@ -3084,35 +3063,6 @@ body {
 }
 
 .notes-ai-tool-output-spinner[hidden] {
-    display: none;
-}
-
-#notes-ai-output .notes-ai-lazy-chunk {
-    position: relative;
-    content-visibility: auto;
-    contain-intrinsic-size: 360px;
-    min-height: 56px;
-}
-
-#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed=''] .notes-ai-lazy-chunk-content,
-#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='pending'] .notes-ai-lazy-chunk-content {
-    opacity: 0.01;
-}
-
-#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-chunk-content {
-    opacity: 1;
-}
-
-#notes-ai-output .notes-ai-lazy-chunk-content {
-    transition: opacity 120ms linear;
-}
-
-#notes-ai-output .notes-ai-lazy-spinner-chunk {
-    top: 20px;
-}
-
-#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-spinner,
-#notes-ai-output .notes-ai-lazy-chunk[data-lazy-processed='done'] .notes-ai-lazy-spinner-chunk {
     display: none;
 }
 

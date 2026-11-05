@@ -286,10 +286,10 @@ eg `xterm` and similar terminal emulators
 
 #### Extended features
 
-- [ ] Hyperlink support
+- [x] Hyperlink support
   - [x] Auto-hyperlink files
   - [x] Auto-hyperlink URLs
-  - [ ] ANSI escape sequence supported (rejected because of safety concerns)
+  - [x] OSC 8 application-provided hyperlinks (`Terminal.OSC8Hyperlinks`, enabled by default)
 - [ ] Bracketed paste mode
 - [x] Inlining images
   - [x] TTYphoon codes

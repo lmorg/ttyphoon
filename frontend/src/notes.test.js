@@ -74,9 +74,7 @@ const getClipboardDataMock = vi.fn(() => Promise.resolve({ text: '', image: '' }
 const swaggerRequestMock = vi.fn(() => Promise.resolve(''));
 const askAIMock = vi.fn(() => Promise.resolve());
 const askAIImageMock = vi.fn(() => Promise.resolve());
-const getAISessionCacheMock = vi.fn(() => Promise.resolve(''));
 const listAIPromptLogsMock = vi.fn(() => Promise.resolve([]));
-const getAIPromptLogMock = vi.fn(() => Promise.resolve(''));
 const getAISessionPromptMock = vi.fn(() => Promise.resolve(''));
 const listAILiveStreamBlocksMock = vi.fn(() => Promise.resolve([]));
 const listAIStreamBlocksMock = vi.fn(() => Promise.resolve([]));
@@ -286,9 +284,7 @@ vi.mock('./wails-bindings.js', () => ({
     SwaggerRequest: swaggerRequestMock,
     AskAI: askAIMock,
     AskAIImage: askAIImageMock,
-    GetAISessionCache: getAISessionCacheMock,
     ListAIPromptLogs: listAIPromptLogsMock,
-    GetAIPromptLog: getAIPromptLogMock,
     GetAISessionPrompt: getAISessionPromptMock,
     ListAILiveStreamBlocks: listAILiveStreamBlocksMock,
     ListAIStreamBlocks: listAIStreamBlocksMock,
@@ -653,8 +649,6 @@ describe('notes rendering', () => {
         setDocumentCacheMock.mockReset();
         listAIPromptLogsMock.mockReset();
         listAIPromptLogsMock.mockResolvedValue([]);
-        getAIPromptLogMock.mockReset();
-        getAIPromptLogMock.mockResolvedValue('');
         getAISessionPromptMock.mockReset();
         getAISessionPromptMock.mockResolvedValue('');
         listAILiveStreamBlocksMock.mockReset();
@@ -4608,10 +4602,7 @@ describe('notes rendering', () => {
             { blockId: 'tool-call', kind: 'tool-call', status: 'closed', ordinal: 1, size: 2 },
             { blockId: 'answer', kind: 'text', status: 'closed', ordinal: 2, size: 20 },
         ]);
-        getAISessionPromptMock.mockResolvedValue('');
-        getAIPromptLogMock.mockResolvedValue(
-            '<!-- start request: 02-11-26 13:15 -->\n\n## Request\n\n### Prompt\n\nWhy did this command fail?\n\n### Stream Trace',
-        );
+        getAISessionPromptMock.mockResolvedValue('Why did this command fail?');
         getAIStreamBlockContentMock.mockImplementation((_sessionId, _promptId, blockId) => Promise.resolve(
             blockId === 'tool-call' ? '{"command":"go test"}' : 'The command failed because a test failed.',
         ));
@@ -5474,7 +5465,7 @@ describe('notes rendering', () => {
         expect(ts.tagName).toBe('P');
         expect(ts.textContent).toMatch(/^\d{1,2}:\d{2}:\d{2}/);
 
-        fmt.appendChunk('Final Answer: Done.');
+        fmt.appendBlock({ blockId: 'answer', kind: 'text', delta: 'Done.', status: 'closed' });
         await flushPromises();
 
         // Timestamp should still be there
@@ -5977,12 +5968,11 @@ describe('notes rendering', () => {
         }
     });
 
-    it('prints only final-answer sections from legacy AI transcripts', async () => {
+    it('has no legacy transcript rendering API and exports nothing without typed blocks', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const fmt = createAIPipelineFormatter(document.createElement('div'), { marked });
-        fmt.setText('Question: user prompt\nThought: private reasoning and tool use\nFinal Answer: # Safe response\n\nAnswer text', { legacy: true });
-        expect(await fmt.outputMarkdown()).toBe('# Safe response\n\nAnswer text');
-        fmt.setText('Unclassified transcript cannot be safely separated', { legacy: true });
+        expect(fmt.setText).toBeUndefined();
+        expect(fmt.appendChunk).toBeUndefined();
         expect(await fmt.outputMarkdown()).toBe('');
     });
 
@@ -6044,34 +6034,6 @@ describe('notes rendering', () => {
         }
     });
 
-    it('flags legacy transcripts and clears the flag for block renders', async () => {
-        const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
-        const wrapper = document.createElement('div');
-        const fmt = createAIPipelineFormatter(wrapper, { marked });
-        // renderTextAsMarkdown yields on requestAnimationFrame, which jsdom backs
-        // with a real timer.
-        const settle = async () => {
-            for (let i = 0; i < 4; i += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-        };
-
-        fmt.setText('# legacy output', { legacy: true });
-        await settle();
-        expect(wrapper.querySelector('.notes-ai-job.notes-ai-legacy')).not.toBeNull();
-
-        fmt.setBlocks(
-            [{ blockId: 'b1', kind: 'text', status: 'closed', sessionId: 1, promptId: 2, runId: 3 }],
-            () => Promise.resolve('current output'),
-        );
-        await settle();
-        expect(wrapper.querySelector('.notes-ai-legacy')).toBeNull();
-
-        const styles = getNotesRenderedStyles();
-        expect(styles).toContain('#notes-ai-output .notes-ai-legacy::before {');
-        expect(styles).toContain("content: 'Legacy transcript';");
-    });
-
     it('restores the live view as structured blocks rather than one flat lump', async () => {
         const { createAIPipelineFormatter } = await import('./ai_pipeline_formatter.js');
         const wrapper = document.createElement('div');
@@ -6100,6 +6062,73 @@ describe('notes rendering', () => {
         expect(thinking?.querySelector('blockquote')?.textContent).toContain('reasoning text');
         expect(toolOutput?.querySelector('pre.notes-ai-code')?.textContent).toBe('raw tool output');
         expect(markedMock.parse).not.toHaveBeenCalled();
+    });
+
+    it('restores the SQLite prompt and timestamp on panel open and workspace switches', async () => {
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 12, promptId: 7, heading: 'Stored prompt heading', status: 'success', started: '02-11-26 13:15' },
+        ]);
+        listAILiveStreamBlocksMock.mockResolvedValue([
+            { blockId: 'thinking', kind: 'thinking', status: 'closed', sessionId: 12, promptId: 7, size: 10 },
+            { blockId: 'answer', kind: 'text', status: 'closed', sessionId: 12, promptId: 7, size: 20 },
+        ]);
+        getAISessionPromptMock.mockResolvedValue('The full **stored prompt**, not the abbreviated heading.');
+        getAIStreamBlockContentMock.mockResolvedValue('Stored answer');
+        await importNotesModule();
+        document.getElementById('notes-tools-tab-ai').click();
+        const output = document.getElementById('notes-ai-output');
+        await vi.waitFor(() => {
+            expect(output.querySelector('.notes-ai-prefix strong')?.textContent).toBe('stored prompt');
+            expect(output.querySelector('.notes-ai-timestamp')?.textContent).toBe('02-11-26 13:15');
+        });
+        expect(getAISessionPromptMock).toHaveBeenCalledWith(12, 7);
+        const disclosure = output.querySelector('details[data-historical-stream="true"]');
+        expect(disclosure.open).toBe(false);
+        expect(disclosure.contains(output.querySelector('[data-block-id="answer"]'))).toBe(false);
+
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 20, promptId: 9, heading: 'Other prompt', status: 'success', started: '04-11-26 21:40' },
+        ]);
+        listAILiveStreamBlocksMock.mockResolvedValue([
+            { blockId: 'other-answer', kind: 'text', status: 'closed', sessionId: 20, promptId: 9, size: 20 },
+        ]);
+        getAISessionPromptMock.mockResolvedValue('Prompt from the other workspace');
+        getEventHandler('notesContextChanged')({ projectRoot: '/other', groupName: 'Other workspace' });
+        await vi.waitFor(() => {
+            expect(output.querySelector('.notes-ai-prefix')?.textContent).toContain('Prompt from the other workspace');
+            expect(output.querySelector('.notes-ai-timestamp')?.textContent).toBe('04-11-26 21:40');
+        });
+        expect(output.textContent).not.toContain('The full');
+        expect(output.querySelectorAll('.notes-ai-prefix')).toHaveLength(1);
+        expect(output.querySelectorAll('.notes-ai-timestamp')).toHaveLength(1);
+        expect(getAISessionPromptMock).toHaveBeenLastCalledWith(20, 9);
+    });
+
+    it('clears typed AI output when switching to a workspace without stream blocks', async () => {
+        listAILiveStreamBlocksMock.mockResolvedValue([
+            { blockId: 'old-answer', kind: 'text', status: 'closed', runId: 7, sessionId: 1, promptId: 2, size: 15 },
+        ]);
+        getAIStreamBlockContentMock.mockResolvedValue('Previous workspace answer');
+        await importNotesModule();
+        document.getElementById('notes-tools-tab-ai').click();
+        const output = document.getElementById('notes-ai-output');
+        await vi.waitFor(() => expect(output.textContent).toContain('Previous workspace answer'));
+
+        listAILiveStreamBlocksMock.mockResolvedValue([]);
+        listAIPromptLogsMock.mockResolvedValue([]);
+        getEventHandler('notesContextChanged')({ projectRoot: '/new', groupName: 'No typed transcripts' });
+        await vi.waitFor(() => expect(listAILiveStreamBlocksMock).toHaveBeenLastCalledWith('No typed transcripts'));
+        await flushPromises();
+        expect(output.textContent).toBe('');
+        expect(document.getElementById('notes-tools-ai-prompt-jump').disabled).toBe(true);
+    });
+
+    it('retains shared loading indicators after removing transcript-only styles', () => {
+        expect(notesCss).toContain('.notes-ai-lazy-spinner {');
+        expect(notesCss).toContain('.notes-ai-lazy-spinner-page {');
+        expect(notesCss).toContain('.notes-file-index-spinner {');
+        expect(notesCss).not.toContain('.notes-ai-legacy');
+        expect(notesCss).not.toContain('.notes-ai-lazy-chunk');
     });
 
     it('renders job prefix as markdown after the timestamp when provided', async () => {
@@ -6181,13 +6210,13 @@ describe('notes rendering', () => {
         const fmt = createAIPipelineFormatter(wrapper);
 
         fmt.startJob();
-        fmt.appendChunk('Final Answer: First result.');
+        fmt.appendBlock({ blockId: 'first-answer', kind: 'text', delta: 'First result.', status: 'closed' });
         await flushPromises();
 
         expect(wrapper.querySelector('.notes-ai-separator')).toBeNull();
 
         fmt.startJob();
-        fmt.appendChunk('Final Answer: Second result.');
+        fmt.appendBlock({ blockId: 'second-answer', kind: 'text', delta: 'Second result.', status: 'closed' });
         await flushPromises();
 
         const sep = wrapper.querySelector('.notes-ai-separator');

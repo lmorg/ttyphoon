@@ -158,6 +158,7 @@ type configT struct {
 		WriteMarkdownHistory    bool   `yaml:"WriteMarkdownHistory"`
 		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
 		AutoHyperlink           bool   `yaml:"AutoHyperlink"`
+		OSC8Hyperlinks          bool   `yaml:"OSC8Hyperlinks"`
 
 		Widgets struct {
 			Table struct {

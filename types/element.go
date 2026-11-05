@@ -13,6 +13,12 @@ type Element interface {
 	MouseOut()
 }
 
+// TextElement attaches an element's interactions to ordinary terminal text.
+// Unlike drawable elements, it does not replace characters with element coordinates.
+type TextElement struct {
+	Element
+}
+
 type ElementID int
 
 const (

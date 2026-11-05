@@ -2975,36 +2975,14 @@ func (a *WApp) SetDocumentCache(filename string, ptr *notes.DocumentCacheT) {
 	notes.SetDocumentCache(a.GetCurrentProject(), filename, ptr)
 }
 
-func (a *WApp) GetAISessionCache(workspace string) string {
-	if strings.TrimSpace(workspace) == "" {
-		agt, ok := a.activeAgent()
-		if !ok {
-			return ""
-		}
-		workspace = agt.Workspace()
-	}
-
-	return sessiondb.GetSessionLog(workspace)
-}
-
-// ListAIPromptLogs returns metadata for every per-prompt log file in the active
-// AI session for the current workspace. Ordered chronologically (oldest first).
+// ListAIPromptLogs returns SQLite prompt metadata for the active AI session,
+// ordered chronologically (oldest first).
 func (a *WApp) ListAIPromptLogs() []sessiondb.PromptLogMeta {
 	agt, ok := a.activeAgent()
 	if !ok {
 		return nil
 	}
 	return sessiondb.ListPromptLogs(agt.Workspace())
-}
-
-// GetAIPromptLog returns the markdown content of a specific prompt log for the
-// current workspace's AI session.
-func (a *WApp) GetAIPromptLog(sessionID, promptID int64) string {
-	agt, ok := a.activeAgent()
-	if !ok {
-		return ""
-	}
-	return sessiondb.GetPromptLog(agt.Workspace(), sessionID, promptID)
 }
 
 func (a *WApp) GetAISessionPrompt(sessionID, promptID int64) string {

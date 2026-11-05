@@ -48,6 +48,14 @@ func (term *Term) writeCell(r rune, el types.Element) {
 	cell.Char = r
 	cell.Sgr = term.sgr.Copy()
 	cell.Element = el
+	if el == nil && term._activeTextElement != nil {
+		if err := term._activeTextElement.Write(r); err != nil {
+			term.renderer.DisplayNotification(types.NOTIFY_ERROR, err.Error())
+			term._activeTextElement = nil
+		} else {
+			cell.Element = term._activeTextElement
+		}
+	}
 
 	/*if debug.Enabled {
 		debug.Log(_debugWriteCell{term._curPos, string(r)})

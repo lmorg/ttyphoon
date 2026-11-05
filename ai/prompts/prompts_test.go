@@ -60,8 +60,8 @@ func TestAskMessagesApplySelectedEffortGuidance(t *testing.T) {
 		want     string
 		recovery string
 	}{
-		{name: "quick", effort: "Quick", want: "Surface a consequential unresolved preference early", recovery: "at most one distinct, safe alternative"},
-		{name: "balanced", effort: "Balanced", want: "Examine relevant context and evidence", recovery: "up to two distinct, safe alternatives"},
+		{name: "quick", effort: "Quick", want: "Surface a consequential unresolved preference early", recovery: "do not retry with alternative approaches"},
+		{name: "balanced", effort: "Balanced", want: "Examine relevant context and evidence", recovery: "at most one distinct, safe alternative"},
 		{name: "thorough", effort: "Thorough", want: "Explore relevant alternatives, edge cases, dependencies, and downstream effects", recovery: "up to three distinct, safe alternatives"},
 	}
 	for _, test := range tests {
@@ -86,7 +86,7 @@ func TestAskMessagesDefaultToQuickEffortGuidance(t *testing.T) {
 	if len(messages) == 0 || !strings.Contains(messages[0].Content, "Surface a consequential unresolved preference early") {
 		t.Fatal("system prompt does not use quick effort guidance when no effort is selected")
 	}
-	if !strings.Contains(messages[0].Content, "at most one distinct, safe alternative") || !strings.Contains(messages[0].Content, "stop and use askUser promptly instead of extending the loop") {
+	if !strings.Contains(messages[0].Content, "do not retry with alternative approaches") || !strings.Contains(messages[0].Content, "use askUser promptly for the help needed instead of extending the loop") {
 		t.Fatal("system prompt does not use Quick effort's stalled-task recovery budget")
 	}
 }

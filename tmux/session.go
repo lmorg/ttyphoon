@@ -52,7 +52,7 @@ var sessionSetOptions = []string{
 	//"cstyle",        // Allows setting the cursor style.
 	"extkeys", // Supports extended keys.
 	//"focus",         // Supports focus reporting.
-	//"hyperlinks",    // Supports OSC 8 hyperlinks.
+	// Hyperlinks are advertised per client with -T, not server-wide.
 	"ignorefkeys", // Ignore function keys from terminfo(5) and use the tmux internal set only.
 	//"margins",       // Supports DECSLRM margins.
 	//"mouse",         // Supports xterm(1) mouse sequences.

@@ -72,6 +72,9 @@ Terminal:
   # Turn anything that looks like a URL or file on disk into a hyperlink.
   AutoHyperlink: true
 
+  # Honour application-provided OSC 8 hyperlink targets. Independent of URL detection.
+  OSC8Hyperlinks: true
+
   Widgets:
     AutoHyperlink:
       IncLineNumbers: false

@@ -1,7 +1,6 @@
 package sessiondb
 
 import (
-	"os"
 	"testing"
 )
 
@@ -60,29 +59,6 @@ func TestPanelShowsLive_TracksPerWorkspaceView(t *testing.T) {
 	}
 	if !PanelShowsLive("beta") {
 		t.Fatal("PanelShowsLive(beta) = false while live, want true")
-	}
-}
-
-func TestWriteToSessionLog_DoesNotCreateMarkdownFile(t *testing.T) {
-	workspace := "stream-only-log-test"
-	path, err := dbPath(workspace)
-	if err != nil {
-		t.Fatalf("dbPath: %v", err)
-	}
-	pendingPath, err := sessionLogPendingPath(workspace, 1)
-	if err != nil {
-		t.Fatalf("sessionLogPendingPath: %v", err)
-	}
-	_ = os.Remove(path)
-	_ = os.Remove(pendingPath)
-	t.Cleanup(func() {
-		_ = os.Remove(path)
-		_ = os.Remove(pendingPath)
-	})
-
-	WriteToSessionLog(SessionLogContext{Workspace: workspace, Query: "query"}, SESSION_LOG_START_JOB, "")
-	if _, err := os.Stat(pendingPath); !os.IsNotExist(err) {
-		t.Fatalf("pending markdown file exists after start: %v", err)
 	}
 }
 
