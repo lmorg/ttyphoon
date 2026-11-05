@@ -6,7 +6,7 @@ const DirName = "ttyphoon"
 var (
 	name      = "Ttyphoon"
 	tagLine   = "The Next Generation Terminal Emulator"
-	version   = "1.0.1000"
+	version   = "1.011000"
 	branch    = "unknown"
 	buildDate = "unknown"
 	copyright = "2023-2026 Laurence Morgan"

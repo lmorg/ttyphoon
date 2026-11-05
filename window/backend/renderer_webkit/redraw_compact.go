@@ -17,6 +17,7 @@ const (
 	compactOpTileOverlay
 	compactOpImage
 	compactOpTable
+	compactOpGraphicsImage
 )
 
 const (
@@ -80,6 +81,13 @@ func encodeDrawCommands(commands []DrawCommand) []DrawOpTuple {
 				cmd.SrcHeight,
 				packScale1000(cmd.SrcScaleX),
 				packScale1000(cmd.SrcScaleY),
+			})
+
+		case DrawOpGraphicsImage:
+			ops = append(ops, DrawOpTuple{
+				compactOpGraphicsImage, cmd.X, cmd.Y, cmd.PixelX, cmd.PixelY,
+				cmd.Width, cmd.Height, cmd.ImageID, cmd.SrcX, cmd.SrcY,
+				cmd.SrcWidth, cmd.SrcHeight, cmd.ClipX, cmd.ClipY, cmd.ClipWidth, cmd.ClipHeight,
 			})
 
 		case DrawOpTable:

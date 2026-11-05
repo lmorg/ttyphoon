@@ -5,40 +5,39 @@ import "github.com/lmorg/ttyphoon/types"
 type DrawOp string
 
 const (
-	DrawOpFrame       DrawOp = "frame"
-	DrawOpCell        DrawOp = "cell"
-	DrawOpImage       DrawOp = "image"
-	DrawOpGaugeH      DrawOp = "gauge_h"
-	DrawOpGaugeV      DrawOp = "gauge_v"
-	DrawOpBlockChrome DrawOp = "block_chrome"
-	DrawOpHighlight   DrawOp = "highlight_rect"
-	DrawOpRectColour  DrawOp = "rect_colour"
-	DrawOpTileOverlay DrawOp = "tile_overlay"
-	DrawOpTable       DrawOp = "table"
+	DrawOpFrame         DrawOp = "frame"
+	DrawOpCell          DrawOp = "cell"
+	DrawOpImage         DrawOp = "image"
+	DrawOpGraphicsImage DrawOp = "graphics_image"
+	DrawOpGaugeH        DrawOp = "gauge_h"
+	DrawOpGaugeV        DrawOp = "gauge_v"
+	DrawOpBlockChrome   DrawOp = "block_chrome"
+	DrawOpHighlight     DrawOp = "highlight_rect"
+	DrawOpRectColour    DrawOp = "rect_colour"
+	DrawOpTileOverlay   DrawOp = "tile_overlay"
+	DrawOpTable         DrawOp = "table"
 )
 
 type DrawCommand struct {
-	Op         DrawOp
-	Flags      int32
-	X          int32
-	Y          int32
-	Height     int32
-	EndX       int32
-	Char       string
-	Fg         *types.Colour
-	Bg         *types.Colour
-	Width      int32
-	Value      int32
-	Max        int32
-	Folded     bool
-	Alpha      uint8
-	ImageID    int64
-	SrcWidth   int32
-	SrcHeight  int32
-	SrcScaleX  float64
-	SrcScaleY  float64
-	Boundaries []int32
-	UlC        *types.Colour
+	Op                    DrawOp
+	Flags                 int32
+	X, Y                  int32
+	Width, Height         int32
+	EndX                  int32
+	Char                  string
+	Fg, Bg                *types.Colour
+	Value, Max            int32
+	Folded                bool
+	Alpha                 uint8
+	ImageID               int64
+	SrcWidth, SrcHeight   int32
+	SrcX, SrcY            int32
+	PixelX, PixelY        int32
+	ClipX, ClipY          int32
+	ClipWidth, ClipHeight int32
+	SrcScaleX, SrcScaleY  float64
+	Boundaries            []int32
+	UlC                   *types.Colour
 }
 
 const (

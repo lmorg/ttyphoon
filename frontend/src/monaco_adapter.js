@@ -140,6 +140,28 @@ function loadMonacoModule() {
     return monacoModulePromise;
 }
 
+export function attachMonacoFontMetricsRefresh(monaco, editor, fonts = document.fonts) {
+    let disposed = false;
+    const refresh = () => {
+        if (disposed) return;
+        // layout() alone keeps cached fallback-font widths after a webfont loads.
+        monaco.editor.remeasureFonts();
+        editor.layout();
+    };
+    fonts?.addEventListener('loadingdone', refresh);
+    if (fonts?.ready) {
+        void fonts.ready.then(refresh).catch((err) => {
+            console.error('Failed to refresh Monaco font metrics:', err);
+        });
+    }
+    return {
+        dispose() {
+            disposed = true;
+            fonts?.removeEventListener('loadingdone', refresh);
+        },
+    };
+}
+
 export function attachMonacoSpellcheckContextMenu(editor, findMisspelling, replaceMisspelling) {
     const domNode = editor.getDomNode();
     const handler = (event) => {
@@ -779,6 +801,7 @@ export async function createMonacoAdapter(container, options = {}) {
         tabSize: 4,
         insertSpaces: true,
     });
+    const fontMetricsRefresh = attachMonacoFontMetricsRefresh(monaco, editor);
 
     // Alias Home/End to Monaco's built-in line navigation commands so they
     // behave the same as Cmd+Left/Cmd+Right (and Shift selection variants).
@@ -1622,6 +1645,7 @@ export async function createMonacoAdapter(container, options = {}) {
         },
 
         dispose() {
+            fontMetricsRefresh.dispose();
             vimAdapterDisposing = true;
             if (vimAdapter) {
                 vimAdapter.dispose?.();
@@ -1684,6 +1708,7 @@ export async function createMonacoDiffAdapter(container, options = {}) {
             horizontalScrollbarSize: 8,
         },
     });
+    const fontMetricsRefresh = attachMonacoFontMetricsRefresh(monaco, diffEditor);
 
     let originalModel = null;
     let modifiedModel = null;
@@ -1812,6 +1837,7 @@ export async function createMonacoDiffAdapter(container, options = {}) {
         },
 
         dispose() {
+            fontMetricsRefresh.dispose();
             changeDisposable.dispose();
             selectionDisposable.dispose();
             inputHooks.dispose();

@@ -95,6 +95,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0087](0087-native-ci-release-artifacts.md) | Build versioned release artifacts on native CI runners | CI/CD |
 | [0088](0088-ai-prompt-status-and-historical-disclosures.md) | Persist AI prompt outcomes and collapse historical stream details | AI panel |
 | [0089](0089-osc8-terminal-hyperlinks.md) | OSC 8 terminal hyperlinks reuse Go hyperlink actions | Terminal |
+| [0090](0090-kitty-graphics-static-images.md) | Kitty graphics static-image subset and deferred protocol features | Terminal |
 
 ## Recurring themes
 

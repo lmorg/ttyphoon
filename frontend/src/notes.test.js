@@ -5320,6 +5320,193 @@ describe('notes rendering', () => {
         expect(markdownUtils.processMarkdownContainer).toHaveBeenCalled();
     });
 
+    it('collapses and expands completed AI Markdown sections across streaming batches', async () => {
+        await importNotesModule();
+        getEventHandler('aiJobStart')({ runId: 991, title: '' });
+        const append = getEventHandler('aiStreamBlock');
+        const source = '# Outer\n\nOuter text.\n\n## Inner\n\nInner *text*.\n\n[Link](https://example.com)\n\n# Next\n\nNext text.';
+        append({ runId: 991, blockId: 'answer', kind: 'text', delta: source, status: 'closed' });
+        await flushPromises();
+        await flushPromises();
+        const output = document.getElementById('notes-ai-output');
+        const answer = output.querySelector('[data-block-id="answer"]');
+        const outer = answer.querySelector('h1');
+        const inner = answer.querySelector('h2');
+        const next = answer.querySelectorAll('h1')[1];
+        expect(outer.nextElementSibling.classList.contains('collapsible-section')).toBe(true);
+        expect(outer.nextElementSibling.contains(inner)).toBe(true);
+        expect(inner.nextElementSibling.textContent).toContain('Inner text.');
+        expect(inner.nextElementSibling.querySelector('a')).not.toBeNull();
+        expect(outer.nextElementSibling.contains(next)).toBe(false);
+
+        for (const target of [inner, answer.querySelector('em'), answer.querySelector('a')]) {
+            target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            expect(menu.options).toContain('Collapse section');
+            expect(menu.options).toContain('Copy response');
+            menu.onSelect(menu.options.indexOf('Collapse section'));
+            expect(inner.dataset.collapsed).toBe('true');
+            expect(outer.dataset.collapsed).not.toBe('true');
+            expect(next.dataset.collapsed).not.toBe('true');
+            inner.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const expand = showLocalMenuMock.mock.calls.at(-1)[0];
+            expect(expand.options).toContain('Expand section');
+            expand.onSelect(expand.options.indexOf('Expand section'));
+            expect(inner.dataset.collapsed).toBe('false');
+        }
+        const wrapperCount = answer.querySelectorAll('.collapsible-section').length;
+        getEventHandler('aiJobFinish')();
+        await flushPromises();
+        await flushPromises();
+        expect(answer.querySelectorAll('.collapsible-section')).toHaveLength(wrapperCount);
+    });
+
+    it('keeps AI heading collapse scoped to each hydrated historical Markdown block', async () => {
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 12, promptId: 7, heading: 'Question', status: 'success', started: '02-11-26 13:15' },
+        ]);
+        listAIStreamBlocksMock.mockResolvedValue([
+            { blockId: 'intermediate', kind: 'text', status: 'closed', ordinal: 0, size: 20 },
+            { blockId: 'answer', kind: 'text', status: 'closed', ordinal: 1, size: 20 },
+        ]);
+        getAISessionPromptMock.mockResolvedValue('Question');
+        getAIStreamBlockContentMock.mockImplementation((_session, _prompt, id) => Promise.resolve(
+            id === 'answer' ? '# Answer\n\nFinal text.' : '# Earlier\n\nIntermediate text.',
+        ));
+        await importNotesModule();
+        await flushPromises();
+        const button = document.getElementById('notes-tools-ai-prompt-jump');
+        await vi.waitFor(() => expect(button.disabled).toBe(false));
+        button.click();
+        showLocalMenuMock.mock.calls.at(-1)[0].onSelect(0);
+        await flushPromises();
+        await flushPromises();
+        const output = document.getElementById('notes-ai-output');
+        const disclosure = output.querySelector('details[data-historical-stream="true"]');
+        const heading = output.querySelector('[data-block-id="answer"] h1');
+        expect(heading.nextElementSibling.classList.contains('collapsible-section')).toBe(true);
+        heading.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        menu.onSelect(menu.options.indexOf('Collapse section'));
+        expect(heading.dataset.collapsed).toBe('true');
+        expect(disclosure.open).toBe(false);
+        expect(output.querySelector('.notes-ai-prefix h1').dataset.collapsed).not.toBe('true');
+        disclosure.open = true;
+        disclosure.dispatchEvent(new Event('toggle'));
+        await flushPromises();
+        await flushPromises();
+        const earlier = disclosure.querySelector('h1');
+        expect(earlier.nextElementSibling.textContent).toContain('Intermediate text.');
+        earlier.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        const earlierMenu = showLocalMenuMock.mock.calls.at(-1)[0];
+        expect(earlierMenu.options).toContain('Collapse section');
+    });
+
+    it('scopes AI table state and column widths to workspace, session, prompt, block and table', async () => {
+        getCurrentGroupNameMock.mockResolvedValue('table-workspace');
+        const tableMarkdown = '| Name | Count |\n| --- | --- |\n| beta | 2 |\n| alpha | 10 |';
+        const markdown = `${tableMarkdown}\n\nSecond table:\n\n${tableMarkdown}`;
+        listAIPromptLogsMock.mockResolvedValue([
+            { sessionId: 12, promptId: 7, heading: 'First', status: 'success' },
+            { sessionId: 12, promptId: 8, heading: 'Second', status: 'success' },
+            { sessionId: 20, promptId: 7, heading: 'Other session', status: 'success' },
+        ]);
+        listAIStreamBlocksMock.mockImplementation((sessionId, promptId) => Promise.resolve([
+            { sessionId, promptId, workspace: 'table-workspace', blockId: 'answer', kind: 'text', status: 'closed', size: markdown.length },
+        ]));
+        getAISessionPromptMock.mockResolvedValue(tableMarkdown);
+        getAIStreamBlockContentMock.mockResolvedValue(markdown);
+        await importNotesModule();
+        await flushPromises();
+        const button = document.getElementById('notes-tools-ai-prompt-jump');
+        await vi.waitFor(() => expect(button.disabled).toBe(false));
+        const documents = [];
+        for (const [label, sessionId, promptId] of [['First', 12, 7], ['Second', 12, 8], ['Other session', 20, 7]]) {
+            getNotesColumnWidthsMock.mockClear();
+            notesTableRestoreMock.mockClear();
+            button.click();
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            menu.onSelect(menu.options.indexOf(`✅ ${label}`));
+            await flushPromises();
+            await flushPromises();
+            const tables = document.querySelectorAll('#notes-ai-output [data-block-id="answer"] table');
+            expect(tables).toHaveLength(2);
+            expect(document.querySelector('#notes-ai-output .notes-ai-prefix table').dataset.tableDocument).toBe(
+                JSON.stringify(['ai-table', 'table-workspace', sessionId, promptId, 'request', 0]),
+            );
+            for (const [index, table] of Array.from(tables).entries()) {
+                const documentKey = JSON.stringify(['ai-table', 'table-workspace', sessionId, promptId, 'answer', index]);
+                documents.push(documentKey);
+                expect(getNotesColumnWidthsMock).toHaveBeenCalledWith(documentKey, 'ai-panel', ['Name', 'Count'], true);
+                expect(notesTableRestoreMock).toHaveBeenCalledWith(expect.objectContaining({
+                    workspace: 'table-workspace',
+                    key: { surface: 'ai', document: documentKey, index: 0 },
+                    stateIndex: 0,
+                }));
+                expect(notesTableReconcileMock).toHaveBeenCalledWith('ai', documentKey, [0]);
+                notesTableSortMock.mockClear();
+                table.querySelector('th').click();
+                await flushPromises();
+                expect(notesTableSortMock).toHaveBeenCalledWith(expect.objectContaining({
+                    key: { surface: 'ai', document: documentKey, index: 0 },
+                }), 1);
+
+                const handle = table.querySelector('.notes-table-col-resize-handle');
+                expect(handle).not.toBeNull();
+                handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 10 }));
+                window.dispatchEvent(new MouseEvent('mousemove', { clientX: 120 }));
+                window.dispatchEvent(new MouseEvent('mouseup'));
+                await flushPromises();
+                expect(setNotesColumnWidthsMock).toHaveBeenCalledWith(
+                    documentKey, 'ai-panel', ['Name', 'Count'], true, expect.any(Array),
+                );
+            }
+        }
+        expect(new Set(documents).size).toBe(6);
+
+        button.click();
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        menu.onSelect(menu.options.indexOf('✅ First'));
+        await flushPromises();
+        await flushPromises();
+        expect(document.querySelector('#notes-ai-output [data-block-id="answer"] table').dataset.tableDocument).toBe(documents[0]);
+    });
+
+    it('carries live AI table filter, graph and width settings into the finalized prompt key', async () => {
+        getCurrentGroupNameMock.mockResolvedValue('table-workspace');
+        await importNotesModule();
+        getEventHandler('aiJobStart')({ runId: 321, title: '' });
+        getEventHandler('aiStreamBlock')({
+            runId: 321, sessionId: 12, promptId: 0, workspace: 'table-workspace',
+            blockId: 'answer', kind: 'text', status: 'closed',
+            delta: '| Name | Count |\n| --- | --- |\n| beta | 2 |\n| alpha | 10 |',
+        });
+        await flushPromises();
+        await flushPromises();
+        const table = document.querySelector('#notes-ai-output table');
+        expect(table.dataset.tableDocument).toBe(JSON.stringify(['ai-table', 'table-workspace', 12, 'run:321', 'answer', 0]));
+        table.dataset.tableFilter = '"Count" > 1';
+        table.dataset.sortColumn = '2';
+        table.dataset.sortDesc = 'true';
+        const spec = { type: 'bar', categoryColumn: 1, valueColumns: [2] };
+        table.dataset.tableGraphSpec = JSON.stringify(spec);
+        table.querySelectorAll('col').forEach((col) => { col.style.width = '123px'; });
+        notesTableSetGraphMock.mockClear();
+        notesTableFilterMock.mockClear();
+        setNotesColumnWidthsMock.mockClear();
+        getEventHandler('aiJobFinish')({ runId: 321, promptId: 9, status: 'success' });
+        await flushPromises();
+        await flushPromises();
+        const documentKey = JSON.stringify(['ai-table', 'table-workspace', 12, 9, 'answer', 0]);
+        const request = expect.objectContaining({
+            key: { surface: 'ai', document: documentKey, index: 0 },
+            workspace: 'table-workspace', filter: '"Count" > 1', sortColumn: 2, sortDesc: true,
+        });
+        expect(notesTableSetGraphMock).toHaveBeenCalledWith(request, spec);
+        expect(notesTableFilterMock).toHaveBeenCalledWith(request, '"Count" > 1');
+        expect(setNotesColumnWidthsMock).toHaveBeenCalledWith(documentKey, 'ai-panel', ['Name', 'Count'], true, [123, 123]);
+    });
+
     it('shows AI output context menu with copy and table word-wrap actions', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });

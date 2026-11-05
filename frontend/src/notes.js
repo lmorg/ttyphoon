@@ -2726,8 +2726,17 @@ function setCollapsibleHeadingState(heading, collapsed) {
 }
 
 function getRenderedSectionHeading(container, target, clientY) {
-    if (state.currentFileType !== 'markdown' || (container !== elements.preview && container !== elements.jupyter)) {
+    const isAIOutput = container === elements.aiOutput;
+    if (!isAIOutput && (state.currentFileType !== 'markdown' || (container !== elements.preview && container !== elements.jupyter))) {
         return null;
+    }
+    if (isAIOutput && target instanceof Element) {
+        const markdownRoot = target.closest('.notes-ai-markdown, .notes-ai-prefix');
+        if (markdownRoot && container.contains(markdownRoot)) {
+            container = markdownRoot;
+        } else if (target.closest('[data-block-kind]')) {
+            return null;
+        }
     }
     const selector = 'h1, h2, h3, h4, h5, h6';
     const clickedHeading = target instanceof Element ? target.closest(selector) : null;
@@ -2762,6 +2771,7 @@ function setupCollapsibleHeadings(container) {
     const headingList = Array.from(headings);
 
     headingList.forEach((heading) => {
+        if (getCollapsibleSectionWrapper(heading)) return;
         const level = parseInt(heading.tagName[1], 10);
 
         // Collect the sibling elements that belong to this heading's section.
@@ -3596,6 +3606,59 @@ function collectTableColumnWidths(table) {
     });
 }
 
+function getAITableIdentity(table) {
+    if (!elements.aiOutput?.contains(table)) return null;
+    const markdown = table.closest('.notes-ai-markdown, .notes-ai-prefix');
+    const block = table.closest('[data-block-id]') || markdown;
+    const sessionId = Number(block?.dataset.sessionId) || 0;
+    const promptId = Number(block?.dataset.promptId) || 0;
+    const runId = Number(block?.dataset.runId) || 0;
+    if (!sessionId || (!promptId && !runId)) return null;
+    const workspace = block.dataset.workspace || state.currentWorkspaceName || state.currentWorkspaceKey || '';
+    const index = Array.from((markdown || block).querySelectorAll('table')).indexOf(table);
+    return {
+        workspace,
+        document: JSON.stringify(['ai-table', workspace, sessionId,
+            promptId || `run:${runId}`, markdown?.classList.contains('notes-ai-prefix') ? 'request' : block.dataset.blockId, index]),
+    };
+}
+
+async function finalizeAITableIdentities(payload) {
+    if (!(Number(payload?.promptId) > 0)) return;
+    const blocks = Array.from(elements.aiOutput.querySelectorAll('[data-run-id]'))
+        .filter((block) => Number(block.dataset.runId) === Number(payload.runId));
+    const tables = blocks.flatMap((block) => Array.from(block.querySelectorAll('table[data-table-surface="ai"]')))
+        .filter((table, index, all) => all.indexOf(table) === index);
+    for (const block of blocks) {
+        block.dataset.promptId = String(payload.promptId);
+    }
+    for (const table of tables) {
+        const identity = getAITableIdentity(table);
+        if (!identity || identity.document === table.dataset.tableDocument) continue;
+        table.dataset.tableDocument = identity.document;
+        try {
+            const request = notesTableRequest(table, true);
+            const spec = JSON.parse(table.dataset.tableGraphSpec || 'null');
+            if (spec) {
+                const result = await NotesTableSetGraph(request, spec);
+                if (result?.error) throw new Error(result.error);
+            }
+            if (table.dataset.tableFilter || Number(table.dataset.sortColumn)) {
+                const result = await NotesTableFilter(request, request.filter);
+                if (result?.error) throw new Error(result.error);
+            }
+            if (table.querySelector('col[style*="width"]')) {
+                const headings = Array.from(table.querySelectorAll('thead th')).map(getTableCellTextContent);
+                await SetNotesColumnWidths(identity.document, 'ai-panel', headings,
+                    state.markdownTableWordWrapMode, collectTableColumnWidths(table));
+            }
+        } catch (err) {
+            console.error('Failed to preserve AI table settings after completion:', err);
+            notifyTerminal('Failed to preserve AI table settings after completion', 'error');
+        }
+    }
+}
+
 async function setupTableColumnResizing(container, wrapped, filename = state.currentFile, viewNameOverride = '') {
     if (!container || filename === null) {
         return;
@@ -3627,7 +3690,11 @@ async function setupTableColumnResizing(container, wrapped, filename = state.cur
             continue;
         }
 
-        const storedWidths = await GetNotesColumnWidths(filename, viewName, headings, wrapped).catch(() => []);
+        const aiIdentity = getAITableIdentity(table);
+        if (elements.aiOutput?.contains(table) && !aiIdentity) continue;
+        const widthFilename = aiIdentity?.document ?? filename;
+        const widthViewName = aiIdentity ? 'ai-panel' : viewName;
+        const storedWidths = await GetNotesColumnWidths(widthFilename, widthViewName, headings, wrapped).catch(() => []);
         if (Array.isArray(storedWidths) && storedWidths.length > 0) {
             applyTableColumnWidths(table, storedWidths);
         }
@@ -3676,7 +3743,7 @@ async function setupTableColumnResizing(container, wrapped, filename = state.cur
                     return;
                 }
 
-                SetNotesColumnWidths(filename, viewName, headings, wrapped, widths).catch((err) => {
+                SetNotesColumnWidths(getAITableIdentity(table)?.document ?? widthFilename, widthViewName, headings, wrapped, widths).catch((err) => {
                     console.error('Failed to save table column widths:', err);
                 });
             };
@@ -3747,7 +3814,9 @@ function notesTableRequest(table, includeSeed) {
             document: table.dataset.tableDocument || '',
             index: Number(table.dataset.tableIndex) || 0,
         },
-        workspace: state.currentWorkspaceKey || '',
+        workspace: table.dataset.tableSurface === 'ai'
+            ? getAITableIdentity(table)?.workspace || state.currentWorkspaceKey || ''
+            : state.currentWorkspaceKey || '',
         stateIndex: Number(table.dataset.tableStateIndex) || 0,
         seed: includeSeed ? notesTableSeed(table) : null,
         sortColumn: Number(table.dataset.sortColumn) || 0,
@@ -4399,15 +4468,17 @@ function setupNotesTableQueries(container, surface, documentPath = '') {
         const headerRow = table.querySelector('thead tr');
         if (!tbody || !headerRow) return;
 
+        const aiIdentity = surface === 'ai' ? getAITableIdentity(table) : null;
+        if (surface === 'ai' && !aiIdentity) return;
         indices.push(tableIndex);
 
         table.dataset.tableSurface = surface;
-        table.dataset.tableDocument = documentPath;
-        table.dataset.tableIndex = String(tableIndex);
+        table.dataset.tableDocument = aiIdentity?.document ?? documentPath;
+        table.dataset.tableIndex = String(aiIdentity ? 0 : tableIndex);
         const headingIdentity = JSON.stringify(getTableHeadingValues(table).map((heading) => heading.trim()));
         const stateIndex = headingOccurrences.get(headingIdentity) || 0;
         headingOccurrences.set(headingIdentity, stateIndex + 1);
-        table.dataset.tableStateIndex = String(stateIndex);
+        table.dataset.tableStateIndex = String(aiIdentity ? 0 : stateIndex);
         table.dataset.sortColumn = table.dataset.sortColumn || '0';
         table.dataset.sortDesc = table.dataset.sortDesc || 'false';
         table.dataset.tableFilter = table.dataset.tableFilter || '';
@@ -4460,7 +4531,12 @@ function setupNotesTableQueries(container, surface, documentPath = '') {
     // surface, so a missed cleanup self-heals rather than accumulating.
     try {
         if (typeof NotesTableReconcile === 'function') {
-            void Promise.resolve(NotesTableReconcile(surface, documentPath, indices)).catch(() => {});
+            const documents = surface === 'ai'
+                ? Array.from(container.querySelectorAll('table')).map((table) => table.dataset.tableDocument).filter(Boolean)
+                : [documentPath];
+            for (const document of new Set(documents)) {
+                void Promise.resolve(NotesTableReconcile(surface, document, surface === 'ai' ? [0] : indices)).catch(() => {});
+            }
         }
     } catch (err) {
         console.error('Failed to reconcile Notes tables:', err);
@@ -13467,8 +13543,9 @@ function initAIOutputContextMenu(container) {
     initRenderedBlockCopyButtons(container);
 
     container.addEventListener('contextmenu', (e) => {
+        const sectionHeading = getRenderedSectionHeading(container, e.target, e.clientY);
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
-        if (anchor && container.contains(anchor)) {
+        if (anchor && container.contains(anchor) && !sectionHeading) {
             e.preventDefault();
             e.stopPropagation();
             openHyperlinkContextMenu(anchor);
@@ -13547,6 +13624,8 @@ function initAIOutputContextMenu(container) {
         const menuItems = [
             ...copyItems,
             ...codeSaveItems,
+            ...(sectionHeading ? [createCollapseSectionMenuItem(sectionHeading), { title: '-' }] : []),
+            ...(anchor ? [{ title: 'Link actions', onSelect: () => openHyperlinkContextMenu(anchor) }, { title: '-' }] : []),
             ...tableItems,
             ...wordWrapItems,
             {
@@ -13606,6 +13685,12 @@ async function processAIMarkdownContainer(container, options = {}) {
     void setupTableColumnResizing(container, state.markdownTableWordWrapMode, '');
     // AI panel code blocks stay unhighlighted; they're mostly tool output, not source.
     await processMarkdownContainer(container, { syntaxHighlighting: false });
+    // Finalized AI Markdown is split into streaming batches. Join their DOM
+    // siblings before grouping sections, without changing the stored Markdown.
+    for (const wrapper of container.querySelectorAll('.notes-ai-stable, .notes-ai-batch, .notes-ai-tail')) {
+        wrapper.replaceWith(...wrapper.childNodes);
+    }
+    setupCollapsibleHeadings(container);
     enableImageContextMenus(container);
     wrapTablesForHorizontalScroll(container);
     setupNotesTableQueries(container, 'ai', '');
@@ -14433,6 +14518,8 @@ async function finishAIJob(payload = {}) {
     }
     try {
         if (wasViewingLive) {
+            await finalizeAITableIdentities(payload);
+            if (generation !== aiRunGeneration || runId !== aiActiveRunId) return;
             await aiPipelineFormatter.finishJob({ scrollToBottom: false });
             if (version === aiCompletionRevealVersion && runId === aiActiveRunId && following && state.aiPanelLive) {
                 const response = aiPipelineFormatter.finalResponseElement();

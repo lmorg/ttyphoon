@@ -31,12 +31,22 @@ func (term *Term) Render() bool {
 	term.renderer.DrawFrame(term.tile)
 
 	screen := term.visibleScreen()
+	term.pruneKittyPlacements()
+	graphics := term.kittyDrawPlacements(screen)
+	if len(graphics) > 0 {
+		term.drawKittyGraphics(graphics, 0)
+		term.renderKittyCellBackgrounds(screen)
+		term.drawKittyGraphics(graphics, 1)
+		term._kittyTextPass = true
+	}
 
 	if !config.Config.TypeFace.Ligatures || term._mouseButtonDown || term._searchHighlight {
 		term._renderCells(screen)
 	} else {
 		term._renderLigs(screen)
 	}
+	term._kittyTextPass = false
+	term.drawKittyGraphics(graphics, 2)
 
 	if term._scrollOffset != 0 {
 		term.renderer.DrawGaugeV(
@@ -78,7 +88,7 @@ func (term *Term) _renderCells(screen types.Screen) {
 				if screen[pos.Y].Cells[pos.X].Sgr.Bitwise.Is(types.SGR_SLOW_BLINK) && !term.renderer.GetBlinkState() {
 					continue // blink
 				}
-				term.renderer.PrintCell(term.tile, term.textElementRenderCell(screen[pos.Y].Cells[pos.X]), pos)
+				term.renderer.PrintCell(term.tile, term.kittyRenderCell(screen[pos.Y].Cells[pos.X]), pos)
 			}
 		}
 	}
@@ -112,7 +122,7 @@ func (term *Term) _renderLigs(screen types.Screen) {
 					row[pos.X] = nil // blink
 					continue
 				}
-				row[pos.X] = term.textElementRenderCell(screen[pos.Y].Cells[pos.X])
+				row[pos.X] = term.kittyRenderCell(screen[pos.Y].Cells[pos.X])
 			}
 		}
 		pos.X = 0

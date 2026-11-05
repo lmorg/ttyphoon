@@ -79,6 +79,8 @@ type Term struct {
 	_isFocused         bool
 	_activeElement     types.Element
 	_activeTextElement *types.TextElement
+	_kitty             *kittyState
+	_kittyTextPass     bool
 	_mouseIn           types.Element
 	_mouseButtonDown   bool
 	_mouseButton       types.MouseButtonT
@@ -186,6 +188,7 @@ func NewRowBlockMeta(term *Term) *types.BlockMeta {
 }
 
 func (term *Term) reset(size *types.XY) {
+	term.clearKittyGraphics()
 	term._termState.Store(int32(types.TermStateUnknown))
 	term.size = size
 	term._activeTextElement = nil
@@ -338,6 +341,7 @@ type scrollRegionT struct {
 }
 
 func (term *Term) Close() {
+	term.clearKittyGraphics()
 	term.Pty.Close()
 	term.tile.Close()
 	term._scrollBuf = nil

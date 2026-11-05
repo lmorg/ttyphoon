@@ -35,6 +35,19 @@ failed, and cancelled runs.
   Load intermediate content when expanded and keep the final response visible.
 - Keep live output rendering unchanged. Its completion continues to honor the
   final-answer reveal behavior in ADR 0035.
+- Finalized AI Markdown also supports the same heading-section collapse/expand
+  context-menu actions as Notes View/Run. Sections stay within their Markdown
+  block, independently of historical stream disclosures. Streaming batch
+  wrappers are removed during final processing so sections can span batches;
+  repeated processing does not nest duplicate section wrappers. Actively
+  growing output keeps its cheap streaming path until finalized.
+- AI-panel table filtering, graphs, and column widths use a shared identity
+  containing workspace, session ID, prompt ID, stream block ID, and the table's
+  position within that Markdown block. Identical headings in different prompts
+  or tables cannot share settings. In-flight blocks use their run ID until the
+  prompt ID is assigned; completion carries live filter, graph, and width
+  settings into the finalized prompt identity. Other Notes surfaces retain their
+  existing keys.
 
 ## Consequences
 

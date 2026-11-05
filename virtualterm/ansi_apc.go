@@ -26,6 +26,10 @@ func (term *Term) parseApcCodes() {
 			return
 		}
 		text = append(text, r)
+		if len(text) == 1 && r == 'G' {
+			term.readKittyAPC()
+			return
+		}
 		if r == codes.AsciiEscape {
 			r, err = term.Pty.Read()
 			if err != nil {

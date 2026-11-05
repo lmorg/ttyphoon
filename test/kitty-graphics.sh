@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# Requires a terminal supporting Kitty graphics. Ttyphoon does not yet support it.
+# Uses the static Kitty graphics subset supported by Ttyphoon (ADR 0090).
 # Through tmux, passthrough must be enabled: tmux set -g allow-passthrough on
 
 payload=$(

@@ -406,6 +406,20 @@ export function createAIPipelineFormatter(container, options = {}) {
         wrapper.dataset.parentId = parentId;
         wrapper.dataset.blockKind = kind;
         wrapper.dataset.blockStatus = closed ? 'closed' : 'open';
+        for (const key of ['sessionId', 'promptId', 'runId', 'workspace']) {
+            if (block?.[key] !== undefined) wrapper.dataset[key] = String(block[key]);
+        }
+        const prefix = root.previousElementSibling;
+        if (prefix?.classList.contains('notes-ai-prefix') && !prefix.dataset.sessionId) {
+            for (const key of ['sessionId', 'promptId', 'runId', 'workspace']) {
+                if (block?.[key] !== undefined) prefix.dataset[key] = String(block[key]);
+            }
+            if (processMarkdownContainer) {
+                void Promise.resolve(processMarkdownContainer(prefix)).catch((err) => {
+                    console.error('Failed to render AI prompt:', err);
+                });
+            }
+        }
         let contentRoot;
         if (isRawBlock(kind)) {
             wrapper.classList.add('notes-ai-markdown', 'markdown-body');
@@ -558,6 +572,9 @@ export function createAIPipelineFormatter(container, options = {}) {
             entry.streamingTextNeedsReset = true;
         }
         entry.closed = entry.closed || block?.status === 'closed';
+        for (const key of ['sessionId', 'promptId', 'runId', 'workspace']) {
+            if (block?.[key] !== undefined) entry.wrapper.dataset[key] = String(block[key]);
+        }
         entry.wrapper.dataset.blockStatus = entry.closed ? 'closed' : 'open';
         syncToolOutputVisibility(entry);
         if (entry.kind === 'tool-call') {
@@ -688,6 +705,9 @@ export function createAIPipelineFormatter(container, options = {}) {
         if (collapseIntermediate) {
             const promptEl = document.createElement('div');
             promptEl.className = 'notes-ai-prefix markdown-body';
+            for (const key of ['sessionId', 'promptId', 'runId', 'workspace']) {
+                if (entries[0]?.[key] !== undefined) promptEl.dataset[key] = String(entries[0][key]);
+            }
             promptEl.innerHTML = markedInstance
                 ? markedInstance.parse(`# Prompt\n\n${String(prompt || '')}`)
                 : `# Prompt\n\n${String(prompt || '')}`;

@@ -21,6 +21,14 @@ type cachedImage struct {
 }
 
 func (wr *webkitRender) loadImage(raw []byte, size *types.XY) (types.Image, error) {
+	return wr.cacheImage(raw, size)
+}
+
+func (wr *webkitRender) LoadGraphicsImage(raw []byte) (types.GraphicsImage, error) {
+	return wr.cacheImage(raw, &types.XY{X: 1, Y: 1})
+}
+
+func (wr *webkitRender) cacheImage(raw []byte, size *types.XY) (*cachedImage, error) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
 		cfg, err = bmp.DecodeConfig(bytes.NewReader(raw))
@@ -89,6 +97,22 @@ func (wr *webkitRender) loadImage(raw []byte, size *types.XY) (types.Image, erro
 
 func (img *cachedImage) Size() *types.XY {
 	return img.sourceSize
+}
+
+func (img *cachedImage) DrawGraphics(tile types.Tile, placement types.GraphicsPlacement) {
+	if tile == nil || placement.Width <= 0 || placement.Height <= 0 {
+		return
+	}
+	img.wr.enqueueDrawCommand(DrawCommand{
+		Op: DrawOpGraphicsImage,
+		X:  tile.Left() + 1 + placement.Column, Y: tile.Top() + placement.Row,
+		PixelX: placement.X, PixelY: placement.Y,
+		Width: placement.Width, Height: placement.Height, ImageID: img.id,
+		SrcX: int32(placement.Source.Min.X), SrcY: int32(placement.Source.Min.Y),
+		SrcWidth: int32(placement.Source.Dx()), SrcHeight: int32(placement.Source.Dy()),
+		ClipX: tile.Left() + 1, ClipY: tile.Top(),
+		ClipWidth: placement.ClipColumns, ClipHeight: placement.ClipRows,
+	})
 }
 
 func (img *cachedImage) Asset() any {

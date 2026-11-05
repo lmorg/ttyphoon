@@ -1,9 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { attachMonacoSpellcheckContextMenu } from './monaco_adapter';
+import { attachMonacoFontMetricsRefresh, attachMonacoSpellcheckContextMenu } from './monaco_adapter';
 import { showSpellcheckSuggestionsPopup } from './spellcheck';
 
 vi.mock('./spellcheck', () => ({ showSpellcheckSuggestionsPopup: vi.fn() }));
 vi.mock('./vim-mode', () => ({ MODE_LABELS: {} }));
+
+describe('Monaco webfont metrics', () => {
+    let fonts;
+    let finishLoading;
+    let monaco;
+    let editor;
+
+    beforeEach(() => {
+        fonts = new EventTarget();
+        fonts.ready = new Promise((resolve) => { finishLoading = resolve; });
+        monaco = { editor: { remeasureFonts: vi.fn() } };
+        editor = { layout: vi.fn() };
+    });
+
+    it('invalidates cached fallback widths before laying out once fonts are ready', async () => {
+        const handle = attachMonacoFontMetricsRefresh(monaco, editor, fonts);
+        expect(monaco.editor.remeasureFonts).not.toHaveBeenCalled();
+        finishLoading();
+        await fonts.ready;
+        expect(monaco.editor.remeasureFonts).toHaveBeenCalledOnce();
+        expect(editor.layout).toHaveBeenCalledOnce();
+        expect(monaco.editor.remeasureFonts.mock.invocationCallOrder[0])
+            .toBeLessThan(editor.layout.mock.invocationCallOrder[0]);
+        handle.dispose();
+    });
+
+    it('remeasures later font loads and stops listening on disposal', () => {
+        const handle = attachMonacoFontMetricsRefresh(monaco, editor, fonts);
+        fonts.dispatchEvent(new Event('loadingdone'));
+        fonts.dispatchEvent(new Event('loadingdone'));
+        expect(monaco.editor.remeasureFonts).toHaveBeenCalledTimes(2);
+        expect(editor.layout).toHaveBeenCalledTimes(2);
+        handle.dispose();
+        fonts.dispatchEvent(new Event('loadingdone'));
+        expect(editor.layout).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not refresh an editor disposed before initial font loading finishes', async () => {
+        const handle = attachMonacoFontMetricsRefresh(monaco, editor, fonts);
+        handle.dispose();
+        finishLoading();
+        await fonts.ready;
+        expect(monaco.editor.remeasureFonts).not.toHaveBeenCalled();
+        expect(editor.layout).not.toHaveBeenCalled();
+    });
+});
 
 describe('Monaco spelling context menu', () => {
     let node;

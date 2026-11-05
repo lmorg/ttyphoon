@@ -648,6 +648,24 @@ describe('terminal compact redraw decoder', () => {
         expect(call[8]).toBe(40);  // height=2 * cellHeight=20
     });
 
+    it('draws Kitty graphics with source cropping, pixel offsets and pane clipping', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        await flushPromises();
+        eventHandlers.get('terminalImageCachePut')({ id: 42, data: 'data:image/png;base64,AAAA' });
+        latestOffscreenCtx.drawImage.mockClear();
+        latestOffscreenCtx.rect.mockClear();
+        eventHandlers.get('terminalRedraw')([
+            [11, 2, -1, 3, 4, 50, 25, 42, 10, 20, 30, 40, 1, 0, 80, 24],
+        ]);
+        expect(latestOffscreenCtx.rect).toHaveBeenCalledWith(10, 0, 800, 480);
+        expect(latestOffscreenCtx.clip).toHaveBeenCalled();
+        expect(latestOffscreenCtx.drawImage).toHaveBeenCalledWith(
+            expect.any(Object), 10, 20, 30, 40, 23, -16, 50, 25,
+        );
+        expect(latestOffscreenCtx.restore).toHaveBeenCalled();
+    });
+
     it('decodes compact table boundaries and draws expected vertical lines', async () => {
         await import('./terminal.js');
         await flushPromises();

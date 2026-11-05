@@ -36,6 +36,11 @@ dependent on the machine.
 - A locally installed plain Fira Code no longer overrides the bundled Nerd Font.
 - Custom system fonts still work because `document.fonts.load` also resolves
   installed families and the configured `monospace` fallback remains available.
+- Monaco's main and diff editors invalidate their cached font measurements with
+  `remeasureFonts()` after `document.fonts.ready` and subsequent `loadingdone`
+  events, then relayout. A plain layout retains fallback-font character widths
+  after a webfont loads, causing horizontal caret drift. Listeners are removed
+  when the editor is disposed.
 - The unused Retina face remains unreferenced and is not bundled.
 
 ## Reference

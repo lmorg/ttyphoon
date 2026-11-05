@@ -105,6 +105,7 @@ thead th {
         --link: color(display-p3 0.35340332984924316 0.60392862558364868 0.97110134363174438);
         --selection: color(display-p3 0.70588237047195435 0.84313726425170898 1);
         --error: var(--red);
+        --notes-print-scale: 0.5;
     }
 
     html.notes-print-ready,
@@ -121,7 +122,7 @@ thead th {
         overflow: visible !important;
     }
 
-    html.notes-print-ready body > :not(#notes-print-root) {
+    html.notes-print-ready body> :not(#notes-print-root) {
         display: none !important;
     }
 
@@ -144,7 +145,7 @@ thead th {
 
     #notes-print-root,
     #notes-print-root * {
-        font-size: max(1pt, calc(var(--notes-print-font-size) - 3pt)) !important;
+        font-size: calc(var(--notes-print-font-size) * var(--notes-print-scale)) !important;
     }
 
     #notes-print-root b,
@@ -180,13 +181,14 @@ thead th {
         max-height: none !important;
         overflow: visible !important;
         break-inside: auto;
+        tab-size: 4;
     }
 
-    #notes-print-root pre,
+    /*#notes-print-root pre,
     #notes-print-root pre code,
     #notes-print-root pre code * {
         font-size: max(1pt, calc(var(--notes-print-font-size) - 4pt)) !important;
-    }
+    }*/
 
     #notes-print-root table {
         width: 100% !important;
@@ -348,7 +350,7 @@ body {
     display: none;
 }
 
-.notes-commit-filename-search > span {
+.notes-commit-filename-search>span {
     font: inherit;
 }
 
@@ -2823,7 +2825,7 @@ body {
     line-height: 1.4;
 }
 
-#notes-ai-output .notes-ai-historical-disclosure[open] > .notes-ai-historical-summary {
+#notes-ai-output .notes-ai-historical-disclosure[open]>.notes-ai-historical-summary {
     margin-bottom: 4px;
 }
 

@@ -15,7 +15,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Our custom menu should support ctrl+v / cmd+v to paste text to the usually hidden search input field
 - [ ] Notes, git panel: hide and disable the commit toolbar button when there are no changes to commit and nothing to stage (clean work tree)
 - [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
-- [ ] Terminal: kitty graphics support (this should be a new ADR)
+- [x] Terminal: Kitty graphics static-image subset ([ADR 0090](0090-kitty-graphics-static-images.md); deferred protocol features tracked there)
 - [x] AI, panel: collapse intermediate blocks when viewing historical prompts, and distinguish live, successful, failed, and cancelled prompts in the prompt menu ([ADR 0088](0088-ai-prompt-status-and-historical-disclosures.md))
 
 ## refactors

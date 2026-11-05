@@ -5,9 +5,10 @@ Date: 2026-10-28
 ## Status
 
 Accepted as capability-reporting and investigation guidance. OSC 8 rendering
-and its configuration gate are now implemented by ADR 0089. Kitty graphics, a
-new terminfo entry, and changes to tmux's response handling remain outside this
-record's implementation scope.
+and its configuration gate are now implemented by ADR 0089. A static Kitty
+graphics subset is implemented by [ADR 0090](0090-kitty-graphics-static-images.md).
+A new terminfo entry and changes to tmux's response handling remain outside
+these implementations' scope.
 
 ## Context
 

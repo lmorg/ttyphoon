@@ -21,7 +21,9 @@ func (p *PaneT) exit() {
 	p.tmux.renderer.DisplayNotification(types.NOTIFY_INFO, fmt.Sprintf("Closing term %s: %s", p.id, p.title))
 
 	p.buf.Close()
-	//p.term.Close()
+	if term, ok := p.term.(interface{ ReleaseGraphics() }); ok {
+		term.ReleaseGraphics()
+	}
 	p.term = nil
 	p.Close()
 

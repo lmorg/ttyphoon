@@ -302,6 +302,7 @@ const REDRAW_OP = {
     TILE_OVERLAY: 8,
     IMAGE: 9,
     TABLE: 10,
+    GRAPHICS_IMAGE: 11,
 };
 
 const REDRAW_FLAG = {
@@ -462,6 +463,14 @@ function toCompactCommand(op) {
                 srcHeight: op[7],
                 srcScaleX: Number.isFinite(Number(op[8])) ? Number(op[8]) / 1000 : 0,
                 srcScaleY: Number.isFinite(Number(op[9])) ? Number(op[9]) / 1000 : 0,
+            };
+
+        case REDRAW_OP.GRAPHICS_IMAGE:
+            return {
+                op: 'graphics_image', x: op[1], y: op[2],
+                pixelX: op[3], pixelY: op[4], width: op[5], height: op[6],
+                imageId: op[7], srcX: op[8], srcY: op[9], srcWidth: op[10], srcHeight: op[11],
+                clipX: op[12], clipY: op[13], clipWidth: op[14], clipHeight: op[15],
             };
 
         case REDRAW_OP.TABLE:
@@ -1226,6 +1235,21 @@ function drawImageCommand(cmd) {
     );
 }
 
+function drawGraphicsImageCommand(cmd) {
+    if (!offCtx) return;
+    const img = getOrLoadImageById(cmd.imageId);
+    if (!img?.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    const { cellWidth, cellHeight } = font.getCellSize();
+    offCtx.save();
+    offCtx.beginPath();
+    offCtx.rect(cmd.clipX * cellWidth, cmd.clipY * cellHeight,
+        cmd.clipWidth * cellWidth, cmd.clipHeight * cellHeight);
+    offCtx.clip();
+    offCtx.drawImage(img, cmd.srcX, cmd.srcY, cmd.srcWidth, cmd.srcHeight,
+        cmd.x * cellWidth + cmd.pixelX, cmd.y * cellHeight + cmd.pixelY, cmd.width, cmd.height);
+    offCtx.restore();
+}
+
 function drawFrame(cmd = null) {
     if (!offCtx) {
         return;
@@ -1517,6 +1541,10 @@ EventsOn("terminalRedraw", ops => {
             }
             if (cmd.op === 'image') {
                 drawImageCommand(cmd);
+                continue;
+            }
+            if (cmd.op === 'graphics_image') {
+                drawGraphicsImageCommand(cmd);
                 continue;
             }
             if (cmd.op === 'gauge_h' || cmd.op === 'gauge_v') {

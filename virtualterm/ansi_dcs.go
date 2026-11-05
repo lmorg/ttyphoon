@@ -25,6 +25,9 @@ func (term *Term) parseDcsCodes() {
 	}
 
 	switch r {
+	case 't':
+		term.readTmuxGraphics()
+
 	case 'q':
 		escSeq := term._parseDcsCodes()
 		escSeq = append([]rune{codes.AsciiEscape, 'P', 'q'}, escSeq...)
@@ -33,6 +36,7 @@ func (term *Term) parseDcsCodes() {
 		term.mxapcInsert(types.ELEMENT_ID_SIXEL, apc)
 
 	default:
+		term._parseDcsCodes()
 		log.Printf("WARNING: Unhandled DCS code %s", string(text))
 	}
 

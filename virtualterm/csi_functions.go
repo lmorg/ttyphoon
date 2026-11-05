@@ -43,6 +43,7 @@ func (term *Term) csiScreenBufferNormal() {
 	for i := range term._altBuf {
 		term._altBuf[i] = term.makeRow()
 	}
+	term.pruneKittyPlacements()
 }
 
 /*
