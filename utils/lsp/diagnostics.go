@@ -59,7 +59,7 @@ type publishDiagnosticsParams struct {
 // ----------------------------------------------------------------------------
 
 // DiagnosticsEmitter is called when the server pushes diagnostics.
-// The implementation in frontend.go uses runtime.EventsEmit.
+// The main-window frontend implementation uses runtime.EventsEmit.
 type DiagnosticsEmitter func(payload DiagnosticsPayload)
 
 // DiagnosticsContentResolver returns content for a given URI when available.

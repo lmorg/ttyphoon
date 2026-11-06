@@ -1,6 +1,7 @@
-package main
+package mainwindow
 
 import (
+	"os"
 	"strings"
 
 	"github.com/lmorg/murex/utils/which"
@@ -33,4 +34,17 @@ func startBackend(a *WApp) error {
 
 	backend.Start(renderer, tmuxClient.GetTermTiles(), tmuxClient, a.ctx, a)
 	return nil
+}
+
+func cdHome() {
+	// default to $HOME
+	home, err := os.UserHomeDir()
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+
+	} else {
+		if err = os.Chdir(home); err != nil {
+			os.Stderr.WriteString(err.Error())
+		}
+	}
 }

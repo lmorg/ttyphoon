@@ -67,7 +67,7 @@ func (t *PatchFile) CallStructured(ctx context.Context, input any) (string, erro
 	if !ok || patch == nil {
 		return "", fmt.Errorf("patchFile received an invalid structured input %T", input)
 	}
-	return t.apply(ctx, patch)
+	return t.apply(patch)
 }
 
 func (t *PatchFile) CallDescription(_ context.Context, input any) string {
@@ -83,7 +83,7 @@ func (t *PatchFile) CallDescription(_ context.Context, input any) string {
 	return description.String()
 }
 
-func (t *PatchFile) apply(ctx context.Context, patch *patchInputT) (string, error) {
+func (t *PatchFile) apply(patch *patchInputT) (string, error) {
 	debug.Log(patch)
 	if strings.TrimSpace(patch.File) == "" {
 		return "ERROR: 'file' is required", nil

@@ -27,7 +27,8 @@ generic "Failed to …" notification, pointing suspicion at the Go implementatio
 
 Every new frontend-callable method requires all of:
 
-1. An exported method on the single `WApp` service in `frontend.go`.
+1. An exported method on the single `WApp` service in the appropriate feature
+  file under `window/frontend/main` (`package mainwindow`; see ADR 0092).
 2. Regenerate bindings with `wails generate bindings`. Generated service code
   lives under `frontend/bindings`; do not edit it by hand.
 3. Import the method through `frontend/src/wails-bindings.js`. This keeps
@@ -52,8 +53,9 @@ if (typeof SetAIPanelLive === 'function') { … }
 
 ## Reference
 
-- `frontend.go` — exported `WApp` methods
-- `frontend/bindings/github.com/lmorg/ttyphoon/wapp.js` — generated service
+- `window/frontend/main/service.go` — `WApp` state and construction
+- `window/frontend/main/*.go` — feature-specific exported `WApp` methods
+- `frontend/bindings/github.com/lmorg/ttyphoon/window/frontend/main/wapp.js` — generated service
 - `frontend/src/wails-bindings.js` — stable frontend import boundary
 - `frontend/src/notes.js` — frontend binding imports
 - `frontend/src/notes.test.js` — mock of the stable import boundary

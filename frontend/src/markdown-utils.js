@@ -2,7 +2,7 @@
  * Shared utilities for markdown rendering across notes.js and markdown.js
  */
 
-import { GetCustomRegexp, HyperlinkOpenWithDefault } from './wails-bindings.js';
+import { GetCustomRegexp, HyperlinkOpenWithDefault, OpenURLInNewWindow } from './wails-bindings.js';
 import { showFullscreenImageOverlay } from './fullscreen-image-overlay';
 import { marked } from "marked";
 import { gfmHeadingId } from "marked-gfm-heading-id";
@@ -368,8 +368,9 @@ export function enableFullscreenMermaidDiagrams(container) {
 }
 
 /**
- * Attach the shared "open hyperlink" behaviour to an anchor. Both left-click
- * and middle-click (auxclick, button 1) open the link via the default handler.
+ * Attach the shared "open hyperlink" behaviour to an anchor. Left-click uses
+ * the default handler; middle-click and Command-click open HTTP(S) pages in a
+ * new Wails window.
  * Used by regular markdown links and custom-regex auto-hyperlinks alike so the
  * click logic stays consolidated in one place.
  * @param {HTMLAnchorElement} a - The anchor to wire up
@@ -381,12 +382,24 @@ export function attachHyperlinkOpenHandlers(a) {
     a.dataset.hyperlinkOpenBound = 'true';
     a.addEventListener('click', (e) => {
         e.preventDefault();
+        if (e.metaKey && (a.protocol === 'http:' || a.protocol === 'https:')) {
+            void OpenURLInNewWindow(a.href).catch((err) => {
+                console.error('Unable to open link in a new window:', err);
+            });
+            return;
+        }
         HyperlinkOpenWithDefault(a.href);
     });
     a.addEventListener('auxclick', (e) => {
         if (e.button === 1) {
             e.preventDefault();
-            HyperlinkOpenWithDefault(a.href);
+            if (a.protocol === 'http:' || a.protocol === 'https:') {
+                void OpenURLInNewWindow(a.href).catch((err) => {
+                    console.error('Unable to open link in a new window:', err);
+                });
+            } else {
+                HyperlinkOpenWithDefault(a.href);
+            }
         }
     });
 }

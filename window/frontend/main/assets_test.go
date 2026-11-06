@@ -1,4 +1,4 @@
-package main
+package mainwindow
 
 import (
 	"net/http"
@@ -117,6 +117,7 @@ func TestNotesAssetHandlerServesAndRefusesAppropriately(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rec.Code)
 		}
+
 		if body := rec.Body.String(); body != "not-really-a-png" {
 			t.Fatalf("unexpected body: %q", body)
 		}
@@ -142,4 +143,28 @@ func TestNotesAssetHandlerServesAndRefusesAppropriately(t *testing.T) {
 			t.Fatalf("expected 405, got %d", rec.Code)
 		}
 	})
+}
+
+func TestAssetHandlerRoutesNotesImagesAndFrontendAssets(t *testing.T) {
+	app, _ := newAssetTestApp(t)
+	var frontendCalls int
+	handler := AssetHandler(app, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		frontendCalls++
+		w.WriteHeader(http.StatusAccepted)
+	}))
+
+	image := httptest.NewRecorder()
+	handler.ServeHTTP(image, httptest.NewRequest(http.MethodGet, notesAssetURLPath+"?path=diagram.png", nil))
+	if image.Code != http.StatusOK || image.Body.String() != "not-really-a-png" {
+		t.Fatalf("image request = %d, %q", image.Code, image.Body.String())
+	}
+	if frontendCalls != 0 {
+		t.Fatal("Notes image request reached the frontend handler")
+	}
+
+	frontend := httptest.NewRecorder()
+	handler.ServeHTTP(frontend, httptest.NewRequest(http.MethodGet, "/assets/app.js", nil))
+	if frontend.Code != http.StatusAccepted || frontendCalls != 1 {
+		t.Fatalf("frontend request = %d, calls = %d", frontend.Code, frontendCalls)
+	}
 }

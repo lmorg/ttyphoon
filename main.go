@@ -38,16 +38,3 @@ func main() {
 
 	startWails()
 }
-
-func cdHome() {
-	// default to $HOME
-	home, err := os.UserHomeDir()
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-
-	} else {
-		if err = os.Chdir(home); err != nil {
-			os.Stderr.WriteString(err.Error())
-		}
-	}
-}

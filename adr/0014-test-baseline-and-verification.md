@@ -21,6 +21,15 @@ failures are fixed.
 
 ### Latest verification
 
+On 2026-11-05, the Wails window-package refactor (ADR 0092) passed relocated Go
+tests, `go build ./...`, binding regeneration (one service, 211 methods), and
+the production frontend build. Native macOS checks passed main-window
+maximization, browser focus and independent closing, main-window hide-on-close,
+and reopening. The full frontend suite passed 677 of 679 tests; two unchanged
+print-style assertions in `src/notes-print.test.js` still expect point-based
+reductions while the unchanged `notes.css` uses scaling. Neither file was
+modified by the refactor.
+
 On 2026-11-03, all 645 frontend tests across 24 files passed with Vite 6.4.5
 and Vitest 4.1.12. The production frontend build and direct DOMPurify/KaTeX
 smoke checks passed, and `npm audit` reported zero vulnerabilities. The updated

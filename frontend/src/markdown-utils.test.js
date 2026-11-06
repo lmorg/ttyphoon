@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { getCustomRegexpMock, getImageMock, hyperlinkOpenWithDefaultMock } = vi.hoisted(() => ({
+const { getCustomRegexpMock, getImageMock, hyperlinkOpenWithDefaultMock, openURLInNewWindowMock } = vi.hoisted(() => ({
     getCustomRegexpMock: vi.fn(() => Promise.resolve([])),
     getImageMock: vi.fn(() => Promise.resolve('')),
     hyperlinkOpenWithDefaultMock: vi.fn(() => Promise.resolve()),
+    openURLInNewWindowMock: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('./wails-bindings.js', () => ({
     GetImage: getImageMock,
     GetCustomRegexp: getCustomRegexpMock,
     HyperlinkOpenWithDefault: hyperlinkOpenWithDefaultMock,
+    OpenURLInNewWindow: openURLInNewWindowMock,
 }));
 
 vi.mock('./fullscreen-image-overlay', () => ({
@@ -187,6 +189,51 @@ describe('markdown image alt sizing', () => {
 });
 
 describe('custom markdown hyperlinks', () => {
+    it('opens HTTP(S) links in a new Wails window on Command-click', () => {
+        openURLInNewWindowMock.mockClear();
+        hyperlinkOpenWithDefaultMock.mockClear();
+        const container = document.createElement('div');
+        container.innerHTML = '<a href="https://example.com/page">Example</a>';
+        processLinks(container);
+
+        const link = container.querySelector('a');
+        link?.dispatchEvent(new MouseEvent('click', {
+            metaKey: true,
+            bubbles: true,
+            cancelable: true,
+        }));
+
+        expect(openURLInNewWindowMock).toHaveBeenCalledWith('https://example.com/page');
+        expect(hyperlinkOpenWithDefaultMock).not.toHaveBeenCalled();
+    });
+
+    it('opens HTTP(S) links in a new Wails window on middle-click', () => {
+        openURLInNewWindowMock.mockClear();
+        const container = document.createElement('div');
+        container.innerHTML = '<a href="https://example.com/page">Example</a>';
+        processLinks(container);
+
+        const link = container.querySelector('a');
+        link?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
+
+        expect(openURLInNewWindowMock).toHaveBeenCalledWith('https://example.com/page');
+        expect(hyperlinkOpenWithDefaultMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps non-web middle-click links on the default handler', () => {
+        hyperlinkOpenWithDefaultMock.mockClear();
+        openURLInNewWindowMock.mockClear();
+        const container = document.createElement('div');
+        container.innerHTML = '<a href="mailto:user@example.com">Email</a>';
+        processLinks(container);
+
+        const link = container.querySelector('a');
+        link?.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }));
+
+        expect(openURLInNewWindowMock).not.toHaveBeenCalled();
+        expect(hyperlinkOpenWithDefaultMock).toHaveBeenCalledWith('mailto:user@example.com');
+    });
+
     it('rewrites matching text to a ttyphoon URL', async () => {
         getCustomRegexpMock.mockResolvedValueOnce([{
             pattern: '(HAP-[0-9]+)',

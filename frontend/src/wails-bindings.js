@@ -1,1 +1,1 @@
-export * from '../bindings/github.com/lmorg/ttyphoon/wapp.js';
+export * from '../bindings/github.com/lmorg/ttyphoon/window/frontend/main/wapp.js';

@@ -4,7 +4,15 @@ Date: 2026-11-02
 
 ## Status
 
-Accepted
+Deprecated and superseded by
+[ADR 0092: Organize Wails code by window and feature](0092-wails-window-packages-and-feature-bindings.md)
+on 2026-11-05.
+
+This record is retained as migration history. Its instruction to keep the root
+`WApp` facade together was limited to the Wails v3 port and no longer governs
+new work. ADR 0092 defines the target layout and how to handle legacy code
+missed during relocation, while explicitly preserving required application
+behavior.
 
 ## Context
 

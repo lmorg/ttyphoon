@@ -1,7 +1,8 @@
-package main
+package mainwindow
 
 import (
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/window/frontend/browser"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -16,6 +17,10 @@ func (runtime *wailsDesktopRuntime) Emit(event string, data ...any) {
 
 func (runtime *wailsDesktopRuntime) OpenURL(url string) {
 	_ = runtime.app.Browser.OpenURL(url)
+}
+
+func (runtime *wailsDesktopRuntime) OpenURLInNewWindow(rawURL string) error {
+	return browser.Open(runtime.app, rawURL)
 }
 
 func (runtime *wailsDesktopRuntime) ShowWindow() {
