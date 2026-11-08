@@ -1,4 +1,5 @@
 # This file contains the configuration for this project.
+# After changing info, run `wails task common:update:build-assets`.
 version: '3'
 
 info:
@@ -7,8 +8,9 @@ info:
   productIdentifier: "com.lmorg.ttyphoon"
   description: "The Next Generation Terminal Emulator"
   copyright: "2023-2026 Laurence Morgan"
+  license: "GPL-2.0-or-later"
   comments: "The Next Generation Terminal Emulator"
-  version: "0.52.1000"
+  version: "1.2.1000"
 
 dev_mode:
   root_path: .
@@ -29,6 +31,8 @@ dev_mode:
       - "*.go"
     git_ignore: true
   executes:
+    - cmd: wails task common:update:build-assets
+      type: blocking
     - cmd: wails build DEV=true
       type: blocking
     - cmd: wails task common:dev:frontend

@@ -75,8 +75,8 @@ jobs:
           go install "github.com/wailsapp/wails/v3/cmd/wails3@${wails_version}"
           ln -s "$(go env GOPATH)/bin/wails3" "$(go env GOPATH)/bin/wails"
 
-      - name: Generate Bindings and Icons
-        run: wails task -C 1 common:generate:bindings common:generate:icons
+      - name: Generate Bindings and Icons, Update Build Assets
+        run: wails task -C 1 common:generate:bindings common:generate:icons common:update:build-assets
 
       - name: Install Frontend Dependencies
         run: npm --prefix frontend ci
@@ -100,7 +100,8 @@ jobs:
             export CGO_LDFLAGS="-mmacosx-version-min=12.0"
           fi
           mkdir -p build/bin
-          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" \
+          app_ldflags=$(go run ./build/buildflags)
+          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s $app_ldflags" \
             -o build/bin/ttyphoon .
           test -x build/bin/ttyphoon
 

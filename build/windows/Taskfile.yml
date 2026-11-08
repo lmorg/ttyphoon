@@ -8,13 +8,17 @@ tasks:
     summary: Build for Windows
     deps:
       - task: common:go:mod:tidy
+      - task: common:update:build-assets
       - task: common:build:frontend
       - task: common:generate:icons
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
+      - |
+        app_ldflags=$(GOOS= GOARCH= go run ./build/buildflags)
+        go build {{.BUILD_FLAGS}} -ldflags="{{.LINKER_FLAGS}} $app_ldflags" -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false{{end}}'
+      LINKER_FLAGS: '{{if ne .DEV "true"}}-w -s -H windowsgui{{end}}'
     env:
       GOOS: windows
       GOARCH: '{{.ARCH | default ARCH}}'

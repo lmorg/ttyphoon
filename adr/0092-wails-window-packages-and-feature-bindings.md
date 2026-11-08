@@ -36,9 +36,10 @@ methods can be split across feature files without creating separate services.
 - Retain one `WApp` service initially. File organization does not require
   splitting shared state or introducing one service per feature. Browser
   windows do not need a separate service until they have their own bindings.
-- Keep root code limited to executable startup, application composition,
-  service registration, and asset embedding/wiring. Embedded frontend assets
-  and the icon may remain at root and be passed to the window packages:
+- Keep root code limited to executable startup and asset embedding. Put
+  application composition, service registration, and the application-wide
+  menu in `window/wails.go` (`package window`). Embed frontend assets and the
+  icon in `main.go` and pass them to `window.StartWails`:
   `go:embed` cannot reference parent directories.
 - Keep dependencies one-way: the main-window adapter may use the browser
   package, but the browser package must not depend on the main-window package.
@@ -64,8 +65,13 @@ application behavior it preserved:
 - Implement hide-on-close with a Wails `RegisterHook` for `WindowClosing`.
   Hooks can cancel destruction before event listeners run; the old
   asynchronous `OnWindowEvent` listener raced Wails' own closing listener.
+- Showing the main window also focuses it, including the show branch of the
+  F12 global visibility toggle. Hiding the window does not request focus.
 - Keep the standard Wails About dialog and native browser-context-menu
   suppression without interfering with application menus.
+- Set an explicit application menu containing only the app-name submenu and
+  Wails' About role. Do not include Wails' default Edit, Window, Services, Hide,
+  or Quit entries; in-app context menus remain unchanged.
 - Keep `ttyphoon://` interactions inside the application without registering
   the scheme with the operating system.
 - Preserve browser-window link gestures, focus, and always-on-top behavior
@@ -114,7 +120,8 @@ application behavior it preserved:
 - [ADR 0010: shared-state synchronization](0010-wails-shared-state-synchronisation.md)
 - [ADR 0013: Wails binding checklist](0013-wails-binding-checklist.md)
 - [ADR 0091: Notes web link windows](0091-notes-markdown-middle-click-opens-wails-window.md)
-- `wails.go` - root application composition and embedded assets
+- `main.go` - executable startup and embedded assets
+- `window/wails.go` - application composition, service registration, and menu
 - `window/frontend/main` - main-window service, feature bindings, adapter,
   lifecycle, and relocated tests
 - `window/frontend/browser` - browser-window creation and URL validation

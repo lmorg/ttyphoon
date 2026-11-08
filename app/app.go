@@ -4,13 +4,13 @@ package app
 const DirName = "ttyphoon"
 
 var (
-	name      = "Ttyphoon"
-	tagLine   = "The Next Generation Terminal Emulator"
-	version   = "1.011000"
-	branch    = "unknown"
-	buildDate = "unknown"
-	copyright = "2023-2026 Laurence Morgan"
-	license   = "GPL v2"
+	name      = "undef"
+	tagLine   = "undef"
+	version   = "undef"
+	branch    = "undef"
+	buildDate = "undef"
+	copyright = "undef"
+	license   = "undef"
 )
 
 func Name() string      { return name }

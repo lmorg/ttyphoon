@@ -13,6 +13,18 @@ func TestAppName(t *testing.T) {
 	}
 }
 
+func TestUninjectedMetadata(t *testing.T) {
+	for name, value := range map[string]string{
+		"name": app.Name(), "tagline": app.TagLine(), "version": app.Version(),
+		"branch": app.Branch(), "build date": app.BuildDate(), "copyright": app.Copyright(),
+		"license": app.License(),
+	} {
+		if value != "undef" {
+			t.Errorf("uninjected %s = %q, want undef", name, value)
+		}
+	}
+}
+
 /*
 func TestVersion(t *testing.T) {
 	rx := regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+( \(([-._/a-zA-Z0-9]+)\))?$`)

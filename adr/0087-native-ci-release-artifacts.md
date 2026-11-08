@@ -35,6 +35,14 @@ credentials.
 - Generate bindings and icons, install dependencies, run the frontend tests,
   build the frontend, then compile the production executable. Check that the
   frontend entry point and native executable exist before packaging.
+- Refresh platform metadata with Wails' built-in `update build-assets` command
+  using `build/config.yml`. Read the same config with `build/buildflags` and
+  inject application name, description, version, copyright, and license via Go linker
+  flags in both local platform tasks and CI. Stamp the Git branch (short commit
+  for detached checkouts) and UTC build time; uninjected Go fields are `undef`.
+  Do not rewrite Go source or add a `jq`/`yq` build dependency.
+  After Wails updates assets, apply `info.license` to nfpm's generated license
+  field so Linux packaging does not retain Wails' default MIT label.
 - Keep these stages sequential within each job. Limit Task execution to one
   task at a time and Go execution/compilation parallelism to two workers through
   `GOMAXPROCS=2` and `GOFLAGS=-p=2`. Platform jobs may run concurrently, and a
@@ -59,9 +67,8 @@ credentials.
 - Merges to `main` produce downloadable, versioned artifacts without requiring
   enough memory to build locally. Resource limits reduce contention but cannot
   guarantee that an individual compiler or bundler will fit available memory.
-- Artifact names reflect the executable's reported version, whose source is
-  `app/app.go`. This does not synchronize plist, Windows, Linux package, or
-  Wails configuration versions; those metadata values remain separately owned.
+- Artifact names reflect the executable's reported version, injected from
+  `build/config.yml`, which also supplies the Wails platform metadata.
 - macOS artifacts may require explicit Gatekeeper approval. Linux executables
   are not fully standalone: destination systems need compatible GTK4,
   WebKitGTK 6.0, X11, and other dynamically linked runtime libraries.

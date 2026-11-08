@@ -6,16 +6,15 @@
 name: "ttyphoon"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.52.1000"
+version: "1.2.1000"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
 description: "The Next Generation Terminal Emulator"
 vendor: "Laurence Morgan"
 homepage: "https://wails.io"
-license: "MIT"
+license: "GPL-2.0-or-later"
 release: "1"
-
 contents:
   - src: "./bin/ttyphoon"
     dst: "/usr/local/bin/ttyphoon"
@@ -23,12 +22,10 @@ contents:
     dst: "/usr/share/icons/hicolor/128x128/apps/ttyphoon.png"
   - src: "./build/linux/ttyphoon.desktop"
     dst: "/usr/share/applications/ttyphoon.desktop"
-
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:
   - libgtk-4-1
   - libwebkitgtk-6.0-4
-
 # Distribution-specific overrides for different package formats
 overrides:
   # RPM packages for Fedora / RHEL / AlmaLinux / Rocky Linux
@@ -36,13 +33,11 @@ overrides:
     depends:
       - gtk4
       - webkitgtk6.0
-
   # Arch Linux packages
   archlinux:
     depends:
       - gtk4
       - webkitgtk-6.0
-
 # scripts section to ensure desktop database is updated after install
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

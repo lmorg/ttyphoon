@@ -1,7 +1,12 @@
 # Build the binary
 .PHONY: build
 build:
+	wails task common:update:build-assets
 	wails build
+
+.PHONY: build-flags
+build-flags:
+	@GOOS= GOARCH= go run ./build/buildflags
 
 # Clean build the binary
 .PHONY: clean
@@ -17,6 +22,7 @@ generate:
 
 .PHONY: package
 package:
+	wails task common:update:build-assets
 	wails package
 
 # Run the application
@@ -59,6 +65,7 @@ list-build-tags:
 help:
 	@echo "Available commands:"
 	@echo "  make build           - Build TTYphoon"
+	@echo "  make build-flags     - Print application metadata linker flags"
 	@echo "  make run-darwin      - Build and run macOS binary"
 	@echo '  make list-build-tags - list tags supported by `$$BUILD_TAGS`'
 	@echo ""

@@ -13,6 +13,25 @@ The structure is:
 * Taskfile.yml - Shared frontend build and asset-generation tasks
 * darwin, linux, windows - Platform build tasks and assets
 
+Edit product metadata in `config.yml`, then run
+`wails task common:update:build-assets` to update the platform build assets.
+Wails preserves custom plist values when updating them.
+The same task then applies `info.license` to the Linux nfpm config, since Wails
+otherwise generates it with an MIT license. This label follows the project's
+license grant; `LICENSE` retains the full license text.
+
+## Compiled Application Metadata
+
+Local platform tasks (including Makefile build/package and development targets)
+and CI use `go run ./build/buildflags` to read `config.yml` and inject the product
+name, description, version, copyright, and license with Go's `-ldflags -X`. The helper
+also stamps the current Git branch (short commit on detached checkouts) and UTC
+build time. It fails on missing or unrepresentable metadata rather than building
+with placeholders. No Go source files are rewritten and no `jq` or `yq` is needed.
+
+`make build-flags` prints these flags for manual builds. Direct `go build` or
+`go test` without the flags leaves those fields, including the license, as `"undef"`.
+
 ## CI Artifacts
 
 `.github/workflows/release-artifacts.yml` builds on every push to `main`
@@ -35,16 +54,19 @@ machine.
 
 ## Mac
 
-The `darwin` directory holds files specific to macOS builds.
+The `darwin` directory holds files specific to macOS builds. `Info.plist` and
+`Info.dev.plist` are updated from `config.yml` by Wails.
 
 The directory contains the following files:
 
-- `Info.plist` - the main plist file used when packaging the app bundle.
-- `Info.dev.plist` - the development plist file.
+- `Info.plist` - the main generated plist used when packaging the app bundle.
+- `Info.dev.plist` - the generated development plist.
 
 ## Linux
 
 The `linux` directory holds Linux build tasks and packaging assets.
+The desktop entry and nfpm package metadata are updated from `config.yml` by
+Wails.
 
 Global hotkeys require CGO and X11 development libraries (`libx11-dev` on
 Debian/Ubuntu or `libX11-devel` on Fedora). Registration requires an accessible
@@ -52,7 +74,9 @@ X display; native Wayland global shortcuts are not supported by this backend.
 
 ## Windows
 
-The `windows` directory contains the manifest and resource files used for Windows builds.
+The `windows` directory contains the manifest and resource files used for
+Windows builds. `info.json` and `wails.exe.manifest` are updated from
+`config.yml` by Wails.
 
 - `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
   use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file

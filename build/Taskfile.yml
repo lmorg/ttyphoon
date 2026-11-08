@@ -44,6 +44,13 @@ tasks:
     cmds:
       - wails generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
 
+  update:build-assets:
+    summary: Update Wails build assets from config.yml
+    dir: build
+    cmds:
+      - wails update build-assets -name ttyphoon -binaryname ttyphoon -config config.yml -dir .
+      - GOOS= GOARCH= go run ./buildflags -config config.yml -nfpm linux/nfpm/nfpm.yaml
+
   dev:frontend:
     summary: Run the frontend development server
     dir: frontend
