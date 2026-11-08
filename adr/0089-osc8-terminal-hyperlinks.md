@@ -41,6 +41,20 @@ overwrites, wide characters, and reflow.
   as `mailto:`, in both that element and the shared hyperlink menu parser.
   Keep auto-detected file paths containing unescaped spaces or percent signs
   working.
+- HTTP(S) tooltips parse the URL authority and show a literal IP address,
+  non-empty username, and explicitly supplied password only when present.
+  Use icons `f1eb`, `f007`, and `f084` respectively and HTML-escape values.
+  Do not resolve hostname addresses or infer credentials from query parameters.
+- HTTP(S) tooltips show `/` for an absent path, a hostname (`f015`) only for
+  non-IP hosts, and a port (`f13d`) only when explicitly present in the URL.
+- HTTP(S) tooltip rows appear in this order: Scheme, Hostname or IP, Port,
+  Path, User, Pass, then query parameters. Omit absent optional fields without
+  changing the order of remaining rows. File tooltips show Path then File;
+  other schemes and malformed HTTP(S) targets show Scheme then Path.
+- Render hyperlink tooltip HTML once during element generation and reuse the
+  cached string on hover. Keep rendering in `utils/hyperlink_tooltip` without
+  renderer or element dependencies; Notes HTTP(S) and file-link hovers use the
+  same renderer through `GetHyperlinkTooltip`.
 - Highlight the actual surviving linked cells, rather than redrawing the
   original label. Underline-only hover uses a rendering copy of SGR and does
   not change application-provided styles.

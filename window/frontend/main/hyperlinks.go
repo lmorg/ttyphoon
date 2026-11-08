@@ -2,14 +2,31 @@ package mainwindow
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/hyperlink_tooltip"
 	menuhyperlink "github.com/lmorg/ttyphoon/utils/menu_hyperlink"
 	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 )
+
+func (a *WApp) GetHyperlinkTooltip(rawURL string) (string, error) {
+	scheme, target, found := strings.Cut(rawURL, ":")
+	if !found || scheme == "" {
+		return "", fmt.Errorf("hyperlink tooltip URL is missing a scheme")
+	}
+	parsed, err := url.Parse(scheme + ":")
+	if err != nil {
+		return "", fmt.Errorf("invalid hyperlink tooltip scheme: %w", err)
+	}
+	if parsed.Scheme == "" || strings.IndexFunc(rawURL, func(r rune) bool { return r < ' ' || r == 127 }) >= 0 {
+		return "", fmt.Errorf("invalid hyperlink tooltip URL")
+	}
+	return hyperlink_tooltip.HTML(strings.ToLower(parsed.Scheme), strings.TrimPrefix(target, "//")), nil
+}
 
 func (a *WApp) hyperlinkMenuItems(url, text string) []types.MenuItem {
 	renderer, ok := renderwebkit.CurrentRenderer()

@@ -29,6 +29,7 @@ func (runtime *wailsDesktopRuntime) OpenManagedURLWindow(rawURL string) (func(),
 
 func (runtime *wailsDesktopRuntime) ShowWindow() {
 	runtime.window.Show()
+	runtime.window.Focus()
 }
 
 func (runtime *wailsDesktopRuntime) HideWindow() {

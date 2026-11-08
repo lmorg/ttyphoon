@@ -25,6 +25,11 @@ styling, and can render Markdown.
 - Route feature-specific tooltip events through the shared Notes tooltip
   integration. Use the existing show and close functions when a component
   already owns that integration.
+- Notes HTTP(S) and file link hovers request HTML through `GetHyperlinkTooltip`,
+  using the same Go `utils/hyperlink_tooltip` renderer as terminal hyperlinks.
+  Cache the request per anchor and URL; invalidate on URL changes and ignore
+  late responses after leaving or switching links. Internal AI links retain
+  their descriptive tooltip rather than being treated as external URLs.
 - Keep accessible control names and semantic accessibility attributes. A
   visual tooltip supplements them; it does not replace them or make hover the
   only way to understand an essential action.

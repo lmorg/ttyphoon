@@ -1,20 +1,18 @@
-package main
+package window
 
 import (
-	"embed"
+	"io/fs"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/window/frontend/browser"
 	mainwindow "github.com/lmorg/ttyphoon/window/frontend/main"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-//go:embed all:frontend/dist
-var wailsAssets embed.FS
-
-//go:embed build/appicon.png
-var appIcon []byte
-
-func startWails() {
+func StartWails(wailsAssets fs.FS, appIcon []byte) {
+	if err := browser.InitializeUserAgent(); err != nil {
+		panic(err)
+	}
 	wapp := mainwindow.NewWailsApp()
 	wailsApp := application.New(application.Options{
 		Name:        app.Name(),
@@ -28,6 +26,11 @@ func startWails() {
 		Windows:    application.WindowsOptions{WndClass: app.Name()},
 		OnShutdown: func() { mainwindow.Shutdown(wapp) },
 	})
+
+	menu := application.NewMenu()
+	menu.AddSubmenu(app.Name()).AddRole(application.About)
+	wailsApp.Menu.SetApplicationMenu(menu)
+
 	mainwindow.NewWindow(wailsApp, wapp)
 	if err := wailsApp.Run(); err != nil {
 		panic(err)

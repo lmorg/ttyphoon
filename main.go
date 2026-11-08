@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,14 @@ import (
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/cache"
+	"github.com/lmorg/ttyphoon/window"
 )
+
+//go:embed all:frontend/dist
+var wailsAssets embed.FS
+
+//go:embed build/appicon.png
+var appIcon []byte
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
@@ -36,5 +44,5 @@ func main() {
 	cache.SetPath(cacheDbPath)
 	cache.InitCache()
 
-	startWails()
+	window.StartWails(wailsAssets, appIcon)
 }

@@ -12,7 +12,7 @@ import {
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
-    DisplayHyperlinkMenu,
+    DisplayHyperlinkMenu, GetHyperlinkTooltip,
     SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, ClipboardSetFormatted, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
@@ -48,6 +48,7 @@ import { initNotesLogPanel } from './notes-log-panel';
 import { discardPrintDocument, printDocument } from './notes-print.js';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
+import { createHyperlinkTooltip } from './hyperlink-tooltip';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
 import { disableNativeTextAssistance, disableNativeTextAssistanceIn } from './text-input.js';
@@ -13512,7 +13513,7 @@ function initAIOutputContextMenu(container) {
             if (anchor && container.contains(anchor)) {
                 const href = String(anchor.href || anchor.getAttribute('href') || '').trim();
                 const displayHref = formatHyperlinkHoverHref(href);
-                if (displayHref && hyperlinkHoverTooltipEl.dataset.href !== displayHref) {
+                if (displayHref) {
                     showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
                 } else {
                     positionHyperlinkHoverTooltip(e.clientX, e.clientY);
@@ -13714,7 +13715,7 @@ function initRenderedNotesContextMenu(container, viewMode) {
             if (anchor && container.contains(anchor)) {
                 const href = String(anchor.href || anchor.getAttribute('href') || '').trim();
                 const displayHref = formatHyperlinkHoverHref(href);
-                if (displayHref && hyperlinkHoverTooltipEl.dataset.href !== displayHref) {
+                if (displayHref) {
                     showHyperlinkHoverTooltip(anchor, e.clientX, e.clientY);
                 } else {
                     positionHyperlinkHoverTooltip(e.clientX, e.clientY);
@@ -16162,8 +16163,15 @@ const lspCompletionEl = (() => {
     return el;
 })();
 
+const notesHyperlinkTooltip = createHyperlinkTooltip({
+    getTooltip: GetHyperlinkTooltip,
+    showTooltip: showSharedTooltip,
+    closeTooltip: closeSharedTooltip,
+    reportError: (error) => console.error('Unable to render hyperlink tooltip:', error),
+});
+
 function hideHyperlinkHoverTooltip() {
-    closeSharedTooltip();
+    notesHyperlinkTooltip.close();
 }
 
 function positionHyperlinkHoverTooltip(x, y) {
@@ -16212,7 +16220,7 @@ function showHyperlinkHoverTooltip(anchor, x, y) {
     }
 
     positionHyperlinkHoverTooltip(x, y);
-    showSharedTooltip(displayHref);
+    void notesHyperlinkTooltip.show(anchor, href, displayHref);
 }
 
 const LSP_SEVERITY_CLASS = ['', 'error', 'warning', 'info', 'hint'];

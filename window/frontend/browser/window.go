@@ -19,6 +19,10 @@ func OpenManaged(app *application.App, rawURL string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
+	userAgent, err := browserUserAgent()
+	if err != nil {
+		return nil, err
+	}
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:       parsedURL.Hostname(),
@@ -26,6 +30,11 @@ func OpenManaged(app *application.App, rawURL string) (func(), error) {
 		Width:       1024,
 		Height:      768,
 		AlwaysOnTop: config.Config.Window.AlwaysOnTop,
+		Mac: application.MacWindow{
+			WebviewPreferences: application.MacWebviewPreferences{
+				ApplicationNameForUserAgent: userAgent,
+			},
+		},
 	})
 	window.Focus()
 	return window.Close, nil
