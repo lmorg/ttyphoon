@@ -15,12 +15,16 @@ func (runtime *wailsDesktopRuntime) Emit(event string, data ...any) {
 	runtime.app.Event.Emit(event, data...)
 }
 
-func (runtime *wailsDesktopRuntime) OpenURL(url string) {
-	_ = runtime.app.Browser.OpenURL(url)
+func (runtime *wailsDesktopRuntime) OpenURL(url string) error {
+	return runtime.app.Browser.OpenURL(url)
 }
 
 func (runtime *wailsDesktopRuntime) OpenURLInNewWindow(rawURL string) error {
 	return browser.Open(runtime.app, rawURL)
+}
+
+func (runtime *wailsDesktopRuntime) OpenManagedURLWindow(rawURL string) (func(), error) {
+	return browser.OpenManaged(runtime.app, rawURL)
 }
 
 func (runtime *wailsDesktopRuntime) ShowWindow() {

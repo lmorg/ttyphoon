@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
@@ -35,14 +37,7 @@ func startServerCmdLine(ctx context.Context, cfgPath string, agent *Agent, envva
 func startServerHttp(ctx context.Context, cfgPath string, agent *Agent, server string, svr mcp_config.ServerT) error {
 	serverURL := svr.Url
 	log.Printf("[info] MCP server %s: %s", server, serverURL)
-	hooks := mcp_client.OAuthUIHooks{
-		OpenBrowser: func(authURL string) {
-			rctx := agent.Renderer().GetWindowContext()
-			if rctx != nil {
-				runtime.BrowserOpenURL(rctx, authURL)
-			}
-		},
-	}
+	hooks := mcpOAuthWindowHooks(agent.Renderer().GetWindowContext())
 
 	return mcp_client.ConnectAndUseHttpContext(
 		ctx,
@@ -59,6 +54,35 @@ func startServerHttp(ctx context.Context, cfgPath string, agent *Agent, server s
 			return startServer(ctx, cfgPath, agent, server, svr, c)
 		},
 	)
+}
+
+func mcpOAuthWindowHooks(ctx context.Context) mcp_client.OAuthUIHooks {
+	var mu sync.Mutex
+	var windows []func()
+	return mcp_client.OAuthUIHooks{
+		OpenBrowser: func(authURL string) error {
+			if !config.Config.Ai.OAuthUseBuiltinWebview {
+				return runtime.BrowserOpenURL(ctx, authURL)
+			}
+			closeWindow, err := runtime.OpenManagedURLWindow(ctx, authURL)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			windows = append(windows, closeWindow)
+			mu.Unlock()
+			return nil
+		},
+		OnAuthenticated: func() {
+			mu.Lock()
+			completed := windows
+			windows = nil
+			mu.Unlock()
+			for _, closeWindow := range completed {
+				closeWindow()
+			}
+		},
+	}
 }
 
 func startServer(ctx context.Context, cfgPath string, agent *Agent, server string, svr mcp_config.ServerT, c *mcp_client.Client) error {

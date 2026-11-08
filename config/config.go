@@ -229,6 +229,7 @@ type LspT struct {
 }
 
 type AiT struct {
+	OAuthUseBuiltinWebview      bool                   `yaml:"OAuthUseBuiltinWebview"`
 	MaxIterations               int                    `yaml:"MaxIterations"`
 	MaxContinuations            int                    `yaml:"MaxContinuations"`
 	RequestTimeout              string                 `yaml:"RequestTimeout"`

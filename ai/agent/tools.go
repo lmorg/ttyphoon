@@ -21,17 +21,19 @@ const (
 )
 
 const (
-	TOOL_DELEGATE = "delegate"
-	TOOL_REPORT   = "report"
-	TOOL_ASK_USER = "askUser"
+	TOOL_DELEGATE         = "delegate"
+	TOOL_REPORT           = "report"
+	TOOL_ASK_USER         = "askUser"
+	TOOL_START_MCP_SERVER = aitypes.ToolStartMcpServer
 )
 
 // Sub-agents run non-interactively and must not recurse, so these can never be
 // delegated regardless of configuration.
 var subagentForbiddenTools = map[string]bool{
-	TOOL_DELEGATE: true,
-	TOOL_REPORT:   true,
-	TOOL_ASK_USER: true,
+	TOOL_DELEGATE:         true,
+	TOOL_REPORT:           true,
+	TOOL_ASK_USER:         true,
+	TOOL_START_MCP_SERVER: true,
 }
 
 func (agent *Agent) toolsInit() {

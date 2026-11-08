@@ -34,6 +34,8 @@ func TestOAuthCancelledSetupCanRetryAutomaticallyWithIssuerValidation(t *testing
 	handler := mcp_sdk.NewStreamableHTTPHandler(func(*http.Request) *mcp_sdk.Server { return server }, nil)
 	var base string
 	var rejectAuthorized atomic.Bool
+	var rejectToken atomic.Bool
+	var tokenIssued atomic.Bool
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -50,6 +52,12 @@ func TestOAuthCancelledSetupCanRetryAutomaticallyWithIssuerValidation(t *testing
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]any{"client_id": "fixture-client", "token_endpoint_auth_method": "none", "redirect_uris": []string{redirect}})
 		case "/token":
+			if rejectToken.Load() {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]any{"error": "invalid_grant"})
+				return
+			}
+			tokenIssued.Store(true)
 			json.NewEncoder(w).Encode(map[string]any{"access_token": "fixture-token", "token_type": "Bearer", "expires_in": 3600})
 		case "/mcp":
 			if r.Header.Get("Authorization") != "Bearer fixture-token" || rejectAuthorized.Load() {
@@ -66,11 +74,18 @@ func TestOAuthCancelledSetupCanRetryAutomaticallyWithIssuerValidation(t *testing
 	base = provider.URL
 	config := &mcp_config.OAuthT{RedirectURI: redirect, TokenFile: filepath.Join(t.TempDir(), "token.json")}
 	var manual atomic.Int32
+	var authenticated atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())
-	hooks := OAuthUIHooks{OpenBrowser: func(string) { cancel() }, PromptCallbackURL: func() (string, error) {
+	hooks := OAuthUIHooks{OpenBrowser: func(string) error { cancel(); return nil }, PromptCallbackURL: func() (string, error) {
 		manual.Add(1)
 		return "", errors.New("manual callback must never be used")
 	}}
+	hooks.OnAuthenticated = func() {
+		if !tokenIssued.Load() {
+			t.Error("authentication success reported before token exchange")
+		}
+		authenticated.Add(1)
+	}
 	redirectURL, err := url.Parse(redirect)
 	if err != nil {
 		t.Fatal(err)
@@ -87,27 +102,46 @@ func TestOAuthCancelledSetupCanRetryAutomaticallyWithIssuerValidation(t *testing
 	if err == nil || !strings.Contains(err.Error(), "automatic OAuth callback") || manual.Load() != 0 {
 		t.Fatalf("busy callback port attempted a manual fallback: %v, prompts=%d", err, manual.Load())
 	}
+	cancelBrowser := hooks.OpenBrowser
+	openFailure := errors.New("authorization window unavailable")
+	hooks.OpenBrowser = func(string) error { return openFailure }
+	err = ConnectAndUseHttpContext(context.Background(), &mcp_config.OverrideT{}, "fixture", "server", base+"/mcp", config, hooks, nil,
+		func(client *Client) error { return client.ListTools() })
+	if !errors.Is(err, openFailure) {
+		t.Fatalf("browser opening failure was not propagated: %v", err)
+	}
+	hooks.OpenBrowser = cancelBrowser
 	err = ConnectAndUseHttpContext(ctx, &mcp_config.OverrideT{}, "fixture", "server", base+"/mcp", config, hooks, nil,
 		func(client *Client) error { return client.ListToolsContext(ctx) })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled setup returned %v", err)
 	}
+	if authenticated.Load() != 0 {
+		t.Fatal("cancelled or failed setup reported authentication success")
+	}
 	var browser atomic.Int32
-	hooks.OpenBrowser = func(raw string) {
+	hooks.OpenBrowser = func(raw string) error {
 		browser.Add(1)
 		authorization, err := url.Parse(raw)
 		if err != nil {
-			t.Error(err)
-			return
+			return err
 		}
 		callback := redirect + "?" + url.Values{"code": {"fixture-code"}, "state": {authorization.Query().Get("state")}, "iss": {base}}.Encode()
 		response, err := http.Get(callback)
 		if err != nil {
-			t.Error(err)
-			return
+			return err
 		}
 		response.Body.Close()
+		return nil
 	}
+	rejectToken.Store(true)
+	err = ConnectAndUseHttpContext(context.Background(), &mcp_config.OverrideT{}, "fixture", "server", base+"/mcp", config, hooks, nil,
+		func(client *Client) error { return client.ListTools() })
+	if err == nil || authenticated.Load() != 0 {
+		t.Fatalf("failed token exchange reported authentication success: %v", err)
+	}
+	rejectToken.Store(false)
+	browser.Store(0)
 	setupCtx, finishSetup := context.WithCancel(context.Background())
 	var connected *Client
 	err = ConnectAndUseHttpContext(setupCtx, &mcp_config.OverrideT{}, "fixture", "server", base+"/mcp", config, hooks, nil,
@@ -119,6 +153,9 @@ func TestOAuthCancelledSetupCanRetryAutomaticallyWithIssuerValidation(t *testing
 	defer connected.Close()
 	if browser.Load() != 1 || manual.Load() != 0 {
 		t.Fatalf("browser=%d manual=%d", browser.Load(), manual.Load())
+	}
+	if authenticated.Load() != 1 {
+		t.Fatalf("authentication success notifications = %d, want 1", authenticated.Load())
 	}
 	if err := connected.ListTools(); err != nil {
 		t.Fatalf("finishing setup killed the live MCP session: %v", err)

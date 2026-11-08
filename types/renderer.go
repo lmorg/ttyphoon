@@ -20,8 +20,9 @@ type SaveDialogOptions struct {
 
 type DesktopRuntime interface {
 	Emit(event string, data ...any)
-	OpenURL(url string)
+	OpenURL(url string) error
 	OpenURLInNewWindow(url string) error
+	OpenManagedURLWindow(url string) (close func(), err error)
 	ShowWindow()
 	HideWindow()
 	SetWindowTitle(title string)

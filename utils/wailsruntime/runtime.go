@@ -32,10 +32,27 @@ func EventsEmit(ctx context.Context, event string, data ...any) {
 	}
 }
 
-func BrowserOpenURL(ctx context.Context, url string) {
+func BrowserOpenURL(ctx context.Context, url string) error {
 	if runtime := getRuntime(ctx); runtime != nil {
-		runtime.OpenURL(url)
+		return runtime.OpenURL(url)
 	}
+	return ErrUnavailable
+}
+
+func OpenURLInNewWindow(ctx context.Context, url string) error {
+	runtime := getRuntime(ctx)
+	if runtime == nil {
+		return ErrUnavailable
+	}
+	return runtime.OpenURLInNewWindow(url)
+}
+
+func OpenManagedURLWindow(ctx context.Context, url string) (func(), error) {
+	runtime := getRuntime(ctx)
+	if runtime == nil {
+		return nil, ErrUnavailable
+	}
+	return runtime.OpenManagedURLWindow(url)
 }
 
 func WindowShow(ctx context.Context) {

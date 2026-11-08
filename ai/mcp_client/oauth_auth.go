@@ -25,7 +25,8 @@ import (
 )
 
 type OAuthUIHooks struct {
-	OpenBrowser               func(string)
+	OpenBrowser               func(string) error
+	OnAuthenticated           func()
 	PromptCallbackURL         func() (string, error)
 	OnAutoCallbackUnavailable func(error)
 }
@@ -216,7 +217,9 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 			defer callback.Close()
 			if hooks.OpenBrowser != nil {
 				log.Printf("[debug] MCP OAuth: opening browser for authorization")
-				hooks.OpenBrowser(authURL)
+				if err := hooks.OpenBrowser(authURL); err != nil {
+					return nil, fmt.Errorf("open OAuth authorization page: %w", err)
+				}
 			}
 			log.Printf("[debug] MCP OAuth: waiting for automatic callback")
 			waitCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -283,7 +286,7 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	log.Printf("[debug] MCP OAuth: NewAuthorizationCodeHandler created")
 
 	// Wrap the handler to persist tokens to file
-	return &gosdkOAuthHandler{inner: h, tokenFile: oauthCfg.TokenFile}, nil
+	return &gosdkOAuthHandler{inner: h, tokenFile: oauthCfg.TokenFile, onAuthenticated: hooks.OnAuthenticated}, nil
 }
 
 func ensureAuthorizationRequestScopes(rawURL string, scopes []string) string {
@@ -325,6 +328,7 @@ type gosdkOAuthHandler struct {
 	authMu                sync.Mutex
 	authorized            bool
 	authorizationErr      error
+	onAuthenticated       func()
 	inner                 *authsdk.AuthorizationCodeHandler
 	tokenFile             string
 	prmMu                 sync.Mutex
@@ -417,6 +421,9 @@ func (g *gosdkOAuthHandler) Authorize(ctx context.Context, req *http.Request, re
 		log.Printf("[error] MCP OAuth: Authorize failed: %v", err)
 	} else {
 		g.authorized = true
+		if g.onAuthenticated != nil {
+			g.onAuthenticated()
+		}
 		log.Printf("[debug] MCP OAuth: Authorize completed")
 	}
 	return err

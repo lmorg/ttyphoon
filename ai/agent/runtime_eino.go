@@ -748,6 +748,7 @@ func (r *einoRuntime) initOpenAI() error {
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel:      chatModel,
 		ToolsConfig:           toolsConfig,
+		ToolReturnDirectly:    map[string]struct{}{TOOL_START_MCP_SERVER: {}},
 		MaxStep:               r.agent.MaxIterations(),
 		StreamToolCallChecker: streamToolCallCheckerAllChunks,
 	})
@@ -792,6 +793,7 @@ func (r *einoRuntime) initAnthropic() error {
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
 		ToolCallingModel:      chatModel,
 		ToolsConfig:           toolsConfig,
+		ToolReturnDirectly:    map[string]struct{}{TOOL_START_MCP_SERVER: {}},
 		MaxStep:               r.agent.MaxIterations(),
 		StreamToolCallChecker: streamToolCallCheckerAllChunks,
 	})
@@ -826,9 +828,10 @@ func (r *einoRuntime) initOllama() error {
 	r.chatModel = chatModel
 
 	r.agentReact, err = react.NewAgent(context.Background(), &react.AgentConfig{
-		ToolCallingModel: chatModel,
-		ToolsConfig:      toolsConfig,
-		MaxStep:          r.agent.MaxIterations(),
+		ToolCallingModel:   chatModel,
+		ToolsConfig:        toolsConfig,
+		ToolReturnDirectly: map[string]struct{}{TOOL_START_MCP_SERVER: {}},
+		MaxStep:            r.agent.MaxIterations(),
 	})
 	if err != nil {
 		return err
@@ -1188,13 +1191,8 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 	}
 	cbHandler := einoCBUtils.NewHandlerHelper().ChatModel(modelHandler).Handler()
 
-	stream, err := r.agentReact.Stream(ctx,
-		buildEinoConversationMessages(history, messages),
-		einoAgent.WithComposeOptions(compose.WithCallbacks(cbHandler)),
-	)
-	if err != nil {
-		return "", err
-	}
+	stream := r.streamWithMcpLaunches(ctx, buildEinoConversationMessages(history, messages),
+		einoAgent.WithComposeOptions(compose.WithCallbacks(cbHandler)))
 	defer stream.Close()
 
 	// Reasoning is streamed to the frontend and log via the callback above; the outer loop only
@@ -1252,6 +1250,106 @@ func (r *einoRuntime) runLLMWithMessageStream(ctx context.Context, messages []*s
 	)
 
 	return response.String(), nil
+}
+
+// MCP startup changes the tool set. Finish that graph's tool batch, retain its
+// full message history, and bind a fresh graph before the next model turn.
+func (r *einoRuntime) streamWithMcpLaunches(ctx context.Context, messages []*schema.Message, options ...einoAgent.AgentOption) *schema.StreamReader[*schema.Message] {
+	reader, writer := schema.Pipe[*schema.Message](1)
+	go func() {
+		defer writer.Close()
+		runner := r.agentReact
+		for launches := 0; ; launches++ {
+			futureOption, future := react.WithMessageFuture()
+			runOptions := append(append([]einoAgent.AgentOption{}, options...), futureOption)
+			stream, err := runner.Stream(ctx, messages, runOptions...)
+			if err != nil {
+				writer.Send(nil, err)
+				return
+			}
+			type capturedMessages struct {
+				messages []*schema.Message
+				err      error
+			}
+			captured := make(chan capturedMessages, 1)
+			go func() {
+				result := capturedMessages{}
+				iterator := future.GetMessageStreams()
+				for {
+					part, ok, err := iterator.Next()
+					if err != nil {
+						result.err = err
+						break
+					}
+					if !ok {
+						break
+					}
+					message, err := schema.ConcatMessageStream(part)
+					if err != nil {
+						result.err = err
+						break
+					}
+					result.messages = append(result.messages, message)
+				}
+				captured <- result
+			}()
+			launched := false
+			for {
+				message, recvErr := stream.Recv()
+				if recvErr == io.EOF {
+					break
+				}
+				if recvErr != nil {
+					err = recvErr
+					break
+				}
+				if message != nil && message.Role == schema.Tool && message.ToolName == TOOL_START_MCP_SERVER {
+					launched = true
+					continue
+				}
+				if writer.Send(message, nil) {
+					stream.Close()
+					return
+				}
+			}
+			stream.Close()
+			result := <-captured
+			if err != nil {
+				writer.Send(nil, err)
+				return
+			}
+			if result.err != nil {
+				writer.Send(nil, result.err)
+				return
+			}
+			if !launched {
+				return
+			}
+			if launches >= max(1, r.agent.MaxIterations()) {
+				writer.Send(nil, fmt.Errorf("MCP startup continuation exceeds max steps"))
+				return
+			}
+			if err := ctx.Err(); err != nil {
+				writer.Send(nil, err)
+				return
+			}
+			messages = append(messages, result.messages...)
+			tools, err := r.toolsConfig()
+			if err == nil {
+				runner, err = react.NewAgent(ctx, &react.AgentConfig{
+					ToolCallingModel: r.chatModel, ToolsConfig: tools,
+					MaxStep:               r.agent.MaxIterations(),
+					ToolReturnDirectly:    map[string]struct{}{TOOL_START_MCP_SERVER: {}},
+					StreamToolCallChecker: streamToolCallCheckerAllChunks,
+				})
+			}
+			if err != nil {
+				writer.Send(nil, err)
+				return
+			}
+		}
+	}()
+	return reader
 }
 
 func isMaxStepError(err error) bool {

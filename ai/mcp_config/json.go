@@ -19,6 +19,7 @@ type ConfigT struct {
 type ServersT map[string]ServerT
 
 type ServerT struct {
+	Description string `json:"description,omitempty"`
 	// Command is the executable name for stdio transport (type: "command")
 	Command string `json:"command"`
 	// Args are arguments to pass to the command
@@ -113,6 +114,7 @@ func ReadJson(filename string) (*ConfigT, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	b, err := io.ReadAll(f)
 	if err != nil {

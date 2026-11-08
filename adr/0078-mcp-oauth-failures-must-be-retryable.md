@@ -23,7 +23,9 @@ The frontend hid the resulting reason behind a generic load-failure message.
 
 - OAuth callbacks are automatic only. A listener failure is an actionable
   connection error, never a request to paste a callback URL. Keep the original
-  exported hook fields compatible, but do not invoke manual callback hooks.
+  manual callback hook fields compatible, but do not invoke them. The browser
+  opener now returns errors so login-window failures can abort immediately
+  (see [0094](0094-mcp-oauth-login-window.md)).
 - Callback waits honor setup cancellation and the two-minute callback limit.
   Close the loopback listener on every exit, including cancellation, timeout,
   provider denial and failed exchange. Reject stale callback states without

@@ -10,9 +10,14 @@ import (
 )
 
 func Open(app *application.App, rawURL string) error {
+	_, err := OpenManaged(app, rawURL)
+	return err
+}
+
+func OpenManaged(app *application.App, rawURL string) (func(), error) {
 	parsedURL, err := parseWebURL(rawURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -23,7 +28,7 @@ func Open(app *application.App, rawURL string) error {
 		AlwaysOnTop: config.Config.Window.AlwaysOnTop,
 	})
 	window.Focus()
-	return nil
+	return window.Close, nil
 }
 
 func parseWebURL(rawURL string) (*url.URL, error) {

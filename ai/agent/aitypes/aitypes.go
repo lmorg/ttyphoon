@@ -27,6 +27,14 @@ type Tool interface {
 	Description() string
 }
 
+const ToolStartMcpServer = "startMcpServer"
+
+type McpServer struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
 // StringInputTool is the compatibility contract for tools that consume JSON
 // arguments as a string instead of a decoded value.
 type StringInputTool interface {

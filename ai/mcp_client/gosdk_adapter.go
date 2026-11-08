@@ -35,6 +35,26 @@ type GoSDKClient struct {
 	reconnect func(ctx context.Context) (*mcp_sdk.ClientSession, error)
 }
 
+type startupCancelableTransport struct {
+	mcp_sdk.Transport
+	stop func() bool
+}
+
+func (t *startupCancelableTransport) Connect(ctx context.Context) (mcp_sdk.Connection, error) {
+	connection, err := t.Transport.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// HTTP connections detach their lifetime from ctx. During the handshake,
+	// explicitly close them on cancellation to unblock a stalled request.
+	t.stop = context.AfterFunc(ctx, func() {
+		if err := connection.Close(); err != nil {
+			log.Printf("[error] MCP: close cancelled startup connection: %v", err)
+		}
+	})
+	return connection, nil
+}
+
 // ConnectCmdLineGoSDK connects to a local MCP server process using the Go SDK transports.
 func ConnectCmdLineGoSDK(overrides *mcp_config.OverrideT, envvars []string, command string, args ...string) (*GoSDKClient, error) {
 	return ConnectCmdLineGoSDKContext(context.Background(), overrides, envvars, command, args...)
@@ -94,13 +114,17 @@ func ConnectHttpGoSDKContext(ctx context.Context, overrides *mcp_config.Override
 	// handler reuses the persisted token, so reconnecting re-authenticates a
 	// previously authenticated client without a new browser round-trip.
 	connect := func(ctx context.Context) (*mcp_sdk.ClientSession, error) {
-		transport := &mcp_sdk.StreamableClientTransport{
-			Endpoint:     endpoint,
-			HTTPClient:   http.DefaultClient,
-			OAuthHandler: oauth,
+		transport := &startupCancelableTransport{
+			Transport: &mcp_sdk.StreamableClientTransport{
+				Endpoint:     endpoint,
+				HTTPClient:   http.DefaultClient,
+				OAuthHandler: oauth,
+			},
 		}
-
 		sess, err := client.Connect(ctx, transport, nil)
+		if transport.stop != nil {
+			transport.stop()
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("gosdk: HTTP connection cancelled: %w", ctx.Err())

@@ -1,4 +1,43 @@
-# MCP Server OAuth Configuration Options
+# MCP Server Configuration Options
+
+## OAuth Login Window
+
+MCP OAuth login opens in a new, focused built-in browser window by default.
+It reuses the URL windows opened by middle-clicking Notes Markdown links;
+each login opens a separate window, and multiple URL windows can coexist.
+These windows also respect `Window.AlwaysOnTop`.
+After successful authorization and token exchange, the login window closes
+automatically. Failed or cancelled logins stay open; unrelated URL windows and
+external-browser tabs are not closed.
+
+To use your external browser instead, add this to your ttyphoon YAML config:
+
+```yaml
+AI:
+  OAuthUseBuiltinWebview: false
+```
+
+The Go setting is `config.Config.Ai.OAuthUseBuiltinWebview`. The built-in
+webview does not share your external browser's login session. Some identity
+providers reject embedded login windows; select the external browser for those
+providers. The selection is explicit: failures do not silently switch browsers.
+OAuth callback validation and token storage are unchanged.
+
+## Descriptions and On-Demand Startup
+
+Each server accepts an optional `description` explaining what its tools are useful
+for. The AI sees the configured server names and descriptions, not their commands,
+environment variables, URLs, or OAuth settings.
+
+The built-in `startMcpServer` tool is enabled by default and asks for permission
+before starting a server. Its approval prompt includes the server name and the
+AI's justification for needing it. It can only start servers already present in
+ttyphoon's MCP configuration files; it cannot supply new commands or URLs.
+After startup, the server's tools are available within the same AI task.
+
+Startup permission is separate from permissions for the tools the server exposes.
+The usual per-invocation/per-prompt choices apply, and AI settings can override the
+startup tool's default approval policy. Startup is not available to sub-agents.
 
 ## Tool Permission Defaults
 
@@ -25,6 +64,7 @@ The `oauth` block inside each server entry is fully optional. If omitted entirel
   "mcp": {
     "servers": {
       "MyServer": {
+        "description": "Search project tickets and retrieve their acceptance criteria",
         "type": "http",
         "url": "https://mcp.example.com/v1/mcp",
         "oauth": {

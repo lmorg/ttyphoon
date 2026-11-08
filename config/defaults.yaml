@@ -178,6 +178,8 @@ Window:
   AlwaysOnTop: false
 
 AI:
+  # Set false to authenticate MCP servers in your external browser instead.
+  OAuthUseBuiltinWebview: true
   MaxIterations: 10
   MaxContinuations: 3
   RequestTimeout: 60m

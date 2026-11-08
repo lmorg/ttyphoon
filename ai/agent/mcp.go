@@ -95,6 +95,13 @@ func (agent *Agent) StartServersFromConfig(config *mcp_config.ConfigT) error {
 }
 
 func (agent *Agent) StartServerFromConfigServer(config *mcp_config.ConfigT, server string) error {
+	return agent.startServerFromConfigServer(context.Background(), config, server)
+}
+
+func (agent *Agent) startServerFromConfigServer(ctx context.Context, config *mcp_config.ConfigT, server string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if config == nil {
 		return fmt.Errorf("MCP config is nil")
 	}
@@ -113,10 +120,17 @@ func (agent *Agent) StartServerFromConfigServer(config *mcp_config.ConfigT, serv
 		return fmt.Errorf("MCP server %q not found in %s", server, config.Source)
 	}
 
-	return agent.startServerFromConfigEntry(config.Source, server, svr, cache)
+	return agent.startServerFromConfigEntryContext(ctx, config.Source, server, svr, cache)
 }
 
 func (agent *Agent) startServerFromConfigEntry(source, name string, svr mcp_config.ServerT, cache *map[string]string) error {
+	return agent.startServerFromConfigEntryContext(context.Background(), source, name, svr, cache)
+}
+
+func (agent *Agent) startServerFromConfigEntryContext(parent context.Context, source, name string, svr mcp_config.ServerT, cache *map[string]string) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	agent.mcpMu.Lock()
 	if agent.mcpClosed {
 		agent.mcpMu.Unlock()
@@ -137,7 +151,7 @@ func (agent *Agent) startServerFromConfigEntry(source, name string, svr mcp_conf
 	if agent.mcpLoads == nil {
 		agent.mcpLoads = make(map[string]context.CancelFunc)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 3*time.Minute)
 	agent.mcpLoads[name] = cancel
 	agent.mcpMu.Unlock()
 	defer func() {
@@ -235,6 +249,7 @@ func (agent *Agent) ListMcpServers() []map[string]interface{} {
 			servers = append(servers, map[string]interface{}{
 				"key":               makeMcpServerKey(cfgPath, name),
 				"name":              name,
+				"description":       svr.Description,
 				"source":            cfgPath,
 				"loaded":            loaded,
 				"loadable":          !loadedElsewhere,

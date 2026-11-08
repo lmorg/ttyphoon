@@ -99,6 +99,8 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0090](0090-kitty-graphics-static-images.md) | Kitty graphics static-image subset and deferred protocol features | Terminal |
 | [0091](0091-notes-markdown-middle-click-opens-wails-window.md) | Open Notes Markdown web links in a Wails window on middle-click | Notes |
 | [0092](0092-wails-window-packages-and-feature-bindings.md) | Organize Wails code by window and feature | Frontend |
+| [0093](0093-approved-on-demand-mcp-startup.md) | Approved on-demand startup of configured MCP servers | AI tools |
+| [0094](0094-mcp-oauth-login-window.md) | Select built-in or external browser for MCP OAuth login | MCP |
 
 ## Recurring themes
 
