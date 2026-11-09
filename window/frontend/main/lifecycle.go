@@ -15,7 +15,7 @@ func (a *WApp) ServiceStartup(ctx context.Context, _ application.ServiceOptions)
 	a.ctx = runtime.WithRuntime(ctx, a.uiRuntime)
 
 	// Set up log capture to emit events
-	lw := &logWriter{ctx: ctx}
+	lw := &logWriter{ctx: a.ctx}
 	log.SetOutput(lw)
 
 	hotkeys.SetTerminalFocusFn(a.FocusTerminalPane)

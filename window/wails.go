@@ -4,6 +4,7 @@ import (
 	"io/fs"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/about"
 	"github.com/lmorg/ttyphoon/window/frontend/browser"
 	mainwindow "github.com/lmorg/ttyphoon/window/frontend/main"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -28,7 +29,18 @@ func StartWails(wailsAssets fs.FS, appIcon []byte) {
 	})
 
 	menu := application.NewMenu()
-	menu.AddSubmenu(app.Name()).AddRole(application.About)
+	appMenu := menu.AddSubmenu(app.Name())
+	appMenu.Add("About " + app.Name()).OnClick(func(*application.Context) {
+		wapp.WindowShow()
+		wailsApp.Event.Emit("showMarkdownModal", map[string]string{
+			"id":       "about",
+			"markdown": about.Markdown(),
+		})
+	})
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Quit)
+
+	menu.AddRole(application.EditMenu)
 	wailsApp.Menu.SetApplicationMenu(menu)
 
 	mainwindow.NewWindow(wailsApp, wapp)

@@ -48,12 +48,20 @@ overwrites, wide characters, and reflow.
 - HTTP(S) tooltips show `/` for an absent path, a hostname (`f015`) only for
   non-IP hosts, and a port (`f13d`) only when explicitly present in the URL.
 - HTTP(S) tooltip rows appear in this order: Scheme, Hostname or IP, Port,
-  Path, User, Pass, then query parameters. Omit absent optional fields without
+  Path, User, Pass, query parameters, then Bookmark (`f02e`) when a non-empty
+  URL fragment exists. Decode and HTML-escape the fragment; an empty `#` or an
+  encoded hash in the path/query does not add a Bookmark row.
+  Omit absent optional fields without
   changing the order of remaining rows. File tooltips show Path then File;
   other schemes and malformed HTTP(S) targets show Scheme then Path.
+- `mailto:` tooltips show Scheme, a non-empty Email recipient (`f0e0`),
+  query fields such as subject, body, cc, and bcc, then a non-empty Bookmark
+  fragment (`f02e`). Percent-decode recipients without turning literal plus
+  signs into spaces and HTML-escape all values. Recipient-less compose links
+  omit Email. Malformed mail targets retain the Scheme/Path fallback.
 - Render hyperlink tooltip HTML once during element generation and reuse the
   cached string on hover. Keep rendering in `utils/hyperlink_tooltip` without
-  renderer or element dependencies; Notes HTTP(S) and file-link hovers use the
+  renderer or element dependencies; Notes HTTP(S), file, and mailto-link hovers use the
   same renderer through `GetHyperlinkTooltip`.
 - Highlight the actual surviving linked cells, rather than redrawing the
   original label. Underline-only hover uses a rendering copy of SGR and does

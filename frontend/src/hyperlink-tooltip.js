@@ -8,7 +8,7 @@ export function createHyperlinkTooltip({ getTooltip, showTooltip, closeTooltip, 
             const request = { anchor, href };
             active = request;
             closeTooltip();
-            if (!/^(https?|file):/i.test(href)) {
+            if (!/^(https?|file|mailto):/i.test(href)) {
                 await showTooltip(fallback);
                 return;
             }

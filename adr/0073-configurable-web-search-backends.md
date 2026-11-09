@@ -18,14 +18,19 @@ or a provider-specific model integration.
 - Own web search in `ai/tools/websearch`, with separate tool dispatch,
   configuration, DuckDuckGo, SearXNG, metadata discovery, and text-processing
   files. Keep page scraping in `ai/tools/webtools`. Register both packages
-  through `ai/tools/tools.go`, retaining tool names and permissions. Move all
+  through `ai/tools/tools.go`, retaining default permissions. Move all
   existing search tests with their implementation rather than duplicating them
   in the scraping package.
-- Reuse the existing structured search tool and retain its `searchDuckDuckGo`
-  identifier, enabled state, and default permissions. Saved permissions and
-  invocation histories must not silently move to a different tool identity.
-  Its description identifies the configured provider. `scrapeWebPage` remains
-  a separate tool; searching does not fetch result URLs automatically.
+- Updated 2026-11-09: expose the structured search tool as `webSearch` for both
+  providers, replacing the provider-specific `searchDuckDuckGo` identifier.
+  Keep its enabled state and default permissions. This is an intentional
+  identity change: existing permission/history entries under the old name are
+  not automatically migrated or aliased.
+- Keep provider-specific descriptions in `duckduckgo_description.md` and
+  `searxng_description.md`, embedded with `go:embed`. Use Markdown headings,
+  lists, and JSON examples while preserving provider selection and guidance.
+  `scrapeWebPage` remains a separate tool; searching does not fetch result URLs
+  automatically.
 - Read `TTYPHOON_WEB_SEARCH_PROVIDER` when constructing the tool. Empty or
   `duckduckgo` preserves the existing default. `searxng` requires
   `TTYPHOON_SEARXNG_URL`, an HTTP(S) instance URL or search endpoint. Preserve

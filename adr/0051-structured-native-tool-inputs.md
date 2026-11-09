@@ -41,16 +41,19 @@ remove the wrapper schema.
   arguments to the MCP adapter through `JSONSchemaTool` / `StringInputTool`.
 - The native migration is complete: dateTime, readDirectory, grep, readFiles,
   writeFile, insertLines, patchFile, createGraph, generateImage, jq, bash,
-  envVars, delegate, report, askUser, searchDuckDuckGo, and
+  envVars, delegate, report, askUser, webSearch, and
   scrapeWebPage all implement `StructuredTool`.
 - `bash` accepts a `{script, summary}` object and executes Bash in a cloned terminal pane
   for both commands and scripts. It replaces the separate `interactive` tool
   (ADR 0056). `envVars` uses an empty JSON object.
 - `delegate` and `report` use arrays of `{name, prompt}` objects; `askUser` uses
   a `{question, choices}` object.
-- `searchDuckDuckGo` uses a `{query}` object for search and an
+- `webSearch` (formerly `searchDuckDuckGo`) uses a `{query}` object for search and an
   `{action:"discover"}` object for SearXNG discovery, with optional filters and
   refresh behavior described in ADR 0073; `scrapeWebPage` uses a `{url}` object.
+- In the tool-management metadata modal, render a Markdown horizontal rule
+  between the tool description and the generated JSON Schema section so
+  description headings and examples remain visually distinct from the schema.
 - `dateTime` accepts an optional positive amount, unit, and before/after
   direction; omitting them returns the current local date and time.
 - Updated 2026-10-21: `readFiles` accepts a `files` array of objects containing

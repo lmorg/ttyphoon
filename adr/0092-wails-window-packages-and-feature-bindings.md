@@ -67,11 +67,21 @@ application behavior it preserved:
   asynchronous `OnWindowEvent` listener raced Wails' own closing listener.
 - Showing the main window also focuses it, including the show branch of the
   F12 global visibility toggle. Hiding the window does not request focus.
-- Keep the standard Wails About dialog and native browser-context-menu
-  suppression without interfering with application menus.
-- Set an explicit application menu containing only the app-name submenu and
-  Wails' About role. Do not include Wails' default Edit, Window, Services, Hide,
-  or Quit entries; in-app context menus remain unchanged.
+- Updated 2026-11-09: the app-name submenu contains About and the native Quit
+  role, separated by a separator. About shows and focuses the main window and
+  opens the shared Markdown modal through `showMarkdownModal`, using document
+  ID `about`. `utils/about.Markdown` renders an embedded Markdown template with
+  application and build metadata; it replaces the standard Wails About dialog.
+- Include Wails' native Edit menu alongside the app-name submenu. Its native
+  roles preserve Copy, Paste, Cut, Undo, Redo, and Select All shortcuts in
+  Monaco and other editable webview controls. Replacing the default application
+  menu without restoring these roles breaks native macOS editing shortcuts.
+  Keep native browser-context-menu suppression without interfering with these
+  application menus; in-app context menus remain unchanged.
+- Runtime-dependent callbacks must use the context returned by
+  `utils/wailsruntime.WithRuntime`, not the original service-startup context.
+  In particular, log capture uses `a.ctx` to deliver `notesLog` events; a bare
+  context has no desktop runtime and cannot emit frontend events.
 - Keep `ttyphoon://` interactions inside the application without registering
   the scheme with the operating system.
 - Preserve browser-window link gestures, focus, and always-on-top behavior
@@ -122,6 +132,7 @@ application behavior it preserved:
 - [ADR 0091: Notes web link windows](0091-notes-markdown-middle-click-opens-wails-window.md)
 - `main.go` - executable startup and embedded assets
 - `window/wails.go` - application composition, service registration, and menu
+- `utils/about/about.go`, `utils/about/about.md` - rendered About document
 - `window/frontend/main` - main-window service, feature bindings, adapter,
   lifecycle, and relocated tests
 - `window/frontend/browser` - browser-window creation and URL validation

@@ -1,12 +1,12 @@
 {
 	"fixed": {
-		"file_version": "1.2.1000",
-		"product_version": "1.2.1000"
+		"file_version": "1.2.2000",
+		"product_version": "1.2.2000"
 	},
 	"info": {
 		"0409": {
-			"FileVersion": "1.2.1000",
-			"ProductVersion": "1.2.1000",
+			"FileVersion": "1.2.2000",
+			"ProductVersion": "1.2.2000",
 			"CompanyName": "Laurence Morgan",
 			"FileDescription": "The Next Generation Terminal Emulator",
 			"LegalCopyright": "2023-2026 Laurence Morgan",

@@ -27,8 +27,16 @@ func TestHTML(t *testing.T) {
 			want: []string{"<code>http</code>", "<code>example.com/100% &lt;done&gt;</code>"},
 		},
 		{
-			name: "other scheme", scheme: "mailto", target: "person@example.com",
-			want: []string{"<code>mailto</code>", "<code>person@example.com</code>"},
+			name: "email", scheme: "mailto", target: "person+tag%40example.com?subject=Hello%20%3Cworld%3E&body=Hi#section",
+			want: []string{`aria-label="Email">&#xf0e0;`, "<code>person+tag@example.com</code>", "<code>subject: Hello &lt;world&gt;</code>", "<code>body: Hi</code>", `aria-label="Bookmark">&#xf02e;`, "<code>section</code>"},
+		},
+		{
+			name: "malformed email", scheme: "mailto", target: "person%ZZ@example.com",
+			want: []string{`aria-label="Path"`, "<code>person%ZZ@example.com</code>"},
+		},
+		{
+			name: "bookmark escaping", scheme: "https", target: "example.com/docs#%3Csection%3E",
+			want: []string{`aria-label="Bookmark">&#xf02e;`, "<code>&lt;section&gt;</code>"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -39,6 +47,19 @@ func TestHTML(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBookmarkOnlyForNonemptyFragment(t *testing.T) {
+	for _, target := range []string{"example.com/docs", "example.com/docs#", "example.com/docs%23section", "example.com/docs?q=%23section"} {
+		if got := HTML("https", target); strings.Contains(got, "&#xf02e;") {
+			t.Errorf("unexpected bookmark for %q: %s", target, got)
+		}
+		for _, target := range []string{"person@example.com", "person@example.com#", "person%23tag@example.com", "person@example.com?subject=%23section"} {
+			if got := HTML("mailto", target); strings.Contains(got, "&#xf02e;") {
+				t.Errorf("unexpected bookmark for %q: %s", target, got)
+			}
+		}
 	}
 }
 
@@ -87,8 +108,8 @@ func TestTooltipRowOrder(t *testing.T) {
 	}{
 		{
 			name: "hostname with all optional fields", scheme: "https",
-			target: "alice:secret@example.com:8443/docs?q=first&q=second",
-			labels: []string{"Scheme", "Hostname", "Port", "Path", "User", "Pass", "q", "q"},
+			target: "alice:secret@example.com:8443/docs?q=first&q=second#section",
+			labels: []string{"Scheme", "Hostname", "Port", "Path", "User", "Pass", "q", "q", "Bookmark"},
 		},
 		{
 			name: "IP with all optional fields", scheme: "http",
@@ -112,7 +133,15 @@ func TestTooltipRowOrder(t *testing.T) {
 			labels: []string{"Scheme", "Path"},
 		},
 		{
-			name: "other scheme", scheme: "mailto", target: "person@example.com",
+			name: "email with details", scheme: "mailto", target: "person@example.com?subject=Hello#section",
+			labels: []string{"Scheme", "Email", "subject", "Bookmark"},
+		},
+		{
+			name: "email without recipient", scheme: "mailto", target: "?subject=Hello",
+			labels: []string{"Scheme", "subject"},
+		},
+		{
+			name: "other scheme", scheme: "tel", target: "+123456789",
 			labels: []string{"Scheme", "Path"},
 		},
 	} {

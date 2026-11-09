@@ -851,6 +851,29 @@ describe('notes rendering', () => {
         expect(servers.querySelectorAll('[data-mcp-index]')).toHaveLength(1);
     });
 
+    it('separates the tool description from its JSON schema with a horizontal rule', async () => {
+        getAIToolsListMock.mockResolvedValue([{
+            name: 'webSearch',
+            description: 'Search the web.',
+            schema: '{"type":"object"}',
+            state: 'always',
+        }]);
+        await importNotesModule();
+        document.getElementById('notes-tools-ai-settings').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('#notes-ai-settings-tools-list .notes-ai-settings-tool-name').click();
+        await flushPromises();
+        await flushPromises();
+
+        const content = document.getElementById('notes-ai-tool-meta-content');
+        const separator = content.querySelector('hr');
+        expect(separator).not.toBeNull();
+        expect(separator.previousElementSibling.textContent).toBe('Search the web.');
+        expect(separator.nextElementSibling.textContent).toBe('JSON Schema');
+        expect(content.textContent).toContain('"type"');
+    });
+
     it.each([
         [false, true, ''],
         [true, true, '/fixture/mcp.json'],

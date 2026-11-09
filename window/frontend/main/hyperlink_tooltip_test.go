@@ -11,6 +11,7 @@ func TestGetHyperlinkTooltip(t *testing.T) {
 	for _, test := range []struct{ url, scheme, target string }{
 		{"HTTPS://192.0.2.1/a", "https", "192.0.2.1/a"},
 		{"file:///tmp/100% done.txt", "file", "/tmp/100% done.txt"},
+		{"mailto:person@example.com?subject=Hello#section", "mailto", "person@example.com?subject=Hello#section"},
 	} {
 		got, err := app.GetHyperlinkTooltip(test.url)
 		if err != nil {

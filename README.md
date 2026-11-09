@@ -439,8 +439,7 @@ search:
 Many public instances disable JSON or rate-limit automated requests; a private
 instance is preferable. Searches return titles, URLs, and plain-text snippets,
 not complete pages. The existing `scrapeWebPage` tool can read a selected page.
-For compatibility with saved tool permissions, the tool keeps its existing
-`searchDuckDuckGo` identifier even when its description and backend use SearXNG.
+The tool is exposed as `webSearch` regardless of the configured provider.
 
 SearXNG accepts optional categories, engines, language, and time-range filters,
 plus bounded pagination and result limits:

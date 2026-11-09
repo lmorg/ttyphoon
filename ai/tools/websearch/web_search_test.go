@@ -57,8 +57,11 @@ func TestSearchProviderConfiguration(t *testing.T) {
 				return
 			}
 			search := tool.(*DuckDuckGoSearch)
-			if search.endpoint != test.endpoint || search.Name() != "searchDuckDuckGo" {
+			if search.endpoint != test.endpoint || search.Name() != "webSearch" {
 				t.Fatalf("search configuration = endpoint:%q name:%q", search.endpoint, search.Name())
+			}
+			if test.provider != "searxng" && !strings.Contains(search.Description(), "DuckDuckGo") {
+				t.Fatal("description does not identify the active search provider")
 			}
 			if test.provider == "searxng" && !strings.Contains(search.Description(), "SearXNG") {
 				t.Fatal("description does not identify the active search provider")

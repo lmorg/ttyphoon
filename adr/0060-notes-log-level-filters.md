@@ -23,6 +23,11 @@ entries.
   rendered through the Font Awesome font stack.
 - Group toolbar controls by selection, level filters, display, and actions, with
   visible separators between groups.
+- After the Wails v3 migration, standard Go log capture must emit `notesLog`
+  using the runtime-wrapped application context (`a.ctx`). The original
+  service-startup context does not contain the desktop runtime, so using it
+  sends logs only to stderr, not the panel. Keep stderr output alongside
+  frontend delivery.
 
 ## Consequences
 
@@ -38,3 +43,5 @@ entries.
 - `frontend/src/notes.css` - level filtering and toolbar presentation
 - `frontend/src/notes-log-panel.test.js`, `frontend/src/notes.test.js` - behavior
   and toolbar regressions
+- `window/frontend/main/lifecycle.go`, `window/frontend/main/logging.go`,
+  `window/frontend/main/logging_test.go` - runtime context and log-event delivery

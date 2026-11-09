@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "Ttyphoon"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "1.2.1000"
+    !define INFO_PRODUCTVERSION "1.2.2000"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "2023-2026 Laurence Morgan"

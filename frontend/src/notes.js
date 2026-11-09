@@ -13044,7 +13044,7 @@ function formatAIToolMetadataMarkdown(tool) {
         schema = '{}';
     }
 
-    return `## ${name}\n\n- [${allowInSubagent ? 'x' : ' '}] Allow in sub-agent\n\n${description}\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
+    return `## ${name}\n\n- [${allowInSubagent ? 'x' : ' '}] Allow in sub-agent\n\n${description}\n\n---\n\n### JSON Schema\n\n\`\`\`json\n${schema}\n\`\`\``;
 }
 
 function formatAIMcpServerMetadataMarkdown(server) {

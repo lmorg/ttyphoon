@@ -25,7 +25,7 @@ styling, and can render Markdown.
 - Route feature-specific tooltip events through the shared Notes tooltip
   integration. Use the existing show and close functions when a component
   already owns that integration.
-- Notes HTTP(S) and file link hovers request HTML through `GetHyperlinkTooltip`,
+- Notes HTTP(S), file, and `mailto:` link hovers request HTML through `GetHyperlinkTooltip`,
   using the same Go `utils/hyperlink_tooltip` renderer as terminal hyperlinks.
   Cache the request per anchor and URL; invalidate on URL changes and ignore
   late responses after leaving or switching links. Internal AI links retain

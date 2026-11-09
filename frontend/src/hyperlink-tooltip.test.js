@@ -14,6 +14,16 @@ function setup(getTooltip = vi.fn().mockResolvedValue('<div>URL details</div>'))
 }
 
 describe('Notes hyperlink tooltip', () => {
+    it('requests shared Go tooltips for mailto links and caches them', async () => {
+        const state = setup();
+        const href = 'mailto:person@example.com?subject=Hello#section';
+        await state.tooltip.show(state.anchor, href, 'fallback');
+        state.tooltip.close();
+        await state.tooltip.show(state.anchor, href, 'fallback');
+        expect(state.getTooltip).toHaveBeenCalledExactlyOnceWith(href);
+        expect(state.showTooltip).toHaveBeenCalledWith('<div>URL details</div>');
+    });
+
     it('caches per anchor and URL, and updates changed URLs', async () => {
         const state = setup();
         await state.tooltip.show(state.anchor, 'https://example.com', 'fallback');
