@@ -18,4 +18,5 @@ This is a terminal emulator and ide.
     - The frontend and backend commincate via an IPC using the Go package `wails`
     - In general, most of the core logic should live in the backend except for when that logic exclusively relates to the frontend UI/UX.
 - Any changes can be tested using `npm` and/or `go test`.
+- Backend logging in Go uses the standard `log` package with a `[error]`/`[warn]`/`[info]`/`[debug]`/`[trace]` prefix and an area tag, e.g. `log.Printf("[debug] tmux: ...")`. See ADR 0098.
 - The application has an inbuilt agent harness that is scoped per workspace

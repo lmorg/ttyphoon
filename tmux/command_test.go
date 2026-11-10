@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -674,6 +675,89 @@ func TestPaneInfoPreservesDirectoryWhenPaneFinishes(t *testing.T) {
 			}
 		})
 	}
+}
+
+type paneCreationTestRenderer struct {
+	types.Renderer
+}
+
+func (*paneCreationTestRenderer) DisplayNotification(types.NotificationType, string) {}
+func (*paneCreationTestRenderer) RefreshNotes()                                      {}
+func (*paneCreationTestRenderer) SetBlinkState(bool)                                 {}
+func (*paneCreationTestRenderer) TriggerRedraw()                                     {}
+
+func TestConcurrentPaneDiscoveryCreatesOnePane(t *testing.T) {
+	previousTmuxEnabled := config.Config.Tmux.Enabled
+	config.Config.Tmux.Enabled = false
+	t.Cleanup(func() { config.Config.Tmux.Enabled = previousTmuxEnabled })
+
+	tmux := &Tmux{
+		wins:           newWindowMap(),
+		panes:          newPaneMap(),
+		renderer:       &paneCreationTestRenderer{},
+		initialEnvVars: map[string]string{"TEST_PANE_ENV": "initial"},
+		pendingPaneState: map[string]paneStartupState{
+			"%42": {workingDirectory: "/tmp/clone", environment: map[string]string{"TEST_PANE_ENV": "cloned"}},
+		},
+	}
+	win := &WindowT{id: "@1", panes: newPaneMap()}
+	tmux.wins.Set(win.id, win)
+
+	const callers = 12
+	start := make(chan struct{})
+	results := make(chan *PaneT, callers)
+	var workers sync.WaitGroup
+	for range callers {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			results <- (&paneInfo{
+				Id:        "%42",
+				WindowId:  win.id,
+				Width:     80,
+				Height:    24,
+				Active:    true,
+				PathStart: "/tmp/tmux-start",
+			}).updatePane(tmux)
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(results)
+
+	var pane *PaneT
+	for result := range results {
+		if result == nil {
+			t.Fatal("concurrent pane discovery returned nil")
+		}
+		if pane == nil {
+			pane = result
+		} else if result != pane {
+			t.Fatal("concurrent pane discovery created multiple PaneT instances")
+		}
+	}
+
+	if got := tmux.panes.Get(pane.id); got != pane {
+		t.Fatal("global pane map does not contain the winning pane")
+	}
+	if got := win.panes.Get(pane.id); got != pane {
+		t.Fatal("window pane map does not contain the winning pane")
+	}
+	if pane.term == nil {
+		t.Fatal("winning pane has no terminal")
+	}
+	if got := pane.Pwd(); got != "/tmp/clone" {
+		t.Fatalf("seeded working directory = %q, want /tmp/clone", got)
+	}
+	if got := pane.term.GetEnvVars()["TEST_PANE_ENV"]; got != "cloned" {
+		t.Fatalf("seeded environment = %q, want cloned", got)
+	}
+	if got := tmux.pendingPaneState[pane.id]; got.workingDirectory != "" {
+		t.Fatalf("pane startup state was not consumed: %+v", got)
+	}
+
+	t.Cleanup(func() { pane.exit() })
 }
 
 func TestPaneInfoResizeUpdatesLocalTerminalWithoutEchoingTmux(t *testing.T) {

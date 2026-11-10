@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -153,6 +154,8 @@ type Tmux struct {
 	pendingPaneStateMu sync.Mutex
 	pendingPaneState   map[string]paneStartupState
 
+	paneCreationMu sync.Mutex
+
 	limiter    sync.Mutex
 	readerDead atomic.Bool
 	prefixTtl  time.Time
@@ -162,7 +165,7 @@ type Tmux struct {
 	layoutRefreshPending bool
 
 	pendingPaneOutputMu sync.Mutex
-	pendingPaneOutput   map[string][][]byte
+	pendingPaneOutput   map[string]pendingPaneOutputT
 
 	interactiveActionMu sync.Mutex
 	interactiveActions  map[string]interactiveActionEntry
@@ -176,6 +179,11 @@ type tmuxResponseT struct {
 type paneStartupState struct {
 	workingDirectory string
 	environment      map[string]string
+}
+
+type pendingPaneOutputT struct {
+	chunks       [][]byte
+	initializing bool
 }
 
 const (
@@ -199,7 +207,7 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 		wins:              newWindowMap(),
 		panes:             newPaneMap(),
 		renderer:          renderer,
-		pendingPaneOutput: make(map[string][][]byte),
+		pendingPaneOutput: make(map[string]pendingPaneOutputT),
 		initialEnvVars:    environmentMap(initialEnvironment),
 		pendingPaneState:  make(map[string]paneStartupState),
 	}
@@ -384,13 +392,16 @@ func (tmux *Tmux) queuePaneOutput(paneId string, chunk []byte) bool {
 	defer tmux.pendingPaneOutputMu.Unlock()
 
 	if tmux.pendingPaneOutput == nil {
-		tmux.pendingPaneOutput = make(map[string][][]byte)
+		tmux.pendingPaneOutput = make(map[string]pendingPaneOutputT)
 	}
 
 	chunk = bytes.Clone(chunk)
 	if pending, ok := tmux.pendingPaneOutput[paneId]; ok {
-		tmux.pendingPaneOutput[paneId] = append(pending, chunk)
-		return false
+		pending.chunks = append(pending.chunks, chunk)
+		retry := !pending.initializing
+		pending.initializing = true
+		tmux.pendingPaneOutput[paneId] = pending
+		return retry
 	}
 
 	if pane := tmux.panes.Get(paneId); pane != nil {
@@ -398,26 +409,46 @@ func (tmux *Tmux) queuePaneOutput(paneId string, chunk []byte) bool {
 		return false
 	}
 
-	tmux.pendingPaneOutput[paneId] = [][]byte{chunk}
+	tmux.pendingPaneOutput[paneId] = pendingPaneOutputT{
+		chunks:       [][]byte{chunk},
+		initializing: true,
+	}
 	return true
 }
 
 func (tmux *Tmux) finishPendingPaneOutput(paneId string, pane *PaneT, initErr error) {
-	tmux.pendingPaneOutputMu.Lock()
-	pending := tmux.pendingPaneOutput[paneId]
 	if initErr == nil && pane != nil {
-		for _, chunk := range pending {
-			pane.buf.Write(chunk)
+		tmux.flushPendingPaneOutput(paneId, pane)
+	} else {
+		tmux.pendingPaneOutputMu.Lock()
+		if pending, ok := tmux.pendingPaneOutput[paneId]; ok {
+			pending.initializing = false
+			tmux.pendingPaneOutput[paneId] = pending
+			log.Printf("[debug] tmux: pane %s initialization failed; retaining %d queued output chunks: %v", paneId, len(pending.chunks), initErr)
 		}
+		tmux.pendingPaneOutputMu.Unlock()
 	}
-	delete(tmux.pendingPaneOutput, paneId)
-	tmux.pendingPaneOutputMu.Unlock()
 
 	if initErr != nil && tmux.renderer != nil {
 		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, initErr.Error())
 	}
-	if initErr == nil && pane != nil {
+	if initErr == nil && pane != nil && tmux.renderer != nil {
 		tmux.renderer.RefreshWindowList()
+	}
+}
+
+func (tmux *Tmux) flushPendingPaneOutput(paneId string, pane *PaneT) {
+	tmux.pendingPaneOutputMu.Lock()
+	pending, ok := tmux.pendingPaneOutput[paneId]
+	if ok {
+		for _, chunk := range pending.chunks {
+			pane.buf.Write(chunk)
+		}
+		delete(tmux.pendingPaneOutput, paneId)
+	}
+	tmux.pendingPaneOutputMu.Unlock()
+	if ok {
+		log.Printf("[debug] tmux: flushed %d queued output chunks to pane %s", len(pending.chunks), paneId)
 	}
 }
 

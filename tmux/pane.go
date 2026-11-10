@@ -3,8 +3,10 @@ package tmux
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -78,6 +80,7 @@ type PaneT struct {
 	windowId     string
 	pwd          string
 	pwdMu        sync.RWMutex
+	updateMu     sync.Mutex
 	tmux         *Tmux
 	term         types.Term
 	buf          *runebuf.Buf
@@ -162,17 +165,6 @@ func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
 
 	pane.term.Start(pane)
 
-	tmux.panes.Set(pane.id, pane)
-	tmux.pendingPaneStateMu.Lock()
-	pendingState, hasPendingState := tmux.pendingPaneState[pane.id]
-	if hasPendingState {
-		delete(tmux.pendingPaneState, pane.id)
-	}
-	tmux.pendingPaneStateMu.Unlock()
-	if hasPendingState {
-		pane.setStartupState(pendingState)
-	}
-
 	return pane
 }
 
@@ -243,14 +235,15 @@ func (tmux *Tmux) updatePaneInfo(paneId string) error {
 			return fmt.Errorf("expecting info on a pane, instead got %T", info)
 		}
 
-		info.updatePane(tmux)
+		if pane := info.updatePane(tmux); pane != nil && !pane.closed {
+			tmux.flushPendingPaneOutput(info.Id, pane)
+		}
 	}
 
 	return nil
 }
 
 func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
-	var isNew bool
 	win := tmux.wins.Get(info.WindowId)
 	if win == nil || win.closed {
 		return nil
@@ -258,12 +251,62 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 
 	pane := tmux.panes.Get(info.Id)
 	if pane == nil {
-		isNew = true
-		pane = tmux.newPane(info)
+		caller := paneDiscoveryCaller()
+		tmux.paneCreationMu.Lock()
+		pane = tmux.panes.Get(info.Id)
+		isNew := pane == nil
+		if isNew {
+			log.Printf("[debug] tmux: creating pane %s in window %s (caller=%s)", info.Id, info.WindowId, caller)
+			pane = tmux.newPane(info)
+		} else {
+			log.Printf("[debug] tmux: duplicate creation of pane %s avoided; reusing existing pane (caller=%s)", info.Id, caller)
+		}
+		if pane != nil {
+			pane.updateMu.Lock()
+			info.updatePaneState(tmux, win, pane, isNew)
+			pane.updateMu.Unlock()
+		}
+		tmux.paneCreationMu.Unlock()
+		return pane
 	}
 
 	if pane.closed {
 		return pane
+	}
+
+	pane.updateMu.Lock()
+	defer pane.updateMu.Unlock()
+	info.updatePaneState(tmux, win, pane, false)
+	return pane
+}
+
+// paneDiscoveryCaller names the first function outside the pane-update path,
+// identifying which notification or API triggered pane discovery.
+func paneDiscoveryCaller() string {
+	pcs := make([]uintptr, 16)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if !strings.HasSuffix(frame.Function, ".(*paneInfo).updatePane") &&
+			!strings.HasSuffix(frame.Function, ".(*Tmux).updatePaneInfo") {
+			if i := strings.LastIndex(frame.Function, "/"); i >= 0 {
+				return frame.Function[i+1:]
+			}
+			return frame.Function
+		}
+		if !more {
+			return "unknown"
+		}
+	}
+}
+
+func (info *paneInfo) updatePaneState(tmux *Tmux, win *WindowT, pane *PaneT, isNew bool) {
+	if isNew {
+		tmux.pendingPaneStateMu.Lock()
+		if pending, ok := tmux.pendingPaneState[pane.id]; ok {
+			delete(tmux.pendingPaneState, pane.id)
+			pane.setStartupState(pending)
+		}
 	}
 
 	// we only see title escape codes emitted while attached, so seed from
@@ -290,13 +333,15 @@ func (info *paneInfo) updatePane(tmux *Tmux) *PaneT {
 	if pane.active {
 		win.activePane = pane
 	}
+	if isNew {
+		tmux.panes.Set(pane.id, pane)
+		tmux.pendingPaneStateMu.Unlock()
+	}
 	if pane.term != nil {
 		pane.term.MakeVisible(info.WinActive)
 		pane.term.SetFocus(info.Active)
 		pane.term.Resize(&types.XY{X: int32(info.Width), Y: int32(info.Height)})
 	}
-
-	return pane
 }
 
 func (tmux *Tmux) ActivePane() (*PaneT, error) {
@@ -447,6 +492,7 @@ func (tmux *Tmux) clonePane(commandLine string, callback interactiveActionCallba
 	if newPaneID == "" {
 		return fmt.Errorf("tmux did not return the cloned pane ID")
 	}
+	log.Printf("[debug] tmux: cloned pane %s from source pane %s (action=%q)", newPaneID, pane.id, actionID)
 	tmux.seedPaneStartupState(newPaneID, pwd, env)
 	if err := tmux.updatePaneInfo(newPaneID); err != nil {
 		return err

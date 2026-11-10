@@ -103,6 +103,8 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0094](0094-mcp-oauth-login-window.md) | Select built-in or external browser for MCP OAuth login | MCP |
 | [0095](0095-formatted-rendered-selection-copy.md) | Rendered selections share Go-backed clipboard formats | Notes |
 | [0096](0096-social-s3-clipboard-image-uploads.md) | Social S3 uploads provide shareable clipboard image URLs | Social / Clipboard |
+| [0097](0097-cloned-pane-hang-diagnosis.md) | (proposed) Cloned panes that hang blank: diagnosis and proposed fixes | Terminal / Concurrency |
+| [0098](0098-backend-logging-conventions.md) | Backend logging conventions: `log` package with `[level] area:` prefixes | Cross-cutting / Diagnostics |
 
 ## Recurring themes
 
