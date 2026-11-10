@@ -1085,6 +1085,10 @@ body {
     font-size: var(--notes-font-size-minus-1);
 }
 
+.notes-graph-form .notes-graph-field-label {
+    color: var(--yellow);
+}
+
 .notes-graph-help,
 .notes-graph-count {
     opacity: 0.75;
@@ -1374,6 +1378,12 @@ body {
     border-color: var(--accent);
     background-color: rgba(var(--accent-rgb), 0.2);
     transition: all 0.2s ease;
+}
+
+#notes-modal-actions #notes-graph-remove:hover {
+    border-color: var(--red);
+    background-color: rgba(var(--red-rgb), 0.2);
+    color: var(--red);
 }
 
 #notes-delete-modal-actions button:hover {

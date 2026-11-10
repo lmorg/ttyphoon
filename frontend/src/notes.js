@@ -3873,12 +3873,9 @@ function notesTableExtras(table, create = false) {
     return extras || null;
 }
 
-function notesTableNumericColumns(table, categoryColumn) {
+function notesTableNumericColumns(table) {
     const seed = notesTableSeed(table);
     return seed.headings.flatMap((_, column) => {
-        if (column === categoryColumn) {
-            return [];
-        }
         const values = seed.rows.map((row) => String(row[column] || '').trim()).filter(Boolean);
         const isNumeric = (value) => {
             const normalized = value.replace(/[\p{Sc},]/gu, '').trim();
@@ -3946,7 +3943,7 @@ function openNotesTableGraphPrompt(table) {
         existing = null;
     }
     const selectedColumns = existing
-        ? new Set([existing.categoryColumn, ...(existing.valueColumns || [])])
+        ? new Set([...(existing.categoryColumns?.length ? existing.categoryColumns : [existing.categoryColumn]), ...(existing.valueColumns || [])])
         : new Set(headings.map((_, index) => index));
     const tableRows = notesTableSourceRows(table);
     const savedRows = Array.isArray(existing?.rowIndices) ? existing.rowIndices : [];
@@ -3966,7 +3963,7 @@ function openNotesTableGraphPrompt(table) {
     };
 
     state.graphPromptHandler = (spec) => {
-        if (spec) {
+        if (spec !== undefined) {
             void setNotesTableGraph(table, spec);
         }
     };
@@ -3978,10 +3975,19 @@ function openNotesTableGraphPrompt(table) {
     elements.modalLocationRow.style.display = 'none';
     elements.modalBody.style.display = 'flex';
     elements.modalInput.value = '';
-    const graphActionLabel = existing ? 'Modify graph' : 'Create graph';
+    const graphActionLabel = existing ? 'Modify' : 'Create';
     setNotesModalTitle(graphActionLabel, true);
     elements.modalCreate.textContent = graphActionLabel;
     elements.modalBody.replaceChildren();
+
+    if (existing) {
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.id = 'notes-graph-remove';
+        removeButton.textContent = 'Remove';
+        removeButton.addEventListener('click', () => finishNotesTableGraphPrompt(null));
+        elements.modalCreate.before(removeButton);
+    }
 
     const form = document.createElement('div');
     form.className = 'notes-graph-form';
@@ -4022,7 +4028,7 @@ function openNotesTableGraphPrompt(table) {
     const columnsField = notesGraphField('Columns');
     const columnsHelp = document.createElement('div');
     columnsHelp.className = 'notes-graph-help';
-    columnsHelp.textContent = 'The first selected column labels rows; selected numeric columns become series.';
+    columnsHelp.textContent = 'Selected non-numeric columns labels the data, joined with commas; numeric columns become series.';
     columnsField.field.appendChild(columnsHelp);
     const columnActions = document.createElement('div');
     columnActions.className = 'notes-graph-list-actions';
@@ -4170,9 +4176,11 @@ function openNotesTableGraphPrompt(table) {
             notifyTerminal('Select a category column and at least one value column.', 'warn');
             return;
         }
-        const categoryColumn = columns[0];
-        const numericColumns = new Set(notesTableNumericColumns(table, categoryColumn));
-        let valueColumns = columns.slice(1).filter((column) => numericColumns.has(column));
+        const numericColumns = new Set(notesTableNumericColumns(table));
+        let categoryColumns = columns.filter((column) => !numericColumns.has(column));
+        if (categoryColumns.length === 0) categoryColumns = [columns[0]];
+        const categoryColumn = categoryColumns[0];
+        let valueColumns = columns.filter((column) => !categoryColumns.includes(column) && numericColumns.has(column));
         if (prompt.type === 'pie' || prompt.type === 'doughnut') valueColumns = valueColumns.slice(0, 1);
         if (valueColumns.length === 0) {
             notifyTerminal('Select at least one numeric value column.', 'warn');
@@ -4191,10 +4199,11 @@ function openNotesTableGraphPrompt(table) {
             format: 'svg',
             title: prompt.title.trim(),
             categoryColumn,
+            categoryColumns,
             valueColumns,
             rowIndices,
             seriesNames: valueColumns.map((column) => headings[column]),
-            categoryAxisTitle: headings[categoryColumn],
+            categoryAxisTitle: categoryColumns.map((column) => headings[column]).join(', '),
         });
     };
 
@@ -4214,6 +4223,7 @@ function finishNotesTableGraphPrompt(spec) {
     elements.modalLocationRow.style.display = '';
     elements.modalBody.style.display = 'none';
     elements.modalBody.replaceChildren();
+    document.getElementById('notes-graph-remove')?.remove();
     elements.modalInput.placeholder = 'example-note';
     setNotesModalTitle('New note name');
     elements.modal.dataset.open = 'false';
@@ -11806,7 +11816,7 @@ async function openRenamePrompt(file, folder = false) {
 
 function closeNewFilePrompt() {
     if (state.graphPromptHandler) {
-        finishNotesTableGraphPrompt(null);
+        finishNotesTableGraphPrompt();
         return;
     }
     if (state.textPromptHandler) {

@@ -58,6 +58,49 @@ func TestRenderTableSupportsPNG(t *testing.T) {
 	}
 }
 
+func TestRenderTableJoinsCategoryColumns(t *testing.T) {
+	table := Table{
+		Headings: []string{"Project", "Account", "USD"},
+		Rows: [][]string{
+			{"CFR", "dev", "$ 607.89"},
+			{"CFR", "prod", "$ 1003.32"},
+			{"Health App", "test", "$ 42.92"},
+			{"Health App", "prod", "$ 6212.18"},
+		},
+	}
+	for _, chartType := range []Type{Line, Area, Bar, HorizontalBar, Scatter, Pie, Doughnut} {
+		t.Run(string(chartType), func(t *testing.T) {
+			data, err := RenderTable(table, Spec{
+				Type: chartType, CategoryColumns: []int{0, 1}, ValueColumns: []int{2},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, label := range []string{"CFR, dev", "CFR, prod", "Health App, test", "Health App, prod"} {
+				if chartType == Scatter {
+					continue // Scatter axes automatically skip some labels.
+				}
+				if !strings.Contains(string(data), label) {
+					t.Errorf("rendered SVG missing label %q", label)
+				}
+				if chartType == Scatter {
+					for _, row := range table.Rows {
+						data, err := RenderTable(Table{Headings: table.Headings, Rows: [][]string{row}}, Spec{
+							Type: Scatter, CategoryColumns: []int{0, 1}, ValueColumns: []int{2},
+						})
+						if err != nil {
+							t.Fatal(err)
+						}
+						if label := row[0] + ", " + row[1]; !strings.Contains(string(data), label) {
+							t.Errorf("rendered scatter SVG missing label %q", label)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestRenderTableValidatesTabularMapping(t *testing.T) {
 	tests := []struct {
 		name string
@@ -77,6 +120,21 @@ func TestRenderTableValidatesTabularMapping(t *testing.T) {
 		{
 			name: "category cannot also be a value",
 			spec: Spec{Type: Line, CategoryColumn: 0, ValueColumns: []int{0}},
+			want: "cannot also be a value column",
+		},
+		{
+			name: "second category out of range",
+			spec: Spec{Type: Line, CategoryColumns: []int{0, 3}, ValueColumns: []int{1}},
+			want: "category column 3 is out of range",
+		},
+		{
+			name: "second category negative",
+			spec: Spec{Type: Line, CategoryColumns: []int{0, -1}, ValueColumns: []int{1}},
+			want: "category column -1 is out of range",
+		},
+		{
+			name: "second category cannot also be a value",
+			spec: Spec{Type: Line, CategoryColumns: []int{0, 1}, ValueColumns: []int{1}},
 			want: "cannot also be a value column",
 		},
 	}

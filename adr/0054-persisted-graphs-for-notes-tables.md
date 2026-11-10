@@ -29,6 +29,9 @@ reopening a table.
   columns and rows. When a graph is already configured, label the action
   `Modify graph...` and prefill that same modal from the persisted graph spec.
   The modal title and confirmation button distinguish creation from modification.
+  Graph form field headings use the Markdown heading colour (`--yellow`).
+  When modifying, a `Remove` button clears the persisted spec and rendered chart;
+  cancelling the modal leaves both unchanged.
 - Keep graph creation in the existing table context menu alongside `Copy`,
   `Copy table (CSV)`, `Copy table (Markdown)`, `Copy table (Formatted)`,
   `Clear sorting`, and `SQL filter…`.
@@ -55,8 +58,12 @@ reopening a table.
   Rendering failures do not touch the clipboard; rendering and clipboard errors
   are reported through terminal notifications. Keep the generated Wails result
   model in sync with the additional response field.
-- The first selected column is the category; selected numeric columns after it
-  become value series. Pie and doughnut use the first selected numeric series.
+- Selected non-numeric columns form the category label, joined with `, ` in
+  table-column order (for example `CFR, dev`). Selected numeric columns become
+  value series. When every selected column is numeric, retain the first column
+  as the category. Pie and doughnut use the first selected numeric series.
+  Persist `categoryColumns` alongside the legacy first `categoryColumn`, and
+  restore old single-category specifications without migration.
 - Persist selected source-row indices in the graph specification. Empty indices
   mean all rows.
 - Render the chart as SVG below the table's horizontal-scroll wrapper and, when

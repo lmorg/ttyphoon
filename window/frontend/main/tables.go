@@ -53,6 +53,7 @@ type NotesTableGraphSpecT struct {
 	Format            string   `json:"format"`
 	Title             string   `json:"title"`
 	CategoryColumn    int      `json:"categoryColumn"`
+	CategoryColumns   []int    `json:"categoryColumns,omitempty"`
 	ValueColumns      []int    `json:"valueColumns"`
 	SeriesNames       []string `json:"seriesNames"`
 	RowIndices        []int    `json:"rowIndices"`
@@ -256,6 +257,7 @@ func graphSpecFromStored(spec *graphs.Spec) *NotesTableGraphSpecT {
 		Format:            string(spec.Format),
 		Title:             spec.Title,
 		CategoryColumn:    spec.CategoryColumn,
+		CategoryColumns:   append([]int(nil), spec.CategoryColumns...),
 		ValueColumns:      append([]int(nil), spec.ValueColumns...),
 		SeriesNames:       append([]string(nil), spec.SeriesNames...),
 		RowIndices:        append([]int(nil), spec.RowIndices...),
@@ -281,6 +283,7 @@ func (spec *NotesTableGraphSpecT) toGraphsSpec() graphs.Spec {
 		Format:            graphs.Format(spec.Format),
 		Title:             spec.Title,
 		CategoryColumn:    spec.CategoryColumn,
+		CategoryColumns:   append([]int(nil), spec.CategoryColumns...),
 		ValueColumns:      append([]int(nil), spec.ValueColumns...),
 		SeriesNames:       append([]string(nil), spec.SeriesNames...),
 		RowIndices:        append([]int(nil), spec.RowIndices...),

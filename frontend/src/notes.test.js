@@ -8752,6 +8752,8 @@ describe('notes rendering', () => {
         expect(notesTableSetGraphMock).toHaveBeenCalledTimes(1);
         expect(notesTableSetGraphMock.mock.calls[0][1]).toMatchObject({
             categoryColumn: 0,
+            categoryColumns: [0, 1],
+            categoryAxisTitle: 'Project, Account',
             valueColumns: [2],
             seriesNames: ['USD'],
         });
@@ -9185,6 +9187,7 @@ describe('notes rendering', () => {
             expect(document.querySelector('#notes-modal-body .notes-graph-dropdown')?.textContent.trim()).toContain('Line');
             const actions = Array.from(document.getElementById('notes-modal-actions').children).map((button) => button.id);
             expect(actions).toEqual(['notes-modal-create', 'notes-modal-cancel']);
+            expect(getNotesStyleProperties('.notes-graph-form .notes-graph-field-label').color).toBe('var(--yellow)');
             const columnsField = Array.from(document.querySelectorAll('.notes-graph-field'))
                 .find((field) => field.querySelector('.notes-graph-field-label')?.textContent === 'Columns');
             const rowsField = Array.from(document.querySelectorAll('.notes-graph-field'))
@@ -9325,6 +9328,7 @@ describe('notes rendering', () => {
             await flushPromises();
             expect(document.getElementById('notes-modal-title').textContent).toBe('Modify graph');
             expect(document.getElementById('notes-modal-create').textContent).toBe('Modify graph');
+            expect(document.getElementById('notes-graph-remove')?.textContent).toBe('Remove');
             expect(document.querySelector('.notes-graph-dropdown').textContent).toContain('Bar');
             const title = document.querySelector('.notes-graph-text-title');
             expect(title.value).toBe('Saved chart');
@@ -9336,6 +9340,74 @@ describe('notes rendering', () => {
             expect(notesTableSetGraphMock).toHaveBeenLastCalledWith(expect.any(Object), expect.objectContaining({
                 type: 'bar', format: 'svg', title: 'Modified chart', categoryColumn: 0, valueColumns: [1], rowIndices: [1],
             }));
+        });
+
+        it.each(['remove', 'cancel', 'failure'])('handles graph modal %s without leaking its Remove button', async (action) => {
+            const spec = { type: 'bar', categoryColumn: 0, valueColumns: [1] };
+            notesTableRestoreMock.mockResolvedValue({ ...emptyTableResult(), order: [0, 1, 2], graph: spec });
+            const table = await loadMarkdownTable();
+            table.querySelector('tbody td').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            menu.onSelect(menu.options.indexOf('Modify graph...'));
+            await flushPromises();
+            if (action === 'failure') notesTableSetGraphMock.mockResolvedValueOnce({ error: 'Removal failed' });
+            document.getElementById(action === 'cancel' ? 'notes-modal-cancel' : 'notes-graph-remove').click();
+            await flushPromises();
+            await flushPromises();
+            expect(document.getElementById('notes-graph-remove')).toBeNull();
+            expect(document.getElementById('notes-modal').dataset.open).toBe('false');
+            if (action === 'cancel') {
+                expect(notesTableSetGraphMock).not.toHaveBeenCalled();
+            } else {
+                expect(notesTableSetGraphMock).toHaveBeenLastCalledWith(expect.any(Object), null);
+            }
+            if (action === 'remove') {
+                expect(table.dataset.tableGraphSpec).toBe('');
+                expect(document.querySelector('#notes-preview .notes-table-graph')).toBeNull();
+            } else {
+                expect(JSON.parse(table.dataset.tableGraphSpec)).toEqual(spec);
+                expect(document.querySelector('.notes-table-graph')).not.toBeNull();
+            }
+            if (action === 'failure') {
+                expect(sendIpcMock).toHaveBeenCalledWith('terminal-notify', expect.objectContaining({ level: 'error', message: 'Removal failed' }));
+            }
+        });
+
+        it.each(['markdown', 'numeric'])('persists and restores multiple graph categories for %s data', async (kind) => {
+            const table = await loadMarkdownTable();
+            table.querySelector('thead tr').innerHTML = kind === 'numeric'
+                ? '<th>Year</th><th>Revenue</th><th>Cost</th>'
+                : '<th>Project</th><th>Account</th><th>USD</th>';
+            table.querySelector('tbody').innerHTML = kind === 'numeric'
+                ? '<tr data-source-row="0"><td>2025</td><td>12</td><td>5</td></tr><tr data-source-row="1"><td>2026</td><td>18</td><td>7</td></tr>'
+                : '<tr data-source-row="0"><td>CFR</td><td>dev</td><td>$ 607.89</td></tr><tr data-source-row="1"><td>CFR</td><td>prod</td><td>$ 1003.32</td></tr>';
+            const openGraph = (action) => {
+                table.querySelector('tbody td').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+                const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+                menu.onSelect(menu.options.indexOf(action));
+            };
+            openGraph('Create graph...');
+            await flushPromises();
+            document.getElementById('notes-modal-create').click();
+            await flushPromises();
+            await flushPromises();
+            const spec = notesTableSetGraphMock.mock.calls.at(-1)[1];
+            expect(spec).toMatchObject(kind === 'numeric'
+                ? { categoryColumns: [0], valueColumns: [1, 2], categoryAxisTitle: 'Year' }
+                : { categoryColumns: [0, 1], valueColumns: [2], categoryAxisTitle: 'Project, Account' });
+            openGraph('Modify graph...');
+            await flushPromises();
+            const fields = Array.from(document.querySelectorAll('.notes-graph-field'));
+            const columns = fields.find((field) => field.querySelector('.notes-graph-field-label')?.textContent === 'Columns');
+            const checkboxes = columns.querySelectorAll('input[type="checkbox"]');
+            expect(Array.from(checkboxes, (checkbox) => checkbox.checked)).toEqual([true, true, true]);
+            if (kind === 'markdown') checkboxes[0].click();
+            document.getElementById('notes-modal-create').click();
+            await flushPromises();
+            await flushPromises();
+            expect(notesTableSetGraphMock.mock.calls.at(-1)[1]).toMatchObject(kind === 'numeric'
+                ? { categoryColumns: [0], valueColumns: [1, 2] }
+                : { categoryColumns: [1], valueColumns: [2], categoryAxisTitle: 'Account' });
         });
 
         it.each(['success', 'render failure', 'clipboard failure'])('copies a graph as PNG with %s handling', async (outcome) => {

@@ -231,11 +231,11 @@ func TestNotesTableGraphStatePersistsByWorkspaceAndDocument(t *testing.T) {
 		Key:       tablecore.Key{Surface: "preview", Document: filepath.Join(workspace, "table.md"), Index: 0},
 		Workspace: workspace,
 		Seed: &NotesTableSeedT{
-			Headings: []string{"Category", "Value"},
-			Rows:     [][]string{{"A", "1"}, {"B", "2"}},
+			Headings: []string{"Category", "Account", "Value"},
+			Rows:     [][]string{{"A", "dev", "1"}, {"B", "prod", "2"}},
 		},
 	}
-	spec := &NotesTableGraphSpecT{Type: string(graphs.Line), CategoryColumn: 0, ValueColumns: []int{1}, RowIndices: []int{1}}
+	spec := &NotesTableGraphSpecT{Type: string(graphs.Line), CategoryColumn: 0, CategoryColumns: []int{0, 1}, ValueColumns: []int{2}, RowIndices: []int{1}}
 	runRequest := viewRequest
 	runRequest.Key.Surface = "jupyter"
 	runRequest.Key.Index = 1
@@ -248,7 +248,7 @@ func TestNotesTableGraphStatePersistsByWorkspaceAndDocument(t *testing.T) {
 	if restored.Error != "" {
 		t.Fatalf("NotesTableRestore() error = %q", restored.Error)
 	}
-	if restored.Graph == nil || restored.Graph.Type != spec.Type || restored.Graph.CategoryColumn != spec.CategoryColumn || len(restored.Graph.ValueColumns) != 1 || restored.Graph.ValueColumns[0] != 1 || len(restored.Graph.RowIndices) != 1 || restored.Graph.RowIndices[0] != 1 {
+	if restored.Graph == nil || restored.Graph.Type != spec.Type || restored.Graph.CategoryColumn != spec.CategoryColumn || len(restored.Graph.CategoryColumns) != 2 || restored.Graph.CategoryColumns[0] != 0 || restored.Graph.CategoryColumns[1] != 1 || len(restored.Graph.ValueColumns) != 1 || restored.Graph.ValueColumns[0] != 2 || len(restored.Graph.RowIndices) != 1 || restored.Graph.RowIndices[0] != 1 {
 		t.Fatalf("restored graph = %+v, want %+v", restored.Graph, spec)
 	}
 
@@ -323,24 +323,25 @@ func TestNotesTableRenderGraphIntersectsSelectedRowsWithSQLFilter(t *testing.T) 
 		Workspace: t.TempDir(),
 		Filter:    `"Value" > 1`,
 		Seed: &NotesTableSeedT{
-			Headings: []string{"Category", "Value"},
+			Headings: []string{"Category", "Value", "Account"},
 			Rows: [][]string{
-				{"ExcludeBySQL", "1"},
-				{"SelectedMatch", "2"},
-				{"MatchButNotSelected", "3"},
+				{"ExcludeBySQL", "1", "dev"},
+				{"SelectedMatch", "2", "prod"},
+				{"MatchButNotSelected", "3", "test"},
 			},
 		},
 	}
 	result := app.NotesTableRenderGraph(request, &NotesTableGraphSpecT{
-		Type:           string(graphs.Bar),
-		CategoryColumn: 0,
-		ValueColumns:   []int{1},
-		RowIndices:     []int{0, 1},
+		Type:            string(graphs.Bar),
+		CategoryColumn:  0,
+		CategoryColumns: []int{0, 2},
+		ValueColumns:    []int{1},
+		RowIndices:      []int{0, 1},
 	})
 	if result.Error != "" {
 		t.Fatalf("NotesTableRenderGraph() error = %q", result.Error)
 	}
-	if !strings.Contains(result.SVG, "SelectedMatch") {
+	if !strings.Contains(result.SVG, "SelectedMatch, prod") {
 		t.Fatalf("SVG does not contain selected SQL match: %s", result.SVG)
 	}
 	for _, excluded := range []string{"ExcludeBySQL", "MatchButNotSelected"} {

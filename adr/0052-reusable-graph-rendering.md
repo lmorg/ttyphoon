@@ -19,6 +19,9 @@ rendering should be independent of AI and frontend integration details.
 - Provide a table-shaped input with headings and rows, plus an explicit chart
   specification that selects the zero-based category column and numeric value
   columns. Do not guess which columns to plot.
+  An optional `CategoryColumns` selection overrides the legacy singular
+  `CategoryColumn`; join its cell values with `, ` in the supplied order.
+  Validate every category index and reject overlap with any value column.
 - Support table-compatible line, area, bar, horizontal bar, scatter, pie, and
   doughnut charts. Exclude specialized chart types whose input does not map
   naturally from ordinary tabular data, including radar, heatmap, candlestick,

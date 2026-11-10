@@ -51,10 +51,12 @@ type Spec struct {
 	// Format defaults to SVG when empty.
 	Format Format
 	Title  string
-	// CategoryColumn and ValueColumns are zero-based indices into Table.Headings.
-	CategoryColumn int
-	ValueColumns   []int
-	SeriesNames    []string
+	// Column indices are zero-based. CategoryColumns, when nonempty, overrides
+	// CategoryColumn and joins the selected cells with ", ".
+	CategoryColumn  int
+	CategoryColumns []int
+	ValueColumns    []int
+	SeriesNames     []string
 	// RowIndices selects zero-based source rows; empty means all rows.
 	RowIndices []int
 	// CategoryAxisTitle and ValueAxisTitle follow the data roles for horizontal bars.
@@ -83,8 +85,14 @@ func RenderTable(table Table, spec Spec) ([]byte, error) {
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("graphs: table has no data rows")
 	}
-	if spec.CategoryColumn < 0 || spec.CategoryColumn >= len(table.Headings) {
-		return nil, fmt.Errorf("graphs: category column %d is out of range", spec.CategoryColumn)
+	categoryColumns := spec.CategoryColumns
+	if len(categoryColumns) == 0 {
+		categoryColumns = []int{spec.CategoryColumn}
+	}
+	for _, column := range categoryColumns {
+		if column < 0 || column >= len(table.Headings) {
+			return nil, fmt.Errorf("graphs: category column %d is out of range", column)
+		}
 	}
 	if len(spec.ValueColumns) == 0 {
 		return nil, fmt.Errorf("graphs: select at least one value column")
@@ -100,8 +108,10 @@ func RenderTable(table Table, spec Spec) ([]byte, error) {
 		if column < 0 || column >= len(table.Headings) {
 			return nil, fmt.Errorf("graphs: value column %d is out of range", column)
 		}
-		if column == spec.CategoryColumn {
-			return nil, fmt.Errorf("graphs: category column %d cannot also be a value column", column)
+		for _, category := range categoryColumns {
+			if column == category {
+				return nil, fmt.Errorf("graphs: category column %d cannot also be a value column", column)
+			}
 		}
 	}
 
@@ -115,7 +125,11 @@ func RenderTable(table Table, spec Spec) ([]byte, error) {
 		values[seriesIndex] = make([]float64, len(rows))
 	}
 	for rowIndex, row := range rows {
-		categories[rowIndex] = cell(row, spec.CategoryColumn)
+		labels := make([]string, len(categoryColumns))
+		for i, column := range categoryColumns {
+			labels[i] = cell(row, column)
+		}
+		categories[rowIndex] = strings.Join(labels, ", ")
 		for seriesIndex, column := range spec.ValueColumns {
 			number, err := parseNumber(cell(row, column))
 			if err != nil {
