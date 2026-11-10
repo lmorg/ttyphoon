@@ -197,10 +197,10 @@ func TestFormattedClipboardItemsIncludeRTFHTMLAndText(t *testing.T) {
 
 func TestCopyFormattedSelectionRejectsInvalidImagesBeforeClipboardWrite(t *testing.T) {
 	app := &WApp{}
-	if err := app.CopyFormattedSelection(`<img src="https://example.com/image.png">`); err == nil {
+	if _, err := app.CopyFormattedSelection(`<img src="https://example.com/image.png">`); err == nil {
 		t.Fatal("expected an error for an image that was not inlined")
 	}
-	if err := app.CopyFormattedTable(`<img src="https://example.com/image.png">`); err == nil {
+	if _, err := app.CopyFormattedTable(`<img src="https://example.com/image.png">`); err == nil {
 		t.Fatal("expected table copy to reject an image that was not inlined")
 	}
 }

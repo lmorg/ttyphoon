@@ -16,16 +16,23 @@ import (
 )
 
 type Formats struct {
-	HTML      string `json:"html"`
-	RTF       string `json:"rtf"`
-	PlainText string `json:"plainText"`
-	Markdown  string `json:"markdown"`
-	SlackHTML string `json:"slackHTML"`
+	HTML      string   `json:"html"`
+	RTF       string   `json:"rtf"`
+	PlainText string   `json:"plainText"`
+	Markdown  string   `json:"markdown"`
+	SlackHTML string   `json:"slackHTML"`
+	Warnings  []string `json:"warnings,omitempty"`
 }
 
 // Convert formats a rendered selection, not its original Markdown source.
 // Images must already be inlined as PNG data URLs by the rendering surface.
 func Convert(source string) (Formats, error) {
+	return ConvertWithImageUpload(source, nil)
+}
+
+// ConvertWithImageUpload uploads local/generated images after validating the
+// entire fragment. HTTP(S) sources are already shareable and are not uploaded.
+func ConvertWithImageUpload(source string, upload func([]byte) (string, error)) (Formats, error) {
 	if len(source) > 32<<20 {
 		return Formats{}, fmt.Errorf("copy content exceeds 32 MiB")
 	}
@@ -39,9 +46,72 @@ func Convert(source string) (Formats, error) {
 			return Formats{}, err
 		}
 	}
+	var warnings []string
+	if upload != nil {
+		cache := map[string]string{}
+		var visit func(*html.Node)
+		visit = func(node *html.Node) {
+			for child := node.FirstChild; child != nil; {
+				next := child.NextSibling
+				visit(child)
+				child = next
+			}
+			if node.Type != html.ElementNode || node.Data != "img" {
+				return
+			}
+			original, parseErr := url.Parse(attr(node, "data-copy-source"))
+			if parseErr == nil && original.Host != "" && (strings.EqualFold(original.Scheme, "http") || strings.EqualFold(original.Scheme, "https")) {
+				return
+			}
+			source := attr(node, "src")
+			address, ok := cache[source]
+			var err error
+			if !ok {
+				var data []byte
+				data, _, err = pngData(source)
+				if err == nil {
+					address, err = upload(data)
+				}
+				if err == nil {
+					u, parseErr := url.Parse(address)
+					if parseErr != nil || u.Host == "" || u.Scheme != "https" || u.User != nil || !safeURL(address) {
+						err = fmt.Errorf("image upload returned an invalid HTTPS URL")
+					}
+				}
+				if err == nil {
+					cache[source] = address
+				}
+			}
+			if err != nil {
+				alt := attr(node, "alt")
+				if alt == "" {
+					alt = "Image"
+				}
+				warnings = append(warnings, fmt.Sprintf("%s: %v", alt, err))
+				node.Parent.InsertBefore(&html.Node{Type: html.TextNode, Data: "[" + alt + "]"}, node)
+				node.Parent.RemoveChild(node)
+				return
+			}
+			found := false
+			for index := range node.Attr {
+				if node.Attr[index].Key == "data-copy-source" {
+					node.Attr[index].Val = address
+					found = true
+				}
+			}
+			if !found {
+				node.Attr = append(node.Attr, html.Attribute{Key: "data-copy-source", Val: address})
+			}
+		}
+		visit(root)
+	}
 	plain := renderPlain(root)
 	markdown := renderText(root, true)
 	rtf := renderRTF(root)
+	slackHTML, err := renderSlackHTML(root)
+	if err != nil {
+		return Formats{}, err
+	}
 	var removeMetadata func(*html.Node)
 	removeMetadata = func(node *html.Node) {
 		if node.Data == "img" {
@@ -58,17 +128,13 @@ func Convert(source string) (Formats, error) {
 		}
 	}
 	removeMetadata(root)
-	slackHTML, err := renderSlackHTML(root)
-	if err != nil {
-		return Formats{}, err
-	}
 	var output bytes.Buffer
 	for node := root.FirstChild; node != nil; node = node.NextSibling {
 		if err := html.Render(&output, node); err != nil {
 			return Formats{}, fmt.Errorf("render copy HTML: %w", err)
 		}
 	}
-	return Formats{HTML: output.String(), RTF: rtf, PlainText: plain, Markdown: markdown, SlackHTML: slackHTML}, nil
+	return Formats{HTML: output.String(), RTF: rtf, PlainText: plain, Markdown: markdown, SlackHTML: slackHTML, Warnings: warnings}, nil
 }
 
 func HTML(source string) (string, error) {

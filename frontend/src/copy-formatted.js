@@ -26,6 +26,18 @@ export function captureRenderedElement(element) {
     return captureRanges(element.parentElement, [range]);
 }
 
+export function captureRenderedElements(elements) {
+    const fragment = document.createElement('div');
+    const images = [];
+    for (const element of elements) {
+        const snapshot = captureRenderedElement(element);
+        if (!snapshot) continue;
+        fragment.append(...snapshot.fragment.childNodes);
+        images.push(...snapshot.images);
+    }
+    return fragment.childNodes.length ? { fragment, images } : null;
+}
+
 function captureRanges(container, ranges) {
     const fragment = document.createElement('div');
     const images = [];
@@ -93,10 +105,22 @@ function snapshotSVG(svg) {
         }
     });
     const bounds = svg.getBoundingClientRect();
-    const viewBox = svg.getAttribute('viewBox')?.split(/[\s,]+/).map(Number);
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('width', String(bounds.width || viewBox?.[2] || 800));
-    clone.setAttribute('height', String(bounds.height || viewBox?.[3] || 600));
+    const viewBox = svg.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+    const validViewBox = viewBox?.length === 4 && viewBox.every(Number.isFinite)
+        && viewBox[2] > 0 && viewBox[3] > 0;
+    const intrinsicLength = (name) => {
+        const value = svg.getAttribute(name)?.trim();
+        return value && /^\d+(?:\.\d+)?(?:px)?$/.test(value) ? parseFloat(value) : 0;
+    };
+    const width = validViewBox ? viewBox[2] : intrinsicLength('width') || bounds.width || 800;
+    const height = validViewBox ? viewBox[3] : intrinsicLength('height') || bounds.height || 600;
+    // Panel layout must not constrain the exported SVG's intrinsic dimensions.
+    for (const property of ['width', 'height', 'max-width', 'max-height', 'min-width', 'min-height']) {
+        clone.style.removeProperty(property);
+    }
+    clone.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', String(width));
+    clone.setAttribute('height', String(height));
     return new XMLSerializer().serializeToString(clone);
 }
 
@@ -160,7 +184,8 @@ export function createRenderedSelectionCopier({ write, notify, rasterize = image
         pending = pending.then(async () => {
             try {
                 const { html, warnings } = await prepareRenderedCopy(snapshot, rasterize);
-                await writer(html);
+                const uploadWarnings = await writer(html);
+                if (Array.isArray(uploadWarnings)) warnings.push(...uploadWarnings);
                 if (warnings.length) notify(`Copied with image fallback: ${warnings.join('; ')}`, 'warn');
             } catch (error) {
                 notify(`Failed to copy selection: ${error instanceof Error ? error.message : error}`, 'error');

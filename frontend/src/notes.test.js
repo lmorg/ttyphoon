@@ -4735,11 +4735,11 @@ describe('notes rendering', () => {
         const copyMenu = showLocalMenuMock.mock.calls.at(-1)[0];
         copyMenu.onSelect(copyMenu.options.indexOf('Copy prompt'));
         await vi.waitFor(() => {
-            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Why did this command fail?');
+            expect(copyFormattedSelectionMock).toHaveBeenLastCalledWith(expect.stringContaining('<p>Why did this command fail?</p>'));
         });
         copyMenu.onSelect(copyMenu.options.indexOf('Copy response'));
         await vi.waitFor(() => {
-            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('The command failed because a test failed.');
+            expect(copyFormattedSelectionMock.mock.calls.at(-1)[0]).toContain('<p>The command failed because a test failed.</p>');
         });
     });
 
@@ -5092,7 +5092,7 @@ describe('notes rendering', () => {
         vi.mocked(markdown.processMarkdownContainer).mockResolvedValue();
     });
 
-    it('copies the user prompt and response Markdown without thoughts or tools', async () => {
+    it('copies the full user prompt and response with rich formats without thoughts or tools', async () => {
         await importNotesModule();
         getEventHandler('aiJobStart')({ runId: 989, title: '## Request\n\n### Prompt\n\nExplain **this** command\n\n### Command\n\n~~~sh\nls\n~~~\n\n### Stream Trace\n' });
         const append = getEventHandler('aiStreamBlock');
@@ -5110,10 +5110,15 @@ describe('notes rendering', () => {
         expect(menu.options).toContain('Copy selection');
         expect(menu.options).not.toContain('Copy');
         await menu.onSelect(menu.options.indexOf('Copy prompt'));
-        expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Explain **this** command');
+        await vi.waitFor(() => {
+            expect(copyFormattedSelectionMock).toHaveBeenLastCalledWith(expect.stringContaining('<p>Explain <strong>this</strong> command</p>'));
+        });
         await menu.onSelect(menu.options.indexOf('Copy response'));
         await vi.waitFor(() => {
-            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('# Answer\n\n**Final output only**');
+            const html = copyFormattedSelectionMock.mock.calls.at(-1)[0];
+            expect(html).toContain('<h1>Answer</h1>');
+            expect(html).toContain('<strong>Final output only</strong>');
+            expect(html).not.toMatch(/Private reasoning|Tool arguments|Tool output|Subagent|Nested output|Explain/);
         });
         const firstJob = document.querySelector('.notes-ai-job');
         getEventHandler('aiJobStart')({ runId: 990, title: '## Request\n\n### Prompt\n\nSecond prompt\n\n### Stream Trace\n' });
@@ -5124,11 +5129,13 @@ describe('notes rendering', () => {
         const jobMenu = showLocalMenuMock.mock.calls.at(-1)[0];
         jobMenu.onSelect(jobMenu.options.indexOf('Copy prompt'));
         await vi.waitFor(() => {
-            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('Second prompt');
+            expect(copyFormattedSelectionMock).toHaveBeenLastCalledWith(expect.stringContaining('<p>Second prompt</p>'));
         });
         jobMenu.onSelect(jobMenu.options.indexOf('Copy response'));
         await vi.waitFor(() => {
-            expect(clipboardSetTextMock).toHaveBeenLastCalledWith('**Second response**');
+            const html = copyFormattedSelectionMock.mock.calls.at(-1)[0];
+            expect(html).toContain('<strong>Second response</strong>');
+            expect(html).not.toContain('Final output only');
         });
     });
 

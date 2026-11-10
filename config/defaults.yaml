@@ -1,3 +1,18 @@
+# Optional clipboard image uploads. Omit Social/S3 to keep copying local-only.
+# WARNING: when configured, rich copy automatically uploads local/generated
+# images to this service. Public reading is managed by your bucket/CDN policy.
+# PublicBaseURL is the bucket root; Prefix is appended to it.
+# Social:
+#   S3:
+#     Endpoint: "" # optional HTTPS S3-compatible endpoint; path-style requests
+#     Region: us-east-1
+#     AccessKeyID: "YOUR_ACCESS_KEY_ID" # literal config value, no env expansion
+#     SecretAccessKey: "YOUR_SECRET_ACCESS_KEY"
+#     SessionToken: "" # optional temporary-credential token
+#     Bucket: my-bucket
+#     Prefix: clipboard/images
+#     PublicBaseURL: https://cdn.example.com
+
 Tmux:
   # tmux is a terminal multiplexer. This terminal emulator supports tmux
   # integration via the tmux control plane.

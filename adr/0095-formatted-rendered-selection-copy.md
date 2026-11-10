@@ -69,6 +69,57 @@ and the user's partial selection.
   metadata from sanitized selected content, not copied Slack IDs or channel
   metadata. Keep tables separate from surrounding rich-text blocks, including
   when the selected HTML nests a table inside a div.
+- Previously tried Slack design (before the hybrid text experiment): emit bold
+  as `<b data-stringify-type="bold">text</b>`, matching
+  Slack's native clipboard markup, rather than `<strong>` or Markdown
+  delimiters. Structured table cells still use `style.bold`; standard HTML
+  retains `<strong>` and Markdown retains its own emphasis syntax. Do not
+  strip literal asterisks from user content.
+- Slack HTML replaces empty or whitespace-only table cells, including headers,
+  with `-` in both the HTML and structured table metadata. Other clipboard
+  representations retain empty cells.
+- Fragment-only same-document bookmark links (`#section`, including `#`) become
+  ordinary formatted text in Slack HTML and table metadata. External links
+  with fragments and all non-Slack representations retain their hyperlinks.
+- Unwrap all unclassed divs in Slack HTML, preserving their children and order,
+  while retaining Slack's classed block and rich-text section wrappers.
+  Other clipboard representations are unchanged.
+- The previously tried design kept lists as `ul`/`ol`/`li`, and converted
+  `h1` through `h6` to paragraphs prefixed with the
+  corresponding Markdown hashes (`#` through `######`), retaining inline
+  formatting. Other representations retain their existing heading rules.
+- That design preserved attribute-free `<p>` and `<em>` tags, including
+  italic styles in structured table cells. Removing these tags experimentally
+  did not resolve missing Slack list bullets, so that experiment was reverted.
+- Current hybrid Slack design: outside tables, headings use hash-prefixed text
+  with an underscored title (`## _Title_`); bold uses `*text*`; italic/emphasis
+  and underline use `_text_`. Lists use literal `- ` or `N. ` markers with
+  HTML line breaks, preserving ordered-list starts and nested indentation.
+  Remove list-layout whitespace and duplicate trailing breaks so consecutive
+  list items, including after nested lists, have one line break, not a blank
+  line. Ignore whitespace-only siblings when separating list-item paragraphs.
+  Inline spans hold literal formatting markers; paragraphs and Slack's own
+  wrappers remain HTML. Inline code and other unlisted elements retain HTML.
+  Heading titles use their displayed text, avoiding nested emphasis markers.
+  Add two explicit HTML line breaks before and after each non-table heading
+  so the hash-prefixed title has a blank line on each side.
+- Tables retain the previous HTML and `data-block-source` metadata, including
+  native bold/italic styling, empty-cell placeholders, and bookmark handling.
+  Formatting inside table cells is not converted to text markers. This hybrid
+  experiment changes only `slack/html`, not standard HTML, RTF, plain text, or
+  the custom `text/markdown` representation. Slack paste remains a manual check.
+- HTTP(S) images in Slack HTML use their original source URL as literal
+  `[fig N: URL]` references, with two HTML line breaks before and after.
+  Number references in selection order, starting at one for each clipboard
+  conversion, including images in table cells and their structured metadata.
+  Without S3 configuration, local/generated images retain inline PNG handling.
+  Read original image metadata before stripping it from exported HTML; never
+  expose internal `data-copy-source` attributes in either HTML representation.
+- Optional Social/S3 uploads give local/generated images shareable URLs for
+  Markdown and Slack while successful HTML/RTF exports retain inline PNGs.
+  Configuration, consent, authentication, object lifecycle, limits, and failure
+  behavior are defined separately in
+  [ADR 0096](0096-social-s3-clipboard-image-uploads.md).
 - The custom Markdown representation uses pipe tables, preserving selected
   row/cell order, empty cells, inline formatting, and displayed formula values.
   Headerless partial selections get an empty Markdown header rather than
@@ -81,8 +132,15 @@ and the user's partial selection.
 - Use this path for AI output's Copy selection, rendered Notes View/Run
   selection copy, the Markdown modal's new Copy selection action, and native
   Copy/Cmd+C/Ctrl+C on rendered Markdown selections. Leave Monaco, editable
-  controls, raw-code copy, block-copy buttons, and AI Copy prompt/response on
-  their existing paths.
+  controls, raw-code copy, and block-copy buttons on their existing paths.
+- AI Copy prompt and Copy response also use the shared selection formatter,
+  publishing Markdown plain text alongside HTML, RTF, and Chromium custom
+  representations. Prompt copy renders only the stored user prompt. Response
+  copy captures all top-level text answer blocks for the targeted job, without
+  thoughts, tools, or nested/subagent output. Capture loaded blocks from the live
+  DOM so table order, filters, and evaluated values survive. Load and render
+  historical answers that have not yet been displayed without expanding their
+  disclosure or mutating the screen; report loading/rendering errors explicitly.
 
 ## Consequences
 
@@ -126,6 +184,7 @@ and the user's partial selection.
 
 ## References
 
+- [ADR 0096: Social S3 clipboard image uploads](0096-social-s3-clipboard-image-uploads.md)
 - [ADR 0028: Go-backed Notes tables](0028-go-backed-notes-table-sorting.md)
 - [ADR 0054: Notes table graphs](0054-persisted-graphs-for-notes-tables.md)
 - [ADR 0013: Wails bindings](0013-wails-binding-checklist.md)

@@ -135,6 +135,10 @@ func PaneAutoCloseDelay() time.Duration {
 }
 
 type configT struct {
+	Social struct {
+		S3 *S3Config `yaml:"S3"`
+	} `yaml:"Social"`
+
 	Tmux struct {
 		Enabled bool `yaml:"Enabled"`
 	} `yaml:"Tmux"`

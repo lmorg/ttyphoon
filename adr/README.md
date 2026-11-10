@@ -102,6 +102,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0093](0093-approved-on-demand-mcp-startup.md) | Approved on-demand startup of configured MCP servers | AI tools |
 | [0094](0094-mcp-oauth-login-window.md) | Select built-in or external browser for MCP OAuth login | MCP |
 | [0095](0095-formatted-rendered-selection-copy.md) | Rendered selections share Go-backed clipboard formats | Notes |
+| [0096](0096-social-s3-clipboard-image-uploads.md) | Social S3 uploads provide shareable clipboard image URLs | Social / Clipboard |
 
 ## Recurring themes
 

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -80,7 +82,7 @@ func slackCellElements(cell *html.Node) []slackInline {
 			return
 		}
 		switch node.Data {
-		case "strong":
+		case "strong", "b":
 			style.Bold = true
 		case "em":
 			style.Italic = true
@@ -90,6 +92,9 @@ func slackCellElements(cell *html.Node) []slackInline {
 			style.Code = true
 		case "a":
 			link = attr(node, "href")
+			if strings.HasPrefix(strings.TrimSpace(link), "#") {
+				link = ""
+			}
 		case "br":
 			appendText("\n", link, style)
 			return
@@ -140,26 +145,161 @@ func makeSlackCell(cell *html.Node) slackCell {
 	return slackCell{Type: "raw_text", Text: &text}
 }
 
+func slackCellEmpty(cell *html.Node) bool {
+	for _, element := range slackCellElements(cell) {
+		if strings.TrimSpace(element.Text) != "" {
+			return false
+		}
+	}
+	return true
+}
+
 func slackElement(tag string, attributes ...html.Attribute) *html.Node {
 	return &html.Node{Type: html.ElementNode, Data: tag, DataAtom: atom.Lookup([]byte(tag)), Attr: attributes}
 }
 
+func appendSlackContent(parent, node *html.Node) {
+	if node.Type == html.ElementNode && node.Data == "div" && strings.TrimSpace(attr(node, "class")) == "" {
+		for node.FirstChild != nil {
+			child := node.FirstChild
+			node.RemoveChild(child)
+			appendSlackContent(parent, child)
+		}
+		return
+	}
+	parent.AppendChild(node)
+}
+
 func renderSlackHTML(root *html.Node) (string, error) {
-	var clone func(*html.Node) (*html.Node, error)
-	clone = func(source *html.Node) (*html.Node, error) {
+	figure := 0
+	var clone func(*html.Node, bool) (*html.Node, error)
+	clone = func(source *html.Node, inTable bool) (*html.Node, error) {
+		inTable = inTable || source.Type == html.ElementNode && source.Data == "table"
 		node := &html.Node{Type: source.Type, Data: source.Data, DataAtom: source.DataAtom, Attr: append([]html.Attribute(nil), source.Attr...)}
+		if source.Type == html.ElementNode && source.Data == "img" {
+			original := attr(source, "data-copy-source")
+			address, err := url.Parse(original)
+			if err == nil && address.Host != "" && safeURL(original) &&
+				(strings.EqualFold(address.Scheme, "http") || strings.EqualFold(address.Scheme, "https")) {
+				figure++
+				reference := slackElement("span")
+				reference.AppendChild(slackElement("br"))
+				reference.AppendChild(slackElement("br"))
+				reference.AppendChild(&html.Node{Type: html.TextNode, Data: fmt.Sprintf("[fig %d: %s]", figure, original)})
+				reference.AppendChild(slackElement("br"))
+				reference.AppendChild(slackElement("br"))
+				return reference, nil
+			}
+			node.Attr = nil
+			for _, attribute := range source.Attr {
+				if attribute.Key != "data-copy-source" {
+					node.Attr = append(node.Attr, attribute)
+				}
+			}
+		}
+		if inTable && source.Type == html.ElementNode && source.Data == "strong" {
+			node.Data, node.DataAtom = "b", atom.B
+			node.Attr = append(node.Attr, html.Attribute{Key: "data-stringify-type", Val: "bold"})
+		}
 		for child := source.FirstChild; child != nil; child = child.NextSibling {
-			copied, err := clone(child)
+			if !inTable && child.Type == html.TextNode && strings.TrimSpace(child.Data) == "" &&
+				(source.Data == "ul" || source.Data == "ol" ||
+					source.Data == "li" && (isBlock(child.PrevSibling) || isBlock(child.NextSibling))) {
+				continue
+			}
+			copied, err := clone(child, inTable)
 			if err != nil {
 				return nil, err
 			}
-			node.AppendChild(copied)
+			appendSlackContent(node, copied)
+		}
+		if source.Type == html.ElementNode && len(source.Data) == 2 &&
+			source.Data[0] == 'h' && source.Data[1] >= '1' && source.Data[1] <= '6' {
+			node.Data, node.DataAtom = "p", atom.P
+			prefix := &html.Node{Type: html.TextNode, Data: strings.Repeat("#", int(source.Data[1]-'0')) + " "}
+			node.InsertBefore(prefix, node.FirstChild)
+			if !inTable {
+				for node.FirstChild != nil {
+					node.RemoveChild(node.FirstChild)
+				}
+				node.AppendChild(slackElement("br"))
+				node.AppendChild(slackElement("br"))
+				node.AppendChild(&html.Node{Type: html.TextNode, Data: strings.Repeat("#", int(source.Data[1]-'0')) + " _" + strings.TrimSpace(nodeText(source, false)) + "_"})
+				node.AppendChild(slackElement("br"))
+				node.AppendChild(slackElement("br"))
+			}
+		}
+		if !inTable && source.Type == html.ElementNode {
+			switch source.Data {
+			case "strong", "em", "u":
+				marker := "_"
+				if source.Data == "strong" {
+					marker = "*"
+				}
+				node.Data, node.DataAtom, node.Attr = "span", atom.Span, nil
+				node.InsertBefore(&html.Node{Type: html.TextNode, Data: marker}, node.FirstChild)
+				node.AppendChild(&html.Node{Type: html.TextNode, Data: marker})
+			case "ul", "ol":
+				node.Data, node.DataAtom, node.Attr = "div", atom.Div, nil
+				if source.Parent != nil && source.Parent.Data == "li" {
+					node.InsertBefore(slackElement("br"), node.FirstChild)
+				}
+			case "li":
+				marker := "- "
+				if source.Parent != nil && source.Parent.Data == "ol" {
+					number, _ := strconv.Atoi(attr(source.Parent, "start"))
+					if number < 1 {
+						number = 1
+					}
+					for sibling := source.PrevSibling; sibling != nil; sibling = sibling.PrevSibling {
+						if sibling.Data == "li" {
+							number++
+						}
+					}
+					marker = strconv.Itoa(number) + ". "
+				}
+				depth := 0
+				for ancestor := source.Parent; ancestor != nil; ancestor = ancestor.Parent {
+					if ancestor.Data == "li" {
+						depth++
+					}
+				}
+				node.Data, node.DataAtom, node.Attr = "div", atom.Div, nil
+				node.InsertBefore(&html.Node{Type: html.TextNode, Data: strings.Repeat("  ", depth) + marker}, node.FirstChild)
+				for node.LastChild != nil && (node.LastChild.Data == "br" ||
+					node.LastChild.Type == html.TextNode && strings.TrimSpace(node.LastChild.Data) == "") {
+					node.RemoveChild(node.LastChild)
+				}
+				node.AppendChild(slackElement("br"))
+			case "p":
+				if source.Parent != nil && source.Parent.Data == "li" {
+					node.Data, node.DataAtom = "span", atom.Span
+					next := source.NextSibling
+					for next != nil && next.Type == html.TextNode && strings.TrimSpace(next.Data) == "" {
+						next = next.NextSibling
+					}
+					if next != nil && next.Data != "ul" && next.Data != "ol" {
+						node.AppendChild(slackElement("br"))
+					}
+				}
+			}
+		}
+		if source.Type == html.ElementNode && source.Data == "a" &&
+			strings.HasPrefix(strings.TrimSpace(attr(source, "href")), "#") {
+			node.Data, node.DataAtom = "span", atom.Span
+			node.Attr = nil
+		}
+		if source.Type == html.ElementNode && (source.Data == "td" || source.Data == "th") && slackCellEmpty(node) {
+			for node.FirstChild != nil {
+				node.RemoveChild(node.FirstChild)
+			}
+			node.AppendChild(&html.Node{Type: html.TextNode, Data: "-"})
 		}
 		if source.Type != html.ElementNode || source.Data != "table" {
 			return node, nil
 		}
 		table := slackTable{Type: "table", Rows: [][]slackCell{}}
-		for _, row := range tableRows(source) {
+		for _, row := range tableRows(node) {
 			cells := make([]slackCell, 0, len(row))
 			for _, cell := range row {
 				cells = append(cells, makeSlackCell(cell))
@@ -207,7 +347,7 @@ func renderSlackHTML(root *html.Node) (string, error) {
 			}
 			return nil
 		}
-		node, err := clone(source)
+		node, err := clone(source, false)
 		if err != nil {
 			return err
 		}
@@ -218,7 +358,7 @@ func renderSlackHTML(root *html.Node) (string, error) {
 			)
 			block := slackElement("div", html.Attribute{Key: "class", Val: "p-rich_text_block"})
 			section := slackElement("div", html.Attribute{Key: "class", Val: "p-rich_text_section"})
-			section.AppendChild(node)
+			appendSlackContent(section, node)
 			block.AppendChild(section)
 			wrapper.AppendChild(block)
 			node = wrapper

@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/lmorg/ttyphoon/utils/copy_format"
+	"github.com/lmorg/ttyphoon/utils/s3"
 	"golang.design/x/clipboard"
 )
 
@@ -14,20 +15,38 @@ type ClipboardData struct {
 	Image string `json:"image"`
 }
 
-func (a *WApp) CopyFormattedSelection(source string) error {
-	items, err := renderedClipboardItems(source, false)
-	if err != nil {
-		return err
-	}
-	return writeClipboardItems(items)
+func (a *WApp) CopyFormattedSelection(source string) ([]string, error) {
+	return copyRenderedClipboard(source, false)
 }
 
-func (a *WApp) CopyFormattedTable(source string) error {
-	items, err := renderedClipboardItems(source, true)
-	if err != nil {
-		return err
+func (a *WApp) CopyFormattedTable(source string) ([]string, error) {
+	return copyRenderedClipboard(source, true)
+}
+
+func copyRenderedClipboard(source string, tabDelimited bool) ([]string, error) {
+	var uploader *s3.Uploader
+	var settingsErr error
+	upload := func(data []byte) (string, error) {
+		if settingsErr != nil {
+			return "", settingsErr
+		}
+		return uploader.UploadPNG(context.Background(), data)
 	}
-	return writeClipboardItems(items)
+	uploader, settingsErr = s3.FromConfig()
+	if uploader == nil && settingsErr == nil {
+		upload = nil
+	}
+	formats, err := copy_format.ConvertWithImageUpload(source, upload)
+	if err != nil {
+		return nil, err
+	}
+	if !tabDelimited {
+		formats.PlainText = formats.Markdown
+	}
+	if err := writeClipboardItems(selectionClipboardItems(formats)); err != nil {
+		return nil, err
+	}
+	return formats.Warnings, nil
 }
 
 func renderedClipboardItems(source string, tabDelimited bool) ([]clipboard.Item, error) {

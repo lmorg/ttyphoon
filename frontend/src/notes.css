@@ -197,6 +197,7 @@ thead th {
 
     #notes-print-root th,
     #notes-print-root td {
+        padding: 2px 4px !important;
         white-space: normal !important;
         overflow-wrap: anywhere;
     }

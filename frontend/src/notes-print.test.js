@@ -123,6 +123,20 @@ describe('Notes print document', () => {
         expect(padding).toBe('5mm');
     });
 
+    it('uses compact table-cell padding only in print media', () => {
+        const stylesheet = postcss.parse(readFileSync('./src/notes.css', 'utf8'));
+        let padding;
+        stylesheet.walkRules((rule) => {
+            if (rule.selectors.includes('#notes-print-root th') && rule.selectors.includes('#notes-print-root td')) {
+                expect(rule.parent.name).toBe('media');
+                expect(rule.parent.params).toBe('print');
+                padding = rule.nodes.find((declaration) => declaration.prop === 'padding');
+            }
+        });
+        expect(padding.value).toBe('2px 4px');
+        expect(padding.important).toBe(true);
+    });
+
     it('waits for menu dismissal and coalesces repeated print requests', async () => {
         let finishAnimation;
         const menu = document.createElement('div');

@@ -49,7 +49,7 @@ import { discardPrintDocument, printDocument } from './notes-print.js';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
 import { createHyperlinkTooltip } from './hyperlink-tooltip';
-import { captureRenderedElement, createRenderedSelectionCopier } from './copy-formatted';
+import { captureRenderedElement, captureRenderedElements, createRenderedSelectionCopier } from './copy-formatted';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
 import { disableNativeTextAssistance, disableNativeTextAssistanceIn } from './text-input.js';
@@ -12261,6 +12261,30 @@ function createRenderedCopyMenuItem(container, title = 'Copy selection') {
     return { ...renderedSelectionCopier.menuItem(container), title };
 }
 
+async function copyAIMessage(kind, root) {
+    try {
+        let snapshot;
+        if (kind === 'prompt') {
+            const source = await aiPipelineFormatter.promptMarkdown(root || undefined);
+            const host = document.createElement('div');
+            const content = document.createElement('div');
+            host.append(content);
+            await renderPrintMarkdown(content, source);
+            snapshot = captureRenderedElement(content);
+        } else {
+            snapshot = captureRenderedElements(await aiPipelineFormatter.outputElements(root));
+        }
+        if (!snapshot) {
+            notifyTerminal(`No AI ${kind} to copy`, 'info');
+            return;
+        }
+        await renderedSelectionCopier.copy(snapshot);
+    } catch (error) {
+        console.error(`Failed to copy AI ${kind}`, error);
+        notifyTerminal(`Failed to copy AI ${kind}: ${error instanceof Error ? error.message : error}`, 'error');
+    }
+}
+
 function getRenderedCopyBlockText(block) {
     if (!(block instanceof Element)) {
         return '';
@@ -13557,16 +13581,14 @@ function initAIOutputContextMenu(container) {
             {
                 title: 'Copy prompt',
                 icon: CONTEXT_ICON_COPY,
-                onSelect: async () => {
-                    copyTextToClipboard(await aiPipelineFormatter.promptMarkdown(copyRoot || undefined));
-                },
+                onSelect: () => copyAIMessage('prompt', copyRoot),
             },
             {
                 title: 'Copy response',
                 icon: CONTEXT_ICON_COPY,
-                onSelect: async () => {
+                onSelect: () => {
                     const root = copyRoot || Array.from(container.querySelectorAll('.notes-ai-job')).at(-1);
-                    copyTextToClipboard(await aiPipelineFormatter.outputMarkdown(root));
+                    return copyAIMessage('response', root);
                 },
             },
         );

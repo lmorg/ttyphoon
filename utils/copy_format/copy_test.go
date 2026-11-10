@@ -3,6 +3,7 @@ package copy_format
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -101,6 +102,92 @@ func TestEscapingAndSafeHTML(t *testing.T) {
 	}
 }
 
+func TestSlackRemoteImageReferences(t *testing.T) {
+	var imageBytes bytes.Buffer
+	if err := png.Encode(&imageBytes, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	pngURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes.Bytes())
+	img := func(source string) string {
+		return `<img src="` + pngURL + `" data-copy-source="` + source + `">`
+	}
+	source := "<p>Before" + img("https://example.com/image.gif?a=1&amp;b=2") +
+		img("local.png") + "</p><table><tr><td>" + img("http://example.com/second.png") + "</td></tr></table>"
+	for range 2 {
+		formats, err := Convert(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{
+			`<br/><br/>[fig 1: https://example.com/image.gif?a=1&amp;b=2]<br/><br/>`,
+			`<br/><br/>[fig 2: http://example.com/second.png]<br/><br/>`,
+		} {
+			if !strings.Contains(formats.SlackHTML, want) {
+				t.Errorf("Slack image reference missing %q: %s", want, formats.SlackHTML)
+			}
+		}
+		if strings.Count(formats.SlackHTML, "<img ") != 1 || strings.Contains(formats.SlackHTML, "data-copy-source") {
+			t.Fatal("local image or internal metadata handling changed")
+		}
+		if !strings.Contains(formats.SlackHTML, "[fig 2: http://example.com/second.png]") ||
+			strings.Contains(formats.SlackHTML, "<td>-</td>") {
+			t.Fatal("table image reference was replaced by empty-cell placeholder")
+		}
+		if strings.Count(formats.HTML, "<img ") != 3 || strings.Contains(formats.HTML, "[fig ") ||
+			!strings.Contains(formats.Markdown, "https://example.com/image.gif") ||
+			!strings.Contains(formats.RTF, `\pngblip`) {
+			t.Fatal("Slack references changed other clipboard formats")
+		}
+	}
+}
+
+func TestUploadedImagesUseURLsAndPreserveRichImages(t *testing.T) {
+	var data bytes.Buffer
+	if err := png.Encode(&data, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	src := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data.Bytes())
+	source := `<p><img src="` + src + `" alt="Local" data-copy-source="local.svg"><img src="` + src + `" alt="Chart"></p><table><tr><td><img src="` + src + `" alt="Remote" data-copy-source="https://existing.example/image.gif"></td></tr></table>`
+	calls := 0
+	formats, err := ConvertWithImageUpload(source, func(png []byte) (string, error) {
+		calls++
+		if !bytes.Equal(png, data.Bytes()) {
+			t.Fatal("upload did not receive rasterized PNG")
+		}
+		return "https://cdn.example/uuid.png", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || len(formats.Warnings) != 0 {
+		t.Fatalf("upload calls = %d, warnings = %v", calls, formats.Warnings)
+	}
+	if strings.Count(formats.Markdown, "https://cdn.example/uuid.png") != 2 ||
+		strings.Count(formats.PlainText, "https://cdn.example/uuid.png") != 2 ||
+		!strings.Contains(formats.SlackHTML, "[fig 1: https://cdn.example/uuid.png]") ||
+		!strings.Contains(formats.SlackHTML, "[fig 3: https://existing.example/image.gif]") ||
+		strings.Count(formats.HTML, src) != 3 || !strings.Contains(formats.RTF, `\pngblip`) {
+		t.Fatal("uploaded image representations are inconsistent")
+	}
+	if strings.Contains(formats.HTML, "data-copy-source") || strings.Contains(formats.SlackHTML, "data-copy-source") {
+		t.Fatal("internal metadata leaked")
+	}
+	failed, err := ConvertWithImageUpload(source, func([]byte) (string, error) {
+		return "", fmt.Errorf("upload unavailable")
+	})
+	if err != nil || len(failed.Warnings) != 2 || !strings.Contains(failed.Markdown, `\[Local\]`) ||
+		strings.Contains(failed.Markdown, "local.svg") || strings.Count(failed.HTML, "<img ") != 1 {
+		t.Fatalf("upload fallback failed: %v, %+v", err, failed)
+	}
+	calls = 0
+	_, err = ConvertWithImageUpload(source+`<img src="invalid">`, func([]byte) (string, error) {
+		calls++
+		return "", nil
+	})
+	if err == nil || calls != 0 {
+		t.Fatal("uploaded content before validating complete selection")
+	}
+}
 func TestCodeFencesPreserveEmbeddedBackticks(t *testing.T) {
 	got, err := PlainText("<pre><code>```code```</code></pre><p><code>a`b</code></p>")
 	if err != nil {

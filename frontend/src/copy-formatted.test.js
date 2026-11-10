@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureRenderedElement, captureRenderedSelection, prepareRenderedCopy, createRenderedSelectionCopier, imageToPNG } from './copy-formatted';
+import { captureRenderedElement, captureRenderedElements, captureRenderedSelection, prepareRenderedCopy, createRenderedSelectionCopier, imageToPNG } from './copy-formatted';
 
 function select(container, start = container, startOffset = 0, end = container, endOffset = container.childNodes.length) {
     const range = document.createRange();
@@ -96,6 +96,29 @@ describe('rendered selection capture', () => {
         expect(html).toBe('<ol start="5"><li>selected</li></ol><pre><code> a\n b</code></pre>');
     });
 
+    it('exports SVG viewBox dimensions rather than the scaled panel size', () => {
+        const container = root('<svg viewBox="0 0 1800 1200" width="100%" style="max-width: 100%; width: 300px; height: 200px"><text>Diagram</text></svg>');
+        const svg = container.querySelector('svg');
+        vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({ width: 300, height: 200 });
+        const snapshot = captureRenderedElement(svg);
+        const exported = new DOMParser().parseFromString(snapshot.images[0].svg, 'image/svg+xml').documentElement;
+        expect(exported.getAttribute('width')).toBe('1800');
+        expect(exported.getAttribute('height')).toBe('1200');
+        expect(exported.style.width).toBe('');
+        expect(exported.style.maxWidth).toBe('');
+        expect(exported.getAttribute('viewBox')).toBe('0 0 1800 1200');
+    });
+
+    it('uses explicit SVG dimensions when no valid viewBox exists', () => {
+        const container = root('<svg width="1600px" height="900" viewBox="invalid"></svg>');
+        const svg = container.querySelector('svg');
+        vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({ width: 320, height: 180 });
+        const snapshot = captureRenderedElement(svg);
+        const exported = new DOMParser().parseFromString(snapshot.images[0].svg, 'image/svg+xml').documentElement;
+        expect(exported.getAttribute('width')).toBe('1600');
+        expect(exported.getAttribute('height')).toBe('900');
+    });
+
     it('captures Mermaid and graph images atomically and inlines PNGs', async () => {
         const container = root('<div class="mermaid-diagram"><svg viewBox="0 0 40 20"><title>Flow</title><text>A</text></svg></div><img alt="Chart" src="chart.svg">');
         select(container);
@@ -127,6 +150,27 @@ describe('rendered selection capture', () => {
 });
 
 describe('copy actions', () => {
+    it('shows upload fallback warnings returned by the Go clipboard writer', async () => {
+        const container = root('<p>Remaining content</p>');
+        const notify = vi.fn();
+        const copier = createRenderedSelectionCopier({
+            write: vi.fn().mockResolvedValue(['Chart: S3 image upload failed (HTTP 403)']),
+            notify,
+        });
+        await copier.copy(captureRenderedElement(container));
+        expect(notify).toHaveBeenCalledWith(
+            'Copied with image fallback: Chart: S3 image upload failed (HTTP 403)', 'warn',
+        );
+    });
+
+    it('combines full rendered response blocks without copying intervening content', async () => {
+        const container = root('<section><p>First</p><img alt="Chart" src="chart.png"></section><aside>Tool output</aside><section><p>Second</p></section>');
+        const snapshot = captureRenderedElements(container.querySelectorAll('section'));
+        const result = await prepareRenderedCopy(snapshot, vi.fn().mockResolvedValue('data:image/png;base64,test'));
+        expect(result.html).toBe('<p>First</p><img alt="Chart" data-copy-source="chart.png" src="data:image/png;base64,test"><p>Second</p>');
+        expect(captureRenderedElements([])).toBeNull();
+    });
+
     it('uses the table writer without changing selection writes or their shared order', async () => {
         const container = root('<p>Selected</p>');
         const calls = [];

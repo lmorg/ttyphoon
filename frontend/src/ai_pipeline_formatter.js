@@ -325,6 +325,25 @@ export function createAIPipelineFormatter(container, options = {}) {
         return output.filter((text) => text.trim()).join('\n\n');
     }
 
+    async function outputElements(root = null) {
+        const entries = Array.from(streamBlocks.values())
+            .filter((entry) => entry.kind === 'text' && !entry.parentId && (!root || root.contains(entry.wrapper)));
+        return Promise.all(entries.map(async (entry) => {
+            await entry.renderPromise;
+            if (entry.loadPrintContent && entry.root.dataset.blockLoaded !== 'true') {
+                const source = String(await entry.loadPrintContent() || '');
+                const host = document.createElement('div');
+                const content = document.createElement('div');
+                host.append(content);
+                content.innerHTML = markedInstance ? markedInstance.parse(source) : '';
+                if (!markedInstance) content.textContent = source;
+                if (processMarkdownContainer) await processMarkdownContainer(content);
+                return content;
+            }
+            return entry.root;
+        }));
+    }
+
     function isRawBlock(kind) {
         return ['tool-call', 'tool-output', 'tool-error', 'tool-summary'].includes(String(kind || ''));
     }
@@ -826,6 +845,7 @@ export function createAIPipelineFormatter(container, options = {}) {
         finalResponseElement,
         promptMarkdown,
         outputMarkdown,
+        outputElements,
         openBlock,
         appendBlock,
         setBlocks,
