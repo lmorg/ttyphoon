@@ -48,8 +48,11 @@ func (term *Term) parseApcCodes() {
 		}
 	}
 
-	apc := types.NewApcSlice(text)
+	term.dispatchMxCommand(text)
+}
 
+func (term *Term) dispatchMxCommand(text []rune) {
+	apc := types.NewApcSlice(text)
 	switch apc.Index(0) {
 	case "begin":
 		/*if term._apcStack > 0 {
@@ -78,7 +81,7 @@ func (term *Term) parseApcCodes() {
 		default:
 			//term._apcStack--
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `begin` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `begin` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "end":
@@ -108,7 +111,7 @@ func (term *Term) parseApcCodes() {
 		default:
 			//term._apcStack++
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `end` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `end` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "insert":
@@ -121,7 +124,7 @@ func (term *Term) parseApcCodes() {
 			term.mxapcInsert(types.ELEMENT_ID_IMAGE, apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `insert` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `insert` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "display":
@@ -132,7 +135,7 @@ func (term *Term) parseApcCodes() {
 			term.mxapcDisplayInput(apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `display` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `display` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "ai":
@@ -143,7 +146,7 @@ func (term *Term) parseApcCodes() {
 			term.mxapcAiAgent(apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `ai` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `ai` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "config":
@@ -160,7 +163,7 @@ func (term *Term) parseApcCodes() {
 			term.mxapcConfigDictionary(apc)
 		default:
 			term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-				fmt.Sprintf("Unknown mxAPC `config` code %s: %s", apc.Index(1), string(text[:len(text)-1])))
+				fmt.Sprintf("Unknown mxAPC `config` code %s: %s", apc.Index(1), string(text)))
 		}
 
 	case "ttyphoon":
@@ -170,7 +173,7 @@ func (term *Term) parseApcCodes() {
 
 	default:
 		term.renderer.DisplayNotification(types.NOTIFY_DEBUG,
-			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(0), string(text[:len(text)-1])))
+			fmt.Sprintf("Unknown mxAPC code %s: %s", apc.Index(0), string(text)))
 	}
 }
 

@@ -223,6 +223,21 @@ ticked but not working as expected, then please raise an issue in Github.
 
 ### Escape Codes
 
+#### TTYphoon / mxtty commands
+
+All proprietary APC commands are also supported under OSC 1701. The command,
+subcommand, and optional JSON parameters are identical:
+
+```text
+ESC _ begin;csv ESC \
+ESC ] 1701;begin;csv ESC \
+```
+
+Both forms accept `ESC \` (ST) or BEL as the terminator. Existing APC producers
+remain compatible; Kitty graphics continues to use its separate APC protocol.
+This adds a terminal parser alias, not new command names or tmux passthrough
+configuration.
+
 #### VT100
 
 - C1 codes

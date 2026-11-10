@@ -103,6 +103,13 @@ parsed:
 		// iTerm2 proprietary escape codes
 		term.osc1337iTerm2(stack[1:])
 
+	case "1701":
+		var payload []rune
+		if len(text) >= 5 {
+			payload = text[5:]
+		}
+		term.dispatchMxCommand(payload)
+
 	default:
 		log.Printf("WARNING: Unknown OSC code %s: %s", stack[0], string(text))
 	}
