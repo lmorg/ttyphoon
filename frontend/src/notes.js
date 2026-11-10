@@ -13,7 +13,7 @@ import {
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu, GetHyperlinkTooltip,
-    SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, ClipboardSetFormatted, SwaggerRequest, NotesKeyPress,
+    SaveImageDialog, SaveCodeDialog, WindowPrint, GetClipboardData, CopyFormattedSelection, CopyFormattedTable, SwaggerRequest, NotesKeyPress,
     ShowCommandPalette, GetCurrentProject, GetCurrentGroupName, GetFileMetaMarkdown, AskAI, AskAIImage,
     ShowAISkillsMenu,
     GetAISessionManagement, CreateAISession, SetActiveAISession, DeleteAISession, RenameAISession, DeleteAIHistoryEntry,
@@ -49,6 +49,7 @@ import { discardPrintDocument, printDocument } from './notes-print.js';
 import { initNotesAIPanel } from './notes-ai-panel';
 import { bindSharedTooltipMouseTracking, closeSharedTooltip, showSharedTooltip, updateSharedTooltipPointer } from './shared_tooltip';
 import { createHyperlinkTooltip } from './hyperlink-tooltip';
+import { captureRenderedElement, createRenderedSelectionCopier } from './copy-formatted';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck } from './spellcheck';
 import { disableNativeTextAssistance, disableNativeTextAssistanceIn } from './text-input.js';
@@ -4268,6 +4269,8 @@ async function renderNotesTableGraph(table) {
         graph.className = 'notes-table-graph';
         extras.appendChild(graph);
         graph.addEventListener('contextmenu', (event) => {
+            const container = graph.closest('[data-copy-rendered], .markdown-body');
+            if (container && hasRenderedSelection(container)) return;
             event.preventDefault();
             event.stopPropagation();
             showNotesLocalMenu([{
@@ -12016,6 +12019,7 @@ function enableImageContextMenus(container) {
         img.dataset.imageMenuBound = 'true';
 
         img.addEventListener('contextmenu', async (e) => {
+            if (hasRenderedSelection(container)) return;
             e.preventDefault();
             e.stopPropagation();
             
@@ -12158,23 +12162,19 @@ function getEditorSelectionText() {
     return elements.editor.value.slice(start, end);
 }
 
-function getRenderedSelectionText(container) {
+function hasRenderedSelection(container) {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        return '';
+        return false;
     }
 
     const anchorNode = selection.anchorNode;
     const focusNode = selection.focusNode;
     const selectionInContainer =
-        (anchorNode && container.contains(anchorNode)) ||
+        (anchorNode && container.contains(anchorNode)) &&
         (focusNode && container.contains(focusNode));
 
-    if (!selectionInContainer) {
-        return '';
-    }
-
-    return selection.toString();
+    return Boolean(selectionInContainer);
 }
 
 function getRenderedCodeBlockText(container, eventTarget) {
@@ -12249,6 +12249,16 @@ function createCopyMenuItem(getText, title = 'Copy') {
             copyTextToClipboard(getText());
         },
     };
+}
+
+const renderedSelectionCopier = createRenderedSelectionCopier({
+    write: CopyFormattedSelection,
+    notify: notifyTerminal,
+});
+document.addEventListener('copy', renderedSelectionCopier.handleCopy, true);
+
+function createRenderedCopyMenuItem(container, title = 'Copy selection') {
+    return { ...renderedSelectionCopier.menuItem(container), title };
 }
 
 function getRenderedCopyBlockText(block) {
@@ -13323,10 +13333,6 @@ function tableDataToCsv(rows) {
     return (rows || []).map(row => (row || []).map(field => escapeCsvField(field)).join(',')).join('\n');
 }
 
-function tableDataToTabSeparatedText(rows) {
-    return (rows || []).map(row => `${(row || []).join('\t')}\n`).join('');
-}
-
 function tableDataToMarkdown(rows) {
     if (!rows || rows.length === 0) return '';
     const header = rows[0];
@@ -13335,58 +13341,6 @@ function tableDataToMarkdown(rows) {
     const separatorLine = `| ${header.map(() => '---').join(' | ')} |`;
     const bodyLines = body.map(row => `| ${row.join(' | ')} |`);
     return [headerLine, separatorLine, ...bodyLines].join('\n');
-}
-
-function escapeRtfText(value) {
-    let escaped = '';
-    const text = String(value || '').replace(/\r\n?/g, '\n');
-    for (let index = 0; index < text.length; index++) {
-        const character = text[index];
-        const code = text.charCodeAt(index);
-        if (character === '\\' || character === '{' || character === '}') {
-            escaped += `\\${character}`;
-        } else if (character === '\n') {
-            escaped += '\\line ';
-        } else if (character === '\t') {
-            escaped += '\\tab ';
-        } else if (code >= 128) {
-            escaped += `\\u${code > 32767 ? code - 65536 : code}?`;
-        } else if (code >= 32) {
-            escaped += character;
-        }
-    }
-    return escaped;
-}
-
-function tableDataToRtf(rows) {
-    const columns = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
-    const cellWidth = Math.max(1, Math.floor(9000 / Math.max(1, columns)));
-    const boundaries = Array.from({ length: columns }, (_, column) => `\\cellx${(column + 1) * cellWidth}`).join('');
-    const body = rows.map((row, index) => {
-        const cells = Array.from({ length: columns }, (_, column) => {
-            const text = escapeRtfText(row[column] || '');
-            return `\\pard\\intbl ${index === 0 ? `\\b ${text}\\b0` : text}\\cell `;
-        }).join('');
-        return `\\trowd\\trgaph108\\trleft0${index === 0 ? '\\trhdr' : ''}${boundaries}\n${cells}\\row\n`;
-    }).join('');
-    return `{\\rtf1\\ansi\\ansicpg1252\\deff0\\uc1{\\fonttbl{\\f0\\fswiss Helvetica;}}\\f0\\fs20\n${body}\\pard\n}`;
-}
-
-function tableDataToHtml(table) {
-    const copy = table.cloneNode(true);
-    copy.querySelectorAll('tbody tr.notes-table-row-filtered').forEach((row) => row.remove());
-    copy.querySelectorAll('.notes-sort-icon, .notes-table-col-resize-handle, .notes-cellref').forEach((node) => node.remove());
-    copy.querySelectorAll('.notes-table-cell-wrap').forEach((wrap) => {
-        const content = wrap.querySelector(':scope > span:first-child');
-        if (content) {
-            wrap.replaceWith(...Array.from(content.childNodes));
-        }
-    });
-    copy.querySelectorAll('[contenteditable], [data-formula]').forEach((node) => {
-        node.removeAttribute('contenteditable');
-        node.removeAttribute('data-formula');
-    });
-    return copy.outerHTML;
 }
 
 function createTableCopyMenuItems(table) {
@@ -13411,10 +13365,7 @@ function createTableCopyMenuItems(table) {
             title: 'Copy table (Formatted)',
             icon: CONTEXT_ICON_COPY,
             onSelect: () => {
-                const data = extractTableData(table);
-                ClipboardSetFormatted(tableDataToHtml(table), tableDataToRtf(data), tableDataToTabSeparatedText(data)).catch((err) => {
-                    notifyTerminal(`Failed to copy formatted table: ${err}`, 'error');
-                });
+                void renderedSelectionCopier.copy(captureRenderedElement(table), CopyFormattedTable);
             },
         },
     ];
@@ -13496,6 +13447,7 @@ function createTableInsertMenuItems(table, target, tableIndex) {
 }
 
 function initAIOutputContextMenu(container) {
+    if (container) container.dataset.copyRendered = 'true';
     if (!container) {
         return;
     }
@@ -13546,7 +13498,7 @@ function initAIOutputContextMenu(container) {
     container.addEventListener('contextmenu', (e) => {
         const sectionHeading = getRenderedSectionHeading(container, e.target, e.clientY);
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
-        if (anchor && container.contains(anchor) && !sectionHeading) {
+        if (anchor && container.contains(anchor) && !sectionHeading && !hasRenderedSelection(container)) {
             e.preventDefault();
             e.stopPropagation();
             openHyperlinkContextMenu(anchor);
@@ -13554,7 +13506,7 @@ function initAIOutputContextMenu(container) {
         }
 
         // Images carry their own menu, bound per element.
-        if (e.target instanceof Element && e.target.closest('img')) {
+        if (e.target instanceof Element && e.target.closest('img') && !hasRenderedSelection(container)) {
             return;
         }
 
@@ -13593,12 +13545,12 @@ function initAIOutputContextMenu(container) {
 
         const copyItems = codeBlockText
             ? [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createRenderedCopyMenuItem(container),
                 createCopyMenuItem(() => codeBlockText, 'Copy code'),
                 { title: '-' },
             ]
             : [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createRenderedCopyMenuItem(container),
                 { title: '-' },
             ];
         copyItems.splice(copyItems.length - 1, 0,
@@ -13700,6 +13652,7 @@ async function processAIMarkdownContainer(container, options = {}) {
 }
 
 function initRenderedNotesContextMenu(container, viewMode) {
+    if (container) container.dataset.copyRendered = 'true';
     if (container && container.dataset.notesLinkHoverBound !== 'true') {
         container.dataset.notesLinkHoverBound = 'true';
 
@@ -13774,14 +13727,14 @@ function initRenderedNotesContextMenu(container, viewMode) {
             ? e.target.closest('[data-run-markdown-source-start]')
             : null;
         const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null;
-        if (anchor && container.contains(anchor) && !runMarkdownBlock && !sectionHeading) {
+        if (anchor && container.contains(anchor) && !runMarkdownBlock && !sectionHeading && !hasRenderedSelection(container)) {
             e.preventDefault();
             e.stopPropagation();
             openHyperlinkContextMenu(anchor);
             return;
         }
 
-        if (e.target instanceof Element && e.target.closest('img')) {
+        if (e.target instanceof Element && e.target.closest('img') && !hasRenderedSelection(container)) {
             return;
         }
 
@@ -13819,12 +13772,12 @@ function initRenderedNotesContextMenu(container, viewMode) {
 
         const copyItems = codeBlockText
             ? [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy selection'),
+                createRenderedCopyMenuItem(container),
                 createCopyMenuItem(() => codeBlockText, 'Copy code'),
                 { title: '-' },
             ]
             : [
-                createCopyMenuItem(() => getRenderedSelectionText(container), 'Copy'),
+                createRenderedCopyMenuItem(container, 'Copy'),
                 { title: '-' },
             ];
         const editMarkdownItems = runMarkdownBlock
@@ -17003,6 +16956,7 @@ initAIOutputContextMenu(elements.aiOutput);
 
 // The caller's modal ID keys saved table state, as a file path does for documents.
 initMarkdownModal({
+    copyMenuItem: (container) => createRenderedCopyMenuItem(container),
     onPrint: (markdown) => {
         void printDocument({
             source: markdown,

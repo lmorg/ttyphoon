@@ -110,4 +110,20 @@ describe('markdown modal', () => {
         expect(overlay.style.display).toBe('none');
         expect(document.body.classList.contains('markdown-modal-open')).toBe(false);
     });
+
+    it('offers Copy selection in the body and table menus using a snapshot from menu open', async () => {
+        const copy = vi.fn();
+        const copyMenuItem = vi.fn(() => ({ title: 'Copy selection', icon: 0xf0c5, onSelect: copy }));
+        initMarkdownModal({ copyMenuItem });
+        await showMarkdownModal('# Heading\n\n' + tableMarkdown);
+        const body = document.getElementById('markdown-modal-body');
+        for (const selector of ['h1', 'td']) {
+            body.querySelector(selector).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            expect(copyMenuItem).toHaveBeenLastCalledWith(body);
+            expect(menu.options[0]).toBe('Copy selection');
+            menu.onSelect(0);
+        }
+        expect(copy).toHaveBeenCalledTimes(2);
+    });
 });

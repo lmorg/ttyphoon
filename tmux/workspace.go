@@ -50,7 +50,7 @@ func (tmux *Tmux) WorkspaceStart(name string) {
 	}
 	msg = strings.TrimSpace(msg)
 
-	if resp != nil && len(resp.Message) > 0 {
+	if msg != "" {
 		icon := types.NOTIFY_INFO
 		if resp.IsErr {
 			icon = types.NOTIFY_ERROR

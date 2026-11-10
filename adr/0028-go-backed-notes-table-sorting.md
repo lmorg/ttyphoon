@@ -62,6 +62,11 @@ Markdown copy options retain their original encodings. RTF preserves cell
 boundaries, line breaks, Unicode text, and bold headings; HTML retains the
 rendered cell markup. The former HTML-only binding remains compatible.
 
+Updated 2026-11-09: `utils/copy_format` now owns these conversions for both
+whole-table Formatted copy and rendered selection copying. The frontend captures
+displayed values and current table state, while Go generates and publishes the
+three representations. See [ADR 0095](0095-formatted-rendered-selection-copy.md).
+
 On 2026-10-07, the user confirmed that Formatted copy pastes as an actual table
 in Slack after its plain-text fallback changed from CSV to tab-separated text.
 The compared samples contained identical cell text and the same table dimensions.
@@ -477,4 +482,3 @@ terminal needs them for viewport pagination. So if a table ever appears that is
 large enough to justify virtualised rendering in Notes, the engine already
 supports it and this decision can be revisited without an API change. A
 row-count threshold around 50,000 is the sensible point to reconsider.
-

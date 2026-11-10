@@ -48,6 +48,7 @@ require (
 	golang.design/x/hotkey v0.6.4
 	golang.org/x/image v0.47.0
 	golang.org/x/mod v0.42.0
+	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/tools v0.52.0
@@ -142,7 +143,6 @@ require (
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/exp/shiny v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
-	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

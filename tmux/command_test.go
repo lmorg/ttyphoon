@@ -234,6 +234,67 @@ func TestSplitWindowPassesAndSeedsActivePaneEnvironment(t *testing.T) {
 	<-done
 }
 
+type workspaceStartTestRenderer struct {
+	paneCloseTestRenderer
+	notifications []string
+	levels        []types.NotificationType
+}
+
+func (r *workspaceStartTestRenderer) DisplayNotification(level types.NotificationType, message string) {
+	r.notifications = append(r.notifications, message)
+	r.levels = append(r.levels, level)
+}
+
+func TestWorkspaceStartNotifications(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		lines    []string
+		isError  bool
+		want     []string
+		wantType types.NotificationType
+	}{
+		{name: "pane ID only", lines: []string{"%8"}},
+		{name: "pane ID and whitespace", lines: []string{"%8", "  ", ""}},
+		{name: "informational output", lines: []string{"%8", "Created workspace"}, want: []string{"Created workspace"}, wantType: types.NOTIFY_INFO},
+		{name: "error output", lines: []string{"could not create window"}, isError: true, want: []string{"tmux command failed: could not create window"}, wantType: types.NOTIFY_ERROR},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+			renderer := &workspaceStartTestRenderer{}
+			tmux := &Tmux{
+				tty: writer, resp: make(chan *tmuxResponseT, 1),
+				wins: newWindowMap(), panes: newPaneMap(), renderer: renderer,
+			}
+			response := &tmuxResponseT{IsErr: test.isError}
+			for _, line := range test.lines {
+				response.Message = append(response.Message, []byte(line))
+			}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				if scanner := bufio.NewScanner(reader); scanner.Scan() {
+					tmux.resp <- response
+				}
+			}()
+			tmux.WorkspaceStart("project")
+			_ = writer.Close()
+			<-done
+			if !reflect.DeepEqual(renderer.notifications, test.want) {
+				t.Fatalf("notifications = %#v, want %#v", renderer.notifications, test.want)
+			}
+			for _, level := range renderer.levels {
+				if level != test.wantType {
+					t.Errorf("notification level = %v, want %v", level, test.wantType)
+				}
+			}
+		})
+	}
+}
+
 func TestWorkspaceStartSeedsApplicationAndWorkspaceEnvironment(t *testing.T) {
 	previous := config.Config.Workspaces
 	config.Config.Workspaces = &workspace.WorkspaceT{

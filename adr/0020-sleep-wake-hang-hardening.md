@@ -129,6 +129,12 @@ behaviour is not implemented.
    second, and `visibilitychange`/`focus`/`pageshow` reset the latch and request
    a fresh redraw on resume.
 
+4. **Window-close notifications use the documented two-field format.**
+   `%window-close window-id` identifies the window in the second field, not a
+   third field. Validate the field count before starting asynchronous cleanup;
+   malformed notifications surface an error rather than panicking. Closing a
+   valid window still removes it and refreshes the window list.
+
 ## Consequences
 
 - Any of these three faults now degrades to a visible error notification and a

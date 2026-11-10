@@ -5,11 +5,13 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/utils/copy_format"
 	"github.com/lmorg/ttyphoon/utils/notes"
 	"golang.design/x/clipboard"
 )
@@ -180,6 +182,7 @@ func TestFormattedClipboardItemsIncludeRTFHTMLAndText(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("clipboard representations = %d, want 3", len(items))
 	}
+
 	wantFormats := []clipboard.Format{clipboard.Register("text/rtf"), clipboard.Register("text/html"), clipboard.FmtText}
 	wantBytes := []string{`{\rtf1 table}`, "<table></table>", "table"}
 	for position, item := range items {
@@ -189,5 +192,74 @@ func TestFormattedClipboardItemsIncludeRTFHTMLAndText(t *testing.T) {
 	}
 	if legacy := formattedClipboardItems("html", "", "text"); len(legacy) != 2 {
 		t.Fatalf("HTML-only compatibility representations = %d, want 2", len(legacy))
+	}
+}
+
+func TestCopyFormattedSelectionRejectsInvalidImagesBeforeClipboardWrite(t *testing.T) {
+	app := &WApp{}
+	if err := app.CopyFormattedSelection(`<img src="https://example.com/image.png">`); err == nil {
+		t.Fatal("expected an error for an image that was not inlined")
+	}
+	if err := app.CopyFormattedTable(`<img src="https://example.com/image.png">`); err == nil {
+		t.Fatal("expected table copy to reject an image that was not inlined")
+	}
+}
+
+func TestRenderedClipboardTextDependsOnCopyAction(t *testing.T) {
+	source := "<h2>Title</h2><p><u>underlined</u> and *literal*</p><table><tr><th>Name</th><th>Value</th></tr><tr><td>Example</td><td>42</td></tr></table>"
+	formats, err := copy_format.Convert(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection, err := renderedClipboardItems(source, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := renderedClipboardItems(source, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(selection[2].Bytes); selection[2].Format != clipboard.FmtText || got != formats.Markdown ||
+		!strings.Contains(got, "| Name | Value |\n| --- | --- |") ||
+		!strings.Contains(got, `<u>underlined</u> and \*literal\*`) {
+		t.Fatalf("selection plain text is not Markdown: %q", got)
+	}
+	if got := string(table[2].Bytes); table[2].Format != clipboard.FmtText || got != formats.PlainText ||
+		!strings.Contains(got, "Name\tValue\nExample\t42") {
+		t.Fatalf("formatted table plain text lost tab-delimited values: %q", got)
+	}
+	for _, index := range []int{0, 1, 3} {
+		if !reflect.DeepEqual(selection[index], table[index]) {
+			t.Errorf("rich representation %d differs between copy actions", index)
+		}
+	}
+}
+
+func TestSelectionClipboardItemsIncludeChromiumData(t *testing.T) {
+	formats, err := copy_format.Convert("<p>Hello 😀</p><table><tr><th>Name</th></tr><tr><td>Value</td></tr></table>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := selectionClipboardItems(formats)
+	if len(items) != 4 {
+		t.Fatalf("selection representations = %d, want 4", len(items))
+	}
+	standard := formattedClipboardItems(formats.HTML, formats.RTF, formats.PlainText)
+	if !reflect.DeepEqual(items[:3], standard) {
+		t.Fatal("standard clipboard representations changed")
+	}
+	custom := items[3]
+	if custom.Format != clipboard.Register(chromiumClipboardType(runtime.GOOS)) ||
+		!reflect.DeepEqual(custom.Bytes, copy_format.ChromiumData(formats)) {
+		t.Fatal("selection did not publish Chromium custom data")
+	}
+	for goos, want := range map[string]string{
+		"darwin":  "org.chromium.web-custom-data",
+		"windows": "Chromium Web Custom MIME Data Format",
+		"linux":   "chromium/x-web-custom-data",
+	} {
+		if got := chromiumClipboardType(goos); got != want {
+			t.Errorf("%s clipboard type = %q, want %q", goos, got, want)
+		}
 	}
 }

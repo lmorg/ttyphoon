@@ -209,6 +209,8 @@ const addNotesFindFieldValueMock = vi.fn(() => Promise.resolve([]));
 const eventsOnMock = vi.fn();
 const clipboardSetTextMock = vi.fn(() => Promise.resolve());
 const clipboardSetHTMLMock = vi.fn(() => Promise.resolve());
+const copyFormattedSelectionMock = vi.fn(() => Promise.resolve());
+const copyFormattedTableMock = vi.fn(() => Promise.resolve());
 const browserOpenURLMock = vi.fn();
 const showLocalMenuMock = vi.fn();
 
@@ -379,6 +381,9 @@ vi.mock('./wails-bindings.js', () => ({
     DisplayHyperlinkMenu: displayHyperlinkMenuMock,
     ClipboardSetHTML: clipboardSetHTMLMock,
     ClipboardSetFormatted: clipboardSetHTMLMock,
+    CopyFormattedSelection: copyFormattedSelectionMock,
+    CopyFormattedTable: copyFormattedTableMock,
+    GetHyperlinkTooltip: vi.fn(() => Promise.resolve('')),
     ShowTooltip: showTooltipMock,
     CloseTooltip: closeTooltipMock,
     NotesKeyPress: notesKeyPressMock,
@@ -678,6 +683,8 @@ describe('notes rendering', () => {
         clipboardSetTextMock.mockClear();
         browserOpenURLMock.mockReset();
             clipboardSetHTMLMock.mockClear();
+            copyFormattedSelectionMock.mockClear();
+            copyFormattedTableMock.mockClear();
         showLocalMenuMock.mockReset();
 
         getWindowStyleMock.mockResolvedValue(theme);
@@ -4314,6 +4321,51 @@ describe('notes rendering', () => {
         expect(askAIMock).not.toHaveBeenCalled();
     });
 
+    it.each(['notes-preview', 'notes-jupyter', 'notes-ai-output'])('copies a rich selection from %s without changing Copy code', async (id) => {
+        await importNotesModule();
+        const container = document.getElementById(id);
+        container.innerHTML = '<p>Before <strong>Selected</strong> after</p>';
+        const text = container.querySelector('strong').firstChild;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        try {
+            text.parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            const copyIndex = menu.options.findIndex((option) => option === 'Copy selection' || option === 'Copy');
+            expect(copyIndex).toBeGreaterThanOrEqual(0);
+            selection.removeAllRanges();
+            await menu.onSelect(copyIndex);
+            await flushPromises();
+            expect(copyFormattedSelectionMock).toHaveBeenLastCalledWith('<p><strong>Selected</strong></p>');
+            expect(clipboardSetTextMock).not.toHaveBeenCalled();
+        } finally {
+            selection.removeAllRanges();
+        }
+    });
+
+    it('routes native copy of a rendered Markdown selection to the Go formatter', async () => {
+        await importNotesModule();
+        const container = document.getElementById('notes-preview');
+        container.innerHTML = '<h2>Selected heading</h2>';
+        const range = document.createRange();
+        range.selectNodeContents(container.querySelector('h2'));
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        try {
+            const event = new Event('copy', { bubbles: true, cancelable: true });
+            container.dispatchEvent(event);
+            await flushPromises();
+            expect(event.defaultPrevented).toBe(true);
+            expect(copyFormattedSelectionMock).toHaveBeenLastCalledWith('<h2>Selected heading</h2>');
+        } finally {
+            selection.removeAllRanges();
+        }
+    });
+
     it('adds Copy code and renames Copy to Copy selection when right-clicking a code block', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/code.md']);
         getFileMock.mockResolvedValue({ contents: '# Code\n\n```js\nconst x = 1;\n```', text: '', error: '' });
@@ -5582,7 +5634,7 @@ describe('notes rendering', () => {
         await flushPromises();
         expect(clipboardSetTextMock).toHaveBeenLastCalledWith('| First | Second |\n| --- | --- |\n| one<br/>two | alpha<br/>beta, "gamma" |');
 
-        clipboardSetHTMLMock.mockClear();
+        copyFormattedTableMock.mockClear();
         tableCell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
         await flushPromises();
         menu = showLocalMenuMock.mock.calls.at(-1)[0];
@@ -5590,21 +5642,17 @@ describe('notes rendering', () => {
         expect(menu.options).not.toContain('Copy table (HTML)');
         menu.onSelect(menu.options.indexOf('Copy table (Formatted)'));
         await flushPromises();
-        expect(clipboardSetHTMLMock).toHaveBeenCalledOnce();
-        const [html, rtf, plainText] = clipboardSetHTMLMock.mock.calls[0];
+        expect(copyFormattedTableMock).toHaveBeenCalledOnce();
+        expect(copyFormattedSelectionMock).not.toHaveBeenCalled();
+        const [html] = copyFormattedTableMock.mock.calls[0];
         expect(html).toContain('<table>');
         expect(html).toContain('<strong>one</strong><br>two');
         expect(html).not.toContain('notes-cellref');
         expect(html).not.toContain('contenteditable');
-        expect(plainText).toBe('First\tSecond\none\ntwo\talpha\nbeta, "gamma"\n');
-        expect(rtf).toContain('\\trowd');
-        expect(rtf).toContain('\\cellx4500\\cellx9000');
-        expect(rtf).toContain('one\\line two');
-        expect(rtf).toContain('alpha\\line beta, "gamma"');
-        expect(rtf.match(/\\row\b/g)).toHaveLength(2);
+        expect(html).toContain('alpha<br>beta, "gamma"');
     });
 
-    it('escapes RTF table text and encodes Unicode as signed UTF-16 units', async () => {
+    it('passes unescaped table text to the Go formatter for RTF encoding', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });
         await importNotesModule();
@@ -5616,10 +5664,9 @@ describe('notes rendering', () => {
         const menu = showLocalMenuMock.mock.calls.at(-1)[0];
         menu.onSelect(menu.options.indexOf('Copy table (Formatted)'));
         await flushPromises();
-        const [, rtf] = clipboardSetHTMLMock.mock.calls.at(-1);
-        expect(rtf).toContain('\\{value\\}\\\\path\\tab Caf\\u233?\\u-10179?\\u-8704?');
-        expect(rtf).toContain('\\trhdr');
-        expect(rtf).toContain('\\b Name\\b0');
+        const [html] = copyFormattedTableMock.mock.calls.at(-1);
+        expect(html).toContain('<th>Name</th>');
+        expect(html).toContain(cell.textContent);
     });
 
     // Images in the AI stream get the same menu as images in a rendered note,
@@ -9030,15 +9077,14 @@ describe('notes rendering', () => {
                 menu = await openMenu();
                 menu.onSelect(menu.options.indexOf('Copy table (Formatted)'));
                 await flushPromises();
-                const [html, rtf, plainText] = clipboardSetHTMLMock.mock.calls.at(-1);
+                const [html] = copyFormattedTableMock.mock.calls.at(-1);
                 const copiedTable = document.createElement('div');
                 copiedTable.innerHTML = html;
                 expect(Array.from(copiedTable.querySelectorAll('tbody tr')).map((row) =>
                     Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent.trim()))).toEqual([visibleCells]);
-                expect(plainText).toBe(`Name\tValue\n${visibleCells.join('\t')}\n`);
-                expect(rtf).toContain('Beta');
-                expect(rtf).not.toContain('Alpha');
-                expect(rtf).not.toContain('Gamma');
+                expect(html).toContain('Beta');
+                expect(html).not.toContain('Alpha');
+                expect(html).not.toContain('Gamma');
             };
 
             await copyFormats(document.querySelector('#notes-preview table'));

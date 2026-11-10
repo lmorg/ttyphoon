@@ -101,6 +101,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0092](0092-wails-window-packages-and-feature-bindings.md) | Organize Wails code by window and feature | Frontend |
 | [0093](0093-approved-on-demand-mcp-startup.md) | Approved on-demand startup of configured MCP servers | AI tools |
 | [0094](0094-mcp-oauth-login-window.md) | Select built-in or external browser for MCP OAuth login | MCP |
+| [0095](0095-formatted-rendered-selection-copy.md) | Rendered selections share Go-backed clipboard formats | Notes |
 
 ## Recurring themes
 

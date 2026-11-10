@@ -491,9 +491,14 @@ func _respLayoutChange(tmux *Tmux, _ []byte) {
 }
 
 func _respWindowClose(tmux *Tmux, b []byte) {
-	params := bytes.SplitN(b, []byte{' '}, 3)
+	params := bytes.Fields(b)
+	if len(params) != 2 {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Invalid tmux window-close notification: %q", b))
+		return
+	}
+	winID := string(params[1])
 	go func() {
-		tmux.CloseWindow(string(params[2]))
+		tmux.CloseWindow(winID)
 		tmux.renderer.RefreshWindowList()
 	}()
 }

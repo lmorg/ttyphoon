@@ -196,7 +196,7 @@ export function initMarkdownModal(hooks = {}) {
 
         const target = e.target instanceof Element ? e.target : null;
         const tableTarget = target?.closest?.('.markdown-modal-table-scroll-wrap, table, th, td');
-        if (!tableTarget && !markdownModalHooks.onPrint) {
+        if (!tableTarget && !markdownModalHooks.onPrint && !markdownModalHooks.copyMenuItem) {
             return;
         }
 
@@ -205,14 +205,16 @@ export function initMarkdownModal(hooks = {}) {
 
         const isWrapEnabled = !body.classList.contains('markdown-modal-table-wordwrap-off');
         const table = tableTarget?.closest('table') || tableTarget?.querySelector('table');
-        const items = tableTarget ? [{
+        const copyItem = markdownModalHooks.copyMenuItem?.(body);
+        const items = copyItem ? [copyItem] : [];
+        if (tableTarget) items.push(...(items.length ? [{ title: '-', icon: 0 }] : []), {
             title: 'Word wrap',
             icon: isWrapEnabled ? 0xf00c : 0x20,
             onSelect: () => {
                 markdownModalTableWordWrapEnabled = !isWrapEnabled;
                 applyTableWordWrapMode(body);
             },
-        }] : [];
+        });
         const tableItems = table ? markdownModalHooks.tableMenuItems?.(table) || [] : [];
         if (tableItems.length > 0) {
             items.push({ title: '-', icon: 0 }, ...tableItems);
