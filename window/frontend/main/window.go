@@ -2,12 +2,15 @@ package mainwindow
 
 import (
 	"fmt"
+	"log"
+	"math"
 	"sync"
 
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
+	renderwebkit "github.com/lmorg/ttyphoon/window/backend/renderer_webkit"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -15,6 +18,19 @@ import (
 func NewWindow(wailsApp *application.App, wapp *WApp) *application.WebviewWindow {
 	wailsApp.Event.On("ttyphoon:frontend-ready", func(*application.CustomEvent) {
 		go wapp.startTerminalWindow()
+	})
+	wailsApp.Event.On(terminalVisibleEvent, func(*application.CustomEvent) {
+		setTerminalRenderingPaused(false)
+	})
+	wailsApp.Event.On(renderwebkit.RedrawAckEvent, func(event *application.CustomEvent) {
+		batchID, ok := event.Data.(float64)
+		if !ok || batchID < 1 || batchID > math.MaxInt64 || math.Trunc(batchID) != batchID {
+			log.Printf("[warn] renderer: invalid terminal redraw acknowledgement: %T", event.Data)
+			return
+		}
+		if renderer, ok := renderwebkit.CurrentRenderer(); ok {
+			renderer.AcknowledgeRedraw(uint64(batchID))
+		}
 	})
 	window := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:       appTitle(),
@@ -44,7 +60,43 @@ func NewWindow(wailsApp *application.App, wapp *WApp) *application.WebviewWindow
 			})
 		})
 	})
+	registerRenderPauseEvents(window)
 	return window
+}
+
+const terminalVisibleEvent = "ttyphoon:terminal-visible"
+
+// On macOS, Common.WindowHide/WindowShow also fire when the window's occlusion
+// state changes, so a minimised, app-hidden, or fully covered window pauses
+// rendering. Focus and the frontend's terminalVisibleEvent resume rendering if
+// a show event is ever missed.
+func registerRenderPauseEvents(window interface {
+	OnWindowEvent(events.WindowEventType, func(*application.WindowEvent)) func()
+}) {
+	for _, event := range []events.WindowEventType{
+		events.Common.WindowHide,
+		events.Common.WindowMinimise,
+	} {
+		window.OnWindowEvent(event, func(*application.WindowEvent) {
+			setTerminalRenderingPaused(true)
+		})
+	}
+	for _, event := range []events.WindowEventType{
+		events.Common.WindowShow,
+		events.Common.WindowUnMinimise,
+		events.Common.WindowRestore,
+		events.Common.WindowFocus,
+	} {
+		window.OnWindowEvent(event, func(*application.WindowEvent) {
+			setTerminalRenderingPaused(false)
+		})
+	}
+}
+
+func setTerminalRenderingPaused(paused bool) {
+	if renderer, ok := renderwebkit.CurrentRenderer(); ok {
+		renderer.SetRenderingPaused(paused)
+	}
 }
 
 func (a *WApp) WindowShow() {

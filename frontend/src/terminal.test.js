@@ -5,6 +5,7 @@ const eventHandlers = new Map();
 const eventsOnMock = vi.fn((eventName, handler) => {
     eventHandlers.set(eventName, handler);
 });
+const eventsEmitMock = vi.fn(async () => true);
 
 const getWindowStyleMock = vi.fn(async () => ({
     statusBar: true,
@@ -53,6 +54,7 @@ const fontApplyCellStyleMock = vi.fn((cmd) => {
 });
 
 vi.mock('./wails-runtime.js', () => ({
+    EventsEmit: eventsEmitMock,
     EventsOn: eventsOnMock,
 }));
 
@@ -170,6 +172,7 @@ describe('terminal compact redraw decoder', () => {
         fontApplyCellStyleMock.mockClear();
 
         document.body.innerHTML = '<div id="terminal-pane"></div>';
+        eventsEmitMock.mockClear();
 
         const ctx = makeContext2d();
         const offCtx = makeContext2d();
@@ -249,6 +252,42 @@ describe('terminal compact redraw decoder', () => {
         }));
         await flushPromises();
         expect(terminalMouseLeaveMock).toHaveBeenCalledOnce();
+    });
+
+    it('acknowledges a redraw batch after applying it to the offscreen canvas', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        const redraw = eventHandlers.get('terminalRedraw');
+
+        redraw({ id: 42, ops: [[2, 0, 0, 80, 24, 0]] });
+
+        expect(latestOffscreenCtx.fillRect).toHaveBeenCalled();
+        expect(eventsEmitMock).toHaveBeenCalledWith('ttyphoon:terminal-redraw-ack', 42);
+    });
+
+    it('tells the backend the terminal is visible when the window regains focus', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        eventsEmitMock.mockClear();
+        terminalRequestRedrawMock.mockClear();
+
+        window.dispatchEvent(new Event('focus'));
+
+        expect(eventsEmitMock).toHaveBeenCalledWith('ttyphoon:terminal-visible');
+        expect(terminalRequestRedrawMock).toHaveBeenCalled();
+    });
+
+    it('does not report the terminal visible while the document is hidden', async () => {
+        await import('./terminal.js');
+        await flushPromises();
+        eventsEmitMock.mockClear();
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+        try {
+            window.dispatchEvent(new Event('focus'));
+            expect(eventsEmitMock).not.toHaveBeenCalledWith('ttyphoon:terminal-visible');
+        } finally {
+            delete document.hidden;
+        }
     });
 
     it('shows every pane close control but reveals running panes only on hover', async () => {

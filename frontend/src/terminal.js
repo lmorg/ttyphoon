@@ -1,5 +1,5 @@
 import { CloseNotification, GetWindowStyle, SendIpc, TerminalCancelPaneAutoClose, TerminalClonePane, TerminalClosePane, TerminalConfirmKillPane, TerminalCopyImageDataURL, TerminalGetPanes, TerminalGetTabs, TerminalMouseLeave, TerminalPaneZoom, TerminalRequestRedraw, TerminalResize, TerminalSelectWindow, TerminalSetGlyphSize } from './wails-bindings.js';
-import { EventsOn } from './wails-runtime.js';
+import { EventsEmit, EventsOn } from './wails-runtime.js';
 import { wireKeyboardEvents, wireMouseEvents } from './events';
 import { createFontController } from './font';
 import { drawGauge } from './gauge';
@@ -1506,7 +1506,9 @@ EventsOn("terminalImageCacheDelete", payload => {
     imageCache.delete(imageId);
 });
 
-EventsOn("terminalRedraw", ops => {
+EventsOn("terminalRedraw", payload => {
+    const batchId = Number.isSafeInteger(payload?.id) && payload.id > 0 ? payload.id : null;
+    const ops = batchId === null ? payload : payload.ops;
     let ownsRedrawLatch = false;
     try {
         // Guard against startup race where canvas dimensions are 0.
@@ -1629,11 +1631,25 @@ EventsOn("terminalRedraw", ops => {
         if (ownsRedrawLatch) {
             clearRedrawLatch();
         }
+    } finally {
+        if (batchId !== null) {
+            try {
+                Promise.resolve(EventsEmit('ttyphoon:terminal-redraw-ack', batchId))
+                    .catch((err) => console.error('terminal redraw acknowledgement failed', err));
+            } catch (err) {
+                console.error('terminal redraw acknowledgement failed', err);
+            }
+        }
     }
 });
 
 function resumeTerminalAfterSuspend() {
     clearRedrawLatch();
+    if (!document.hidden) {
+        // Backend pauses rendering while the window is hidden; this resumes it
+        // if a native show event was missed.
+        Promise.resolve(EventsEmit('ttyphoon:terminal-visible')).catch(() => {});
+    }
     TerminalRequestRedraw().catch(() => {});
 }
 

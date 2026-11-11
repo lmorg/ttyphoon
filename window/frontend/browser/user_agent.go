@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// embed safari.ver
+//go:embed safari.ver
 var safariVersion string
 
 var browserUserAgent = sync.OnceValues(func() (string, error) {

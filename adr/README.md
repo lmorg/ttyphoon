@@ -105,6 +105,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0096](0096-social-s3-clipboard-image-uploads.md) | Social S3 uploads provide shareable clipboard image URLs | Social / Clipboard |
 | [0097](0097-cloned-pane-hang-diagnosis.md) | (proposed) Cloned panes that hang blank: diagnosis and proposed fixes | Terminal / Concurrency |
 | [0098](0098-backend-logging-conventions.md) | Backend logging conventions: `log` package with `[level] area:` prefixes | Cross-cutting / Diagnostics |
+| [0099](0099-pause-terminal-rendering-when-hidden.md) | Pause terminal rendering while the window is hidden | Rendering / Performance |
 
 ## Recurring themes
 

@@ -17,6 +17,8 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
 - [x] Terminal: Kitty graphics static-image subset ([ADR 0090](0090-kitty-graphics-static-images.md); deferred protocol features tracked there)
 - [x] AI, panel: collapse intermediate blocks when viewing historical prompts, and distinguish live, successful, failed, and cancelled prompts in the prompt menu ([ADR 0088](0088-ai-prompt-status-and-historical-disclosures.md))
+- [ ] Git panel: when comparing a commits there are `=` and `!=` symbols. They're hard to differentiate. So can `=` be in --green and != in --red
+- [ ] make build should auto increment the app version in config.yml
 
 ## refactors
 

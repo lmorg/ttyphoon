@@ -36,9 +36,8 @@ default opener, outside the application.
 - Web pages opened from Notes remain in the application.
 - New windows use a normal 1024-by-768 starting size and the URL host as title.
 - New windows use `Window.AlwaysOnTop`, matching the main window's configuration.
-- The current refactor declares `safariVersion`, but its `// embed safari.ver`
-  comment is not a Go embed directive. Until wired with `//go:embed`, the Safari
-  token is empty; the existing user-agent test still expects `605.1.15`.
+- The Safari token is embedded in the binary, so browser windows do not depend
+  on the source file being available at runtime.
 - The new Wails binding is exposed through `WApp` and added to the generated
   bindings; frontend calls go through `wails-bindings.js`.
 

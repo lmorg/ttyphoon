@@ -28,7 +28,7 @@ reopening a table.
   chart-type dropdown and multi-select column and row fields, defaulting to all
   columns and rows. When a graph is already configured, label the action
   `Modify graph...` and prefill that same modal from the persisted graph spec.
-  The modal title and confirmation button distinguish creation from modification.
+  The modal title and confirmation button read `Create` or `Modify`.
   Graph form field headings use the Markdown heading colour (`--yellow`).
   When modifying, a `Remove` button clears the persisted spec and rendered chart;
   cancelling the modal leaves both unchanged.

@@ -93,11 +93,12 @@ the live application theme:
   ...)` values. Foreground, bold, and source text use black; ANSI and link colours
   retain their supplied components. Request exact print colour adjustment.
 - Capture each element's original computed font size before enabling print
-  media. The current text reduction is `3pt`, with a `1pt` minimum. Code blocks,
-  their `code` elements, and highlighted token descendants use `4pt`, making code
-  one additional point smaller. Subtract from captured sizes rather than nested
-  `em` values so reductions do not compound and highlighted spans cannot reset
-  the size.
+  media. In print, every element's font size is that captured size multiplied
+  by `--notes-print-scale` (currently `0.5`, defined in the print media
+  block). Code blocks and highlighted tokens use the same scale with no extra
+  reduction. Scale captured sizes rather than nested `em` values so reductions
+  do not compound and highlighted spans cannot reset the size. (This replaced
+  the earlier `3pt`/`4pt` subtraction with a `1pt` minimum.)
 - Checked and unchecked checkbox outlines use `--fg` with transparent
   backgrounds. Checked boxes retain an `--fg` tick sized `2pt` above the inherited
   checkbox font size.

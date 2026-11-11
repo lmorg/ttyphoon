@@ -34,7 +34,7 @@ func (term *Term) lineFeed(flags linefeedF) {
 	}
 
 	term.phraseSetToRowPos(flags)
-	go term.lfRedraw()
+	term.lfRedraw()
 }
 
 func (term *Term) setJumpScroll() {

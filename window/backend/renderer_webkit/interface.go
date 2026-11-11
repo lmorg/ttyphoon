@@ -66,6 +66,11 @@ type webkitRender struct {
 	drawCommands   []DrawCommand
 	wapp           context.Context
 	_redraw        chan struct{}
+	renderPaused   atomic.Bool
+	inFlightRedraw atomic.Uint64
+	redrawAck      atomic.Uint64
+	nextRedrawID   atomic.Uint64
+	redrawDeferred atomic.Bool
 	fnSchedule     []func()
 	contextMenu    types.ContextMenu
 	menuMu         sync.Mutex

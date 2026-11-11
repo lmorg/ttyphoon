@@ -9,23 +9,15 @@ afterEach(() => {
 });
 
 describe('Notes print document', () => {
-    it('reduces code blocks and highlighted tokens by one extra point without nested em sizing', () => {
+    it('does not give code blocks or highlighted tokens a separate print font size', () => {
         const stylesheet = postcss.parse(readFileSync('./src/notes.css', 'utf8'));
         const selectors = ['#notes-print-root pre', '#notes-print-root pre code', '#notes-print-root pre code *'];
-        const sizes = new Map();
         stylesheet.walkRules((rule) => {
-            for (const selector of rule.selectors) {
-                if (!selectors.includes(selector)) continue;
-                rule.walkDecls('font-size', (declaration) => {
-                    expect(rule.parent.params).toBe('print');
-                    expect(declaration.important).toBe(true);
-                    sizes.set(selector, declaration.value);
-                });
-            }
+            if (!rule.selectors.some((selector) => selectors.includes(selector))) return;
+            rule.walkDecls('font-size', (declaration) => {
+                throw new Error(`unexpected code font-size override: ${declaration.value}`);
+            });
         });
-        for (const selector of selectors) {
-            expect(sizes.get(selector)).toBe('max(1pt, calc(var(--notes-print-font-size) - 4pt))');
-        }
     });
 
     it('prints the source filename as a separate text line before the code', async () => {
@@ -59,7 +51,7 @@ describe('Notes print document', () => {
         });
     });
 
-    it('captures original sizes before applying a print-only three-point reduction', async () => {
+    it('captures original sizes before applying a print-only scale', async () => {
         await printDocument({
             source: 'font sizes', dismissMenu: vi.fn(),
             renderMarkdown: async (container) => {
@@ -76,14 +68,20 @@ describe('Notes print document', () => {
         });
         const stylesheet = postcss.parse(readFileSync('./src/notes.css', 'utf8'));
         let reduction;
+        let scale;
         stylesheet.walkRules((rule) => {
             if (rule.selectors.includes('#notes-print-root *')) {
                 expect(rule.parent.params).toBe('print');
                 reduction = rule.nodes.find((declaration) => declaration.prop === 'font-size');
             }
+            rule.walkDecls('--notes-print-scale', (declaration) => {
+                expect(rule.parent.params).toBe('print');
+                scale = declaration.value;
+            });
         });
-        expect(reduction.value).toBe('max(1pt, calc(var(--notes-print-font-size) - 3pt))');
+        expect(reduction.value).toBe('calc(var(--notes-print-font-size) * var(--notes-print-scale))');
         expect(reduction.important).toBe(true);
+        expect(scale).toBe('0.5');
     });
 
     it('scopes the supplied Display-P3 palette to print media and adds page margins and padding', () => {

@@ -36,6 +36,11 @@ run-webkit:
 
 # Test
 .PHONY: test
+ifeq ($(shell uname -s),Darwin)
+test: export MACOSX_DEPLOYMENT_TARGET = 12.0
+test: export CGO_CFLAGS = -mmacosx-version-min=12.0
+test: export CGO_LDFLAGS = -mmacosx-version-min=12.0
+endif
 test: generate
 	npm --prefix frontend run test:run -- --reporter=dot
 	go test ./... -count 1 -race -covermode=atomic

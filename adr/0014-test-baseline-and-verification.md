@@ -21,6 +21,24 @@ failures are fixed.
 
 ### Latest verification
 
+On 2026-11-11, `go test -race ./virtualterm -count=5` passed after making line-feed
+jump-scroll redraw accounting synchronous. This keeps redraws at the configured
+line-feed cadence while eliminating the unsynchronized counter access; the
+synchronized-output test renderer now uses atomic counters, and new tests cover
+the jump-scroll threshold and switching between smooth and jump scroll.
+
+On 2026-11-10, the full frontend suite passed all 718 tests. The print-style
+assertions in `src/notes-print.test.js` were updated to the scale-based print
+sizing (ADR 0079), and the graph modal tests to the `Create`/`Modify` titles
+(ADR 0054). The `ai/tools/file` call-description tests were also updated to
+expect the escaped `<pre><code>` cells produced by `markdownTableCode`;
+`go test ./ai/tools/file -count=1` passes.
+
+The `utils/hyperlink_tooltip` tests now pass after preserving separate User and
+Host rows for mail recipients and correcting recipient-less and malformed
+`mailto:` tooltips (ADR 0089). `go test ./window/frontend/browser -count=1`
+also passes after embedding the Safari user-agent token (ADR 0091).
+
 On 2026-11-05, the Wails window-package refactor (ADR 0092) passed relocated Go
 tests, `go build ./...`, binding regeneration (one service, 211 methods), and
 the production frontend build. Native macOS checks passed main-window
@@ -105,8 +123,10 @@ Observed on macOS with Go 1.27.1 on 2026-10-14; these AI packages were not rerun
 during this documentation update:
 
 - `ai/tools/file`: `TestInsertLinesCallDescriptionRendersEscapedInserts` and
-  `TestPatchFileCallDescriptionRendersEmbeddedTemplate` expect older description
-  formatting/line numbers.
+  `TestPatchFileCallDescriptionRendersEmbeddedTemplate` expected older
+  description formatting/line numbers. Fixed 2026-11-10 by updating their
+  expectations to the escaped `<pre><code>` cells rendered by `markdownTableCode`;
+  the targeted package test passes.
 - `ai/tools/shell`: `TestBashReturnsOutputAndExitError` expects a returned Bash
   exit error, but receives nil.
 

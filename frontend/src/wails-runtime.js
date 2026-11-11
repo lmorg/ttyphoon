@@ -8,6 +8,10 @@ export function EventsOff(...eventNames) {
     Events.Off(...eventNames);
 }
 
+export function EventsEmit(eventName, data) {
+    return Events.Emit(eventName, data);
+}
+
 export function ClipboardSetText(text) {
     return Clipboard.SetText(text);
 }

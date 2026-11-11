@@ -28,11 +28,56 @@ func TestHTML(t *testing.T) {
 		},
 		{
 			name: "email", scheme: "mailto", target: "person+tag%40example.com?subject=Hello%20%3Cworld%3E&body=Hi#section",
-			want: []string{`aria-label="Email">&#xf0e0;`, "<code>person+tag@example.com</code>", "<code>subject: Hello &lt;world&gt;</code>", "<code>body: Hi</code>", `aria-label="Bookmark">&#xf02e;`, "<code>section</code>"},
+			want: []string{
+				`aria-label="User">&#xf007;</span> <code>person+tag</code>`,
+				`aria-label="Host">&#xf015;</span> <code>example.com</code>`,
+				"<code>subject: Hello &lt;world&gt;</code>", "<code>body: Hi</code>",
+				`aria-label="Bookmark">&#xf02e;`, "<code>section</code>",
+			},
+		},
+		{
+			name: "email recipient escaping", scheme: "mailto", target: "%3Cperson%3E+tag%40example.com",
+			want: []string{
+				`aria-label="User">&#xf007;</span> <code>&lt;person&gt;+tag</code>`,
+				`aria-label="Host">&#xf015;</span> <code>example.com</code>`,
+			},
+		},
+		{
+			name: "multiple email recipients", scheme: "mailto", target: "first%2Btag%40example.com,second%40other.example?subject=Hi#section",
+			want: []string{
+				`aria-label="Email">&#xf0e0;</span> <code>first+tag@example.com,second@other.example</code>`,
+				"<code>subject: Hi</code>", "<code>section</code>",
+			},
+		},
+		{
+			name: "email without host", scheme: "mailto", target: "person%2Btag?subject=Hi#section",
+			want: []string{
+				`aria-label="Email">&#xf0e0;</span> <code>person+tag</code>`,
+				"<code>subject: Hi</code>", "<code>section</code>",
+			},
+		},
+		{
+			name: "email with a leading slash", scheme: "mailto", target: "/person%40example.com",
+			want: []string{
+				`aria-label="User">&#xf007;</span> <code>/person</code>`,
+				`aria-label="Host">&#xf015;</span> <code>example.com</code>`,
+			},
 		},
 		{
 			name: "malformed email", scheme: "mailto", target: "person%ZZ@example.com",
 			want: []string{`aria-label="Path"`, "<code>person%ZZ@example.com</code>"},
+		},
+		{
+			name: "malformed email query", scheme: "mailto", target: "person@example.com?subject=bad%ZZ&body=%3Cvalue%3E",
+			want: []string{`aria-label="Path"`, "<code>person@example.com?subject=bad%ZZ&amp;body=%3Cvalue%3E</code>"},
+		},
+		{
+			name: "malformed email fragment", scheme: "mailto", target: "person@example.com#bad%ZZ",
+			want: []string{`aria-label="Path"`, "<code>person@example.com#bad%ZZ</code>"},
+		},
+		{
+			name: "malformed email escaping", scheme: "mailto", target: "person%ZZ<bad>@example.com",
+			want: []string{`aria-label="Path"`, "<code>person%ZZ&lt;bad&gt;@example.com</code>"},
 		},
 		{
 			name: "bookmark escaping", scheme: "https", target: "example.com/docs#%3Csection%3E",
@@ -134,11 +179,31 @@ func TestTooltipRowOrder(t *testing.T) {
 		},
 		{
 			name: "email with details", scheme: "mailto", target: "person@example.com?subject=Hello#section",
-			labels: []string{"Scheme", "Email", "subject", "Bookmark"},
+			labels: []string{"Scheme", "User", "Host", "subject", "Bookmark"},
 		},
 		{
 			name: "email without recipient", scheme: "mailto", target: "?subject=Hello",
 			labels: []string{"Scheme", "subject"},
+		},
+		{
+			name: "email without recipient or query", scheme: "mailto", target: "#section",
+			labels: []string{"Scheme", "Bookmark"},
+		},
+		{
+			name: "empty email target", scheme: "mailto", target: "",
+			labels: []string{"Scheme"},
+		},
+		{
+			name: "email with multiple recipients", scheme: "mailto", target: "first@example.com,second@example.com?subject=Hello",
+			labels: []string{"Scheme", "Email", "subject"},
+		},
+		{
+			name: "malformed email", scheme: "mailto", target: "person%ZZ@example.com",
+			labels: []string{"Scheme", "Path"},
+		},
+		{
+			name: "malformed email query", scheme: "mailto", target: "person@example.com?subject=bad%ZZ",
+			labels: []string{"Scheme", "Path"},
 		},
 		{
 			name: "other scheme", scheme: "tel", target: "+123456789",

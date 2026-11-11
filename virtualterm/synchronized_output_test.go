@@ -1,6 +1,7 @@
 package virtualterm
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -9,16 +10,16 @@ import (
 
 type synchronizedOutputTestRenderer struct {
 	types.Renderer
-	redraws int
-	frames  int
+	redraws atomic.Int32
+	frames  atomic.Int32
 }
 
 func (renderer *synchronizedOutputTestRenderer) TriggerRedraw() {
-	renderer.redraws++
+	renderer.redraws.Add(1)
 }
 
 func (renderer *synchronizedOutputTestRenderer) DrawFrame(types.Tile) {
-	renderer.frames++
+	renderer.frames.Add(1)
 }
 
 func (renderer *synchronizedOutputTestRenderer) PrintCell(types.Tile, *types.Cell, *types.XY) {}
@@ -44,8 +45,8 @@ func TestSynchronizedOutputPrivateModeLifecycle(t *testing.T) {
 	if rendered := term.Render(); rendered {
 		t.Fatal("expected rendering to be deferred during synchronized output")
 	}
-	if renderer.frames != 0 {
-		t.Fatalf("expected no frame while synchronized, got %d", renderer.frames)
+	if frames := renderer.frames.Load(); frames != 0 {
+		t.Fatalf("expected no frame while synchronized, got %d", frames)
 	}
 
 	end := "\x1b[?2026l"
@@ -55,8 +56,8 @@ func TestSynchronizedOutputPrivateModeLifecycle(t *testing.T) {
 	if term.synchronizedUpdateActive(time.Now()) {
 		t.Fatal("expected DECRST 2026 to end synchronized output")
 	}
-	if renderer.redraws != 1 {
-		t.Fatalf("expected end to request one redraw, got %d", renderer.redraws)
+	if redraws := renderer.redraws.Load(); redraws != 1 {
+		t.Fatalf("expected end to request one redraw, got %d", redraws)
 	}
 }
 
@@ -84,8 +85,8 @@ func TestSynchronizedOutputRefreshesDeadlineAndExpires(t *testing.T) {
 	if rendered := term.Render(); !rendered {
 		t.Fatal("expected rendering to resume after the synchronized-output timeout")
 	}
-	if renderer.frames != 1 {
-		t.Fatalf("expected one frame after timeout, got %d", renderer.frames)
+	if frames := renderer.frames.Load(); frames != 1 {
+		t.Fatalf("expected one frame after timeout, got %d", frames)
 	}
 }
 
@@ -96,7 +97,7 @@ func TestSynchronizedOutputIgnoresUnmatchedEnd(t *testing.T) {
 
 	term.endSynchronizedUpdate()
 
-	if renderer.redraws != 0 {
-		t.Fatalf("expected unmatched end not to request a redraw, got %d", renderer.redraws)
+	if redraws := renderer.redraws.Load(); redraws != 0 {
+		t.Fatalf("expected unmatched end not to request a redraw, got %d", redraws)
 	}
 }

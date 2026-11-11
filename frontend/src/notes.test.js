@@ -9171,7 +9171,7 @@ describe('notes rendering', () => {
             menu.onSelect(menu.options.indexOf('Create graph...'));
             await flushPromises();
 
-            expect(document.getElementById('notes-modal-title').textContent).toBe('Create graph');
+            expect(document.getElementById('notes-modal-title').textContent).toBe('Create');
             const titleInput = document.querySelector('.notes-graph-text-title');
             const checkerIndex = attachSpellCheck.mock.calls.findIndex(([target]) => target === titleInput);
             expect(checkerIndex).toBeGreaterThanOrEqual(0);
@@ -9182,7 +9182,7 @@ describe('notes rendering', () => {
                 expect(control.getAttribute('spellcheck')).toBe('false');
                 expect(attachSpellCheck.mock.calls.some(([target]) => target === control)).toBe(control === titleInput);
             }
-            expect(document.querySelector('#notes-modal-title h3')?.textContent).toBe('Create graph');
+            expect(document.querySelector('#notes-modal-title h3')?.textContent).toBe('Create');
             expect(getNotesRenderedStyles()).toMatch(/\.notes-graph-options-list\s*\{[^}]*height:\s*190px;[^}]*min-height:\s*190px;[^}]*max-height:\s*190px;/s);
             expect(document.querySelector('#notes-modal-body .notes-graph-dropdown')?.textContent.trim()).toContain('Line');
             const actions = Array.from(document.getElementById('notes-modal-actions').children).map((button) => button.id);
@@ -9326,8 +9326,8 @@ describe('notes rendering', () => {
             expect(menu.icons[menu.options.indexOf('Modify graph...')]).toBe(0xf201);
             menu.onSelect(menu.options.indexOf('Modify graph...'));
             await flushPromises();
-            expect(document.getElementById('notes-modal-title').textContent).toBe('Modify graph');
-            expect(document.getElementById('notes-modal-create').textContent).toBe('Modify graph');
+            expect(document.getElementById('notes-modal-title').textContent).toBe('Modify');
+            expect(document.getElementById('notes-modal-create').textContent).toBe('Modify');
             expect(document.getElementById('notes-graph-remove')?.textContent).toBe('Remove');
             expect(document.querySelector('.notes-graph-dropdown').textContent).toContain('Bar');
             const title = document.querySelector('.notes-graph-text-title');

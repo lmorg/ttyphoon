@@ -54,11 +54,15 @@ overwrites, wide characters, and reflow.
   Omit absent optional fields without
   changing the order of remaining rows. File tooltips show Path then File;
   other schemes and malformed HTTP(S) targets show Scheme then Path.
-- `mailto:` tooltips show Scheme, a non-empty Email recipient (`f0e0`),
-  query fields such as subject, body, cc, and bcc, then a non-empty Bookmark
-  fragment (`f02e`). Percent-decode recipients without turning literal plus
-  signs into spaces and HTML-escape all values. Recipient-less compose links
-  omit Email. Malformed mail targets retain the Scheme/Path fallback.
+- `mailto:` tooltips show Scheme, then User (`f007`) and Host (`f015`) for a
+  recipient containing exactly one `@`. Other non-empty recipients use an
+  Email (`f0e0`) row containing the decoded recipient, excluding the query and
+  fragment. Follow these with query fields such as subject, body, cc, and bcc,
+  then a non-empty Bookmark fragment (`f02e`). Percent-decode recipients
+  without turning literal plus signs into spaces and HTML-escape all values.
+  Recipient-less compose links omit recipient rows. Malformed mail targets,
+  including invalid URL escapes in the recipient, query, or fragment, retain
+  the Scheme/Path fallback with the original target.
 - Render hyperlink tooltip HTML once during element generation and reuse the
   cached string on hover. Keep rendering in `utils/hyperlink_tooltip` without
   renderer or element dependencies; Notes HTTP(S), file, and mailto-link hovers use the
