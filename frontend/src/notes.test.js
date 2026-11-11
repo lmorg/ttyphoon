@@ -1113,6 +1113,33 @@ describe('notes rendering', () => {
         expect(getNotesRenderedStyles()).toMatch(/#notes-title\s*\{[^}]*font-family:\s*"Jura", var\(--font-family\), sans-serif;[^}]*color:\s*var\(--yellow\);[^}]*font-weight:\s*bold;/s);
     });
 
+    it('loads SVG source in Edit and retains its image preview tab', async () => {
+        const source = '<svg xmlns="http://www.w3.org/2000/svg"><text>Diagram</text></svg>';
+        listFilesMock.mockResolvedValue(['$NOTES/diagram.svg']);
+        getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
+        resolveFilePathMock.mockResolvedValue('/tmp/diagram.svg');
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/diagram.svg"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const editTab = document.getElementById('notes-tab-editor');
+        const viewTab = document.getElementById('notes-tab-image-view');
+        expect(getFileMock).toHaveBeenCalledWith('$NOTES/diagram.svg');
+        expect(document.getElementById('notes-editor').value).toBe(source);
+        expect(editTab.style.display).not.toBe('none');
+        expect(viewTab.style.display).not.toBe('none');
+        expect(document.getElementById('notes-image-view-wrap').dataset.active).toBe('true');
+
+        editTab.click();
+        expect(document.getElementById('notes-editor-wrap').dataset.active).toBe('true');
+        viewTab.click();
+        await flushPromises();
+        await flushPromises();
+        expect(document.getElementById('notes-image-view-img').src).toContain('/__asset?path=%2Ftmp%2Fdiagram.svg&v=');
+    });
+
     it('restores and persists the file-list splitter without replacing its preferred ratio on clamp', async () => {
         listFilesMock.mockResolvedValue([]);
         getNotesLayoutSizingMock.mockResolvedValue({ fileListRatio: 0.4 });
@@ -2305,12 +2332,33 @@ describe('notes rendering', () => {
         expect(getNotesStyleProperties('#notes-lsp-tooltip:hover').opacity).toBe('1');
     });
 
-    it('closes visible LSP tooltips when Escape is pressed in editor', async () => {
-        listFilesMock.mockResolvedValue([]);
+    it.each(['Notes', 'Jupyter'])('dismisses tooltips, then completion, then toggles Vim in %s', async (surface) => {
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+            measureText: () => ({ width: 8 }),
+        });
+        listFilesMock.mockResolvedValue(['$NOTES/escape.md']);
+        getFileMock.mockResolvedValue({ contents: '```python\nprint("hello")\n```', text: '', error: '' });
 
         await importNotesModule();
+        document.querySelector('[data-file="$NOTES/escape.md"]').click();
+        await flushPromises();
+        await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
+        let editor = document.getElementById('notes-editor');
+        if (surface === 'Jupyter') {
+            const { FormatCodeBlock } = await import('./wails-bindings.js');
+            FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/escape.py', Err: '' });
+            document.getElementById('notes-tab-jupyter').click();
+            await flushPromises();
+            await flushPromises();
+            document.querySelector('.jupyter-lsp-notes').click();
+            await flushPromises();
+            await flushPromises();
+            editor = document.querySelector('.jupyter-code-editable');
+        }
+        const { attachVimMode } = await vi.importActual('./vim-mode');
+        const vim = attachVimMode(editor);
+        editor.focus();
         const lspTooltip = document.getElementById('notes-lsp-tooltip');
         const lspHoverTooltip = document.getElementById('notes-lsp-hover-tooltip');
         const lspCompletion = document.getElementById('notes-lsp-completion');
@@ -2321,12 +2369,21 @@ describe('notes rendering', () => {
         lspCompletion.style.display = 'block';
         lspCompletion.innerHTML = '<div>completion</div>';
 
-        editor.focus();
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        const escape = () => editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 
+        escape();
         expect(lspTooltip.style.display).toBe('none');
         expect(lspHoverTooltip.style.display).toBe('none');
+        expect(lspCompletion.style.display).toBe('block');
+        expect(vim.getMode()).toBe('insert');
+        escape();
         expect(lspCompletion.style.display).toBe('none');
+        expect(vim.getMode()).toBe('insert');
+        escape();
+        expect(vim.getMode()).toBe('normal');
+        escape();
+        expect(vim.getMode()).toBe('insert');
+        vim.detach();
     });
 
     it('wires LSP document lifecycle for code files', async () => {

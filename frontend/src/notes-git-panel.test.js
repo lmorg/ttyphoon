@@ -869,6 +869,7 @@ describe('Notes Git panel', () => {
         const rows = [...elements.gitFileList.querySelectorAll('.notes-git-file-row')];
         expect(rows.map((row) => row.dataset.path)).toEqual(['z-different.go', 'a-equal.go', 'b-equal.go']);
         expect(rows.map((row) => row.querySelector('.notes-git-status-code').textContent)).toEqual(['≠', '=', '=']);
+        expect(rows.map((row) => row.querySelector('.notes-git-status-code').dataset.comparison)).toEqual(['different', 'equal', 'equal']);
         expect(rows[1].querySelector('.notes-git-status-code').dataset.tooltip).toBe('Matches abcdef123456');
         expect(rows[1].querySelectorAll('.notes-git-action')).toHaveLength(0);
         rows[1].querySelector('.notes-git-file').click();

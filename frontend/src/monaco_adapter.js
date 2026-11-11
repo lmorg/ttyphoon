@@ -187,7 +187,7 @@ export function attachMonacoSpellcheckContextMenu(editor, findMisspelling, repla
     };
 }
 
-function attachMonacoEditorHooks(editor, options, onEscape) {
+export function attachMonacoEditorHooks(editor, options, onEscape) {
     const keyDownDisposable = editor.onKeyDown((event) => {
         const browserEvent = event?.browserEvent;
         const position = editor.getPosition();
@@ -210,11 +210,6 @@ function attachMonacoEditorHooks(editor, options, onEscape) {
                 browserEvent.stopPropagation?.();
                 return;
             }
-        }
-
-        if (browserEvent && String(browserEvent.key || '') === 'Escape'
-            && typeof onEscape === 'function' && onEscape(browserEvent, event) === true) {
-            return;
         }
 
         if (browserEvent) {
@@ -244,6 +239,30 @@ function attachMonacoEditorHooks(editor, options, onEscape) {
     });
 
     const domNode = editor.getDomNode();
+    const onEscapeHandler = typeof onEscape === 'function'
+        ? (event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) {
+                return;
+            }
+            const hover = editor.getContribution('editor.contrib.contentHover');
+            let handled = true;
+            if (hover?.isHoverVisible) {
+                hover.hideContentHover();
+            } else if (domNode.querySelector('.parameter-hints-widget.visible')) {
+                editor.trigger('keyboard', 'closeParameterHints', null);
+            } else if (options.onEscape?.(event) === true) {
+                // Notes tooltips live outside Monaco's editor DOM.
+            } else if (domNode.querySelector('.suggest-widget.visible')) {
+                editor.trigger('keyboard', 'hideSuggestWidget', null);
+            } else {
+                handled = onEscape(event) === true;
+            }
+            if (handled) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        }
+        : null;
     const onPasteHandler = typeof options.onPaste === 'function'
         ? (event) => options.onPaste(event)
         : null;
@@ -267,6 +286,9 @@ function attachMonacoEditorHooks(editor, options, onEscape) {
     if (domNode && onPrimaryPasteHandler) {
         domNode.addEventListener('keydown', onPrimaryPasteHandler, true);
     }
+    if (domNode && onEscapeHandler) {
+        domNode.addEventListener('keydown', onEscapeHandler, true);
+    }
     if (domNode && onPasteHandler) {
         domNode.addEventListener('paste', onPasteHandler, true);
     }
@@ -280,6 +302,9 @@ function attachMonacoEditorHooks(editor, options, onEscape) {
             typeDisposable.dispose();
             if (domNode && onPrimaryPasteHandler) {
                 domNode.removeEventListener('keydown', onPrimaryPasteHandler, true);
+            }
+            if (domNode && onEscapeHandler) {
+                domNode.removeEventListener('keydown', onEscapeHandler, true);
             }
             if (domNode && onPasteHandler) {
                 domNode.removeEventListener('paste', onPasteHandler, true);
@@ -653,6 +678,7 @@ export async function createMonacoAdapter(container, options = {}) {
     let currentVimSubMode = '';
     let vimReplaceOncePending = false;
     let vimAdapterDisposing = false;
+    let vimAdapterLoading = false;
     let vimCursorPulseRaf = 0;
 
     function applyTheme(colors = {}) {
@@ -934,11 +960,26 @@ export async function createMonacoAdapter(container, options = {}) {
         });
     }
 
+    function disableVimMode() {
+        vimAdapter?.dispose();
+        vimAdapter = null;
+        stopMonacoVimCursorPulse();
+        setMonacoVimActiveClass(false);
+        vimIndicator?.remove();
+        vimIndicator = null;
+        currentVimLabel = '';
+        currentVimMode = '';
+        currentVimSubMode = '';
+        vimReplaceOncePending = false;
+        editor.updateOptions({ cursorStyle: 'line', cursorBlinking: 'blink' });
+    }
+
     async function enableVimMode() {
-        if (vimAdapter || vimAdapterDisposing) {
+        if (vimAdapter || vimAdapterDisposing || vimAdapterLoading) {
             return;
         }
 
+        vimAdapterLoading = true;
         vimIndicator = vimIndicator || createVimModeIndicator();
 
         try {
@@ -982,6 +1023,8 @@ export async function createMonacoAdapter(container, options = {}) {
             currentVimMode = '';
             currentVimSubMode = '';
             vimReplaceOncePending = false;
+        } finally {
+            vimAdapterLoading = false;
         }
     }
 
@@ -1023,13 +1066,18 @@ export async function createMonacoAdapter(container, options = {}) {
 
 
 
-    const inputHooks = attachMonacoEditorHooks(editor, options, (browserEvent) => {
-        if (vimAdapter || isMonacoOverlayOpen()) {
-            return true;
+    const inputHooks = attachMonacoEditorHooks(editor, options, () => {
+        if (isMonacoOverlayOpen()) {
+            return false;
         }
-        browserEvent.preventDefault?.();
-        browserEvent.stopPropagation?.();
-        void enableVimMode();
+        if (vimAdapter) {
+            if (currentVimMode === 'insert') {
+                return false;
+            }
+            disableVimMode();
+        } else {
+            void enableVimMode();
+        }
         return true;
     });
 
@@ -1647,20 +1695,7 @@ export async function createMonacoAdapter(container, options = {}) {
         dispose() {
             fontMetricsRefresh.dispose();
             vimAdapterDisposing = true;
-            if (vimAdapter) {
-                vimAdapter.dispose?.();
-                vimAdapter = null;
-            }
-            stopMonacoVimCursorPulse();
-            setMonacoVimActiveClass(false);
-            if (vimIndicator) {
-                vimIndicator.remove();
-                vimIndicator = null;
-            }
-            currentVimLabel = '';
-            currentVimMode = '';
-            currentVimSubMode = '';
-            vimReplaceOncePending = false;
+            disableVimMode();
             changeDisposable.dispose();
             cursorDisposable.dispose();
             mouseMoveDisposable.dispose();

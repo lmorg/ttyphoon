@@ -122,6 +122,13 @@ toggle behavior. Terminal focus, an open inputbox and fullscreen image overlays
 still leave the shortcut unhandled by Notes. Other shortcuts retain their
 existing listeners.
 
+Updated 2026-11-11: Escape dismisses LSP tooltips first, then an LSP completion
+menu on a subsequent press, and only toggles Vim/insert mode when neither is
+open. Monaco intercepts Escape in the editor DOM capture phase, before native
+keybindings and monaco-vim can process the same event. Its adapter also checks
+Notes tooltips rendered outside Monaco. The textarea and Jupyter Vim handlers
+respect previously prevented events so dismissing a popup cannot change mode.
+
 Regression tests enable a mock Monaco adapter and deliberately make the hidden
 textarea stale, verifying model searches and visible selection/reveal for JSON,
 YAML, YML and XML. Shortcut tests simulate a Monaco-level handler that would

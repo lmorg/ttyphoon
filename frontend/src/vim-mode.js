@@ -1096,6 +1096,9 @@ export function attachVimMode(textarea) {
 
     // ── main keydown handler ──────────────────────────────────────────────────
     function onKeyDown(event) {
+        if (event.defaultPrevented) {
+            return;
+        }
         // Let Ctrl/Meta shortcuts pass through in all modes (save, copy, etc.)
         if (event.ctrlKey || event.metaKey) {
             return;
@@ -1117,13 +1120,14 @@ export function attachVimMode(textarea) {
             return;
         }
 
+        if (event.key === 'Escape') {
+            setMode(MODE_INSERT);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
         if (mode === MODE_REPLACE_ONCE) {
-            if (event.key === 'Escape') {
-                setMode(MODE_NORMAL);
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
             if (event.key.length === 1) {
                 applyVimReplace(getCurrentPos(textarea), event.key);
                 setMode(MODE_NORMAL);
@@ -1134,12 +1138,6 @@ export function attachVimMode(textarea) {
         }
 
         if (mode === MODE_REPLACE) {
-            if (event.key === 'Escape') {
-                setMode(MODE_NORMAL);
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
             if (event.key === 'Backspace') {
                 // Move cursor back one position (replace mode backspace)
                 const p = getCurrentPos(textarea);
@@ -1164,15 +1162,6 @@ export function attachVimMode(textarea) {
         }
 
         // MODE_NORMAL
-        if (event.key === 'Escape') {
-            // Already in normal; just clear pending state
-            operator = null;
-            countBuf = '';
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
-
         handleNormalKey(event);
     }
 

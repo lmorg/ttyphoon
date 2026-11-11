@@ -14,11 +14,15 @@ All improvements should consider if actions are blocking the UI -- particularly 
 - [ ] Notes: support for audio playback
 - [ ] Our custom menu should support ctrl+v / cmd+v to paste text to the usually hidden search input field
 - [ ] Notes, git panel: hide and disable the commit toolbar button when there are no changes to commit and nothing to stage (clean work tree)
-- [ ] Notes, SVG: these files should support an Edit even though they're images because they are built from text
+- [x] Notes, SVG: these files should support an Edit even though they're images because they are built from text
 - [x] Terminal: Kitty graphics static-image subset ([ADR 0090](0090-kitty-graphics-static-images.md); deferred protocol features tracked there)
 - [x] AI, panel: collapse intermediate blocks when viewing historical prompts, and distinguish live, successful, failed, and cancelled prompts in the prompt menu ([ADR 0088](0088-ai-prompt-status-and-historical-disclosures.md))
-- [ ] Git panel: when comparing a commits there are `=` and `!=` symbols. They're hard to differentiate. So can `=` be in --green and != in --red
-- [ ] make build should auto increment the app version in config.yml
+- [x] Git panel: when comparing a commits there are `=` and `!=` symbols. They're hard to differentiate. So can `=` be in --green and != in --red
+- [x] make build should auto increment the app version in config.yml
+- [x] Notes, monaco and jupyter code editor: pressing ESC brings up the VIM mode but also closes menus. But this behaviour is consistent between the two editors. The behaviour should be:
+    1. Close any LSP tooltip (if none present, move to option 2)
+    2. Close any LSP menu (if no menu open, move to option 3)
+    3. Start VIM mode (if already in vim mode, switch back to insert mode)
 
 ## refactors
 
@@ -27,6 +31,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 ## functional tweaks
 
 - [x] Window UI: disable the custom titlebar on non-macOS platforms
+- [x] AI Ask: show a sticky "Selecting skills for request...." notification until the main agent run takes over
 
 ## bugfixes
 

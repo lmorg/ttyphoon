@@ -1044,6 +1044,7 @@ async function createMonacoMainEditor() {
         onCompletionRequest: (payload) => {
             return handleMonacoCompletionRequest(payload);
         },
+        onEscape: closeOpenLspTooltips,
     });
 
     monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
@@ -1523,6 +1524,10 @@ function isHtmlViewFile(fileName) {
 
 function isImageFile(fileName) {
     return /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i.test(String(fileName || ''));
+}
+
+function isSvgFile(fileName) {
+    return /\.svg$/i.test(String(fileName || ''));
 }
 
 function isCsvFile(fileName) {
@@ -4715,6 +4720,9 @@ function scheduleAutoSave() {
 }
 
 function isCurrentFileLspEligible() {
+    if (isSvgFile(state.currentFile)) {
+        return false;
+    }
     return state.currentFileType === 'code' || state.currentFileType === 'json' || state.currentFileType === 'markdown' || state.currentFileType === 'html';
 }
 
@@ -4772,6 +4780,10 @@ function closeOpenLspTooltips() {
     if (lspHoverTooltipEl && lspHoverTooltipEl.style.display !== 'none' && lspHoverTooltipEl.style.display !== '') {
         hideLspHoverTooltip();
         closedAny = true;
+    }
+
+    if (closedAny) {
+        return true;
     }
 
     if (lspCompletionEl && lspCompletionEl.style.display !== 'none' && lspCompletionEl.style.display !== '') {
@@ -6962,7 +6974,7 @@ function setViewMode(mode) {
     } else if (state.currentFileType === 'html') {
         state.viewMode = mode === 'viewer' ? 'html-view' : 'editor';
     } else if (state.currentFileType === 'code') {
-        state.viewMode = 'editor';
+        state.viewMode = isSvgFile(state.currentFile) && mode === 'image-view' ? 'image-view' : 'editor';
     } else if (state.currentFileType === 'binary') {
         state.viewMode = 'hex';
     } else if (state.currentFileType === 'image') {
@@ -9061,8 +9073,9 @@ function updateTabVisibility(fileType) {
     elements.tabCsvRun.style.display = 'none';
 
     if (isCode) {
-        // Code files use a single Edit tab.
+        // SVG files also retain their image preview alongside the text editor.
         elements.tabEditor.style.display = '';
+        elements.tabImageView.style.display = isSvgFile(state.currentFile) ? '' : 'none';
         elements.tabHex.style.display = '';
         elements.tabMeta.style.display = '';
         elements.tabViewer.style.display = 'none';
@@ -10058,7 +10071,8 @@ async function loadFile(file, options = {}) {
         const loadingJsonByExtension = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
         const loadingHtml     = isHtmlViewFile(file);
-        const loadingImage    = isImageFile(file);
+        const loadingSvg      = isSvgFile(file);
+        const loadingImage    = isImageFile(file) && !loadingSvg;
         const loadingCsv      = isCsvFile(file);
         stickyId = loadingJsonByExtension ? Date.now() : null;
 
@@ -10080,18 +10094,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('image');
             applyDocumentCache(documentCache, 'image-view');
 
-            // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
-            // GetFile does. The asset handler then streams the file to the webview
-            // rather than marshalling it through the bridge as base64.
-            const resolvedPath = await ResolveFilePath(file);
-            state.currentFileUri = filePathToUri(resolvedPath || file);
-            elements.imageViewImg.onerror = () => {
-                notifyTerminal(`Failed to load image: ${fileName}`, 'error');
-            };
-            elements.imageViewImg.src = notesAssetURL(resolvedPath || file);
-            elements.imageViewImg.dataset.originalFilename = fileName;
-            enableFullscreenImages(elements.imageViewWrap);
-            enableImageContextMenus(elements.imageViewWrap);
+            await configureImagePreview(file, fileName);
 
             state.suspendDocumentCacheSave = false;
             saveDocumentCache();
@@ -10275,7 +10278,10 @@ async function loadFile(file, options = {}) {
             // Set editor content
             setMainEditorValue(doc || '');
             refreshEditorLanguage(file, doc || '');
-            applyDocumentCache(documentCache, 'editor');
+            if (loadingSvg) {
+                await configureImagePreview(file, fileName);
+            }
+            applyDocumentCache(documentCache, loadingSvg ? 'image-view' : 'editor');
         }
         
         setDirty(false);
@@ -10309,6 +10315,24 @@ async function loadFile(file, options = {}) {
         notifyTerminal(`Failed to load ${file}`, 'error');
         console.error(err);
     }
+}
+
+async function configureImagePreview(file, fileName, refresh = false) {
+    // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
+    // GetFile does. The asset handler streams files to the webview.
+    const resolvedPath = await ResolveFilePath(file);
+    const previewPath = resolvedPath || file;
+    const assetURL = notesAssetURL(previewPath);
+    state.currentFileUri = filePathToUri(previewPath);
+    elements.imageViewImg.onerror = () => {
+        notifyTerminal(`Failed to load image: ${fileName}`, 'error');
+    };
+    elements.imageViewImg.src = refresh
+        ? `${assetURL}${assetURL.includes('?') ? '&' : '?'}v=${Date.now()}`
+        : assetURL;
+    elements.imageViewImg.dataset.originalFilename = fileName;
+    enableFullscreenImages(elements.imageViewWrap);
+    enableImageContextMenus(elements.imageViewWrap);
 }
 
 async function saveFile() {
@@ -17079,7 +17103,19 @@ elements.tabSwaggerRun.addEventListener('click', () => {
     renderSwaggerUI();
 });
 
-elements.tabImageView.addEventListener('click', () => {
+elements.tabImageView.addEventListener('click', async () => {
+    if (state.currentFileType === 'code' && isSvgFile(state.currentFile)) {
+        if (state.dirty && !await saveFile()) {
+            return;
+        }
+        try {
+            await configureImagePreview(state.currentFile, getPathFileName(state.currentFile), true);
+        } catch (err) {
+            notifyTerminal(`Failed to load image: ${getPathFileName(state.currentFile)}`, 'error');
+            console.error(err);
+            return;
+        }
+    }
     setViewMode('image-view');
 });
 
@@ -17182,7 +17218,10 @@ function getVisibleNotesTabs() {
     }
 
     if (state.currentFileType === 'code') {
-        return [elements.tabEditor, elements.tabHex, elements.tabMeta].filter(Boolean);
+        const tabs = [elements.tabEditor];
+        if (isSvgFile(state.currentFile)) tabs.push(elements.tabImageView);
+        tabs.push(elements.tabHex, elements.tabMeta);
+        return tabs.filter(Boolean);
     }
 
     if (state.currentFileType === 'binary') {

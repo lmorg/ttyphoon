@@ -212,6 +212,7 @@ export function initNotesGitPanel(elements, api, options = {}) {
             const code = document.createElement('span');
             code.className = 'notes-git-status-code';
             const comparisonEqual = file.compareOnly && file.code === '=';
+            if (file.compareOnly) code.dataset.comparison = comparisonEqual ? 'equal' : 'different';
             code.textContent = file.compareOnly ? (comparisonEqual ? '=' : '≠') : statusCode(file);
             code.dataset.statusCode = statusCode(file);
             code.dataset.tooltip = file.compareOnly

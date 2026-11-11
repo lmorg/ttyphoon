@@ -45,14 +45,18 @@ describe('vim-mode — mode transitions', () => {
         expect(vim.getMode()).toBe('normal');
     });
 
-    it('Escape in normal clears pending state but stays normal', () => {
+    it('Escape in normal clears pending state and returns to insert', () => {
         const { ta, vim } = setup('hello');
         toNormal(ta, vim);
         key(ta, 'd');            // pending operator
         key(ta, 'Escape');       // cancel
-        expect(vim.getMode()).toBe('normal');
+        expect(vim.getMode()).toBe('insert');
         // d+Escape should NOT delete anything
         expect(ta.value).toBe('hello');
+        toNormal(ta, vim);
+        key(ta, 'l');
+        expect(ta.value).toBe('hello');
+        expect(ta.selectionStart).toBe(1);
     });
 
     it('i returns to insert from normal', () => {
@@ -110,12 +114,12 @@ describe('vim-mode — mode transitions', () => {
         expect(vim.getMode()).toBe('replace');
     });
 
-    it('Escape exits replace mode → normal', () => {
+    it('Escape exits replace mode → insert', () => {
         const { ta, vim } = setup('hello');
         toNormal(ta, vim);
         key(ta, 'R');
         key(ta, 'Escape');
-        expect(vim.getMode()).toBe('normal');
+        expect(vim.getMode()).toBe('insert');
     });
 
     it('r enters replace-once mode', () => {
@@ -125,12 +129,29 @@ describe('vim-mode — mode transitions', () => {
         expect(vim.getMode()).toBe('replace-once');
     });
 
-    it('Escape exits replace-once → normal', () => {
+    it('Escape exits replace-once → insert', () => {
         const { ta, vim } = setup('hello');
         toNormal(ta, vim);
         key(ta, 'r');
         key(ta, 'Escape');
+        expect(vim.getMode()).toBe('insert');
+    });
+
+    it('does not toggle modes when an earlier Escape handler dismissed a popup', () => {
+        const { ta, vim } = setup('hello');
+        ta.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') event.preventDefault();
+        }, { capture: true, once: true });
+        key(ta, 'Escape');
+        expect(vim.getMode()).toBe('insert');
+        toNormal(ta, vim);
+        ta.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') event.preventDefault();
+        }, { capture: true, once: true });
+        key(ta, 'Escape');
         expect(vim.getMode()).toBe('normal');
+        key(ta, 'Escape');
+        expect(vim.getMode()).toBe('insert');
     });
 
     it('Ctrl+key does not change mode in insert', () => {

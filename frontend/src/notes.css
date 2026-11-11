@@ -2350,6 +2350,14 @@ body {
     cursor: help;
 }
 
+.notes-git-status-code[data-comparison="equal"] {
+    color: var(--green);
+}
+
+.notes-git-status-code[data-comparison="different"] {
+    color: var(--red);
+}
+
 .notes-git-file-actions {
     display: flex;
     width: 140px;
@@ -4427,7 +4435,7 @@ body {
     line-height: 1.4;
     overflow-x: auto;
     overflow-y: auto;
-    max-height: calc((25 * 1.4em) + 24px);
+    max-height: calc((10 * 1.4em) + 24px);
     white-space: pre-wrap;
     word-wrap: break-word;
     border: none;

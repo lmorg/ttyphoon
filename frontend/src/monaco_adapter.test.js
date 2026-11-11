@@ -1,9 +1,93 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { attachMonacoFontMetricsRefresh, attachMonacoSpellcheckContextMenu } from './monaco_adapter';
+import { attachMonacoEditorHooks, attachMonacoFontMetricsRefresh, attachMonacoSpellcheckContextMenu } from './monaco_adapter';
 import { showSpellcheckSuggestionsPopup } from './spellcheck';
 
 vi.mock('./spellcheck', () => ({ showSpellcheckSuggestionsPopup: vi.fn() }));
 vi.mock('./vim-mode', () => ({ MODE_LABELS: {} }));
+
+describe('Monaco Escape priority', () => {
+    let node;
+    let editor;
+    let hover;
+    let options;
+    let toggleVim;
+    let nativeKeydown;
+    let handle;
+
+    beforeEach(() => {
+        document.body.innerHTML = '<div id="editor"><textarea></textarea><div class="suggest-widget visible"></div></div>';
+        node = document.getElementById('editor');
+        hover = { isHoverVisible: true, hideContentHover: vi.fn(() => { hover.isHoverVisible = false; }) };
+        editor = {
+            getDomNode: () => node,
+            getContribution: () => hover,
+            onKeyDown: () => ({ dispose: vi.fn() }),
+            onDidType: () => ({ dispose: vi.fn() }),
+            trigger: vi.fn(() => node.querySelector('.suggest-widget').classList.remove('visible')),
+        };
+        options = { onEscape: vi.fn(() => false) };
+        toggleVim = vi.fn(() => true);
+        nativeKeydown = vi.fn();
+        node.querySelector('textarea').addEventListener('keydown', nativeKeydown);
+        handle = attachMonacoEditorHooks(editor, options, toggleVim);
+    });
+
+    const escape = () => {
+        const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        document.querySelector('#editor textarea').dispatchEvent(event);
+        return event;
+    };
+
+    it('dismisses hover, then suggestions, then toggles Vim on separate keypresses', () => {
+        expect(escape().defaultPrevented).toBe(true);
+        expect(hover.hideContentHover).toHaveBeenCalledOnce();
+        expect(editor.trigger).not.toHaveBeenCalled();
+        expect(toggleVim).not.toHaveBeenCalled();
+        expect(escape().defaultPrevented).toBe(true);
+        expect(editor.trigger).toHaveBeenCalledWith('keyboard', 'hideSuggestWidget', null);
+        expect(toggleVim).not.toHaveBeenCalled();
+        expect(escape().defaultPrevented).toBe(true);
+        expect(toggleVim).toHaveBeenCalledOnce();
+        expect(nativeKeydown).not.toHaveBeenCalled();
+        handle.dispose();
+    });
+
+    it('dismisses external Notes tooltips before suggestions without reaching Vim', () => {
+        hover.isHoverVisible = false;
+        options.onEscape.mockReturnValueOnce(true);
+        escape();
+        expect(options.onEscape).toHaveBeenCalledOnce();
+        expect(editor.trigger).not.toHaveBeenCalled();
+        expect(toggleVim).not.toHaveBeenCalled();
+        expect(nativeKeydown).not.toHaveBeenCalled();
+        escape();
+        expect(editor.trigger).toHaveBeenCalledWith('keyboard', 'hideSuggestWidget', null);
+        handle.dispose();
+    });
+
+    it('dismisses parameter hints before suggestions', () => {
+        hover.isHoverVisible = false;
+        node.insertAdjacentHTML('beforeend', '<div class="parameter-hints-widget visible"></div>');
+        escape();
+        expect(editor.trigger).toHaveBeenCalledWith('keyboard', 'closeParameterHints', null);
+        expect(toggleVim).not.toHaveBeenCalled();
+        expect(nativeKeydown).not.toHaveBeenCalled();
+        handle.dispose();
+    });
+
+    it('allows unhandled editor keys through and removes its capture handler on disposal', () => {
+        hover.isHoverVisible = false;
+        node.querySelector('.suggest-widget').remove();
+        toggleVim.mockReturnValue(false);
+        expect(escape().defaultPrevented).toBe(false);
+        expect(nativeKeydown).toHaveBeenCalledOnce();
+        handle.dispose();
+        toggleVim.mockClear();
+        escape();
+        expect(toggleVim).not.toHaveBeenCalled();
+        expect(nativeKeydown).toHaveBeenCalledTimes(2);
+    });
+});
 
 describe('Monaco webfont metrics', () => {
     let fonts;

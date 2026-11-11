@@ -114,6 +114,12 @@ func AskAIWithImages(agt *agent.Agent, prompt string, images []aitypes.ImageAtta
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), config.Config.Ai.RequestTimeoutDuration())
 		defer cancel()
+		sticky := agt.Renderer().DisplaySticky(
+			types.NOTIFY_INFO,
+			"Selecting skills for AI request....",
+			func() {},
+		)
+		defer sticky.Close()
 		messages := prompts.GetAskMessagesWithSkillSelectionAndImages(ctx, agt, prompt, attachments)
 		askAI(agt, messages, prompt)
 	}()
