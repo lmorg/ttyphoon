@@ -38,7 +38,7 @@ func mcpLaunchConfig(t *testing.T, url string) string {
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return makeMcpServerKey(path, "example")
+	return "test::example"
 }
 
 func mcpLaunchAgent(t *testing.T) (*Agent, *startMcpServerTool) {
@@ -62,7 +62,7 @@ func mcpLaunchAgent(t *testing.T) (*Agent, *startMcpServerTool) {
 }
 
 func TestMcpLaunchDefaultPermissionsAndCatalog(t *testing.T) {
-	key := mcpLaunchConfig(t, "https://private.example/mcp?token=secret")
+	mcpLaunchConfig(t, "https://private.example/mcp?token=secret")
 	owner, tool := mcpLaunchAgent(t)
 	if !tool.Enabled() || owner.ToolState(tool.Name()) != ToolStateApproval {
 		t.Fatal("MCP launch tool must be enabled and ask for approval by default")
@@ -71,10 +71,13 @@ func TestMcpLaunchDefaultPermissionsAndCatalog(t *testing.T) {
 		t.Fatal("interactive MCP launch was allowed in a subagent")
 	}
 	description := tool.Description()
-	for _, expected := range []string{"example", "Inspect project tickets", key} {
+	for _, expected := range []string{"test::example", "Inspect project tickets"} {
 		if !strings.Contains(description, expected) {
 			t.Errorf("catalog missing %q: %s", expected, description)
 		}
+	}
+	if strings.Contains(description, "test.json") || strings.Contains(description, "/ttyphoon/mcp/") {
+		t.Fatalf("catalog exposed the config filename or internal path: %s", description)
 	}
 	for _, secret := range []string{"private-token", "private.example", "SECRET"} {
 		if strings.Contains(description, secret) {
@@ -142,7 +145,7 @@ func TestMcpLaunchApprovalIncludesNameAndJustificationAndDenialDoesNotStart(t *t
 			t.Fatal(ctx.Err())
 		}
 	}
-	for _, expected := range []string{`Enable MCP server "example"`, request.Justification} {
+	for _, expected := range []string{`Enable MCP server "test::example"`, request.Justification} {
 		if !strings.Contains(markdown, expected) {
 			t.Fatalf("approval missing %q: %s", expected, markdown)
 		}

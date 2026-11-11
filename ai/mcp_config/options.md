@@ -26,8 +26,10 @@ OAuth callback validation and token storage are unchanged.
 ## Descriptions and On-Demand Startup
 
 Each server accepts an optional `description` explaining what its tools are useful
-for. The AI sees the configured server names and descriptions, not their commands,
-environment variables, URLs, or OAuth settings.
+for. The on-demand startup catalog identifies each server as
+`filename::server` (with the config filename's `.json` extension omitted) and
+includes its description. The AI does not see commands, environment variables,
+URLs, or OAuth settings.
 
 The built-in `startMcpServer` tool is enabled by default and asks for permission
 before starting a server. Its approval prompt includes the server name and the

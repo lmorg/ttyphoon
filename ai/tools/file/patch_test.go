@@ -218,10 +218,10 @@ func TestPatchFileCallDescriptionRendersEmbeddedTemplate(t *testing.T) {
 	for _, want := range []string{
 		"File: `src/&lt;example&gt;\\.go`",
 		"| Change | Text |",
-		"| `-` | &lt;old&gt; \\*\\*first\\*\\* \\| |",
-		"| `+` | new first |",
-		"| `-` | old second |",
-		"| `+` | new second |",
+		"| `-` | <pre><code>&lt;old&gt; &#42;&#42;first&#42;&#42; &#124;</code></pre> |",
+		"| `+` | <pre><code>new first</code></pre> |",
+		"| `-` | <pre><code>old second</code></pre> |",
+		"| `+` | <pre><code>new second</code></pre> |",
 	} {
 		if !strings.Contains(description, want) {
 			t.Errorf("CallDescription() = %q, want it to contain %q", description, want)

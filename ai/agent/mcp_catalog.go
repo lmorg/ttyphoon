@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
@@ -21,7 +23,9 @@ func (agent *Agent) ConfiguredMcpServers() ([]aitypes.McpServer, error) {
 		}
 		for name, server := range config.Mcp.Servers {
 			servers = append(servers, aitypes.McpServer{
-				Key: makeMcpServerKey(path, name), Name: name, Description: server.Description,
+				Key:         makeMcpServerKey(path, name),
+				Name:        strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)) + "::" + name,
+				Description: server.Description,
 			})
 		}
 	}
@@ -29,7 +33,7 @@ func (agent *Agent) ConfiguredMcpServers() ([]aitypes.McpServer, error) {
 	return servers, nil
 }
 
-func (agent *Agent) StartConfiguredMcpServer(ctx context.Context, key string) (string, error) {
+func (agent *Agent) StartConfiguredMcpServer(ctx context.Context, name string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -37,23 +41,31 @@ func (agent *Agent) StartConfiguredMcpServer(ctx context.Context, key string) (s
 	if err != nil {
 		return "", err
 	}
-	for _, server := range servers {
-		if server.Key != key {
+	var match *aitypes.McpServer
+	for i := range servers {
+		if servers[i].Name != name {
 			continue
 		}
-		source, name, err := parseMcpServerKey(server.Key)
-		if err != nil {
-			return "", err
+		if match != nil {
+			return "", fmt.Errorf("MCP server name %q is ambiguous in the configured server catalog", name)
 		}
-		config, err := mcp_config.ReadJson(source)
-		if err != nil {
-			return "", err
-		}
-		config.Source = source
-		if err := agent.startServerFromConfigServer(ctx, config, name); err != nil {
-			return "", err
-		}
-		return name, nil
+		match = &servers[i]
 	}
-	return "", fmt.Errorf("MCP server key %q is not in the configured server catalog", key)
+	if match == nil {
+		return "", fmt.Errorf("MCP server name %q is not in the configured server catalog", name)
+	}
+
+	source, name, err := parseMcpServerKey(match.Key)
+	if err != nil {
+		return "", err
+	}
+	config, err := mcp_config.ReadJson(source)
+	if err != nil {
+		return "", err
+	}
+	config.Source = source
+	if err := agent.startServerFromConfigServer(ctx, config, name); err != nil {
+		return "", err
+	}
+	return name, nil
 }

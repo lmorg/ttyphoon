@@ -119,8 +119,8 @@ func TestInsertLinesCallDescriptionRendersEscapedInserts(t *testing.T) {
 	for _, want := range []string{
 		"File: `src/&lt;example&gt;\\.go`",
 		"| # | Text |",
-		"| 5 | \\*\\*inserted\\*\\* \\| &lt;value&gt; |",
-		"| 9 | second line |",
+		"| 5 | <pre><code>&#42;&#42;inserted&#42;&#42; &#124; &lt;value&gt;</code></pre> |",
+		"| 9 | <pre><code>second line</code></pre> |",
 	} {
 		if !strings.Contains(description, want) {
 			t.Errorf("CallDescription() = %q, want it to contain %q", description, want)

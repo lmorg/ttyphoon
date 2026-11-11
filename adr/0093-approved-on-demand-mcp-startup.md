@@ -22,10 +22,11 @@ requires an explicit, understandable approval by default.
   per-invocation/per-prompt permission handling. Approval details include the
   server name and a required model-provided justification.
 - Never delegate startup to non-interactive sub-agents.
-- Accept only an exact server key discovered through ttyphoon's configured MCP
-  files. Do not accept new commands, URLs, or arbitrary configuration paths.
-- Add an optional server `description`. Advertise only the configured key, name,
-  and description to the model, not transport settings or credentials.
+- Accept only an exact `filename::server` identifier discovered through
+  ttyphoon's configured MCP files; omit the config filename's `.json`
+  extension. Do not accept new commands, URLs, or arbitrary configuration paths.
+- Add an optional server `description`. Advertise only the identifier and
+  description to the model, not transport settings or credentials.
   Treat descriptions as data, not instructions. Invalid configuration files
   produce an explicit catalog error rather than a silently incomplete catalog.
 - Reuse existing input collection, OAuth, loading reservations, atomic tool

@@ -27,7 +27,7 @@ func (m *testManager) StartConfiguredMcpServer(_ context.Context, key string) (s
 
 func TestStartServerUsesCapabilityAndEmbeddedDescription(t *testing.T) {
 	manager := &testManager{servers: []aitypes.McpServer{{
-		Key: "config::example", Name: "example", Description: "Inspect tickets",
+		Key: "config.json::example", Name: "config::example", Description: "Inspect tickets",
 	}}}
 	created, err := (&StartServer{}).New(manager)
 	if err != nil {
@@ -37,15 +37,15 @@ func TestStartServerUsesCapabilityAndEmbeddedDescription(t *testing.T) {
 	if !tool.Enabled() || tool.DefaultPermissions().Invocation != "askPermission" || tool.DefaultPermissions().Subagents != "deny" {
 		t.Fatal("startup defaults changed")
 	}
-	if !strings.HasPrefix(tool.Description(), strings.TrimSpace(description)+"\n\nConfigured MCP servers:\n") {
-		t.Fatal("tool description does not use embedded Markdown")
+	if !strings.Contains(tool.Description(), "- `config::example`: Inspect tickets") {
+		t.Fatalf("configured server list is missing or malformed: %s", tool.Description())
 	}
-	if !strings.Contains(tool.Description(), `"description":"Inspect tickets"`) {
-		t.Fatal("configured server catalog is missing")
+	if strings.Contains(tool.Description(), "config.json") || strings.Contains(tool.Description(), `"key"`) {
+		t.Fatal("tool description exposed the internal config filename or key")
 	}
 	input := &StartServerInput{ServerKey: "config::example", Justification: "Find ticket requirements"}
 	details := tool.CallDescription(context.Background(), input)
-	if !strings.Contains(details, `Enable MCP server "example"`) || !strings.Contains(details, input.Justification) {
+	if !strings.Contains(details, `Enable MCP server "config::example"`) || !strings.Contains(details, input.Justification) {
 		t.Fatalf("approval details = %q", details)
 	}
 	output, err := tool.CallStructured(context.Background(), input)

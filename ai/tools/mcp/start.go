@@ -1,18 +1,27 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
+	"text/template"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/utils/markdownutil"
 )
 
 //go:embed description.md
 var description string
+
+var descriptionTemplate = template.Must(template.New("mcp-start-description").Funcs(markdownutil.TemplateFuncMap()).Parse(description))
+
+type mcpServers []struct {
+	Name        string
+	Description string
+}
 
 type serverManager interface {
 	ConfiguredMcpServers() ([]aitypes.McpServer, error)
@@ -49,16 +58,22 @@ func (t *StartServer) InputType() reflect.Type {
 }
 
 func (t *StartServer) Description() string {
-	text := strings.TrimSpace(description) + "\n\nConfigured MCP servers:\n"
 	servers, err := t.agent.ConfiguredMcpServers()
 	if err != nil {
-		return text + "Catalog unavailable: " + err.Error()
+		return strings.TrimSpace(description) + "\n\nCatalog unavailable: " + err.Error()
 	}
-	catalog, err := json.Marshal(servers)
-	if err != nil {
-		return text + "Catalog encoding failed: " + err.Error()
+	catalog := make(mcpServers, 0, len(servers))
+	for _, server := range servers {
+		catalog = append(catalog, struct {
+			Name        string
+			Description string
+		}{Name: server.Name, Description: server.Description})
 	}
-	return text + string(catalog)
+	var rendered bytes.Buffer
+	if err := descriptionTemplate.Execute(&rendered, map[string]mcpServers{"mcpServers": catalog}); err != nil {
+		return strings.TrimSpace(description) + "\n\nCatalog rendering failed: " + err.Error()
+	}
+	return rendered.String()
 }
 
 func (t *StartServer) CallDescription(_ context.Context, input any) string {
@@ -71,11 +86,11 @@ func (t *StartServer) CallDescription(_ context.Context, input any) string {
 		return "MCP server catalog unavailable: " + err.Error()
 	}
 	for _, server := range servers {
-		if server.Key == request.ServerKey {
+		if server.Name == request.ServerKey {
 			return fmt.Sprintf("Enable MCP server %q\n\nJustification: %s", server.Name, request.Justification)
 		}
 	}
-	return fmt.Sprintf("Invalid MCP server key: %q", request.ServerKey)
+	return fmt.Sprintf("Invalid MCP server name: %q", request.ServerKey)
 }
 
 func (t *StartServer) CallStructured(ctx context.Context, input any) (string, error) {
