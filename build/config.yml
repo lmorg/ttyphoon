@@ -1,5 +1,6 @@
 # This file contains the configuration for this project.
-# After changing info, run `wails task common:update:build-assets`.
+# `make build` increments info.version before updating generated build assets.
+# After changing other info fields, run `wails task common:update:build-assets`.
 version: '3'
 
 info:

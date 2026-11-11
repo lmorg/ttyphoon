@@ -1,6 +1,7 @@
 # Build the binary
 .PHONY: build
 build:
+	go run ./build/buildflags -increment-version
 	wails task common:update:build-assets
 	wails build
 

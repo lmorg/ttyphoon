@@ -14,10 +14,24 @@ import (
 func main() {
 	configPath := flag.String("config", "build/config.yml", "Wails configuration file")
 	nfpmPath := flag.String("nfpm", "", "update the license in this nfpm file instead of printing linker flags")
+	incrementVersion := flag.Bool("increment-version", false, "increment the patch component of info.version")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "build flags: unexpected positional arguments")
 		os.Exit(1)
+	}
+	if *incrementVersion {
+		if *nfpmPath != "" {
+			fmt.Fprintln(os.Stderr, "build flags: -increment-version and -nfpm cannot be used together")
+			os.Exit(1)
+		}
+		previous, next, err := incrementConfigVersion(*configPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "build version:", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Updated %s version: %s -> %s\n", *configPath, previous, next)
+		return
 	}
 	if *nfpmPath != "" {
 		if err := syncPackageLicense(*configPath, *nfpmPath); err != nil {
