@@ -24,7 +24,13 @@ import (
 )
 
 const (
-	defaultImageModel   = "gpt-image-1"
+	/*
+	  The API lets you generate and edit images from text prompts using
+	  gpt-image-2.5-sunburst and gpt-image-2.5-flare. Choose Sunburst for
+	  workflows where editing precision matters most, and Flare for fast,
+	  high-quality everyday image generation.
+	*/
+	defaultImageModel   = "gpt-image-2.5-sunburst"
 	defaultImageBaseURL = "https://api.openai.com/v1"
 	defaultImageSize    = "1024x1024"
 	imageRequestTimeout = 5 * time.Minute

@@ -1,7 +1,6 @@
 # Build the binary
 .PHONY: build
 build:
-	go run ./build/buildflags -increment-version
 	wails task common:update:build-assets
 	wails build
 
@@ -18,6 +17,7 @@ clean:
 .PHONY: generate
 generate:
 	@echo "Running code generation..."
+	go run ./build/buildflags -increment-version
 	go generate ./...
 	wails generate bindings
 
