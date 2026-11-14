@@ -635,7 +635,6 @@ const state = {
     suspendDocumentCacheSave: false,
     dirty: false,
     viewTainted: false,
-    useMonacoEditor: false,
     renderTimer: null,
     autosaveTimer: null,
     viewMode: 'viewer',
@@ -789,22 +788,10 @@ function scheduleAIScrollButtonUpdate() {
     });
 }
 
-function isMonacoPhase0Enabled() {
-    try {
-        const userAgent = String(globalThis?.navigator?.userAgent || '');
-        if (/jsdom/i.test(userAgent)) {
-            return false;
-        }
-
-        const value = window.localStorage.getItem('notes-editor-monaco');
-        return value !== '0';
-    } catch {
-        return true;
-    }
-}
-
+// Monaco is created lazily the first time the editor becomes visible, so code
+// that runs before then (e.g. a file opened in preview) uses the hidden textarea.
 function isMonacoActive() {
-    return state.useMonacoEditor && monacoMainEditor !== null;
+    return monacoMainEditor !== null;
 }
 
 function isGitDiffActive() {
@@ -822,7 +809,9 @@ function getMainEditorValue() {
 }
 
 function setMainEditorValue(value) {
-    const text = String(value || '');
+    // Documents are edited with LF line endings whichever surface is live: the
+    // textarea normalises CRLF, and Run view source offsets assume marked's LF.
+    const text = String(value || '').replace(/\r\n?/g, '\n');
     if (elements.editor) {
         elements.editor.value = text;
     }
@@ -967,7 +956,7 @@ function getMonacoTypographyOptions() {
 }
 
 async function ensureMonacoMainEditor() {
-    if (!state.useMonacoEditor || !elements.monacoEditor || monacoMainEditor) {
+    if (!elements.monacoEditor || monacoMainEditor) {
         return;
     }
 
@@ -1103,10 +1092,6 @@ function scheduleMonacoRelayout() {
 // the current document, language, wrap mode and theme before laying it out. This
 // is the single entry point used whenever the editor tab becomes visible.
 async function ensureMonacoVisibleAndLaidOut() {
-    if (!state.useMonacoEditor) {
-        return;
-    }
-
     await ensureMonacoMainEditor();
     if (!isMonacoActive()) {
         return;
@@ -1134,17 +1119,7 @@ async function ensureMonacoVisibleAndLaidOut() {
     scheduleMonacoRelayout();
 }
 
-function syncEditorEngineMode() {
-    if (!elements.editorShell) {
-        return;
-    }
-
-    elements.editorShell.dataset.monacoEnabled = state.useMonacoEditor ? 'true' : 'false';
-}
-
 configureMarked();
-state.useMonacoEditor = isMonacoPhase0Enabled();
-syncEditorEngineMode();
 
 // Belt-and-suspenders relayout: any size change to the editor box (pane
 // maximize/restore, splitter drag, window resize) triggers a measured Monaco
@@ -6857,10 +6832,6 @@ function setDirty(isDirty) {
 }
 
 function focusActiveEditorForViewMode() {
-    if (!elements.editor && !isMonacoActive()) {
-        return;
-    }
-
     // Keep terminal ownership on app startup; ttyphoon.js will hand off when Notes is explicitly focused.
     if (window.terminalFocusedState === true) {
         return;
@@ -6896,14 +6867,7 @@ function focusActiveEditorForViewMode() {
 
         if (isMonacoActive()) {
             monacoMainEditor.focus();
-            return;
         }
-
-        if (!elements.editor) {
-            return;
-        }
-
-        elements.editor.focus({ preventScroll: true });
     }, 0);
 }
 
@@ -7051,10 +7015,9 @@ function setViewMode(mode) {
 
     // The main editor wrap is shared by code/markdown/json edit and csv edit.
     // Whenever it becomes visible, (lazily) create Monaco and lay it out against
-    // its now-visible box. Fall back to legacy decorations only when Monaco is
-    // disabled.
+    // its now-visible box.
     const editorWrapActive = elements.editorWrap.dataset.active === 'true';
-    if (state.useMonacoEditor && editorWrapActive) {
+    if (editorWrapActive) {
         void ensureMonacoVisibleAndLaidOut();
     } else if ((isEditor && usesCodeEditorDecorations()) || isStructuredEdit) {
         renderEditorDecorations();
@@ -10794,32 +10757,26 @@ function jumpEditorToOffset(start, end = start) {
         return;
     }
 
-    if (state.useMonacoEditor) {
-        const schedule = typeof requestAnimationFrame === 'function'
-            ? requestAnimationFrame
-            : (cb) => setTimeout(cb, 16);
+    const schedule = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb) => setTimeout(cb, 16);
 
-        const tryRevealWhenReady = (remainingFrames) => {
-            if (isMonacoActive()) {
-                monacoMainEditor.setSelectionOffsets(start, end);
-                monacoMainEditor.revealOffset(start);
-                monacoMainEditor.focus();
-                return;
-            }
+    const tryRevealWhenReady = (remainingFrames) => {
+        if (isMonacoActive()) {
+            monacoMainEditor.setSelectionOffsets(start, end);
+            monacoMainEditor.revealOffset(start);
+            monacoMainEditor.focus();
+            return;
+        }
 
-            if (remainingFrames > 0) {
-                schedule(() => tryRevealWhenReady(remainingFrames - 1));
-            }
-        };
+        if (remainingFrames > 0) {
+            schedule(() => tryRevealWhenReady(remainingFrames - 1));
+        }
+    };
 
-        // Monaco can be created/layouted asynchronously when editor view opens.
-        // Retry for a bit longer so grep-navigation still lands on the requested line.
-        tryRevealWhenReady(20);
-    }
-
-    const editor = elements.editor;
-    editor.focus();
-    scrollEditorToSelection(editor, start);
+    // Monaco can be created/layouted asynchronously when editor view opens.
+    // Retry for a bit longer so grep-navigation still lands on the requested line.
+    tryRevealWhenReady(20);
 }
 
 function maybeRefreshProjectFindAfterSave() {
@@ -15522,11 +15479,6 @@ async function openNotesGitDiff({ root, file, diff }) {
     }
     await NotesHistoryAddPosition(notesFilePath, 1);
 
-    if (!state.useMonacoEditor) {
-        notifyTerminal('The selected file is open; side-by-side Git diff requires Monaco.', 'warn');
-        return;
-    }
-
     activeGitDiff = { root, file, diff, notesFilePath };
     setNotesGitDiffTabActive(true);
     elements.gitDiffMessage.hidden = !diff.binary && !diff.readOnly;
@@ -16488,191 +16440,6 @@ async function refreshJupyterReservedWords(blockId) {
 }
 
 if (elements.editor) {
-    let editorInputSequence = 0;
-
-    function resolveUndoRedoDirection(event) {
-        const key = String(event?.key || '').toLowerCase();
-        const hasPrimaryModifier = Boolean(event?.metaKey || event?.ctrlKey);
-        if (!hasPrimaryModifier || event?.altKey) {
-            return '';
-        }
-
-        if (key === 'z') {
-            return event.shiftKey ? 'redo' : 'undo';
-        }
-
-        if (key === 'y') {
-            return 'redo';
-        }
-
-        return '';
-    }
-
-    function maybeHandleManagedUndoRedoShortcut(event) {
-        if (!event || document.activeElement !== elements.editor) {
-            return false;
-        }
-
-        const direction = resolveUndoRedoDirection(event);
-        if (!direction) {
-            return false;
-        }
-
-        const canApply = direction === 'undo'
-            ? notesUndoManager.canUndo()
-            : notesUndoManager.canRedo();
-        if (!canApply) {
-            return false;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        const applySnapshot = (tx, txDirection) => {
-            notesMutationAdapter.applySnapshot(elements.editor, tx, txDirection, true);
-        };
-
-        if (direction === 'undo') {
-            notesUndoManager.undo(applySnapshot);
-            return true;
-        }
-
-        notesUndoManager.redo(applySnapshot);
-        return true;
-    }
-
-    function maybeDispatchInputFallbackAfterShortcut(event) {
-        const isModifierShortcut = (event.ctrlKey || event.metaKey) && !event.altKey;
-        if (!isModifierShortcut) {
-            return;
-        }
-
-        const key = String(event.key || '').toLowerCase();
-        if (key !== 'z' && key !== 'v') {
-            return;
-        }
-
-        if (document.activeElement !== elements.editor) {
-            return;
-        }
-
-        const valueBefore = elements.editor.value;
-        const seqBefore = editorInputSequence;
-
-        setTimeout(() => {
-            // Some WebKit edit paths can mutate textarea value without emitting `input`.
-            // Re-emit `input` only when content changed and no native input was observed.
-            if (editorInputSequence !== seqBefore) {
-                return;
-            }
-            if (elements.editor.value === valueBefore) {
-                return;
-            }
-            elements.editor.dispatchEvent(new Event('input', { bubbles: true }));
-        }, 0);
-    }
-
-    elements.editor.addEventListener('keydown', async (event) => {
-        if (maybeHandleManagedUndoRedoShortcut(event)) {
-            return;
-        }
-
-        maybeDispatchInputFallbackAfterShortcut(event);
-
-        if (event.key === 'Escape' && closeOpenLspTooltips()) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
-
-        if (!event.ctrlKey && !event.metaKey && !event.altKey) {
-            if (event.key === 'Enter' && commitActiveLspCompletion()) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-
-            if (event.key === 'ArrowDown' && moveLspCompletionSelection(1)) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-
-            if (event.key === 'ArrowUp' && moveLspCompletionSelection(-1)) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-        }
-
-        if (maybeHandleSyntaxCompletionKey(event, elements.editor, {
-            docPath: state.currentFile || '',
-            languageHint: state.editorLanguage || '',
-        })) {
-            return;
-        }
-
-        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
-            return;
-        }
-
-        if (state.lspCompletionVisible) {
-            // When completion is already open, Tab dismisses it and inserts indentation.
-            hideLspCompletion();
-            event.preventDefault();
-            event.stopPropagation();
-
-            const start = elements.editor.selectionStart;
-            const end = elements.editor.selectionEnd;
-            const indentation = await getIndentationString();
-            notesMutationAdapter.replaceRange(elements.editor, {
-                start,
-                end,
-                text: indentation,
-                source: 'editor-tab-indent',
-                label: 'Tab indentation (completion open)',
-                emit: true,
-            });
-            return;
-        }
-
-        const source = elements.editor.value || '';
-        const cursor = elements.editor.selectionStart || 0;
-        const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
-        const leftOfCaret = source.slice(lineStart, cursor);
-        const isWhitespaceOnlyLeft = /^\s*$/.test(leftOfCaret);
-        const shouldTryLspCompletion = isCurrentFileLspEligible()
-            && state.currentFile
-            && state.lspOpenFile === state.currentFile
-            && !isWhitespaceOnlyLeft;
-
-        if (shouldTryLspCompletion) {
-            // With non-whitespace prefix on this line, use Tab to open completion rather than insert indentation.
-            event.preventDefault();
-            event.stopPropagation();
-            hideLspHoverTooltip();
-            hideLspCompletion();
-            void requestLspCompletion();
-            return;
-        }
-
-        // Keep Tab inside the editor so it doesn't trigger app-level focus hotkeys.
-        event.preventDefault();
-        event.stopPropagation();
-
-        const start = elements.editor.selectionStart;
-        const end = elements.editor.selectionEnd;
-        const indentation = await getIndentationString();
-        notesMutationAdapter.replaceRange(elements.editor, {
-            start,
-            end,
-            text: indentation,
-            source: 'editor-tab-indent',
-            label: 'Tab indentation',
-            emit: true,
-        });
-    });
-
     elements.editor.addEventListener('input', () => {
         if (isMonacoActive() && !suppressMonacoChange) {
             const textareaValue = String(elements.editor.value || '');
@@ -16686,7 +16453,6 @@ if (elements.editor) {
             notesGitDiffAdapter.setModifiedValue(String(elements.editor.value || ''));
         }
 
-        editorInputSequence += 1;
         state.lastEditorInputAt = Date.now();
         setDirty(true);
         state.lspHoverLastKey = '';
@@ -16694,43 +16460,16 @@ if (elements.editor) {
         clearCurrentFileLspDiagnosticsCache();
         clearVisibleLspDiagnostics({ preserveCompletion: true });
 
-        if (!isMonacoActive()) {
-            const cursor = elements.editor.selectionStart || 0;
-            const value = elements.editor.value || '';
-            const prevChar = cursor > 0 ? value[cursor - 1] : '';
-
-            // If LSP completion menu is visible, keep it open and re-filter based on current position.
-            // Otherwise, check for trigger characters to open it.
-            if (state.lspCompletionVisible) {
-                // Menu is open - sync first, then re-request completion to filter by current text.
-                void requestLspCompletionAfterSync(value, '', 1);
-            } else {
-                // Menu is closed - check for trigger characters
-                if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
-                    void requestLspCompletionAfterSync(value, prevChar);
-                } else {
-                    // Don't close the menu if user types an identifier character (keeps menu open while typing to filter)
-                    const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
-                    if (!isIdentifierChar) {
-                        hideLspCompletion();
-                    }
-                }
-            }
-        } else {
-            const cursor = elements.editor.selectionStart || 0;
-            const value = elements.editor.value || '';
-            const prevChar = cursor > 0 ? value[cursor - 1] : '';
-
-            if (state.lspCompletionVisible) {
-                void requestLspCompletionAfterSync(value, '', 1);
-            } else if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
-                void requestLspCompletionAfterSync(value, prevChar);
-            } else {
-                const isIdentifierChar = /[A-Za-z0-9_-]/.test(prevChar);
-                if (!isIdentifierChar) {
-                    hideLspCompletion();
-                }
-            }
+        const cursor = elements.editor.selectionStart || 0;
+        const value = elements.editor.value || '';
+        const prevChar = cursor > 0 ? value[cursor - 1] : '';
+        if (state.lspCompletionVisible) {
+            // Re-filter the open menu against the text now under the caret.
+            void requestLspCompletionAfterSync(value, '', 1);
+        } else if (prevChar === '.' || prevChar === ':' || prevChar === '>') {
+            void requestLspCompletionAfterSync(value, prevChar);
+        } else if (!/[A-Za-z0-9_-]/.test(prevChar)) {
+            hideLspCompletion();
         }
 
         if (isMonacoActive()) {
@@ -16770,42 +16509,6 @@ if (elements.editor) {
         scheduleAutoSave();
     });
 
-    elements.editor.addEventListener('scroll', () => {
-        hideLspHoverTooltip();
-        hideLspCompletion();
-        if (usesCodeEditorDecorations()) {
-            syncEditorScrollDecorations();
-        }
-    });
-
-    elements.editor.addEventListener('mousemove', (event) => {
-        state.lspHoverMouseX = event.clientX;
-        state.lspHoverMouseY = event.clientY;
-    });
-
-    elements.editor.addEventListener('mouseup', () => {
-        state.lspHoverLastKey = '';
-        scheduleLspHover();
-    });
-
-    elements.editor.addEventListener('keyup', () => {
-        scheduleLspHover();
-    });
-
-    elements.editor.addEventListener('blur', () => {
-        hideLspHoverTooltip();
-        hideLspCompletion();
-    });
-
-    elements.editor.addEventListener('paste', (event) => {
-        handleEditorImagePaste(event);
-    });
-
-    attachVimMode(elements.editor, {
-        mutationAdapter: notesMutationAdapter,
-        undoManager: notesUndoManager,
-        filePathResolver: () => state.currentFile || '',
-    });
     notesSpellCheckHandle = attachSpellCheck(elements.editor, {
         onMisspellingsChange: (misspellings) => {
             if (!isMonacoActive()) {
@@ -16816,28 +16519,9 @@ if (elements.editor) {
     });
 }
 
-let _editorSelectionBeforeContextMenu = null;
-
-elements.editor.addEventListener('mousedown', (e) => {
-    if (e.button === 2) {
-        _editorSelectionBeforeContextMenu = {
-            start: elements.editor.selectionStart,
-            end: elements.editor.selectionEnd,
-        };
-    }
-});
-
-['click', 'input', 'keyup', 'mouseup', 'select'].forEach((eventName) => {
-    elements.editor.addEventListener(eventName, scheduleCurrentHistoryPosition);
-});
+elements.editor.addEventListener('input', scheduleCurrentHistoryPosition);
 
 function openMainEditorContextMenu(e) {
-    // Restore selection that WebKit changed on right-click
-    if (_editorSelectionBeforeContextMenu !== null) {
-        elements.editor.selectionStart = _editorSelectionBeforeContextMenu.start;
-        elements.editor.selectionEnd = _editorSelectionBeforeContextMenu.end;
-        _editorSelectionBeforeContextMenu = null;
-    }
     e.preventDefault();
 
     const menuItems = [
@@ -16998,10 +16682,6 @@ function openMainEditorContextMenu(e) {
 
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 }
-
-elements.editor.addEventListener('contextmenu', (e) => {
-    openMainEditorContextMenu(e);
-});
 
 initRenderedNotesContextMenu(elements.preview, 'viewer');
 initRenderedNotesContextMenu(elements.jupyter, 'jupyter');

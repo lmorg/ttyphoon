@@ -14,6 +14,13 @@ Notes has two editor surfaces. Monaco is the default, and the original
 active — it is retained as the fallback surface and as the value store that
 several helpers read from.
 
+*Update (ADR 0100, Stage 1):* the textarea fallback editor has been removed.
+Monaco is the only editing surface. Monaco is created lazily when an Edit view
+first opens, so until ADR 0100 Stage 1 task 3 lands the hidden textarea is still
+the value store before Monaco exists (for example, preview checkbox toggles) and
+is kept in sync with Monaco afterwards. It no longer receives keyboard, mouse,
+Vim or context-menu input.
+
 Both symbol handlers drove the textarea directly:
 
 ```js
@@ -41,12 +48,12 @@ helper, `jumpEditorToOffset(start, end = start)`:
 
 1. `setMainEditorSelectionRange(start, end)` — updates whichever surface is live.
 2. If `isMonacoActive()` — `revealOffset` + `focus` on Monaco, then return.
-3. Else if `state.useMonacoEditor` — retry on `requestAnimationFrame` for ~20
-   frames, because Monaco is created and laid out asynchronously when the editor
-   view opens. This matters after `loadFile()`, where the jump can be requested
-   before the new model is mounted.
-4. Otherwise fall through to the textarea path (`focus` +
-   `scrollEditorToSelection`).
+3. Otherwise retry on `requestAnimationFrame` for ~20 frames, because Monaco is
+   created and laid out asynchronously when the editor view opens. This matters
+   after `loadFile()`, where the jump can be requested before the new model is
+   mounted. (Before ADR 0100 Stage 1 this step was gated on
+   `state.useMonacoEditor`, with a textarea `focus` + `scrollEditorToSelection`
+   fallback.)
 
 The Markdown ToC uses the same navigation path in Edit mode. Its entries map
 rendered headings back to source lines, then call `jumpEditorToLine`; in View
@@ -149,7 +156,7 @@ consume the event and verify Notes captures both modifier variants first.
   Monaco's native paste, and routes to the same Go-backed clipboard handler as
   the custom Paste menu.
 - Direct `elements.editor` selection/scroll writes are now limited to the
-  low-level helpers (`setMainEditorSelectionRange`), the fallback branch, and
+  low-level helpers (`setMainEditorSelectionRange`), the pre-Monaco branch, and
   full-document resets.
 
 ## Lessons

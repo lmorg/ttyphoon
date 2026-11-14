@@ -3359,40 +3359,11 @@ body {
     overflow-y: auto;
 }
 
+/* The main editor is Monaco; #notes-editor is a hidden text store. */
 #notes-editor {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    resize: none;
-    border-radius: 0;
-    border: 0;
-    background: transparent;
-    color: var(--fg);
-    caret-color: var(--fg);
-    padding: 10px 14px;
-    font-size: var(--notes-font-size);
-    line-height: 1.4;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    overflow-y: auto;
-    overflow-x: hidden;
-    font-family: var(--font-family);
-    -webkit-user-modify: read-write-plaintext-only;
+    display: none;
 }
 
-#notes-editor:focus {
-    outline: none;
-    box-shadow: none;
-    border: 0;
-}
-
-#notes-editor:not(:focus) {
-    background-color: transparent;
-}
-
-#notes-editor,
 .jupyter-code-editable,
 .jupyter-highlight,
 .jupyter-highlight code,
@@ -3429,33 +3400,6 @@ body {
     border-bottom-right-radius: 8px;
 }
 
-#notes-editor-shell[data-code-view="true"] {
-    grid-template-columns: 1fr;
-}
-
-#notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] {
-    grid-template-columns: 1fr;
-}
-
-#notes-editor-shell[data-code-view="true"] #notes-editor {
-    color: var(--fg);
-    white-space: pre;
-    overflow-wrap: normal;
-    word-break: normal;
-    overflow: auto;
-}
-
-#notes-editor-shell[data-code-view="true"][data-wrap-mode="true"] #notes-editor {
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    overflow-y: auto;
-    overflow-x: hidden;
-    box-sizing: border-box;
-    text-rendering: auto;
-    color: var(--fg);
-}
-
 #notes-editor-scroll {
     position: relative;
     display: block;
@@ -3470,37 +3414,10 @@ body {
     inset: 0;
     min-width: 0;
     min-height: 0;
-    display: none;
-}
-
-#notes-editor-shell[data-monaco-enabled="true"] {
-    grid-template-columns: 1fr !important;
-}
-
-#notes-editor-shell[data-monaco-enabled="true"] #notes-editor,
-#notes-editor-shell[data-monaco-enabled="false"] #notes-monaco-editor,
-#notes-editor-shell[data-code-view="false"] #notes-editor,
-#notes-editor-shell[data-code-view="false"] #notes-monaco-editor {
-    display: none;
-}
-
-#notes-editor-shell[data-monaco-enabled="false"] #notes-editor {
     display: block;
 }
 
-#notes-editor-shell[data-monaco-enabled="true"] #notes-editor {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-}
-
-#notes-editor-shell[data-monaco-enabled="true"] #notes-monaco-editor {
-    display: block;
-}
-
-#notes-editor-shell[data-monaco-enabled="true"] #notes-editor-scroll> :not(#notes-monaco-editor) {
+#notes-editor-scroll> :not(#notes-monaco-editor) {
     display: none !important;
 }
 

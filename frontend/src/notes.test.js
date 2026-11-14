@@ -24,8 +24,20 @@ function getNotesStyleProperties(selector) {
     return properties;
 }
 
+import { createFakeMonacoAdapter, createFakeMonacoDiffAdapter } from './test-support/fake_monaco_adapter.js';
+
+// The Notes main editor is Monaco; under jsdom it is the string-backed fake.
+function mainEditorAdapter() {
+    const adapter = createMonacoAdapterMock.mock.results.at(-1)?.value;
+    if (!adapter) {
+        throw new Error('the Monaco main editor has not been created');
+    }
+    return adapter;
+}
+
 const getWindowStyleMock = vi.fn();
 const createMonacoAdapterMock = vi.fn();
+const createMonacoDiffAdapterMock = vi.fn();
 const getNotesLayoutSizingMock = vi.fn(() => Promise.resolve({}));
 const setNotesLayoutRatioMock = vi.fn(() => Promise.resolve());
 const getNotesMaxLogLinesMock = vi.fn();
@@ -399,7 +411,7 @@ vi.mock('./wails-runtime.js', () => ({
 
 vi.mock('./monaco_adapter', () => ({
     createMonacoAdapter: createMonacoAdapterMock,
-    createMonacoDiffAdapter: vi.fn(),
+    createMonacoDiffAdapter: createMonacoDiffAdapterMock,
 }));
 
 vi.mock('./popup_menu', () => ({
@@ -519,6 +531,9 @@ describe('notes rendering', () => {
 
         getWindowStyleMock.mockReset();
         createMonacoAdapterMock.mockReset();
+        createMonacoAdapterMock.mockImplementation(createFakeMonacoAdapter);
+        createMonacoDiffAdapterMock.mockReset();
+        createMonacoDiffAdapterMock.mockImplementation(createFakeMonacoDiffAdapter);
         getNotesLayoutSizingMock.mockReset();
         getNotesLayoutSizingMock.mockResolvedValue({});
         setNotesLayoutRatioMock.mockClear();
@@ -1270,8 +1285,6 @@ describe('notes rendering', () => {
     });
 
     it('records editor cursor positions after moving twenty lines in one document', async () => {
-        const previousMonacoSetting = localStorage.getItem('notes-editor-monaco');
-        localStorage.setItem('notes-editor-monaco', '0');
         const contents = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n');
         listFilesMock.mockResolvedValue(['$NOTES/long.md']);
         getFileMock.mockResolvedValue({ contents, text: '', error: '' });
@@ -1282,12 +1295,11 @@ describe('notes rendering', () => {
             await flushPromises();
             await flushPromises();
             document.getElementById('notes-tab-editor').click();
+            await flushPromises();
 
-            const editor = document.getElementById('notes-editor');
             const lineOffset = contents.split('\n').slice(0, 24).join('\n').length + 1;
             vi.useFakeTimers();
-            editor.setSelectionRange(lineOffset, lineOffset);
-            editor.dispatchEvent(new Event('select', { bubbles: true }));
+            mainEditorAdapter().moveCursor(lineOffset);
             await vi.advanceTimersByTimeAsync(500);
             vi.useRealTimers();
             await flushPromises();
@@ -1295,11 +1307,6 @@ describe('notes rendering', () => {
             expect(notesHistoryAddPositionMock).toHaveBeenCalledWith('$NOTES/long.md', 25);
         } finally {
             vi.useRealTimers();
-            if (previousMonacoSetting === null) {
-                localStorage.removeItem('notes-editor-monaco');
-            } else {
-                localStorage.setItem('notes-editor-monaco', previousMonacoSetting);
-            }
         }
     });
 
@@ -1813,7 +1820,7 @@ describe('notes rendering', () => {
         await flushPromises();
         const runView = document.getElementById('notes-jupyter');
         const staleHeading = runView.querySelector('h1');
-        document.getElementById('notes-editor').value = updatedSource;
+        mainEditorAdapter().setValue(updatedSource);
         sendIpcMock.mockClear();
         saveFileMock.mockClear();
         staleHeading.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
@@ -1893,7 +1900,6 @@ describe('notes rendering', () => {
         ['$NOTES/print.md', 'print.md'],
         ['$PROJECT/src/components/print.md', 'src/components/print.md'],
     ])('prints the unsaved Monaco buffer with the correct filename for %s', async (filename, printedFilename) => {
-        const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Monaco print test');
         let value = '# Saved';
         const adapter = {
             getValue: () => value, setValue: (next) => { value = next; },
@@ -1902,7 +1908,10 @@ describe('notes rendering', () => {
             setLanguage: vi.fn(), setWordWrap: vi.fn(), setTypography: vi.fn(),
             applyTheme: vi.fn(), configureLsp: vi.fn(), setDiagnostics: vi.fn(), setTyposMisspellings: vi.fn(),
         };
-        createMonacoAdapterMock.mockResolvedValue(adapter);
+        createMonacoAdapterMock.mockImplementation(async (_container, options) => {
+            adapter.options = options;
+            return adapter;
+        });
         listFilesMock.mockResolvedValue([filename]);
         getFileMock.mockResolvedValue({ contents: value, text: '', error: '' });
         try {
@@ -1918,7 +1927,7 @@ describe('notes rendering', () => {
             const editor = document.getElementById('notes-editor');
             editor.value = 'Stale hidden textarea';
             const printed = new Promise((resolve) => windowPrintMock.mockImplementationOnce(async () => { resolve(); }));
-            editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+            adapter.options.onContextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
             const menu = showLocalMenuMock.mock.calls.at(-1)[0];
             menu.onSelect(menu.options.indexOf('Print...'));
             await printed;
@@ -1930,7 +1939,6 @@ describe('notes rendering', () => {
             expect(saveFileMock.mock.calls.filter(([savedFilename]) => savedFilename === filename)).toHaveLength(0);
         } finally {
             window.dispatchEvent(new Event('afterprint'));
-            userAgent.mockRestore();
         }
     });
 
@@ -1938,43 +1946,28 @@ describe('notes rendering', () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo list.md']);
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
         getClipboardDataMock.mockResolvedValue({ text: '', image: 'aW1hZ2U=' });
-        const originalExecCommand = document.execCommand;
-        document.execCommand = vi.fn((_command, _showUi, text) => {
-            const editor = document.activeElement;
-            const start = editor.selectionStart;
-            const end = editor.selectionEnd;
-            editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
-            editor.selectionStart = start + text.length;
-            editor.selectionEnd = editor.selectionStart;
-            editor.dispatchEvent(new Event('input', { bubbles: true }));
-            return true;
-        });
 
-        try {
-            await importNotesModule();
-            document.querySelector('[data-file="$NOTES/todo list.md"]').click();
-            await flushPromises();
-            await flushPromises();
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/todo list.md"]').click();
+        await flushPromises();
+        await flushPromises();
 
-            document.getElementById('notes-tab-editor').click();
-            const editor = document.getElementById('notes-editor');
-            editor.selectionStart = editor.value.length;
-            editor.selectionEnd = editor.value.length;
-            editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
+        editor.contextMenu();
 
-            const menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
-            menu.onSelect(menu.options.indexOf('Paste'));
-            await flushPromises();
-            await flushPromises();
+        const menu = showLocalMenuMock.mock.calls.at(-1)?.[0];
+        menu.onSelect(menu.options.indexOf('Paste'));
+        await flushPromises();
+        await flushPromises();
 
-            expect(saveBinaryFileMock).toHaveBeenCalledWith(
-                expect.stringMatching(/^\$NOTES\/todo list\.md\.d\/\d+\.png$/),
-                'aW1hZ2U=',
-            );
-            expect(editor.value).toMatch(/!\[\d+\]\(todo%20list\.md\.d\/\d+\.png\)$/);
-        } finally {
-            document.execCommand = originalExecCommand;
-        }
+        expect(saveBinaryFileMock).toHaveBeenCalledWith(
+            expect.stringMatching(/^\$NOTES\/todo list\.md\.d\/\d+\.png$/),
+            'aW1hZ2U=',
+        );
+        expect(editor.getValue()).toMatch(/!\[\d+\]\(todo%20list\.md\.d\/\d+\.png\)$/);
     });
 
     it('reveals the Frontmatter tab and caption for documents with YAML frontmatter', async () => {
@@ -2016,7 +2009,6 @@ describe('notes rendering', () => {
         ['added', '# Old heading', '---\ntitle: Added\n---\n# Updated heading', { title: 'Added' }],
         ['removed', '---\ntitle: Old\n---\n# Old heading', '# Updated heading', null],
     ])('refreshes ToC and %s Frontmatter on Monaco autosave without rendering the preview', async (_label, initial, updated, frontmatter) => {
-        const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Monaco regression test');
         let value = initial;
         const adapter = {
             getValue: () => value,
@@ -2068,7 +2060,6 @@ describe('notes rendering', () => {
             expect(preview.innerHTML).toBe(originalPreview);
         } finally {
             vi.useRealTimers();
-            userAgent.mockRestore();
         }
     });
 
@@ -2127,41 +2118,7 @@ describe('notes rendering', () => {
         expect(editor.selectionEnd).toBe(secondLineEnd);
     });
 
-    it('undoes and redoes adapter-backed editor edits with keyboard shortcuts', async () => {
-        listFilesMock.mockResolvedValue([]);
-
-        await importNotesModule();
-
-        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
-        expect(typeof createAndOpenHandler).toBe('function');
-        await createAndOpenHandler({ filename: '$NOTES/sample.md', contents: 'abc' });
-        await flushPromises();
-        await flushPromises();
-
-        const editor = document.getElementById('notes-editor');
-        editor.focus();
-        editor.value = 'abc';
-        editor.selectionStart = 3;
-        editor.selectionEnd = 3;
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
-        await flushPromises();
-        await flushPromises();
-
-        expect(editor.value).toBe('abc    ');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-
-        expect(editor.value).toBe('abc');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-
-        expect(editor.value).toBe('abc    ');
-    });
-
-    it('refreshes markdown preview after ctrl+z style edits when input is not emitted', async () => {
+    it('refreshes markdown preview after a Monaco undo', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/todo.md']);
         getFileMock.mockResolvedValue({ contents: '# Hello Notes', text: '', error: '' });
 
@@ -2173,18 +2130,15 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const tabEditor = document.getElementById('notes-tab-editor');
-        const editor = document.getElementById('notes-editor');
         const preview = document.getElementById('notes-preview');
 
         tabEditor.click();
         await flushPromises();
 
-        editor.focus();
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
-        editor.value = '# Updated from undo';
-
-        await flushPromises();
+        mainEditorAdapter().setValue('# Updated from undo');
+        document.getElementById('notes-tab-viewer').click();
         await new Promise((resolve) => setTimeout(resolve, 160));
+        await flushPromises();
 
         expect(preview?.textContent).toContain('Updated from undo');
     });
@@ -2332,7 +2286,38 @@ describe('notes rendering', () => {
         expect(getNotesStyleProperties('#notes-lsp-tooltip:hover').opacity).toBe('1');
     });
 
-    it.each(['Notes', 'Jupyter'])('dismisses tooltips, then completion, then toggles Vim in %s', async (surface) => {
+    it('dismisses tooltips, then completion, before Monaco handles Escape in Notes', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/escape.md']);
+        getFileMock.mockResolvedValue({ contents: '# Escape', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/escape.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+
+        const editor = mainEditorAdapter();
+        const lspTooltip = document.getElementById('notes-lsp-tooltip');
+        const lspHoverTooltip = document.getElementById('notes-lsp-hover-tooltip');
+        const lspCompletion = document.getElementById('notes-lsp-completion');
+        lspTooltip.style.display = 'block';
+        lspHoverTooltip.style.display = 'block';
+        lspHoverTooltip.innerHTML = '<p>hover docs</p>';
+        lspCompletion.style.display = 'block';
+        lspCompletion.innerHTML = '<div>completion</div>';
+
+        expect(editor.pressEscape()).toBe(true);
+        expect(lspTooltip.style.display).toBe('none');
+        expect(lspHoverTooltip.style.display).toBe('none');
+        expect(lspCompletion.style.display).toBe('block');
+        expect(editor.pressEscape()).toBe(true);
+        expect(lspCompletion.style.display).toBe('none');
+        // Nothing left for Notes to close, so Monaco moves on to Vim.
+        expect(editor.pressEscape()).toBe(false);
+    });
+
+    it('dismisses tooltips, then completion, then toggles Vim in Jupyter', async () => {
         vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
             measureText: () => ({ width: 8 }),
         });
@@ -2344,18 +2329,15 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        let editor = document.getElementById('notes-editor');
-        if (surface === 'Jupyter') {
-            const { FormatCodeBlock } = await import('./wails-bindings.js');
-            FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/escape.py', Err: '' });
-            document.getElementById('notes-tab-jupyter').click();
-            await flushPromises();
-            await flushPromises();
-            document.querySelector('.jupyter-lsp-notes').click();
-            await flushPromises();
-            await flushPromises();
-            editor = document.querySelector('.jupyter-code-editable');
-        }
+        const { FormatCodeBlock } = await import('./wails-bindings.js');
+        FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/escape.py', Err: '' });
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.jupyter-lsp-notes').click();
+        await flushPromises();
+        await flushPromises();
+        const editor = document.querySelector('.jupyter-code-editable');
         const { attachVimMode } = await vi.importActual('./vim-mode');
         const vim = attachVimMode(editor);
         editor.focus();
@@ -2437,7 +2419,7 @@ describe('notes rendering', () => {
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('$NOTES/todo.md');
     });
 
-    it('sends LSP didChange after ctrl+v style edits when input is not emitted', async () => {
+    it('sends LSP didChange after a Monaco paste', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/main.go']);
         resolveNotesLspLanguageMock.mockResolvedValue('go');
         getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}\n', text: '', error: '' });
@@ -2451,10 +2433,9 @@ describe('notes rendering', () => {
 
         notesLspChangeDocumentMock.mockClear();
 
-        const editor = document.getElementById('notes-editor');
-        editor.focus();
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
-        editor.value = 'package main\n\nfunc main() { println("x") }\n';
+        const editor = mainEditorAdapter();
+        editor.moveCursor('package main\n\nfunc main() {'.length);
+        editor.typeText(' println("x") ');
 
         await flushPromises();
         await new Promise((resolve) => setTimeout(resolve, 260));
@@ -2480,10 +2461,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = 2;
-        editor.selectionEnd = 2;
-        editor.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+        mainEditorAdapter().moveCursor(2);
 
         await new Promise((resolve) => setTimeout(resolve, 320));
         await flushPromises();
@@ -2564,11 +2542,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin.';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
+        editor.typeText('.');
         await flushPromises();
         await flushPromises();
 
@@ -2576,22 +2552,17 @@ describe('notes rendering', () => {
         expect(completion?.style.display).toBe('block');
         expect(completion?.querySelector('.notes-lsp-completion-item.is-active')?.textContent).toContain('Println');
 
-        const downEvent = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-        const downHandled = editor.dispatchEvent(downEvent);
-        expect(downHandled).toBe(false);
+        expect(editor.requestCompletion({ source: 'keydown', key: 'ArrowDown' })).toBe(true);
         expect(completion?.querySelector('.notes-lsp-completion-item.is-active')?.textContent).toContain('Printf');
 
-        const upEvent = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
-        const upHandled = editor.dispatchEvent(upEvent);
-        expect(upHandled).toBe(false);
+        expect(editor.requestCompletion({ source: 'keydown', key: 'ArrowUp' })).toBe(true);
         expect(completion?.querySelector('.notes-lsp-completion-item.is-active')?.textContent).toContain('Println');
 
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Escape' })).toBe(true);
         expect(completion?.style.display).toBe('none');
 
-        const noMenuEvent = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
-        const noMenuHandled = editor.dispatchEvent(noMenuEvent);
-        expect(noMenuHandled).toBe(true);
+        // With the popup closed, arrow keys are left to Monaco.
+        expect(editor.requestCompletion({ source: 'keydown', key: 'ArrowDown' })).toBe(false);
     });
 
     it('selects highlighted LSP completion item when Enter is pressed', async () => {
@@ -2611,26 +2582,22 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin.';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
+        editor.typeText('.');
         await flushPromises();
         await flushPromises();
 
         const completion = document.getElementById('notes-lsp-completion');
         expect(completion?.style.display).toBe('block');
 
-        const downHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-        expect(downHandled).toBe(false);
+        expect(editor.requestCompletion({ source: 'keydown', key: 'ArrowDown' })).toBe(true);
         expect(completion?.querySelector('.notes-lsp-completion-item.is-active')?.textContent).toContain('Printf');
 
-        const enterHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Enter' })).toBe(true);
         await flushPromises();
 
-        expect(enterHandled).toBe(false);
-        expect(editor.value).toContain('Printf');
+        expect(editor.getValue()).toContain('Printf');
         expect(completion?.style.display).toBe('none');
     });
 
@@ -2660,13 +2627,10 @@ describe('notes rendering', () => {
         document.getElementById('notes-tab-editor').click();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPr';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
-        expect(tabHandled).toBe(false);
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Tab' })).toBe(true);
         await flushPromises();
         await flushPromises();
 
@@ -2679,10 +2643,8 @@ describe('notes rendering', () => {
         expect(items?.[1]?.textContent).toContain('Printf');
         expect(items?.[2]?.textContent).toContain('Panic');
 
-        editor.value = '# Todo\n\nPrf';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(editor.requestCompletion({ source: 'type', key: 'f' })).toBe(false);
+        editor.typeText('f');
         await flushPromises();
         await flushPromises();
 
@@ -2712,18 +2674,15 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        const before = editor.value;
-        const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        const before = editor.getValue();
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Tab' })).toBe(true);
         await flushPromises();
         await flushPromises();
 
-        expect(tabHandled).toBe(false);
-        expect(editor.value).toBe(before);
+        expect(editor.getValue()).toBe(before);
         expect(notesLspCompletionMock).toHaveBeenCalled();
         expect(document.getElementById('notes-lsp-completion')?.style.display).toBe('block');
     });
@@ -2746,20 +2705,18 @@ describe('notes rendering', () => {
 
         notesLspCompletionMock.mockClear();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\n    ';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        const tabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Tab' })).toBe(true);
+        await flushPromises();
         await flushPromises();
 
-        expect(tabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\n        ');
+        expect(editor.getValue()).toBe('# Todo\n\n        ');
         expect(notesLspCompletionMock).not.toHaveBeenCalled();
     });
 
-    it('closes open LSP completion and inserts a tab when Tab is pressed again', async () => {
+    it('commits the active LSP completion when Tab is pressed again', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');
         notesLspCompletionMock.mockResolvedValue([
@@ -2776,23 +2733,19 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        const firstTabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Tab' })).toBe(true);
         await flushPromises();
         await flushPromises();
 
-        expect(firstTabHandled).toBe(false);
         expect(document.getElementById('notes-lsp-completion')?.style.display).toBe('block');
 
-        const secondTabHandled = editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(editor.requestCompletion({ source: 'keydown', key: 'Tab' })).toBe(true);
         await flushPromises();
 
-        expect(secondTabHandled).toBe(false);
-        expect(editor.value).toBe('# Todo\n\nPrin    ');
+        expect(editor.getValue()).toBe('# Todo\n\nPrintln');
         expect(document.getElementById('notes-lsp-completion')?.style.display).toBe('none');
         expect(notesLspCompletionMock).toHaveBeenCalledTimes(1);
     });
@@ -2841,10 +2794,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = 0;
-        editor.selectionEnd = 0;
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(0);
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         const contextMenu = showLocalMenuMock.mock.calls[0][0];
@@ -2940,8 +2892,8 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         expect(showLocalMenuMock).toHaveBeenCalled();
@@ -2961,15 +2913,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspFormatMock).toHaveBeenCalledWith('$NOTES/main.go');
-        expect(editor.value).toContain('func main() {');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('package main\nfunc main(){println("ok")}');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('package main\n\nfunc main() {\n\tprintln("ok")\n}\n');
+        expect(editor.getValue()).toBe('package main\n\nfunc main() {\n\tprintln("ok")\n}\n');
     });
 
     it('formats selected range via editor context menu action', async () => {
@@ -2989,13 +2933,10 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        const start = editor.value.indexOf('func');
-        const end = editor.value.length;
-        editor.selectionStart = start;
-        editor.selectionEnd = end;
+        const editor = mainEditorAdapter();
+        editor.setSelectionOffsets(editor.getValue().indexOf('func'), editor.getValue().length);
 
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         expect(showLocalMenuMock).toHaveBeenCalled();
@@ -3016,7 +2957,7 @@ describe('notes rendering', () => {
 
         expect(notesLspFormatRangeMock).toHaveBeenCalledWith('$NOTES/main.go', 1, 0, 1, 26);
         expect(notesLspFormatRangeMock).toHaveBeenCalledTimes(1);
-        expect(editor.value).toContain('func main() {');
+        expect(editor.getValue()).toContain('func main() {');
     });
 
     it('navigates to selected document symbol from editor context menu', async () => {
@@ -3043,10 +2984,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = 0;
-        editor.selectionEnd = 0;
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(0);
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         const contextMenu = showLocalMenuMock.mock.calls[0][0];
@@ -3073,8 +3013,8 @@ describe('notes rendering', () => {
         symbolMenu.onSelect(1);
         await flushPromises();
 
-        expect(editor.selectionStart).toBe('package main\n\nfunc alpha() {}\n'.length);
-        expect(editor.selectionEnd).toBe(editor.selectionStart);
+        expect(editor.getSelectionOffsets().start).toBe('package main\n\nfunc alpha() {}\n'.length);
+        expect(editor.getSelectionOffsets().end).toBe(editor.getSelectionOffsets().start);
     });
 
     it('navigates to selected workspace symbol from editor context menu', async () => {
@@ -3121,10 +3061,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = 0;
-        editor.selectionEnd = 0;
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(0);
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         const contextMenu = showLocalMenuMock.mock.calls[0][0];
@@ -3161,9 +3100,9 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(getFileMock).toHaveBeenLastCalledWith('$NOTES/pkg/beta.go');
-        expect(editor.value).toBe('func beta() {}\n');
-        expect(editor.selectionStart).toBe(0);
-        expect(editor.selectionEnd).toBe(0);
+        expect(editor.getValue()).toBe('func beta() {}\n');
+        expect(editor.getSelectionOffsets().start).toBe(0);
+        expect(editor.getSelectionOffsets().end).toBe(0);
     });
 
     it('requests signature help from editor context menu action', async () => {
@@ -3187,11 +3126,10 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = editor.value.indexOf('println');
-        editor.selectionEnd = editor.selectionStart;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().indexOf('println'));
 
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
@@ -3262,11 +3200,10 @@ describe('notes rendering', () => {
             return '';
         });
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
         await flushPromises();
 
@@ -3290,15 +3227,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspApplyCodeActionMock).toHaveBeenCalled();
-        expect(editor.value).toContain('import "fmt"');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('package main\nfunc main(){_ = fmt.Errorf("x")}');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('package main\n\nimport "fmt"\n\nfunc main() { _ = fmt.Errorf("x") }\n');
+        expect(editor.getValue()).toBe('package main\n\nimport "fmt"\n\nfunc main() { _ = fmt.Errorf("x") }\n');
     });
 
     it('groups LSP code actions by kind in the editor context menu', async () => {
@@ -3319,11 +3248,10 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
 
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
         await flushPromises();
 
@@ -3369,14 +3297,13 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        const cursorOffset = editor.value.indexOf('println');
-        editor.selectionStart = cursorOffset;
-        editor.selectionEnd = cursorOffset + 'println'.length;
+        const editor = mainEditorAdapter();
+        const cursorOffset = editor.getValue().indexOf('println');
+        editor.setSelectionOffsets(cursorOffset, cursorOffset + 'println'.length);
 
         const promptSpy = vi.spyOn(window, 'prompt');
 
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         expect(showLocalMenuMock).toHaveBeenCalled();
@@ -3409,18 +3336,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(notesLspRenameMock).toHaveBeenCalledWith('$NOTES/main.go', 3, 1, 'Println');
-        expect(editor.value).toContain('Println("ok")');
-
-        // The modal steals focus while open; the user must return to the editor
-        // before undo/redo keystrokes are routed to it again.
-        editor.focus();
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toContain('println("ok")');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toContain('Println("ok")');
+        expect(editor.getValue()).toContain('Println("ok")');
 
         promptSpy.mockRestore();
     });
@@ -3620,7 +3536,7 @@ describe('notes rendering', () => {
         expect(saveFileMock).not.toHaveBeenCalledWith('$PROJECT/new-note.txt.md', '', '');
     });
 
-    it('focuses the textarea whenever an Edit view becomes active', async () => {
+    it('focuses Monaco whenever an Edit view becomes active', async () => {
         listFilesMock.mockResolvedValue([
             '$NOTES/script.go',
             '$NOTES/readme.md',
@@ -3641,7 +3557,6 @@ describe('notes rendering', () => {
 
         await importNotesModule();
 
-        const notesEditor = document.getElementById('notes-editor');
         const clickFile = async (filePath) => {
             const fileButton = document.querySelector(`[data-file="${filePath}"]`);
             fileButton.click();
@@ -3650,25 +3565,31 @@ describe('notes rendering', () => {
         };
 
         await clickFile('$NOTES/script.go');
-        expect(document.activeElement).toBe(notesEditor);
+        const editor = mainEditorAdapter();
+        let focusCount = editor.focusCount;
+        const expectFocused = () => {
+            expect(editor.focusCount).toBeGreaterThan(focusCount);
+            focusCount = editor.focusCount;
+        };
+        expect(focusCount).toBeGreaterThan(0);
 
         await clickFile('$NOTES/readme.md');
 
         document.getElementById('notes-tab-editor').click();
         await flushPromises();
-        expect(document.activeElement).toBe(notesEditor);
+        expectFocused();
 
         await clickFile('$NOTES/spec.yaml');
 
         document.getElementById('notes-tab-swagger-edit').click();
         await flushPromises();
-        expect(document.activeElement).toBe(notesEditor);
+        expectFocused();
 
         document.getElementById('notes-tab-swagger-view').click();
         await flushPromises();
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
-        expect(document.activeElement).toBe(notesEditor);
+        expectFocused();
     });
 
     it('preserves file-list scroll position when opening another file', async () => {
@@ -4231,8 +4152,8 @@ describe('notes rendering', () => {
 
         showLocalMenuMock.mockClear();
 
-        const editor = document.getElementById('notes-editor');
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 90, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 90, clientY: 120 }));
         await flushPromises();
 
         expect(showLocalMenuMock).toHaveBeenCalledTimes(1);
@@ -4261,42 +4182,24 @@ describe('notes rendering', () => {
             error: '',
         });
 
-        const originalExecCommand = document.execCommand;
-        document.execCommand = vi.fn((_command, _showUi, text) => {
-            const editor = document.activeElement;
-            const start = editor.selectionStart;
-            const end = editor.selectionEnd;
-            editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
-            editor.selectionStart = start + text.length;
-            editor.selectionEnd = editor.selectionStart;
-            editor.dispatchEvent(new Event('input', { bubbles: true }));
-            return true;
-        });
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/file with space.md"]').click();
+        await flushPromises();
+        await flushPromises();
 
-        try {
-            await importNotesModule();
-            document.querySelector('[data-file="$NOTES/file with space.md"]').click();
-            await flushPromises();
-            await flushPromises();
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().indexOf('![123]'));
+        editor.contextMenu();
+        await flushPromises();
 
-            const editor = document.getElementById('notes-editor');
-            const imageStart = editor.value.indexOf('![123]');
-            editor.selectionStart = imageStart;
-            editor.selectionEnd = imageStart;
-            editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-            await flushPromises();
+        const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+        const deleteImageIndex = menu.options.indexOf('Delete image from disk');
+        expect(deleteImageIndex).toBeGreaterThanOrEqual(0);
+        await menu.onSelect(deleteImageIndex);
+        await flushPromises();
 
-            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
-            const deleteImageIndex = menu.options.indexOf('Delete image from disk');
-            expect(deleteImageIndex).toBeGreaterThanOrEqual(0);
-            await menu.onSelect(deleteImageIndex);
-            await flushPromises();
-
-            expect(deleteFileMock).toHaveBeenCalledWith('$NOTES/file with space.md.d/123.png');
-            expect(editor.value).not.toContain('![123]');
-        } finally {
-            document.execCommand = originalExecCommand;
-        }
+        expect(deleteFileMock).toHaveBeenCalledWith('$NOTES/file with space.md.d/123.png');
+        expect(editor.getValue()).not.toContain('![123]');
     });
 
     it('shows Ask AI in rendered preview context menu and sends current document content', async () => {
@@ -7596,7 +7499,10 @@ describe('notes rendering', () => {
         expect(getFileMock).toHaveBeenCalledWith('$PROJECT/src/main.go');
         expect(notesHistoryAddPositionMock).toHaveBeenCalledWith('$PROJECT/src/main.go', 1);
         expect(document.getElementById('notes-current-file').textContent).toBe('main.go');
-        expect(document.getElementById('notes-git-diff-wrap').dataset.active).toBe('false');
+        expect(document.getElementById('notes-git-diff-wrap').dataset.active).toBe('true');
+        const diffEditor = createMonacoDiffAdapterMock.mock.results.at(-1)?.value;
+        expect(diffEditor.diff).toEqual(expect.objectContaining({ path: 'src/main.go' }));
+        expect(diffEditor.getModifiedValue()).toBe('package main\n');
     });
 
     it('shows Diff for a modified file opened through the regular Notes file list', async () => {
@@ -7631,7 +7537,6 @@ describe('notes rendering', () => {
         ['yml', 'name: needle'],
         ['xml', '<?xml version="1.0"?><root>needle</root>'],
     ])('finds %s source in the live Monaco structured Edit view', async (extension, source) => {
-        const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Monaco regression test');
         let value = source;
         const match = { start: source.indexOf('needle'), end: source.indexOf('needle') + 6 };
         const adapter = {
@@ -7654,28 +7559,24 @@ describe('notes rendering', () => {
         createMonacoAdapterMock.mockResolvedValue(adapter);
         listFilesMock.mockResolvedValue([`$NOTES/search.${extension}`]);
         getFileMock.mockResolvedValue({ contents: source, text: '', error: '' });
-        try {
-            await importNotesModule();
-            document.querySelector(`[data-file="$NOTES/search.${extension}"]`).click();
-            await flushPromises();
-            await flushPromises();
-            document.getElementById('notes-tab-swagger-edit').click();
-            await flushPromises();
-            await flushPromises();
-            expect(createMonacoAdapterMock).toHaveBeenCalled();
-            document.getElementById('notes-editor').value = 'stale hidden textarea';
-            const findInput = document.getElementById('notes-find-input');
-            findInput.value = 'needle';
-            findInput.dispatchEvent(new Event('input', { bubbles: true }));
-            expect(adapter.findMatches).toHaveBeenCalledWith('needle', {
-                isRegex: false, matchCase: false, limit: 10000,
-            });
-            expect(document.getElementById('notes-find-counter').textContent).toBe('1 of 1');
-            expect(adapter.setSelectionOffsets).toHaveBeenCalledWith(match.start, match.end);
-            expect(adapter.revealOffset).toHaveBeenCalledWith(match.start);
-        } finally {
-            userAgent.mockRestore();
-        }
+        await importNotesModule();
+        document.querySelector(`[data-file="$NOTES/search.${extension}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-swagger-edit').click();
+        await flushPromises();
+        await flushPromises();
+        expect(createMonacoAdapterMock).toHaveBeenCalled();
+        document.getElementById('notes-editor').value = 'stale hidden textarea';
+        const findInput = document.getElementById('notes-find-input');
+        findInput.value = 'needle';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(adapter.findMatches).toHaveBeenCalledWith('needle', {
+            isRegex: false, matchCase: false, limit: 10000,
+        });
+        expect(document.getElementById('notes-find-counter').textContent).toBe('1 of 1');
+        expect(adapter.setSelectionOffsets).toHaveBeenCalledWith(match.start, match.end);
+        expect(adapter.revealOffset).toHaveBeenCalledWith(match.start);
     });
 
     it.each(['metaKey', 'ctrlKey'])('captures %s+F before Monaco handles the shortcut', async (modifier) => {
@@ -8112,7 +8013,7 @@ describe('notes rendering', () => {
         expect(editorHighlight).toBeNull();
     });
 
-    it('undoes and redoes structured JSON format actions from editor context menu', async () => {
+    it('applies structured JSON format actions from editor context menu', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/config.json']);
         getFileMock.mockResolvedValue({
             contents: '{\n  "name": "ttyphoon",\n  "ok": true\n}',
@@ -8127,10 +8028,8 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.focus();
-
-        editor.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        const editor = mainEditorAdapter();
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
         await flushPromises();
 
         const menuConfig = showLocalMenuMock.mock.calls[0][0];
@@ -8141,15 +8040,8 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const minified = '{"name":"ttyphoon","ok":true}';
-        expect(editor.value).toBe(minified);
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('{' + '\n  "name": "ttyphoon",\n  "ok": true\n}');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe(minified);
+        expect(editor.getValue()).toBe(minified);
+        expect(document.getElementById('notes-editor').value).toBe(minified);
     });
 
     it('cycles visible notes tabs with ctrl+tab', async () => {
@@ -8314,7 +8206,6 @@ describe('notes rendering', () => {
         ['Delete row', '# Table\n\n| Name | Value |\n| --- | --- |\n| Beta | 2 |'],
         ['Delete column', '# Table\n\n| Value |\n| --- |\n| 1 |\n| 2 |'],
     ])('keeps Monaco, saved content, Run and View synchronized after %s', async (action, expected) => {
-        const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Monaco table regression test');
         const initial = '# Table\n\n| Name | Value |\n| --- | --- |\n| Alpha | 1 |\n| Beta | 2 |';
         let value = initial;
         const adapter = {
@@ -8331,83 +8222,79 @@ describe('notes rendering', () => {
         listFilesMock.mockResolvedValue(['$NOTES/table.md']);
         getFileMock.mockResolvedValue({ contents: initial, text: '', error: '' });
 
-        try {
-            await importNotesModule();
-            document.querySelector('[data-file="$NOTES/table.md"]').click();
-            await flushPromises();
-            await flushPromises();
-            document.getElementById('notes-tab-editor').click();
-            await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
-            const editor = document.getElementById('notes-editor');
-            const runTab = document.getElementById('notes-tab-jupyter');
-            const viewTab = document.getElementById('notes-tab-viewer');
-            runTab.click();
-            await flushPromises();
-            await flushPromises();
-            const cell = document.querySelector('#notes-jupyter tbody tr td');
-            expect(cell).not.toBeNull();
-            saveFileMock.mockClear();
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/table.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = document.getElementById('notes-editor');
+        const runTab = document.getElementById('notes-tab-jupyter');
+        const viewTab = document.getElementById('notes-tab-viewer');
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+        const cell = document.querySelector('#notes-jupyter tbody tr td');
+        expect(cell).not.toBeNull();
+        saveFileMock.mockClear();
 
-            if (action.startsWith('cell')) {
-                cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
-                cell.textContent = 'Gamma';
-                cell.dispatchEvent(action === 'cell blur'
-                    ? new Event('blur')
-                    : new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-            } else {
-                cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-                await flushPromises();
-                const menu = showLocalMenuMock.mock.calls.at(-1)[0];
-                const index = menu.options.indexOf(action);
-                expect(index).toBeGreaterThanOrEqual(0);
-                menu.onSelect(index);
-            }
+        if (action.startsWith('cell')) {
+            cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            cell.textContent = 'Gamma';
+            cell.dispatchEvent(action === 'cell blur'
+                ? new Event('blur')
+                : new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        } else {
+            cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
             await flushPromises();
-            await flushPromises();
-            expect(value).toBe(expected);
-            expect(editor.value).toBe(expected);
-            expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/table.md', expected, '');
-
-            const run = document.getElementById('notes-jupyter');
-            const preview = document.getElementById('notes-preview');
-            const runTable = run.querySelector('table')?.outerHTML;
-            if (action.startsWith('cell')) {
-                expect(run.querySelector('tbody tr td')?.textContent).toContain('Gamma');
-            } else if (action === 'Insert row (after)') {
-                expect(run.querySelectorAll('tbody tr')).toHaveLength(3);
-            } else if (action === 'Insert column (after)') {
-                expect(run.querySelectorAll('thead th')).toHaveLength(3);
-            } else if (action === 'Delete row') {
-                expect(run.querySelectorAll('tbody tr')).toHaveLength(1);
-                expect(run.textContent).not.toContain('Alpha');
-            } else {
-                expect(run.querySelectorAll('thead th')).toHaveLength(1);
-                expect(run.textContent).not.toContain('Alpha');
-            }
-
-            viewTab.click();
-            await vi.waitFor(() => {
-                const headers = Array.from(preview.querySelectorAll('thead th')).map((header) => header.textContent);
-                expect(headers).toEqual(Array.from(run.querySelectorAll('thead th'))
-                    .map((header) => header.querySelector('.notes-table-cell-wrap > span')?.textContent ?? header.textContent));
-                expect(preview.querySelectorAll('tbody tr')).toHaveLength(run.querySelectorAll('tbody tr').length);
-                expect(preview.textContent.includes('Gamma')).toBe(action.startsWith('cell'));
-                expect(preview.textContent.includes('Alpha')).toBe(!action.startsWith('cell')
-                    && action !== 'Delete row' && action !== 'Delete column');
-            });
-            document.getElementById('notes-tab-editor').click();
-            await flushPromises();
-            expect(value).toBe(expected);
-            expect(editor.value).toBe(expected);
-            runTab.click();
-            await flushPromises();
-            await flushPromises();
-            expect(run.querySelector('table')?.outerHTML).toBe(runTable);
-            expect(value).toBe(expected);
-            expect(editor.value).toBe(expected);
-        } finally {
-            userAgent.mockRestore();
+            const menu = showLocalMenuMock.mock.calls.at(-1)[0];
+            const index = menu.options.indexOf(action);
+            expect(index).toBeGreaterThanOrEqual(0);
+            menu.onSelect(index);
         }
+        await flushPromises();
+        await flushPromises();
+        expect(value).toBe(expected);
+        expect(editor.value).toBe(expected);
+        expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/table.md', expected, '');
+
+        const run = document.getElementById('notes-jupyter');
+        const preview = document.getElementById('notes-preview');
+        const runTable = run.querySelector('table')?.outerHTML;
+        if (action.startsWith('cell')) {
+            expect(run.querySelector('tbody tr td')?.textContent).toContain('Gamma');
+        } else if (action === 'Insert row (after)') {
+            expect(run.querySelectorAll('tbody tr')).toHaveLength(3);
+        } else if (action === 'Insert column (after)') {
+            expect(run.querySelectorAll('thead th')).toHaveLength(3);
+        } else if (action === 'Delete row') {
+            expect(run.querySelectorAll('tbody tr')).toHaveLength(1);
+            expect(run.textContent).not.toContain('Alpha');
+        } else {
+            expect(run.querySelectorAll('thead th')).toHaveLength(1);
+            expect(run.textContent).not.toContain('Alpha');
+        }
+
+        viewTab.click();
+        await vi.waitFor(() => {
+            const headers = Array.from(preview.querySelectorAll('thead th')).map((header) => header.textContent);
+            expect(headers).toEqual(Array.from(run.querySelectorAll('thead th'))
+                .map((header) => header.querySelector('.notes-table-cell-wrap > span')?.textContent ?? header.textContent));
+            expect(preview.querySelectorAll('tbody tr')).toHaveLength(run.querySelectorAll('tbody tr').length);
+            expect(preview.textContent.includes('Gamma')).toBe(action.startsWith('cell'));
+            expect(preview.textContent.includes('Alpha')).toBe(!action.startsWith('cell')
+                && action !== 'Delete row' && action !== 'Delete column');
+        });
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+        expect(value).toBe(expected);
+        expect(editor.value).toBe(expected);
+        runTab.click();
+        await flushPromises();
+        await flushPromises();
+        expect(run.querySelector('table')?.outerHTML).toBe(runTable);
+        expect(value).toBe(expected);
+        expect(editor.value).toBe(expected);
     });
 
     it('renders Markdown in Run table cells without creating hyperlinks', async () => {
@@ -8836,7 +8723,7 @@ describe('notes rendering', () => {
         expect(getNotesRenderedStyles()).toContain('white-space: pre-wrap;');
     });
 
-    it('undoes and redoes CSV table row insertion from Run mode context menu', async () => {
+    it('inserts a CSV table row from Run mode context menu', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/table.csv']);
         getFileMock.mockResolvedValue({
             contents: 'Name,Value\nAlpha,1',
@@ -8869,21 +8756,11 @@ describe('notes rendering', () => {
         menuConfig.onSelect(insertRowIndex);
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
+        expect(document.getElementById('notes-editor').value).toBe('Name,Value\nAlpha,1\n,');
 
-        const editTab = document.getElementById('notes-tab-csv-edit');
-        editTab.click();
+        document.getElementById('notes-tab-csv-edit').click();
         await flushPromises();
-        editor.focus();
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('Name,Value\nAlpha,1');
-
-        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-        await flushPromises();
-        expect(editor.value).toBe('Name,Value\nAlpha,1\n,');
+        expect(mainEditorAdapter().getValue()).toBe('Name,Value\nAlpha,1\n,');
     });
 
     it('does not attach table highlight callbacks in Run view', async () => {

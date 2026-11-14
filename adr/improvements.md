@@ -26,7 +26,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## refactors
 
-- [ ] Notes: move LSP code into new JS file
+- [ ] Notes: move LSP code into new JS file (now tracked as ADR 0100 stage 2, under future ambitions)
 
 ## functional tweaks
 
@@ -45,7 +45,39 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## future ambitions
 
-- [ ] Notes: support having multiple documents open at a time
+- [ ] Notes: support having multiple documents open at a time ([ADR 0100](0100-notes-multiple-open-documents.md)). Each stage ships on `main` with no behaviour change until stage 7. "Blocked by Qn" refers to ADR 0100's open questions.
+  - Stage 1: remove the fallback editor
+    - [x] Add a Monaco editor/model fake for jsdom (`getValue`/`setValue`, `setModel`, view state, selections, `onDidChangeContent`) and run `notes.test.js` with Monaco active instead of the textarea fallback
+    - [x] Remove the `notes-editor-monaco` setting and the `!isMonacoActive()` fallback branches; Monaco is always the main editor
+    - [ ] Retire the hidden textarea as the source of truth: route the ~180 `elements.editor` reads/writes through the Monaco model, audit the undo manager, mutation adapter and spellcheck for textarea dependencies, then remove it. Update ADR 0021
+  - Stage 2: extract Notes LSP
+    - [ ] Move Notes LSP code from `notes.js` into its own module with no behaviour change (replaces the "move LSP code into new JS file" refactor)
+    - [ ] Monaco LSP providers resolve their document from `model.uri` and read text from that model, replacing `state.lspOpenFile === state.currentFile` guards and `getMainEditorValue()`
+  - Stage 3: backend reference counting
+    - [ ] `utils/lsp.DocumentStore`: reference-count `DidOpen`/`DidClose` per URI (first open sends `didOpen`, last close sends `didClose`), with tests
+    - [ ] `NotesTyposOpenDocument`: stop closing and reopening an already-open URI; use the reference count and send `didChange` for new content
+  - Stage 4: `NotesDocument`
+    - [ ] Add a `NotesDocument` record and registry keyed by absolute path (open, get, close), holding the per-document fields in ADR 0100 decision 4, with unit tests
+    - [ ] Route `state.currentFile`, `currentFileUri`, file type, project, dirty state, Monaco model and autosave timer through the active document. Still one document
+    - [ ] Move Jupyter block runtimes and kernels onto the `NotesDocument`; stop kernels when the document closes
+    - [ ] Open the LSP and typos documents when a `NotesDocument` opens and close them when it closes, rather than on every file switch
+  - Stage 5: asynchronous work captures its document
+    - [ ] Load, save and autosave capture their `NotesDocument` and only update it if it is still open
+    - [ ] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
+  - Stage 6: `NotesView`
+    - [ ] Create the editor area (tab strip host, Monaco host, preview/structured-view host) from a `NotesView` factory and template, with lookups scoped to the view root; the existing view is created through it. Still one view
+    - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (blocked by Q15: view mode per view or per document)
+    - [ ] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Find behaviour blocked by Q10)
+  - Stage 7: tabs
+    - [ ] Tab strip in a view: opening a file from the file list, history or go-to-definition opens or focuses a tab; closing a tab releases its document when no view shows it (blocked by Q16: tab strip per view or shared)
+    - [ ] External changes to open documents: reload clean documents silently; mark dirty ones as conflicted and let the user choose which version to keep, in every view
+    - [ ] Renames and deletes of open documents in background tabs and other views (blocked by Q12)
+    - [ ] Hotkeys and command palette entries for next/previous tab, close tab and reopen closed tab (blocked by Q14)
+    - [ ] Persist and restore open tabs and the focused tab per workspace (blocked by Q8)
+    - [ ] Decide typos-lsp behaviour for background tabs (blocked by Q13) and AI Ask context with several documents open (blocked by Q11)
+  - Stage 8: second view
+    - [ ] Serialisable layout tree of views, rendered in the version 1 shape (blocked by Q1: one fixed split or recursive document splits)
+    - [ ] Second view with focus switching; the same file in both views shares one model and `NotesDocument`
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)
 - [ ] Notes, image: support for annotating images. Add text, highlights, ovals and rounded rectangles, with an option to export the annotations flattened onto a PNG while preserving the original image.
 - [ ] AI: run agents inside a docker container. $GLOBAL, $PROJECT and $NOTES should all be mounted directories. Tools and MCP should still work but inside the docker container. We should use the dev containers specification
