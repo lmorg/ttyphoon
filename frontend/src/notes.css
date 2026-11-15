@@ -1718,6 +1718,14 @@ body {
     color: var(--accent);
 }
 
+.notes-view .notes-doc-tabs[data-drop-target="true"] {
+    background-color: rgba(var(--fg-rgb), 0.06);
+}
+
+.notes-view .notes-doc-tab[data-drop-before="true"] {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .notes-view .notes-doc-tab-name {
     overflow: hidden;
     text-overflow: ellipsis;

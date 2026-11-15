@@ -642,6 +642,17 @@ Known limitations, for the following tasks:
 - Views have no depth limit. Monaco relayouts through each view's
   ResizeObserver.
 
+*Done (Stage 8, task 7):*
+
+- Document tabs are draggable. Dropping one on a tab strip places it before
+  the tab under the pointer (after it past its middle, or last on empty
+  strip space). Within one view this reorders the tabs.
+- Dropped on another view, the tab joins that view, which takes focus showing
+  the document, and leaves its source without a save or a reopen entry, as
+  the document stays open. A view emptied this way closes.
+- The drag uses a module-level record of the dragged tab rather than
+  `dataTransfer`, which can't be read during `dragover`.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

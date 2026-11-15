@@ -4419,6 +4419,52 @@ describe('notes rendering', () => {
         expect(viewTabTitles(only)).toEqual([]);
     });
 
+    it('reorders tabs and moves them between views by dragging', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        await openDocumentTabs(disk);
+        await splitRight();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2));
+        const right = mainEditorAdapter();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        const tabIn = (root, file) => [...root.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file);
+        const drag = async (tab, target) => {
+            const fire = (el, type) => {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                Object.defineProperty(event, 'clientX', { value: 0 });
+                el.dispatchEvent(event);
+                return event;
+            };
+            expect(tab.draggable).toBe(true);
+            fire(tab, 'dragstart');
+            expect(fire(target, 'dragover').defaultPrevented).toBe(true);
+            fire(target, 'drop');
+            fire(tab, 'dragend');
+            await flushPromises();
+            await flushPromises();
+        };
+
+        // Onto the other view, before the tab dropped on.
+        right.typeText('mine ');
+        await drag(tabIn(leftRoot, first), tabIn(rightRoot, second));
+        expect(viewTabTitles(rightRoot)).toEqual([first, second]);
+        expect(viewTabTitles(leftRoot)).toEqual([second]);
+        expect(rightRoot.dataset.focused).toBe('true');
+        expect(right.getValue()).toBe('first text');
+        expect(disk.get(second)).toBe('mine second text');
+
+        // Within one strip, and to its end.
+        await drag(tabIn(rightRoot, first), rightRoot.querySelector('.notes-doc-tabs'));
+        expect(viewTabTitles(rightRoot)).toEqual([second, first]);
+
+        // Moving a view's last tab closes the view.
+        await drag(tabIn(leftRoot, second), tabIn(rightRoot, first));
+        await vi.waitFor(() => expect(notesViewRoots()).toEqual([rightRoot]));
+        expect(viewTabTitles(rightRoot)).toEqual([second, first]);
+        expect(right.getValue()).toBe('mine second text');
+    });
+
     it('collapses split views to one on switching workspace', async () => {
         const first = '$NOTES/first.md';
         const disk = new Map([[first, 'first text']]);

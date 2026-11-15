@@ -1112,6 +1112,7 @@ function renderNotesTabs(view) {
         tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-selected', String(doc === shown));
         tab.dataset.docKey = doc.key;
+        tab.draggable = true;
         tab.dataset.dirty = String(doc.dirty === true);
         tab.dataset.conflicted = String(doc.conflicted === true);
         tab.dataset.deleted = String(doc.deleted === true);
@@ -1301,9 +1302,9 @@ async function activateNotesTab(view, key) {
 // fails) and closes the document unless another tab shows it. Closing the
 // active tab activates its neighbour. The edits of a deleted document, or of
 // any document with discard, are dropped.
-async function closeNotesTab(view, key, { discard = false } = {}) {
+async function closeNotesTab(view, key, { discard = false, moving = false } = {}) {
     const doc = findNotesDocument(key);
-    if (doc?.dirty && !discard && !doc.deleted) {
+    if (doc?.dirty && !discard && !moving && !doc.deleted) {
         clearTimeout(doc.autosaveTimer);
         doc.autosaveTimer = null;
         if (!await saveFile(doc)) {
@@ -1314,7 +1315,7 @@ async function closeNotesTab(view, key, { discard = false } = {}) {
     if (index < 0) {
         return;
     }
-    if (doc && !discard && !doc.deleted) {
+    if (doc && !discard && !moving && !doc.deleted) {
         rememberClosedNotesTab(doc);
     }
     if (doc && doc !== activeNotesDocument && !isNotesDocumentInTab(doc)) {
@@ -1606,7 +1607,107 @@ function bindNotesViewFocus(view) {
     });
 }
 
+// Places `key` in a view's tabs before `beforeKey`, or last. A tab placed
+// before itself stays where it is.
+function placeNotesTab(view, key, beforeKey) {
+    if (beforeKey === key && view.tabs.includes(key)) {
+        return;
+    }
+    const tabs = view.tabs.filter((tabKey) => tabKey !== key);
+    const index = beforeKey ? tabs.indexOf(beforeKey) : -1;
+    tabs.splice(index < 0 ? tabs.length : index, 0, key);
+    view.tabs = tabs;
+}
+
+// Dropping a tab on a tab strip reorders it, or moves it to that view, which
+// takes focus showing it (ADR 0100 question 19). The source view lets the
+// tab go without saving, as the document stays open.
+async function moveNotesTab(from, key, to, beforeKey) {
+    if (!notesViews.has(from.id) || !notesViews.has(to.id) || !from.tabs.includes(key)) {
+        return;
+    }
+    if (from === to) {
+        placeNotesTab(to, key, beforeKey);
+        renderNotesTabs(to);
+        return;
+    }
+    placeNotesTab(to, key, beforeKey);
+    renderNotesTabs(to);
+    await focusNotesView(to, key);
+    await closeNotesTab(from, key, { moving: true });
+}
+
+let draggedNotesTab = null;
+
+function notesTabDropTarget(event) {
+    const tab = event.target instanceof Element ? event.target.closest('.notes-doc-tab') : null;
+    if (!tab) {
+        return { tab: null, beforeKey: '' };
+    }
+    const rect = tab.getBoundingClientRect();
+    if (event.clientX > rect.left + rect.width / 2) {
+        const next = tab.nextElementSibling;
+        return { tab: next, beforeKey: next?.dataset.docKey || '' };
+    }
+    return { tab, beforeKey: tab.dataset.docKey };
+}
+
+function clearNotesTabDropMarker() {
+    document.querySelectorAll('.notes-doc-tabs[data-drop-target], .notes-doc-tab[data-drop-before]').forEach((el) => {
+        delete el.dataset.dropTarget;
+        delete el.dataset.dropBefore;
+    });
+}
+
 function bindNotesViewTabs(view) {
+    const strip = view.parts.docTabs;
+    strip.addEventListener('dragstart', (event) => {
+        const tab = event.target instanceof Element ? event.target.closest('.notes-doc-tab') : null;
+        if (!tab) {
+            return;
+        }
+        draggedNotesTab = { view, key: tab.dataset.docKey };
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('application/x-ttyphoon-notes-tab', tab.dataset.docKey);
+        }
+    });
+    strip.addEventListener('dragover', (event) => {
+        if (!draggedNotesTab) {
+            return;
+        }
+        event.preventDefault();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'move';
+        }
+        clearNotesTabDropMarker();
+        strip.dataset.dropTarget = 'true';
+        const { tab } = notesTabDropTarget(event);
+        if (tab) {
+            tab.dataset.dropBefore = 'true';
+        }
+    });
+    strip.addEventListener('dragleave', (event) => {
+        if (!strip.contains(event.relatedTarget)) {
+            clearNotesTabDropMarker();
+        }
+    });
+    strip.addEventListener('drop', (event) => {
+        const dragged = draggedNotesTab;
+        draggedNotesTab = null;
+        clearNotesTabDropMarker();
+        if (!dragged) {
+            return;
+        }
+        event.preventDefault();
+        const { beforeKey } = notesTabDropTarget(event);
+        void moveNotesTab(dragged.view, dragged.key, view, beforeKey);
+    });
+    strip.addEventListener('dragend', () => {
+        draggedNotesTab = null;
+        clearNotesTabDropMarker();
+    });
+
     view.parts.docTabs.addEventListener('click', (event) => {
         const tab = event.target.closest('.notes-doc-tab');
         if (!tab) {
