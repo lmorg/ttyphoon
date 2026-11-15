@@ -77,9 +77,16 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Hotkeys and command palette entries for next/previous tab, close tab and reopen closed tab (Q14: Cmd+Shift+]/[, Cmd+W, Cmd+Shift+T)
     - [x] Persist and restore open tabs and the focused tab per workspace (Q8: per workspace)
     - [x] Decide typos-lsp behaviour for background tabs (Q13: shown documents only) and AI Ask context with several documents open (Q11: focused document only)
-  - Stage 8: second view
-    - [ ] Serialisable layout tree of views, rendered in the version 1 shape (blocked by Q1: one fixed split or recursive document splits)
-    - [ ] Second view with focus switching; the same file in both views shares one model and `NotesDocument`
+  - Stage 8: split views (Q1: recursive splits, side by side or stacked)
+    - [ ] Layout tree module: view leaves and split branches (direction, children, sizes), with split, close, resize and serialise operations that keep the tree normalised. Unit tests only, no UI
+    - [ ] Render the Notes editor area from the layout tree, with the existing view as its only leaf. Behaviour unchanged
+    - [ ] Split right and Split down from the tab context menu, command palette and `Cmd+\` (Q17); the new view shows the same document through the shared model and `NotesDocument`
+    - [ ] Focus follows the clicked view; Cmd+Option+arrows move focus between neighbouring views (Q18); global chrome and the focused-view outline follow
+    - [ ] Close a view when its last tab closes and collapse the tree; release a document only when no view shows it
+    - [ ] Draggable dividers with minimum sizes; double-click a divider to equalise (Q20)
+    - [ ] Drag a tab onto another view's tab strip (Q19)
+    - [ ] External changes, renames, deletes, Jupyter output and LSP diagnostics update every view showing the document; typos stay open while any view shows it
+    - [ ] Persist the layout tree, each view's tabs and the focused view per workspace, loading Stage 7 tab lists as one view (Q21)
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)
 - [ ] Notes, image: support for annotating images. Add text, highlights, ovals and rounded rectangles, with an option to export the annotations flattened onto a PNG while preserving the original image.
 - [ ] AI: run agents inside a docker container. $GLOBAL, $PROJECT and $NOTES should all be mounted directories. Tools and MCP should still work but inside the docker container. We should use the dev containers specification

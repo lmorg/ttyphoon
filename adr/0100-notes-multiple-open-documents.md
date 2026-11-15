@@ -103,9 +103,13 @@ recommendations to accept or amend while answering the open questions.
 
 *Decided:* version 1 must be more than tabs only, because one visible
 document with a tab strip is barely different from today's file pickers. It
-must also not attempt full MDI in one change. The exact version 1 UI is still
-open (question 1), but the code must not prevent a later move to full MDI with
-recursive splits and movable terminal, AI and logs.
+must also not attempt full MDI in one change.
+
+*Decided (2026-11-15, question 1):* version 1 has tabs plus recursive splits
+of document views. A view can be split side by side or stacked, and any view
+in a split can be split again, in either direction. Terminal, AI and logs stay
+where they are; making them leaves of the same layout tree is the later move
+to full MDI.
 
 ### 2. Three layers: document, view, layout
 
@@ -118,9 +122,15 @@ one view:
 - **`NotesView`**, one per visible editor pane. It owns the editor instance,
   its preview and structured-view host, its tab list, the active document, and
   per-document view state (cursor, scroll, view mode).
-- **Layout**, a serialisable tree of views. Version 1 uses a fixed, small
-  shape; full MDI later grows the same tree and adds terminal, AI and logs as
-  leaf kinds.
+- **Layout**, a serialisable tree. Each leaf is a `NotesView`. Each branch is
+  a split with a direction (side by side, or stacked), two or more children,
+  and their relative sizes. Version 1 only has view leaves; full MDI later adds
+  terminal, AI and logs as leaf kinds.
+
+  The tree is kept normalised: a split with one child is replaced by that
+  child, and a split inside a split of the same direction is merged into its
+  parent. Closing a view's last tab closes the view, unless it is the only
+  view.
 
 *Decided:* the same file can be open in two views. Both share one
 `NotesDocument` and one Monaco model, which Monaco supports natively, so edits
@@ -622,8 +632,8 @@ full test suite stays green at every step:
 6. **Introduce `NotesView`.** Refactor the editor area into the view factory
    and create the one existing view through it. There is still one view.
 7. **Tabs:** allow several documents in a view.
-8. **Second view:** add the version 1 layout (question 1), including the same
-   file in both views.
+8. **Split views:** add the version 1 layout (question 1): recursive splits
+   in both directions, including the same file in several views.
 
 Any stage that needs a "secondary" or "legacy" code path is a sign that an
 earlier stage is incomplete.
@@ -675,16 +685,30 @@ Answered on 2026-11-15 (Stage 7):
 - **16. Tabs and views:** each view has its own tab strip. A file can be a tab
   in both views; the tabs share one `NotesDocument`.
 
-Still open:
+Answered on 2026-11-15 (Stage 8):
 
-- **1. Version 1 layout.** More than tabs only, but not full MDI (decision 1).
-  Options:
-  - tabs plus one fixed side-by-side split (two views);
-  - tabs plus recursive splits of document views only, with terminal, AI and
-    logs unchanged.
+- **1. Version 1 layout:** tabs plus recursive splits of document views, side
+  by side or stacked, to any depth (decision 1). Terminal, AI and logs are
+  unchanged.
 
-  *Recommendation:* one fixed split. It exercises every boundary MDI needs
-  (two views, a shared document, focus following) with minimal UI.
+Still open (Stage 8). Each has a recommendation that Stage 8 follows unless
+amended:
+
+- **17. Splitting:** *Recommendation:* "Split right" and "Split down" in the
+  tab context menu and the command palette, with `Cmd+\` for Split right as in
+  VS Code. The new view opens the same document. Dragging a tab to the edge
+  of a view to split it comes later.
+- **18. Moving focus between views:** *Recommendation:* clicking a view
+  focuses it, and Cmd+Option+arrow keys move focus to the neighbouring view
+  in that direction.
+- **19. Moving tabs:** *Recommendation:* a tab can be dragged onto another
+  view's tab strip, and "Move to other view" is not needed beyond that.
+- **20. Sizes:** *Recommendation:* dividers can be dragged, double-clicking a
+  divider makes its neighbours equal, and a view cannot shrink below a
+  minimum width or height. There is no depth limit.
+- **21. Persistence:** *Recommendation:* the whole layout tree, with each
+  view's tabs and the focused view, replaces Stage 7's per-workspace tab list.
+  Saved tab lists from Stage 7 load as a single view.
 
 ## Consequences
 
