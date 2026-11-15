@@ -515,6 +515,25 @@ Answered on 2026-11-15:
 - **15. View mode:** chosen per view, so one view can edit a file while another
   previews it. Each view remembers the mode it last used for each document.
 
+Answered on 2026-11-15 (Stage 7):
+
+- **8. Persistence:** open tabs and the focused tab are restored per
+  workspace, using ADR 0074's workspace naming. Navigation history and recent
+  files work as before.
+- **11. AI context:** AI Ask uses only the focused document, as now.
+- **12. Renames and deletes:** a renamed file's tabs follow the new path in
+  every view. A deleted file's clean tabs close; dirty tabs stay open, marked
+  deleted, and saving recreates the file. ADR 0064's history rules still apply.
+- **13. Spellcheck:** typos-lsp keeps only documents shown in a view open, and
+  reopens a document when it is shown again.
+- **14. Navigation:** with Notes focused, Cmd+Shift+] and Cmd+Shift+[ select
+  the next and previous tab, Cmd+W closes the tab and Cmd+Shift+T reopens the
+  last closed one; each is also in the command palette. Ctrl+Tab still cycles
+  the mode tabs (View, Edit, …). Go-to-definition into another file opens or
+  focuses a tab in the focused view.
+- **16. Tabs and views:** each view has its own tab strip. A file can be a tab
+  in both views; the tabs share one `NotesDocument`.
+
 Still open:
 
 - **1. Version 1 layout.** More than tabs only, but not full MDI (decision 1).
@@ -525,20 +544,6 @@ Still open:
 
   *Recommendation:* one fixed split. It exercises every boundary MDI needs
   (two views, a shared document, focus following) with minimal UI.
-- **8. Persistence.** Are views, their tabs and the focused view restored per
-  workspace, using the workspace naming in ADR 0074? How does this interact
-  with history and recent files?
-- **11. AI context.** Does AI Ask use only the focused document, or can it
-  reference other open documents?
-- **12. Renames and deletes.** How do ADR 0064's navigation rules apply when the
-  renamed or deleted file is open in background tabs or other views?
-- **13. Spellcheck.** Does typos-lsp keep every open document open, or only
-  visible ones? Aspell runs on demand and only needs the focused document.
-- **14. Navigation.** What are the hotkeys for next/previous tab, close tab,
-  reopen closed tab and switch view? Does go-to-definition into another file
-  open a tab in the focused view or replace the current document?
-- **16. Tabs and views.** Does each view have its own tab strip, or is there one
-  shared tab list where each view shows one of the tabs?
 
 ## Consequences
 
