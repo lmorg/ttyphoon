@@ -57,10 +57,10 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] `utils/lsp.DocumentStore`: reference-count `DidOpen`/`DidClose` per URI (first open sends `didOpen`, last close sends `didClose`), with tests
     - [x] `NotesTyposOpenDocument`: stop closing and reopening an already-open URI; use the reference count and send `didChange` for new content
   - Stage 4: `NotesDocument`
-    - [ ] Add a `NotesDocument` record and registry keyed by absolute path (open, get, close), holding the per-document fields in ADR 0100 decision 4, with unit tests
-    - [ ] Route `state.currentFile`, `currentFileUri`, file type, project, dirty state, Monaco model and autosave timer through the active document. Still one document
-    - [ ] Move Jupyter block runtimes and kernels onto the `NotesDocument`; stop kernels when the document closes
-    - [ ] Open the LSP and typos documents when a `NotesDocument` opens and close them when it closes, rather than on every file switch
+    - [x] Add a `NotesDocument` record and registry keyed by absolute path (open, get, close), holding the per-document fields in ADR 0100 decision 4, with unit tests. Keyed by Notes path, with `$PROJECT` qualified by the project root (see ADR 0100)
+    - [x] Route `state.currentFile`, `currentFileUri`, file type, project, dirty state, Monaco model and autosave timer through the active document. Still one document. The document holds the text buffer; a Monaco model per document is deferred to Stage 7
+    - [x] Move Jupyter block runtimes and kernels onto the `NotesDocument`; stop kernels when the document closes
+    - [x] Open the LSP and typos documents when a `NotesDocument` opens and close them when it closes, rather than on every file switch
   - Stage 5: asynchronous work captures its document
     - [ ] Load, save and autosave capture their `NotesDocument` and only update it if it is still open
     - [ ] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
@@ -69,6 +69,8 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (blocked by Q15: view mode per view or per document)
     - [ ] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Find behaviour blocked by Q10)
   - Stage 7: tabs
+    - [ ] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model
+    - [ ] Backend Jupyter run IDs and `noteRun`/`noteComplete` events identify the document as well as the block, so blocks in two open documents can run at once
     - [ ] Tab strip in a view: opening a file from the file list, history or go-to-definition opens or focuses a tab; closing a tab releases its document when no view shows it (blocked by Q16: tab strip per view or shared)
     - [ ] External changes to open documents: reload clean documents silently; mark dirty ones as conflicted and let the user choose which version to keep, in every view
     - [ ] Renames and deletes of open documents in background tabs and other views (blocked by Q12)

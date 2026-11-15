@@ -46,6 +46,7 @@ import { captureRenderedElement, captureRenderedElements, createRenderedSelectio
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck, createSpellCheckEngine } from './spellcheck';
 import { createDocumentBuffer } from './notes_document_buffer';
+import { createNotesDocument, createNotesDocumentRegistry } from './notes_document';
 import {
     LSP_CHANGE_DEBOUNCE_MS,
     applyLspSpellCheckExclusions,
@@ -70,9 +71,11 @@ import {
     moveLspCompletionSelection,
     openCurrentLspDocument,
     openCurrentTyposDocument,
+    releaseLspDocument,
     renderLspEditorDecorations,
     requestLspCompletion,
     requestLspCompletionAfterSync,
+    resetLspViewState,
     scheduleLspDidChange,
     scheduleLspHover,
     scheduleTyposDidChange,
@@ -653,16 +656,10 @@ const elements = {
 
 const state = {
     files: [],
-    currentFile: '',
     mutatingFile: '',
-    currentFileUri: '',
-    currentFileProject: '',  // The project path when file was opened, prevents overwrites on project switch
-    currentFileType: 'markdown',  // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
     suspendDocumentCacheSave: false,
-    dirty: false,
     viewTainted: false,
     renderTimer: null,
-    autosaveTimer: null,
     viewMode: 'viewer',
     renamingFile: null,
     renamingFolder: false,
@@ -715,8 +712,6 @@ const state = {
     },
     expandedFolders: {},
     currentProjectRoot: '',      // current project root, used to index FileListCollapsed map
-    jupyterCodeBlocks: {},
-    jupyterBlockCounter: 0,
     lspActiveBlockId: null,
     lspActiveBlockEditor: null,
     swaggerSpec: null,
@@ -761,10 +756,6 @@ const state = {
     aiStickToBottom: true,
     currentWorkspaceName: '',
     currentWorkspaceKey: '',
-    lspChangeTimer: null,
-    lspOpenFile: '',
-    typosOpenFile: '',
-    typosChangeTimer: null,
     lspHoverTimer: null,
     lspHoverLastKey: '',
     lspHoverMouseX: 0,
@@ -782,6 +773,70 @@ const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
 let monacoMainEditor = null;
 const mainDocument = createDocumentBuffer();
+
+// Open documents (ADR 0100). Notes still shows one document at a time, so
+// switching file closes the previous one. With no file open, the active
+// document is a detached placeholder so its fields always have a home.
+const notesDocuments = createNotesDocumentRegistry({ onClose: releaseNotesDocument });
+let activeNotesDocument = createNotesDocument({ buffer: mainDocument });
+
+function activateNotesDocument(path, { project = '' } = {}) {
+    const previous = activeNotesDocument;
+    const next = notesDocuments.open(path, { project, buffer: mainDocument });
+    if (next !== previous) {
+        notesDocuments.close(previous);
+        activeNotesDocument = next;
+    }
+    return next;
+}
+
+// A closed document stops its block runs and releases its own and its
+// blocks' LSP and typos documents.
+function releaseNotesDocument(doc) {
+    for (const blockId of doc.runningJupyterBlocks) {
+        Promise.resolve(StopNote(blockId)).catch((err) => {
+            console.error('Error stopping code block:', err);
+        });
+    }
+    doc.runningJupyterBlocks.clear();
+    const blocks = doc.jupyterCodeBlocks;
+    doc.jupyterCodeBlocks = {};
+    return Promise.all([
+        settleLspDocumentCloses(releaseLspDocument(doc)),
+        releaseJupyterBlockLspDocuments(blocks),
+    ]);
+}
+
+function closeActiveNotesDocument() {
+    notesDocuments.close(activeNotesDocument);
+    activeNotesDocument = createNotesDocument({ buffer: mainDocument });
+}
+
+// The current-file fields read the active document. currentFile and
+// currentFileProject identify it, so they change only by switching document.
+Object.defineProperties(state, {
+    currentFile: { enumerable: true, get: () => activeNotesDocument.path },
+    // The project when the file was opened, so saves after a project switch
+    // still go to the right place.
+    currentFileProject: { enumerable: true, get: () => activeNotesDocument.project },
+    ...Object.fromEntries([
+        ['currentFileUri', 'uri'],
+        // 'markdown' | 'json' | 'html' | 'code' | 'image' | 'csv' | 'binary'
+        ['currentFileType', 'fileType'],
+        ['dirty', 'dirty'],
+        ['autosaveTimer', 'autosaveTimer'],
+        ['lspOpenFile', 'lspOpenFile'],
+        ['lspChangeTimer', 'lspChangeTimer'],
+        ['typosOpenFile', 'typosOpenFile'],
+        ['typosChangeTimer', 'typosChangeTimer'],
+        ['jupyterCodeBlocks', 'jupyterCodeBlocks'],
+        ['jupyterBlockCounter', 'jupyterBlockCounter'],
+    ].map(([name, field]) => [name, {
+        enumerable: true,
+        get: () => activeNotesDocument[field],
+        set: (value) => { activeNotesDocument[field] = value; },
+    }])),
+});
 let monacoMainEditorInit = null;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
@@ -5280,6 +5335,10 @@ function markMarkdownRunSourceBlocks(container, markdown, sourceOffset, source) 
 async function releaseJupyterBlockLspDocuments(blocks) {
     const closes = [];
     for (const block of Object.values(blocks || {})) {
+        if (block?.typosChangeTimer) {
+            clearTimeout(block.typosChangeTimer);
+            block.typosChangeTimer = null;
+        }
         if (block?.lspFilePath) {
             closes.push(NotesLspCloseDocument(block.lspFilePath));
         }
@@ -5287,10 +5346,14 @@ async function releaseJupyterBlockLspDocuments(blocks) {
             closes.push(NotesTyposCloseDocument(block.typosFilePath));
         }
     }
+    await settleLspDocumentCloses(closes);
+}
+
+async function settleLspDocumentCloses(closes) {
     const results = await Promise.allSettled(closes);
     for (const result of results) {
         if (result.status === 'rejected') {
-            console.error('Error closing LSP document for code block:', result.reason);
+            console.error('Error closing LSP document:', result.reason);
         }
     }
 }
@@ -6057,9 +6120,12 @@ async function runCodeBlockInNotes(blockId) {
         outputBlock.textContent = '';
     }
     
+    const doc = activeNotesDocument;
+    doc.runningJupyterBlocks.add(blockId);
     try {
         await RunNote(state.currentFile, blockId, block.currentContent, block.runtime);
     } catch (err) {
+        doc.runningJupyterBlocks.delete(blockId);
         console.error('Error running code:', err);
         const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
         if (outputBlock) {
@@ -6464,13 +6530,9 @@ async function loadProjectCache(options = {}) {
                 jumpEditorToLine(historyPosition.line);
             }
         } else if (state.currentFile) {
-            await closeOpenLspDocument();
-            await closeCurrentTyposDocument();
             if (options.isCurrent && !options.isCurrent()) return;
-            state.currentFile = '';
-            state.currentFileUri = '';
-            state.currentFileProject = '';
-            state.currentFileType = 'markdown';
+            resetLspViewState();
+            closeActiveNotesDocument();
             state.swaggerSpec = null;
             state.swaggerRunAvailable = false;
             emitCurrentFileName();
@@ -8118,6 +8180,13 @@ async function loadFile(file, options = {}) {
 
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
+        // Closing the document drops its autosave timer, so save pending
+        // edits now while the editor still holds them.
+        if (state.dirty) {
+            clearTimeout(state.autosaveTimer);
+            state.autosaveTimer = null;
+            await saveFile();
+        }
     }
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
@@ -8126,8 +8195,9 @@ async function loadFile(file, options = {}) {
     state.suspendDocumentCacheSave = true;
 
     if (state.currentFile && state.currentFile !== file) {
-        await closeOpenLspDocument();
-        await closeCurrentTyposDocument();
+        // The previous document's LSP and typos registrations are released
+        // when it closes, on switching below.
+        resetLspViewState();
         lspSpellCheckExclusions.symbols = [];
         lspSpellCheckExclusions.tokens = [];
         lspSpellCheckExclusions.keywords = [];
@@ -8144,7 +8214,7 @@ async function loadFile(file, options = {}) {
         clearHexSource();
 
         // Capture the current project context to prevent autosave issues if user switches projects
-        state.currentFileProject = await GetCurrentProject();
+        const project = await GetCurrentProject();
         const documentCachePromise = skipDocumentCacheRestore
             ? Promise.resolve(null)
             : GetDocumentCache(file).catch((error) => {
@@ -8167,7 +8237,7 @@ async function loadFile(file, options = {}) {
 
         if (loadingImage) {
             const documentCache = await documentCachePromise;
-            state.currentFile = file;
+            activateNotesDocument(file, { project });
             emitCurrentFileName();
             await refreshFileMetaMarkdown(file);
             state.currentFileType = 'image';
@@ -8197,7 +8267,7 @@ async function loadFile(file, options = {}) {
         const result = await GetFile(file);
     const documentCache = await documentCachePromise;
 
-        state.currentFile = file;
+        activateNotesDocument(file, { project });
         state.currentFileUri = await resolveNotesFileUri(file);
         clearCurrentFileLspDiagnosticsCache();
         emitCurrentFileName();
@@ -8546,9 +8616,7 @@ async function confirmDelete() {
             lspDiagnosticsStore.delete(fileUri);
         }
         if (state.currentFile === fileToDelete) {
-            state.currentFile = '';
-            state.currentFileUri = '';
-            state.currentFileProject = '';
+            closeActiveNotesDocument();
             state.lspHoverLastKey = '';
             emitCurrentFileName();
             setMainEditorValue('');
@@ -12349,8 +12417,11 @@ EventsOn("notesRunLspGoToWorkspaceSymbol", async () => {
     await goToWorkspaceLspSymbol();
 });
 
+// Block IDs are only unique within a document, so output is shown only for
+// runs started from the active document.
 EventsOn("noteRun", (data) => {
     const { blockId, output, isError } = data;
+    if (!activeNotesDocument.runningJupyterBlocks.has(blockId)) return;
 
     const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
     if (!outputBlock) return;
@@ -12371,6 +12442,7 @@ EventsOn("noteRun", (data) => {
 
 EventsOn("noteComplete", (data) => {
     const { blockId } = data;
+    if (!activeNotesDocument.runningJupyterBlocks.delete(blockId)) return;
 
     // Toggle buttons back to Run
     const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
@@ -13502,9 +13574,8 @@ async function openNotesGitDiff({ root, file, diff }) {
         await closeOpenLspDocument();
         await closeCurrentTyposDocument();
         clearVisibleLspDiagnostics();
+        activateNotesDocument(notesFilePath, { project: root });
         state.currentFileUri = '';
-        state.currentFileProject = root;
-        state.currentFile = notesFilePath;
         state.currentFileType = 'code';
         elements.editorShell.dataset.fileType = 'code';
         state.swaggerSpec = null;

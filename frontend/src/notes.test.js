@@ -2466,6 +2466,33 @@ describe('notes rendering', () => {
         expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('$NOTES/main.go');
     });
 
+    it('releases LSP and typos documents when their document closes, not when a load fails', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go', '$NOTES/broken.go', '$NOTES/other.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+        getFileMock.mockImplementation((file) => (file === '$NOTES/broken.go'
+            ? Promise.reject(new Error('unreadable'))
+            : Promise.resolve({ contents: 'package main\n', text: '', error: '' })));
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/main.go"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        document.querySelector('[data-file="$NOTES/broken.go"]').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalled();
+        expect(notesTyposCloseDocumentMock).not.toHaveBeenCalled();
+
+        document.querySelector('[data-file="$NOTES/other.go"]').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesLspCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go']]);
+        expect(notesTyposCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go']]);
+        expect(notesLspOpenDocumentMock).toHaveBeenLastCalledWith('$NOTES/other.go', 'go', 'package main\n');
+    });
+
     it('releases Jupyter block LSP documents when the Run view re-renders', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/blocks.md']);
         getFileMock.mockResolvedValue({ contents: '```python\nprint("hello")\n```', text: '', error: '' });
@@ -2493,6 +2520,44 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
+        expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
+        expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
+    });
+
+    it('stops block runs and releases block documents when the document closes', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/blocks.md', '$NOTES/other.md']);
+        getFileMock.mockImplementation((file) => Promise.resolve({
+            contents: file === '$NOTES/blocks.md' ? '```python\nprint("hello")\n```' : '# other\n',
+            text: '',
+            error: '',
+        }));
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/blocks.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const { FormatCodeBlock } = await import('./wails-bindings.js');
+        FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/block.py', Err: '' });
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.jupyter-lsp-notes').click();
+        await flushPromises();
+        await flushPromises();
+
+        document.querySelector('.jupyter-run-notes').click();
+        await flushPromises();
+        expect(runNoteMock).toHaveBeenCalledWith('$NOTES/blocks.md', 'jupyter-block-0', 'print("hello")', 'python');
+        getEventHandler('noteRun')({ blockId: 'jupyter-block-0', output: 'hello', isError: 'false' });
+        expect(document.querySelector('.jupyter-output').textContent).toBe('hello');
+
+        document.querySelector('[data-file="$NOTES/other.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(stopNoteMock).toHaveBeenCalledWith('jupyter-block-0');
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
         expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
     });
@@ -6746,6 +6811,29 @@ describe('notes rendering', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it('saves pending edits to the previous file when switching before autosave fires', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/a.md', '$NOTES/b.md']);
+        getCurrentProjectMock.mockResolvedValue('/work/one');
+        getFileMock.mockImplementation((file) => Promise.resolve({ contents: `# ${file}\n`, text: '', error: '' }));
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/a.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+
+        getCurrentProjectMock.mockResolvedValue('/work/two');
+        mainEditorAdapter().setValue('# a edited\n');
+        document.querySelector('[data-file="$NOTES/b.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(saveFileMock).toHaveBeenCalledTimes(1);
+        expect(saveFileMock).toHaveBeenCalledWith('$NOTES/a.md', '# a edited\n', '/work/one');
+        expect(mainEditorAdapter().getValue()).toBe('# $NOTES/b.md\n');
     });
 
     it('invalidates and re-runs project grep after autosave while keeping find mode active', async () => {

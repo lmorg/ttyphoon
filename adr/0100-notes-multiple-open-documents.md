@@ -241,6 +241,55 @@ as `lspOpenFile === currentFile`.
   change. They are released once block runtimes move onto `NotesDocument`
   (Stage 4).
 
+*Done (Stage 4):*
+
+- `frontend/src/notes_document.js` defines `NotesDocument` and a registry
+  (`open`, `get`, `close`). Opening a file that is already open returns its
+  existing document.
+- The registry key is the Notes path used by every backend call (for example
+  `$NOTES/a.md`). For `$PROJECT/...` paths, the prefix is replaced with the
+  project root, because the same path names a different file in each project.
+  The absolute path is not used because it is only known after an
+  asynchronous lookup.
+- A document holds its path, project, URI, file type, text buffer, dirty
+  flag, autosave timer, LSP and typos registration and change timers, Jupyter
+  blocks, and the blocks that are running.
+- Closing a document:
+  - clears its timers;
+  - stops its block runs (`StopNote`);
+  - releases its blocks' LSP and typos documents. This closes the Stage 3 gap.
+- `state.currentFile` and `state.currentFileProject` are read-only accessors
+  for the active document. The other fields read and write the active
+  document.
+- `loadFile` and the Git diff view switch document with
+  `activateNotesDocument`. Deleting the current file, and history leaving no
+  file, call `closeActiveNotesDocument`. Notes still shows one document at a
+  time, so switching closes the previous document.
+- A document's LSP and typos registrations are released when it closes
+  (`releaseLspDocument`), not by `loadFile` before every switch. Switching
+  only resets the UI the view showed for that document (`resetLspViewState`:
+  hover, completion, spellcheck mode). If the new file fails to load, the
+  previous document stays active with its LSP and typos still open; before
+  this, they were closed while it was still shown. The delete and Git
+  deleted-file paths still close explicitly, because the file itself is gone.
+- Switching files within the one-second autosave delay used to lose those
+  edits. The timer then fired on the new file after the editor text had been
+  replaced. `loadFile` now saves pending edits to the previous file before
+  switching. The project captured when the file was opened is used for that
+  save, even if the project has changed since.
+- Output events (`noteRun`, `noteComplete`) are applied only for runs started
+  from the active document. Block IDs (`jupyter-block-N`) are only unique
+  within a document, so this keeps a closed document's output, including the
+  backend's `[process killed]` message, out of the next document's blocks.
+- Not yet per document:
+  - The Monaco model. The adapter still has one model, and the active
+    document's buffer is attached to it. A model per document needs model
+    swapping in the adapter, which is needed once two documents are open at
+    the same time (Stage 7).
+  - Backend run IDs and output events. These carry only the block ID, so
+    running blocks from two open documents needs the document in the ID
+    (Stage 7).
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

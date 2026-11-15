@@ -1448,6 +1448,39 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
     }
 }
 
+// When a NotesDocument closes, release its LSP and typos registrations. The
+// returned promises settle when the backend has closed them.
+export function releaseLspDocument(doc) {
+    const closes = [];
+    if (doc.lspOpenFile) {
+        for (const [uri, entry] of lspModelDocuments) {
+            if (entry.filePath === doc.lspOpenFile) {
+                lspModelDocuments.delete(uri);
+            }
+        }
+        closes.push(NotesLspCloseDocument(doc.lspOpenFile));
+        doc.lspOpenFile = '';
+    }
+    if (doc.typosOpenFile) {
+        closes.push(NotesTyposCloseDocument(doc.typosOpenFile));
+        doc.typosOpenFile = '';
+    }
+    return closes;
+}
+
+// When the editor stops showing a document, clear the LSP and spellcheck UI
+// that belonged to it.
+export function resetLspViewState() {
+    clearLspHoverTimer();
+    hideLspHoverTooltip();
+    hideLspCompletion();
+    state.lspHoverLastKey = '';
+    getNotesSpellCheckHandle()?.setMode('aspell');
+    if (isMonacoActive()) {
+        getMonacoMainEditor().setTyposMisspellings([]);
+    }
+}
+
 export async function closeOpenLspDocument() {
     for (const [uri, doc] of lspModelDocuments) {
         if (doc.filePath === state.lspOpenFile) {
