@@ -511,6 +511,21 @@ as `lspOpenFile === currentFile`.
 - The command palette lists the same four commands as "Notes: ..." entries.
   They send a `notesDocumentTabCommand` event naming the command.
 
+*Done (Stage 7, task 7):*
+
+- Each workspace (tmux window name, ADR 0074) remembers its open tabs and
+  focused tab, saved whenever the tab strip changes. They are kept with the
+  workspace's history in `notesw_history`, under `tabs:workspace:<name>`, as
+  expanded filenames, and returned with Notes aliases, as history is. Up to 50
+  tabs are kept, for 30 days.
+- Opening Notes, or switching to a workspace, restores its tabs in place of its
+  history position. Only the focused tab's file is read; the others are read
+  when first shown. A workspace with no remembered tabs restores its history
+  position as before.
+- Saving waits until the workspace's tabs have been restored, so the empty
+  strip at startup or during a switch never overwrites them. The backend also
+  ignores a save that names a workspace other than its current one.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

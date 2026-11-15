@@ -83,6 +83,8 @@ const runNoteMock = vi.fn(() => Promise.resolve());
 const runFunctionMock = vi.fn(() => Promise.resolve(''));
 const stopNoteMock = vi.fn(() => Promise.resolve());
 const watchNotesFilesMock = vi.fn(() => Promise.resolve());
+const getNotesOpenTabsMock = vi.fn(() => Promise.resolve({ workspace: '', files: [], active: 0 }));
+const setNotesOpenTabsMock = vi.fn(() => Promise.resolve(true));
 const sendIpcMock = vi.fn(() => Promise.resolve());
 const sendToTerminalMock = vi.fn(() => Promise.resolve());
 const getLanguageDescriptionsMock = vi.fn(() => Promise.resolve([]));
@@ -296,6 +298,8 @@ vi.mock('./wails-bindings.js', () => ({
     RunFunction: runFunctionMock,
     StopNote: stopNoteMock,
     WatchNotesFiles: watchNotesFilesMock,
+    GetNotesOpenTabs: getNotesOpenTabsMock,
+    SetNotesOpenTabs: setNotesOpenTabsMock,
     SendIpc: sendIpcMock,
     SendToTerminal: sendToTerminalMock,
     GetLanguageDescriptions: getLanguageDescriptionsMock,
@@ -603,6 +607,9 @@ describe('notes rendering', () => {
         runFunctionMock.mockClear();
         stopNoteMock.mockClear();
         watchNotesFilesMock.mockClear();
+        getNotesOpenTabsMock.mockReset();
+        getNotesOpenTabsMock.mockResolvedValue({ workspace: '', files: [], active: 0 });
+        setNotesOpenTabsMock.mockClear();
         sendIpcMock.mockClear();
         sendToTerminalMock.mockClear();
         getLanguageDescriptionsMock.mockReset().mockResolvedValue([]);
@@ -4252,6 +4259,52 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         expect(selectedTabTitle()).toBe(second);
+    });
+
+    it('restores each workspace\'s open tabs and saves them as they change', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const third = '$NOTES/third.md';
+        let workspace = 'One';
+        const saved = {
+            One: { workspace: 'One', files: [first, second], active: 1 },
+            Two: { workspace: 'Two', files: [third], active: 0 },
+        };
+        listFilesMock.mockResolvedValue([first, second, third]);
+        getCurrentGroupNameMock.mockImplementation(async () => workspace);
+        getFileMock.mockImplementation(async (file) => ({ contents: `${file} text`, text: '', error: '' }));
+        getNotesOpenTabsMock.mockImplementation(async () => saved[workspace]);
+        setNotesOpenTabsMock.mockImplementation(async (name, tabs, active) => {
+            saved[name] = { workspace: name, files: tabs.map((tab) => tab.path), active };
+            return true;
+        });
+
+        await importNotesModule();
+        await vi.waitFor(() => expect(selectedTabTitle()).toBe(second));
+        expect(tabTitles()).toEqual([first, second]);
+        // Background tabs are read when first shown, and history is not used.
+        expect(getFileMock).not.toHaveBeenCalledWith(first);
+        expect(notesHistoryCurrentPositionMock).not.toHaveBeenCalled();
+        expect(saved.One).toEqual({ workspace: 'One', files: [first, second], active: 1 });
+
+        document.querySelector(`[data-file="${third}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(saved.One).toEqual({ workspace: 'One', files: [first, second, third], active: 2 });
+
+        const callsBeforeSwitch = setNotesOpenTabsMock.mock.calls.length;
+        workspace = 'Two';
+        getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'Two' });
+        await vi.waitFor(() => expect(tabTitles()).toEqual([third]));
+        expect(selectedTabTitle()).toBe(third);
+        expect(saved.One.files).toEqual([first, second, third]);
+        expect(setNotesOpenTabsMock.mock.calls.slice(callsBeforeSwitch).filter(([name]) => name !== 'Two')).toEqual([]);
+
+        workspace = 'One';
+        getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'One' });
+        await vi.waitFor(() => expect(tabTitles()).toEqual([first, second, third]));
+        expect(selectedTabTitle()).toBe(third);
+        expect(saved.Two).toEqual({ workspace: 'Two', files: [third], active: 0 });
     });
 
     it('closes a clean background document when its file is deleted outside the app', async () => {

@@ -75,7 +75,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] External changes to open documents: reload clean documents silently; mark dirty ones as conflicted and let the user choose which version to keep, in every view
     - [x] Renames and deletes of open documents in background tabs and other views (Q12: tabs follow renames; deleted clean tabs close, dirty ones stay)
     - [x] Hotkeys and command palette entries for next/previous tab, close tab and reopen closed tab (Q14: Cmd+Shift+]/[, Cmd+W, Cmd+Shift+T)
-    - [ ] Persist and restore open tabs and the focused tab per workspace (Q8: per workspace)
+    - [x] Persist and restore open tabs and the focused tab per workspace (Q8: per workspace)
     - [ ] Decide typos-lsp behaviour for background tabs (Q13: shown documents only) and AI Ask context with several documents open (Q11: focused document only)
   - Stage 8: second view
     - [ ] Serialisable layout tree of views, rendered in the version 1 shape (blocked by Q1: one fixed split or recursive document splits)

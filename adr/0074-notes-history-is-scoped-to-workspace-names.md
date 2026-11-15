@@ -37,6 +37,8 @@ the active root could not be restored.
   active root within a workspace. Do not suppress restoration based on a global
   filename sentinel. An empty workspace history clears the previous document.
   Cancel pending cursor-history debounce timers during context transitions.
+- A workspace's remembered open tabs (ADR 0100), when it has any, are restored
+  instead of its history position.
 - On first access to a workspace without a workspace-history cache entry, copy
   its active root's legacy history, preserving positions and the selected index.
   Persist even an empty result so later root changes cannot seed it again.

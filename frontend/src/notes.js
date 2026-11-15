@@ -10,6 +10,7 @@ import {
     GetNotesStructViewMaxSizeKB,
     GetNotesContext, GetNotesFilesSnapshot, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
     RunNote, RunFunction, StopNote, SendIpc, SendToTerminal, WatchNotesFiles,
+    GetNotesOpenTabs, SetNotesOpenTabs,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu, GetHyperlinkTooltip,
@@ -889,6 +890,63 @@ function syncWatchedNotesFiles() {
     });
 }
 
+// Open tabs are remembered per workspace (ADR 0100 question 8). Saving waits
+// until the workspace's tabs have been restored, so the empty strip at
+// startup or during a workspace change never overwrites them.
+let notesTabsWorkspace = null;
+let notesTabsSaveQueued = false;
+let notesTabsLastSaved = '';
+
+function saveNotesOpenTabs() {
+    if (notesTabsSaveQueued) {
+        return;
+    }
+    notesTabsSaveQueued = true;
+    queueMicrotask(() => {
+        notesTabsSaveQueued = false;
+        const workspace = notesTabsWorkspace;
+        if (workspace === null || workspace !== state.currentWorkspaceName) {
+            return;
+        }
+        const docs = mainView.tabs.map(findNotesDocument).filter(Boolean);
+        const tabs = docs.map(({ path, project }) => ({ path, project }));
+        const active = Math.max(0, docs.indexOf(activeNotesDocument));
+        const saved = JSON.stringify([workspace, tabs, active]);
+        if (saved === notesTabsLastSaved) {
+            return;
+        }
+        notesTabsLastSaved = saved;
+        Promise.resolve(SetNotesOpenTabs(workspace, tabs, active)).catch((err) => {
+            notesTabsLastSaved = '';
+            console.error('Failed to save open notes tabs:', err);
+        });
+    });
+}
+
+// Reopens a workspace's remembered tabs. Background documents are read when
+// their tab is first shown; the focused one loads now unless loadActive is
+// false. Returns whether there were tabs to restore.
+async function restoreNotesOpenTabs(saved, { loadActive = true, isCurrent = () => true } = {}) {
+    const files = Array.isArray(saved?.files) ? saved.files.filter(Boolean) : [];
+    if (files.length === 0) {
+        return false;
+    }
+    const project = await GetCurrentProject();
+    if (!isCurrent()) {
+        return true;
+    }
+    for (const path of files) {
+        mainView.addTab(notesDocuments.open(path, { project }).key);
+    }
+    syncWatchedNotesFiles();
+    renderNotesTabs(mainView);
+    const active = files[saved.active] || files[0];
+    if (loadActive && active) {
+        await loadFile(active);
+    }
+    return true;
+}
+
 function activateNotesDocument(path, { project = '' } = {}) {
     const next = notesDocuments.open(path, { project });
     syncWatchedNotesFiles();
@@ -1010,6 +1068,9 @@ function renderNotesTabs(view) {
         return tab;
     }));
     renderNotesNotice(view);
+    if (view === mainView) {
+        saveNotesOpenTabs();
+    }
 }
 
 const NOTES_DOCUMENT_NOTICES = {
@@ -6987,6 +7048,7 @@ async function refreshFiles(options = {}) {
             clearTimeout(state.historyPositionTimer);
             state.historyPositionTimer = null;
             notesGitPanel?.setCommitsActive(false);
+            notesTabsWorkspace = null;
             await closeBackgroundNotesTabs();
             if (sequence !== fileListRefreshSequence) return;
         }
@@ -7010,11 +7072,26 @@ async function refreshFiles(options = {}) {
         state.files = Array.isArray(snapshot.files) ? snapshot.files : [];
         state.filteredFiles = null;
         renderFileList();
+        const isCurrent = () => sequence === fileListRefreshSequence;
+        // A workspace's remembered tabs take the place of its history
+        // position.
+        const savedTabs = workspaceScopedRefresh ? await GetNotesOpenTabs() : null;
+        if (!isCurrent()) return;
+        const hasSavedTabs = savedTabs?.workspace === state.currentWorkspaceName
+            && Array.isArray(savedTabs.files) && savedTabs.files.length > 0;
         await loadProjectCache({
-            skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh,
-            isCurrent: () => sequence === fileListRefreshSequence,
+            skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh || hasSavedTabs,
+            isCurrent,
         });
-        if (sequence !== fileListRefreshSequence) return;
+        if (!isCurrent()) return;
+        if (workspaceScopedRefresh) {
+            if (hasSavedTabs) {
+                await restoreNotesOpenTabs(savedTabs, { loadActive: !skipHistoryRestore, isCurrent });
+                if (!isCurrent()) return;
+            }
+            notesTabsWorkspace = state.currentWorkspaceName;
+            saveNotesOpenTabs();
+        }
         await applyFileFilter();
 
         if (sequence !== fileListRefreshSequence) return;

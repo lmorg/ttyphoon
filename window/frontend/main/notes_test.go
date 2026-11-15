@@ -329,3 +329,33 @@ func TestNotifyNotesFileChangedReportsOnlyFilesThatStayDeleted(t *testing.T) {
 	case <-time.After(notesDeletedFileDelay + 200*time.Millisecond):
 	}
 }
+
+func TestNotesOpenTabsAreRememberedPerWorkspace(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	workspace := t.Name() + root
+	app := &WApp{projRoot: root, groupName: workspace, homeDir: t.TempDir()}
+	external := filepath.Join(outside, "external.md")
+	if !app.SetNotesOpenTabs(workspace, []NotesOpenTabT{
+		{Path: "$PROJECT/a.md", Project: root},
+		{Path: external},
+	}, 1) {
+		t.Fatal("tabs of the current workspace were not saved")
+	}
+	want := NotesOpenTabsT{Workspace: workspace, Files: []string{"$PROJECT/a.md", external}, Active: 1}
+	if got := app.GetNotesOpenTabs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("restored tabs = %+v, want %+v", got, want)
+	}
+
+	app.groupName = workspace + "-other"
+	if got := app.GetNotesOpenTabs(); len(got.Files) != 0 {
+		t.Fatalf("another workspace inherited tabs: %+v", got)
+	}
+	// A save sent before the switch to this workspace is ignored.
+	if app.SetNotesOpenTabs(workspace, nil, 0) {
+		t.Fatal("a save for a previous workspace was accepted")
+	}
+	app.groupName = workspace
+	if got := app.GetNotesOpenTabs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("tabs after a stale save = %+v, want %+v", got, want)
+	}
+}
