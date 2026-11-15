@@ -65,9 +65,9 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Load, save and autosave capture their `NotesDocument` and only update it if it is still open
     - [x] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
   - Stage 6: `NotesView`
-    - [ ] Create the editor area (tab strip host, Monaco host, preview/structured-view host) from a `NotesView` factory and template, with lookups scoped to the view root; the existing view is created through it. Still one view
-    - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (blocked by Q15: view mode per view or per document)
-    - [ ] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Find behaviour blocked by Q10)
+    - [x] Create the editor area (tab strip host, Monaco host, preview/structured-view host) from a `NotesView` factory and template, with lookups scoped to the view root; the existing view is created through it. Still one view
+    - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (Q15: view mode per view)
+    - [ ] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Q10: Find query per document)
   - Stage 7: tabs
     - [ ] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model
     - [ ] Backend Jupyter run IDs and `noteRun`/`noteComplete` events identify the document as well as the block, so blocks in two open documents can run at once

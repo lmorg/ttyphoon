@@ -1,0 +1,65 @@
+<div class="notes-view">
+    <div class="notes-tabs" role="tablist" data-part="tabs">
+        <button type="button" class="tab notes-tab-viewer" role="tab" aria-selected="true" data-part="tabViewer">View</button>
+        <button type="button" class="tab notes-tab-editor" role="tab" aria-selected="false" data-part="tabEditor">Edit</button>
+        <button type="button" class="tab notes-tab-jupyter" role="tab" aria-selected="false" data-part="tabJupyter">Run</button>
+        <button type="button" class="tab notes-tab-swagger-view" role="tab" aria-selected="false" style="display: none;" data-swagger="true" data-part="tabSwaggerView">View</button>
+        <button type="button" class="tab notes-tab-swagger-edit" role="tab" aria-selected="false" style="display: none;" data-swagger="true" data-part="tabSwaggerEdit">Edit</button>
+        <button type="button" class="tab notes-tab-swagger-run" role="tab" aria-selected="false" style="display: none;" data-swagger="true" data-part="tabSwaggerRun">Run</button>
+        <button type="button" class="tab notes-tab-csv-view" role="tab" aria-selected="false" style="display: none;" data-part="tabCsvView">View</button>
+        <button type="button" class="tab notes-tab-csv-edit" role="tab" aria-selected="false" style="display: none;" data-part="tabCsvEdit">Edit</button>
+        <button type="button" class="tab notes-tab-csv-run" role="tab" aria-selected="false" style="display: none;" data-part="tabCsvRun">Run</button>
+        <button type="button" class="tab notes-tab-image-view" role="tab" aria-selected="false" style="display: none;" data-part="tabImageView">View</button>
+        <button type="button" class="tab notes-tab-hex" role="tab" aria-selected="false" data-part="tabHex">Hex</button>
+        <button type="button" class="tab notes-tab-meta" role="tab" aria-selected="false" data-part="tabMeta">Meta</button>
+        <button type="button" class="tab notes-tab-diff" role="tab" aria-selected="false" style="display: none;" data-part="tabDiff">Diff</button>
+        <div class="notes-view-toolbar-slot" data-part="toolbarSlot"></div>
+    </div>
+    <div class="notes-view-panel" data-part="panel">
+        <div class="notes-editor-wrap" role="tabpanel" data-part="editorWrap">
+            <div class="notes-editor-shell" data-code-view="false" data-part="editorShell">
+                <div class="notes-editor-scroll" data-part="editorScroll">
+                    <div class="notes-monaco-editor" data-part="monacoEditor"></div>
+                </div>
+            </div>
+        </div>
+        <div class="notes-git-diff-wrap" data-active="false" role="tabpanel" data-part="gitDiffWrap">
+            <div class="notes-git-diff-editor" data-part="gitDiffEditor"></div>
+            <div class="notes-git-diff-message" hidden data-part="gitDiffMessage"></div>
+        </div>
+        <div class="notes-hex-wrap" role="tabpanel" data-part="hexWrap">
+            <div class="notes-hex" data-part="hex"></div>
+        </div>
+        <div class="notes-preview-wrap markdown-body" role="tabpanel" data-part="previewWrap">
+            <div class="notes-preview" data-part="preview"></div>
+        </div>
+        <div class="notes-html-view-wrap" role="tabpanel" data-part="htmlViewWrap">
+            <iframe class="notes-html-view-frame" title="HTML preview" sandbox="" data-part="htmlViewFrame"></iframe>
+        </div>
+        <div class="notes-jupyter-wrap markdown-body" role="tabpanel" data-part="jupyterWrap">
+            <div class="notes-jupyter" data-part="jupyter"></div>
+        </div>
+        <div class="notes-csv-view-wrap" role="tabpanel" data-part="csvViewWrap">
+            <div class="notes-csv-view markdown-body" data-part="csvView"></div>
+        </div>
+        <div class="notes-image-view-wrap" role="tabpanel" data-part="imageViewWrap">
+            <img class="notes-image-view-img" alt="" data-part="imageViewImg" />
+        </div>
+        <div class="notes-meta-wrap markdown-body" role="tabpanel" data-part="metaWrap">
+            <div class="notes-meta" data-part="meta"></div>
+        </div>
+        <div class="notes-swagger-view-wrap" role="tabpanel" style="display: none;" data-part="swaggerViewWrap">
+            <div class="notes-swagger-view json-viewer" data-part="swaggerView"></div>
+        </div>
+        <div class="notes-swagger-run-wrap swagger-ui" role="tabpanel" style="display: none;" data-part="swaggerRunWrap">
+            <div class="notes-swagger-layout swagger-layout" data-part="swaggerLayout">
+                <div class="notes-swagger-info swagger-info markdown-body" data-part="swaggerInfo"></div>
+                <aside class="notes-swagger-endpoints swagger-endpoints-pane" data-part="swaggerEndpoints"></aside>
+                <section class="notes-swagger-main swagger-main-pane" data-part="swaggerMain">
+                    <div class="notes-swagger-request-builder" data-part="swaggerRequestBuilder"></div>
+                    <div class="notes-swagger-response" data-part="swaggerResponse"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>

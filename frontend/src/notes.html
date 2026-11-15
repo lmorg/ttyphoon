@@ -23,73 +23,14 @@
         </aside>
         <div id="notes-splitter"></div>
         <main id="notes-main">
-            <div id="notes-tabs" role="tablist">
-                <button id="notes-tab-viewer" type="button" class="tab" role="tab" aria-selected="true">View</button>
-                <button id="notes-tab-editor" type="button" class="tab" role="tab" aria-selected="false">Edit</button>
-                <button id="notes-tab-jupyter" type="button" class="tab" role="tab" aria-selected="false">Run</button>
-                <button id="notes-tab-swagger-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">View</button>
-                <button id="notes-tab-swagger-edit" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Edit</button>
-                <button id="notes-tab-swagger-run" type="button" class="tab" role="tab" aria-selected="false" style="display: none;" data-swagger="true">Run</button>
-                <button id="notes-tab-csv-view"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
-                <button id="notes-tab-csv-edit"   type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Edit</button>
-                <button id="notes-tab-csv-run"    type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Run</button>
-                <button id="notes-tab-image-view" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">View</button>
-                <button id="notes-tab-hex" type="button" class="tab" role="tab" aria-selected="false">Hex</button>
-                <button id="notes-tab-meta" type="button" class="tab" role="tab" aria-selected="false">Meta</button>
-                <button id="notes-tab-diff" type="button" class="tab" role="tab" aria-selected="false" style="display: none;">Diff</button>
-                <div id="notes-toolbar" class="notes-toolbar">
-                    <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
-                    <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
-                    <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
-                    <button id="notes-fullsize-btn" type="button" class="notes-toolbar-btn" title="Maximize Notes" aria-label="Maximize Notes" aria-pressed="false">&#xf065;</button>
-                </div>
+            <div id="notes-toolbar" class="notes-toolbar">
+                <button id="notes-new" type="button" class="notes-toolbar-btn" title="New" aria-label="New note">&#xe494;</button>
+                <button id="notes-history-prev" type="button" class="notes-toolbar-btn" title="Previous document" aria-label="Previous document">&#xf359;</button>
+                <button id="notes-history-next" type="button" class="notes-toolbar-btn" title="Next document" aria-label="Next document">&#xf35a;</button>
+                <button id="notes-fullsize-btn" type="button" class="notes-toolbar-btn" title="Maximize Notes" aria-label="Maximize Notes" aria-pressed="false">&#xf065;</button>
             </div>
             <div id="notes-panel">
-                <div id="notes-editor-wrap" role="tabpanel">
-                    <div id="notes-editor-shell" data-code-view="false">
-                        <div id="notes-editor-scroll">
-                            <div id="notes-monaco-editor"></div>
-                        </div>
-                    </div>
-                </div>
-                <div id="notes-git-diff-wrap" class="notes-git-diff-wrap" data-active="false" role="tabpanel">
-                    <div id="notes-git-diff-editor" class="notes-git-diff-editor"></div>
-                    <div id="notes-git-diff-message" class="notes-git-diff-message" hidden></div>
-                </div>
-                <div id="notes-hex-wrap" role="tabpanel">
-                    <div id="notes-hex"></div>
-                </div>
-                <div id="notes-preview-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-preview"></div>
-                </div>
-                <div id="notes-html-view-wrap" role="tabpanel">
-                    <iframe id="notes-html-view-frame" title="HTML preview" sandbox=""></iframe>
-                </div>
-                <div id="notes-jupyter-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-jupyter"></div>
-                </div>
-                <div id="notes-csv-view-wrap" role="tabpanel">
-                    <div id="notes-csv-view" class="markdown-body"></div>
-                </div>
-                <div id="notes-image-view-wrap" role="tabpanel">
-                    <img id="notes-image-view-img" alt="" />
-                </div>
-                <div id="notes-meta-wrap" class="markdown-body" role="tabpanel">
-                    <div id="notes-meta"></div>
-                </div>
-                <div id="notes-swagger-view-wrap" role="tabpanel" style="display: none;">
-                    <div id="notes-swagger-view" class="json-viewer"></div>
-                </div>
-                <div id="notes-swagger-run-wrap" class="swagger-ui" role="tabpanel" style="display: none;">
-                    <div id="notes-swagger-layout" class="swagger-layout">
-                        <div id="notes-swagger-info" class="swagger-info markdown-body"></div>
-                        <aside id="notes-swagger-endpoints" class="swagger-endpoints-pane"></aside>
-                        <section id="notes-swagger-main" class="swagger-main-pane">
-                            <div id="notes-swagger-request-builder"></div>
-                            <div id="notes-swagger-response"></div>
-                        </section>
-                    </div>
-                </div>
+                <div id="notes-views"></div>
                 <div id="notes-tools-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize Tools panel" tabindex="0" data-enabled="false" title="Drag to resize Tools; double-click to reset"></div>
                 <div id="notes-tools-panel" class="notes-tools-panel" data-collapsed="true">
                     <div class="notes-tools-header">

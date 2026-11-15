@@ -238,7 +238,7 @@ export function renderHexDump(container, base64Data, options = {}) {
 export function getHexDumpStyles(fontSize, adjustCellHeight = 0) {
     const rowHeight = getRowHeight(fontSize, adjustCellHeight);
     return `
-        #notes-hex-wrap {
+        .notes-view .notes-hex-wrap {
             flex: 1;
             display: none;
             min-width: 0;
@@ -247,11 +247,11 @@ export function getHexDumpStyles(fontSize, adjustCellHeight = 0) {
             padding: 0;
         }
 
-        #notes-hex-wrap[data-active="true"] {
+        .notes-view .notes-hex-wrap[data-active="true"] {
             display: block;
         }
 
-        #notes-hex {
+        .notes-view .notes-hex {
             min-width: 0;
             width: 100%;
             height: 100%;

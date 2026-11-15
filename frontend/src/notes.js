@@ -90,6 +90,7 @@ import { initNotesGitPanel } from './notes-git-panel.js';
 import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
 import notesTemplate from './notes.html?raw';
+import { createNotesView } from './notes_view.js';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -489,6 +490,9 @@ initLineNavigationKeys(document);
 
 app.innerHTML = notesTemplate;
 
+const mainView = createNotesView({ host: document.getElementById('notes-views') });
+mainView.parts.toolbarSlot.replaceWith(document.getElementById('notes-toolbar'));
+
 const elements = {
     appRoot: app,
     title: document.getElementById('notes-title'),
@@ -501,51 +505,50 @@ const elements = {
     gitFilenameSearch: document.getElementById('notes-commit-filename-search'),
     listFilter: document.getElementById('notes-list-filter'),
     listFilterClear: document.getElementById('notes-list-filter-clear'),
-    editorShell: document.getElementById('notes-editor-shell'),
-    monacoEditor: document.getElementById('notes-monaco-editor'),
-    preview: document.getElementById('notes-preview'),
-    htmlViewWrap: document.getElementById('notes-html-view-wrap'),
-    htmlViewFrame: document.getElementById('notes-html-view-frame'),
-    jupyter: document.getElementById('notes-jupyter'),
+    editorShell: mainView.parts.editorShell,
+    monacoEditor: mainView.parts.monacoEditor,
+    preview: mainView.parts.preview,
+    htmlViewWrap: mainView.parts.htmlViewWrap,
+    htmlViewFrame: mainView.parts.htmlViewFrame,
+    jupyter: mainView.parts.jupyter,
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
     historyPrev: document.getElementById('notes-history-prev'),
     historyNext: document.getElementById('notes-history-next'),
-    tabEditor: document.getElementById('notes-tab-editor'),
-    tabHex: document.getElementById('notes-tab-hex'),
-    tabViewer: document.getElementById('notes-tab-viewer'),
-    tabJupyter: document.getElementById('notes-tab-jupyter'),
-    tabSwaggerView: document.getElementById('notes-tab-swagger-view'),
-    tabSwaggerEdit: document.getElementById('notes-tab-swagger-edit'),
-    tabSwaggerRun: document.getElementById('notes-tab-swagger-run'),
-    tabImageView: document.getElementById('notes-tab-image-view'),
-    tabMeta: document.getElementById('notes-tab-meta'),
-    tabs: document.getElementById('notes-tabs'),
-    tabDiff: document.getElementById('notes-tab-diff'),
-    tabCsvView: document.getElementById('notes-tab-csv-view'),
-    tabCsvEdit: document.getElementById('notes-tab-csv-edit'),
-    tabCsvRun: document.getElementById('notes-tab-csv-run'),
-    editorWrap: document.getElementById('notes-editor-wrap'),
-    notesPanel: document.getElementById('notes-panel'),
-    gitDiffWrap: document.getElementById('notes-git-diff-wrap'),
-    gitDiffEditor: document.getElementById('notes-git-diff-editor'),
-    gitDiffMessage: document.getElementById('notes-git-diff-message'),
-    hexWrap: document.getElementById('notes-hex-wrap'),
-    hex: document.getElementById('notes-hex'),
-    previewWrap: document.getElementById('notes-preview-wrap'),
-    jupyterWrap: document.getElementById('notes-jupyter-wrap'),
-    imageViewWrap: document.getElementById('notes-image-view-wrap'),
-    imageViewImg: document.getElementById('notes-image-view-img'),
-    metaWrap: document.getElementById('notes-meta-wrap'),
-    meta: document.getElementById('notes-meta'),
-    csvViewWrap: document.getElementById('notes-csv-view-wrap'),
-    csvView: document.getElementById('notes-csv-view'),
-    swaggerViewWrap: document.getElementById('notes-swagger-view-wrap'),
-    swaggerRunWrap: document.getElementById('notes-swagger-run-wrap'),
-    swaggerView: document.getElementById('notes-swagger-view'),
-    swaggerEndpoints: document.getElementById('notes-swagger-endpoints'),
-    swaggerRequestBuilder: document.getElementById('notes-swagger-request-builder'),
-    swaggerResponse: document.getElementById('notes-swagger-response'),
+    tabEditor: mainView.parts.tabEditor,
+    tabHex: mainView.parts.tabHex,
+    tabViewer: mainView.parts.tabViewer,
+    tabJupyter: mainView.parts.tabJupyter,
+    tabSwaggerView: mainView.parts.tabSwaggerView,
+    tabSwaggerEdit: mainView.parts.tabSwaggerEdit,
+    tabSwaggerRun: mainView.parts.tabSwaggerRun,
+    tabImageView: mainView.parts.tabImageView,
+    tabMeta: mainView.parts.tabMeta,
+    tabs: mainView.parts.tabs,
+    tabDiff: mainView.parts.tabDiff,
+    tabCsvView: mainView.parts.tabCsvView,
+    tabCsvEdit: mainView.parts.tabCsvEdit,
+    tabCsvRun: mainView.parts.tabCsvRun,
+    editorWrap: mainView.parts.editorWrap,
+    gitDiffWrap: mainView.parts.gitDiffWrap,
+    gitDiffEditor: mainView.parts.gitDiffEditor,
+    gitDiffMessage: mainView.parts.gitDiffMessage,
+    hexWrap: mainView.parts.hexWrap,
+    hex: mainView.parts.hex,
+    previewWrap: mainView.parts.previewWrap,
+    jupyterWrap: mainView.parts.jupyterWrap,
+    imageViewWrap: mainView.parts.imageViewWrap,
+    imageViewImg: mainView.parts.imageViewImg,
+    metaWrap: mainView.parts.metaWrap,
+    meta: mainView.parts.meta,
+    csvViewWrap: mainView.parts.csvViewWrap,
+    csvView: mainView.parts.csvView,
+    swaggerViewWrap: mainView.parts.swaggerViewWrap,
+    swaggerRunWrap: mainView.parts.swaggerRunWrap,
+    swaggerView: mainView.parts.swaggerView,
+    swaggerEndpoints: mainView.parts.swaggerEndpoints,
+    swaggerRequestBuilder: mainView.parts.swaggerRequestBuilder,
+    swaggerResponse: mainView.parts.swaggerResponse,
     modal: document.getElementById('notes-modal'),
     modalBody: document.getElementById('notes-modal-body'),
     modalLocationRow: document.getElementById('notes-modal-location-row'),
@@ -877,7 +880,7 @@ function isMonacoActive() {
 }
 
 function isGitDiffActive() {
-    return Boolean(elements.notesPanel?.dataset.gitDiff === 'true' && activeGitDiff && notesGitDiffAdapter);
+    return Boolean(mainView.root.dataset.gitDiff === 'true' && activeGitDiff && notesGitDiffAdapter);
 }
 
 function getMainEditorValue() {
@@ -5125,7 +5128,7 @@ function updateGitDiffTabForCurrentFile(status, projectRoot) {
 }
 
 function setViewMode(mode) {
-    if (activeGitDiff && elements.notesPanel.dataset.gitDiff === 'true') {
+    if (activeGitDiff && mainView.root.dataset.gitDiff === 'true') {
         void closeNotesGitDiff();
     }
     // Determine the mode based on current file type.
@@ -7850,7 +7853,7 @@ function renderSwaggerUI() {
         return;
     }
 
-    const swaggerInfoEl = document.getElementById('notes-swagger-info');
+    const swaggerInfoEl = mainView.parts.swaggerInfo;
     if (swaggerInfoEl) {
         const info = state.swaggerSpec.info || {};
         const title = typeof info.title === 'string' && info.title.trim() ? info.title.trim() : '';
@@ -13765,7 +13768,7 @@ async function closeNotesGitDiff() {
 
 function setNotesGitDiffTabActive(active) {
     const isActive = active === true;
-    elements.notesPanel.dataset.gitDiff = isActive ? 'true' : 'false';
+    mainView.root.dataset.gitDiff = isActive ? 'true' : 'false';
     elements.gitDiffWrap.dataset.active = isActive ? 'true' : 'false';
     elements.tabDiff.style.display = activeGitDiff ? '' : 'none';
     const tabs = elements.tabs.querySelectorAll('[role="tab"]');
@@ -14290,13 +14293,13 @@ function applyWindowStyle(result) {
         }
 
         ${getScrollbarStyles(result.colors)}
-        ${getMarkdownBaseTextSizeStyles('#notes-preview', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-jupyter', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-meta', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-csv-view', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-swagger-info', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-swagger-run-wrap', result.fontSize)}
-        ${getMarkdownBaseTextSizeStyles('#notes-swagger-request-builder .swagger-param-description', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-preview', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-jupyter', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-meta', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-csv-view', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-swagger-info', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-swagger-run-wrap', result.fontSize)}
+        ${getMarkdownBaseTextSizeStyles('.notes-view .notes-swagger-request-builder .swagger-param-description', result.fontSize)}
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'markdown-body')}
         ${getMarkdownContentStyles(result.colors, result.fontSize, 'swagger-ui')}
         ${getCheckboxStyles(result.colors, result.fontSize, 'markdown-body')}
@@ -15640,10 +15643,15 @@ elements.findPrev.addEventListener('mousedown', (event) => {
         return panel.isConnected && tools.dataset.collapsed === 'false'
             && !tools.closest('[data-ai-maximized="true"], [data-log-maximized="true"]');
     }
+    // The Tools size is a share of the space below the view tab rows, which
+    // sit inside #notes-panel above the panes.
+    function availableHeight() {
+        return panel.getBoundingClientRect().height - 4 - mainView.parts.tabs.getBoundingClientRect().height;
+    }
     function apply() {
         handle.dataset.enabled = enabled() ? 'true' : 'false';
         if (!enabled()) return;
-        const available = panel.getBoundingClientRect().height - 4;
+        const available = availableHeight();
         if (available <= 0) return;
         const minimum = Math.min(120, available / 2);
         const maximum = available - Math.min(140, available / 2);
@@ -15652,7 +15660,7 @@ elements.findPrev.addEventListener('mousedown', (event) => {
         handle.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
     }
     function resize(height) {
-        const available = panel.getBoundingClientRect().height - 4;
+        const available = availableHeight();
         if (available < 260) return false;
         ratio = Math.min(Math.max(height, 120), available - 140) / available;
         edited = true;

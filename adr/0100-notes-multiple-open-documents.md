@@ -324,6 +324,40 @@ as `lspOpenFile === currentFile`.
 - Still compared against the single active document, not a `NotesView`.
   Stage 6 replaces "shown" with "shown in this view".
 
+*Done (Stage 6, task 1):*
+
+- `frontend/src/notes_view.html` is the view template: the mode tab row
+  (View, Edit, Run, …) and the panel holding the editor, Git diff, hex,
+  preview, HTML, Run, CSV, image, Meta and Swagger hosts. Elements carry a
+  `data-part` name and a class; none has an ID.
+- `createNotesView({ host })` in `frontend/src/notes_view.js` creates a view
+  from the template and returns its `root` and `parts`, looked up by
+  `data-part` within that root. `notes.js` creates the one view (`mainView`)
+  inside `#notes-views` at startup, and its `elements` map takes the view
+  elements from `mainView.parts`.
+- `notes.html` no longer contains the view markup. `#notes-panel` now holds
+  `#notes-views` (the layout host) above the Tools panel, and each view holds
+  its own tab row above its panes, which is the shape a second view needs.
+- The toolbar (New, history, maximise) is global and keeps its IDs. It is
+  moved into the view's tab row at startup, where it sat before. Where it
+  goes with two views is part of question 1.
+- The Git diff flag (`data-git-diff`) moved from `#notes-panel` to the view
+  root, so it hides only that view's panes.
+- CSS selectors for view elements changed from IDs to classes scoped by
+  `.notes-view` (for example `#notes-preview` became
+  `.notes-view .notes-preview`). The extra class keeps them above
+  single-class rules such as `.markdown-body`, which the IDs used to beat.
+  The runtime font-size styles and the hex viewer styles changed the same way.
+- The tab row now sits inside `#notes-panel`, so it gets the
+  `#notes-main` background overlay explicitly, and the Tools resizer
+  subtracts the tab row's height so the Tools size is the same share of the
+  same space as before.
+- Checked by rendering the old and new markup with the real CSS in Chrome
+  across 15 states (each view mode, Git diff, Tools expanded, AI and log
+  maximised, terminal focused, full size), for screen and print. Screenshots
+  are pixel-identical, and computed styles match except the tab row's
+  background, which composites to the same colour.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco
@@ -439,6 +473,13 @@ Answered on 2026-11-14:
   is marked as conflicted and the user chooses which version to keep. Both
   apply to every view of the document.
 
+Answered on 2026-11-15:
+
+- **10. Find:** the Find query is kept per document. Project-search results
+  (ADR 0019) are not tied to a document and survive tab and focus changes.
+- **15. View mode:** chosen per view, so one view can edit a file while another
+  previews it. Each view remembers the mode it last used for each document.
+
 Still open:
 
 - **1. Version 1 layout.** More than tabs only, but not full MDI (decision 1).
@@ -452,8 +493,6 @@ Still open:
 - **8. Persistence.** Are views, their tabs and the focused view restored per
   workspace, using the workspace naming in ADR 0074? How does this interact
   with history and recent files?
-- **10. Find.** Should the Find query be kept per document or shared? Do
-  project-search results (ADR 0019) survive tab and focus changes?
 - **11. AI context.** Does AI Ask use only the focused document, or can it
   reference other open documents?
 - **12. Renames and deletes.** How do ADR 0064's navigation rules apply when the
@@ -463,8 +502,6 @@ Still open:
 - **14. Navigation.** What are the hotkeys for next/previous tab, close tab,
   reopen closed tab and switch view? Does go-to-definition into another file
   open a tab in the focused view or replace the current document?
-- **15. View mode.** Is edit, preview or structured view chosen per view (so one
-  view edits while the other previews the same file), or per document?
 - **16. Tabs and views.** Does each view have its own tab strip, or is there one
   shared tab list where each view shows one of the tabs?
 

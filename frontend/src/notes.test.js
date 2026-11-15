@@ -1137,7 +1137,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/todo.md');
-        expect(document.getElementById('notes-preview')?.textContent).toContain('Hello Notes');
+        expect(document.querySelector('.notes-preview')?.textContent).toContain('Hello Notes');
         expect(document.querySelector('[data-file="$NOTES/todo.md"]')?.dataset.active).toBe('true');
         expect(document.getElementById('notes-title-group').children[0].id).toBe('notes-title');
         expect(document.getElementById('notes-title-group').children[1].id).toBe('notes-current-file');
@@ -1157,20 +1157,20 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editTab = document.getElementById('notes-tab-editor');
-        const viewTab = document.getElementById('notes-tab-image-view');
+        const editTab = document.querySelector('.notes-tab-editor');
+        const viewTab = document.querySelector('.notes-tab-image-view');
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/diagram.svg');
         expect(editTab.style.display).not.toBe('none');
         expect(viewTab.style.display).not.toBe('none');
-        expect(document.getElementById('notes-image-view-wrap').dataset.active).toBe('true');
+        expect(document.querySelector('.notes-image-view-wrap').dataset.active).toBe('true');
 
         editTab.click();
-        expect(document.getElementById('notes-editor-wrap').dataset.active).toBe('true');
+        expect(document.querySelector('.notes-editor-wrap').dataset.active).toBe('true');
         await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toBe(source));
         viewTab.click();
         await flushPromises();
         await flushPromises();
-        expect(document.getElementById('notes-image-view-img').src).toContain('/__asset?path=%2Ftmp%2Fdiagram.svg&v=');
+        expect(document.querySelector('.notes-image-view-img').src).toContain('/__asset?path=%2Ftmp%2Fdiagram.svg&v=');
     });
 
     it('restores and persists the file-list splitter without replacing its preferred ratio on clamp', async () => {
@@ -1207,7 +1207,7 @@ describe('notes rendering', () => {
         listFilesMock.mockResolvedValue([]);
         getNotesLayoutSizingMock.mockResolvedValue({ toolsRatio: 0.4 });
         const bounds = { width: 1002, left: 0, right: 1002, height: 804, top: 0, bottom: 804 };
-        const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => bounds);
+        const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () { return this.classList.contains('notes-tabs') ? { ...bounds, height: 0 } : bounds; });
         try {
             await importNotesModule();
             document.getElementById('notes-tools-tab-find').click();
@@ -1248,9 +1248,8 @@ describe('notes rendering', () => {
     it('ignores invalid cached layout ratios and restores current defaults', async () => {
         listFilesMock.mockResolvedValue([]);
         getNotesLayoutSizingMock.mockResolvedValue({ fileListRatio: -1, toolsRatio: '0.9' });
-        const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-            width: 1202, left: 0, right: 1202, height: 804, top: 0, bottom: 804,
-        });
+        const bounds = { width: 1202, left: 0, right: 1202, height: 804, top: 0, bottom: 804 };
+        const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () { return this.classList.contains('notes-tabs') ? { ...bounds, height: 0 } : bounds; });
         try {
             await importNotesModule();
             expect(document.getElementById('notes-app').style.gridTemplateColumns).toBe('400px 2px 800px');
@@ -1300,7 +1299,7 @@ describe('notes rendering', () => {
         const editor = mainEditorAdapter();
         expect(editor.getValue()).toBe('one\ntwo\nthree\nfour');
         expect(editor.getSelectionOffsets().start).toBe('one\ntwo\n'.length);
-        expect(document.getElementById('notes-tab-editor').getAttribute('aria-selected')).toBe('true');
+        expect(document.querySelector('.notes-tab-editor').getAttribute('aria-selected')).toBe('true');
     });
 
     it('records editor cursor positions after moving twenty lines in one document', async () => {
@@ -1313,7 +1312,7 @@ describe('notes rendering', () => {
             document.querySelector('[data-file="$NOTES/long.md"]').click();
             await flushPromises();
             await flushPromises();
-            document.getElementById('notes-tab-editor').click();
+            document.querySelector('.notes-tab-editor').click();
             await flushPromises();
 
             const lineOffset = contents.split('\n').slice(0, 24).join('\n').length + 1;
@@ -1419,15 +1418,15 @@ describe('notes rendering', () => {
 
         document.querySelector(`[data-file="$NOTES/${fileName}"]`).click();
         for (let tick = 0; tick < 8; tick += 1) await flushPromises();
-        expect(document.getElementById('notes-tab-swagger-edit').getAttribute('aria-selected')).toBe('true');
+        expect(document.querySelector('.notes-tab-swagger-edit').getAttribute('aria-selected')).toBe('true');
         const previousWindowRAF = window.requestAnimationFrame;
         const previousGlobalRAF = globalThis.requestAnimationFrame;
         const immediateRAF = (callback) => { callback(0); return 1; };
         window.requestAnimationFrame = immediateRAF;
         globalThis.requestAnimationFrame = immediateRAF;
         try {
-            document.getElementById('notes-tab-swagger-view').click();
-            expect(document.getElementById('notes-tab-swagger-view').getAttribute('aria-selected')).toBe('true');
+            document.querySelector('.notes-tab-swagger-view').click();
+            expect(document.querySelector('.notes-tab-swagger-view').getAttribute('aria-selected')).toBe('true');
         } finally {
             window.requestAnimationFrame = previousWindowRAF;
             globalThis.requestAnimationFrame = previousGlobalRAF;
@@ -1435,20 +1434,20 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const actualJsonViewer = await vi.importActual('./json-viewer.js');
-        const view = document.getElementById('notes-swagger-view');
+        const view = document.querySelector('.notes-swagger-view');
         const renderCall = renderJsonViewer.mock.calls.findLast(([target]) => target === view);
         const editHandlerCall = attachJsonViewerEditHandler.mock.calls.findLast(([target]) => target === view);
-        expect(renderCall?.[0]).toBe(document.getElementById('notes-swagger-view'));
-        expect(editHandlerCall?.[0]).toBe(document.getElementById('notes-swagger-view'));
+        expect(renderCall?.[0]).toBe(document.querySelector('.notes-swagger-view'));
+        expect(editHandlerCall?.[0]).toBe(document.querySelector('.notes-swagger-view'));
         actualJsonViewer.renderJsonViewer(...renderCall);
         actualJsonViewer.attachJsonViewerEditHandler(...editHandlerCall);
 
-        const value = Array.from(document.querySelectorAll('#notes-swagger-view .json-editable[data-json-edit="value"]'))
+        const value = Array.from(document.querySelectorAll('.notes-swagger-view .json-editable[data-json-edit="value"]'))
             .find((element) => element.dataset.jsonPath === JSON.stringify(['root', 'name']));
         expect(value).toBeTruthy();
         expect(value?.textContent).toContain('Old');
         value.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
-        const input = document.querySelector('#notes-swagger-view .json-inline-editor');
+        const input = document.querySelector('.notes-swagger-view .json-inline-editor');
         expect(input).toBeTruthy();
         input.value = 'Updated';
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1486,7 +1485,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/print.md"]').click();
         await flushPromises();
         await flushPromises();
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         preview.innerHTML = '<h1>Visible excerpt</h1><section hidden>Collapsed live section</section>';
         const livePreview = preview.innerHTML;
         try {
@@ -1515,11 +1514,11 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/print.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-preview').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        document.querySelector('.notes-preview').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
         expect(showLocalMenuMock.mock.calls.at(-1)[0].options).toContain('Print');
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         const output = document.createElement('p');
         output.textContent = 'Runtime output excluded from print';
         runView.appendChild(output);
@@ -1537,7 +1536,7 @@ describe('notes rendering', () => {
             expect(root.querySelector('code').textContent).toContain('printf hello');
             expect(root.textContent).not.toContain('Runtime output excluded from print');
             expect(root.querySelector('.jupyter-code-editable, .jupyter-run-terminal, .notes-print-filename')).toBeNull();
-            expect(document.getElementById('notes-tab-jupyter').getAttribute('aria-selected')).toBe('true');
+            expect(document.querySelector('.notes-tab-jupyter').getAttribute('aria-selected')).toBe('true');
             expect(runView.contains(output)).toBe(true);
         } finally {
             window.dispatchEvent(new Event('afterprint'));
@@ -1552,10 +1551,10 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         if (mode === 'jupyter') {
-            document.getElementById('notes-tab-jupyter').click();
+            document.querySelector('.notes-tab-jupyter').click();
             await flushPromises();
         }
-        const container = document.getElementById(mode === 'viewer' ? 'notes-preview' : 'notes-jupyter');
+        const container = document.querySelector(mode === 'viewer' ? '.notes-preview' : '.notes-jupyter');
         const outer = container.querySelector('h1');
         const inner = container.querySelector('h2');
         const next = container.querySelectorAll('h1')[1];
@@ -1619,11 +1618,11 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/run-code.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
 
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         const codeBlock = runView.querySelector('.jupyter-code-block');
         expect(codeBlock.closest('[data-run-markdown-source-start]')?.tagName).toBe('UL');
         const bubbled = vi.fn();
@@ -1660,14 +1659,14 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         preview.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
         expect(showLocalMenuMock.mock.calls.at(-1)[0].options).not.toContain('Edit');
 
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         const headings = runView.querySelectorAll('h1');
         headings[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
         let inlineEditor = runView.querySelector('.notes-run-markdown-inline-edit');
@@ -1745,7 +1744,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/sizing.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         const scrollHeight = vi.spyOn(Element.prototype, 'scrollHeight', 'get')
             .mockImplementation(function () {
@@ -1754,7 +1753,7 @@ describe('notes rendering', () => {
                 return this.value.split('\n').length * 20 + 12;
             });
         try {
-            const runView = document.getElementById('notes-jupyter');
+            const runView = document.querySelector('.notes-jupyter');
             runView.querySelector('li').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
             const textarea = runView.querySelector('.notes-run-markdown-inline-edit textarea');
             expect(textarea.rows).toBe(12);
@@ -1790,9 +1789,9 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/spelling.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         runView.querySelector('p').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
         const editor = runView.querySelector('.notes-run-markdown-inline-edit');
         const textarea = editor.querySelector('textarea');
@@ -1834,9 +1833,9 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/stale-run.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         const staleHeading = runView.querySelector('h1');
         mainEditorAdapter().setValue(updatedSource);
         sendIpcMock.mockClear();
@@ -1867,10 +1866,10 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/README.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
-        const runView = document.getElementById('notes-jupyter');
+        const runView = document.querySelector('.notes-jupyter');
         const contentsLink = runView.querySelector('ul a');
         contentsLink.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
         const linkMenu = showLocalMenuMock.mock.calls.at(-1)[0];
@@ -1937,7 +1936,7 @@ describe('notes rendering', () => {
             document.querySelector(`[data-file="${filename}"]`).click();
             await flushPromises();
             await flushPromises();
-            document.getElementById('notes-tab-editor').click();
+            document.querySelector('.notes-tab-editor').click();
             await flushPromises();
             await flushPromises();
             expect(createMonacoAdapterMock).toHaveBeenCalled();
@@ -1967,7 +1966,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
         const editor = mainEditorAdapter();
         editor.moveCursor(editor.getValue().length);
@@ -2003,7 +2002,7 @@ describe('notes rendering', () => {
         const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
         expect(frontmatterTab?.style.display).not.toBe('none');
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         // Frontmatter is stripped from the rendered body.
         expect(preview?.textContent).toContain('Body Heading');
         expect(preview?.textContent).not.toContain('draft: true');
@@ -2031,11 +2030,11 @@ describe('notes rendering', () => {
             document.querySelector('[data-file="$NOTES/post.md"]').click();
             await flushPromises();
             await flushPromises();
-            document.getElementById('notes-tab-editor').click();
+            document.querySelector('.notes-tab-editor').click();
             await flushPromises();
             await flushPromises();
             expect(createMonacoAdapterMock).toHaveBeenCalled();
-            const preview = document.getElementById('notes-preview');
+            const preview = document.querySelector('.notes-preview');
             const originalPreview = preview.innerHTML;
             const editor = mainEditorAdapter();
             renderJsonViewer.mockClear();
@@ -2056,7 +2055,7 @@ describe('notes rendering', () => {
                 expect(frontmatterTab.style.display).toBe('none');
                 expect(pane.innerHTML).toBe('');
             }
-            expect(document.getElementById('notes-tab-editor').getAttribute('aria-selected')).toBe('true');
+            expect(document.querySelector('.notes-tab-editor').getAttribute('aria-selected')).toBe('true');
             expect(preview.innerHTML).toBe(originalPreview);
         } finally {
             vi.useRealTimers();
@@ -2076,7 +2075,7 @@ describe('notes rendering', () => {
 
         const frontmatterTab = document.getElementById('notes-tools-tab-frontmatter');
         expect(frontmatterTab?.style.display).toBe('none');
-        expect(document.querySelector('#notes-preview .notes-frontmatter-caption')).toBeNull();
+        expect(document.querySelector('.notes-preview .notes-frontmatter-caption')).toBeNull();
     });
 
     it('maps Home and End to current line boundaries in editor fields', async () => {
@@ -2124,14 +2123,14 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const tabEditor = document.getElementById('notes-tab-editor');
-        const preview = document.getElementById('notes-preview');
+        const tabEditor = document.querySelector('.notes-tab-editor');
+        const preview = document.querySelector('.notes-preview');
 
         tabEditor.click();
         await flushPromises();
 
         mainEditorAdapter().setValue('# Updated from undo');
-        document.getElementById('notes-tab-viewer').click();
+        document.querySelector('.notes-tab-viewer').click();
         await new Promise((resolve) => setTimeout(resolve, 160));
         await flushPromises();
 
@@ -2149,7 +2148,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabEditor = document.querySelector('.notes-tab-editor');
         const findInput = document.getElementById('notes-find-input');
         const replaceInput = document.getElementById('notes-replace-input');
         const replaceAll = document.getElementById('notes-replace-all');
@@ -2187,7 +2186,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabEditor = document.querySelector('.notes-tab-editor');
         const findInput = document.getElementById('notes-find-input');
         const replaceInput = document.getElementById('notes-replace-input');
         const replaceAll = document.getElementById('notes-replace-all');
@@ -2287,7 +2286,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/escape.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
 
         const editor = mainEditorAdapter();
@@ -2324,7 +2323,7 @@ describe('notes rendering', () => {
 
         const { FormatCodeBlock } = await import('./wails-bindings.js');
         FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/escape.py', Err: '' });
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
         document.querySelector('.jupyter-lsp-notes').click();
@@ -2505,7 +2504,7 @@ describe('notes rendering', () => {
 
         const { FormatCodeBlock } = await import('./wails-bindings.js');
         FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/block.py', Err: '' });
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
         document.querySelector('.jupyter-lsp-notes').click();
@@ -2514,9 +2513,9 @@ describe('notes rendering', () => {
         expect(notesLspOpenDocumentMock).toHaveBeenCalledWith('/tmp/block.py', '', 'print("hello")');
         expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith('/tmp/block.py');
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
 
@@ -2540,7 +2539,7 @@ describe('notes rendering', () => {
 
         const { FormatCodeBlock } = await import('./wails-bindings.js');
         FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/block.py', Err: '' });
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
         document.querySelector('.jupyter-lsp-notes').click();
@@ -2801,7 +2800,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
 
         const editor = mainEditorAdapter();
@@ -3623,7 +3622,7 @@ describe('notes rendering', () => {
         } else {
             expect(getFileMock).not.toHaveBeenCalled();
             await new Promise((resolve) => setTimeout(resolve, 160));
-            expect(document.getElementById('notes-preview').textContent.includes('three'))
+            expect(document.querySelector('.notes-preview').textContent.includes('three'))
                 .toBe(deletedFile !== '$NOTES/current.md');
         }
     });
@@ -3748,17 +3747,17 @@ describe('notes rendering', () => {
 
         await clickFile('$NOTES/readme.md');
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
         expectFocused();
 
         await clickFile('$NOTES/spec.yaml');
 
-        document.getElementById('notes-tab-swagger-edit').click();
+        document.querySelector('.notes-tab-swagger-edit').click();
         await flushPromises();
         expectFocused();
 
-        document.getElementById('notes-tab-swagger-view').click();
+        document.querySelector('.notes-tab-swagger-view').click();
         await flushPromises();
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
@@ -3859,7 +3858,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const tabId = mode === 'viewer' ? 'notes-tab-viewer' : 'notes-tab-editor';
-        expect(document.getElementById(tabId).getAttribute('aria-selected')).toBe('true');
+        expect(document.querySelector(`.${tabId}`).getAttribute('aria-selected')).toBe('true');
         if (mode === 'editor') {
             await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
             expect(mainEditorAdapter().getSelectionOffsets().start).toBe('one\ntwo\n'.length);
@@ -3909,7 +3908,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         expect(mainEditorAdapter().getValue()).toBe('');
-        expect(document.getElementById('notes-preview').textContent).not.toContain('Previous workspace');
+        expect(document.querySelector('.notes-preview').textContent).not.toContain('Previous workspace');
     });
 
     it('ignores old workspace scans and does not rescan unchanged contexts', async () => {
@@ -4299,7 +4298,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         // Inject an anchor directly into the rendered preview container
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         const anchor = document.createElement('a');
         anchor.href = 'https://example.com/docs';
         anchor.textContent = 'Docs site';
@@ -4389,7 +4388,7 @@ describe('notes rendering', () => {
 
         showLocalMenuMock.mockClear();
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         preview.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
         await flushPromises();
 
@@ -4457,7 +4456,7 @@ describe('notes rendering', () => {
 
     it.each(['notes-preview', 'notes-jupyter', 'notes-ai-output'])('copies a rich selection from %s without changing Copy code', async (id) => {
         await importNotesModule();
-        const container = document.getElementById(id);
+        const container = document.querySelector(`#${id}, .${id}`);
         container.innerHTML = '<p>Before <strong>Selected</strong> after</p>';
         const text = container.querySelector('strong').firstChild;
         const range = document.createRange();
@@ -4482,7 +4481,7 @@ describe('notes rendering', () => {
 
     it('routes native copy of a rendered Markdown selection to the Go formatter', async () => {
         await importNotesModule();
-        const container = document.getElementById('notes-preview');
+        const container = document.querySelector('.notes-preview');
         container.innerHTML = '<h2>Selected heading</h2>';
         const range = document.createRange();
         range.selectNodeContents(container.querySelector('h2'));
@@ -4514,7 +4513,7 @@ describe('notes rendering', () => {
         showLocalMenuMock.mockClear();
         clipboardSetTextMock.mockClear();
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         preview.innerHTML = '<pre><code>const x = 1;\nconst y = 2;\n</code></pre>';
         const codeEl = preview.querySelector('code');
 
@@ -4557,7 +4556,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/reserved.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
 
@@ -4602,8 +4601,9 @@ describe('notes rendering', () => {
         const originalSetAttribute = Element.prototype.setAttribute;
         const setAttributeSpy = vi.spyOn(Element.prototype, 'setAttribute').mockImplementation(function (name, value) {
             originalSetAttribute.call(this, name, value);
-            if (name === 'aria-selected' && value === 'true' && this.id.startsWith('notes-tab-')) {
-                selectedDocumentTabs.push(this.id);
+            const tabClass = Array.from(this.classList || []).find((cls) => cls.startsWith('notes-tab-'));
+            if (name === 'aria-selected' && value === 'true' && tabClass) {
+                selectedDocumentTabs.push(tabClass);
             }
         });
 
@@ -4664,7 +4664,7 @@ describe('notes rendering', () => {
         let expectedContent = content;
         let expectedRuntime = 'Bash Shell Script';
         if (source === 'Jupyter') {
-            document.getElementById('notes-tab-jupyter').click();
+            document.querySelector('.notes-tab-jupyter').click();
             await flushPromises();
             expectedContent = "printf '%s\\n' 'edited cell'\n";
             document.querySelector('.jupyter-code-editable').value = expectedContent;
@@ -4673,7 +4673,7 @@ describe('notes rendering', () => {
             expectedRuntime = 'Alternative shell';
             document.querySelector('.jupyter-run-terminal').click();
         } else {
-            const block = document.querySelector('#notes-preview pre');
+            const block = document.querySelector('.notes-preview pre');
             block.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
             block.querySelector('.notes-send-terminal-block-button').click();
         }
@@ -4690,7 +4690,7 @@ describe('notes rendering', () => {
         await importNotesModule();
         clipboardSetTextMock.mockClear();
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         preview.innerHTML = '<pre><code>view code\n</code></pre><blockquote>view quote</blockquote>';
         const viewCode = preview.querySelector('pre');
         const viewQuote = preview.querySelector('blockquote');
@@ -5074,7 +5074,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const preview = document.getElementById('notes-preview');
+        const preview = document.querySelector('.notes-preview');
         const anchor = document.createElement('a');
         anchor.href = 'https://go.dev';
         anchor.textContent = '';
@@ -5409,7 +5409,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         document.getElementById('notes-tools-tab-log').click();
-        document.getElementById('notes-tab-diff').click();
+        document.querySelector('.notes-tab-diff').click();
         await flushPromises();
         await flushPromises();
         expect(getGitDiffMock).toHaveBeenCalledWith('/repo', 'src/main.go', '');
@@ -5480,7 +5480,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/guide.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
 
@@ -6686,7 +6686,7 @@ describe('notes rendering', () => {
         const replaceInput = document.getElementById('notes-replace-input');
         const replaceOne = document.getElementById('notes-replace-one');
         const replaceAll = document.getElementById('notes-replace-all');
-        const tabEditor = document.getElementById('notes-tab-editor');
+        const tabEditor = document.querySelector('.notes-tab-editor');
 
         // Markdown opens in View mode by default, so replace should be disabled.
         expect(replaceControls.dataset.disabled).toBe('true');
@@ -6714,7 +6714,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
 
@@ -6924,7 +6924,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/a.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
 
         let finishSave;
@@ -6949,7 +6949,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/a.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
 
         getCurrentProjectMock.mockResolvedValue('/work/two');
@@ -6974,7 +6974,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
 
@@ -7175,7 +7175,7 @@ describe('notes rendering', () => {
         await importNotesModule();
 
         const gitTab = document.getElementById('notes-tools-tab-git');
-        const diffTab = document.getElementById('notes-tab-diff');
+        const diffTab = document.querySelector('.notes-tab-diff');
         expect(getGitStatusMock).toHaveBeenCalledWith('/workspace/repo');
         expect(gitTab.style.display).toBe('');
         expect(document.getElementById('notes-tools-git-branch').textContent).toBe('main');
@@ -7827,7 +7827,7 @@ describe('notes rendering', () => {
         expect(getFileMock).toHaveBeenCalledWith('$PROJECT/src/main.go');
         expect(notesHistoryAddPositionMock).toHaveBeenCalledWith('$PROJECT/src/main.go', 1);
         expect(document.getElementById('notes-current-file').textContent).toBe('main.go');
-        expect(document.getElementById('notes-git-diff-wrap').dataset.active).toBe('true');
+        expect(document.querySelector('.notes-git-diff-wrap').dataset.active).toBe('true');
         const diffEditor = createMonacoDiffAdapterMock.mock.results.at(-1)?.value;
         expect(diffEditor.diff).toEqual(expect.objectContaining({ path: 'src/main.go' }));
         expect(diffEditor.getModifiedValue()).toBe('package main\n');
@@ -7849,14 +7849,14 @@ describe('notes rendering', () => {
         await flushPromises();
 
         expect(document.getElementById('notes-current-file').textContent).toBe('main.go');
-        expect(document.getElementById('notes-tab-diff').style.display).toBe('');
-        expect(document.getElementById('notes-tab-diff').getAttribute('aria-selected')).toBe('false');
+        expect(document.querySelector('.notes-tab-diff').style.display).toBe('');
+        expect(document.querySelector('.notes-tab-diff').getAttribute('aria-selected')).toBe('false');
 
         getEventHandler('notesGitStatusChanged')({
             root: '/workspace/repo',
             status: { root: '/workspace/repo', branch: 'main', ahead: 0, behind: 0, clean: true, files: [] },
         });
-        expect(document.getElementById('notes-tab-diff').style.display).toBe('none');
+        expect(document.querySelector('.notes-tab-diff').style.display).toBe('none');
     });
 
     it.each([
@@ -7891,7 +7891,7 @@ describe('notes rendering', () => {
         document.querySelector(`[data-file="$NOTES/search.${extension}"]`).click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-swagger-edit').click();
+        document.querySelector('.notes-tab-swagger-edit').click();
         await flushPromises();
         await flushPromises();
         expect(createMonacoAdapterMock).toHaveBeenCalled();
@@ -7910,7 +7910,7 @@ describe('notes rendering', () => {
         await importNotesModule();
         const panel = document.getElementById('notes-tools-panel');
         panel.dataset.collapsed = 'true';
-        const monacoElement = document.getElementById('notes-monaco-editor');
+        const monacoElement = document.querySelector('.notes-monaco-editor');
         const nativeFind = vi.fn((event) => event.stopPropagation());
         monacoElement.addEventListener('keydown', nativeFind, true);
         const event = new KeyboardEvent('keydown', {
@@ -7939,7 +7939,7 @@ describe('notes rendering', () => {
                 window[guard] = true;
             }
             try {
-                const monacoElement = document.getElementById('notes-monaco-editor');
+                const monacoElement = document.querySelector('.notes-monaco-editor');
                 const nativeFind = vi.fn();
                 monacoElement.addEventListener('keydown', nativeFind, true);
                 const event = new KeyboardEvent('keydown', {
@@ -7967,9 +7967,9 @@ describe('notes rendering', () => {
         const findInput = document.getElementById('notes-find-input');
         const findPrev = document.getElementById('notes-find-prev');
         const findNext = document.getElementById('notes-find-next');
-        const tabHex = document.getElementById('notes-tab-hex');
-        const tabMeta = document.getElementById('notes-tab-meta');
-        const tabViewer = document.getElementById('notes-tab-viewer');
+        const tabHex = document.querySelector('.notes-tab-hex');
+        const tabMeta = document.querySelector('.notes-tab-meta');
+        const tabViewer = document.querySelector('.notes-tab-viewer');
 
         expect(tabFind.style.display).not.toBe('none');
 
@@ -8013,14 +8013,14 @@ describe('notes rendering', () => {
 
         const findInput = document.getElementById('notes-find-input');
         const counter = document.getElementById('notes-find-counter');
-        const csvView = document.getElementById('notes-csv-view');
+        const csvView = document.querySelector('.notes-csv-view');
         findInput.value = 'needle';
         findInput.dispatchEvent(new Event('input', { bubbles: true }));
 
         expect(csvView.querySelectorAll('.find-highlight')).toHaveLength(2);
         expect(counter.textContent).toBe('1 of 2');
 
-        document.getElementById('notes-tab-csv-run').click();
+        document.querySelector('.notes-tab-csv-run').click();
         await flushPromises();
         await flushPromises();
 
@@ -8077,8 +8077,8 @@ describe('notes rendering', () => {
         const findInput = document.getElementById('notes-find-input');
         const findPrev = document.getElementById('notes-find-prev');
         const findNext = document.getElementById('notes-find-next');
-        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
-        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
+        const tabSwaggerRun = document.querySelector('.notes-tab-swagger-run');
+        const tabSwaggerEdit = document.querySelector('.notes-tab-swagger-edit');
 
         expect(tabFind.style.display).not.toBe('none');
 
@@ -8111,7 +8111,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const textNode = document.createTextNode('Selected markdown text');
-        document.getElementById('notes-preview').appendChild(textNode);
+        document.querySelector('.notes-preview').appendChild(textNode);
 
         const selectionMock = {
             rangeCount: 1,
@@ -8154,14 +8154,14 @@ describe('notes rendering', () => {
 
         await importNotesModule();
 
-        const tabEditor = document.getElementById('notes-tab-editor');
-        const tabHex = document.getElementById('notes-tab-hex');
-        const tabViewer = document.getElementById('notes-tab-viewer');
-        const tabJupyter = document.getElementById('notes-tab-jupyter');
-        const tabMeta = document.getElementById('notes-tab-meta');
-        const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
-        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
-        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
+        const tabEditor = document.querySelector('.notes-tab-editor');
+        const tabHex = document.querySelector('.notes-tab-hex');
+        const tabViewer = document.querySelector('.notes-tab-viewer');
+        const tabJupyter = document.querySelector('.notes-tab-jupyter');
+        const tabMeta = document.querySelector('.notes-tab-meta');
+        const tabSwaggerView = document.querySelector('.notes-tab-swagger-view');
+        const tabSwaggerEdit = document.querySelector('.notes-tab-swagger-edit');
+        const tabSwaggerRun = document.querySelector('.notes-tab-swagger-run');
 
         const clickFile = async (filePath) => {
             const fileButton = document.querySelector(`[data-file="${filePath}"]`);
@@ -8216,13 +8216,13 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const tabEditor = document.getElementById('notes-tab-editor');
-        const tabHex = document.getElementById('notes-tab-hex');
-        const tabViewer = document.getElementById('notes-tab-viewer');
-        const tabMeta = document.getElementById('notes-tab-meta');
-        const hexWrap = document.getElementById('notes-hex-wrap');
-        const hexRoot = document.getElementById('notes-hex');
-        const editorWrap = document.getElementById('notes-editor-wrap');
+        const tabEditor = document.querySelector('.notes-tab-editor');
+        const tabHex = document.querySelector('.notes-tab-hex');
+        const tabViewer = document.querySelector('.notes-tab-viewer');
+        const tabMeta = document.querySelector('.notes-tab-meta');
+        const hexWrap = document.querySelector('.notes-hex-wrap');
+        const hexRoot = document.querySelector('.notes-hex');
+        const editorWrap = document.querySelector('.notes-editor-wrap');
         const hexHeader = document.querySelector('.notes-hex-header');
         const offsetInput = document.querySelector('.notes-hex-offset-input');
         const goButton = document.querySelector('.notes-hex-offset-go');
@@ -8252,8 +8252,8 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const hexRoot = document.getElementById('notes-hex');
-        const tabHex = document.getElementById('notes-tab-hex');
+        const hexRoot = document.querySelector('.notes-hex');
+        const tabHex = document.querySelector('.notes-tab-hex');
 
         expect(hexRoot.textContent).not.toContain('00000000');
 
@@ -8298,11 +8298,11 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const tabViewer = document.getElementById('notes-tab-viewer');
-        const tabMeta = document.getElementById('notes-tab-meta');
-        const previewWrap = document.getElementById('notes-preview-wrap');
-        const metaWrap = document.getElementById('notes-meta-wrap');
-        const metaRoot = document.getElementById('notes-meta');
+        const tabViewer = document.querySelector('.notes-tab-viewer');
+        const tabMeta = document.querySelector('.notes-tab-meta');
+        const previewWrap = document.querySelector('.notes-preview-wrap');
+        const metaWrap = document.querySelector('.notes-meta-wrap');
+        const metaRoot = document.querySelector('.notes-meta');
 
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
         expect(metaWrap.dataset.active).toBe('false');
@@ -8329,7 +8329,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const monacoEditor = document.getElementById('notes-monaco-editor');
+        const monacoEditor = document.querySelector('.notes-monaco-editor');
         expect(monacoEditor).toBeTruthy();
         expect(monacoEditor.getAttribute('aria-hidden')).toBeNull();
         expect(document.getElementById('notes-editor-highlight')).toBeNull();
@@ -8394,11 +8394,11 @@ describe('notes rendering', () => {
 
         // Markdown defaults to View, then cycles View -> Edit -> Run -> Hex -> Meta -> View.
         await clickFile('$NOTES/readme.md');
-        const tabViewer = document.getElementById('notes-tab-viewer');
-        const tabEditor = document.getElementById('notes-tab-editor');
-        const tabHex = document.getElementById('notes-tab-hex');
-        const tabJupyter = document.getElementById('notes-tab-jupyter');
-        const tabMeta = document.getElementById('notes-tab-meta');
+        const tabViewer = document.querySelector('.notes-tab-viewer');
+        const tabEditor = document.querySelector('.notes-tab-editor');
+        const tabHex = document.querySelector('.notes-tab-hex');
+        const tabJupyter = document.querySelector('.notes-tab-jupyter');
+        const tabMeta = document.querySelector('.notes-tab-meta');
 
         expect(tabViewer.getAttribute('aria-selected')).toBe('true');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -8414,9 +8414,9 @@ describe('notes rendering', () => {
 
         // YAML defaults to structured View, then cycles View -> Edit -> Hex -> Meta -> View (Run hidden without swagger key).
         await clickFile('$NOTES/spec.yaml');
-        const tabSwaggerView = document.getElementById('notes-tab-swagger-view');
-        const tabSwaggerEdit = document.getElementById('notes-tab-swagger-edit');
-        const tabSwaggerRun = document.getElementById('notes-tab-swagger-run');
+        const tabSwaggerView = document.querySelector('.notes-tab-swagger-view');
+        const tabSwaggerEdit = document.querySelector('.notes-tab-swagger-edit');
+        const tabSwaggerRun = document.querySelector('.notes-tab-swagger-run');
 
         expect(tabSwaggerRun.style.display).toBe('none');
         tabSwaggerView.click();
@@ -8493,12 +8493,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const targetCell = document.querySelector('#notes-jupyter tbody tr td');
+        const targetCell = document.querySelector('.notes-jupyter tbody tr td');
         expect(targetCell).toBeTruthy();
 
         targetCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
@@ -8511,7 +8511,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toContain('| Gamma | 1 |'));
     });
 
@@ -8531,15 +8531,15 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/table.md"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
-        const runTab = document.getElementById('notes-tab-jupyter');
-        const viewTab = document.getElementById('notes-tab-viewer');
+        const runTab = document.querySelector('.notes-tab-jupyter');
+        const viewTab = document.querySelector('.notes-tab-viewer');
         runTab.click();
         await flushPromises();
         await flushPromises();
-        const cell = document.querySelector('#notes-jupyter tbody tr td');
+        const cell = document.querySelector('.notes-jupyter tbody tr td');
         expect(cell).not.toBeNull();
         saveFileMock.mockClear();
 
@@ -8562,8 +8562,8 @@ describe('notes rendering', () => {
         expect(editor.getValue()).toBe(expected);
         expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/table.md', expected, '');
 
-        const run = document.getElementById('notes-jupyter');
-        const preview = document.getElementById('notes-preview');
+        const run = document.querySelector('.notes-jupyter');
+        const preview = document.querySelector('.notes-preview');
         const runTable = run.querySelector('table')?.outerHTML;
         if (action.startsWith('cell')) {
             expect(run.querySelector('tbody tr td')?.textContent).toContain('Gamma');
@@ -8589,7 +8589,7 @@ describe('notes rendering', () => {
             expect(preview.textContent.includes('Alpha')).toBe(!action.startsWith('cell')
                 && action !== 'Delete row' && action !== 'Delete column');
         });
-        document.getElementById('notes-tab-editor').click();
+        document.querySelector('.notes-tab-editor').click();
         await flushPromises();
         expect(editor.getValue()).toBe(expected);
         runTab.click();
@@ -8614,11 +8614,11 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        document.getElementById('notes-tab-jupyter').click();
+        document.querySelector('.notes-tab-jupyter').click();
         await flushPromises();
         await flushPromises();
 
-        const cells = document.querySelectorAll('#notes-jupyter tbody tr:first-child td');
+        const cells = document.querySelectorAll('.notes-jupyter tbody tr:first-child td');
         expect(cells[0].querySelector('strong')?.textContent).toBe('bold');
         expect(cells[0].querySelector('em')?.textContent).toBe('italic');
         expect(cells[1].querySelector('code')?.textContent).toBe('const x = 1');
@@ -8651,7 +8651,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
@@ -8666,7 +8666,7 @@ describe('notes rendering', () => {
         expect(parameters).toEqual(['2', '3']);
         expect(runtime).toBe('Python 3.x');
 
-        const renderedCell = document.querySelector('#notes-jupyter tbody tr td');
+        const renderedCell = document.querySelector('.notes-jupyter tbody tr td');
         expect(renderedCell).toBeTruthy();
         expect(String(renderedCell.textContent || '')).toContain('5');
     });
@@ -8696,14 +8696,14 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
         expect(runFunctionMock.mock.calls.length).toBeGreaterThan(0);
 
-        const renderedCell = document.querySelector('#notes-jupyter tbody tr td');
+        const renderedCell = document.querySelector('.notes-jupyter tbody tr td');
         expect(renderedCell).toBeTruthy();
         const cellText = String(renderedCell.textContent || '');
         expect(cellText).toMatch(/^#ERR Error line 1\s+Error line 2\s+A2$/);
@@ -8733,7 +8733,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
@@ -8779,7 +8779,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
@@ -8801,7 +8801,7 @@ describe('notes rendering', () => {
         expect(secondCallCellId).toBe('D2');
         expect(secondCallParams).toEqual(['1', '5']);
 
-        const renderedCell = document.querySelector('#notes-jupyter tbody tr td:last-child');
+        const renderedCell = document.querySelector('.notes-jupyter tbody tr td:last-child');
         expect(renderedCell).toBeTruthy();
         expect(String(renderedCell.textContent || '')).toContain('6');
     });
@@ -8836,7 +8836,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
@@ -8851,7 +8851,7 @@ describe('notes rendering', () => {
         expect(calledWithCellA2).toBe(true);
         expect(calledWithCellA3).toBe(true);
 
-        const renderedCells = Array.from(document.querySelectorAll('#notes-jupyter tbody tr td'));
+        const renderedCells = Array.from(document.querySelectorAll('.notes-jupyter tbody tr td'));
         expect(renderedCells.length).toBe(2);
         expect(String(renderedCells[0].textContent || '')).toContain('3');
         expect(String(renderedCells[1].textContent || '')).toContain('7');
@@ -8890,12 +8890,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const renderedCells = Array.from(document.querySelectorAll('#notes-jupyter tbody tr td'));
+        const renderedCells = Array.from(document.querySelectorAll('.notes-jupyter tbody tr td'));
         expect(renderedCells.length).toBe(2);
         expect(String(renderedCells[0].textContent || '')).toContain('3');
         expect(String(renderedCells[1].textContent || '')).toContain('7');
@@ -8920,7 +8920,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-csv-run');
+        const runTab = document.querySelector('.notes-tab-csv-run');
         vi.mocked(markdownUtils.autoHyperlink).mockClear();
         runTab.click();
         await flushPromises();
@@ -8948,10 +8948,10 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const csvView = document.querySelector('#notes-csv-view');
+        const csvView = document.querySelector('.notes-csv-view');
         expect(csvView.querySelectorAll('.notes-table-col-resize-handle')).toHaveLength(4);
         expect(vi.mocked(markdownUtils.autoHyperlink)).toHaveBeenCalledWith(csvView);
-        expect(getNotesRenderedStyles()).toContain('#notes-csv-view th .notes-table-col-resize-handle::before');
+        expect(getNotesRenderedStyles()).toContain('.notes-view .notes-csv-view th .notes-table-col-resize-handle::before');
     });
 
     it('offers Create graph from any CSV table cell', async () => {
@@ -8962,7 +8962,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const cell = document.querySelector('#notes-csv-view tbody td');
+        const cell = document.querySelector('.notes-csv-view tbody td');
         cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 8, clientY: 8 }));
         const menu = showLocalMenuMock.mock.calls.at(-1)[0];
         expect(menu.options.filter((option) => option.startsWith('Create graph'))).toEqual(['Create graph...']);
@@ -8986,7 +8986,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const cell = document.querySelector('#notes-csv-view tbody td');
+        const cell = document.querySelector('.notes-csv-view tbody td');
         cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 8, clientY: 8 }));
         const menu = showLocalMenuMock.mock.calls.at(-1)[0];
         menu.onSelect(menu.options.indexOf('Create graph...'));
@@ -9020,7 +9020,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const cell = document.querySelector('#notes-csv-view tbody tr td:nth-child(2)');
+        const cell = document.querySelector('.notes-csv-view tbody tr td:nth-child(2)');
         expect(cell?.textContent).toBe('first line\nsecond line');
         expect(getNotesRenderedStyles()).toContain('white-space: pre-wrap;');
     });
@@ -9040,12 +9040,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-csv-run');
+        const runTab = document.querySelector('.notes-tab-csv-run');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const tableCell = document.querySelector('#notes-csv-view tbody tr td');
+        const tableCell = document.querySelector('.notes-csv-view tbody tr td');
         expect(tableCell).toBeTruthy();
 
         tableCell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
@@ -9058,7 +9058,7 @@ describe('notes rendering', () => {
         menuConfig.onSelect(insertRowIndex);
         await flushPromises();
 
-        document.getElementById('notes-tab-csv-edit').click();
+        document.querySelector('.notes-tab-csv-edit').click();
         await flushPromises();
         expect(mainEditorAdapter().getValue()).toBe('Name,Value\nAlpha,1\n,');
     });
@@ -9071,14 +9071,14 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/table.csv"]').click();
         await flushPromises();
         await flushPromises();
-        document.getElementById('notes-tab-csv-edit').click();
+        document.querySelector('.notes-tab-csv-edit').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
 
-        document.getElementById('notes-tab-csv-run').click();
+        document.querySelector('.notes-tab-csv-run').click();
         await flushPromises();
         await flushPromises();
-        document.querySelector('#notes-csv-view tbody tr td')
+        document.querySelector('.notes-csv-view tbody tr td')
             .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
         await flushPromises();
         const menuConfig = showLocalMenuMock.mock.calls.at(-1)[0];
@@ -9106,12 +9106,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const table = document.querySelector('#notes-jupyter table');
+        const table = document.querySelector('.notes-jupyter table');
         const cell = table.querySelector('tbody tr td');
 
         cell.dispatchEvent(new MouseEvent('contextmenu', {
@@ -9143,12 +9143,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const table = document.querySelector('#notes-jupyter table');
+        const table = document.querySelector('.notes-jupyter table');
         const cell = table.querySelector('tbody tr td');
 
         cell.dispatchEvent(new MouseEvent('contextmenu', {
@@ -9177,7 +9177,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-csv-run');
+        const runTab = document.querySelector('.notes-tab-csv-run');
         runTab.click();
         await flushPromises();
         await flushPromises();
@@ -9236,7 +9236,7 @@ describe('notes rendering', () => {
             await flushPromises();
             await flushPromises();
 
-            return document.querySelector('#notes-preview table');
+            return document.querySelector('.notes-preview table');
         };
 
         const bodyText = (table) => Array.from(table.querySelectorAll('tbody tr'))
@@ -9357,12 +9357,12 @@ describe('notes rendering', () => {
                 expect(html).not.toContain('Gamma');
             };
 
-            await copyFormats(document.querySelector('#notes-preview table'));
+            await copyFormats(document.querySelector('.notes-preview table'));
 
-            document.getElementById('notes-tab-jupyter').click();
+            document.querySelector('.notes-tab-jupyter').click();
             await flushPromises();
             await flushPromises();
-            await copyFormats(document.querySelector('#notes-jupyter table'));
+            await copyFormats(document.querySelector('.notes-jupyter table'));
         });
 
         // Losing server-side state must be recoverable, so a miss is retried once
@@ -9624,7 +9624,7 @@ describe('notes rendering', () => {
             }
             if (action === 'remove') {
                 expect(table.dataset.tableGraphSpec).toBe('');
-                expect(document.querySelector('#notes-preview .notes-table-graph')).toBeNull();
+                expect(document.querySelector('.notes-preview .notes-table-graph')).toBeNull();
             } else {
                 expect(JSON.parse(table.dataset.tableGraphSpec)).toEqual(spec);
                 expect(document.querySelector('.notes-table-graph')).not.toBeNull();
@@ -9812,12 +9812,12 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const runTab = document.getElementById('notes-tab-jupyter');
+        const runTab = document.querySelector('.notes-tab-jupyter');
         runTab.click();
         await flushPromises();
         await flushPromises();
 
-        const table = document.querySelector('#notes-jupyter table');
+        const table = document.querySelector('.notes-jupyter table');
         if (!table) {
             // Skip if no table
             expect(true).toBe(true);
@@ -9861,7 +9861,7 @@ describe('notes rendering', () => {
         await flushPromises();
 
         // Stay in viewer mode (don't switch to Run tab)
-        const table = document.querySelector('#notes-preview table');
+        const table = document.querySelector('.notes-preview table');
         if (!table) {
             // Skip if no table in preview
             expect(true).toBe(true);

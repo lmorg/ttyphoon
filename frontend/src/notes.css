@@ -1669,9 +1669,11 @@ body {
     background-color: var(--bg);
 }
 
-#notes-tabs {
+.notes-view .notes-tabs {
     display: flex;
     gap: 8px;
+    /* Matches the #notes-main background this row sat on before it moved into the view. */
+    background-color: var(--darken-background-overlay);
     padding: 6px 8px 0px 8px;
     border-bottom: 1px solid rgba(var(--fg-rgb), 0.2);
     /*align-items: center;*/
@@ -1679,7 +1681,7 @@ body {
     box-sizing: border-box;
 }
 
-#notes-tabs button {
+.notes-view .notes-tabs button {
     border-radius: 0;
     border: 1px solid transparent;
     background: transparent;
@@ -1689,7 +1691,7 @@ body {
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-#notes-tabs button[aria-selected="true"] {
+.notes-view .notes-tabs button[aria-selected="true"] {
     border-color: rgba(var(--fg-rgb), 0.2);
     border-bottom: 5px;
     background-color: rgba(var(--fg-rgb), 0.1);
@@ -1710,7 +1712,7 @@ body {
     border-color: var(--accent) !important;
 }
 
-#notes-tabs button:not([aria-selected="true"]):hover {
+.notes-view .notes-tabs button:not([aria-selected="true"]):hover {
     color: var(--accent);
 }
 
@@ -1733,21 +1735,47 @@ body {
     overflow: hidden;
 }
 
-#notes-editor-wrap,
-#notes-preview-wrap,
-#notes-jupyter-wrap,
-#notes-meta-wrap {
+#notes-views {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+}
+
+.notes-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+}
+
+.notes-view-panel {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+}
+
+.notes-view .notes-editor-wrap,
+.notes-view .notes-preview-wrap,
+.notes-view .notes-jupyter-wrap,
+.notes-view .notes-meta-wrap {
     flex: 1;
     display: none;
     min-height: 0;
     border-bottom: 0;
 }
 
-#notes-editor-wrap {
+.notes-view .notes-editor-wrap {
     min-width: 0;
 }
 
-#notes-git-diff-wrap {
+.notes-view .notes-git-diff-wrap {
     display: none;
     flex: 1;
     flex-direction: column;
@@ -1756,20 +1784,20 @@ body {
     overflow: hidden;
 }
 
-#notes-git-diff-wrap[data-active="true"] {
+.notes-view .notes-git-diff-wrap[data-active="true"] {
     display: flex;
 }
 
-#notes-panel[data-git-diff="true"]>#notes-editor-wrap,
-#notes-panel[data-git-diff="true"]>#notes-hex-wrap,
-#notes-panel[data-git-diff="true"]>#notes-preview-wrap,
-#notes-panel[data-git-diff="true"]>#notes-html-view-wrap,
-#notes-panel[data-git-diff="true"]>#notes-jupyter-wrap,
-#notes-panel[data-git-diff="true"]>#notes-csv-view-wrap,
-#notes-panel[data-git-diff="true"]>#notes-image-view-wrap,
-#notes-panel[data-git-diff="true"]>#notes-meta-wrap,
-#notes-panel[data-git-diff="true"]>#notes-swagger-view-wrap,
-#notes-panel[data-git-diff="true"]>#notes-swagger-run-wrap {
+.notes-view[data-git-diff="true"] .notes-editor-wrap,
+.notes-view[data-git-diff="true"] .notes-hex-wrap,
+.notes-view[data-git-diff="true"] .notes-preview-wrap,
+.notes-view[data-git-diff="true"] .notes-html-view-wrap,
+.notes-view[data-git-diff="true"] .notes-jupyter-wrap,
+.notes-view[data-git-diff="true"] .notes-csv-view-wrap,
+.notes-view[data-git-diff="true"] .notes-image-view-wrap,
+.notes-view[data-git-diff="true"] .notes-meta-wrap,
+.notes-view[data-git-diff="true"] .notes-swagger-view-wrap,
+.notes-view[data-git-diff="true"] .notes-swagger-run-wrap {
     display: none !important;
 }
 
@@ -1790,15 +1818,15 @@ body {
     color: rgba(var(--fg-rgb), 0.7);
 }
 
-#notes-preview-wrap,
-#notes-jupyter-wrap,
-#notes-meta-wrap {
+.notes-view .notes-preview-wrap,
+.notes-view .notes-jupyter-wrap,
+.notes-view .notes-meta-wrap {
     padding-right: 10px;
     padding-bottom: 10px;
     overflow: auto;
 }
 
-#notes-html-view-wrap {
+.notes-view .notes-html-view-wrap {
     flex: 1;
     display: none;
     min-width: 0;
@@ -1807,16 +1835,16 @@ body {
     padding: 0;
 }
 
-#notes-html-view-frame {
+.notes-view .notes-html-view-frame {
     width: 100%;
     height: 100%;
     border: 0;
     background: #fff;
 }
 
-#notes-swagger-view-wrap,
-#notes-swagger-run-wrap,
-#notes-hex-wrap {
+.notes-view .notes-swagger-view-wrap,
+.notes-view .notes-swagger-run-wrap,
+.notes-view .notes-hex-wrap {
     flex: 1;
     display: none;
     min-width: 0;
@@ -1824,27 +1852,27 @@ body {
     overflow: hidden;
 }
 
-#notes-pane[data-terminal-focused="true"] #notes-preview-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-html-view-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-jupyter-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-meta-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-csv-view-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-swagger-view-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-swagger-run-wrap,
-#notes-pane[data-terminal-focused="true"] #notes-hex-wrap {
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-preview-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-html-view-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-jupyter-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-meta-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-csv-view-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-swagger-view-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-swagger-run-wrap,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-hex-wrap {
     background-color: var(--darken-background-overlay);
 }
 
-#notes-editor-wrap[data-active="true"],
-#notes-hex-wrap[data-active="true"],
-#notes-preview-wrap[data-active="true"],
-#notes-html-view-wrap[data-active="true"],
-#notes-jupyter-wrap[data-active="true"],
-#notes-meta-wrap[data-active="true"] {
+.notes-view .notes-editor-wrap[data-active="true"],
+.notes-view .notes-hex-wrap[data-active="true"],
+.notes-view .notes-preview-wrap[data-active="true"],
+.notes-view .notes-html-view-wrap[data-active="true"],
+.notes-view .notes-jupyter-wrap[data-active="true"],
+.notes-view .notes-meta-wrap[data-active="true"] {
     display: block;
 }
 
-#notes-editor-wrap[data-active="true"] {
+.notes-view .notes-editor-wrap[data-active="true"] {
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1855,12 +1883,12 @@ body {
     order: 1;
 }
 
-#notes-swagger-view-wrap[data-active="true"],
-#notes-swagger-run-wrap[data-active="true"] {
+.notes-view .notes-swagger-view-wrap[data-active="true"],
+.notes-view .notes-swagger-run-wrap[data-active="true"] {
     display: flex !important;
 }
 
-#notes-image-view-wrap {
+.notes-view .notes-image-view-wrap {
     flex: 1;
     display: none;
     min-height: 0;
@@ -1871,11 +1899,11 @@ body {
     box-sizing: border-box;
 }
 
-#notes-image-view-wrap[data-active="true"] {
+.notes-view .notes-image-view-wrap[data-active="true"] {
     display: flex;
 }
 
-#notes-image-view-img {
+.notes-view .notes-image-view-img {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
@@ -1884,7 +1912,7 @@ body {
     border-radius: 4px;
 }
 
-#notes-csv-view-wrap {
+.notes-view .notes-csv-view-wrap {
     flex: 1;
     display: none;
     min-height: 0;
@@ -1893,22 +1921,22 @@ body {
     overflow-y: auto;
 }
 
-#notes-csv-view-wrap[data-active="true"] {
+.notes-view .notes-csv-view-wrap[data-active="true"] {
     display: block;
 }
 
-#notes-csv-view {
+.notes-view .notes-csv-view {
     padding: 8px 16px;
     min-width: 0;
 }
 
-#notes-csv-view table {
+.notes-view .notes-csv-view table {
     width: max-content;
     min-width: 100%;
 }
 
-#notes-csv-view th,
-#notes-csv-view td {
+.notes-view .notes-csv-view th,
+.notes-view .notes-csv-view td {
     position: relative;
     border-bottom: 1px solid rgba(var(--fg-rgb), 0.18);
     padding: 4px 8px;
@@ -1916,16 +1944,16 @@ body {
     white-space: pre-wrap;
 }
 
-#notes-csv-view thead th {
+.notes-view .notes-csv-view thead th {
     border-bottom: 1px solid rgba(var(--fg-rgb), 0.28);
 }
 
-#notes-csv-view th .notes-table-col-resize-handle::before {
+.notes-view .notes-csv-view th .notes-table-col-resize-handle::before {
     background: var(--fg);
 }
 
-#notes-csv-view .notes-table-col-resize-handle:hover::before,
-#notes-csv-view .notes-table-col-resize-handle.is-dragging::before {
+.notes-view .notes-csv-view .notes-table-col-resize-handle:hover::before,
+.notes-view .notes-csv-view .notes-table-col-resize-handle.is-dragging::before {
     background: var(--accent);
 }
 
@@ -3237,16 +3265,16 @@ body {
 
 [data-log-maximized="true"] #notes-sidebar,
 [data-log-maximized="true"] #notes-splitter,
-[data-log-maximized="true"] #notes-tabs,
-[data-log-maximized="true"] #notes-editor-wrap,
-[data-log-maximized="true"] #notes-hex-wrap,
-[data-log-maximized="true"] #notes-preview-wrap,
-[data-log-maximized="true"] #notes-jupyter-wrap,
-[data-log-maximized="true"] #notes-csv-view-wrap,
-[data-log-maximized="true"] #notes-image-view-wrap,
-[data-log-maximized="true"] #notes-meta-wrap,
-[data-log-maximized="true"] #notes-swagger-view-wrap,
-[data-log-maximized="true"] #notes-swagger-run-wrap,
+[data-log-maximized="true"] .notes-view .notes-tabs,
+[data-log-maximized="true"] .notes-view .notes-editor-wrap,
+[data-log-maximized="true"] .notes-view .notes-hex-wrap,
+[data-log-maximized="true"] .notes-view .notes-preview-wrap,
+[data-log-maximized="true"] .notes-view .notes-jupyter-wrap,
+[data-log-maximized="true"] .notes-view .notes-csv-view-wrap,
+[data-log-maximized="true"] .notes-view .notes-image-view-wrap,
+[data-log-maximized="true"] .notes-view .notes-meta-wrap,
+[data-log-maximized="true"] .notes-view .notes-swagger-view-wrap,
+[data-log-maximized="true"] .notes-view .notes-swagger-run-wrap,
 [data-log-maximized="true"] .notes-tools-restore,
 [data-log-maximized="true"] #notes-tools-ai-pane,
 [data-log-maximized="true"] #notes-tools-toc-pane,
@@ -3278,16 +3306,16 @@ body {
 
 [data-ai-maximized="true"] #notes-sidebar,
 [data-ai-maximized="true"] #notes-splitter,
-[data-ai-maximized="true"] #notes-tabs,
-[data-ai-maximized="true"] #notes-editor-wrap,
-[data-ai-maximized="true"] #notes-hex-wrap,
-[data-ai-maximized="true"] #notes-preview-wrap,
-[data-ai-maximized="true"] #notes-jupyter-wrap,
-[data-ai-maximized="true"] #notes-csv-view-wrap,
-[data-ai-maximized="true"] #notes-image-view-wrap,
-[data-ai-maximized="true"] #notes-meta-wrap,
-[data-ai-maximized="true"] #notes-swagger-view-wrap,
-[data-ai-maximized="true"] #notes-swagger-run-wrap,
+[data-ai-maximized="true"] .notes-view .notes-tabs,
+[data-ai-maximized="true"] .notes-view .notes-editor-wrap,
+[data-ai-maximized="true"] .notes-view .notes-hex-wrap,
+[data-ai-maximized="true"] .notes-view .notes-preview-wrap,
+[data-ai-maximized="true"] .notes-view .notes-jupyter-wrap,
+[data-ai-maximized="true"] .notes-view .notes-csv-view-wrap,
+[data-ai-maximized="true"] .notes-view .notes-image-view-wrap,
+[data-ai-maximized="true"] .notes-view .notes-meta-wrap,
+[data-ai-maximized="true"] .notes-view .notes-swagger-view-wrap,
+[data-ai-maximized="true"] .notes-view .notes-swagger-run-wrap,
 [data-ai-maximized="true"] .notes-tools-restore,
 [data-ai-maximized="true"] #notes-tools-log-pane,
 [data-ai-maximized="true"] #notes-tools-toc-pane,
@@ -3371,7 +3399,7 @@ body {
     font-feature-settings: "liga" 0, "calt" 0;
 }
 
-#notes-editor-shell {
+.notes-view .notes-editor-shell {
     position: relative;
     display: grid;
     grid-template-columns: 1fr;
@@ -3386,16 +3414,16 @@ body {
     transition: border-color 120ms ease;
 }
 
-#notes-editor-shell:focus-within {
+.notes-view .notes-editor-shell:focus-within {
     border-color: var(--accent);
     background-color: transparent;
 }
 
-#notes-pane[data-fullsize="true"] #notes-panel:has(#notes-tools-panel[data-collapsed="true"]) #notes-editor-shell:focus-within {
+#notes-pane[data-fullsize="true"] #notes-panel:has(#notes-tools-panel[data-collapsed="true"]) .notes-view .notes-editor-shell:focus-within {
     border-bottom-right-radius: 8px;
 }
 
-#notes-editor-scroll {
+.notes-view .notes-editor-scroll {
     position: relative;
     display: block;
     min-width: 0;
@@ -3404,7 +3432,7 @@ body {
     overflow: hidden;
 }
 
-#notes-monaco-editor {
+.notes-view .notes-monaco-editor {
     position: absolute;
     inset: 0;
     min-width: 0;
@@ -3412,18 +3440,18 @@ body {
     display: block;
 }
 
-#notes-editor-scroll> :not(#notes-monaco-editor) {
+.notes-view .notes-editor-scroll> :not(.notes-monaco-editor) {
     display: none !important;
 }
 
-#notes-monaco-editor .monaco-scrollable-element>.scrollbar>.slider {
+.notes-view .notes-monaco-editor .monaco-scrollable-element>.scrollbar>.slider {
     background-color: var(--fg) !important;
     border-radius: 999px;
     opacity: 0.5;
 }
 
-#notes-monaco-editor .monaco-scrollable-element>.scrollbar:hover>.slider,
-#notes-monaco-editor .monaco-scrollable-element>.scrollbar>.slider:hover {
+.notes-view .notes-monaco-editor .monaco-scrollable-element>.scrollbar:hover>.slider,
+.notes-view .notes-monaco-editor .monaco-scrollable-element>.scrollbar>.slider:hover {
     background-color: var(--accent) !important;
 }
 
@@ -3441,7 +3469,7 @@ body {
     }
 }
 
-#notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor {
+.notes-view .notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor {
     background-color: var(--fg, #ffffff) !important;
     border-color: var(--fg, #ffffff) !important;
     border-left-color: var(--fg, #ffffff) !important;
@@ -3449,7 +3477,7 @@ body {
     color: var(--bg, #000000) !important;
 }
 
-#notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor-secondary {
+.notes-view .notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor-secondary {
     background-color: var(--fg, #ffffff) !important;
     border-color: var(--fg, #ffffff) !important;
     border-left-color: var(--fg, #ffffff) !important;
@@ -3457,7 +3485,7 @@ body {
     color: var(--bg, #000000) !important;
 }
 
-#notes-monaco-editor .notes-monaco-typo-squiggle {
+.notes-view .notes-monaco-editor .notes-monaco-typo-squiggle {
     text-decoration: none;
     background-color: transparent;
     background-image: linear-gradient(var(--red), var(--red));
@@ -3475,22 +3503,22 @@ body {
     padding-bottom: 3px;
 }
 
-#notes-preview-wrap,
-#notes-jupyter-wrap,
-#notes-meta-wrap {
+.notes-view .notes-preview-wrap,
+.notes-view .notes-jupyter-wrap,
+.notes-view .notes-meta-wrap {
     overflow-y: auto;
     padding-left: 16px;
 }
 
-#notes-preview,
-#notes-jupyter,
-#notes-meta,
-#notes-csv-view {
+.notes-view .notes-preview,
+.notes-view .notes-jupyter,
+.notes-view .notes-meta,
+.notes-view .notes-csv-view {
     min-width: 0;
 }
 
-#notes-preview img,
-#notes-jupyter img {
+.notes-view .notes-preview img,
+.notes-view .notes-jupyter img {
     max-width: 100%;
     height: auto;
 }
@@ -3580,8 +3608,8 @@ body {
     min-height: 24px;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table {
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table {
     width: 100%;
     min-width: 100%;
     table-layout: fixed;
@@ -3593,10 +3621,10 @@ body {
     table-layout: fixed;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th,
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td {
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th,
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td {
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word;
@@ -3611,10 +3639,10 @@ body {
     max-width: 0;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th>*,
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td>*,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th>*,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td>* {
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th>*,
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td>*,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th>*,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td>* {
     white-space: inherit;
     overflow-wrap: inherit;
     word-break: inherit;
@@ -3627,10 +3655,10 @@ body {
     word-break: inherit;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td code,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap td code,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap th code,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap td code {
     white-space: normal !important;
     overflow-wrap: anywhere !important;
     word-break: break-word;
@@ -3653,18 +3681,18 @@ body {
     min-width: 0 !important;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]),
 #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) {
     width: max-content !important;
     min-width: 0 !important;
     table-layout: fixed;
 }
 
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
-#notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
-#notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
+.notes-view .notes-preview.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
+.notes-view .notes-jupyter.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td,
 #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) th,
 #notes-ai-output.notes-table-wordwrap-on .notes-table-scroll-wrap table:has(colgroup.notes-table-colgroup col[style*="width"]) td {
     max-width: none;
@@ -4055,7 +4083,7 @@ body {
 
 /* Jupyter UI Styles */
 
-#notes-jupyter-wrap pre:not(.jupyter-highlight) {
+.notes-view .notes-jupyter-wrap pre:not(.jupyter-highlight) {
     border-left: 0;
     padding-left: 10px;
 }
@@ -4223,7 +4251,7 @@ body {
     max-height: calc((25 * 1.5em) + 24px);
 }
 
-#notes-jupyter .jupyter-highlight {
+.notes-view .notes-jupyter .jupyter-highlight {
     position: absolute;
     inset: 0;
     margin: 0 !important;
@@ -4361,13 +4389,13 @@ body {
     color: var(--error);
 }
 
-#notes-swagger-view-wrap {
+.notes-view .notes-swagger-view-wrap {
     display: flex;
     flex-direction: column;
     padding: 0px;
 }
 
-#notes-swagger-view {
+.notes-view .notes-swagger-view {
     overflow-y: auto;
     overflow-x: hidden;
     width: 100%;
@@ -4596,7 +4624,7 @@ body {
     color: rgba(var(--fg-rgb), 0.95);
 }
 
-#notes-swagger-run-wrap {
+.notes-view .notes-swagger-run-wrap {
     display: flex;
     flex-direction: column;
     height: 100%;
