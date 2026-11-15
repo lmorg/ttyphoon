@@ -3632,12 +3632,16 @@ body {
     overflow: hidden;
 }
 
+/* getMonacoTypographyOptions reads Monaco's font from this container. */
 .notes-view .notes-monaco-editor {
     position: absolute;
     inset: 0;
     min-width: 0;
     min-height: 0;
     display: block;
+    font-family: var(--font-family);
+    font-size: var(--notes-font-size);
+    line-height: 1.4;
 }
 
 .notes-view .notes-editor-scroll> :not(.notes-monaco-editor) {

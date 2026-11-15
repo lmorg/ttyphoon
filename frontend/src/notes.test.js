@@ -1377,6 +1377,15 @@ describe('notes rendering', () => {
         expect(menu.y).toBe(92);
     });
 
+    it('sizes the Monaco editor from the Notes font settings', () => {
+        // Monaco takes its font from this container's computed style.
+        expect(getNotesStyleProperties('.notes-view .notes-monaco-editor')).toMatchObject({
+            'font-family': 'var(--font-family)',
+            'font-size': 'var(--notes-font-size)',
+            'line-height': '1.4',
+        });
+    });
+
     it('opens the terminal window menu next to the workspace title click', async () => {
         const terminalTabs = document.createElement('div');
         terminalTabs.id = 'terminal-tabs';
