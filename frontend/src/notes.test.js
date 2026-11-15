@@ -6813,6 +6813,133 @@ describe('notes rendering', () => {
         }
     });
 
+    it('keeps the newest file when an earlier load finishes last', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/slow.go', '$NOTES/fast.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        let resolveSlow;
+        getFileMock.mockImplementation((file) => (file === '$NOTES/slow.go'
+            ? new Promise((resolve) => { resolveSlow = resolve; })
+            : Promise.resolve({ contents: 'package fast\n', text: '', error: '' })));
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/slow.go"]').click();
+        await flushPromises();
+        document.querySelector('[data-file="$NOTES/fast.go"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        resolveSlow({ contents: 'package slow\n', text: '', error: '' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(mainEditorAdapter().getValue()).toBe('package fast\n');
+        expect(document.getElementById('notes-status').textContent).toBe('$NOTES/fast.go');
+        expect(notesLspOpenDocumentMock.mock.calls.map(([file]) => file)).toEqual(['$NOTES/fast.go']);
+    });
+
+    it('releases an LSP open that finishes after its document closed', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/a.go', '$NOTES/b.md']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        getFileMock.mockImplementation((file) => Promise.resolve({ contents: `// ${file}\n`, text: '', error: '' }));
+        let finishOpen;
+        notesLspOpenDocumentMock.mockImplementationOnce(() => new Promise((resolve) => { finishOpen = resolve; }));
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/a.go"]').click();
+        await vi.waitFor(() => expect(notesLspOpenDocumentMock).toHaveBeenCalledWith('$NOTES/a.go', 'go', '// $NOTES/a.go\n'));
+
+        resolveNotesLspLanguageMock.mockResolvedValue('');
+        document.querySelector('[data-file="$NOTES/b.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalled();
+
+        finishOpen();
+        await flushPromises();
+        expect(notesLspCloseDocumentMock.mock.calls).toEqual([['$NOTES/a.go']]);
+    });
+
+    it('does not apply a format response to a file opened while formatting', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/a.go', '$NOTES/b.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        getFileMock.mockImplementation((file) => Promise.resolve({ contents: `// ${file}\n`, text: '', error: '' }));
+        let finishFormat;
+        notesLspFormatMock.mockImplementationOnce(() => new Promise((resolve) => { finishFormat = resolve; }));
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/a.go"]').click();
+        await vi.waitFor(() => expect(notesLspOpenDocumentMock).toHaveBeenCalledWith('$NOTES/a.go', 'go', '// $NOTES/a.go\n'));
+        await flushPromises();
+
+        const editor = mainEditorAdapter();
+        editor.contextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }));
+        await flushPromises();
+        const menuConfig = showLocalMenuMock.mock.calls[0][0];
+        await menuConfig.onSelect(menuConfig.options.indexOf('LSP options...'));
+        await flushPromises();
+        const lspMenu = showLocalMenuMock.mock.calls[1][0];
+        lspMenu.onSelect(lspMenu.options.indexOf('Format document'));
+        await vi.waitFor(() => expect(notesLspFormatMock).toHaveBeenCalledWith('$NOTES/a.go'));
+
+        document.querySelector('[data-file="$NOTES/b.go"]').click();
+        await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toBe('// $NOTES/b.go\n'));
+
+        finishFormat({ changed: true, content: 'formatted a\n' });
+        await flushPromises();
+        await flushPromises();
+
+        expect(mainEditorAdapter().getValue()).toBe('// $NOTES/b.go\n');
+    });
+
+    it('does not show a hover response after its file was replaced', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/a.md', '$NOTES/b.md']);
+        resolveNotesLspLanguageMock.mockResolvedValue('markdown');
+        getFileMock.mockImplementation((file) => Promise.resolve({ contents: `# ${file}\n`, text: '', error: '' }));
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/a.md"]').click();
+        await vi.waitFor(() => expect(notesLspOpenDocumentMock).toHaveBeenCalledWith('$NOTES/a.md', 'markdown', '# $NOTES/a.md\n'));
+        await flushPromises();
+
+        let finishHover;
+        notesLspHoverMock.mockReset();
+        notesLspHoverMock.mockImplementation(() => new Promise((resolve) => { finishHover = resolve; }));
+        mainEditorAdapter().moveCursor(2);
+        await vi.waitFor(() => expect(notesLspHoverMock).toHaveBeenCalled(), { timeout: 1000 });
+
+        document.querySelector('[data-file="$NOTES/b.md"]').click();
+        await vi.waitFor(() => expect(document.getElementById('notes-status').textContent).toBe('$NOTES/b.md'));
+
+        finishHover('**Stale hover**');
+        await flushPromises();
+        await flushPromises();
+
+        expect(document.getElementById('notes-lsp-hover-tooltip')?.innerHTML || '').not.toContain('Stale hover');
+    });
+
+    it('stays unsaved when edited while a save is in flight', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/a.md']);
+        getFileMock.mockResolvedValue({ contents: '# a\n', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/a.md"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+
+        let finishSave;
+        saveFileMock.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
+        mainEditorAdapter().setValue('# a one\n');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+        await vi.waitFor(() => expect(saveFileMock).toHaveBeenCalledWith('$NOTES/a.md', '# a one\n', ''));
+
+        mainEditorAdapter().setValue('# a two\n');
+        finishSave();
+        await flushPromises();
+
+        expect(document.getElementById('notes-status').textContent).toBe('$NOTES/a.md (unsaved)');
+    });
+
     it('saves pending edits to the previous file when switching before autosave fires', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/a.md', '$NOTES/b.md']);
         getCurrentProjectMock.mockResolvedValue('/work/one');

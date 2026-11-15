@@ -807,6 +807,10 @@ function releaseNotesDocument(doc) {
     ]);
 }
 
+function isNotesDocumentOpen(doc) {
+    return Boolean(doc) && notesDocuments.get(doc.path, doc.project) === doc;
+}
+
 function closeActiveNotesDocument() {
     notesDocuments.close(activeNotesDocument);
     activeNotesDocument = createNotesDocument({ buffer: mainDocument });
@@ -2228,12 +2232,22 @@ function insertFrontmatterCaption(container) {
     container.prepend(caption);
 }
 
+let markdownRenderSeq = 0;
+
+// A render stops after an await once a newer render has started or its
+// document is no longer shown, so it never post-processes another render's DOM.
 async function renderMarkdown() {
+    const renderSeq = ++markdownRenderSeq;
+    const doc = activeNotesDocument;
+    const isCurrent = () => renderSeq === markdownRenderSeq && doc === activeNotesDocument;
     const markdown = applyDocumentFrontmatter();
     elements.preview.innerHTML = marked.parse(markdown);
 
     // Apply common markdown processing
     await processMarkdownContainer(elements.preview);
+    if (!isCurrent()) {
+        return;
+    }
 
     // Enable context menus on images
     enableImageContextMenus(elements.preview);
@@ -2248,11 +2262,14 @@ async function renderMarkdown() {
     wrapTablesForHorizontalScroll(elements.preview);
 
     // Enable column sorting on all tables
-    setupNotesTableQueries(elements.preview, 'preview', state.currentFile || '');
+    setupNotesTableQueries(elements.preview, 'preview', doc.path);
 
     // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
     elements.preview.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
-    await setupTableColumnResizing(elements.preview, state.markdownTableWordWrapMode, state.currentFile);
+    await setupTableColumnResizing(elements.preview, state.markdownTableWordWrapMode, doc.path);
+    if (!isCurrent()) {
+        return;
+    }
 
     // Surface a caption when the document carries frontmatter.
     insertFrontmatterCaption(elements.preview);
@@ -3221,7 +3238,7 @@ function getFormulaDependencies(formula, row, col, rowCount, colCount) {
     return refs;
 }
 
-async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, rows, cellId) {
+async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, rows, cellId, file = state.currentFile) {
     const block = findMarkdownFunctionCodeBlock(container, fnName);
     if (!block) {
         return '#ERR';
@@ -3231,7 +3248,7 @@ async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, row
 
     // Create a function executor for nested function calls
     const functionExecutor = async (nestedFnName, nestedFnArgs, nestedRow, nestedCol) => {
-        return runMarkdownTableFunction(container, nestedFnName, nestedFnArgs, nestedRow, nestedCol, rows, currentCellId);
+        return runMarkdownTableFunction(container, nestedFnName, nestedFnArgs, nestedRow, nestedCol, rows, currentCellId, file);
     };
 
     // Resolve arguments with support for nested function calls
@@ -3243,7 +3260,7 @@ async function runMarkdownTableFunction(container, fnName, fnArgs, row, col, row
     const runtime = await resolveRuntimeForFunctionLanguage(block.language);
 
     try {
-        const result = await RunFunction(state.currentFile, fnName, currentCellId, block.code, resolvedArgs, runtime);
+        const result = await RunFunction(file, fnName, currentCellId, block.code, resolvedArgs, runtime);
 
         // Backward compatibility: support both structured and string responses.
         const isStructured = result && typeof result === 'object';
@@ -3281,6 +3298,7 @@ function unwrapTableCellLinks(cell) {
 }
 
 async function evaluateTableFormulasInPlace(container) {
+    const file = state.currentFile;
     const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(String(navigator.userAgent || ''));
 
     const flushUiPaint = () => new Promise((resolve) => {
@@ -3391,7 +3409,7 @@ async function evaluateTableFormulasInPlace(container) {
                 const { cell, row, col, val, ref } = task;
                 const fnCall = parseTableFunctionCall(val);
                 const content = fnCall
-                    ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref)
+                    ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref, file)
                     : evaluateTableFormula(val, row, col, rows);
 
                 rows[row][col] = String(content ?? '');
@@ -3427,7 +3445,7 @@ async function evaluateTableFormulasInPlace(container) {
             const { cell, row, col, val, ref } = task;
             const fnCall = parseTableFunctionCall(val);
             const content = fnCall
-                ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref)
+                ? await runMarkdownTableFunction(container, fnCall.fnName, fnCall.args, row, col, rows, ref, file)
                 : evaluateTableFormula(val, row, col, rows);
             rows[row][col] = String(content ?? '');
             cell.dataset.formula = val;
@@ -4630,12 +4648,15 @@ function scheduleRender() {
 }
 
 function scheduleAutoSave() {
-    if (state.autosaveTimer) {
-        clearTimeout(state.autosaveTimer);
+    const doc = activeNotesDocument;
+    if (doc.autosaveTimer) {
+        clearTimeout(doc.autosaveTimer);
     }
-    state.autosaveTimer = setTimeout(() => {
-        state.autosaveTimer = null;
-        saveFile();
+    doc.autosaveTimer = setTimeout(() => {
+        doc.autosaveTimer = null;
+        if (doc === activeNotesDocument) {
+            saveFile();
+        }
     }, 1000);
 }
 
@@ -5358,7 +5379,13 @@ async function settleLspDocumentCloses(closes) {
     }
 }
 
+let jupyterRenderSeq = 0;
+
 async function renderJupyterView() {
+    const renderSeq = ++jupyterRenderSeq;
+    const doc = activeNotesDocument;
+    const isCurrent = () => renderSeq === jupyterRenderSeq && doc === activeNotesDocument;
+
     // Reset jupyter state for the new render
     const previousBlocks = state.jupyterCodeBlocks;
     state.jupyterCodeBlocks = {};
@@ -5374,6 +5401,9 @@ async function renderJupyterView() {
     
     // Apply common markdown processing
     await processMarkdownContainer(elements.jupyter);
+    if (!isCurrent()) {
+        return;
+    }
 
     // Enable context menus on images
     enableImageContextMenus(elements.jupyter);
@@ -5395,16 +5425,19 @@ async function renderJupyterView() {
             console.warn('Table formula evaluation failed:', err);
         })
         .finally(() => {
+            if (!isCurrent()) {
+                return;
+            }
             setupInteractiveMarkdownTables(elements.jupyter, true);
 
             // Keep table horizontal scrolling local to each table rather than the whole section.
             wrapTablesForHorizontalScroll(elements.jupyter);
 
             // Enable column sorting on all tables
-            setupNotesTableQueries(elements.jupyter, 'jupyter', state.currentFile || '');
+            setupNotesTableQueries(elements.jupyter, 'jupyter', doc.path);
 
             elements.jupyter.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
-            void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, state.currentFile);
+            void setupTableColumnResizing(elements.jupyter, state.markdownTableWordWrapMode, doc.path);
 
             // Re-apply find highlights when Find tab is active in jupyter mode.
             if (elements.toolsTabFind?.getAttribute('aria-selected') === 'true' && state.findQuery && state.viewMode === 'jupyter') {
@@ -8045,6 +8078,7 @@ async function sendSwaggerRequest() {
     });
 
     const url = buildRequestUrl(state.swaggerSpec, state.swaggerSelectedEndpoint, parameters);
+    const doc = activeNotesDocument;
 
     try {
         const response = await SwaggerRequest({
@@ -8053,10 +8087,16 @@ async function sendSwaggerRequest() {
             headers,
             body,
         });
+        if (doc !== activeNotesDocument) {
+            return;
+        }
 
         elements.swaggerResponse.innerHTML = generateLiveResponseHTML(response);
         setupSwaggerResponseTabs();
     } catch (err) {
+        if (doc !== activeNotesDocument) {
+            return;
+        }
         elements.swaggerResponse.innerHTML = generateLiveResponseHTML({
             error: String(err?.message || err),
         });
@@ -8169,6 +8209,8 @@ function setupSwaggerTabSwitching() {
     });
 }
 
+let notesLoadSeq = 0;
+
 async function loadFile(file, options = {}) {
     if (!file) {
         return;
@@ -8178,6 +8220,13 @@ async function loadFile(file, options = {}) {
         return;
     }
 
+    // A newer load supersedes this one, and once this load has activated its
+    // document it stops if that document is no longer the active one.
+    const loadSeq = ++notesLoadSeq;
+    let loadedDocument = null;
+    const isStale = () => loadSeq !== notesLoadSeq
+        || (loadedDocument !== null && loadedDocument !== activeNotesDocument);
+
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
         // Closing the document drops its autosave timer, so save pending
@@ -8186,6 +8235,9 @@ async function loadFile(file, options = {}) {
             clearTimeout(state.autosaveTimer);
             state.autosaveTimer = null;
             await saveFile();
+            if (isStale()) {
+                return;
+            }
         }
     }
 
@@ -8215,6 +8267,9 @@ async function loadFile(file, options = {}) {
 
         // Capture the current project context to prevent autosave issues if user switches projects
         const project = await GetCurrentProject();
+        if (isStale()) {
+            return;
+        }
         const documentCachePromise = skipDocumentCacheRestore
             ? Promise.resolve(null)
             : GetDocumentCache(file).catch((error) => {
@@ -8237,9 +8292,15 @@ async function loadFile(file, options = {}) {
 
         if (loadingImage) {
             const documentCache = await documentCachePromise;
-            activateNotesDocument(file, { project });
+            if (isStale()) {
+                return;
+            }
+            loadedDocument = activateNotesDocument(file, { project });
             emitCurrentFileName();
             await refreshFileMetaMarkdown(file);
+            if (isStale()) {
+                return;
+            }
             state.currentFileType = 'image';
             setCodeEditorMode(false);
             elements.editorShell.dataset.fileType = 'image';
@@ -8249,6 +8310,9 @@ async function loadFile(file, options = {}) {
             applyDocumentCache(documentCache, 'image-view');
 
             await configureImagePreview(file, fileName);
+            if (isStale()) {
+                return;
+            }
 
             state.suspendDocumentCacheSave = false;
             saveDocumentCache();
@@ -8265,13 +8329,23 @@ async function loadFile(file, options = {}) {
         }*/
 
         const result = await GetFile(file);
-    const documentCache = await documentCachePromise;
+        const documentCache = await documentCachePromise;
+        if (isStale()) {
+            return;
+        }
 
-        activateNotesDocument(file, { project });
-        state.currentFileUri = await resolveNotesFileUri(file);
+        loadedDocument = activateNotesDocument(file, { project });
+        const fileUri = await resolveNotesFileUri(file);
+        if (isStale()) {
+            return;
+        }
+        state.currentFileUri = fileUri;
         clearCurrentFileLspDiagnosticsCache();
         emitCurrentFileName();
         await refreshFileMetaMarkdown(file);
+        if (isStale()) {
+            return;
+        }
 
         if (result.error !== '') {
             if (stickyId) {
@@ -8332,6 +8406,10 @@ async function loadFile(file, options = {}) {
             state.swaggerViewTooLarge = isStructViewTooLarge(doc);
             updateStickyProgress(stickyId, `Loading ${fileName}… parsing json`);
             await yieldToUI();
+            if (isStale()) {
+                closeStickyProgress(stickyId);
+                return;
+            }
             state.swaggerSpec = parseStructuredDocument(file, doc);
             state.swaggerRunAvailable = hasSwaggerKey(state.swaggerSpec);
 
@@ -8353,6 +8431,10 @@ async function loadFile(file, options = {}) {
             // Render JSON tree view
             updateStickyProgress(stickyId, `Loading ${fileName}… rendering viewer`);
             await yieldToUI();
+            if (isStale()) {
+                closeStickyProgress(stickyId);
+                return;
+            }
             // Defer JSON/YAML tree render until the View tab is clicked; loadFile no longer eagerly renders it.
             state.swaggerViewCurrent = false;
             
@@ -8360,6 +8442,10 @@ async function loadFile(file, options = {}) {
             if (state.swaggerRunAvailable) {
                 updateStickyProgress(stickyId, `Loading ${fileName}… rendering run view`);
                 await yieldToUI();
+                if (isStale()) {
+                    closeStickyProgress(stickyId);
+                    return;
+                }
                 renderSwaggerUI();
             } else {
                 elements.swaggerResponse.innerHTML = '';
@@ -8389,7 +8475,13 @@ async function loadFile(file, options = {}) {
 
             // Render markdown views
             await renderMarkdown();
+            if (isStale()) {
+                return;
+            }
             await renderJupyterView();
+            if (isStale()) {
+                return;
+            }
         } else if (loadingHtml) {
             state.currentFileType = 'html';
             setCodeEditorMode(true);
@@ -8434,6 +8526,9 @@ async function loadFile(file, options = {}) {
             refreshEditorLanguage(file, doc || '');
             if (loadingSvg) {
                 await configureImagePreview(file, fileName);
+                if (isStale()) {
+                    return;
+                }
             }
             applyDocumentCache(documentCache, loadingSvg ? 'image-view' : 'editor');
         }
@@ -8449,12 +8544,21 @@ async function loadFile(file, options = {}) {
         }
 
         await refreshMainReservedWords(file);
+        if (isStale()) {
+            return;
+        }
         if (isCurrentFileLspEligible()) {
             await openCurrentLspDocument(mainDocument.getValue());
+            if (isStale()) {
+                return;
+            }
         }
 
         // Spellcheck via typos-lsp for eligible files (falls back to aspell).
         await openCurrentTyposDocument(mainDocument.getValue());
+        if (isStale()) {
+            return;
+        }
 
         notesSpellCheckHandle?.check();
         state.suspendDocumentCacheSave = false;
@@ -8474,7 +8578,11 @@ async function loadFile(file, options = {}) {
 async function configureImagePreview(file, fileName, refresh = false) {
     // ResolveFilePath expands $NOTES/$PROJECT/etc variables the same way
     // GetFile does. The asset handler streams files to the webview.
+    const doc = activeNotesDocument;
     const resolvedPath = await ResolveFilePath(file);
+    if (doc !== activeNotesDocument) {
+        return;
+    }
     const previewPath = resolvedPath || file;
     const assetURL = notesAssetURL(previewPath);
     state.currentFileUri = filePathToUri(previewPath);
@@ -8489,30 +8597,43 @@ async function configureImagePreview(file, fileName, refresh = false) {
     enableImageContextMenus(elements.imageViewWrap);
 }
 
+// Saves the active document. The document is captured when the save starts,
+// and only updated afterwards if it is still open.
 async function saveFile() {
-    if (!state.currentFile) {
+    const doc = activeNotesDocument;
+    if (!doc.path) {
         setStatus('Select a note before saving', true);
         return false;
     }
 
+    const file = doc.path;
     try {
-        const file = state.currentFile;
-        const content = getMainEditorValue();
-        
+        const content = doc.buffer.getValue();
+
         // Use the saved project context to prevent overwrites if user switched projects
-        await SaveFile(file, content, state.currentFileProject || '');
-        if (state.lspOpenFile === state.currentFile && isCurrentFileLspEligible()) {
-            await NotesLspSaveDocument(state.currentFile);
+        await SaveFile(file, content, doc.project || '');
+        maybeRefreshProjectFindAfterSave();
+        if (!isNotesDocumentOpen(doc)) {
+            return true;
         }
-        if (state.currentFile === file && state.currentFileType === 'markdown' && state.viewMode === 'editor') {
+        if (doc.lspOpenFile === file) {
+            await NotesLspSaveDocument(file);
+        }
+        if (doc !== activeNotesDocument) {
+            doc.dirty = false;
+            return true;
+        }
+        if (doc.fileType === 'markdown' && state.viewMode === 'editor') {
             applyDocumentFrontmatter();
             refreshToolsToC();
         }
-        setDirty(false);
-        maybeRefreshProjectFindAfterSave();
+        // Edits made while saving are still unsaved; their autosave is pending.
+        if (doc.buffer.getValue() === content) {
+            setDirty(false);
+        }
         return true;
     } catch (err) {
-        notifyTerminal(`Failed to save ${state.currentFile}`, 'error');
+        notifyTerminal(`Failed to save ${file}`, 'error');
         console.error(err);
         return false;
     }
@@ -14451,6 +14572,8 @@ initNotesLsp({
     updateFindOptionButtons,
     getMonacoMainEditor: () => monacoMainEditor,
     getNotesSpellCheckHandle: () => notesSpellCheckHandle,
+    getActiveNotesDocument: () => activeNotesDocument,
+    isNotesDocumentOpen,
 });
 
 async function refreshMainReservedWords(file) {

@@ -25,7 +25,7 @@ let
     resolveNotesFileFromAbsolutePath, runProjectFindSearch, setMainEditorSelectionRange,
     setMainEditorValue, setProjectReferencesResults, setToolsPanelCollapsed, setToolsTab,
     shouldMonacoTabIndent, showNotesLocalMenu, updateFindOptionButtons, getMonacoMainEditor,
-    getNotesSpellCheckHandle;
+    getNotesSpellCheckHandle, getActiveNotesDocument, isNotesDocumentOpen;
 
 export function initNotesLsp(deps) {
     ({
@@ -38,6 +38,7 @@ export function initNotesLsp(deps) {
         setMainEditorSelectionRange, setMainEditorValue, setProjectReferencesResults,
         setToolsPanelCollapsed, setToolsTab, shouldMonacoTabIndent, showNotesLocalMenu,
         updateFindOptionButtons, getMonacoMainEditor, getNotesSpellCheckHandle,
+        getActiveNotesDocument, isNotesDocumentOpen,
     } = deps);
 
     EventsOn('notesLspDiagnostics', payload => {
@@ -64,6 +65,14 @@ export function initNotesLsp(deps) {
 }
 
 export const LSP_CHANGE_DEBOUNCE_MS = 200;
+
+// Captures the document shown when an LSP request starts. The returned check
+// tells whether it is still shown when the response arrives, so a response is
+// never painted or applied over another document (ADR 0100 decision 5).
+function captureShownDocument() {
+    const doc = getActiveNotesDocument();
+    return () => doc === getActiveNotesDocument();
+}
 
 const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 
@@ -372,8 +381,12 @@ export async function requestLspCompletion(triggerKind = 1, triggerChar = '') {
         ? { start: blockTarget.editor.selectionStart || 0 }
         : getMainEditorSelectionRange();
     const pos = offsetToLspPosition(completionSource, completionSelection.start || 0);
+    const isShown = captureShownDocument();
     try {
         const items = await NotesLspCompletion(completionFile, pos.line, pos.character, triggerKind, triggerChar);
+        if (!isShown()) {
+            return;
+        }
         const list = Array.isArray(items) ? items : [];
         if (list.length === 0) {
             hideLspCompletion();
@@ -499,13 +512,16 @@ export async function requestLspCompletionAfterSync(content, triggerChar = '', t
     }
 
     const syncFile = blockTarget ? blockTarget.filePath : state.currentFile;
+    const isShown = captureShownDocument();
     try {
         await NotesLspChangeDocument(syncFile, String(content || ''));
     } catch {
         // Fall through to completion request even when fast sync fails.
     }
 
-    await requestLspCompletion(triggerKind, triggerChar);
+    if (isShown()) {
+        await requestLspCompletion(triggerKind, triggerChar);
+    }
 }
 
 function lspPositionToEditorOffset(content, line, character) {
@@ -622,8 +638,12 @@ async function requestLspDefinition() {
     const selection = getMainEditorSelectionRange();
     const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
 
+    const isShown = captureShownDocument();
     try {
         const locations = await NotesLspDefinition(state.currentFile, pos.line, pos.character);
+        if (!isShown()) {
+            return;
+        }
         const target = Array.isArray(locations) && locations.length > 0 ? locations[0] : null;
         if (!target) {
             notifyTerminal('Definition not found', 'info');
@@ -668,6 +688,8 @@ export async function formatCurrentLspDocument(options = {}) {
 
     const preferSelection = options.preferSelection !== false;
     const notifyOnError = options.notifyOnError !== false;
+    const file = state.currentFile;
+    const isShown = captureShownDocument();
 
     try {
         const selection = getMainEditorSelectionRange();
@@ -681,17 +703,17 @@ export async function formatCurrentLspDocument(options = {}) {
             const endPos = offsetToLspPosition(currentText, selectionEnd);
 
             result = await NotesLspFormatRange(
-                state.currentFile,
+                file,
                 startPos.line,
                 startPos.character,
                 endPos.line,
                 endPos.character,
             );
         } else {
-            result = await NotesLspFormat(state.currentFile);
+            result = await NotesLspFormat(file);
         }
 
-        if (!result || !result.changed) {
+        if (!isShown() || !result || !result.changed) {
             return;
         }
 
@@ -769,10 +791,14 @@ export async function goToCurrentLspSymbol() {
     }
 
     let symbols = [];
+    const isShown = captureShownDocument();
     try {
         symbols = await NotesLspDocumentSymbols(state.currentFile);
     } catch {
         notifyTerminal('Failed to fetch document symbols', 'error');
+        return;
+    }
+    if (!isShown()) {
         return;
     }
 
@@ -907,10 +933,15 @@ async function runCurrentLspCodeLens() {
     }
 
     let lenses = [];
+    const file = state.currentFile;
+    const isShown = captureShownDocument();
     try {
-        lenses = await NotesLspCodeLens(state.currentFile);
+        lenses = await NotesLspCodeLens(file);
     } catch {
         notifyTerminal('Failed to fetch code lens actions', 'error');
+        return;
+    }
+    if (!isShown()) {
         return;
     }
 
@@ -938,7 +969,7 @@ async function runCurrentLspCodeLens() {
             }
 
             try {
-                const applied = await NotesLspExecuteCodeLens(state.currentFile, Number(picked.index) || 0);
+                const applied = await NotesLspExecuteCodeLens(file, Number(picked.index) || 0);
                 if (!applied) {
                     notifyTerminal('Code lens had no executable command', 'info');
                 }
@@ -1021,8 +1052,12 @@ async function getLspCodeActionsForCursor() {
     const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
     const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
 
+    const isShown = captureShownDocument();
     try {
         const actions = await NotesLspCodeActions(state.currentFile, pos.line, pos.character, diagnostics);
+        if (!isShown()) {
+            return { line: 0, character: 0, diagnostics: [], actions: [] };
+        }
         return {
             line: pos.line,
             character: pos.character,
@@ -1224,9 +1259,10 @@ async function applyLspCodeActionFromCursor(index, line, character, diagnostics)
         return;
     }
 
+    const isShown = captureShownDocument();
     try {
         const result = await NotesLspApplyCodeAction(state.currentFile, line, character, index, diagnostics || []);
-        if (!result || !result.changed) {
+        if (!isShown() || !result || !result.changed) {
             return;
         }
 
@@ -1266,10 +1302,15 @@ async function renameCurrentLspSymbol() {
     const pos = offsetToLspPosition(getMainEditorValue(), selectionStart);
 
     let prepare;
+    const file = state.currentFile;
+    const isShown = captureShownDocument();
     try {
-        prepare = await NotesLspPrepareRename(state.currentFile, pos.line, pos.character);
+        prepare = await NotesLspPrepareRename(file, pos.line, pos.character);
     } catch {
         notifyTerminal('Failed to prepare symbol rename', 'error');
+        return;
+    }
+    if (!isShown()) {
         return;
     }
 
@@ -1280,7 +1321,7 @@ async function renameCurrentLspSymbol() {
 
     const suggested = String(prepare.placeholder || currentSelection || '').trim();
     const nextName = await openTextPrompt({ title: 'Rename symbol', value: suggested, confirmLabel: 'Rename' });
-    if (nextName === null) {
+    if (nextName === null || !isShown()) {
         return;
     }
 
@@ -1291,7 +1332,10 @@ async function renameCurrentLspSymbol() {
     }
 
     try {
-        const result = await NotesLspRename(state.currentFile, pos.line, pos.character, trimmedName);
+        const result = await NotesLspRename(file, pos.line, pos.character, trimmedName);
+        if (!isShown()) {
+            return;
+        }
         if (!result || !result.changed) {
             notifyTerminal('No rename edits applied', 'info');
             return;
@@ -1373,9 +1417,13 @@ export function scheduleLspHover() {
             return;
         }
         state.lspHoverLastKey = key;
+        const isShown = captureShownDocument();
 
         try {
             const hoverText = await NotesLspHover(hoverFilePath, pos.line, pos.character);
+            if (!isShown()) {
+                return;
+            }
             const diagnosticsText = (!blockTarget && hoverFilePath === state.currentFile)
                 ? formatLspDiagnosticsForHover(lspDiagnosticsAtPosition(pos.line, pos.character))
                 : '';
@@ -1426,8 +1474,12 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
 
     const pos = offsetToLspPosition(mainDocument.getValue(), mainDocument.getSelection().start);
 
+    const isShown = captureShownDocument();
     try {
         const text = await NotesLspSignatureHelp(state.currentFile, pos.line, pos.character, triggerKind, triggerChar);
+        if (!isShown()) {
+            return;
+        }
         if (!text) {
             notifyTerminal('No signature help available', 'info');
             return;
@@ -1513,18 +1565,29 @@ export async function openCurrentLspDocument(content) {
     // lspOpenFile is set even if no server started, so closing first (rather
     // than reopening and then closing) keeps a failed start retryable.
     await closeOpenLspDocument();
-    if (!state.currentFile || !isCurrentFileLspEligible()) {
+    const doc = getActiveNotesDocument();
+    const file = doc.path;
+    if (!file || !isCurrentFileLspEligible()) {
         return;
     }
 
     try {
-        const languageID = await ResolveNotesLspLanguage(state.currentFile);
-        if (!languageID) {
+        const languageID = await ResolveNotesLspLanguage(file);
+        if (!languageID || doc !== getActiveNotesDocument()) {
             return;
         }
 
-        await NotesLspOpenDocument(state.currentFile, languageID, String(content || ''));
-        state.lspOpenFile = state.currentFile;
+        await NotesLspOpenDocument(file, languageID, String(content || ''));
+        // A document holds one reference. Release this one if the document
+        // closed meanwhile or another open already registered it.
+        if (!isNotesDocumentOpen(doc) || doc.lspOpenFile) {
+            await NotesLspCloseDocument(file).catch((err) => console.error('notes lsp close failed:', err));
+            return;
+        }
+        doc.lspOpenFile = file;
+        if (doc !== getActiveNotesDocument()) {
+            return;
+        }
 
         if (isMonacoActive()) {
             const editor = getMonacoMainEditor();
@@ -1719,38 +1782,52 @@ export async function openCurrentTyposDocument(content) {
 
     // The backend reference-counts opens. typosOpenFile is only set after a
     // successful open, so reopening first and then releasing the old reference
-    // turns a same-file reload into a didChange.
-    let previousFile = state.typosOpenFile;
+    // turns a same-file reload into a didChange. A document holds one
+    // reference, so the old one is only released if it is still registered,
+    // and the new one is released if the document closed meanwhile or
+    // another open registered it first.
+    const doc = getActiveNotesDocument();
+    const file = doc.path;
+    let previousFile = doc.typosOpenFile;
     const releasePrevious = async () => {
-        const file = previousFile;
+        const previous = previousFile;
         previousFile = '';
-        if (file) {
-            await NotesTyposCloseDocument(file).catch((err) => console.error('notes typos close failed:', err));
+        if (previous && doc.typosOpenFile === previous) {
+            doc.typosOpenFile = '';
+            await NotesTyposCloseDocument(previous).catch((err) => console.error('notes typos close failed:', err));
         }
     };
-    try {
-        const languageID = await ResolveNotesLspLanguage(state.currentFile);
-        const ok = await NotesTyposOpenDocument(state.currentFile, languageID || '', String(content || ''));
-        await releasePrevious();
-        if (ok) {
-            state.typosOpenFile = state.currentFile;
-            getNotesSpellCheckHandle().setMode('external');
-            const diagnostics = state.currentFileUri ? (typosDiagnosticsStore.get(state.currentFileUri) || []) : [];
-            getNotesSpellCheckHandle().setMisspellings(typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
-        } else {
-            state.typosOpenFile = '';
-            getNotesSpellCheckHandle().setMode('aspell');
-            if (isMonacoActive()) {
-                getMonacoMainEditor().setTyposMisspellings([]);
-            }
+    const showAspell = () => {
+        if (doc !== getActiveNotesDocument() || doc.typosOpenFile) {
+            return;
         }
-    } catch (err) {
-        await releasePrevious();
-        state.typosOpenFile = '';
-        getNotesSpellCheckHandle().setMode('aspell');
+        getNotesSpellCheckHandle()?.setMode('aspell');
         if (isMonacoActive()) {
             getMonacoMainEditor().setTyposMisspellings([]);
         }
+    };
+    try {
+        const languageID = await ResolveNotesLspLanguage(file);
+        const ok = await NotesTyposOpenDocument(file, languageID || '', String(content || ''));
+        await releasePrevious();
+        if (!ok) {
+            showAspell();
+            return;
+        }
+        if (!isNotesDocumentOpen(doc) || doc.typosOpenFile) {
+            await NotesTyposCloseDocument(file).catch((err) => console.error('notes typos close failed:', err));
+            return;
+        }
+        doc.typosOpenFile = file;
+        if (doc !== getActiveNotesDocument()) {
+            return;
+        }
+        getNotesSpellCheckHandle()?.setMode('external');
+        const diagnostics = doc.uri ? (typosDiagnosticsStore.get(doc.uri) || []) : [];
+        getNotesSpellCheckHandle()?.setMisspellings(typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));
+    } catch (err) {
+        await releasePrevious();
+        showAspell();
         console.error('notes typos open failed:', err);
     }
 }

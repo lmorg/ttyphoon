@@ -62,8 +62,8 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Move Jupyter block runtimes and kernels onto the `NotesDocument`; stop kernels when the document closes
     - [x] Open the LSP and typos documents when a `NotesDocument` opens and close them when it closes, rather than on every file switch
   - Stage 5: asynchronous work captures its document
-    - [ ] Load, save and autosave capture their `NotesDocument` and only update it if it is still open
-    - [ ] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
+    - [x] Load, save and autosave capture their `NotesDocument` and only update it if it is still open
+    - [x] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
   - Stage 6: `NotesView`
     - [ ] Create the editor area (tab strip host, Monaco host, preview/structured-view host) from a `NotesView` factory and template, with lookups scoped to the view root; the existing view is created through it. Still one view
     - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (blocked by Q15: view mode per view or per document)

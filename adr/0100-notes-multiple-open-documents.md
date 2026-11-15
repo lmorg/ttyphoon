@@ -290,6 +290,40 @@ as `lspOpenFile === currentFile`.
     running blocks from two open documents needs the document in the ID
     (Stage 7).
 
+*Done (Stage 5):*
+
+- `loadFile` takes a sequence token and checks it after every `await`. A load
+  that finishes after a newer one started stops without touching the editor,
+  views, status bar, LSP or typos. Previously a slow load could overwrite the
+  file opened after it.
+- `saveFile` and the autosave timer capture the document, its path, project
+  and text when they start. After `SaveFile` returns:
+  - if the document has closed, nothing else is updated;
+  - if it is open but not shown, only its dirty flag is cleared;
+  - if it is shown, it is marked saved only when its text has not changed
+    since the save started. Edits made while a save was in flight used to be
+    marked as saved.
+- A document holds at most one LSP and one typos registration. An open that
+  finishes after its document closed, or after another open already
+  registered it, closes its own reference. This keeps the Stage 3 reference
+  counts balanced when files are switched quickly.
+- LSP requests (completion, hover, signature help, definition, symbols, code
+  lens, code actions, format, rename) capture the shown document with
+  `captureShownDocument()` and drop the response if another document is shown
+  by then. Format, code action and rename used to apply their edits to
+  whichever file was open when the response arrived. Requests also send the
+  path captured at the start.
+- `renderMarkdown` and `renderJupyterView` stop after an `await` if a newer
+  render started or their document is no longer shown. Jupyter code blocks
+  are only registered on the document that started the render.
+- Table formulas send `RunFunction` the file captured when evaluation started.
+  Image previews and Swagger responses are dropped if their document is no
+  longer shown.
+- Jupyter output was already scoped to the active document's runs in
+  Stage 4.
+- Still compared against the single active document, not a `NotesView`.
+  Stage 6 replaces "shown" with "shown in this view".
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco
