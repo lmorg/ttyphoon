@@ -18,6 +18,11 @@ function createFakeModel(value, language, onChange) {
         undoStack: [],
         uri: `inmemory://model/${++fakeModelCount}`,
         onChange,
+        // Like the real adapter: editors showing the model, and the one that
+        // showed it last, which selection and edits go through.
+        shownBy: new Set(),
+        activeEditor: null,
+        selectionVersion: 0,
     };
 }
 
@@ -25,14 +30,32 @@ export function createFakeMonacoAdapter(container, options = {}) {
     const placeholder = createFakeModel(options.value, options.language);
     let current = placeholder;
     let disposed = false;
+    // Each editor has its own selection in each model it shows.
+    const selections = new Map([[placeholder, placeholder.selection]]);
+    const selectionVersions = new Map();
     // The shown model's fields, as the single-model fake used to hold them.
     const field = (name) => ({ get: () => current[name], set: (next) => { current[name] = next; } });
     const local = Object.defineProperties({}, {
         value: field('value'),
-        selection: field('selection'),
+        selection: {
+            get: () => selections.get(current) || { start: 0, end: 0, active: 0 },
+            set: (next) => { selections.set(current, next); },
+        },
         language: field('language'),
         undoStack: field('undoStack'),
     });
+    const releaseCurrent = () => {
+        if (current === placeholder) {
+            return;
+        }
+        current.shownBy.delete(adapter);
+        if (current.activeEditor === adapter) {
+            current.selection = { ...local.selection };
+            current.selectionVersion += 1;
+            current.activeEditor = null;
+        }
+        selectionVersions.set(current, current.selectionVersion);
+    };
 
     const emitModelChange = (target) => {
         target.onChange?.();
@@ -73,13 +96,13 @@ export function createFakeMonacoAdapter(container, options = {}) {
 
         createDocumentModel({ value = '', language = 'plaintext', onChange } = {}) {
             const target = createFakeModel(value, language, onChange);
-            const shown = () => target === current;
+            const active = () => target.activeEditor;
             return {
                 fakeModel: target,
                 getValue: () => target.value,
                 setValue(next) {
-                    if (shown()) {
-                        adapter.setValue(next);
+                    if (active()) {
+                        active().setValue(next);
                         return;
                     }
                     const text = String(next || '');
@@ -87,22 +110,26 @@ export function createFakeMonacoAdapter(container, options = {}) {
                         target.value = text;
                         target.undoStack = [];
                         target.selection = { start: 0, end: 0, active: 0 };
+                        target.selectionVersion += 1;
                         emitModelChange(target);
                     }
                 },
-                getSelectionOffsets: () => ({ start: target.selection.start, end: target.selection.end }),
+                getSelectionOffsets: () => (active()
+                    ? active().getSelectionOffsets()
+                    : { start: target.selection.start, end: target.selection.end }),
                 setSelectionOffsets(start, end) {
-                    if (shown()) {
-                        adapter.setSelectionOffsets(start, end);
+                    if (active()) {
+                        active().setSelectionOffsets(start, end);
                         return;
                     }
                     const safeStart = clampOffset(start, target.value.length);
                     const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, target.value.length));
                     target.selection = { start: safeStart, end: safeEnd, active: safeEnd };
+                    target.selectionVersion += 1;
                 },
                 replaceRange(start, end, text) {
-                    if (shown()) {
-                        adapter.replaceRange(start, end, text);
+                    if (active()) {
+                        active().replaceRange(start, end, text);
                         return;
                     }
                     const safeStart = clampOffset(start, target.value.length);
@@ -116,14 +143,29 @@ export function createFakeMonacoAdapter(container, options = {}) {
                 },
                 dispose() {
                     target.disposed = true;
-                    if (shown()) {
-                        adapter.showModel(null);
+                    for (const editor of [...target.shownBy]) {
+                        editor.showModel(null);
                     }
                 },
             };
         },
         showModel(handle) {
-            current = handle?.fakeModel || placeholder;
+            const next = handle?.fakeModel || placeholder;
+            if (next === current) {
+                if (handle) {
+                    next.activeEditor = adapter;
+                }
+                return;
+            }
+            releaseCurrent();
+            current = next;
+            if (handle) {
+                next.shownBy.add(adapter);
+                next.activeEditor = adapter;
+                if (selectionVersions.get(next) !== next.selectionVersion) {
+                    selections.set(next, { ...next.selection });
+                }
+            }
         },
         getValue: () => local.value,
         setValue(next) {
@@ -223,6 +265,7 @@ export function createFakeMonacoAdapter(container, options = {}) {
             adapter.theme = colors;
         },
         dispose() {
+            releaseCurrent();
             disposed = true;
         },
         isDisposed: () => disposed,

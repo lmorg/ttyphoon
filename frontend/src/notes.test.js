@@ -4286,6 +4286,86 @@ describe('notes rendering', () => {
         expect(selectedTabTitle()).toBe(second);
     });
 
+    const notesViewRoots = () => [...document.querySelectorAll('.notes-view')];
+    const viewTabTitles = (view) => [...view.querySelectorAll('.notes-doc-tab')].map((tab) => tab.title);
+
+    async function splitRight() {
+        await getEventHandler('notesDocumentTabCommand')('split-right');
+        await vi.waitFor(() => expect(notesViewRoots()[1]?.dataset.focused).toBe('true'));
+        await flushPromises();
+        await flushPromises();
+    }
+
+    it('splits a view side by side, sharing the document but not the selection', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const left = await openDocumentTabs(disk);
+        left.setSelectionOffsets(1, 3);
+
+        await splitRight();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        expect(rightRoot.parentElement.matches('.notes-layout-split[data-direction="row"]')).toBe(true);
+        expect(leftRoot.dataset.focused).toBeUndefined();
+        expect(viewTabTitles(leftRoot)).toEqual([first, second]);
+        expect(viewTabTitles(rightRoot)).toEqual([second]);
+        expect(rightRoot.contains(document.getElementById('notes-toolbar'))).toBe(true);
+
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2));
+        const right = mainEditorAdapter();
+        expect(right.container.closest('.notes-view')).toBe(rightRoot);
+        expect(right.getValue()).toBe('second text');
+
+        right.typeText('mine ');
+        expect(left.getValue()).toBe(right.getValue());
+        right.setSelectionOffsets(0, 0);
+        expect(left.getSelectionOffsets()).toEqual({ start: 1, end: 3 });
+
+        // The first click on the other view only focuses it.
+        leftRoot.querySelector('.notes-view-panel').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        await vi.waitFor(() => expect(leftRoot.dataset.focused).toBe('true'));
+        await flushPromises();
+        expect(rightRoot.dataset.focused).toBeUndefined();
+        expect(leftRoot.contains(document.getElementById('notes-toolbar'))).toBe(true);
+        expect(left.getValue()).toContain('mine');
+        expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a document open while another view still has its tab', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const left = await openDocumentTabs(disk);
+        await splitRight();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2));
+        const right = mainEditorAdapter();
+        const [leftRoot, rightRoot] = notesViewRoots();
+
+        // Closing the left view's tab leaves the document open on the right.
+        [...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second)
+            .querySelector('.notes-doc-tab-close').click();
+        await flushPromises();
+        await flushPromises();
+        expect(viewTabTitles(leftRoot)).toEqual([first]);
+        expect(viewTabTitles(rightRoot)).toEqual([second]);
+        right.typeText('still ');
+        expect(right.getValue()).toBe('still second text');
+        expect(left.getValue()).toBe('first text');
+    });
+
+    it('collapses split views to one on switching workspace', async () => {
+        const first = '$NOTES/first.md';
+        const disk = new Map([[first, 'first text']]);
+        await openDocumentTabs(disk);
+        await splitRight();
+        expect(notesViewRoots()).toHaveLength(2);
+
+        getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'Other' });
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(1));
+        expect(notesViewRoots()[0].dataset.focused).toBe('true');
+        expect(notesViewRoots()[0].contains(document.getElementById('notes-toolbar'))).toBe(true);
+    });
+
     it('restores each workspace\'s open tabs and saves them as they change', async () => {
         const first = '$NOTES/first.md';
         const second = '$NOTES/second.md';

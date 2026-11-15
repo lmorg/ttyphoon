@@ -36,6 +36,8 @@ export function createNotesView({ host, before = null } = {}) {
         editorInit: null,
         // Key of the document whose content the view's editor currently holds.
         shownDocumentKey: '',
+        // Cleanups (observers, listeners on other elements) run on destroy.
+        disposers: [],
         // Keys of the documents open as tabs in this view, in tab order
         // (ADR 0100 question 16).
         tabs: [],
@@ -88,6 +90,7 @@ export function createNotesView({ host, before = null } = {}) {
             return documentStates.get(key) || null;
         },
         destroy() {
+            this.disposers.splice(0).forEach((dispose) => dispose());
             this.editor?.dispose?.();
             this.editor = null;
             documentStates.clear();

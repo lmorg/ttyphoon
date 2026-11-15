@@ -174,7 +174,7 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		},
 	}...)
 
-	// Notes document tabs (ADR 0100 question 14):
+	// Notes document tabs and split views (ADR 0100 questions 14 and 17):
 
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
 	for _, command := range []struct{ title, name string }{
@@ -182,6 +182,8 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		{"Notes: Previous tab (Cmd+Shift+[)", "previous"},
 		{"Notes: Close tab (Cmd+W)", "close"},
 		{"Notes: Reopen closed tab (Cmd+Shift+T)", "reopen"},
+		{"Notes: Split right (Cmd+\\)", "split-right"},
+		{"Notes: Split down", "split-down"},
 	} {
 		menu = append(menu, types.MenuItem{
 			Title: command.title,

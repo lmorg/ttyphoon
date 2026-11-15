@@ -576,6 +576,38 @@ as `lspOpenFile === currentFile`.
 - `notes.js` keeps `notesViews` (views by ID) and `notesLayout`, creates the
   main view detached, and renders the one-view layout.
 
+*Done (Stage 8, task 3):*
+
+- Split right (`Cmd+\`, a tab's context menu, the command palette) and Split
+  down (context menu, palette) add a view beside or below the focused one. The
+  new view gets a tab for the focused document, with the source view's
+  remembered mode and editor state, and takes focus.
+- One view is focused at a time. The toolbar moves into it, and the active
+  document, `state`, the `elements` view parts and global chrome follow it.
+  Focusing a view reloads its document into it with `loadFile`, keeping unsaved
+  edits.
+- Views of one document share its model, so edits show in every view. Each
+  Monaco editor keeps its own selection in each model it has shown. A model's
+  get/set selection and `replaceRange` go through the editor that last showed
+  it (`activeEditor`). Disposing a model hands every editor showing it the
+  placeholder.
+- Each view binds its own mode tabs, tab strip, context menus, scroll and
+  resize observers (`bindNotesView`). Theme and typography changes reach every
+  view's editor.
+- A document stays open while any view has its tab. Switching workspace
+  removes the other views.
+
+Known limitations, for the following tasks:
+
+- An unfocused view keeps its last rendered DOM. Its Monaco editor stays live,
+  but previews, Jupyter output and LSP decorations update only when it is
+  focused again.
+- The first click on an unfocused view only focuses it. Clicks on its tab
+  strip act straight away.
+- Only the first view's tabs are remembered per workspace (task 9).
+- A view stays when its last tab closes (task 5), and its size is fixed
+  (task 6).
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

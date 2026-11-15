@@ -94,7 +94,7 @@ import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
 import notesTemplate from './notes.html?raw';
 import { createNotesView } from './notes_view.js';
-import { createLayout } from './notes_layout.js';
+import { closeLayoutView, createLayout, layoutViewIds, splitLayoutView } from './notes_layout.js';
 import { renderNotesLayout } from './notes_layout_dom.js';
 
 import { marked } from "marked";
@@ -495,24 +495,40 @@ initLineNavigationKeys(document);
 
 app.innerHTML = notesTemplate;
 
-const mainView = createNotesView();
-
 // Every open view, by ID, and the layout tree that arranges them in the editor
-// area (ADR 0100 decision 2). There is only the main view for now.
-const notesViews = new Map([[mainView.id, mainView]]);
-let notesLayout = createLayout(mainView.id);
+// area (ADR 0100 decision 2).
+const notesViews = new Map();
+const firstNotesView = createNotesView();
+notesViews.set(firstNotesView.id, firstNotesView);
+let notesLayout = createLayout(firstNotesView.id);
+let notesFocusedView = firstNotesView;
+firstNotesView.root.dataset.focused = 'true';
 
 function renderNotesViewsLayout() {
     renderNotesLayout(document.getElementById('notes-views'), notesLayout, (id) => notesViews.get(id)?.root);
 }
 renderNotesViewsLayout();
 
-// The view that global chrome (status bar, Tools panel, LSP overlays) follows.
-// Its document is the active NotesDocument. Notes has one view for now.
+// The view that global chrome (status bar, Tools panel, LSP overlays, the
+// toolbar) follows. Its shown document is the active NotesDocument, and
+// rendering goes to its parts. Other views keep what they last showed; their
+// editors still show live edits, as views of one document share its model.
 function focusedView() {
-    return mainView;
+    return notesFocusedView;
 }
-mainView.parts.toolbarSlot.replaceWith(document.getElementById('notes-toolbar'));
+
+function notesViewList() {
+    return layoutViewIds(notesLayout).map((id) => notesViews.get(id)).filter(Boolean);
+}
+
+// The view whose tabs are remembered per workspace, until the whole layout is
+// (ADR 0100 Stage 8).
+function primaryNotesView() {
+    return notesViewList()[0] || notesFocusedView;
+}
+
+const notesToolbar = document.getElementById('notes-toolbar');
+firstNotesView.parts.toolbarSlot.replaceWith(notesToolbar);
 
 const elements = {
     appRoot: app,
@@ -526,50 +542,50 @@ const elements = {
     gitFilenameSearch: document.getElementById('notes-commit-filename-search'),
     listFilter: document.getElementById('notes-list-filter'),
     listFilterClear: document.getElementById('notes-list-filter-clear'),
-    editorShell: mainView.parts.editorShell,
-    monacoEditor: mainView.parts.monacoEditor,
-    preview: mainView.parts.preview,
-    htmlViewWrap: mainView.parts.htmlViewWrap,
-    htmlViewFrame: mainView.parts.htmlViewFrame,
-    jupyter: mainView.parts.jupyter,
+    get editorShell() { return focusedView().parts.editorShell; },
+    get monacoEditor() { return focusedView().parts.monacoEditor; },
+    get preview() { return focusedView().parts.preview; },
+    get htmlViewWrap() { return focusedView().parts.htmlViewWrap; },
+    get htmlViewFrame() { return focusedView().parts.htmlViewFrame; },
+    get jupyter() { return focusedView().parts.jupyter; },
     status: document.getElementById('notes-status'),
     newFile: document.getElementById('notes-new'),
     historyPrev: document.getElementById('notes-history-prev'),
     historyNext: document.getElementById('notes-history-next'),
-    tabEditor: mainView.parts.tabEditor,
-    tabHex: mainView.parts.tabHex,
-    tabViewer: mainView.parts.tabViewer,
-    tabJupyter: mainView.parts.tabJupyter,
-    tabSwaggerView: mainView.parts.tabSwaggerView,
-    tabSwaggerEdit: mainView.parts.tabSwaggerEdit,
-    tabSwaggerRun: mainView.parts.tabSwaggerRun,
-    tabImageView: mainView.parts.tabImageView,
-    tabMeta: mainView.parts.tabMeta,
-    tabs: mainView.parts.tabs,
-    tabDiff: mainView.parts.tabDiff,
-    tabCsvView: mainView.parts.tabCsvView,
-    tabCsvEdit: mainView.parts.tabCsvEdit,
-    tabCsvRun: mainView.parts.tabCsvRun,
-    editorWrap: mainView.parts.editorWrap,
-    gitDiffWrap: mainView.parts.gitDiffWrap,
-    gitDiffEditor: mainView.parts.gitDiffEditor,
-    gitDiffMessage: mainView.parts.gitDiffMessage,
-    hexWrap: mainView.parts.hexWrap,
-    hex: mainView.parts.hex,
-    previewWrap: mainView.parts.previewWrap,
-    jupyterWrap: mainView.parts.jupyterWrap,
-    imageViewWrap: mainView.parts.imageViewWrap,
-    imageViewImg: mainView.parts.imageViewImg,
-    metaWrap: mainView.parts.metaWrap,
-    meta: mainView.parts.meta,
-    csvViewWrap: mainView.parts.csvViewWrap,
-    csvView: mainView.parts.csvView,
-    swaggerViewWrap: mainView.parts.swaggerViewWrap,
-    swaggerRunWrap: mainView.parts.swaggerRunWrap,
-    swaggerView: mainView.parts.swaggerView,
-    swaggerEndpoints: mainView.parts.swaggerEndpoints,
-    swaggerRequestBuilder: mainView.parts.swaggerRequestBuilder,
-    swaggerResponse: mainView.parts.swaggerResponse,
+    get tabEditor() { return focusedView().parts.tabEditor; },
+    get tabHex() { return focusedView().parts.tabHex; },
+    get tabViewer() { return focusedView().parts.tabViewer; },
+    get tabJupyter() { return focusedView().parts.tabJupyter; },
+    get tabSwaggerView() { return focusedView().parts.tabSwaggerView; },
+    get tabSwaggerEdit() { return focusedView().parts.tabSwaggerEdit; },
+    get tabSwaggerRun() { return focusedView().parts.tabSwaggerRun; },
+    get tabImageView() { return focusedView().parts.tabImageView; },
+    get tabMeta() { return focusedView().parts.tabMeta; },
+    get tabs() { return focusedView().parts.tabs; },
+    get tabDiff() { return focusedView().parts.tabDiff; },
+    get tabCsvView() { return focusedView().parts.tabCsvView; },
+    get tabCsvEdit() { return focusedView().parts.tabCsvEdit; },
+    get tabCsvRun() { return focusedView().parts.tabCsvRun; },
+    get editorWrap() { return focusedView().parts.editorWrap; },
+    get gitDiffWrap() { return focusedView().parts.gitDiffWrap; },
+    get gitDiffEditor() { return focusedView().parts.gitDiffEditor; },
+    get gitDiffMessage() { return focusedView().parts.gitDiffMessage; },
+    get hexWrap() { return focusedView().parts.hexWrap; },
+    get hex() { return focusedView().parts.hex; },
+    get previewWrap() { return focusedView().parts.previewWrap; },
+    get jupyterWrap() { return focusedView().parts.jupyterWrap; },
+    get imageViewWrap() { return focusedView().parts.imageViewWrap; },
+    get imageViewImg() { return focusedView().parts.imageViewImg; },
+    get metaWrap() { return focusedView().parts.metaWrap; },
+    get meta() { return focusedView().parts.meta; },
+    get csvViewWrap() { return focusedView().parts.csvViewWrap; },
+    get csvView() { return focusedView().parts.csvView; },
+    get swaggerViewWrap() { return focusedView().parts.swaggerViewWrap; },
+    get swaggerRunWrap() { return focusedView().parts.swaggerRunWrap; },
+    get swaggerView() { return focusedView().parts.swaggerView; },
+    get swaggerEndpoints() { return focusedView().parts.swaggerEndpoints; },
+    get swaggerRequestBuilder() { return focusedView().parts.swaggerRequestBuilder; },
+    get swaggerResponse() { return focusedView().parts.swaggerResponse; },
     modal: document.getElementById('notes-modal'),
     modalBody: document.getElementById('notes-modal-body'),
     modalLocationRow: document.getElementById('notes-modal-location-row'),
@@ -865,7 +881,7 @@ function findNotesDocument(key) {
 }
 
 function isNotesDocumentInTab(doc) {
-    return Boolean(doc?.key) && mainView.tabs.includes(doc.key);
+    return Boolean(doc?.key) && notesViewList().some((view) => view.tabs.includes(doc.key));
 }
 
 // Activating an open document opens or focuses its tab, next to the tab that
@@ -873,16 +889,17 @@ function isNotesDocumentInTab(doc) {
 function setActiveNotesDocument(next) {
     const previous = activeNotesDocument;
     activeNotesDocument = next;
+    const view = focusedView();
     if (isNotesDocumentOpen(next)) {
-        mainView.addTab(next.key, previous.key);
+        view.addTab(next.key, previous.key);
     }
-    showDocumentInView(mainView, next);
+    showDocumentInView(view, next);
     if (!isNotesDocumentInTab(previous)) {
         retireNotesDocument(previous);
     } else if (previous !== next) {
         void releaseTyposDocument(previous);
     }
-    renderNotesTabs(mainView);
+    renderNotesTabs(view);
 }
 
 // The backend watches the files of open documents for changes made outside
@@ -923,7 +940,7 @@ function saveNotesOpenTabs() {
         if (workspace === null || workspace !== state.currentWorkspaceName) {
             return;
         }
-        const docs = mainView.tabs.map(findNotesDocument).filter(Boolean);
+        const docs = primaryNotesView().tabs.map(findNotesDocument).filter(Boolean);
         const tabs = docs.map(({ path, project }) => ({ path, project }));
         const active = Math.max(0, docs.indexOf(activeNotesDocument));
         const saved = JSON.stringify([workspace, tabs, active]);
@@ -950,11 +967,12 @@ async function restoreNotesOpenTabs(saved, { loadActive = true, isCurrent = () =
     if (!isCurrent()) {
         return true;
     }
+    const view = focusedView();
     for (const path of files) {
-        mainView.addTab(notesDocuments.open(path, { project }).key);
+        view.addTab(notesDocuments.open(path, { project }).key);
     }
     syncWatchedNotesFiles();
-    renderNotesTabs(mainView);
+    renderNotesTabs(view);
     const active = files[saved.active] || files[0];
     if (loadActive && active) {
         await loadFile(active);
@@ -967,9 +985,15 @@ function activateNotesDocument(path, { project = '' } = {}) {
     syncWatchedNotesFiles();
     if (next !== activeNotesDocument) {
         setActiveNotesDocument(next);
-    } else if (!isNotesDocumentInTab(next)) {
-        mainView.addTab(next.key);
-        renderNotesTabs(mainView);
+        return next;
+    }
+    // The focused view may be newly showing the active document, as on
+    // focusing another view of it.
+    const view = focusedView();
+    showDocumentInView(view, next);
+    if (!view.tabs.includes(next.key)) {
+        view.addTab(next.key);
+        renderNotesTabs(view);
     }
     return next;
 }
@@ -1052,20 +1076,34 @@ function isNotesDocumentOpen(doc) {
 }
 
 function closeActiveNotesDocument() {
-    mainView.removeTab(activeNotesDocument.key);
+    focusedView().removeTab(activeNotesDocument.key);
     setActiveNotesDocument(newNotesDocument());
+}
+
+// The document a view shows: the active one in the focused view, and in any
+// other view the one it last showed.
+function notesViewDocument(view) {
+    if (view === focusedView()) {
+        return activeNotesDocument;
+    }
+    return findNotesDocument(view.shownDocumentKey);
+}
+
+function renderAllNotesTabs() {
+    notesViewList().forEach(renderNotesTabs);
 }
 
 function renderNotesTabs(view) {
     const strip = view.parts.docTabs;
     const docs = view.tabs.map(findNotesDocument).filter(Boolean);
+    const shown = notesViewDocument(view);
     strip.hidden = docs.length === 0;
     strip.replaceChildren(...docs.map((doc) => {
         const name = getPathFileName(doc.path);
         const tab = document.createElement('div');
         tab.className = 'notes-doc-tab';
         tab.setAttribute('role', 'tab');
-        tab.setAttribute('aria-selected', String(doc === activeNotesDocument));
+        tab.setAttribute('aria-selected', String(doc === shown));
         tab.dataset.docKey = doc.key;
         tab.dataset.dirty = String(doc.dirty === true);
         tab.dataset.conflicted = String(doc.conflicted === true);
@@ -1083,7 +1121,7 @@ function renderNotesTabs(view) {
         return tab;
     }));
     renderNotesNotice(view);
-    if (view === mainView) {
+    if (view === primaryNotesView()) {
         saveNotesOpenTabs();
     }
 }
@@ -1108,11 +1146,11 @@ function notesDocumentNotice(doc) {
     return doc.conflicted ? 'conflicted' : '';
 }
 
-// Explains why the active document is not being saved, and offers the
+// Explains why the view's document is not being saved, and offers the
 // choices.
 function renderNotesNotice(view) {
-    const doc = activeNotesDocument;
-    const notice = notesDocumentNotice(doc);
+    const doc = notesViewDocument(view);
+    const notice = doc ? notesDocumentNotice(doc) : '';
     const text = NOTES_DOCUMENT_NOTICES[notice];
     view.parts.docNotice.hidden = !text;
     view.parts.docNotice.dataset.notice = notice;
@@ -1138,14 +1176,16 @@ async function handleNotesDocumentDeleted(doc) {
         doc.autosaveTimer = null;
         doc.conflicted = false;
         doc.deleted = true;
-        renderNotesTabs(mainView);
+        renderAllNotesTabs();
         if (doc === activeNotesDocument) {
             setStatus(`${doc.path} was deleted: recreate it or discard your edits`, true);
         }
         return;
     }
     if (isNotesDocumentInTab(doc)) {
-        await closeNotesTab(mainView, doc.key, { discard: true });
+        for (const view of notesViewList().filter((candidate) => candidate.tabs.includes(doc.key))) {
+            await closeNotesTab(view, doc.key, { discard: true });
+        }
     } else if (doc !== activeNotesDocument) {
         notesDocuments.close(doc);
     }
@@ -1157,7 +1197,7 @@ function markNotesDocumentConflicted(doc) {
     clearTimeout(doc.autosaveTimer);
     doc.autosaveTimer = null;
     doc.conflicted = true;
-    renderNotesTabs(mainView);
+    renderAllNotesTabs();
     if (doc === activeNotesDocument) {
         setStatus(`${doc.path} changed on disk: keep your edits or load the disk version`, true);
     }
@@ -1167,7 +1207,7 @@ function markNotesDocumentConflicted(doc) {
 // deleted file.
 async function keepNotesDocumentEdits(doc = activeNotesDocument) {
     doc.conflicted = false;
-    renderNotesTabs(mainView);
+    renderAllNotesTabs();
     await saveFile(doc);
 }
 
@@ -1179,7 +1219,7 @@ async function loadNotesDocumentFromDisk(doc = activeNotesDocument) {
     doc.autosaveTimer = null;
     doc.conflicted = false;
     setDirty(false);
-    renderNotesTabs(mainView);
+    renderAllNotesTabs();
     await reloadActiveNotesDocument();
 }
 
@@ -1224,20 +1264,26 @@ async function handleNotesDocumentChangedOnDisk(doc) {
         } else {
             doc.dirty = false;
         }
-        renderNotesTabs(mainView);
+        renderAllNotesTabs();
         return;
     }
     markNotesDocumentConflicted(doc);
 }
 
 function markActiveNotesTabDirty() {
-    const tab = [...mainView.parts.docTabs.children].find((el) => el.dataset.docKey === activeNotesDocument.key);
-    if (tab) {
-        tab.dataset.dirty = String(state.dirty === true);
+    for (const view of notesViewList()) {
+        const tab = [...view.parts.docTabs.children].find((el) => el.dataset.docKey === activeNotesDocument.key);
+        if (tab) {
+            tab.dataset.dirty = String(state.dirty === true);
+        }
     }
 }
 
 async function activateNotesTab(view, key) {
+    if (view !== focusedView()) {
+        await focusNotesView(view, key);
+        return;
+    }
     const doc = findNotesDocument(key);
     if (doc && doc !== activeNotesDocument) {
         await loadFile(doc.path);
@@ -1268,10 +1314,22 @@ async function closeNotesTab(view, key, { discard = false } = {}) {
         notesDocuments.close(doc);
     }
     renderNotesTabs(view);
+    const neighbour = findNotesDocument(view.tabs[Math.min(index, view.tabs.length - 1)]);
+    if (view !== focusedView()) {
+        // An unfocused view shows its next tab's document in its editor; the
+        // rest of the view is rendered when it is next focused.
+        if (view.shownDocumentKey === key) {
+            view.shownDocumentKey = neighbour?.key || '';
+            if (neighbour) {
+                showDocumentInView(view, neighbour);
+            }
+            renderNotesTabs(view);
+        }
+        return;
+    }
     if (doc !== activeNotesDocument) {
         return;
     }
-    const neighbour = findNotesDocument(view.tabs[Math.min(index, view.tabs.length - 1)]);
     if (neighbour) {
         await loadFile(neighbour.path);
     } else {
@@ -1298,7 +1356,7 @@ function rememberClosedNotesTab(doc) {
 async function reopenClosedNotesTab() {
     while (closedNotesTabs.length > 0) {
         const entry = closedNotesTabs.pop();
-        if (!mainView.tabs.includes(entry.key)) {
+        if (!focusedView().tabs.includes(entry.key)) {
             await loadFile(entry.path);
             return;
         }
@@ -1306,18 +1364,19 @@ async function reopenClosedNotesTab() {
 }
 
 async function cycleNotesDocumentTabs(step) {
-    const tabs = mainView.tabs;
+    const view = focusedView();
+    const tabs = view.tabs;
     if (tabs.length < 2) {
         return;
     }
     const index = tabs.indexOf(activeNotesDocument.key);
     const next = index < 0 ? 0 : (index + step + tabs.length) % tabs.length;
-    await activateNotesTab(mainView, tabs[next]);
+    await activateNotesTab(view, tabs[next]);
 }
 
 async function closeActiveNotesTab() {
-    if (mainView.tabs.includes(activeNotesDocument.key)) {
-        await closeNotesTab(mainView, activeNotesDocument.key);
+    if (focusedView().tabs.includes(activeNotesDocument.key)) {
+        await closeNotesTab(focusedView(), activeNotesDocument.key);
     }
 }
 
@@ -1326,11 +1385,13 @@ const NOTES_DOCUMENT_TAB_COMMANDS = {
     previous: () => cycleNotesDocumentTabs(-1),
     close: closeActiveNotesTab,
     reopen: reopenClosedNotesTab,
+    'split-right': () => splitNotesView('row'),
+    'split-down': () => splitNotesView('column'),
 };
 
 // Cmd+Shift+] and Cmd+Shift+[ step through the document tabs, Cmd+W closes
-// the active one and Cmd+Shift+T reopens the last closed (ADR 0100 question
-// 14). Ctrl+Tab still cycles the Notes mode tabs.
+// the active one, Cmd+Shift+T reopens the last closed (ADR 0100 question 14)
+// and Cmd+\ splits the view to the right (question 17). Ctrl+Tab still cycles the Notes mode tabs.
 function notesDocumentTabCommandForKey(event) {
     if (!event.metaKey || event.ctrlKey || event.altKey) {
         return '';
@@ -1348,54 +1409,181 @@ function notesDocumentTabCommandForKey(event) {
     if (event.shiftKey && key === 't') {
         return 'reopen';
     }
+    if (!event.shiftKey && (event.code === 'Backslash' || key === '\\')) {
+        return 'split-right';
+    }
     return '';
 }
 
-// Closes every tab, leaving the active document open but untabbed until
-// another document replaces it, as on switching workspace.
+// Closes every tab and every view but the focused one, leaving the active
+// document open but untabbed until another document replaces it, as on
+// switching workspace.
 async function closeBackgroundNotesTabs() {
-    const docs = mainView.tabs.map(findNotesDocument).filter((doc) => doc && doc !== activeNotesDocument);
-    mainView.tabs = [];
+    const keys = new Set(notesViewList().flatMap((view) => view.tabs));
+    for (const view of notesViewList()) {
+        if (view !== focusedView()) {
+            removeNotesView(view);
+        }
+    }
+    const docs = [...keys].map(findNotesDocument).filter((doc) => doc && doc !== activeNotesDocument);
+    focusedView().tabs = [];
     for (const doc of docs) {
         if (doc.dirty && savesNotesDocumentAutomatically(doc)) {
             await saveFile(doc);
         }
         notesDocuments.close(doc);
     }
-    renderNotesTabs(mainView);
+    renderNotesTabs(focusedView());
 }
 
-mainView.parts.docTabs.addEventListener('click', (event) => {
-    const tab = event.target.closest('.notes-doc-tab');
-    if (!tab) {
+// Moves focus, and with it the toolbar and global chrome, to a view, then
+// loads its document (or the given tab) into it. Unsaved edits are kept, as
+// another view may have been editing the same document.
+async function focusNotesView(view, key = view.shownDocumentKey) {
+    if (!notesViews.has(view.id)) {
         return;
     }
-    if (event.target.closest('.notes-doc-tab-close')) {
-        void closeNotesTab(mainView, tab.dataset.docKey);
-    } else {
-        void activateNotesTab(mainView, tab.dataset.docKey);
+    const previous = focusedView();
+    if (view !== previous) {
+        rememberShownDocumentState();
+        notesToolbar.replaceWith(previous.parts.toolbarSlot);
+        view.parts.toolbarSlot.replaceWith(notesToolbar);
+        delete previous.root.dataset.focused;
+        view.root.dataset.focused = 'true';
+        notesFocusedView = view;
+        // The view's DOM shows whatever it last rendered, so its document is
+        // loaded afresh below rather than the outgoing view's state recorded
+        // against it.
+        view.shownDocumentKey = '';
+        renderNotesTabs(previous);
     }
-});
-
-mainView.parts.docNoticeKeep.addEventListener('click', () => {
-    void keepNotesDocumentEdits();
-});
-
-mainView.parts.docNoticeDiscard.addEventListener('click', () => {
-    if (activeNotesDocument.deleted) {
-        void closeNotesTab(mainView, activeNotesDocument.key, { discard: true });
+    const doc = findNotesDocument(key);
+    if (doc) {
+        await loadFile(doc.path, { keepUnsavedEdits: true });
     } else {
-        void loadNotesDocumentFromDisk();
+        await showNoNotesDocument();
+        renderNotesTabs(view);
     }
-});
+}
 
-mainView.parts.docTabs.addEventListener('auxclick', (event) => {
-    const tab = event.target.closest('.notes-doc-tab');
-    if (tab && event.button === 1) {
+// Removes an unfocused view from the layout. Its documents stay open; callers
+// close those no other view tabs.
+function removeNotesView(view) {
+    if (view === focusedView() || !notesViews.delete(view.id)) {
+        return;
+    }
+    notesLayout = closeLayoutView(notesLayout, view.id);
+    view.destroy();
+    renderNotesViewsLayout();
+}
+
+// Splits the focused view, side by side (row) or stacked (column), opening its
+// document in the new view, which takes focus (ADR 0100 question 17).
+async function splitNotesView(direction) {
+    const source = focusedView();
+    const doc = state.currentFile ? activeNotesDocument : null;
+    rememberShownDocumentState();
+    const view = createNotesView();
+    notesViews.set(view.id, view);
+    bindNotesView(view);
+    notesLayout = splitLayoutView(notesLayout, source.id, view.id, direction);
+    renderNotesViewsLayout();
+    if (doc) {
+        view.addTab(doc.key);
+        const remembered = source.recallDocument(doc.key);
+        if (remembered) {
+            view.rememberDocument(doc.key, remembered);
+        }
+    }
+    renderNotesTabs(view);
+    await focusNotesView(view, doc?.key || '');
+}
+
+// The first click on an unfocused view only focuses it, so it can't act on the
+// focused view's document by mistake. Its tab strip handles its own clicks.
+function bindNotesViewFocus(view) {
+    let swallowing = false;
+    const swallow = (event) => {
+        if (swallowing) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    };
+    view.root.addEventListener('pointerdown', (event) => {
+        swallowing = false;
+        if (view === focusedView() || view.parts.docTabs.contains(event.target)) {
+            return;
+        }
+        swallowing = true;
+        swallow(event);
+        void focusNotesView(view);
+    }, true);
+    view.root.addEventListener('mousedown', swallow, true);
+    view.root.addEventListener('mouseup', swallow, true);
+    view.root.addEventListener('click', (event) => {
+        swallow(event);
+        swallowing = false;
+    }, true);
+    view.root.addEventListener('focusin', (event) => {
+        if (view !== focusedView() && !swallowing && !view.parts.docTabs.contains(event.target)) {
+            void focusNotesView(view);
+        }
+    });
+    view.parts.docTabs.addEventListener('contextmenu', (event) => {
+        const tab = event.target.closest('.notes-doc-tab');
+        if (!tab) {
+            return;
+        }
         event.preventDefault();
-        void closeNotesTab(mainView, tab.dataset.docKey);
-    }
-});
+        const key = tab.dataset.docKey;
+        const splitWith = (direction) => async () => {
+            if (view !== focusedView() || activeNotesDocument?.key !== key) {
+                await activateNotesTab(view, key);
+            }
+            await splitNotesView(direction);
+        };
+        showNotesLocalMenu([
+            { title: 'Split right', onSelect: () => void splitWith('row')() },
+            { title: 'Split down', onSelect: () => void splitWith('column')() },
+            { title: '-' },
+            { title: 'Close tab', onSelect: () => void closeNotesTab(view, key) },
+        ], event.clientX, event.clientY, 'Document tab');
+    });
+}
+
+function bindNotesViewTabs(view) {
+    view.parts.docTabs.addEventListener('click', (event) => {
+        const tab = event.target.closest('.notes-doc-tab');
+        if (!tab) {
+            return;
+        }
+        if (event.target.closest('.notes-doc-tab-close')) {
+            void closeNotesTab(view, tab.dataset.docKey);
+        } else {
+            void activateNotesTab(view, tab.dataset.docKey);
+        }
+    });
+
+    view.parts.docTabs.addEventListener('auxclick', (event) => {
+        const tab = event.target.closest('.notes-doc-tab');
+        if (tab && event.button === 1) {
+            event.preventDefault();
+            void closeNotesTab(view, tab.dataset.docKey);
+        }
+    });
+
+    view.parts.docNoticeKeep.addEventListener('click', () => {
+        void keepNotesDocumentEdits();
+    });
+
+    view.parts.docNoticeDiscard.addEventListener('click', () => {
+        if (activeNotesDocument.deleted) {
+            void closeNotesTab(view, activeNotesDocument.key, { discard: true });
+        } else {
+            void loadNotesDocumentFromDisk();
+        }
+    });
+}
 
 // The current-file fields read the active document. currentFile and
 // currentFileProject identify it, so they change only by switching document.
@@ -1457,11 +1645,11 @@ function scheduleAIScrollButtonUpdate() {
 // Monaco is created lazily the first time the editor becomes visible. Until
 // then mainDocument holds the text (e.g. for a file opened in preview).
 function isMonacoActive() {
-    return mainView.editor !== null;
+    return focusedView().editor !== null;
 }
 
 function isGitDiffActive() {
-    return Boolean(mainView.root.dataset.gitDiff === 'true' && activeGitDiff && notesGitDiffAdapter);
+    return Boolean(focusedView().root.dataset.gitDiff === 'true' && activeGitDiff && notesGitDiffAdapter);
 }
 
 function getMainEditorValue() {
@@ -1591,32 +1779,35 @@ function getMonacoTypographyOptions() {
     };
 }
 
-async function ensureMonacoMainEditor() {
-    if (!elements.monacoEditor || mainView.editor) {
+async function ensureMonacoMainEditor(view = focusedView()) {
+    if (!view.parts.monacoEditor || view.editor) {
         return;
     }
 
-    // mainView.editor is only assigned after an await, so concurrent callers must
+    // view.editor is only assigned after an await, so concurrent callers must
     // share one creation or Monaco is created twice on the same container.
-    if (!mainView.editorInit) {
-        mainView.editorInit = createMonacoMainEditor().finally(() => {
-            mainView.editorInit = null;
+    if (!view.editorInit) {
+        view.editorInit = createMonacoMainEditor(view).finally(() => {
+            view.editorInit = null;
         });
     }
 
     try {
-        await mainView.editorInit;
+        await view.editorInit;
     } catch (err) {
-        // A failed boot leaves mainView.editor null and silently degrades every
+        // A failed boot leaves view.editor null and silently degrades every
         // Monaco-dependent path, so surface it rather than reject unhandled.
         console.error('Monaco editor creation failed:', err);
     }
 }
 
-async function createMonacoMainEditor() {
+// Each view has its own editor. Its callbacks act on the active document, so
+// they are ignored while another view is focused.
+async function createMonacoMainEditor(view) {
     const typography = getMonacoTypographyOptions();
+    const focused = () => view === focusedView();
 
-    mainView.editor = await createMonacoAdapter(elements.monacoEditor, {
+    const editor = await createMonacoAdapter(view.parts.monacoEditor, {
         value: mainDocument.getValue(),
         language: state.editorLanguage || 'plaintext',
         highlightJs: hljs,
@@ -1625,6 +1816,9 @@ async function createMonacoMainEditor() {
         lineHeight: typography.lineHeight,
         themeColors: latestWindowStyle?.colors || null,
         onSelectionChange: (start, end, activeOffset) => {
+            if (!focused()) {
+                return;
+            }
             scheduleHistoryPosition(state.currentFile, activeOffset);
             if (isCurrentFileLspEligible() && state.lspOpenFile === state.currentFile) {
                 state.lspHoverLastKey = '';
@@ -1632,6 +1826,9 @@ async function createMonacoMainEditor() {
             }
         },
         onPointerMove: (x, y) => {
+            if (!focused()) {
+                return;
+            }
             state.lspHoverMouseX = Number(x) || 0;
             state.lspHoverMouseY = Number(y) || 0;
         },
@@ -1639,46 +1836,57 @@ async function createMonacoMainEditor() {
             hideLspHoverTooltip();
         },
         onPaste: (event) => {
-            handleEditorImagePaste(event);
+            if (focused()) {
+                handleEditorImagePaste(event);
+            }
         },
         onPrimaryPaste: () => {
-            if (state.viewMode !== 'editor' || state.currentFileType !== 'markdown') {
+            if (!focused() || state.viewMode !== 'editor' || state.currentFileType !== 'markdown') {
                 return false;
             }
             void pasteFromGoClipboard(null, true);
             return true;
         },
         onContextMenu: (event) => {
-            openMainEditorContextMenu(event);
+            if (focused()) {
+                openMainEditorContextMenu(event);
+            }
         },
         onCompletionRequest: (payload) => {
-            return handleMonacoCompletionRequest(payload);
+            return focused() ? handleMonacoCompletionRequest(payload) : undefined;
         },
-        onEscape: closeOpenLspTooltips,
+        onEscape: () => (focused() ? closeOpenLspTooltips() : false),
     });
+    if (!notesViews.has(view.id)) {
+        editor.dispose();
+        return;
+    }
+    view.editor = editor;
 
-    mainView.editor.setWordWrap(Boolean(state.markdownWrapMode));
+    editor.setWordWrap(Boolean(state.markdownWrapMode));
     if (latestWindowStyle?.colors) {
-        mainView.editor.applyTheme(latestWindowStyle.colors);
+        editor.applyTheme(latestWindowStyle.colors);
     }
 
     // Monaco boot can race against file loading, so the buffer hands over
     // whatever text it holds now.
-    showDocumentInView(mainView, activeNotesDocument);
-
-    mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
-    mainView.editor.setTypography(getMonacoTypographyOptions());
-    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
-    if (Array.isArray(spellcheckMisspellings)) {
-        mainView.editor.setTyposMisspellings(spellcheckMisspellings);
+    const doc = notesViewDocument(view);
+    if (doc) {
+        showDocumentInView(view, doc);
     }
-    mainView.editor.layout();
+
+    editor.setLanguage(state.editorLanguage || 'plaintext');
+    editor.setTypography(getMonacoTypographyOptions());
+    const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
+    if (focused() && Array.isArray(spellcheckMisspellings)) {
+        editor.setTyposMisspellings(spellcheckMisspellings);
+    }
+    editor.layout();
 
     requestAnimationFrame(() => {
-        if (!isMonacoActive()) {
-            return;
+        if (view.editor === editor) {
+            editor.layout();
         }
-        mainView.editor.layout();
     });
 }
 
@@ -1687,18 +1895,19 @@ async function createMonacoMainEditor() {
 // maximize/restore) doesn't give Monaco a correct size in the same frame, so a
 // single synchronous layout() can latch a stale/zero viewport (blank editor or
 // content offset with a top shadow). Two deferred measured layouts fix that.
-function scheduleMonacoRelayout() {
-    if (!isMonacoActive()) {
+function scheduleMonacoRelayout(view = focusedView()) {
+    const editor = view.editor;
+    if (!editor) {
         return;
     }
     requestAnimationFrame(() => {
-        if (!isMonacoActive()) {
+        if (view.editor !== editor) {
             return;
         }
-        mainView.editor.layout();
+        editor.layout();
         requestAnimationFrame(() => {
-            if (isMonacoActive()) {
-                mainView.editor.layout();
+            if (view.editor === editor) {
+                editor.layout();
             }
         });
     });
@@ -1713,32 +1922,36 @@ async function ensureMonacoVisibleAndLaidOut() {
         return;
     }
 
-    mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
-    mainView.editor.setWordWrap(Boolean(state.markdownWrapMode));
-    mainView.editor.setTypography(getMonacoTypographyOptions());
+    focusedView().editor.setLanguage(state.editorLanguage || 'plaintext');
+    focusedView().editor.setWordWrap(Boolean(state.markdownWrapMode));
+    focusedView().editor.setTypography(getMonacoTypographyOptions());
     const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
     if (Array.isArray(spellcheckMisspellings)) {
-        mainView.editor.setTyposMisspellings(spellcheckMisspellings);
+        focusedView().editor.setTyposMisspellings(spellcheckMisspellings);
     }
     if (latestWindowStyle?.colors) {
-        mainView.editor.applyTheme(latestWindowStyle.colors);
+        focusedView().editor.applyTheme(latestWindowStyle.colors);
     }
 
-    mainView.editor.layout();
+    focusedView().editor.layout();
     scheduleMonacoRelayout();
 }
 
 configureMarked();
 
-// Belt-and-suspenders relayout: any size change to the editor box (pane
-// maximize/restore, splitter drag, window resize) triggers a measured Monaco
-// relayout. This complements Monaco's own automaticLayout, which can latch a
-// stale viewport across display:none -> visible transitions.
-if (typeof ResizeObserver !== 'undefined' && elements.monacoEditor?.parentElement) {
+// Belt-and-suspenders relayout: any size change to a view's editor box (pane
+// maximize/restore, splitter drag, window resize, splitting a view) triggers a
+// measured Monaco relayout. This complements Monaco's own automaticLayout,
+// which can latch a stale viewport across display:none -> visible transitions.
+function observeNotesViewEditorSize(view) {
+    if (typeof ResizeObserver === 'undefined' || !view.parts.monacoEditor?.parentElement) {
+        return;
+    }
     const monacoResizeObserver = new ResizeObserver(() => {
-        scheduleMonacoRelayout();
+        scheduleMonacoRelayout(view);
     });
-    monacoResizeObserver.observe(elements.monacoEditor.parentElement);
+    monacoResizeObserver.observe(view.parts.monacoEditor.parentElement);
+    view.disposers.push(() => monacoResizeObserver.disconnect());
 }
 
 function escapeEditorHtml(text) {
@@ -1959,13 +2172,13 @@ function renderEditorDecorations() {
         return;
     }
     renderLspEditorDecorations();
-    mainView.editor.layout();
+    focusedView().editor.layout();
 }
 
 function refreshEditorLanguage(file, content) {
     state.editorLanguage = inferEditorLanguage(file, content);
     if (isMonacoActive()) {
-        mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
+        focusedView().editor.setLanguage(state.editorLanguage || 'plaintext');
     }
     renderEditorDecorations();
 }
@@ -5165,7 +5378,7 @@ function updateMarkdownTableOfContents() {
     hideLspHoverTooltip();
     hideLspCompletion();
     if (isMonacoActive()) {
-        mainView.editor.revealOffset(0);
+        focusedView().editor.revealOffset(0);
     }
     setDirty(true);
     scheduleRender();
@@ -5291,7 +5504,7 @@ function buildLineIndentationEdit(source, start, end, indentation, outdent = fal
 }
 
 function shouldMonacoTabIndent() {
-    const selection = mainView.editor?.getSelectionOffsets?.();
+    const selection = focusedView().editor?.getSelectionOffsets?.();
     const cursor = Number(selection?.start) || 0;
     const source = getMainEditorValue();
     const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
@@ -5304,16 +5517,16 @@ async function applyMonacoTabIndent() {
         return;
     }
 
-    const selection = mainView.editor.getSelectionOffsets();
+    const selection = focusedView().editor.getSelectionOffsets();
     const start = Number(selection?.start) || 0;
     const end = Number(selection?.end) || start;
     const indentation = await getIndentationString();
 
     hideLspCompletion();
-    mainView.editor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
+    focusedView().editor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
     const next = start + indentation.length;
-    mainView.editor.setSelectionOffsets(next, next);
-    mainView.editor.focus();
+    focusedView().editor.setSelectionOffsets(next, next);
+    focusedView().editor.focus();
 }
 
 async function applyMonacoLineIndentationForSelection(outdent = false) {
@@ -5321,7 +5534,7 @@ async function applyMonacoLineIndentationForSelection(outdent = false) {
         return false;
     }
 
-    const selection = mainView.editor.getSelectionOffsets();
+    const selection = focusedView().editor.getSelectionOffsets();
     const start = Number(selection?.start) || 0;
     const end = Number(selection?.end) || start;
     if (end <= start) {
@@ -5335,9 +5548,9 @@ async function applyMonacoLineIndentationForSelection(outdent = false) {
     }
 
     hideLspCompletion();
-    mainView.editor.replaceRange(edit.start, edit.end, edit.text, outdent ? 'notes-monaco-shift-tab-outdent' : 'notes-monaco-tab-indent-lines');
-    mainView.editor.setSelectionOffsets(edit.selectionStart, edit.selectionEnd);
-    mainView.editor.focus();
+    focusedView().editor.replaceRange(edit.start, edit.end, edit.text, outdent ? 'notes-monaco-shift-tab-outdent' : 'notes-monaco-tab-indent-lines');
+    focusedView().editor.setSelectionOffsets(edit.selectionStart, edit.selectionEnd);
+    focusedView().editor.focus();
     return true;
 }
 
@@ -5655,7 +5868,7 @@ function focusActiveEditorForViewMode() {
         }
 
         if (isMonacoActive()) {
-            mainView.editor.focus();
+            focusedView().editor.focus();
         }
     }, 0);
 }
@@ -5710,7 +5923,7 @@ function updateGitDiffTabForCurrentFile(status, projectRoot) {
 }
 
 function setViewMode(mode) {
-    if (activeGitDiff && mainView.root.dataset.gitDiff === 'true') {
+    if (activeGitDiff && focusedView().root.dataset.gitDiff === 'true') {
         void closeNotesGitDiff();
     }
     // Determine the mode based on current file type.
@@ -5844,7 +6057,7 @@ function setEditorWrapMode(enabled) {
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
     if (isMonacoActive()) {
-        mainView.editor.setWordWrap(wrapEnabled);
+        focusedView().editor.setWordWrap(wrapEnabled);
     }
     if (isGitDiffActive()) {
         notesGitDiffAdapter.setWordWrap(wrapEnabled);
@@ -7202,12 +7415,12 @@ async function showNoNotesDocument() {
 // content in the editor, as the editor state would belong to another file.
 function rememberShownDocumentState() {
     const key = activeNotesDocument?.key;
-    if (!state.currentFile || !key || mainView.shownDocumentKey !== key) {
+    if (!state.currentFile || !key || focusedView().shownDocumentKey !== key) {
         return;
     }
-    mainView.rememberDocument(key, {
+    focusedView().rememberDocument(key, {
         viewMode: state.viewMode,
-        editorState: mainView.editor?.saveViewState() ?? null,
+        editorState: focusedView().editor?.saveViewState() ?? null,
     });
 }
 
@@ -8477,7 +8690,7 @@ function renderSwaggerUI() {
         return;
     }
 
-    const swaggerInfoEl = mainView.parts.swaggerInfo;
+    const swaggerInfoEl = focusedView().parts.swaggerInfo;
     if (swaggerInfoEl) {
         const info = state.swaggerSpec.info || {};
         const title = typeof info.title === 'string' && info.title.trim() ? info.title.trim() : '';
@@ -8912,7 +9125,7 @@ async function loadFile(file, options = {}) {
         // persisted cache, which records the mode last used in any view.
         const rememberedView = skipDocumentCacheRestore
             ? null
-            : mainView.recallDocument(notesDocumentKey(file, project));
+            : focusedView().recallDocument(notesDocumentKey(file, project));
         const documentCachePromise = (skipDocumentCacheRestore
             ? Promise.resolve(null)
             : GetDocumentCache(file).catch((error) => {
@@ -9036,7 +9249,7 @@ async function loadFile(file, options = {}) {
             }
 
             setDirty(false);
-            mainView.shownDocumentKey = activeNotesDocument.key;
+            focusedView().shownDocumentKey = activeNotesDocument.key;
             renderFileList();
 
             showDocumentFindState();
@@ -9187,8 +9400,8 @@ async function loadFile(file, options = {}) {
         }
         
         setDirty(keepsUnsavedEdits && !diskMatchesEdits);
-        mainView.shownDocumentKey = activeNotesDocument.key;
-        mainView.editor?.restoreViewState(rememberedView?.editorState);
+        focusedView().shownDocumentKey = activeNotesDocument.key;
+        focusedView().editor?.restoreViewState(rememberedView?.editorState);
         renderFileList();
 
         // JSON/YAML tree view render is deferred until the View tab is clicked (see swaggerViewCurrent).
@@ -9273,7 +9486,7 @@ async function saveFile(doc = activeNotesDocument) {
         }
         if (doc.deleted) {
             doc.deleted = false;
-            renderNotesTabs(mainView);
+            renderAllNotesTabs();
         }
         if (doc.lspOpenFile === file) {
             await NotesLspSaveDocument(file);
@@ -9281,7 +9494,7 @@ async function saveFile(doc = activeNotesDocument) {
         if (doc !== activeNotesDocument) {
             if (doc.buffer.getValue() === content) {
                 doc.dirty = false;
-                renderNotesTabs(mainView);
+                renderAllNotesTabs();
             }
             return true;
         }
@@ -9319,7 +9532,7 @@ async function saveAndFormat() {
     }
     // Saving explicitly keeps the edits over a version changed on disk.
     activeNotesDocument.conflicted = false;
-    renderNotesTabs(mainView);
+    renderAllNotesTabs();
     await saveFile();
 }
 
@@ -9411,8 +9624,11 @@ async function confirmDelete() {
                 await handleNotesDocumentDeleted(doc);
             }
         }
-        const tabIndex = mainView.tabs.indexOf(deletedKey);
+        const tabIndex = focusedView().tabs.indexOf(deletedKey);
         if (deletingCurrentFile) {
+            for (const view of notesViewList().filter((candidate) => candidate !== focusedView() && candidate.tabs.includes(deletedKey))) {
+                await closeNotesTab(view, deletedKey, { discard: true });
+            }
             closeActiveNotesDocument();
             state.lspHoverLastKey = '';
             emitCurrentFileName();
@@ -9428,7 +9644,8 @@ async function confirmDelete() {
         if (deletingCurrentFile) {
             // The next open tab takes over; with none, the surviving history
             // position (ADR 0064).
-            const neighbour = findNotesDocument(mainView.tabs[Math.min(tabIndex, mainView.tabs.length - 1)]);
+            const tabs = focusedView().tabs;
+            const neighbour = findNotesDocument(tabs[Math.min(tabIndex, tabs.length - 1)]);
             const entry = neighbour ? null : await NotesHistoryCurrentPosition();
             if (neighbour) {
                 await loadFile(neighbour.path);
@@ -9712,8 +9929,8 @@ function jumpEditorToOffset(start, end = start) {
     setMainEditorSelectionRange(start, end);
 
     if (isMonacoActive()) {
-        mainView.editor.revealOffset(start);
-        mainView.editor.focus();
+        focusedView().editor.revealOffset(start);
+        focusedView().editor.focus();
         return;
     }
 
@@ -9723,9 +9940,9 @@ function jumpEditorToOffset(start, end = start) {
 
     const tryRevealWhenReady = (remainingFrames) => {
         if (isMonacoActive()) {
-            mainView.editor.setSelectionOffsets(start, end);
-            mainView.editor.revealOffset(start);
-            mainView.editor.focus();
+            focusedView().editor.setSelectionOffsets(start, end);
+            focusedView().editor.revealOffset(start);
+            focusedView().editor.focus();
             return;
         }
 
@@ -10340,7 +10557,7 @@ function findInEditor(findPattern) {
             return;
         }
 
-        const matches = mainView.editor.findMatches(request.query, {
+        const matches = focusedView().editor.findMatches(request.query, {
             isRegex: request.isRegex,
             matchCase: request.matchCase,
             limit: 10000,
@@ -10444,10 +10661,10 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
         }
 
         if (focusEditor) {
-            mainView.editor.focus();
+            focusedView().editor.focus();
         }
-        mainView.editor.setSelectionOffsets(match.start, match.end);
-        mainView.editor.revealOffset(match.start);
+        focusedView().editor.setSelectionOffsets(match.start, match.end);
+        focusedView().editor.revealOffset(match.start);
         return;
     }
 
@@ -13014,11 +13231,11 @@ async function createNewFile() {
                 const previousKey = doc.key;
                 doc.uri = '';
                 await notesDocuments.move(doc, fileName + doc.path.slice(oldPath.length));
-                mainView.renameDocument(previousKey, doc.key);
+                notesViewList().forEach((view) => view.renameDocument(previousKey, doc.key));
             }
             if (renamedDocuments.length > 0) {
                 syncWatchedNotesFiles();
-                renderNotesTabs(mainView);
+                renderAllNotesTabs();
             }
             if (renamingCurrent) {
                 await loadFile(activeNotesDocument.path, { keepUnsavedEdits: true });
@@ -13186,7 +13403,7 @@ async function reloadActiveNotesDocument() {
 
             mainDocument.setSelection(nextStart, nextEnd);
             if (previousSelection.hadFocus && isMonacoActive()) {
-                mainView.editor.focus();
+                focusedView().editor.focus();
             }
         }
     } catch (err) {
@@ -14500,7 +14717,7 @@ async function closeNotesGitDiff() {
 
 function setNotesGitDiffTabActive(active) {
     const isActive = active === true;
-    mainView.root.dataset.gitDiff = isActive ? 'true' : 'false';
+    focusedView().root.dataset.gitDiff = isActive ? 'true' : 'false';
     elements.gitDiffWrap.dataset.active = isActive ? 'true' : 'false';
     elements.tabDiff.style.display = activeGitDiff ? '' : 'none';
     const tabs = elements.tabs.querySelectorAll('[role="tab"]');
@@ -14943,16 +15160,6 @@ if (elements.toolsToC) {
         scrollToToolsToCHeading(tocButton);
     });
 }
-if (elements.previewWrap) {
-    elements.previewWrap.addEventListener('scroll', () => {
-        syncToolsToCHighlightForMode();
-    });
-}
-if (elements.jupyterWrap) {
-    elements.jupyterWrap.addEventListener('scroll', () => {
-        syncToolsToCHighlightForMode();
-    });
-}
 
 setToolsTab('find');
 
@@ -15040,9 +15247,9 @@ function applyWindowStyle(result) {
         ${getSwaggerUIStyles(result.colors, result.fontSize)}
     `;
 
-    if (isMonacoActive()) {
-        mainView.editor.setTypography(getMonacoTypographyOptions());
-        mainView.editor.applyTheme(result.colors);
+    for (const view of notesViewList()) {
+        view.editor?.setTypography(getMonacoTypographyOptions());
+        view.editor?.applyTheme(result.colors);
     }
 }
 
@@ -15413,7 +15620,7 @@ notesSpellCheckHandle = createSpellCheckEngine({
         if (!isMonacoActive()) {
             return;
         }
-        mainView.editor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
+        focusedView().editor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
     },
 });
 notesSpellCheckHandle.scheduleCheck();
@@ -15568,7 +15775,7 @@ function openMainEditorContextMenu(e) {
                         if (isGitDiffActive()) {
                             notesGitDiffAdapter?.openCommandPalette?.();
                         } else {
-                            mainView.editor?.openCommandPalette?.();
+                            focusedView().editor?.openCommandPalette?.();
                         }
                     }, 0);
                 },
@@ -15578,9 +15785,6 @@ function openMainEditorContextMenu(e) {
     showNotesLocalMenu(menuItems, e.clientX, e.clientY);
 }
 
-initRenderedNotesContextMenu(elements.preview, 'viewer');
-initRenderedNotesContextMenu(elements.jupyter, 'jupyter');
-initRenderedNotesContextMenu(elements.swaggerRunWrap, 'swagger-run');
 initRenderedNotesContextMenu(lspHoverTooltipEl, 'viewer');
 initRenderedNotesContextMenu(lspTooltipEl, 'viewer');
 initAIOutputContextMenu(elements.aiOutput);
@@ -15607,121 +15811,153 @@ initMarkdownModal({
     ],
 });
 
-elements.csvView.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    const table = e.target instanceof Element ? e.target.closest('table') : null;
-    if (!table || !elements.csvView.contains(table)) return;
-    const menuItems = [
-        ...createTableCopyMenuItems(table),
-        { title: '-' },
-        createClearTableSortMenuItem(table),
-        createTableFilterMenuItem(table),
-        createTableGraphMenuItem(table),
-    ];
-    const isRunMode = state.viewMode === 'csv-run';
-    if (isRunMode) {
-        const insertItems = createTableInsertMenuItems(table, e.target, 0);
-        if (insertItems.length > 0) {
-            menuItems.push({ title: '-' }, ...insertItems);
-        }
-    }
-
-    menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
-
-    showNotesLocalMenu(menuItems, e.clientX, e.clientY);
-});
-initStructuredDataTreeContextMenu(elements.swaggerView, {
-    isActive: () => state.viewMode === 'swagger-view',
-    getRoot: () => state.swaggerSpec ?? parseStructuredDocument(state.currentFile, mainDocument.getValue()),
-    menuTitle: 'Document',
-});
 initStructuredDataTreeContextMenu(elements.toolsFrontmatter, {
     isActive: () => state.currentFileType === 'markdown' && state.frontmatter != null,
     getRoot: () => state.frontmatter,
     menuTitle: 'Frontmatter field',
 });
 
-elements.tabEditor.addEventListener('click', () => {
-    setViewMode('editor');
-});
+// Binds a view's own controls. Events only reach the focused view's content
+// (see bindNotesViewFocus), so handlers act on the active document and the
+// focused view's parts.
+function bindNotesView(view) {
+    bindNotesViewTabs(view);
+    bindNotesViewFocus(view);
+    observeNotesViewEditorSize(view);
+    if (view.parts.previewWrap) {
+        view.parts.previewWrap.addEventListener('scroll', () => {
+            syncToolsToCHighlightForMode();
+        });
+    }
+    if (view.parts.jupyterWrap) {
+        view.parts.jupyterWrap.addEventListener('scroll', () => {
+            syncToolsToCHighlightForMode();
+        });
+    }
+    initRenderedNotesContextMenu(view.parts.preview, 'viewer');
+    initRenderedNotesContextMenu(view.parts.jupyter, 'jupyter');
+    initRenderedNotesContextMenu(view.parts.swaggerRunWrap, 'swagger-run');
+    view.parts.csvView.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const table = e.target instanceof Element ? e.target.closest('table') : null;
+        if (!table || !view.parts.csvView.contains(table)) return;
+        const menuItems = [
+            ...createTableCopyMenuItems(table),
+            { title: '-' },
+            createClearTableSortMenuItem(table),
+            createTableFilterMenuItem(table),
+            createTableGraphMenuItem(table),
+        ];
+        const isRunMode = state.viewMode === 'csv-run';
+        if (isRunMode) {
+            const insertItems = createTableInsertMenuItems(table, e.target, 0);
+            if (insertItems.length > 0) {
+                menuItems.push({ title: '-' }, ...insertItems);
+            }
+        }
 
-elements.tabHex.addEventListener('click', () => {
-    setViewMode('hex');
-});
+        menuItems.push({ title: '-' }, createAskAIDocumentMenuItem());
 
-elements.tabViewer.addEventListener('click', () => {
-    setViewMode('viewer');
-    if (state.viewTainted && state.currentFileType === 'markdown') {
+        showNotesLocalMenu(menuItems, e.clientX, e.clientY);
+    });
+    initStructuredDataTreeContextMenu(view.parts.swaggerView, {
+        isActive: () => state.viewMode === 'swagger-view',
+        getRoot: () => state.swaggerSpec ?? parseStructuredDocument(state.currentFile, mainDocument.getValue()),
+        menuTitle: 'Document',
+    });
+    view.parts.tabEditor.addEventListener('click', () => {
+        setViewMode('editor');
+    });
+
+    view.parts.tabHex.addEventListener('click', () => {
+        setViewMode('hex');
+    });
+
+    view.parts.tabViewer.addEventListener('click', () => {
+        setViewMode('viewer');
+        if (state.viewTainted && state.currentFileType === 'markdown') {
+            state.viewTainted = false;
+            scheduleRender();
+        }
+    });
+
+    view.parts.tabJupyter.addEventListener('click', () => {
+        setViewMode('jupyter');
+        renderJupyterView();
+    });
+
+    view.parts.tabSwaggerView.addEventListener('click', () => {
+        setViewMode('swagger-view');
         state.viewTainted = false;
-        scheduleRender();
-    }
-});
+        renderSwaggerJsonViewLazy();
+    });
 
-elements.tabJupyter.addEventListener('click', () => {
-    setViewMode('jupyter');
-    renderJupyterView();
-});
+    view.parts.tabSwaggerEdit.addEventListener('click', () => {
+        setViewMode('swagger-edit');
+    });
 
-elements.tabSwaggerView.addEventListener('click', () => {
-    setViewMode('swagger-view');
-    state.viewTainted = false;
-    renderSwaggerJsonViewLazy();
-});
+    view.parts.tabSwaggerRun.addEventListener('click', () => {
+        setViewMode('swagger-run');
+        updateSwaggerLayoutMode();
+        renderSwaggerUI();
+    });
 
-elements.tabSwaggerEdit.addEventListener('click', () => {
-    setViewMode('swagger-edit');
-});
+    view.parts.tabImageView.addEventListener('click', async () => {
+        if (state.currentFileType === 'code' && isSvgFile(state.currentFile)) {
+            if (state.dirty && !await saveFile()) {
+                return;
+            }
+            try {
+                await configureImagePreview(state.currentFile, getPathFileName(state.currentFile), true);
+            } catch (err) {
+                notifyTerminal(`Failed to load image: ${getPathFileName(state.currentFile)}`, 'error');
+                console.error(err);
+                return;
+            }
+        }
+        setViewMode('image-view');
+    });
 
-elements.tabSwaggerRun.addEventListener('click', () => {
-    setViewMode('swagger-run');
-    updateSwaggerLayoutMode();
-    renderSwaggerUI();
-});
+    view.parts.tabCsvView.addEventListener('click', () => {
+        setViewMode('csv-view');
+    });
 
-elements.tabImageView.addEventListener('click', async () => {
-    if (state.currentFileType === 'code' && isSvgFile(state.currentFile)) {
-        if (state.dirty && !await saveFile()) {
+    view.parts.tabCsvEdit.addEventListener('click', () => {
+        setViewMode('csv-edit');
+    });
+
+    view.parts.tabCsvRun.addEventListener('click', () => {
+        setViewMode('csv-run');
+    });
+
+    view.parts.tabMeta.addEventListener('click', () => {
+        setViewMode('meta');
+    });
+
+    view.parts.tabDiff.addEventListener('click', () => {
+        if (activeGitDiff) {
+            setNotesGitDiffTabActive(true);
+            notesGitDiffAdapter?.focus();
             return;
         }
-        try {
-            await configureImagePreview(state.currentFile, getPathFileName(state.currentFile), true);
-        } catch (err) {
-            notifyTerminal(`Failed to load image: ${getPathFileName(state.currentFile)}`, 'error');
-            console.error(err);
-            return;
+        const filePath = currentProjectRelativeGitPath();
+        const projectRoot = state.currentFileProject || notesGitPanel?.getCurrentRoot();
+        if (filePath && projectRoot) {
+            void notesGitPanel?.openFileDiff(filePath, projectRoot);
         }
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+        const swaggerPaneResizeObserver = new ResizeObserver(() => {
+            if (view === focusedView()) {
+                updateSwaggerLayoutMode();
+            }
+        });
+        swaggerPaneResizeObserver.observe(view.parts.swaggerRunWrap);
+        view.disposers.push(() => swaggerPaneResizeObserver.disconnect());
     }
-    setViewMode('image-view');
-});
+}
 
-elements.tabCsvView.addEventListener('click', () => {
-    setViewMode('csv-view');
-});
-
-elements.tabCsvEdit.addEventListener('click', () => {
-    setViewMode('csv-edit');
-});
-
-elements.tabCsvRun.addEventListener('click', () => {
-    setViewMode('csv-run');
-});
-
-elements.tabMeta.addEventListener('click', () => {
-    setViewMode('meta');
-});
-
-elements.tabDiff.addEventListener('click', () => {
-    if (activeGitDiff) {
-        setNotesGitDiffTabActive(true);
-        notesGitDiffAdapter?.focus();
-        return;
-    }
-    const filePath = currentProjectRelativeGitPath();
-    const projectRoot = state.currentFileProject || notesGitPanel?.getCurrentRoot();
-    if (filePath && projectRoot) {
-        void notesGitPanel?.openFileDiff(filePath, projectRoot);
-    }
-});
+bindNotesView(firstNotesView);
 
 async function openRecentFilesMenu(x, y) {
     try {
@@ -16379,7 +16615,7 @@ elements.findPrev.addEventListener('mousedown', (event) => {
     // The Tools size is a share of the space below the view tab rows, which
     // sit inside #notes-panel above the panes.
     function availableHeight() {
-        return panel.getBoundingClientRect().height - 4 - mainView.parts.tabs.getBoundingClientRect().height;
+        return panel.getBoundingClientRect().height - 4 - focusedView().parts.tabs.getBoundingClientRect().height;
     }
     function apply() {
         handle.dataset.enabled = enabled() ? 'true' : 'false';
@@ -16656,12 +16892,7 @@ hydrateFindFieldHistory(elements.findFilesInput);
 // Initial scan is followed by context-change events, not terminal focus scans.
 refreshFiles();
 
-if (typeof ResizeObserver !== 'undefined' && elements.swaggerRunWrap) {
-    const swaggerPaneResizeObserver = new ResizeObserver(() => {
-        updateSwaggerLayoutMode();
-    });
-    swaggerPaneResizeObserver.observe(elements.swaggerRunWrap);
-} else {
+if (typeof ResizeObserver === 'undefined') {
     window.addEventListener('resize', () => {
         updateSwaggerLayoutMode();
     });

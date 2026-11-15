@@ -675,7 +675,9 @@ export async function createMonacoAdapter(container, options = {}) {
     const placeholderModel = monaco.editor.createModel(initialValue, initialLanguage);
     let model = placeholderModel;
     let shownHandle = null;
-    let editorDisposed = false;
+    // This editor's selection in each document model it has shown, so two
+    // editors of one model keep their own cursors (ADR 0100 Stage 8).
+    const handleSelections = new WeakMap();
     const themeName = 'ttyphoon-monaco';
     let vimAdapter = null;
     let vimIndicator = null;
@@ -1262,21 +1264,46 @@ export async function createMonacoAdapter(container, options = {}) {
         };
     };
 
+    // Stops showing the current document model, keeping this editor's
+    // selection in it. If this was its active editor, the selection is also
+    // kept with the model for whichever editor shows it next.
+    const releaseShownHandle = () => {
+        const handle = shownHandle;
+        if (!handle) {
+            return;
+        }
+        shownHandle = null;
+        handle.shownBy.delete(api);
+        const selection = api.getSelectionOffsets();
+        if (handle.activeEditor === api) {
+            handle.storedSelection = selection;
+            handle.storedSelectionVersion += 1;
+            handle.activeEditor = null;
+        }
+        handleSelections.set(handle, { selection, version: handle.storedSelectionVersion });
+    };
+
     const api = {
         // A document's own model. It has the editing API a document buffer
         // attaches to (getValue, setValue, selection, replaceRange) and works
-        // whether or not the editor shows it: edits to a hidden model keep their
+        // whether or not an editor shows it: edits to a hidden model keep their
         // own undo history, and its selection is kept until it is shown.
-        // onChange fires for every content change of this model.
+        // Several editors can show one model; selection and edits go through
+        // the one that showed it last, its active editor. onChange fires for
+        // every content change of this model.
         createDocumentModel({ value = '', language = 'plaintext', onChange } = {}) {
             const textModel = monaco.editor.createModel(String(value || ''), resolveMonacoLanguage(language));
-            let storedSelection = { start: 0, end: 0 };
             const contentDisposable = typeof onChange === 'function'
                 ? textModel.onDidChangeContent(() => onChange())
                 : null;
-            const isShown = () => model === textModel;
             const handle = {
                 textModel,
+                shownBy: new Set(),
+                activeEditor: null,
+                storedSelection: { start: 0, end: 0 },
+                // Bumped whenever storedSelection changes, so an editor's own
+                // saved selection is only restored if nothing newer was set.
+                storedSelectionVersion: 0,
                 getValue: () => textModel.getValue(),
                 setValue(next) {
                     const text = String(next || '');
@@ -1285,23 +1312,24 @@ export async function createMonacoAdapter(container, options = {}) {
                     }
                 },
                 getSelectionOffsets() {
-                    return isShown() ? api.getSelectionOffsets() : { ...storedSelection };
+                    return handle.activeEditor ? handle.activeEditor.getSelectionOffsets() : { ...handle.storedSelection };
                 },
                 setSelectionOffsets(start, end) {
-                    if (isShown()) {
-                        api.setSelectionOffsets(start, end);
+                    if (handle.activeEditor) {
+                        handle.activeEditor.setSelectionOffsets(start, end);
                         return;
                     }
                     const length = textModel.getValueLength();
                     const safeStart = Math.max(0, Math.min(Number(start) || 0, length));
-                    storedSelection = {
+                    handle.storedSelection = {
                         start: safeStart,
                         end: Math.max(safeStart, Math.min(Number(end) || safeStart, length)),
                     };
+                    handle.storedSelectionVersion += 1;
                 },
                 replaceRange(start, end, text, source) {
-                    if (isShown()) {
-                        api.replaceRange(start, end, text, source);
+                    if (handle.activeEditor) {
+                        handle.activeEditor.replaceRange(start, end, text, source);
                         return;
                     }
                     textModel.pushStackElement();
@@ -1315,16 +1343,9 @@ export async function createMonacoAdapter(container, options = {}) {
                 setLanguage(language) {
                     monaco.editor.setModelLanguage(textModel, resolveMonacoLanguage(language));
                 },
-                // Kept while the editor shows another model.
-                rememberSelection() {
-                    storedSelection = api.getSelectionOffsets();
-                },
-                restoreSelection() {
-                    api.setSelectionOffsets(storedSelection.start, storedSelection.end);
-                },
                 dispose() {
-                    if (isShown() && !editorDisposed) {
-                        api.showModel(null);
+                    for (const shownBy of [...handle.shownBy]) {
+                        shownBy.showModel(null);
                     }
                     contentDisposable?.dispose();
                     textModel.dispose();
@@ -1333,19 +1354,31 @@ export async function createMonacoAdapter(container, options = {}) {
             return handle;
         },
 
-        // Shows a document model (or the placeholder for null). Decorations
-        // and LSP markers stay with their model.
+        // Shows a document model (or the placeholder for null) and makes this
+        // the model's active editor. Decorations and LSP markers stay with
+        // their model.
         showModel(handle) {
             const next = handle?.textModel || placeholderModel;
             if (next === model) {
+                if (handle) {
+                    handle.activeEditor = api;
+                }
                 return;
             }
-            shownHandle?.rememberSelection();
+            releaseShownHandle();
             setTyposDecorations([]);
             model = next;
             shownHandle = handle || null;
             editor.setModel(model);
-            shownHandle?.restoreSelection();
+            if (shownHandle) {
+                shownHandle.shownBy.add(api);
+                shownHandle.activeEditor = api;
+                const own = handleSelections.get(shownHandle);
+                const selection = own?.version === shownHandle.storedSelectionVersion
+                    ? own.selection
+                    : shownHandle.storedSelection;
+                api.setSelectionOffsets(selection.start, selection.end);
+            }
         },
 
         getValue() {
@@ -1818,7 +1851,6 @@ export async function createMonacoAdapter(container, options = {}) {
         dispose() {
             fontMetricsRefresh.dispose();
             vimAdapterDisposing = true;
-            editorDisposed = true;
             disableVimMode();
             changeDisposable.dispose();
             cursorDisposable.dispose();
@@ -1834,6 +1866,7 @@ export async function createMonacoAdapter(container, options = {}) {
                 disposable?.dispose?.();
             }
             setTyposDecorations([]);
+            releaseShownHandle();
             editor.dispose();
             placeholderModel.dispose();
         },
