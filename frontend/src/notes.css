@@ -1891,8 +1891,8 @@ body {
     min-width: 0;
 }
 
-/* Split views (ADR 0100 Stage 8): a thin border between views, and the
-   unfocused ones dimmed so the focused view stands out. */
+/* Split views (ADR 0100 Stage 8): a thin border between views, the focused
+   view outlined in the accent colour and the others dimmed. */
 .notes-layout-split > .notes-layout-split + *,
 .notes-layout-split > .notes-view + * {
     border-left: 1px solid rgba(var(--fg-rgb), 0.3);
@@ -1905,6 +1905,19 @@ body {
 
 .notes-layout-split .notes-view:not([data-focused="true"]) .notes-view-panel {
     opacity: 0.75;
+}
+
+.notes-layout-split .notes-view[data-focused="true"] {
+    position: relative;
+}
+
+.notes-layout-split .notes-view[data-focused="true"]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--accent);
+    pointer-events: none;
+    z-index: 5;
 }
 
 .notes-view-panel {

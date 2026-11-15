@@ -4331,6 +4331,33 @@ describe('notes rendering', () => {
         expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2);
     });
 
+    it('moves focus between views with Cmd+Option+arrows, leaving the keys to Monaco otherwise', async () => {
+        const first = '$NOTES/first.md';
+        const disk = new Map([[first, 'first text']]);
+        await openDocumentTabs(disk);
+        const pressArrow = async (key) => {
+            const event = new KeyboardEvent('keydown', { key, code: key, metaKey: true, altKey: true, bubbles: true, cancelable: true });
+            document.body.dispatchEvent(event);
+            await flushPromises();
+            await flushPromises();
+            return event;
+        };
+        expect((await pressArrow('ArrowRight')).defaultPrevented).toBe(false);
+
+        await splitRight();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        expect((await pressArrow('ArrowRight')).defaultPrevented).toBe(false);
+        expect((await pressArrow('ArrowUp')).defaultPrevented).toBe(false);
+
+        expect((await pressArrow('ArrowLeft')).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(leftRoot.dataset.focused).toBe('true'));
+        expect(rightRoot.dataset.focused).toBeUndefined();
+        expect(leftRoot.contains(document.getElementById('notes-toolbar'))).toBe(true);
+
+        await pressArrow('ArrowRight');
+        await vi.waitFor(() => expect(rightRoot.dataset.focused).toBe('true'));
+    });
+
     it('keeps a document open while another view still has its tab', async () => {
         const first = '$NOTES/first.md';
         const second = '$NOTES/second.md';

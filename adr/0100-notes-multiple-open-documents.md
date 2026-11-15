@@ -608,6 +608,19 @@ Known limitations, for the following tasks:
 - A view stays when its last tab closes (task 5), and its size is fixed
   (task 6).
 
+*Done (Stage 8, task 4):*
+
+- Cmd+Option+arrows focus the neighbouring view. `neighbourLayoutView` works
+  out each view's rectangle from the split sizes and picks, of the views
+  touching that edge, the one sharing most of it. The editor takes keyboard
+  focus when the view shows it.
+- The keys are taken only when there is a view on that side. Otherwise Monaco
+  keeps Cmd+Option+Up/Down for adding a cursor above or below.
+- With more than one view, the focused one is outlined in the accent colour
+  and the others are dimmed. Clicking a view focuses it (task 3).
+- The tab hotkey handler ignores keys once its Notes app is no longer in the
+  page.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

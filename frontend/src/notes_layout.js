@@ -42,6 +42,74 @@ export function findLayoutView(node, viewId) {
     return null;
 }
 
+// Each view's rectangle in the unit square, from the split sizes.
+export function layoutViewRects(node, rect = { x: 0, y: 0, width: 1, height: 1 }) {
+    if (!node) {
+        return [];
+    }
+    if (node.type === 'view') {
+        return [{ id: node.id, ...rect }];
+    }
+    let offset = 0;
+    return node.children.flatMap((child, index) => {
+        const share = node.sizes[index];
+        const childRect = node.direction === LAYOUT_ROW
+            ? { x: rect.x + offset * rect.width, y: rect.y, width: share * rect.width, height: rect.height }
+            : { x: rect.x, y: rect.y + offset * rect.height, width: rect.width, height: share * rect.height };
+        offset += share;
+        return layoutViewRects(child, childRect);
+    });
+}
+
+const EDGE_EPSILON = 1e-6;
+
+// The view next to `viewId` in `side` ('left', 'right', 'up' or 'down'): of
+// the views touching that edge, the one sharing most of it, then the one
+// nearest its start. Null at the edge of the layout.
+export function neighbourLayoutView(tree, viewId, side) {
+    const rects = layoutViewRects(tree);
+    const from = rects.find((rect) => rect.id === viewId);
+    if (!from) {
+        return null;
+    }
+    const horizontal = side === 'left' || side === 'right';
+    const edge = {
+        left: from.x,
+        right: from.x + from.width,
+        up: from.y,
+        down: from.y + from.height,
+    }[side];
+    if (edge === undefined) {
+        return null;
+    }
+    const start = horizontal ? from.y : from.x;
+    const end = start + (horizontal ? from.height : from.width);
+    let best = null;
+    for (const rect of rects) {
+        const near = {
+            left: rect.x + rect.width,
+            right: rect.x,
+            up: rect.y + rect.height,
+            down: rect.y,
+        }[side];
+        if (rect.id === viewId || Math.abs(near - edge) > EDGE_EPSILON) {
+            continue;
+        }
+        const otherStart = horizontal ? rect.y : rect.x;
+        const otherEnd = otherStart + (horizontal ? rect.height : rect.width);
+        const overlap = Math.min(end, otherEnd) - Math.max(start, otherStart);
+        if (overlap <= EDGE_EPSILON) {
+            continue;
+        }
+        const distance = Math.abs(otherStart - start);
+        if (!best || overlap > best.overlap + EDGE_EPSILON
+            || (Math.abs(overlap - best.overlap) <= EDGE_EPSILON && distance < best.distance)) {
+            best = { id: rect.id, overlap, distance };
+        }
+    }
+    return best?.id ?? null;
+}
+
 // Splits `viewId` in `direction`, putting the new view after it (right or
 // below), or before it when `before` is set. The new view takes half of the
 // split view's space.

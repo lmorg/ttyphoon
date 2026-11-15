@@ -4,6 +4,7 @@ import {
     createLayout,
     equaliseLayoutDivider,
     layoutViewIds,
+    neighbourLayoutView,
     parseLayout,
     resizeLayoutDivider,
     serialiseLayout,
@@ -79,5 +80,22 @@ describe('notes layout tree', () => {
         expect(parseLayout(withTabs, { parseView: ({ id, tabs }) => ({ type: 'view', id, tabs }) }))
             .toEqual({ type: 'view', id: 'a', tabs: ['$NOTES/a.md'] });
         expect(parseLayout(withTabs, { parseView: () => null })).toBeNull();
+    });
+
+    it('finds the neighbouring view on each side across nested splits', () => {
+        // a | (b over (c | d))
+        let tree = createLayout('a');
+        tree = splitLayoutView(tree, 'a', 'b', 'row');
+        tree = splitLayoutView(tree, 'b', 'c', 'column');
+        tree = splitLayoutView(tree, 'c', 'd', 'row');
+
+        expect(neighbourLayoutView(tree, 'a', 'right')).toBe('b');
+        expect(neighbourLayoutView(tree, 'a', 'left')).toBeNull();
+        expect(neighbourLayoutView(tree, 'b', 'down')).toBe('c');
+        expect(neighbourLayoutView(tree, 'd', 'up')).toBe('b');
+        expect(neighbourLayoutView(tree, 'd', 'left')).toBe('c');
+        expect(neighbourLayoutView(tree, 'c', 'left')).toBe('a');
+        expect(neighbourLayoutView(tree, 'd', 'right')).toBeNull();
+        expect(neighbourLayoutView(tree, 'missing', 'up')).toBeNull();
     });
 });

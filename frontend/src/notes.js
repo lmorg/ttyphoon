@@ -94,7 +94,7 @@ import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
 import notesTemplate from './notes.html?raw';
 import { createNotesView } from './notes_view.js';
-import { closeLayoutView, createLayout, layoutViewIds, splitLayoutView } from './notes_layout.js';
+import { closeLayoutView, createLayout, layoutViewIds, neighbourLayoutView, splitLayoutView } from './notes_layout.js';
 import { renderNotesLayout } from './notes_layout_dom.js';
 
 import { marked } from "marked";
@@ -1387,12 +1387,40 @@ const NOTES_DOCUMENT_TAB_COMMANDS = {
     reopen: reopenClosedNotesTab,
     'split-right': () => splitNotesView('row'),
     'split-down': () => splitNotesView('column'),
+    'focus-left': () => focusNeighbourNotesView('left'),
+    'focus-right': () => focusNeighbourNotesView('right'),
+    'focus-up': () => focusNeighbourNotesView('up'),
+    'focus-down': () => focusNeighbourNotesView('down'),
 };
 
+const NOTES_VIEW_FOCUS_KEYS = {
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+};
+
+// Cmd+Option+arrows move focus to the neighbouring view (ADR 0100 question 18).
+async function focusNeighbourNotesView(side) {
+    const view = notesViews.get(neighbourLayoutView(notesLayout, focusedView().id, side));
+    if (view) {
+        await focusNotesView(view);
+        if (state.viewMode === 'editor') {
+            view.editor?.focus();
+        }
+    }
+}
+
 // Cmd+Shift+] and Cmd+Shift+[ step through the document tabs, Cmd+W closes
-// the active one, Cmd+Shift+T reopens the last closed (ADR 0100 question 14)
-// and Cmd+\ splits the view to the right (question 17). Ctrl+Tab still cycles the Notes mode tabs.
+// the active one, Cmd+Shift+T reopens the last closed (ADR 0100 question 14),
+// Cmd+\ splits the view to the right (question 17) and Cmd+Option+arrows move
+// between views (question 18). Ctrl+Tab still cycles the Notes mode tabs.
 function notesDocumentTabCommandForKey(event) {
+    if (event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey) {
+        const side = NOTES_VIEW_FOCUS_KEYS[event.key];
+        // Left to Monaco (add cursor above/below) when there is no view there.
+        return side && neighbourLayoutView(notesLayout, focusedView().id, side) ? `focus-${side}` : '';
+    }
     if (!event.metaKey || event.ctrlKey || event.altKey) {
         return '';
     }
@@ -16709,6 +16737,7 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('keydown', (event) => {
     const command = notesDocumentTabCommandForKey(event);
     if (!command
+        || !app.isConnected
         || document.getElementById('fullscreen-image-overlay')
         || window.ttyphoonInputboxOpen === true
         || window.terminalFocusedState === true
