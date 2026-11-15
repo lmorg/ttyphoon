@@ -653,6 +653,22 @@ Known limitations, for the following tasks:
 - The drag uses a module-level record of the dragged tab rather than
   `dataTransfer`, which can't be read during `dragover`.
 
+*Done (Stage 8, task 8):*
+
+- Edits, renames, deletes and LSP diagnostics already reached every view:
+  views share the document's model, and markers are set per model.
+- An unfocused view keeps the DOM it last rendered. A View or HTML view
+  showing a document that changes, by an edit in another view or on disk, is
+  re-rendered after a short debounce. A clean document changed on disk that
+  only unfocused views show reloads in place.
+- Jupyter output is recorded on the document. An unfocused Run view shows it
+  when focused, as its code blocks are bound to the focused view.
+- Typos underlines are model decorations, so they show in every view of a
+  document. A document's typos registration and underlines stay while any
+  view shows it, and are released once none does.
+- A view focused and then left before its document finished loading keeps
+  tracking that document.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

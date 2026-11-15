@@ -1537,14 +1537,15 @@ export function releaseTyposDocument(doc) {
 }
 
 // When the editor stops showing a document, clear the LSP and spellcheck UI
-// that belonged to it.
-export function resetLspViewState() {
+// that belonged to it. keepTypos leaves its underlines for another view
+// still showing it.
+export function resetLspViewState({ keepTypos = false } = {}) {
     clearLspHoverTimer();
     hideLspHoverTooltip();
     hideLspCompletion();
     state.lspHoverLastKey = '';
     getNotesSpellCheckHandle()?.setMode('aspell');
-    if (isMonacoActive()) {
+    if (isMonacoActive() && !keepTypos) {
         getMonacoMainEditor().setTyposMisspellings([]);
     }
 }

@@ -85,7 +85,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Close a view when its last tab closes and collapse the tree; release a document only when no view shows it
     - [x] Draggable dividers with minimum sizes; double-click a divider to equalise (Q20)
     - [x] Drag a tab onto another view's tab strip (Q19)
-    - [ ] External changes, renames, deletes, Jupyter output and LSP diagnostics update every view showing the document; typos stay open while any view shows it
+    - [x] External changes, renames, deletes, Jupyter output and LSP diagnostics update every view showing the document; typos stay open while any view shows it
     - [ ] Persist the layout tree, each view's tabs and the focused view per workspace, loading Stage 7 tab lists as one view (Q21)
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)
 - [ ] Notes, image: support for annotating images. Add text, highlights, ovals and rounded rectangles, with an option to export the annotations flattened onto a PNG while preserving the original image.

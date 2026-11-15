@@ -615,6 +615,19 @@ function normalizeVimModeLabel(mode, subMode) {
     return '';
 }
 
+// Typos underlines belong to the text model, so every editor showing a
+// document shows them (ADR 0100 Stage 8).
+const typosByModel = new WeakMap();
+
+function modelTypos(model) {
+    let typos = typosByModel.get(model);
+    if (!typos) {
+        typos = { ids: [], list: [] };
+        typosByModel.set(model, typos);
+    }
+    return typos;
+}
+
 export async function createMonacoAdapter(container, options = {}) {
     if (!container) {
         return null;
@@ -1118,8 +1131,6 @@ export async function createMonacoAdapter(container, options = {}) {
     let lspCodeActionCommandDisposable = null;
     let lspGeneration = 0;
     let inlayHintsChangeEmitter = null;
-    let typosDecorationIds = [];
-    let currentTyposMisspellings = [];
 
     function disposeLsp() {
         lspGeneration++;
@@ -1140,7 +1151,8 @@ export async function createMonacoAdapter(container, options = {}) {
 
     function setTyposDecorations(list) {
         const misspellings = Array.isArray(list) ? list : [];
-        currentTyposMisspellings = misspellings
+        const typos = modelTypos(model);
+        typos.list = misspellings
             .map((item) => ({
                 ...item,
                 wordStart: Math.max(0, Math.min(Number(item?.wordStart) || 0, model.getValueLength())),
@@ -1181,12 +1193,12 @@ export async function createMonacoAdapter(container, options = {}) {
             })
             .filter((item) => item.range.endLineNumber >= item.range.startLineNumber);
 
-        typosDecorationIds = editor.deltaDecorations(typosDecorationIds, next);
+        typos.ids = model.deltaDecorations(typos.ids, next);
     }
 
     function getMisspellingAtOffset(offset) {
         const safeOffset = Math.max(0, Math.min(Number(offset) || 0, model.getValueLength()));
-        return currentTyposMisspellings.find((item) => {
+        return modelTypos(model).list.find((item) => {
             const start = Math.max(0, Number(item?.wordStart) || 0);
             const length = Math.max(1, Number(item?.wordLength) || 1);
             return safeOffset >= start && safeOffset < start + length;
@@ -1366,7 +1378,6 @@ export async function createMonacoAdapter(container, options = {}) {
                 return;
             }
             releaseShownHandle();
-            setTyposDecorations([]);
             model = next;
             shownHandle = handle || null;
             editor.setModel(model);
@@ -1865,7 +1876,6 @@ export async function createMonacoAdapter(container, options = {}) {
                 const disposable = fallbackProviderDisposables.pop();
                 disposable?.dispose?.();
             }
-            setTyposDecorations([]);
             releaseShownHandle();
             editor.dispose();
             placeholderModel.dispose();

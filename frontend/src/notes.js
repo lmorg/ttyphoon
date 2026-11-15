@@ -836,6 +836,7 @@ const mainDocument = {
 function newNotesDocument(fields = {}) {
     const doc = createNotesDocument(fields);
     doc.buffer.onChange((event) => {
+        scheduleMirroredNotesViews(doc);
         if (doc !== activeNotesDocument) {
             return;
         }
@@ -903,7 +904,7 @@ function setActiveNotesDocument(next) {
     showDocumentInView(view, next);
     if (!isNotesDocumentInTab(previous)) {
         retireNotesDocument(previous);
-    } else if (previous !== next) {
+    } else if (previous !== next && unfocusedNotesViewsShowing(previous).length === 0) {
         void releaseTyposDocument(previous);
     }
     renderNotesTabs(view);
@@ -1239,6 +1240,27 @@ function isNotesPathMutating(path) {
 // A file changed on disk. A clean document reloads: the active one now, a
 // background one when it is next shown, as showing a tab reads the file. A
 // document with unsaved edits is conflicted unless the disk text matches.
+// A clean document shown only in unfocused views reloads in place; the
+// focused view reloads through loadFile when it is focused.
+async function reloadShownNotesDocument(doc) {
+    let result = null;
+    try {
+        result = await GetFile(doc.path);
+    } catch (err) {
+        console.error(err);
+        return;
+    }
+    if (!result || result.error || (result.binary ?? result.text) || doc.dirty || doc === activeNotesDocument) {
+        return;
+    }
+    const text = normaliseLineEndings(result.contents);
+    if (text === doc.buffer.getValue()) {
+        return;
+    }
+    doc.buffer.setValue(text);
+    renderMirroredNotesViews(doc);
+}
+
 async function handleNotesDocumentChangedOnDisk(doc) {
     if (!doc?.path || isNotesPathMutating(doc.path)) {
         return;
@@ -1246,6 +1268,8 @@ async function handleNotesDocumentChangedOnDisk(doc) {
     if (!doc.dirty) {
         if (doc === activeNotesDocument) {
             await reloadActiveNotesDocument();
+        } else if (unfocusedNotesViewsShowing(doc).length > 0) {
+            await reloadShownNotesDocument(doc);
         }
         return;
     }
@@ -1333,6 +1357,9 @@ async function closeNotesTab(view, key, { discard = false, moving = false } = {}
             view.shownDocumentKey = neighbour?.key || '';
             if (neighbour) {
                 showDocumentInView(view, neighbour);
+            }
+            if (doc && doc !== activeNotesDocument && unfocusedNotesViewsShowing(doc).length === 0) {
+                void releaseTyposDocument(doc);
             }
             renderNotesTabs(view);
         }
@@ -1499,6 +1526,10 @@ async function focusNotesView(view, key = view.shownDocumentKey) {
     const doc = findNotesDocument(key);
     if (doc) {
         await loadFile(doc.path, { keepUnsavedEdits: true });
+        // Focus moved on before the load finished; the view still shows the document.
+        if (view !== focusedView() && !view.shownDocumentKey && notesViews.has(view.id)) {
+            view.shownDocumentKey = doc.key;
+        }
     } else {
         await showNoNotesDocument();
         renderNotesTabs(view);
@@ -3157,8 +3188,8 @@ function syncFrontmatterTab() {
 
 // Prepends a caption to a rendered markdown container indicating that the
 // document contains frontmatter, with a button to reveal it in the Tools panel.
-function insertFrontmatterCaption(container) {
-    if (!container || state.currentFileType !== 'markdown' || state.frontmatter == null) {
+function insertFrontmatterCaption(container, present = state.currentFileType === 'markdown' && state.frontmatter != null) {
+    if (!container || !present) {
         return;
     }
 
@@ -3184,6 +3215,44 @@ function insertFrontmatterCaption(container) {
 
 let markdownRenderSeq = 0;
 
+// Renders a document's markdown body into a viewer container. Returns false
+// once isCurrent() fails after an await, leaving the container to the newer render.
+async function renderMarkdownPreview(container, doc, markdown, isCurrent, hasFrontmatter) {
+    container.innerHTML = marked.parse(markdown);
+
+    // Apply common markdown processing
+    await processMarkdownContainer(container);
+    if (!isCurrent()) {
+        return false;
+    }
+
+    // Enable context menus on images
+    enableImageContextMenus(container);
+
+    // Keep checkboxes readonly in viewer mode
+    setupInteractiveCheckboxes(container, false);
+
+    // Enable collapsible H1-H6 sections
+    setupCollapsibleHeadings(container);
+
+    // Keep table horizontal scrolling local to each table rather than the whole section.
+    wrapTablesForHorizontalScroll(container);
+
+    // Enable column sorting on all tables
+    setupNotesTableQueries(container, 'preview', doc.path);
+
+    // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
+    container.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
+    await setupTableColumnResizing(container, state.markdownTableWordWrapMode, doc.path);
+    if (!isCurrent()) {
+        return false;
+    }
+
+    // Surface a caption when the document carries frontmatter.
+    insertFrontmatterCaption(container, hasFrontmatter);
+    return true;
+}
+
 // A render stops after an await once a newer render has started or its
 // document is no longer shown, so it never post-processes another render's DOM.
 async function renderMarkdown() {
@@ -3191,38 +3260,10 @@ async function renderMarkdown() {
     const doc = activeNotesDocument;
     const isCurrent = () => renderSeq === markdownRenderSeq && doc === activeNotesDocument;
     const markdown = applyDocumentFrontmatter();
-    elements.preview.innerHTML = marked.parse(markdown);
-
-    // Apply common markdown processing
-    await processMarkdownContainer(elements.preview);
-    if (!isCurrent()) {
+    const hasFrontmatter = state.currentFileType === 'markdown' && state.frontmatter != null;
+    if (!await renderMarkdownPreview(elements.preview, doc, markdown, isCurrent, hasFrontmatter)) {
         return;
     }
-
-    // Enable context menus on images
-    enableImageContextMenus(elements.preview);
-
-    // Keep checkboxes readonly in viewer mode
-    setupInteractiveCheckboxes(elements.preview, false);
-
-    // Enable collapsible H1-H6 sections
-    setupCollapsibleHeadings(elements.preview);
-
-    // Keep table horizontal scrolling local to each table rather than the whole section.
-    wrapTablesForHorizontalScroll(elements.preview);
-
-    // Enable column sorting on all tables
-    setupNotesTableQueries(elements.preview, 'preview', doc.path);
-
-    // Apply the word-wrap CSS class and enable resizable table columns with persisted widths.
-    elements.preview.classList.toggle('notes-table-wordwrap-on', state.markdownTableWordWrapMode);
-    await setupTableColumnResizing(elements.preview, state.markdownTableWordWrapMode, doc.path);
-    if (!isCurrent()) {
-        return;
-    }
-
-    // Surface a caption when the document carries frontmatter.
-    insertFrontmatterCaption(elements.preview);
 
     refreshToolsToC();
 
@@ -3231,6 +3272,46 @@ async function renderMarkdown() {
         setTimeout(() => {
             performFind();
         }, 0);
+    }
+}
+
+// Unfocused views keep the DOM they last rendered, so a view showing a
+// document that changes is re-rendered here (ADR 0100 Stage 8). Jupyter views
+// re-render when focused, as their code blocks are bound to the focused view.
+const mirroredNotesViewTimers = new Map();
+const mirroredNotesViewRenders = new WeakMap();
+
+function unfocusedNotesViewsShowing(doc) {
+    return notesViewList().filter((view) => view !== focusedView() && notesViewDocument(view) === doc);
+}
+
+function scheduleMirroredNotesViews(doc) {
+    if (!doc || unfocusedNotesViewsShowing(doc).length === 0) {
+        return;
+    }
+    clearTimeout(mirroredNotesViewTimers.get(doc));
+    mirroredNotesViewTimers.set(doc, setTimeout(() => {
+        mirroredNotesViewTimers.delete(doc);
+        renderMirroredNotesViews(doc);
+    }, 120));
+}
+
+function renderMirroredNotesViews(doc) {
+    for (const view of unfocusedNotesViewsShowing(doc)) {
+        const { parts } = view;
+        if (parts.htmlViewWrap?.dataset.active === 'true' && parts.htmlViewFrame) {
+            parts.htmlViewFrame.srcdoc = doc.buffer.getValue();
+        }
+        if (parts.previewWrap?.dataset.active !== 'true' || !parts.preview) {
+            continue;
+        }
+        const renderSeq = (mirroredNotesViewRenders.get(view) || 0) + 1;
+        mirroredNotesViewRenders.set(view, renderSeq);
+        const isCurrent = () => mirroredNotesViewRenders.get(view) === renderSeq
+            && view !== focusedView() && notesViewDocument(view) === doc;
+        const fm = parseFrontmatter(doc.buffer.getValue());
+        void renderMarkdownPreview(parts.preview, doc, fm.body, isCurrent, fm.present)
+            .catch((err) => console.warn('Notes view render failed:', err));
     }
 }
 
@@ -7550,7 +7631,7 @@ async function loadProjectCache(options = {}) {
 
 // Closes the active document and shows an empty editor.
 async function showNoNotesDocument() {
-    resetLspViewState();
+    resetNotesLspViewState();
     closeActiveNotesDocument();
     state.swaggerSpec = null;
     state.swaggerRunAvailable = false;
@@ -9257,7 +9338,7 @@ async function loadFile(file, options = {}) {
     if (state.currentFile && state.currentFile !== file) {
         // The previous document's LSP and typos registrations are released
         // when it closes, on switching below.
-        resetLspViewState();
+        resetNotesLspViewState();
         lspSpellCheckExclusions.symbols = [];
         lspSpellCheckExclusions.tokens = [];
         lspSpellCheckExclusions.keywords = [];
@@ -15630,6 +15711,18 @@ async function pasteFromGoClipboard(targetEditor = null, allowImagePaste = true)
 }
 
 let notesSpellCheckHandle = null;
+let keepingShownTypos = false;
+
+// Typos underlines are on the document's model, so they stay while another
+// view still shows the document the focused view is leaving.
+function resetNotesLspViewState() {
+    keepingShownTypos = unfocusedNotesViewsShowing(activeNotesDocument).length > 0;
+    try {
+        resetLspViewState({ keepTypos: keepingShownTypos });
+    } finally {
+        keepingShownTypos = false;
+    }
+}
 
 // Per-block spellcheck overlay handles for Jupyter code blocks, keyed by blockId.
 const jupyterSpellCheckHandles = {};
@@ -15773,7 +15866,7 @@ mainDocument.onChange(() => {
 notesSpellCheckHandle = createSpellCheckEngine({
     getText: () => mainDocument.getValue(),
     onMisspellingsChange: (misspellings) => {
-        if (!isMonacoActive()) {
+        if (!isMonacoActive() || keepingShownTypos) {
             return;
         }
         focusedView().editor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);

@@ -4380,6 +4380,70 @@ describe('notes rendering', () => {
         expect(left.getValue()).toBe('first text');
     });
 
+    it('re-renders an unfocused view previewing a document edited or changed elsewhere', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        await openDocumentTabs(disk);
+        await splitRight();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2));
+        const right = mainEditorAdapter();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        const leftPreview = () => leftRoot.querySelector('.notes-preview').textContent;
+        const focusView = async (root) => {
+            const panel = root.querySelector('.notes-view-panel');
+            panel.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+            panel.click();
+            await vi.waitFor(() => expect(root.dataset.focused).toBe('true'));
+            await vi.waitFor(() => expect(root.querySelector('.notes-tab-editor').getAttribute('aria-selected')).toBe('true'));
+        };
+
+        // The left view previews the document the right view edits.
+        await focusView(leftRoot);
+        leftRoot.querySelector('.notes-tab-viewer').click();
+        await vi.waitFor(() => expect(leftRoot.querySelector('.notes-tab-viewer').getAttribute('aria-selected')).toBe('true'));
+        await focusView(rightRoot);
+
+        right.typeText('typed ');
+        await vi.waitFor(() => expect(leftPreview()).toContain('typed second text'));
+
+        // A change on disk reaches the preview while another document is focused.
+        saveFileMock.mockClear();
+        await vi.waitFor(() => expect(saveFileMock).toHaveBeenCalled());
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(viewTabTitles(rightRoot)).toContain(first);
+        disk.set(second, 'changed on disk');
+        await getEventHandler('notesFileChanged')({ keys: [second] });
+        await vi.waitFor(() => expect(leftPreview()).toContain('changed on disk'));
+    });
+
+    it('keeps typos open for a document while any view shows it', async () => {
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        await openDocumentTabs(disk);
+        await splitRight();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        await vi.waitFor(() => expect(notesTyposOpenDocumentMock).toHaveBeenCalledWith(second, expect.anything(), expect.anything()));
+
+        // The right view moves on to another document; the left still shows it.
+        notesTyposCloseDocumentMock.mockClear();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await vi.waitFor(() => expect(viewTabTitles(rightRoot)).toEqual([second, first]));
+        await flushPromises();
+        await flushPromises();
+        expect(notesTyposCloseDocumentMock).not.toHaveBeenCalledWith(second);
+
+        // Once no view shows it, its typos registration is released.
+        [...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second)
+            .querySelector('.notes-doc-tab-close').click();
+        await vi.waitFor(() => expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith(second));
+        expect(viewTabTitles(rightRoot)).toContain(second);
+    });
+
     it('removes a view when its last tab closes and releases documents no view has', async () => {
         const first = '$NOTES/first.md';
         const second = '$NOTES/second.md';
