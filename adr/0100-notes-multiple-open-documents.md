@@ -544,6 +544,26 @@ as `lspOpenFile === currentFile`.
 - AI Ask sends only the focused document's contents (Q11). It already did, so
   this needed no change.
 
+*Done (Stage 8, task 1):*
+
+- `notes_layout.js` holds the layout tree as plain data: view leaves
+  `{ type: 'view', id }` and split branches `{ type: 'split', direction,
+  children, sizes }`, where `direction` is `row` (side by side) or `column`
+  (stacked) and `sizes` are shares summing to 1. Every operation returns a new
+  tree.
+- Splitting a view inside a split of the same direction adds a sibling that
+  takes half of the view's share; otherwise the view becomes a new two-way
+  split. Closing a view gives its share to its neighbours in proportion, then
+  collapses one-child splits and merges same-direction nesting. The only view
+  is never closed.
+- Dividers are addressed by the split's path of child indices and the index of
+  the child before them. Resizing clamps both sides to a minimum share;
+  equalising gives the two sides equal shares.
+- `parseLayout` rebuilds saved data, dropping unknown nodes and duplicate view
+  ids and repairing bad sizes. A `parseView` callback keeps per-view data,
+  which task 9 uses for tabs.
+- Not yet used by the UI.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco
