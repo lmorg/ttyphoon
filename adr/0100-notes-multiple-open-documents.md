@@ -498,6 +498,19 @@ as `lspOpenFile === currentFile`.
 - Deleting the active file activates its neighbouring tab. History (ADR 0064)
   decides what opens only when no tabs remain.
 
+*Done (Stage 7, task 6):*
+
+- With Notes focused, Cmd+Shift+] and Cmd+Shift+[ step to the next and
+  previous document tab, wrapping round. Cmd+W closes the active tab, saving
+  it as clicking its close button does. Cmd+Shift+T reopens the most recently
+  closed tab that is not open again; up to 20 closed tabs are remembered.
+  Tabs closed because their file was deleted, or whose edits were discarded,
+  are not remembered. Ctrl+Tab still cycles the Notes mode tabs.
+- The keys are handled by Notes in the capture phase, so they do not reach the
+  terminal or Monaco, and do nothing while a Notes dialog is open.
+- The command palette lists the same four commands as "Notes: ..." entries.
+  They send a `notesDocumentTabCommand` event naming the command.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

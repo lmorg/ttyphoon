@@ -1185,6 +1185,9 @@ async function closeNotesTab(view, key, { discard = false } = {}) {
     if (index < 0) {
         return;
     }
+    if (doc && !discard && !doc.deleted) {
+        rememberClosedNotesTab(doc);
+    }
     if (doc && doc !== activeNotesDocument && !isNotesDocumentInTab(doc)) {
         notesDocuments.close(doc);
     }
@@ -1198,6 +1201,78 @@ async function closeNotesTab(view, key, { discard = false } = {}) {
     } else {
         await showNoNotesDocument();
     }
+}
+
+const MAX_CLOSED_NOTES_TABS = 20;
+const closedNotesTabs = [];
+
+function rememberClosedNotesTab(doc) {
+    const index = closedNotesTabs.findIndex((entry) => entry.key === doc.key);
+    if (index >= 0) {
+        closedNotesTabs.splice(index, 1);
+    }
+    closedNotesTabs.push({ key: doc.key, path: doc.path });
+    if (closedNotesTabs.length > MAX_CLOSED_NOTES_TABS) {
+        closedNotesTabs.shift();
+    }
+}
+
+// Reopens the most recently closed tab whose document is not open again
+// already, as Cmd+Shift+T does in a browser.
+async function reopenClosedNotesTab() {
+    while (closedNotesTabs.length > 0) {
+        const entry = closedNotesTabs.pop();
+        if (!mainView.tabs.includes(entry.key)) {
+            await loadFile(entry.path);
+            return;
+        }
+    }
+}
+
+async function cycleNotesDocumentTabs(step) {
+    const tabs = mainView.tabs;
+    if (tabs.length < 2) {
+        return;
+    }
+    const index = tabs.indexOf(activeNotesDocument.key);
+    const next = index < 0 ? 0 : (index + step + tabs.length) % tabs.length;
+    await activateNotesTab(mainView, tabs[next]);
+}
+
+async function closeActiveNotesTab() {
+    if (mainView.tabs.includes(activeNotesDocument.key)) {
+        await closeNotesTab(mainView, activeNotesDocument.key);
+    }
+}
+
+const NOTES_DOCUMENT_TAB_COMMANDS = {
+    next: () => cycleNotesDocumentTabs(1),
+    previous: () => cycleNotesDocumentTabs(-1),
+    close: closeActiveNotesTab,
+    reopen: reopenClosedNotesTab,
+};
+
+// Cmd+Shift+] and Cmd+Shift+[ step through the document tabs, Cmd+W closes
+// the active one and Cmd+Shift+T reopens the last closed (ADR 0100 question
+// 14). Ctrl+Tab still cycles the Notes mode tabs.
+function notesDocumentTabCommandForKey(event) {
+    if (!event.metaKey || event.ctrlKey || event.altKey) {
+        return '';
+    }
+    const key = event.key.toLowerCase();
+    if (event.shiftKey && (event.code === 'BracketRight' || key === ']' || key === '}')) {
+        return 'next';
+    }
+    if (event.shiftKey && (event.code === 'BracketLeft' || key === '[' || key === '{')) {
+        return 'previous';
+    }
+    if (!event.shiftKey && key === 'w') {
+        return 'close';
+    }
+    if (event.shiftKey && key === 't') {
+        return 'reopen';
+    }
+    return '';
 }
 
 // Closes every tab, leaving the active document open but untabbed until
@@ -16302,6 +16377,25 @@ document.addEventListener('keydown', (event) => {
         openFindBar();
     }
 }, true);
+
+document.addEventListener('keydown', (event) => {
+    const command = notesDocumentTabCommandForKey(event);
+    if (!command
+        || document.getElementById('fullscreen-image-overlay')
+        || window.ttyphoonInputboxOpen === true
+        || window.terminalFocusedState === true
+        || elements.modal.dataset.open === 'true'
+        || elements.deleteModal.dataset.open === 'true') {
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    void NOTES_DOCUMENT_TAB_COMMANDS[command]();
+}, true);
+
+EventsOn('notesDocumentTabCommand', (command) => {
+    void NOTES_DOCUMENT_TAB_COMMANDS[command]?.();
+});
 
 document.addEventListener('keydown', (event) => {
     // Block keyboard shortcuts if fullscreen image overlay is open

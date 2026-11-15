@@ -174,6 +174,22 @@ func (wr *webkitRender) commandPaletteItems() []types.MenuItem {
 		},
 	}...)
 
+	// Notes document tabs (ADR 0100 question 14):
+
+	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})
+	for _, command := range []struct{ title, name string }{
+		{"Notes: Next tab (Cmd+Shift+])", "next"},
+		{"Notes: Previous tab (Cmd+Shift+[)", "previous"},
+		{"Notes: Close tab (Cmd+W)", "close"},
+		{"Notes: Reopen closed tab (Cmd+Shift+T)", "reopen"},
+	} {
+		menu = append(menu, types.MenuItem{
+			Title: command.title,
+			Fn:    func() { runtime.EventsEmit(wr.wapp, "notesDocumentTabCommand", command.name) },
+			Icon:  0xf518,
+		})
+	}
+
 	// Edit Files
 
 	menu = append(menu, types.MenuItem{Title: types.MENU_SEPARATOR})

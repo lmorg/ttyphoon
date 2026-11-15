@@ -4220,6 +4220,40 @@ describe('notes rendering', () => {
         expect(editor.getValue()).toBe('first text');
     });
 
+    it('switches, closes and reopens document tabs with hotkeys and palette commands', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const third = '$NOTES/third.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text'], [third, 'third text']]);
+        const editor = await openDocumentTabs(disk);
+        const press = async (key, code, shiftKey) => {
+            const event = new KeyboardEvent('keydown', { key, code, metaKey: true, shiftKey, bubbles: true, cancelable: true });
+            document.body.dispatchEvent(event);
+            await flushPromises();
+            await flushPromises();
+            return event;
+        };
+
+        expect((await press('}', 'BracketRight', true)).defaultPrevented).toBe(true);
+        expect(selectedTabTitle()).toBe(first);
+        await press('{', 'BracketLeft', true);
+        expect(selectedTabTitle()).toBe(third);
+
+        await press('w', 'KeyW', false);
+        expect(tabTitles()).toEqual([first, second]);
+        expect(editor.getValue()).toBe('second text');
+
+        await press('t', 'KeyT', true);
+        expect(tabTitles()).toEqual([first, second, third]);
+        expect(selectedTabTitle()).toBe(third);
+        expect(editor.getValue()).toBe('third text');
+
+        await getEventHandler('notesDocumentTabCommand')('previous');
+        await flushPromises();
+        await flushPromises();
+        expect(selectedTabTitle()).toBe(second);
+    });
+
     it('closes a clean background document when its file is deleted outside the app', async () => {
         const first = '$NOTES/first.md';
         const second = '$NOTES/second.md';
