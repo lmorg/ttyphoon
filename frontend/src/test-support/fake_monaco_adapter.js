@@ -12,6 +12,8 @@ export function createFakeMonacoAdapter(container, options = {}) {
     let selection = { start: 0, end: 0, active: 0 };
     let language = String(options.language || 'plaintext');
     let disposed = false;
+    // Like Monaco: replaceRange (executeEdits) is undoable, setValue resets history.
+    let undoStack = [];
 
     const emitChange = () => {
         if (typeof options.onChange === 'function') {
@@ -50,6 +52,7 @@ export function createFakeMonacoAdapter(container, options = {}) {
                 return;
             }
             value = text;
+            undoStack = [];
             selection = { start: 0, end: 0, active: 0 };
             emitChange();
         },
@@ -75,8 +78,17 @@ export function createFakeMonacoAdapter(container, options = {}) {
         replaceRange(start, end, text) {
             const safeStart = clampOffset(start, value.length);
             const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, value.length));
+            undoStack.push(value);
             value = value.slice(0, safeStart) + String(text || '') + value.slice(safeEnd);
             emitChange();
+        },
+        undo() {
+            if (undoStack.length === 0) {
+                return false;
+            }
+            value = undoStack.pop();
+            emitChange();
+            return true;
         },
         findMatches(query, findOptions = {}) {
             const search = String(query || '');
@@ -133,6 +145,8 @@ export function createFakeMonacoAdapter(container, options = {}) {
             adapter.replaceRange(selection.start, selection.end, insert);
             const caret = start + insert.length;
             select(caret, caret);
+            // Monaco's onDidType, which the adapter forwards as a 'type' request.
+            options.onCompletionRequest?.({ source: 'type', key: insert.slice(-1) });
         },
         moveCursor(offset) {
             select(offset, offset);

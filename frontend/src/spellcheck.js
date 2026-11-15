@@ -76,14 +76,15 @@ export function showSpellcheckSuggestionsPopup(anchorX, anchorY, misspelling, on
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Attach spell-check to a textarea or single-line text input.
+ * The misspelling source without any overlay: aspell checks (debounced) or
+ * externally pushed misspellings, filtered by exclusions. Used directly for
+ * documents rendered by Monaco, and by attachSpellCheck for textareas.
  *
- * @param {HTMLTextAreaElement|HTMLInputElement} textarea
- * @param {{ exclusions?: string[] }} [options]
- * @returns {{ detach(): void, setExclusions(words: string[]): void, check(): void }}
+ * @param {{ getText: () => string, exclusions?: string[], mode?: 'aspell'|'external',
+ *   onMisspellingsChange?: (list: object[], text: string) => void }} options
  */
-export function attachSpellCheck(textarea, options = {}) {
-    disableNativeTextAssistance(textarea);
+export function createSpellCheckEngine(options = {}) {
+    const getText = typeof options.getText === 'function' ? options.getText : () => '';
     const onMisspellingsChange = typeof options.onMisspellingsChange === 'function'
         ? options.onMisspellingsChange
         : null;
@@ -95,14 +96,143 @@ export function attachSpellCheck(textarea, options = {}) {
     let rawMisspellings = [];
     /** Filtered misspellings after exclusions applied. */
     let currentMisspellings = [];
+    let lastCheckedText = null;
+    let checkTimer = null;
+    let destroyed = false;
+
+    function applyMisspellings(raw, text) {
+        rawMisspellings     = Array.isArray(raw) ? raw : [];
+        currentMisspellings = rawMisspellings.filter(
+            m => m && m.misspeltWord && !exclusionSet.has(String(m.misspeltWord).toLowerCase()),
+        );
+        if (onMisspellingsChange) {
+            onMisspellingsChange(currentMisspellings.slice(), text);
+        }
+    }
+
+    async function runCheck() {
+        if (destroyed) return;
+        // In external mode misspellings come from setMisspellings(); never call aspell.
+        if (mode === 'external') return;
+        const text = getText();
+        if (text === lastCheckedText) return;
+        lastCheckedText = text;
+
+        let raw = [];
+        try {
+            raw = (await NotesSpellCheck(text)) || [];
+        } catch {
+            // aspell not available or backend error — degrade silently.
+        }
+
+        if (destroyed) return;
+
+        applyMisspellings(raw, text);
+    }
+
+    function scheduleCheck() {
+        if (destroyed) return;
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => runCheck(), DEBOUNCE_MS);
+    }
+
+    return {
+        /** Debounced re-check; call when the text changes. */
+        scheduleCheck,
+
+        detach() {
+            destroyed = true;
+            clearTimeout(checkTimer);
+        },
+
+        /**
+         * Update the exclusion list. Re-filters the last backend result without
+         * calling aspell again.
+         * @param {string[]} words
+         */
+        setExclusions(words) {
+            exclusionSet = new Set((words || []).map(w => String(w).toLowerCase()));
+            applyMisspellings(rawMisspellings, getText());
+        },
+
+        /** Trigger an immediate spell-check, bypassing the debounce. */
+        check() {
+            lastCheckedText = null;
+            runCheck();
+        },
+
+        /**
+         * Switch the data source. 'external' suppresses aspell so misspellings
+         * come solely from setMisspellings() (typos-lsp); 'aspell' restores the
+         * built-in aspell checker. Switching always clears the current list.
+         * @param {'aspell'|'external'} nextMode
+         */
+        setMode(nextMode) {
+            const next = nextMode === 'external' ? 'external' : 'aspell';
+            if (next === mode) return;
+            mode = next;
+            applyMisspellings([], getText());
+            if (mode === 'external') {
+                clearTimeout(checkTimer);
+            } else {
+                lastCheckedText = null;
+                scheduleCheck();
+            }
+        },
+
+        /** Current data source mode. */
+        getMode() {
+            return mode;
+        },
+
+        /** Current filtered misspellings. */
+        getMisspellings() {
+            return currentMisspellings.slice();
+        },
+
+        /**
+         * Replace the misspellings (external mode). Each item must be
+         * { misspeltWord, wordStart, wordLength, suggestions? } with absolute
+         * character offsets into the text.
+         * @param {Array<{misspeltWord:string,wordStart:number,wordLength:number,suggestions?:string[]}>} list
+         */
+        setMisspellings(list) {
+            if (mode !== 'external') return;
+            applyMisspellings(list, getText());
+        },
+    };
+}
+
+/**
+ * Attach spell-check to a textarea or single-line text input.
+ *
+ * @param {HTMLTextAreaElement|HTMLInputElement} textarea
+ * @param {{ exclusions?: string[] }} [options]
+ * @returns {{ detach(): void, setExclusions(words: string[]): void, check(): void }}
+ */
+export function attachSpellCheck(textarea, options = {}) {
+    disableNativeTextAssistance(textarea);
+    const onMisspellingsChange = typeof options.onMisspellingsChange === 'function'
+        ? options.onMisspellingsChange
+        : null;
     /**
      * Cached word position data from the last measureWordRects call.
      * Each entry: { wordRect, mirrorRect }.
      */
     let cachedWordData = [];
-    let lastCheckedText = null;
-    let checkTimer = null;
     let destroyed = false;
+    const engine = createSpellCheckEngine({
+        getText: () => textarea.value,
+        exclusions: options.exclusions,
+        mode: options.mode,
+        onMisspellingsChange: (misspellings, text) => {
+            cachedWordData = measureWordRects(misspellings, text);
+            drawCanvas();
+            if (onMisspellingsChange) {
+                onMisspellingsChange(misspellings);
+            }
+        },
+    });
 
     // ── Canvas overlay ────────────────────────────────────────────────────
 
@@ -323,53 +453,10 @@ export function attachSpellCheck(textarea, options = {}) {
         });
     }
 
-    // ── Spell-check runner ────────────────────────────────────────────────
-
-    /**
-     * Apply a raw misspelling list (from aspell or pushed externally): filter by
-     * exclusions, measure word rects, and repaint the overlay.
-     */
-    function applyMisspellings(raw, text) {
-        rawMisspellings     = Array.isArray(raw) ? raw : [];
-        currentMisspellings = rawMisspellings.filter(
-            m => m && m.misspeltWord && !exclusionSet.has(String(m.misspeltWord).toLowerCase()),
-        );
-        cachedWordData      = measureWordRects(currentMisspellings, text);
-        drawCanvas();
-        if (onMisspellingsChange) {
-            onMisspellingsChange(currentMisspellings.slice());
-        }
-    }
-
-    async function runCheck() {
-        if (destroyed) return;
-        // In external mode the overlay is fed by setMisspellings(); never call aspell.
-        if (mode === 'external') return;
-        const text = textarea.value;
-        if (text === lastCheckedText) return;
-        lastCheckedText = text;
-
-        let raw = [];
-        try {
-            raw = (await NotesSpellCheck(text)) || [];
-        } catch {
-            // aspell not available or backend error — degrade silently.
-        }
-
-        if (destroyed) return;
-
-        applyMisspellings(raw, text);
-    }
-
-    function scheduleCheck() {
-        clearTimeout(checkTimer);
-        checkTimer = setTimeout(() => runCheck(), DEBOUNCE_MS);
-    }
-
     // ── Event listeners ───────────────────────────────────────────────────
 
     function onInput() {
-        scheduleCheck();
+        engine.scheduleCheck();
     }
 
     /** On textarea scroll: redraw with cached positions — no re-measurement needed. */
@@ -419,7 +506,7 @@ export function attachSpellCheck(textarea, options = {}) {
         rafId = requestAnimationFrame(() => {
             rafId = null;
             if (!destroyed) {
-                cachedWordData = measureWordRects(currentMisspellings, textarea.value);
+                cachedWordData = measureWordRects(engine.getMisspellings(), textarea.value);
                 drawCanvas();
             }
         });
@@ -433,7 +520,7 @@ export function attachSpellCheck(textarea, options = {}) {
 
     // Initial position + first check.
     drawCanvas();
-    scheduleCheck();
+    engine.scheduleCheck();
 
     // ── Public handle ─────────────────────────────────────────────────────
 
@@ -441,7 +528,7 @@ export function attachSpellCheck(textarea, options = {}) {
         detach() {
             if (destroyed) return;
             destroyed = true;
-            clearTimeout(checkTimer);
+            engine.detach();
             if (rafId !== null) cancelAnimationFrame(rafId);
             textarea.removeEventListener('input',  onInput);
             textarea.removeEventListener('scroll', onScroll);
@@ -454,61 +541,12 @@ export function attachSpellCheck(textarea, options = {}) {
             }
         },
 
-        /**
-         * Update the exclusion list. Re-filters the last backend result without
-         * calling aspell again, then redraws.
-         * @param {string[]} words
-         */
-        setExclusions(words) {
-            exclusionSet        = new Set((words || []).map(w => String(w).toLowerCase()));
-            applyMisspellings(rawMisspellings, textarea.value);
-        },
-
-        /** Trigger an immediate spell-check, bypassing the debounce. */
-        check() {
-            lastCheckedText = null;
-            runCheck();
-        },
-
-        /**
-         * Switch the data source. 'external' suppresses aspell so the overlay is
-         * driven solely by setMisspellings() (typos-lsp); 'aspell' restores the
-         * built-in aspell checker. Switching always clears the current underlines.
-         * @param {'aspell'|'external'} nextMode
-         */
-        setMode(nextMode) {
-            const next = nextMode === 'external' ? 'external' : 'aspell';
-            if (next === mode) return;
-            mode = next;
-            applyMisspellings([], textarea.value);
-            if (mode === 'external') {
-                clearTimeout(checkTimer);
-            } else {
-                lastCheckedText = null;
-                scheduleCheck();
-            }
-        },
-
-        /** Current data source mode. */
-        getMode() {
-            return mode;
-        },
-
-        /** Current filtered misspellings rendered by the shared pipeline. */
-        getMisspellings() {
-            return currentMisspellings.slice();
-        },
-
-        /**
-         * Replace the rendered misspellings (external mode). Each item must be
-         * { misspeltWord, wordStart, wordLength, suggestions? } with absolute
-         * character offsets into the textarea value.
-         * @param {Array<{misspeltWord:string,wordStart:number,wordLength:number,suggestions?:string[]}>} list
-         */
-        setMisspellings(list) {
-            if (mode !== 'external') return;
-            applyMisspellings(list, textarea.value);
-        },
+        setExclusions: engine.setExclusions,
+        check: engine.check,
+        setMode: engine.setMode,
+        getMode: engine.getMode,
+        getMisspellings: engine.getMisspellings,
+        setMisspellings: engine.setMisspellings,
     };
 }
 

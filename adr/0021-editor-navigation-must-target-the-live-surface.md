@@ -14,12 +14,13 @@ Notes has two editor surfaces. Monaco is the default, and the original
 active — it is retained as the fallback surface and as the value store that
 several helpers read from.
 
-*Update (ADR 0100, Stage 1):* the textarea fallback editor has been removed.
-Monaco is the only editing surface. Monaco is created lazily when an Edit view
-first opens, so until ADR 0100 Stage 1 task 3 lands the hidden textarea is still
-the value store before Monaco exists (for example, preview checkbox toggles) and
-is kept in sync with Monaco afterwards. It no longer receives keyboard, mouse,
-Vim or context-menu input.
+*Update (ADR 0100, Stage 1):* the textarea fallback editor and the hidden
+textarea have both been removed. Monaco is the only editing surface. The
+document text lives in a document buffer (`notes_document_buffer.js`,
+`mainDocument` in `notes.js`), which holds the text before Monaco is created and
+delegates to Monaco once it mounts. The hidden-surface history below explains
+why navigation and programmatic edits go through the buffer and Monaco rather
+than any DOM element.
 
 Both symbol handlers drove the textarea directly:
 
@@ -81,8 +82,8 @@ history is scoped to tmux window names and supports files outside the active
 root; recent files are derived from history (ADR 0074). Same-document
 positions at least 20 lines apart create separate entries; nearby positions do
 not append another item. Legacy filename-only cache entries migrate to line 1.
-Monaco reports its active cursor offset, including reverse selections, and the
-textarea fallback reports selection/input events. Position capture is debounced.
+Monaco reports its active cursor offset, including reverse selections, and
+document changes. Position capture is debounced.
 The toolbar's Previous/Next actions use the position-aware Go bindings, load
 the target file, select its Edit mode, await Monaco initialization, and restore
 the saved line through `jumpEditorToLine`. Filename-only compatibility bindings
@@ -133,11 +134,10 @@ Updated 2026-11-11: Escape dismisses LSP tooltips first, then an LSP completion
 menu on a subsequent press, and only toggles Vim/insert mode when neither is
 open. Monaco intercepts Escape in the editor DOM capture phase, before native
 keybindings and monaco-vim can process the same event. Its adapter also checks
-Notes tooltips rendered outside Monaco. The textarea and Jupyter Vim handlers
-respect previously prevented events so dismissing a popup cannot change mode.
+Notes tooltips rendered outside Monaco. The Jupyter Vim handlers respect
+previously prevented events so dismissing a popup cannot change mode.
 
-Regression tests enable a mock Monaco adapter and deliberately make the hidden
-textarea stale, verifying model searches and visible selection/reveal for JSON,
+Regression tests use a mock Monaco adapter, verifying model searches and visible selection/reveal for JSON,
 YAML, YML and XML. Shortcut tests simulate a Monaco-level handler that would
 consume the event and verify Notes captures both modifier variants first.
 
@@ -146,7 +146,7 @@ consume the event and verify Notes captures both modifier variants first.
 - Symbol navigation works on the visible editor, and survives the
   `loadFile` → Monaco-remount race.
 - New navigation entry points should call `jumpEditorToOffset` rather than
-  touching `elements.editor`.
+  setting a selection directly.
 - Programmatic insertions, including Markdown emitted for clipboard images,
   must use `insertTextInMainEditor` so Monaco updates its model and emits the
   input event that refreshes the rendered preview.
@@ -155,9 +155,10 @@ consume the event and verify Notes captures both modifier variants first.
   primary-paste keydown in the capture phase for Markdown documents, prevents
   Monaco's native paste, and routes to the same Go-backed clipboard handler as
   the custom Paste menu.
-- Direct `elements.editor` selection/scroll writes are now limited to the
-  low-level helpers (`setMainEditorSelectionRange`), the pre-Monaco branch, and
-  full-document resets.
+- Since ADR 0100 Stage 1 there is no `elements.editor`. Reads and writes go
+  through `mainDocument` (or the `getMainEditorValue` /
+  `setMainEditorSelectionRange` / `replaceMainDocumentText` wrappers), which
+  target Monaco when it exists.
 
 ## Lessons
 

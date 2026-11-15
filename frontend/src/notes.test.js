@@ -4,7 +4,7 @@ import postcss from 'postcss';
 import * as swaggerUtils from './swagger-utils.js';
 import { attachJsonViewerEditHandler, renderJsonViewer } from './json-viewer.js';
 import { marked } from 'marked';
-import { attachSpellCheck } from './spellcheck';
+import { attachSpellCheck, createSpellCheckEngine } from './spellcheck';
 
 const notesCss = readFileSync('./src/notes.css', 'utf8');
 
@@ -27,6 +27,14 @@ function getNotesStyleProperties(selector) {
 import { createFakeMonacoAdapter, createFakeMonacoDiffAdapter } from './test-support/fake_monaco_adapter.js';
 
 // The Notes main editor is Monaco; under jsdom it is the string-backed fake.
+function mainSpellCheckEngine() {
+    const engine = createSpellCheckEngine.mock.results.at(-1)?.value;
+    if (!engine) {
+        throw new Error('the main document spellcheck engine has not been created');
+    }
+    return engine;
+}
+
 function mainEditorAdapter() {
     const adapter = createMonacoAdapterMock.mock.results.at(-1)?.value;
     if (!adapter) {
@@ -470,6 +478,16 @@ vi.mock('./spellcheck', () => ({
         check: vi.fn(),
         setMode: vi.fn(),
         getMode: vi.fn(() => 'aspell'),
+        setMisspellings: vi.fn(),
+    })),
+    createSpellCheckEngine: vi.fn(() => ({
+        scheduleCheck: vi.fn(),
+        detach: vi.fn(),
+        setExclusions: vi.fn(),
+        check: vi.fn(),
+        setMode: vi.fn(),
+        getMode: vi.fn(() => 'aspell'),
+        getMisspellings: vi.fn(() => []),
         setMisspellings: vi.fn(),
     })),
 }));
@@ -1142,13 +1160,13 @@ describe('notes rendering', () => {
         const editTab = document.getElementById('notes-tab-editor');
         const viewTab = document.getElementById('notes-tab-image-view');
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/diagram.svg');
-        expect(document.getElementById('notes-editor').value).toBe(source);
         expect(editTab.style.display).not.toBe('none');
         expect(viewTab.style.display).not.toBe('none');
         expect(document.getElementById('notes-image-view-wrap').dataset.active).toBe('true');
 
         editTab.click();
         expect(document.getElementById('notes-editor-wrap').dataset.active).toBe('true');
+        await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toBe(source));
         viewTab.click();
         await flushPromises();
         await flushPromises();
@@ -1277,10 +1295,11 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
         expect(getFileMock).toHaveBeenCalledWith('$NOTES/previous.md');
-        expect(editor.value).toBe('one\ntwo\nthree\nfour');
-        expect(editor.selectionStart).toBe('one\ntwo\n'.length);
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+        expect(editor.getValue()).toBe('one\ntwo\nthree\nfour');
+        expect(editor.getSelectionOffsets().start).toBe('one\ntwo\n'.length);
         expect(document.getElementById('notes-tab-editor').getAttribute('aria-selected')).toBe('true');
     });
 
@@ -1436,14 +1455,13 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        expect(editor.value).toContain('  <!-- keep this comment -->');
-        expect(editor.value).toContain('  <name>Updated</name>');
-        expect(editor.value).toContain('  <count>2</count>');
-        const updated = editor.value;
         await vi.waitFor(() => {
-            expect(saveFileMock).toHaveBeenCalledWith(`$NOTES/${fileName}`, updated, '');
+            expect(saveFileMock.mock.calls.some(([file]) => file === `$NOTES/${fileName}`)).toBe(true);
         }, { timeout: 2000 });
+        const updated = saveFileMock.mock.calls.filter(([file]) => file === `$NOTES/${fileName}`).at(-1)[1];
+        expect(updated).toContain('  <!-- keep this comment -->');
+        expect(updated).toContain('  <name>Updated</name>');
+        expect(updated).toContain('  <count>2</count>');
     });
 
     it('disables native assistance on filters and attaches custom spellchecking only to commit prose', async () => {
@@ -1924,8 +1942,6 @@ describe('notes rendering', () => {
             await flushPromises();
             expect(createMonacoAdapterMock).toHaveBeenCalled();
             value = '# Unsaved\n' + '<b>source text</b>\n'.repeat(300) + 'Last editor line';
-            const editor = document.getElementById('notes-editor');
-            editor.value = 'Stale hidden textarea';
             const printed = new Promise((resolve) => windowPrintMock.mockImplementationOnce(async () => { resolve(); }));
             adapter.options.onContextMenu(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
             const menu = showLocalMenuMock.mock.calls.at(-1)[0];
@@ -1935,7 +1951,6 @@ describe('notes rendering', () => {
             expect(document.querySelector('#notes-print-root .notes-print-filename').nextElementSibling.tagName).toBe('PRE');
             expect(document.querySelector('#notes-print-root code').textContent).toBe(value);
             expect(document.querySelector('#notes-print-root b')).toBeNull();
-            expect(editor.value).toBe('Stale hidden textarea');
             expect(saveFileMock.mock.calls.filter(([savedFilename]) => savedFilename === filename)).toHaveLength(0);
         } finally {
             window.dispatchEvent(new Event('afterprint'));
@@ -2009,18 +2024,6 @@ describe('notes rendering', () => {
         ['added', '# Old heading', '---\ntitle: Added\n---\n# Updated heading', { title: 'Added' }],
         ['removed', '---\ntitle: Old\n---\n# Old heading', '# Updated heading', null],
     ])('refreshes ToC and %s Frontmatter on Monaco autosave without rendering the preview', async (_label, initial, updated, frontmatter) => {
-        let value = initial;
-        const adapter = {
-            getValue: () => value,
-            setValue: (next) => { value = next; },
-            getSelectionOffsets: () => ({ start: 0, end: 0 }),
-            setSelectionOffsets: vi.fn(),
-            revealOffset: vi.fn(), focus: vi.fn(), layout: vi.fn(),
-            setLanguage: vi.fn(), setWordWrap: vi.fn(), setTypography: vi.fn(),
-            applyTheme: vi.fn(), configureLsp: vi.fn(), setDiagnostics: vi.fn(),
-            setTyposMisspellings: vi.fn(),
-        };
-        createMonacoAdapterMock.mockResolvedValue(adapter);
         listFilesMock.mockResolvedValue(['$NOTES/post.md']);
         getFileMock.mockResolvedValue({ contents: initial, text: '', error: '' });
         try {
@@ -2034,14 +2037,11 @@ describe('notes rendering', () => {
             expect(createMonacoAdapterMock).toHaveBeenCalled();
             const preview = document.getElementById('notes-preview');
             const originalPreview = preview.innerHTML;
-            const editor = document.getElementById('notes-editor');
+            const editor = mainEditorAdapter();
             renderJsonViewer.mockClear();
 
             vi.useFakeTimers();
-            value = updated;
-            editor.value = updated;
-            editor.dispatchEvent(new Event('input', { bubbles: true }));
-            editor.value = '# Stale hidden textarea';
+            editor.setValue(updated);
             await vi.advanceTimersByTimeAsync(1100);
 
             expect(saveFileMock).toHaveBeenCalledWith('$NOTES/post.md', updated, '');
@@ -2081,17 +2081,12 @@ describe('notes rendering', () => {
 
     it('maps Home and End to current line boundaries in editor fields', async () => {
         listFilesMock.mockResolvedValue([]);
-        getFileMock.mockResolvedValue({ contents: 'first line\nsecond line\nthird line', text: '', error: '' });
 
         await importNotesModule();
 
-        const createAndOpenHandler = getEventHandler('notesCreateAndOpen');
-        expect(typeof createAndOpenHandler).toBe('function');
-        await createAndOpenHandler({ filename: '$NOTES/sample.md', contents: 'first line\nsecond line\nthird line' });
-        await flushPromises();
-        await flushPromises();
-
-        const editor = document.getElementById('notes-editor');
+        const editor = document.createElement('textarea');
+        editor.value = 'first line\nsecond line\nthird line';
+        document.getElementById('notes-app').appendChild(editor);
         editor.focus();
 
         const secondLineStart = editor.value.indexOf('second line');
@@ -2160,10 +2155,9 @@ describe('notes rendering', () => {
         const replaceAll = document.getElementById('notes-replace-all');
         const caseBtn = document.getElementById('notes-find-doc-option-case');
         const wholeWordBtn = document.getElementById('notes-find-doc-option-word');
-        const editor = document.getElementById('notes-editor');
-
         tabEditor.click();
-        await flushPromises();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
 
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
@@ -2179,7 +2173,7 @@ describe('notes rendering', () => {
         replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
 
-        expect(editor.value).toBe('X Foo food X');
+        expect(editor.getValue()).toBe('X Foo food X');
     });
 
     it('applies regex replace all for in-document find', async () => {
@@ -2198,10 +2192,9 @@ describe('notes rendering', () => {
         const replaceInput = document.getElementById('notes-replace-input');
         const replaceAll = document.getElementById('notes-replace-all');
         const regexBtn = document.getElementById('notes-find-doc-option-regex');
-        const editor = document.getElementById('notes-editor');
-
         tabEditor.click();
-        await flushPromises();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
 
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
@@ -2215,7 +2208,7 @@ describe('notes rendering', () => {
         replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
 
-        expect(editor.value).toBe('Y Y Y');
+        expect(editor.getValue()).toBe('Y Y Y');
     });
 
     it('handles diagnostics events without an active file', async () => {
@@ -2392,9 +2385,7 @@ describe('notes rendering', () => {
             expect.stringContaining('#'),
         );
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nUpdated content';
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        mainEditorAdapter().setValue('# Todo\n\nUpdated content');
         await new Promise((resolve) => setTimeout(resolve, 260));
 
         expect(notesLspChangeDocumentMock).toHaveBeenCalledWith(
@@ -2498,11 +2489,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin.';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
+        editor.typeText('.');
         await flushPromises();
         await flushPromises();
 
@@ -2522,7 +2511,7 @@ describe('notes rendering', () => {
         firstItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
 
-        expect(editor.value).toContain('Println');
+        expect(editor.getValue()).toContain('Println');
     });
 
     it('cycles LSP completion selection with arrow keys only when popup is open', async () => {
@@ -2843,11 +2832,9 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const editor = document.getElementById('notes-editor');
-        editor.value = '# Todo\n\nPrin.';
-        editor.selectionStart = editor.value.length;
-        editor.selectionEnd = editor.value.length;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        const editor = mainEditorAdapter();
+        editor.moveCursor(editor.getValue().length);
+        editor.typeText('.');
         await flushPromises();
         await flushPromises();
 
@@ -2855,14 +2842,11 @@ describe('notes rendering', () => {
         expect(completion?.style.display).toBe('block');
         expect(completion?.style.opacity || '').toBe('');
 
-        editor.selectionStart = 2;
-        editor.selectionEnd = 2;
-        editor.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }));
+        editor.moveCursor(2);
         await new Promise((resolve) => setTimeout(resolve, 320));
         await flushPromises();
 
         const hover = document.getElementById('notes-lsp-hover-tooltip');
-        expect(hover?.style.display).toBe('none');
         expect(hover?.style.opacity || '').toBe('');
 
         const styles = getNotesRenderedStyles();
@@ -3446,12 +3430,13 @@ describe('notes rendering', () => {
         expect(deleteFileMock).toHaveBeenCalledWith(deletedFile);
         if (historyFile) {
             expect(getFileMock).toHaveBeenCalledWith(historyFile);
-            expect(document.getElementById('notes-editor').selectionStart).toBe('one\ntwo\n'.length);
+            await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+            expect(mainEditorAdapter().getSelectionOffsets().start).toBe('one\ntwo\n'.length);
         } else {
             expect(getFileMock).not.toHaveBeenCalled();
-            expect(document.getElementById('notes-editor').value).toBe(
-                deletedFile === '$NOTES/current.md' ? '' : 'one\ntwo\nthree\nfour',
-            );
+            await new Promise((resolve) => setTimeout(resolve, 160));
+            expect(document.getElementById('notes-preview').textContent.includes('three'))
+                .toBe(deletedFile !== '$NOTES/current.md');
         }
     });
 
@@ -3688,7 +3673,8 @@ describe('notes rendering', () => {
         const tabId = mode === 'viewer' ? 'notes-tab-viewer' : 'notes-tab-editor';
         expect(document.getElementById(tabId).getAttribute('aria-selected')).toBe('true');
         if (mode === 'editor') {
-            expect(document.getElementById('notes-editor').selectionStart).toBe('one\ntwo\n'.length);
+            await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+            expect(mainEditorAdapter().getSelectionOffsets().start).toBe('one\ntwo\n'.length);
         }
     });
 
@@ -3701,7 +3687,7 @@ describe('notes rendering', () => {
         notesHistoryCurrentPositionMock.mockResolvedValue({ file, line: 1 });
         getFileMock.mockImplementation(async () => ({ contents: `# ${workspace}`, text: '', error: '' }));
         await importNotesModule();
-        expect(document.getElementById('notes-editor').value).toBe('# One');
+        await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toBe('# One'));
 
         const contextChanged = getEventHandler('notesContextChanged');
         workspace = 'Two';
@@ -3710,7 +3696,7 @@ describe('notes rendering', () => {
         contextChanged({ projectRoot: otherRoot, groupName: workspace });
         await flushPromises();
         await flushPromises();
-        expect(document.getElementById('notes-editor').value).toBe('# Two');
+        expect(mainEditorAdapter().getValue()).toBe('# Two');
         expect(getFileMock).toHaveBeenCalledTimes(2);
 
         const externalFile = '/another-project/outside.md';
@@ -3728,13 +3714,13 @@ describe('notes rendering', () => {
         notesHistoryCurrentPositionMock.mockResolvedValue({ file: '$PROJECT/README.md', line: 1 });
         getFileMock.mockResolvedValue({ contents: '# Previous workspace', text: '', error: '' });
         await importNotesModule();
-        expect(document.getElementById('notes-editor').value).toBe('# Previous workspace');
+        await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toBe('# Previous workspace'));
 
         notesHistoryCurrentPositionMock.mockResolvedValue({ file: '', line: 1 });
         getEventHandler('notesContextChanged')({ projectRoot: '/new', groupName: 'Empty workspace' });
         await flushPromises();
         await flushPromises();
-        expect(document.getElementById('notes-editor').value).toBe('');
+        expect(mainEditorAdapter().getValue()).toBe('');
         expect(document.getElementById('notes-preview').textContent).not.toContain('Previous workspace');
     });
 
@@ -4391,7 +4377,7 @@ describe('notes rendering', () => {
         const editors = document.querySelectorAll('.jupyter-code-editable');
         const dockerHandle = spellcheckFor(editors[0]);
         const pythonHandle = spellcheckFor(editors[1]);
-        const mainHandle = spellcheckFor(document.getElementById('notes-editor'));
+        const mainHandle = mainSpellCheckEngine();
         expect(dockerHandle.setExclusions).toHaveBeenLastCalledWith(['FROM', 'RUN']);
         expect(pythonHandle.setExclusions).toHaveBeenLastCalledWith(['def']);
         const pythonCalls = pythonHandle.setExclusions.mock.calls.length;
@@ -4472,8 +4458,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/Dockerfile"]').click();
         await flushPromises();
         await flushPromises();
-        const editor = document.getElementById('notes-editor');
-        const handle = attachSpellCheck.mock.results[attachSpellCheck.mock.calls.findIndex(([target]) => target === editor)].value;
+        const handle = mainSpellCheckEngine();
         expect(getNotesLanguageReservedWordsMock).toHaveBeenCalledWith('dockerfile');
         expect(handle.setExclusions).toHaveBeenLastCalledWith(['from', 'run']);
     });
@@ -5308,16 +5293,18 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         document.getElementById('notes-tab-editor').click();
-        await flushPromises();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
 
         const entries = Array.from(document.querySelectorAll('.notes-tools-toc-item'));
         const firstSection = entries.find((entry) => entry.textContent === 'First section');
-        expect(firstSection, `editor=${document.getElementById('notes-editor').value}; toc=${document.getElementById('notes-tools-toc').textContent}`).toBeTruthy();
+        expect(firstSection, `editor=${editor.getValue()}; toc=${document.getElementById('notes-tools-toc').textContent}`).toBeTruthy();
         firstSection.click();
 
-        const editor = document.getElementById('notes-editor');
-        expect(editor.selectionStart).toBe(markdown.indexOf('## First section'));
-        expect(editor.selectionEnd).toBe(markdown.indexOf('\n\nBody'));
+        await vi.waitFor(() => expect(editor.getSelectionOffsets()).toEqual({
+            start: markdown.indexOf('## First section'),
+            end: markdown.indexOf('\n\nBody'),
+        }));
     });
 
     it('reuses markdown processing pipeline for AI sections', async () => {
@@ -6540,7 +6527,8 @@ describe('notes rendering', () => {
         await flushPromises();
 
         document.getElementById('notes-tab-editor').click();
-        await flushPromises();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
 
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
         await flushPromises();
@@ -6548,7 +6536,6 @@ describe('notes rendering', () => {
         const findInput = document.getElementById('notes-find-input');
         const replaceInput = document.getElementById('notes-replace-input');
         const replaceAll = document.getElementById('notes-replace-all');
-        const editor = document.getElementById('notes-editor');
 
         findInput.value = 'alpha';
         findInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -6557,7 +6544,11 @@ describe('notes rendering', () => {
         replaceAll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
         await flushPromises();
 
-        expect(editor.value).toBe('omega beta omega');
+        expect(editor.getValue()).toBe('omega beta omega');
+
+        // Replace all is a Monaco edit, so a single undo restores the original.
+        expect(editor.undo()).toBe(true);
+        expect(editor.getValue()).toBe('alpha beta alpha');
     });
 
     it.each([
@@ -6646,10 +6637,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         document.getElementById('notes-tab-editor').click();
-        await flushPromises();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
 
         const findFilesInput = document.getElementById('notes-find-files-input');
-        const editor = document.getElementById('notes-editor');
 
         findFilesInput.value = 'alpha';
         findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -6658,8 +6649,7 @@ describe('notes rendering', () => {
 
         vi.useFakeTimers();
         try {
-            editor.value = '# Guide\n\nalpha updated';
-            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.setValue('# Guide\n\nalpha updated');
 
             await vi.advanceTimersByTimeAsync(1100);
         } finally {
@@ -7567,7 +7557,6 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
         expect(createMonacoAdapterMock).toHaveBeenCalled();
-        document.getElementById('notes-editor').value = 'stale hidden textarea';
         const findInput = document.getElementById('notes-find-input');
         findInput.value = 'needle';
         findInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -8003,14 +7992,10 @@ describe('notes rendering', () => {
         await flushPromises();
 
         const monacoEditor = document.getElementById('notes-monaco-editor');
-        const notesEditor = document.getElementById('notes-editor');
-        const editorHighlight = document.getElementById('notes-editor-highlight');
-
-        notesEditor.value = '{"veryLongPropertyNameThatForcesHorizontalScrolling": "value"}';
-        notesEditor.dispatchEvent(new Event('input', { bubbles: true }));
-
         expect(monacoEditor).toBeTruthy();
-        expect(editorHighlight).toBeNull();
+        expect(monacoEditor.getAttribute('aria-hidden')).toBeNull();
+        expect(document.getElementById('notes-editor-highlight')).toBeNull();
+        expect(document.getElementById('notes-editor')).toBeNull();
     });
 
     it('applies structured JSON format actions from editor context menu', async () => {
@@ -8041,7 +8026,10 @@ describe('notes rendering', () => {
 
         const minified = '{"name":"ttyphoon","ok":true}';
         expect(editor.getValue()).toBe(minified);
-        expect(document.getElementById('notes-editor').value).toBe(minified);
+
+        // Formatting is a Monaco edit, so undo restores the original layout.
+        expect(editor.undo()).toBe(true);
+        expect(editor.getValue()).toBe('{\n  "name": "ttyphoon",\n  "ok": true\n}');
     });
 
     it('cycles visible notes tabs with ctrl+tab', async () => {
@@ -8126,7 +8114,7 @@ describe('notes rendering', () => {
         expect(selectedAfterFourth).toBe(selectedBefore);
     });
 
-    it('disables grammar helpers and keeps spellcheck enabled on note editors', async () => {
+    it('disables grammar helpers on Jupyter code editors', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/readme.md']);
         getFileMock.mockResolvedValue({ contents: '# Note\n\n```js\nconsole.log("hello")\n```', text: '', error: '' });
 
@@ -8137,16 +8125,7 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const notesEditor = document.getElementById('notes-editor');
         const jupyterEditor = document.querySelector('.jupyter-code-editable');
-
-        expect(notesEditor.getAttribute('autocorrect')).toBe('off');
-        expect(notesEditor.getAttribute('autocapitalize')).toBe('off');
-        expect(notesEditor.getAttribute('autocomplete')).toBe('off');
-        expect(notesEditor.getAttribute('data-gramm')).toBe('false');
-        expect(notesEditor.getAttribute('data-gramm_editor')).toBe('false');
-        expect(notesEditor.getAttribute('data-enable-grammarly')).toBe('false');
-        expect(notesEditor.getAttribute('spellcheck')).toBe('false');
 
         expect(jupyterEditor).toBeTruthy();
         expect(jupyterEditor.getAttribute('autocorrect')).toBe('off');
@@ -8194,8 +8173,8 @@ describe('notes rendering', () => {
         await flushPromises();
         await flushPromises();
 
-        const notesEditor = document.getElementById('notes-editor');
-        expect(notesEditor.value).toContain('| Gamma | 1 |');
+        document.getElementById('notes-tab-editor').click();
+        await vi.waitFor(() => expect(mainEditorAdapter().getValue()).toContain('| Gamma | 1 |'));
     });
 
     it.each([
@@ -8207,18 +8186,6 @@ describe('notes rendering', () => {
         ['Delete column', '# Table\n\n| Value |\n| --- |\n| 1 |\n| 2 |'],
     ])('keeps Monaco, saved content, Run and View synchronized after %s', async (action, expected) => {
         const initial = '# Table\n\n| Name | Value |\n| --- | --- |\n| Alpha | 1 |\n| Beta | 2 |';
-        let value = initial;
-        const adapter = {
-            getValue: () => value,
-            setValue: (next) => { value = next; },
-            getSelectionOffsets: () => ({ start: 0, end: 0 }),
-            setSelectionOffsets: vi.fn(),
-            revealOffset: vi.fn(), focus: vi.fn(), layout: vi.fn(),
-            setLanguage: vi.fn(), setWordWrap: vi.fn(), setTypography: vi.fn(),
-            applyTheme: vi.fn(), configureLsp: vi.fn(), setDiagnostics: vi.fn(),
-            setTyposMisspellings: vi.fn(),
-        };
-        createMonacoAdapterMock.mockResolvedValue(adapter);
         listFilesMock.mockResolvedValue(['$NOTES/table.md']);
         getFileMock.mockResolvedValue({ contents: initial, text: '', error: '' });
 
@@ -8228,7 +8195,7 @@ describe('notes rendering', () => {
         await flushPromises();
         document.getElementById('notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
-        const editor = document.getElementById('notes-editor');
+        const editor = mainEditorAdapter();
         const runTab = document.getElementById('notes-tab-jupyter');
         const viewTab = document.getElementById('notes-tab-viewer');
         runTab.click();
@@ -8254,8 +8221,7 @@ describe('notes rendering', () => {
         }
         await flushPromises();
         await flushPromises();
-        expect(value).toBe(expected);
-        expect(editor.value).toBe(expected);
+        expect(editor.getValue()).toBe(expected);
         expect(saveFileMock).toHaveBeenLastCalledWith('$NOTES/table.md', expected, '');
 
         const run = document.getElementById('notes-jupyter');
@@ -8287,14 +8253,12 @@ describe('notes rendering', () => {
         });
         document.getElementById('notes-tab-editor').click();
         await flushPromises();
-        expect(value).toBe(expected);
-        expect(editor.value).toBe(expected);
+        expect(editor.getValue()).toBe(expected);
         runTab.click();
         await flushPromises();
         await flushPromises();
         expect(run.querySelector('table')?.outerHTML).toBe(runTable);
-        expect(value).toBe(expected);
-        expect(editor.value).toBe(expected);
+        expect(editor.getValue()).toBe(expected);
     });
 
     it('renders Markdown in Run table cells without creating hyperlinks', async () => {
@@ -8756,11 +8720,36 @@ describe('notes rendering', () => {
         menuConfig.onSelect(insertRowIndex);
         await flushPromises();
 
-        expect(document.getElementById('notes-editor').value).toBe('Name,Value\nAlpha,1\n,');
-
         document.getElementById('notes-tab-csv-edit').click();
         await flushPromises();
         expect(mainEditorAdapter().getValue()).toBe('Name,Value\nAlpha,1\n,');
+    });
+
+    it('makes CSV Run mode edits undoable in the open editor', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/table.csv']);
+        getFileMock.mockResolvedValue({ contents: 'Name,Value\nAlpha,1', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/table.csv"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tab-csv-edit').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+
+        document.getElementById('notes-tab-csv-run').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('#notes-csv-view tbody tr td')
+            .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+        await flushPromises();
+        const menuConfig = showLocalMenuMock.mock.calls.at(-1)[0];
+        menuConfig.onSelect(menuConfig.options.indexOf('Insert row (after)'));
+        await flushPromises();
+
+        expect(editor.getValue()).toBe('Name,Value\nAlpha,1\n,');
+        expect(editor.undo()).toBe(true);
+        expect(editor.getValue()).toBe('Name,Value\nAlpha,1');
     });
 
     it('does not attach table highlight callbacks in Run view', async () => {

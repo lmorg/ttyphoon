@@ -49,7 +49,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
   - Stage 1: remove the fallback editor
     - [x] Add a Monaco editor/model fake for jsdom (`getValue`/`setValue`, `setModel`, view state, selections, `onDidChangeContent`) and run `notes.test.js` with Monaco active instead of the textarea fallback
     - [x] Remove the `notes-editor-monaco` setting and the `!isMonacoActive()` fallback branches; Monaco is always the main editor
-    - [ ] Retire the hidden textarea as the source of truth: route the ~180 `elements.editor` reads/writes through the Monaco model, audit the undo manager, mutation adapter and spellcheck for textarea dependencies, then remove it. Update ADR 0021
+    - [x] Retire the hidden textarea as the source of truth: route the ~180 `elements.editor` reads/writes through the Monaco model, audit the undo manager, mutation adapter and spellcheck for textarea dependencies, then remove it. Update ADR 0021
   - Stage 2: extract Notes LSP
     - [ ] Move Notes LSP code from `notes.js` into its own module with no behaviour change (replaces the "move LSP code into new JS file" refactor)
     - [ ] Monaco LSP providers resolve their document from `model.uri` and read text from that model, replacing `state.lspOpenFile === state.currentFile` guards and `getMainEditorValue()`

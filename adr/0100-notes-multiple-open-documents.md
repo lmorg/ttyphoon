@@ -72,8 +72,8 @@ At 2026-11-14, `frontend/src/notes.js` is about 18,000 lines with:
 - One `state` object with about 100 fields, mixing document state, view state
   and global state. `state.currentFile` is referenced 188 times.
 - 123 `elements.*` handles. The hidden-textarea source of truth,
-  `elements.editor`, is referenced 181 times; ADR 0021 describes its live
-  surface split.
+  `elements.editor`, was referenced 181 times; ADR 0021 describes its live
+  surface split. (Removed in Stage 1 task 3, see decision 7.)
 - `monacoMainEditor` (81 references) and `getMainEditorValue()` (51) assume
   one model.
 - `state.lspOpenFile` (35 references) holds one path:
@@ -217,6 +217,39 @@ This buffer becomes part of `NotesDocument` in Stage 4. Programmatic edits
 buffer as range edits that Monaco applies with `executeEdits`, so they land on
 Monaco's undo stack and Cmd+Z undoes them.
 
+*Done (Stage 1, task 3):*
+
+- `frontend/src/notes_document_buffer.js` exports `createDocumentBuffer`. It
+  holds text and selection until a view attaches, then delegates reads and
+  edits to the view. `setValue` is a reset (file load: no change event, not
+  undoable). `replaceRange` and `replaceAll` are edits: with Monaco attached
+  they go through the adapter's `replaceRange` (`executeEdits`), and
+  `replaceAll` diffs the common prefix and suffix so the edit is minimal.
+  Listeners registered with `onChange` replace the old textarea `input`
+  handler.
+- `notes.js` has one buffer, `mainDocument`. `replaceMainDocumentText` replaces
+  every whole-document `notesMutationAdapter.replaceDocumentText(elements.editor, …)`
+  call (format actions, CSV and Markdown table edits, checkbox toggles, ToC,
+  LSP format, code actions and rename, structured edits, frontmatter, Find
+  replace-all and git-diff edits). The textarea, `elements.editor` and its CSS
+  are gone.
+- `spellcheck.js` gained `createSpellCheckEngine`, which checks text from a
+  `getText` callback rather than a DOM element. `attachSpellCheck` is built on
+  it, and the main document uses the engine directly.
+- The adapter's `replaceRange` pushes undo stops around each edit, so every
+  programmatic edit is its own undo step. Edits made from another view (such
+  as saving a Run-mode Markdown block) pass `preserveSelection` so the Edit
+  caret does not jump.
+- `notesUndoManager` and `notesMutationAdapter` remain for Jupyter cell
+  textareas only.
+- LSP completion trigger characters now come only from Monaco's `onDidType`
+  (`handleMonacoCompletionRequest`). The change listener used to check the
+  character before the textarea caret, which worked only because setting a
+  textarea's value moves its caret to the end; at Monaco's content-change event
+  the caret has not moved yet. The listener still re-filters an open menu.
+- The Monaco container no longer has `aria-hidden="true"`, which made sense
+  only while the textarea was the accessible surface.
+
 ### 8. Migrate in stages that each ship on `main`
 
 Each stage leaves behaviour unchanged until the UI stages at the end, so the
@@ -293,8 +326,9 @@ Still open:
 - One pipeline, with one editor implementation and shared models, avoids both
   previous failure modes. No legacy surface is kept beside a thinner secondary
   one, and no backend services are duplicated.
-- Removing the fallback editor removes about 50 `isMonacoActive()` branches
-  and the hidden-textarea sync, but needs a Monaco test fake first.
+- Removing the fallback editor removed about 50 `isMonacoActive()` branches
+  and the hidden-textarea sync. The remaining `isMonacoActive()` checks only
+  mean "Monaco has been created yet".
 - The bulk of the work is stages 4–6: moving references from singleton state
   to documents and views. It is mechanical but large, and each stage is
   testable alone before any UI changes.

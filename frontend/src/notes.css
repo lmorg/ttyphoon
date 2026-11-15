@@ -3359,11 +3359,6 @@ body {
     overflow-y: auto;
 }
 
-/* The main editor is Monaco; #notes-editor is a hidden text store. */
-#notes-editor {
-    display: none;
-}
-
 .jupyter-code-editable,
 .jupyter-highlight,
 .jupyter-highlight code,

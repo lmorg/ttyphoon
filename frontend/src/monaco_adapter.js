@@ -1578,6 +1578,9 @@ export async function createMonacoAdapter(container, options = {}) {
             const startPos = model.getPositionAt(safeStart);
             const endPos = model.getPositionAt(safeEnd);
 
+            // Undo stops keep each programmatic edit a separate undo step
+            // rather than merging it with adjacent typing or edits.
+            editor.pushUndoStop();
             editor.executeEdits(source, [{
                 range: {
                     startLineNumber: startPos.lineNumber,
@@ -1588,6 +1591,7 @@ export async function createMonacoAdapter(container, options = {}) {
                 text: String(text || ''),
                 forceMoveMarkers: true,
             }]);
+            editor.pushUndoStop();
         },
 
         findMatches(query, options = {}) {
