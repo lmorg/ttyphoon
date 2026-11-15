@@ -1282,6 +1282,10 @@ export async function createMonacoAdapter(container, options = {}) {
             inlayHintsChangeEmitter?.fire();
         },
 
+        getModelUri() {
+            return model.uri.toString();
+        },
+
         configureLsp(callbacks = {}) {
             disposeLsp();
 
@@ -1294,7 +1298,7 @@ export async function createMonacoAdapter(container, options = {}) {
                     return;
                 }
                 const result = await callbacks.applyCodeAction(args || {});
-                if (result && result.changed === true && typeof result.content === 'string') {
+                if (result && result.changed === true && typeof result.content === 'string' && args?.model === model) {
                     editor.setValue(String(result.content || ''));
                 }
             });
@@ -1305,7 +1309,7 @@ export async function createMonacoAdapter(container, options = {}) {
                 void (async () => {
                     let first = null;
                     try {
-                        first = await callbacks.semanticTokens();
+                        first = await callbacks.semanticTokens({ model });
                     } catch {
                         return;
                     }
@@ -1318,51 +1322,58 @@ export async function createMonacoAdapter(container, options = {}) {
                         ? first.legend.tokenModifiers
                         : [];
 
+                    // Providers apply to every model of this language, so fallback
+                    // tokens are kept per model and the probe only serves this one.
                     let pending = first;
-                    let lastGood = Array.isArray(first?.data) && first.data.length > 0 ? first : null;
-                    let lastResultId = typeof first?.resultId === 'string' ? first.resultId : null;
+                    const lastGoodByModel = new WeakMap();
+                    if (Array.isArray(first?.data) && first.data.length > 0) {
+                        lastGoodByModel.set(model, first);
+                    }
                     lspDisposables.push(monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
                         getLegend: () => ({ tokenTypes, tokenModifiers }),
-                        provideDocumentSemanticTokens: async () => {
+                        provideDocumentSemanticTokens: async (targetModel) => {
                             // The probe response is reused once, then discarded so
                             // later calls always reflect current document state.
-                            const result = pending || await callbacks.semanticTokens();
-                            pending = null;
+                            let result = null;
+                            if (pending && targetModel === model) {
+                                result = pending;
+                                pending = null;
+                            } else {
+                                result = await callbacks.semanticTokens({ model: targetModel });
+                            }
                             const data = result?.data;
                             if (Array.isArray(data) && data.length > 0) {
-                                lastGood = result;
-                                lastResultId = typeof result?.resultId === 'string' ? result.resultId : lastResultId;
+                                lastGoodByModel.set(targetModel, result);
                                 return { data: new Uint32Array(data) };
                             }
+                            const lastGood = lastGoodByModel.get(targetModel);
                             if (lastGood && Array.isArray(lastGood.data) && lastGood.data.length > 0) {
                                 return { data: new Uint32Array(lastGood.data) };
                             }
                             return null;
                         },
-                        provideDocumentSemanticTokensEdits: async (previousResultId) => {
-                            const result = await callbacks.semanticTokens({ previousResultId });
+                        provideDocumentSemanticTokensEdits: async (targetModel, previousResultId) => {
+                            const result = await callbacks.semanticTokens({ model: targetModel, previousResultId });
                             const edits = Array.isArray(result?.edits) ? result.edits : [];
                             const nextResultId = typeof result?.resultId === 'string' ? result.resultId : previousResultId || null;
+                            const lastGood = lastGoodByModel.get(targetModel);
                             if (Array.isArray(result?.data) && result.data.length > 0) {
-                                lastGood = result;
-                                lastResultId = nextResultId;
+                                lastGoodByModel.set(targetModel, result);
                                 return {
                                     resultId: nextResultId,
                                     edits: [{ start: 0, deleteCount: 0, data: Array.from(result.data) }],
                                 };
                             }
                             if (edits.length === 0 && lastGood && Array.isArray(lastGood.data) && lastGood.data.length > 0) {
-                                lastResultId = nextResultId || lastResultId;
                                 return {
-                                    resultId: lastResultId,
+                                    resultId: nextResultId || previousResultId || null,
                                     edits: [{ start: 0, deleteCount: 0, data: Array.from(lastGood.data) }],
                                 };
                             }
                             if (edits.length === 0) {
                                 return { resultId: nextResultId || previousResultId || null, edits: [] };
                             }
-                            lastGood = result;
-                            lastResultId = nextResultId;
+                            lastGoodByModel.set(targetModel, result);
                             return { resultId: nextResultId || previousResultId || null, edits: edits.map((edit) => ({
                                 start: Number(edit?.start) || 0,
                                 deleteCount: Number(edit?.deleteCount) || 0,
@@ -1378,8 +1389,8 @@ export async function createMonacoAdapter(container, options = {}) {
                 inlayHintsChangeEmitter = new monaco.Emitter();
                 lspDisposables.push(monaco.languages.registerInlayHintsProvider(languageId, {
                     onDidChangeInlayHints: inlayHintsChangeEmitter.event,
-                    provideInlayHints: async () => {
-                        const hints = await callbacks.inlayHints();
+                    provideInlayHints: async (targetModel) => {
+                        const hints = await callbacks.inlayHints({ model: targetModel });
                         if (!Array.isArray(hints) || hints.length === 0) {
                             return { hints: [], dispose: () => {} };
                         }
@@ -1403,11 +1414,11 @@ export async function createMonacoAdapter(container, options = {}) {
 
             lspDisposables.push(monaco.languages.registerSignatureHelpProvider(languageId, {
                 signatureHelpTriggerCharacters: ['(', ','],
-                provideSignatureHelp: async (_model, position) => {
+                provideSignatureHelp: async (targetModel, position) => {
                     if (typeof callbacks.signature !== 'function') {
                         return null;
                     }
-                    const text = await callbacks.signature({ line: position.lineNumber - 1, character: position.column - 1 });
+                    const text = await callbacks.signature({ model: targetModel, line: position.lineNumber - 1, character: position.column - 1 });
                     if (!text) {
                         return null;
                     }
@@ -1423,44 +1434,45 @@ export async function createMonacoAdapter(container, options = {}) {
             }));
 
             lspDisposables.push(monaco.languages.registerDocumentFormattingEditProvider(languageId, {
-                provideDocumentFormattingEdits: async () => {
+                provideDocumentFormattingEdits: async (targetModel) => {
                     if (typeof callbacks.formatDocument !== 'function') {
                         return [];
                     }
-                    const result = await callbacks.formatDocument();
+                    const result = await callbacks.formatDocument({ model: targetModel });
                     if (!result || !result.changed || typeof result.content !== 'string') {
                         return [];
                     }
-                    const fullRange = model.getFullModelRange();
+                    const fullRange = targetModel.getFullModelRange();
                     return [{ range: fullRange, text: String(result.content || '') }];
                 },
             }));
 
             lspDisposables.push(monaco.languages.registerDocumentRangeFormattingEditProvider(languageId, {
-                provideDocumentRangeFormattingEdits: async (_model, range) => {
+                provideDocumentRangeFormattingEdits: async (targetModel, range) => {
                     if (typeof callbacks.formatRange !== 'function') {
                         return [];
                     }
                     const result = await callbacks.formatRange({
+                        model: targetModel,
                         start: { line: range.startLineNumber - 1, character: range.startColumn - 1 },
                         end: { line: range.endLineNumber - 1, character: range.endColumn - 1 },
                     });
                     if (!result || !result.changed || typeof result.content !== 'string') {
                         return [];
                     }
-                    const fullRange = model.getFullModelRange();
+                    const fullRange = targetModel.getFullModelRange();
                     return [{ range: fullRange, text: String(result.content || '') }];
                 },
             }));
 
             lspDisposables.push(monaco.languages.registerDefinitionProvider(languageId, {
-                provideDefinition: async (_model, position) => {
+                provideDefinition: async (targetModel, position) => {
                     if (typeof callbacks.definition !== 'function') {
                         return [];
                     }
-                    const defs = await callbacks.definition({ line: position.lineNumber - 1, character: position.column - 1 });
+                    const defs = await callbacks.definition({ model: targetModel, line: position.lineNumber - 1, character: position.column - 1 });
                     return (Array.isArray(defs) ? defs : []).map((item) => ({
-                        uri: monaco.Uri.parse(String(item?.uri || model.uri.toString())),
+                        uri: monaco.Uri.parse(String(item?.uri || targetModel.uri.toString())),
                         range: {
                             startLineNumber: (Number(item?.line) || 0) + 1,
                             startColumn: (Number(item?.character) || 0) + 1,
@@ -1472,11 +1484,11 @@ export async function createMonacoAdapter(container, options = {}) {
             }));
 
             lspDisposables.push(monaco.languages.registerRenameProvider(languageId, {
-                resolveRenameLocation: async (_model, position) => {
+                resolveRenameLocation: async (targetModel, position) => {
                     if (typeof callbacks.prepareRename !== 'function') {
                         return null;
                     }
-                    const prepared = await callbacks.prepareRename({ line: position.lineNumber - 1, character: position.column - 1 });
+                    const prepared = await callbacks.prepareRename({ model: targetModel, line: position.lineNumber - 1, character: position.column - 1 });
                     if (!prepared || prepared.canRename !== true) {
                         return { rejectReason: 'Rename not available at this position' };
                     }
@@ -1491,11 +1503,12 @@ export async function createMonacoAdapter(container, options = {}) {
                         text: String(prepared.placeholder || ''),
                     };
                 },
-                provideRenameEdits: async (_model, position, newName) => {
+                provideRenameEdits: async (targetModel, position, newName) => {
                     if (typeof callbacks.rename !== 'function') {
                         return { edits: [] };
                     }
                     const result = await callbacks.rename({
+                        model: targetModel,
                         line: position.lineNumber - 1,
                         character: position.column - 1,
                         newName,
@@ -1505,9 +1518,9 @@ export async function createMonacoAdapter(container, options = {}) {
                     }
                     return {
                         edits: [{
-                            resource: model.uri,
+                            resource: targetModel.uri,
                             textEdit: {
-                                range: model.getFullModelRange(),
+                                range: targetModel.getFullModelRange(),
                                 text: String(result.content || ''),
                             },
                         }],
@@ -1516,11 +1529,12 @@ export async function createMonacoAdapter(container, options = {}) {
             }));
 
             lspDisposables.push(monaco.languages.registerCodeActionProvider(languageId, {
-                provideCodeActions: async (_model, range) => {
+                provideCodeActions: async (targetModel, range) => {
                     if (typeof callbacks.codeActions !== 'function') {
                         return { actions: [], dispose: () => {} };
                     }
                     const payload = {
+                        model: targetModel,
                         line: range.startLineNumber - 1,
                         character: range.startColumn - 1,
                     };
@@ -1531,7 +1545,7 @@ export async function createMonacoAdapter(container, options = {}) {
                         command: {
                             id: codeActionCommandId,
                             title: String(action?.title || 'Code action'),
-                            arguments: [action],
+                            arguments: [{ ...action, ...payload }],
                         },
                     }));
                     return { actions: mapped, dispose: () => {} };

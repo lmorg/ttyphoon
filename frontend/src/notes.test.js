@@ -2437,6 +2437,69 @@ describe('notes rendering', () => {
         );
     });
 
+    it('resolves Monaco LSP provider requests from the model URI', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go', '$NOTES/notes.txt']);
+        resolveNotesLspLanguageMock.mockImplementation((file) => Promise.resolve(file.endsWith('.go') ? 'go' : ''));
+        notesLspInlayHintsMock.mockResolvedValue([{ line: 0, character: 1, label: 'hint' }]);
+        getFileMock.mockImplementation((file) => Promise.resolve({
+            contents: file.endsWith('.go') ? 'package main\n' : 'plain text\n',
+            text: '',
+            error: '',
+        }));
+
+        await importNotesModule();
+
+        document.querySelector('[data-file="$NOTES/main.go"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const editor = mainEditorAdapter();
+        const callbacks = editor.lspCallbacks;
+        const otherModel = { uri: { toString: () => 'inmemory://model/diff' }, getValue: () => 'other' };
+
+        await expect(callbacks.inlayHints({ model: editor.model })).resolves.toEqual([{ line: 0, character: 1, label: 'hint' }]);
+        expect(notesLspInlayHintsMock).toHaveBeenCalledWith('$NOTES/main.go');
+
+        notesLspInlayHintsMock.mockClear();
+        notesLspChangeDocumentMock.mockClear();
+        await expect(callbacks.inlayHints({ model: otherModel })).resolves.toEqual([]);
+        await expect(callbacks.semanticTokens({ model: otherModel })).resolves.toBeNull();
+        await expect(callbacks.prepareRename({ model: otherModel, line: 0, character: 0 })).resolves.toEqual({ canRename: false });
+        expect(notesLspInlayHintsMock).not.toHaveBeenCalled();
+        expect(notesLspChangeDocumentMock).not.toHaveBeenCalled();
+        expect(notesLspPrepareRenameMock).not.toHaveBeenCalled();
+
+        await callbacks.semanticTokens({ model: editor.model });
+        expect(notesLspChangeDocumentMock).toHaveBeenCalledWith('$NOTES/main.go', 'package main\n');
+        expect(notesLspSemanticTokensMock).toHaveBeenCalledWith('$NOTES/main.go');
+
+        document.querySelector('[data-file="$NOTES/notes.txt"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        notesLspInlayHintsMock.mockClear();
+        await expect(callbacks.inlayHints({ model: editor.model })).resolves.toEqual([]);
+        expect(notesLspInlayHintsMock).not.toHaveBeenCalled();
+    });
+
+    it('applies LSP code actions at the position they were requested for', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}\n', text: '', error: '' });
+
+        await importNotesModule();
+
+        document.querySelector('[data-file="$NOTES/main.go"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const editor = mainEditorAdapter();
+        editor.moveCursor(0);
+        await editor.lspCallbacks.applyCodeAction({ index: 2, model: editor.model, line: 2, character: 5 });
+
+        expect(notesLspApplyCodeActionMock).toHaveBeenCalledWith('$NOTES/main.go', 2, 5, 2, []);
+    });
+
     it('requests and shows LSP hover tooltip at cursor', async () => {
         listFilesMock.mockResolvedValue([]);
         resolveNotesLspLanguageMock.mockResolvedValue('markdown');

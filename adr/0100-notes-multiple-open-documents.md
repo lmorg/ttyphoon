@@ -191,6 +191,30 @@ as `lspOpenFile === currentFile`.
 - The semantic-tokens delta callback called `NotesLspSemanticTokensDelta`
   without importing it. The new module imports it.
 
+*Done (Stage 2, task 2):*
+
+- Monaco providers are registered per language, so they also ran for other
+  models of that language, such as the Git diff editor's, and answered with
+  the main file's results. Each provider now passes the model it was asked
+  about to its callback (`{ model, line, character }` and so on), and results
+  use that model's URI and range.
+- `notes_lsp.js` keeps `lspModelDocuments`, which maps a model URI to
+  `{ filePath, fileUri }`. `openCurrentLspDocument` registers the main
+  editor's model (`getModelUri()` on the adapter) and `closeOpenLspDocument`
+  removes it. Callbacks resolve their document with `lspDocumentForModel` and
+  read text from the model, replacing the
+  `state.lspOpenFile === state.currentFile` guards and `getMainEditorValue()`.
+  A model that is not registered gets an empty result.
+- Code actions carry their model and position in the command arguments, so
+  applying one uses the position it was computed for, not wherever the cursor
+  is by then.
+- The semantic-tokens fallback cache is per model, and the edits provider now
+  takes Monaco's `(model, previousResultId)` arguments; it was treating the
+  model as the result ID.
+- Not yet keyed by document: hover, completion, signature help from the cursor,
+  and `didChange` scheduling still follow the focused main editor and
+  `state.lspOpenFile`. They move with `NotesDocument` (Stage 4).
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

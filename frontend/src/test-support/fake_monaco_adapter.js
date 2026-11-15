@@ -7,6 +7,8 @@ function clampOffset(value, length) {
     return Math.max(0, Math.min(Number(value) || 0, length));
 }
 
+let fakeModelCount = 0;
+
 export function createFakeMonacoAdapter(container, options = {}) {
     let value = String(options.value || '');
     let selection = { start: 0, end: 0, active: 0 };
@@ -34,9 +36,16 @@ export function createFakeMonacoAdapter(container, options = {}) {
         emitSelection();
     };
 
+    const modelUri = `inmemory://model/${++fakeModelCount}`;
+
     const adapter = {
         options,
         container,
+        // Stands in for the Monaco model that LSP provider callbacks receive.
+        model: {
+            uri: { toString: () => modelUri },
+            getValue: () => value,
+        },
         lspCallbacks: null,
         diagnostics: [],
         typosMisspellings: [],
@@ -67,6 +76,7 @@ export function createFakeMonacoAdapter(container, options = {}) {
             adapter.typosMisspellings = Array.isArray(list) ? list : [];
         },
         refreshInlayHints() {},
+        getModelUri: () => modelUri,
         configureLsp(callbacks = {}) {
             adapter.lspCallbacks = callbacks;
         },

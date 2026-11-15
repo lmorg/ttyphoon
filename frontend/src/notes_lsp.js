@@ -69,6 +69,17 @@ const LSP_DIAGNOSTIC_RENDER_IDLE_MS = 220;
 
 const LSP_HOVER_DEBOUNCE_MS = 250;
 
+// Monaco model URI → the LSP document it shows ({ filePath, fileUri }).
+// Providers are registered per language, so they also run for other models
+// of that language, such as the Git diff editor's; only registered models
+// resolve to a document.
+const lspModelDocuments = new Map();
+
+function lspDocumentForModel(model) {
+    const uri = model?.uri ? String(model.uri.toString()) : '';
+    return (uri && lspModelDocuments.get(uri)) || null;
+}
+
 export function isCurrentFileLspEligible() {
     if (isSvgFile(state.currentFile)) {
         return false;
@@ -961,8 +972,7 @@ function isPositionWithinRange(line, character, range) {
     return true;
 }
 
-function lspDiagnosticsAtPosition(line, character) {
-    const uri = state.currentFileUri;
+function lspDiagnosticsAtPosition(line, character, uri = state.currentFileUri) {
     if (!uri) {
         return [];
     }
@@ -1439,6 +1449,11 @@ async function requestLspSignatureHelpFromCursor(triggerKind = 1, triggerChar = 
 }
 
 export async function closeOpenLspDocument() {
+    for (const [uri, doc] of lspModelDocuments) {
+        if (doc.filePath === state.lspOpenFile) {
+            lspModelDocuments.delete(uri);
+        }
+    }
     clearLspChangeTimer();
     clearLspHoverTimer();
     hideLspHoverTooltip();
@@ -1474,113 +1489,102 @@ export async function openCurrentLspDocument(content) {
         state.lspOpenFile = state.currentFile;
 
         if (isMonacoActive()) {
-            getMonacoMainEditor().configureLsp({
-                completion: async ({ line, character }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-                        return [];
-                    }
-                    try {
-                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
-                    } catch {
-                        // Completion can still work with last synced state.
-                    }
-                    const items = await NotesLspCompletion(state.currentFile, line, character, 1, '');
-                    return Array.isArray(items) ? items : [];
-                },
-                signature: async ({ line, character }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+            const editor = getMonacoMainEditor();
+            lspModelDocuments.set(editor.getModelUri(), { filePath: state.currentFile, fileUri: state.currentFileUri });
+            editor.configureLsp({
+                signature: async ({ model, line, character }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return '';
                     }
-                    return await NotesLspSignatureHelp(state.currentFile, line, character, 1, '');
+                    return await NotesLspSignatureHelp(doc.filePath, line, character, 1, '');
                 },
-                semanticTokens: async ({ previousResultId } = {}) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                semanticTokens: async ({ model, previousResultId } = {}) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return null;
                     }
                     try {
-                        await NotesLspChangeDocument(state.currentFile, getMainEditorValue());
+                        await NotesLspChangeDocument(doc.filePath, model.getValue());
                     } catch {
                         // Semantic tokens can still use the last synced state.
                     }
                     if (previousResultId) {
-                        return await NotesLspSemanticTokensDelta(state.currentFile, previousResultId);
+                        return await NotesLspSemanticTokensDelta(doc.filePath, previousResultId);
                     }
-                    return await NotesLspSemanticTokens(state.currentFile);
+                    return await NotesLspSemanticTokens(doc.filePath);
                 },
-                inlayHints: async () => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                inlayHints: async ({ model }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return [];
                     }
-                    const hints = await NotesLspInlayHints(state.currentFile);
+                    const hints = await NotesLspInlayHints(doc.filePath);
                     return Array.isArray(hints)
                         ? hints.filter((item) => item && String(item.label || '') !== '')
                         : [];
                 },
-                formatDocument: async () => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                formatDocument: async ({ model }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return null;
                     }
-                    return await NotesLspFormat(state.currentFile);
+                    return await NotesLspFormat(doc.filePath);
                 },
-                formatRange: async ({ start, end }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                formatRange: async ({ model, start, end }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return null;
                     }
                     return await NotesLspFormatRange(
-                        state.currentFile,
+                        doc.filePath,
                         Number(start?.line) || 0,
                         Number(start?.character) || 0,
                         Number(end?.line) || 0,
                         Number(end?.character) || 0,
                     );
                 },
-                definition: async ({ line, character }) => {
-                    if (!state.currentFile || !isCurrentFileLspEligible()) {
+                definition: async ({ model, line, character }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return [];
                     }
-
-                    const locations = await NotesLspDefinition(state.currentFile, line, character);
+                    const locations = await NotesLspDefinition(doc.filePath, line, character);
                     return Array.isArray(locations) ? locations : [];
                 },
-                prepareRename: async ({ line, character }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                prepareRename: async ({ model, line, character }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return { canRename: false };
                     }
-                    return await NotesLspPrepareRename(state.currentFile, line, character);
+                    return await NotesLspPrepareRename(doc.filePath, line, character);
                 },
-                rename: async ({ line, character, newName }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                rename: async ({ model, line, character, newName }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return null;
                     }
-                    return await NotesLspRename(state.currentFile, line, character, String(newName || ''));
+                    return await NotesLspRename(doc.filePath, line, character, String(newName || ''));
                 },
-                codeActions: async ({ line, character }) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
+                codeActions: async ({ model, line, character }) => {
+                    const doc = lspDocumentForModel(model);
+                    if (!doc) {
                         return [];
                     }
-                    const diagnostics = lspDiagnosticsAtPosition(line, character);
-                    const actions = await NotesLspCodeActions(state.currentFile, line, character, diagnostics);
+                    const diagnostics = lspDiagnosticsAtPosition(line, character, doc.fileUri);
+                    const actions = await NotesLspCodeActions(doc.filePath, line, character, diagnostics);
                     return Array.isArray(actions) ? actions : [];
                 },
                 applyCodeAction: async (action) => {
-                    if (!state.currentFile || state.lspOpenFile !== state.currentFile || !isCurrentFileLspEligible()) {
-                        return null;
-                    }
-
-                    const selection = getMainEditorSelectionRange();
-                    const pos = offsetToLspPosition(getMainEditorValue(), selection.start || 0);
-                    const diagnostics = lspDiagnosticsAtPosition(pos.line, pos.character);
+                    const doc = lspDocumentForModel(action?.model);
                     const actionIndex = Number(action?.index);
-                    if (!Number.isFinite(actionIndex)) {
+                    if (!doc || !Number.isFinite(actionIndex)) {
                         return null;
                     }
-                    return await NotesLspApplyCodeAction(
-                        state.currentFile,
-                        pos.line,
-                        pos.character,
-                        actionIndex,
-                        diagnostics,
-                    );
+                    const line = Number(action?.line) || 0;
+                    const character = Number(action?.character) || 0;
+                    const diagnostics = lspDiagnosticsAtPosition(line, character, doc.fileUri);
+                    return await NotesLspApplyCodeAction(doc.filePath, line, character, actionIndex, diagnostics);
                 },
             });
         }
