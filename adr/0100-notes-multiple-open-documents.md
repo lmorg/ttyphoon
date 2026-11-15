@@ -621,6 +621,15 @@ Known limitations, for the following tasks:
 - The tab hotkey handler ignores keys once its Notes app is no longer in the
   page.
 
+*Done (Stage 8, task 5):*
+
+- Closing a view's last tab removes the view and the tree collapses around it,
+  unless it is the only view, which stays empty. A focused view first hands
+  focus to its neighbour on the left, above, right or below, in that order.
+- A document closes when no view has its tab. Moving focus off a removed view
+  releases its document through `setActiveNotesDocument`, as switching tabs
+  does.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

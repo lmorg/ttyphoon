@@ -1314,6 +1314,9 @@ async function closeNotesTab(view, key, { discard = false } = {}) {
         notesDocuments.close(doc);
     }
     renderNotesTabs(view);
+    if (await closeEmptyNotesView(view)) {
+        return;
+    }
     const neighbour = findNotesDocument(view.tabs[Math.min(index, view.tabs.length - 1)]);
     if (view !== focusedView()) {
         // An unfocused view shows its next tab's document in its editor; the
@@ -1492,6 +1495,23 @@ async function focusNotesView(view, key = view.shownDocumentKey) {
         await showNoNotesDocument();
         renderNotesTabs(view);
     }
+}
+
+// Removes a view whose last tab has closed, unless it is the only view. A
+// focused view first hands focus to a neighbour, which releases the closed
+// document if no other tab has it.
+async function closeEmptyNotesView(view) {
+    if (view.tabs.length > 0 || notesViews.size < 2 || !notesViews.has(view.id)) {
+        return false;
+    }
+    if (view === focusedView()) {
+        const nextId = ['left', 'up', 'right', 'down']
+            .map((side) => neighbourLayoutView(notesLayout, view.id, side))
+            .find(Boolean) || layoutViewIds(notesLayout).find((id) => id !== view.id);
+        await focusNotesView(notesViews.get(nextId));
+    }
+    removeNotesView(view);
+    return true;
 }
 
 // Removes an unfocused view from the layout. Its documents stay open; callers

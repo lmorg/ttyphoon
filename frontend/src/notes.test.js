@@ -4380,6 +4380,45 @@ describe('notes rendering', () => {
         expect(left.getValue()).toBe('first text');
     });
 
+    it('removes a view when its last tab closes and releases documents no view has', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const left = await openDocumentTabs(disk);
+        await splitRight();
+        const [leftRoot, rightRoot] = notesViewRoots();
+        const closeIn = async (root, file) => {
+            [...root.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file)
+                .querySelector('.notes-doc-tab-close').click();
+            await flushPromises();
+            await flushPromises();
+        };
+
+        // The unfocused left view moves on to its other tab.
+        await closeIn(leftRoot, second);
+        expect(viewTabTitles(leftRoot)).toEqual([first]);
+        expect(left.getValue()).toBe('first text');
+
+        // Closing the focused right view's last tab removes it and focuses the left.
+        await closeIn(rightRoot, second);
+        await vi.waitFor(() => expect(notesViewRoots()).toEqual([leftRoot]));
+        expect(leftRoot.dataset.focused).toBe('true');
+        expect(document.querySelector('.notes-layout-split')).toBeNull();
+        expect(leftRoot.contains(document.getElementById('notes-toolbar'))).toBe(true);
+        expect(left.getValue()).toBe('first text');
+        await vi.waitFor(() => expect(watchNotesFilesMock.mock.calls.at(-1)[1].map((file) => file.path)).toEqual([first]));
+
+        // An unfocused view goes too, and the last view stays when emptied.
+        await splitRight();
+        await closeIn(notesViewRoots()[0], first);
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(1));
+        const [only] = notesViewRoots();
+        expect(only.dataset.focused).toBe('true');
+        await closeIn(only, first);
+        expect(notesViewRoots()).toEqual([only]);
+        expect(viewTabTitles(only)).toEqual([]);
+    });
+
     it('collapses split views to one on switching workspace', async () => {
         const first = '$NOTES/first.md';
         const disk = new Map([[first, 'first text']]);
