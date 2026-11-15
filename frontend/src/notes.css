@@ -3615,7 +3615,6 @@ body {
     align-content: stretch;
     border: 1px solid rgba(var(--fg-rgb), 0);
     background-color: rgba(0, 0, 0, 0.22);
-    transition: border-color 120ms ease;
 }
 
 .notes-view .notes-editor-shell:focus-within {
