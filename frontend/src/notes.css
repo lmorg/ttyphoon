@@ -3673,7 +3673,7 @@ body {
     }
 }
 
-.notes-view .notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor {
+.notes-view .notes-monaco-editor.notes-monaco-vim-active .cursors-layer .cursor {
     background-color: var(--fg, #ffffff) !important;
     border-color: var(--fg, #ffffff) !important;
     border-left-color: var(--fg, #ffffff) !important;
@@ -3681,7 +3681,7 @@ body {
     color: var(--bg, #000000) !important;
 }
 
-.notes-view .notes-monaco-editor .monaco-editor.notes-monaco-vim-active .cursors-layer .cursor-secondary {
+.notes-view .notes-monaco-editor.notes-monaco-vim-active .cursors-layer .cursor-secondary {
     background-color: var(--fg, #ffffff) !important;
     border-color: var(--fg, #ffffff) !important;
     border-left-color: var(--fg, #ffffff) !important;

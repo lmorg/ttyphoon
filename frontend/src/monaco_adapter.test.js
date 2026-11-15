@@ -19,7 +19,7 @@ describe('Monaco Escape priority', () => {
         node = document.getElementById('editor');
         hover = { isHoverVisible: true, hideContentHover: vi.fn(() => { hover.isHoverVisible = false; }) };
         editor = {
-            getDomNode: () => node,
+            getContainerDomNode: () => node,
             getContribution: () => hover,
             onKeyDown: () => ({ dispose: vi.fn() }),
             onDidType: () => ({ dispose: vi.fn() }),
@@ -149,7 +149,7 @@ describe('Monaco spelling context menu', () => {
         document.body.innerHTML = '<div id="editor"></div>';
         node = document.getElementById('editor');
         editor = {
-            getDomNode: () => node,
+            getContainerDomNode: () => node,
             getTargetAtClientPoint: vi.fn(() => ({ position: { lineNumber: 1, column: 3 } })),
             getModel: () => ({ getOffsetAt: () => 2 }),
         };
@@ -200,5 +200,43 @@ describe('Monaco spelling context menu', () => {
         node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
         expect(editor.getTargetAtClientPoint).not.toHaveBeenCalled();
         expect(normalMenu).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('Monaco DOM hooks after a model switch', () => {
+    it('keep handling events once setModel() replaces the editor view node', () => {
+        document.body.innerHTML = '<div id="container"><div class="monaco-editor"></div></div>';
+        const container = document.getElementById('container');
+        let view = container.firstElementChild;
+        const editor = {
+            getContainerDomNode: () => container,
+            getDomNode: () => view,
+            getContribution: () => null,
+            onKeyDown: () => ({ dispose: vi.fn() }),
+            onDidType: () => ({ dispose: vi.fn() }),
+            getTargetAtClientPoint: () => ({ position: { lineNumber: 1, column: 1 } }),
+            getModel: () => ({ getOffsetAt: () => 0 }),
+            // Monaco builds a new view, and so a new getDomNode(), per model.
+            setModel() {
+                view = document.createElement('div');
+                view.className = 'monaco-editor';
+                container.replaceChildren(view);
+            },
+        };
+        const onContextMenu = vi.fn();
+        const toggleVim = vi.fn(() => true);
+        const findMisspelling = vi.fn(() => null);
+        const hooks = attachMonacoEditorHooks(editor, { onContextMenu }, toggleVim);
+        const spelling = attachMonacoSpellcheckContextMenu(editor, findMisspelling, vi.fn());
+
+        editor.setModel();
+        view.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        view.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+        expect(findMisspelling).toHaveBeenCalledOnce();
+        expect(onContextMenu).toHaveBeenCalledOnce();
+        expect(toggleVim).toHaveBeenCalledOnce();
+        hooks.dispose();
+        spelling.dispose();
     });
 });

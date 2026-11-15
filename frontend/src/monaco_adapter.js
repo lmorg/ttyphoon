@@ -162,8 +162,10 @@ export function attachMonacoFontMetricsRefresh(monaco, editor, fonts = document.
     };
 }
 
+// Monaco rebuilds getDomNode() on every setModel(), so DOM listeners go on the
+// container passed to create(), which lasts for the editor's lifetime.
 export function attachMonacoSpellcheckContextMenu(editor, findMisspelling, replaceMisspelling) {
-    const domNode = editor.getDomNode();
+    const domNode = editor.getContainerDomNode();
     const handler = (event) => {
         const position = editor.getTargetAtClientPoint(event.clientX, event.clientY)?.position;
         if (!position) return;
@@ -238,7 +240,7 @@ export function attachMonacoEditorHooks(editor, options, onEscape) {
         });
     });
 
-    const domNode = editor.getDomNode();
+    const domNode = editor.getContainerDomNode();
     const onEscapeHandler = typeof onEscape === 'function'
         ? (event) => {
             if (event.key !== 'Escape' || event.defaultPrevented) {
@@ -866,7 +868,7 @@ export async function createMonacoAdapter(container, options = {}) {
     });*/
 
     function setMonacoVimActiveClass(enabled) {
-        const root = editor.getDomNode();
+        const root = editor.getContainerDomNode();
         if (!root) {
             return;
         }
