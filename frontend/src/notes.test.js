@@ -2553,17 +2553,59 @@ describe('notes rendering', () => {
 
         document.querySelector('.jupyter-run-notes').click();
         await flushPromises();
-        expect(runNoteMock).toHaveBeenCalledWith('$NOTES/blocks.md', 'jupyter-block-0', 'print("hello")', 'python');
-        getEventHandler('noteRun')({ blockId: 'jupyter-block-0', output: 'hello', isError: 'false' });
+        expect(runNoteMock).toHaveBeenCalledWith('$NOTES/blocks.md', 'jupyter-block-0', expect.any(String), 'print("hello")', 'python');
+        const runId = runNoteMock.mock.calls[0][2];
+        getEventHandler('noteRun')({ runId, blockId: 'jupyter-block-0', output: 'hello', isError: 'false' });
         expect(document.querySelector('.jupyter-output').textContent).toBe('hello');
 
         document.querySelector('[data-file="$NOTES/other.md"]').click();
         await flushPromises();
         await flushPromises();
 
-        expect(stopNoteMock).toHaveBeenCalledWith('jupyter-block-0');
+        expect(stopNoteMock).toHaveBeenCalledWith(runId);
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
         expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
+    });
+
+    it('keeps block runs from different documents apart when their block IDs match', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/first.md', '$NOTES/second.md']);
+        getFileMock.mockImplementation((file) => Promise.resolve({
+            contents: '```python\nprint("' + file + '")\n```',
+            text: '',
+            error: '',
+        }));
+
+        await importNotesModule();
+        const runBlockIn = async (file) => {
+            document.querySelector(`[data-file="${file}"]`).click();
+            await flushPromises();
+            await flushPromises();
+            document.querySelector('.notes-tab-jupyter').click();
+            await flushPromises();
+            document.querySelector('.jupyter-run-notes').click();
+            await flushPromises();
+            return runNoteMock.mock.calls.at(-1);
+        };
+
+        const [, firstBlockId, firstRunId] = await runBlockIn('$NOTES/first.md');
+        const [, secondBlockId, secondRunId] = await runBlockIn('$NOTES/second.md');
+        expect(secondBlockId).toBe(firstBlockId);
+        expect(secondRunId).not.toBe(firstRunId);
+
+        // Late events from the first document's run must not reach the second.
+        getEventHandler('noteRun')({ runId: firstRunId, blockId: firstBlockId, output: 'stale', isError: 'false' });
+        getEventHandler('noteComplete')({ runId: firstRunId, blockId: firstBlockId });
+        expect(document.querySelector('.jupyter-output').textContent).toBe('');
+        expect(document.querySelector('.jupyter-stop-notes').style.display).toBe('inline-block');
+
+        getEventHandler('noteRun')({ runId: secondRunId, blockId: secondBlockId, output: 'fresh', isError: 'false' });
+        expect(document.querySelector('.jupyter-output').textContent).toBe('fresh');
+
+        document.querySelector('.jupyter-stop-notes').click();
+        await flushPromises();
+        expect(stopNoteMock).toHaveBeenLastCalledWith(secondRunId);
+        getEventHandler('noteComplete')({ runId: secondRunId, blockId: secondBlockId });
+        expect(document.querySelector('.jupyter-run-notes').style.display).toBe('inline-block');
     });
 
     it('resolves Monaco LSP provider requests from the model URI', async () => {

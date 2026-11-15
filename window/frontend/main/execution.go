@@ -20,14 +20,17 @@ func (a *WApp) GetAllLanguageDescriptions() []string {
 	return jupyter.GetAllLanguageDescriptions()
 }
 
-func (a *WApp) RunNote(docPath, id string, code, language string) {
+// RunNote runs a code block. Block IDs are only unique within a document, so
+// the frontend also passes a runID that is unique across open documents. The
+// runID keys the kill function and is echoed in noteRun and noteComplete.
+func (a *WApp) RunNote(docPath, id, runID string, code, language string) {
 	ch := make(chan *jupyter.OutputT)
 
 	bookID := jupyter.BookId(a.GetCurrentProject(), a.filePath(docPath))
 
 	ctx, kill := context.WithCancel(context.Background())
 	a.notesMu.Lock()
-	a.notesKills[id] = kill
+	a.notesKills[runID] = kill
 	a.notesMu.Unlock()
 
 	go jupyter.RunNote(ctx, bookID, id, a.GetCurrentProject(), code, language, ch)
@@ -35,17 +38,19 @@ func (a *WApp) RunNote(docPath, id string, code, language string) {
 	go func() {
 		for output := range ch {
 			runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
-				"blockId": output.Id,
+				"runId":   runID,
+				"blockId": id,
 				"output":  output.Output,
 				"isError": fmt.Sprintf("%v", output.IsErr),
 			})
 		}
 		// Emit completion event when channel closes
 		runtime.EventsEmit(a.ctx, "noteComplete", map[string]string{
+			"runId":   runID,
 			"blockId": id,
 		})
 		a.notesMu.Lock()
-		delete(a.notesKills, id)
+		delete(a.notesKills, runID)
 		a.notesMu.Unlock()
 	}()
 }
@@ -143,19 +148,19 @@ func (a *WApp) FormatCodeFile(docPath, language string) {
 	jupyter.FormatFile(context.Background(), a.GetCurrentProject(), filePath, language)
 }
 
-func (a *WApp) StopNote(id string) {
+func (a *WApp) StopNote(runID string) {
 	a.notesMu.Lock()
-	fn, ok := a.notesKills[id]
+	fn, ok := a.notesKills[runID]
 	a.notesMu.Unlock()
 	if !ok {
-		log.Printf("cannot stop note %s because no kill function exists", id)
+		log.Printf("[warn] notes: cannot stop run %s because no kill function exists", runID)
 		return
 	}
 
 	fn()
 
 	runtime.EventsEmit(a.ctx, "noteRun", map[string]string{
-		"blockId": id,
+		"runId":   runID,
 		"output":  "[process killed]",
 		"isError": fmt.Sprintf("%v", true),
 	})

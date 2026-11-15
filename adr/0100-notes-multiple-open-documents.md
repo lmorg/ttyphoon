@@ -415,6 +415,22 @@ as `lspOpenFile === currentFile`.
   created it. Before two views can share one model, selection must be tracked
   per view.
 
+*Done (Stage 7, task 2):*
+
+- `RunNote(docPath, id, runID, code, language)` takes a run ID that the
+  frontend makes unique across open documents. The backend keys its kill
+  functions by run ID, `StopNote(runID)` stops a run, and `noteRun` and
+  `noteComplete` carry `runId` as well as `blockId`. Two documents can now run
+  blocks with the same block ID at the same time.
+- In `notes.js`, `jupyterRuns` maps each run ID to its document and block, and
+  `doc.runningJupyterBlocks` maps each block to its current run ID. Late events
+  from a run whose document has closed are ignored. A completed run does not
+  reset the buttons of a newer run of the same block.
+- Output is still shown only for runs in the active document. Once the tab
+  strip keeps documents open in the background, it must keep their output too,
+  so that switching back to a document shows output from runs that continued
+  while it was hidden.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

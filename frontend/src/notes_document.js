@@ -36,8 +36,8 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         typosChangeTimer: null,
         jupyterCodeBlocks: {},
         jupyterBlockCounter: 0,
-        // Block IDs with a run in progress on the backend.
-        runningJupyterBlocks: new Set(),
+        // Block ID to the run ID of its run in progress on the backend.
+        runningJupyterBlocks: new Map(),
         // Find in the document (ADR 0100 question 10).
         findQuery: '',
         findMatches: [],

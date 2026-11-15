@@ -857,11 +857,35 @@ function activateNotesDocument(path, { project = '' } = {}) {
     return next;
 }
 
+// Block IDs are only unique within a document, so each run gets a run ID that
+// is unique across open documents. The backend echoes it in noteRun and
+// noteComplete, and it maps back to the document and block that started it.
+const jupyterRuns = new Map();
+let jupyterRunCounter = 0;
+
+function startJupyterRun(doc, blockId) {
+    const runId = `run-${++jupyterRunCounter}`;
+    doc.runningJupyterBlocks.set(blockId, runId);
+    jupyterRuns.set(runId, { doc, blockId });
+    return runId;
+}
+
+function finishJupyterRun(runId) {
+    const run = jupyterRuns.get(runId);
+    if (!run) return null;
+    jupyterRuns.delete(runId);
+    if (run.doc.runningJupyterBlocks.get(run.blockId) === runId) {
+        run.doc.runningJupyterBlocks.delete(run.blockId);
+    }
+    return run;
+}
+
 // A closed document stops its block runs and releases its own and its
 // blocks' LSP and typos documents.
 function releaseNotesDocument(doc) {
-    for (const blockId of doc.runningJupyterBlocks) {
-        Promise.resolve(StopNote(blockId)).catch((err) => {
+    for (const runId of doc.runningJupyterBlocks.values()) {
+        jupyterRuns.delete(runId);
+        Promise.resolve(StopNote(runId)).catch((err) => {
             console.error('Error stopping code block:', err);
         });
     }
@@ -6222,11 +6246,11 @@ async function runCodeBlockInNotes(blockId) {
     }
     
     const doc = activeNotesDocument;
-    doc.runningJupyterBlocks.add(blockId);
+    const runId = startJupyterRun(doc, blockId);
     try {
-        await RunNote(state.currentFile, blockId, block.currentContent, block.runtime);
+        await RunNote(doc.path, blockId, runId, block.currentContent, block.runtime);
     } catch (err) {
-        doc.runningJupyterBlocks.delete(blockId);
+        finishJupyterRun(runId);
         console.error('Error running code:', err);
         const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
         if (outputBlock) {
@@ -6247,10 +6271,13 @@ function scrollJupyterOutputToBottom(outputBlock) {
 }
 
 async function stopCodeBlockInNotes(blockId) {
-    try {
-        await StopNote(blockId);
-    } catch (err) {
-        console.error('Error stopping code:', err);
+    const runId = activeNotesDocument.runningJupyterBlocks.get(blockId);
+    if (runId) {
+        try {
+            await StopNote(runId);
+        } catch (err) {
+            console.error('Error stopping code:', err);
+        }
     }
     
     // Toggle buttons back
@@ -12644,11 +12671,12 @@ EventsOn("notesRunLspGoToWorkspaceSymbol", async () => {
     await goToWorkspaceLspSymbol();
 });
 
-// Block IDs are only unique within a document, so output is shown only for
-// runs started from the active document.
+// Output is shown only for runs started from the active document.
 EventsOn("noteRun", (data) => {
-    const { blockId, output, isError } = data;
-    if (!activeNotesDocument.runningJupyterBlocks.has(blockId)) return;
+    const { runId, output, isError } = data;
+    const run = jupyterRuns.get(String(runId ?? ''));
+    if (!run || run.doc !== activeNotesDocument) return;
+    const { blockId } = run;
 
     const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
     if (!outputBlock) return;
@@ -12668,8 +12696,11 @@ EventsOn("noteRun", (data) => {
 });
 
 EventsOn("noteComplete", (data) => {
-    const { blockId } = data;
-    if (!activeNotesDocument.runningJupyterBlocks.delete(blockId)) return;
+    const run = finishJupyterRun(String(data?.runId ?? ''));
+    if (!run || run.doc !== activeNotesDocument) return;
+    const { blockId } = run;
+    // A newer run of the same block is still in progress.
+    if (run.doc.runningJupyterBlocks.has(blockId)) return;
 
     // Toggle buttons back to Run
     const runBtn = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-run-notes`);
