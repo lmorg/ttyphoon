@@ -630,6 +630,18 @@ Known limitations, for the following tasks:
   releases its document through `setActiveNotesDocument`, as switching tabs
   does.
 
+*Done (Stage 8, task 6):*
+
+- Each split has a `.notes-layout-divider` between its children, carrying the
+  split's path and the divider's index. Dividers are reused on re-render, so
+  views are not moved.
+- Dragging a divider resizes the views either side of it, measured from the
+  layout as the drag began, with pointer capture so iframes and Monaco don't
+  take the drag. No view shrinks below 120px. Double-clicking a divider gives
+  the two views equal shares.
+- Views have no depth limit. Monaco relayouts through each view's
+  ResizeObserver.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

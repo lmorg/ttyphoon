@@ -95,7 +95,7 @@ import './notes.css';
 import notesTemplate from './notes.html?raw';
 import { createNotesView } from './notes_view.js';
 import { closeLayoutView, createLayout, layoutViewIds, neighbourLayoutView, splitLayoutView } from './notes_layout.js';
-import { renderNotesLayout } from './notes_layout_dom.js';
+import { bindNotesLayoutDividers, renderNotesLayout } from './notes_layout_dom.js';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -508,6 +508,13 @@ function renderNotesViewsLayout() {
     renderNotesLayout(document.getElementById('notes-views'), notesLayout, (id) => notesViews.get(id)?.root);
 }
 renderNotesViewsLayout();
+bindNotesLayoutDividers(document.getElementById('notes-views'), {
+    getLayout: () => notesLayout,
+    setLayout: (next) => {
+        notesLayout = next;
+        renderNotesViewsLayout();
+    },
+});
 
 // The view that global chrome (status bar, Tools panel, LSP overlays, the
 // toolbar) follows. Its shown document is the active NotesDocument, and

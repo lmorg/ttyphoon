@@ -83,7 +83,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Split right and Split down from the tab context menu, command palette and `Cmd+\` (Q17); the new view shows the same document through the shared model and `NotesDocument`; track selection per view rather than per model handle (see Stage 7 task 1 limitation)
     - [x] Focus follows the clicked view; Cmd+Option+arrows move focus between neighbouring views (Q18); global chrome and the focused-view outline follow
     - [x] Close a view when its last tab closes and collapse the tree; release a document only when no view shows it
-    - [ ] Draggable dividers with minimum sizes; double-click a divider to equalise (Q20)
+    - [x] Draggable dividers with minimum sizes; double-click a divider to equalise (Q20)
     - [ ] Drag a tab onto another view's tab strip (Q19)
     - [ ] External changes, renames, deletes, Jupyter output and LSP diagnostics update every view showing the document; typos stay open while any view shows it
     - [ ] Persist the layout tree, each view's tabs and the focused view per workspace, loading Stage 7 tab lists as one view (Q21)

@@ -1891,16 +1891,34 @@ body {
     min-width: 0;
 }
 
-/* Split views (ADR 0100 Stage 8): a thin border between views, the focused
-   view outlined in the accent colour and the others dimmed. */
-.notes-layout-split > .notes-layout-split + *,
-.notes-layout-split > .notes-view + * {
-    border-left: 1px solid rgba(var(--fg-rgb), 0.3);
+/* Split views (ADR 0100 Stage 8): draggable dividers between views, the
+   focused view outlined in the accent colour and the others dimmed. */
+.notes-layout-divider {
+    flex: 0 0 5px;
+    position: relative;
+    cursor: col-resize;
+    touch-action: none;
 }
 
-.notes-layout-split[data-direction="column"] > * + * {
-    border-left: none;
-    border-top: 1px solid rgba(var(--fg-rgb), 0.3);
+.notes-layout-split[data-direction="column"] > .notes-layout-divider {
+    cursor: row-resize;
+}
+
+.notes-layout-divider::before {
+    content: '';
+    position: absolute;
+    inset: 0 2px;
+    background-color: rgba(var(--fg-rgb), 0.3);
+}
+
+.notes-layout-split[data-direction="column"] > .notes-layout-divider::before {
+    inset: 2px 0;
+}
+
+.notes-layout-divider:hover::before,
+.notes-layout-divider[data-dragging="true"]::before {
+    inset: 0;
+    background-color: var(--accent);
 }
 
 .notes-layout-split .notes-view:not([data-focused="true"]) .notes-view-panel {
