@@ -69,7 +69,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (Q15: view mode per view)
     - [x] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Q10: Find query per document)
   - Stage 7: tabs
-    - [ ] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model
+    - [x] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model
     - [ ] Backend Jupyter run IDs and `noteRun`/`noteComplete` events identify the document as well as the block, so blocks in two open documents can run at once
     - [ ] Tab strip in a view: opening a file from the file list, history or go-to-definition opens or focuses a tab; closing a tab releases its document when no view shows it (Q16: tab strip per view)
     - [ ] External changes to open documents: reload clean documents silently; mark dirty ones as conflicted and let the user choose which version to keep, in every view

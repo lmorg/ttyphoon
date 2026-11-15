@@ -393,6 +393,28 @@ as `lspOpenFile === currentFile`.
 - Until Stage 7 keeps documents open, a document's Find query is lost when
   another file replaces it.
 
+*Done (Stage 7, task 1):*
+
+- Each `NotesDocument` owns its own buffer and Monaco model
+  (`doc.editorModel`). The model is created the first time a view shows the
+  document (`showDocumentInView`), and the buffer attaches to the model handle
+  rather than to the editor. A document that is not shown can still be edited
+  through its buffer, and it keeps its own undo history.
+- `createDocumentModel()` and `showModel()` in `monaco_adapter.js` create
+  models and swap them in with `setModel()`. When a model is hidden, its
+  selection is saved, and it is restored when the model is shown again. Typos
+  decorations are cleared before each swap. A placeholder model is shown when
+  no document is.
+- The `mainDocument` that `notes.js` keeps is now a facade over the active
+  document's buffer. Its change listeners fire only for the active document.
+- Disposing a model after its editor has already been disposed is safe.
+- Checked in real Chrome against real Monaco: model swapping, edits to hidden
+  models, separate undo histories, separate model URIs, selection restore and
+  dispose order.
+- Stage 8 limitation: a model handle routes selection through the adapter that
+  created it. Before two views can share one model, selection must be tracked
+  per view.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

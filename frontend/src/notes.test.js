@@ -1924,6 +1924,11 @@ describe('notes rendering', () => {
             revealOffset: vi.fn(), focus: vi.fn(), layout: vi.fn(),
             setLanguage: vi.fn(), setWordWrap: vi.fn(), setTypography: vi.fn(),
             applyTheme: vi.fn(), configureLsp: vi.fn(), setDiagnostics: vi.fn(), setTyposMisspellings: vi.fn(),
+            showModel: vi.fn(),
+            createDocumentModel: () => ({
+                getValue: () => value, setValue: (next) => { value = next; },
+                getSelectionOffsets: () => ({ start: 0, end: 0 }), setSelectionOffsets: vi.fn(), dispose: vi.fn(),
+            }),
         };
         createMonacoAdapterMock.mockImplementation(async (_container, options) => {
             adapter.options = options;
@@ -3827,6 +3832,34 @@ describe('notes rendering', () => {
 
         expect(scrollSpy).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' });
         scrollSpy.mockRestore();
+    });
+
+    it('gives each document its own editor model with its own undo history', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: `${file} text`, text: '', error: '' }));
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+        const firstUri = editor.getModelUri();
+        editor.typeText('typed ');
+
+        notesHistoryPreviousPositionMock.mockResolvedValue({ file: second, line: 1 });
+        document.getElementById('notes-history-prev').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(editor.getValue()).toBe(`${second} text`);
+        expect(editor.getModelUri()).not.toBe(firstUri);
+        expect(editor.undo()).toBe(false);
+        expect(editor.getValue()).toBe(`${second} text`);
     });
 
     it('restores the view mode and editor cursor the view last used for a document', async () => {

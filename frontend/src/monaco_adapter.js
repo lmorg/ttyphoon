@@ -669,7 +669,13 @@ export async function createMonacoAdapter(container, options = {}) {
     const initialLanguage = resolveMonacoLanguage(options.language || 'plaintext');
     const fontMetrics = toFontMetrics(options);
 
-    const model = monaco.editor.createModel(initialValue, initialLanguage);
+    // The editor shows one model at a time. Documents each own a model
+    // (createDocumentModel) and are shown with showModel; this placeholder is
+    // shown when no document is.
+    const placeholderModel = monaco.editor.createModel(initialValue, initialLanguage);
+    let model = placeholderModel;
+    let shownHandle = null;
+    let editorDisposed = false;
     const themeName = 'ttyphoon-monaco';
     let vimAdapter = null;
     let vimIndicator = null;
@@ -1242,7 +1248,106 @@ export async function createMonacoAdapter(container, options = {}) {
         }
     }
 
-    return {
+    const toOffsetRange = (textModel, start, end) => {
+        const length = textModel.getValueLength();
+        const safeStart = Math.max(0, Math.min(Number(start) || 0, length));
+        const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, length));
+        const startPos = textModel.getPositionAt(safeStart);
+        const endPos = textModel.getPositionAt(safeEnd);
+        return {
+            startLineNumber: startPos.lineNumber,
+            startColumn: startPos.column,
+            endLineNumber: endPos.lineNumber,
+            endColumn: endPos.column,
+        };
+    };
+
+    const api = {
+        // A document's own model. It has the editing API a document buffer
+        // attaches to (getValue, setValue, selection, replaceRange) and works
+        // whether or not the editor shows it: edits to a hidden model keep their
+        // own undo history, and its selection is kept until it is shown.
+        // onChange fires for every content change of this model.
+        createDocumentModel({ value = '', language = 'plaintext', onChange } = {}) {
+            const textModel = monaco.editor.createModel(String(value || ''), resolveMonacoLanguage(language));
+            let storedSelection = { start: 0, end: 0 };
+            const contentDisposable = typeof onChange === 'function'
+                ? textModel.onDidChangeContent(() => onChange())
+                : null;
+            const isShown = () => model === textModel;
+            const handle = {
+                textModel,
+                getValue: () => textModel.getValue(),
+                setValue(next) {
+                    const text = String(next || '');
+                    if (textModel.getValue() !== text) {
+                        textModel.setValue(text);
+                    }
+                },
+                getSelectionOffsets() {
+                    return isShown() ? api.getSelectionOffsets() : { ...storedSelection };
+                },
+                setSelectionOffsets(start, end) {
+                    if (isShown()) {
+                        api.setSelectionOffsets(start, end);
+                        return;
+                    }
+                    const length = textModel.getValueLength();
+                    const safeStart = Math.max(0, Math.min(Number(start) || 0, length));
+                    storedSelection = {
+                        start: safeStart,
+                        end: Math.max(safeStart, Math.min(Number(end) || safeStart, length)),
+                    };
+                },
+                replaceRange(start, end, text, source) {
+                    if (isShown()) {
+                        api.replaceRange(start, end, text, source);
+                        return;
+                    }
+                    textModel.pushStackElement();
+                    textModel.pushEditOperations([], [{
+                        range: toOffsetRange(textModel, start, end),
+                        text: String(text || ''),
+                        forceMoveMarkers: true,
+                    }], () => null);
+                    textModel.pushStackElement();
+                },
+                setLanguage(language) {
+                    monaco.editor.setModelLanguage(textModel, resolveMonacoLanguage(language));
+                },
+                // Kept while the editor shows another model.
+                rememberSelection() {
+                    storedSelection = api.getSelectionOffsets();
+                },
+                restoreSelection() {
+                    api.setSelectionOffsets(storedSelection.start, storedSelection.end);
+                },
+                dispose() {
+                    if (isShown() && !editorDisposed) {
+                        api.showModel(null);
+                    }
+                    contentDisposable?.dispose();
+                    textModel.dispose();
+                },
+            };
+            return handle;
+        },
+
+        // Shows a document model (or the placeholder for null). Decorations
+        // and LSP markers stay with their model.
+        showModel(handle) {
+            const next = handle?.textModel || placeholderModel;
+            if (next === model) {
+                return;
+            }
+            shownHandle?.rememberSelection();
+            setTyposDecorations([]);
+            model = next;
+            shownHandle = handle || null;
+            editor.setModel(model);
+            shownHandle?.restoreSelection();
+        },
+
         getValue() {
             return editor.getValue();
         },
@@ -1587,21 +1692,11 @@ export async function createMonacoAdapter(container, options = {}) {
         },
 
         replaceRange(start, end, text, source = 'notes-monaco-edit') {
-            const safeStart = Math.max(0, Math.min(Number(start) || 0, model.getValueLength()));
-            const safeEnd = Math.max(safeStart, Math.min(Number(end) || safeStart, model.getValueLength()));
-            const startPos = model.getPositionAt(safeStart);
-            const endPos = model.getPositionAt(safeEnd);
-
             // Undo stops keep each programmatic edit a separate undo step
             // rather than merging it with adjacent typing or edits.
             editor.pushUndoStop();
             editor.executeEdits(source, [{
-                range: {
-                    startLineNumber: startPos.lineNumber,
-                    startColumn: startPos.column,
-                    endLineNumber: endPos.lineNumber,
-                    endColumn: endPos.column,
-                },
+                range: toOffsetRange(model, start, end),
                 text: String(text || ''),
                 forceMoveMarkers: true,
             }]);
@@ -1723,6 +1818,7 @@ export async function createMonacoAdapter(container, options = {}) {
         dispose() {
             fontMetricsRefresh.dispose();
             vimAdapterDisposing = true;
+            editorDisposed = true;
             disableVimMode();
             changeDisposable.dispose();
             cursorDisposable.dispose();
@@ -1739,9 +1835,10 @@ export async function createMonacoAdapter(container, options = {}) {
             }
             setTyposDecorations([]);
             editor.dispose();
-            model.dispose();
+            placeholderModel.dispose();
         },
     };
+    return api;
 }
 
 export async function createMonacoDiffAdapter(container, options = {}) {

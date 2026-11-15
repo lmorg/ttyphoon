@@ -9,42 +9,59 @@ function clampOffset(value, length) {
 
 let fakeModelCount = 0;
 
-export function createFakeMonacoAdapter(container, options = {}) {
-    let value = String(options.value || '');
-    let selection = { start: 0, end: 0, active: 0 };
-    let language = String(options.language || 'plaintext');
-    let disposed = false;
-    // Like Monaco: replaceRange (executeEdits) is undoable, setValue resets history.
-    let undoStack = [];
+function createFakeModel(value, language, onChange) {
+    return {
+        value: String(value || ''),
+        selection: { start: 0, end: 0, active: 0 },
+        language: String(language || 'plaintext'),
+        // Like Monaco: replaceRange (executeEdits) is undoable, setValue resets history.
+        undoStack: [],
+        uri: `inmemory://model/${++fakeModelCount}`,
+        onChange,
+    };
+}
 
-    const emitChange = () => {
-        if (typeof options.onChange === 'function') {
-            options.onChange(value);
+export function createFakeMonacoAdapter(container, options = {}) {
+    const placeholder = createFakeModel(options.value, options.language);
+    let current = placeholder;
+    let disposed = false;
+    // The shown model's fields, as the single-model fake used to hold them.
+    const field = (name) => ({ get: () => current[name], set: (next) => { current[name] = next; } });
+    const local = Object.defineProperties({}, {
+        value: field('value'),
+        selection: field('selection'),
+        language: field('language'),
+        undoStack: field('undoStack'),
+    });
+
+    const emitModelChange = (target) => {
+        target.onChange?.();
+        if (target === current && typeof options.onChange === 'function') {
+            options.onChange(target.value);
         }
     };
+    const emitChange = () => emitModelChange(current);
 
     const emitSelection = () => {
         if (typeof options.onSelectionChange === 'function') {
-            options.onSelectionChange(selection.start, selection.end, selection.active);
+            options.onSelectionChange(local.selection.start, local.selection.end, local.selection.active);
         }
     };
 
     const select = (start, end, active = end) => {
-        const safeStart = clampOffset(start, value.length);
-        const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, value.length));
-        selection = { start: safeStart, end: safeEnd, active: clampOffset(active, value.length) };
+        const safeStart = clampOffset(start, local.value.length);
+        const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, local.value.length));
+        local.selection = { start: safeStart, end: safeEnd, active: clampOffset(active, local.value.length) };
         emitSelection();
     };
-
-    const modelUri = `inmemory://model/${++fakeModelCount}`;
 
     const adapter = {
         options,
         container,
         // Stands in for the Monaco model that LSP provider callbacks receive.
-        model: {
-            uri: { toString: () => modelUri },
-            getValue: () => value,
+        get model() {
+            const shown = current;
+            return { uri: { toString: () => shown.uri }, getValue: () => shown.value };
         },
         lspCallbacks: null,
         diagnostics: [],
@@ -54,20 +71,74 @@ export function createFakeMonacoAdapter(container, options = {}) {
         theme: null,
         focusCount: 0,
 
-        getValue: () => value,
+        createDocumentModel({ value = '', language = 'plaintext', onChange } = {}) {
+            const target = createFakeModel(value, language, onChange);
+            const shown = () => target === current;
+            return {
+                fakeModel: target,
+                getValue: () => target.value,
+                setValue(next) {
+                    if (shown()) {
+                        adapter.setValue(next);
+                        return;
+                    }
+                    const text = String(next || '');
+                    if (text !== target.value) {
+                        target.value = text;
+                        target.undoStack = [];
+                        target.selection = { start: 0, end: 0, active: 0 };
+                        emitModelChange(target);
+                    }
+                },
+                getSelectionOffsets: () => ({ start: target.selection.start, end: target.selection.end }),
+                setSelectionOffsets(start, end) {
+                    if (shown()) {
+                        adapter.setSelectionOffsets(start, end);
+                        return;
+                    }
+                    const safeStart = clampOffset(start, target.value.length);
+                    const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, target.value.length));
+                    target.selection = { start: safeStart, end: safeEnd, active: safeEnd };
+                },
+                replaceRange(start, end, text) {
+                    if (shown()) {
+                        adapter.replaceRange(start, end, text);
+                        return;
+                    }
+                    const safeStart = clampOffset(start, target.value.length);
+                    const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, target.value.length));
+                    target.undoStack.push(target.value);
+                    target.value = target.value.slice(0, safeStart) + String(text || '') + target.value.slice(safeEnd);
+                    emitModelChange(target);
+                },
+                setLanguage(next) {
+                    target.language = String(next || 'plaintext');
+                },
+                dispose() {
+                    target.disposed = true;
+                    if (shown()) {
+                        adapter.showModel(null);
+                    }
+                },
+            };
+        },
+        showModel(handle) {
+            current = handle?.fakeModel || placeholder;
+        },
+        getValue: () => local.value,
         setValue(next) {
             const text = String(next || '');
-            if (text === value) {
+            if (text === local.value) {
                 return;
             }
-            value = text;
-            undoStack = [];
-            selection = { start: 0, end: 0, active: 0 };
+            local.value = text;
+            local.undoStack = [];
+            local.selection = { start: 0, end: 0, active: 0 };
             emitChange();
         },
-        getLanguage: () => language,
+        getLanguage: () => local.language,
         setLanguage(next) {
-            language = String(next || 'plaintext');
+            local.language = String(next || 'plaintext');
         },
         setDiagnostics(list) {
             adapter.diagnostics = Array.isArray(list) ? list : [];
@@ -76,27 +147,27 @@ export function createFakeMonacoAdapter(container, options = {}) {
             adapter.typosMisspellings = Array.isArray(list) ? list : [];
         },
         refreshInlayHints() {},
-        getModelUri: () => modelUri,
+        getModelUri: () => current.uri,
         configureLsp(callbacks = {}) {
             adapter.lspCallbacks = callbacks;
         },
-        getSelectionOffsets: () => ({ start: selection.start, end: selection.end }),
+        getSelectionOffsets: () => ({ start: local.selection.start, end: local.selection.end }),
         setSelectionOffsets(start, end) {
             select(start, end);
         },
-        getSelectionText: () => value.slice(selection.start, selection.end),
+        getSelectionText: () => local.value.slice(local.selection.start, local.selection.end),
         replaceRange(start, end, text) {
-            const safeStart = clampOffset(start, value.length);
-            const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, value.length));
-            undoStack.push(value);
-            value = value.slice(0, safeStart) + String(text || '') + value.slice(safeEnd);
+            const safeStart = clampOffset(start, local.value.length);
+            const safeEnd = Math.max(safeStart, clampOffset(end ?? safeStart, local.value.length));
+            local.undoStack.push(local.value);
+            local.value = local.value.slice(0, safeStart) + String(text || '') + local.value.slice(safeEnd);
             emitChange();
         },
         undo() {
-            if (undoStack.length === 0) {
+            if (local.undoStack.length === 0) {
                 return false;
             }
-            value = undoStack.pop();
+            local.value = local.undoStack.pop();
             emitChange();
             return true;
         },
@@ -116,7 +187,7 @@ export function createFakeMonacoAdapter(container, options = {}) {
             }
             const limit = Number(findOptions.limit) || 10000;
             const matches = [];
-            for (const match of value.matchAll(pattern)) {
+            for (const match of local.value.matchAll(pattern)) {
                 if (match[0].length === 0) {
                     continue;
                 }
@@ -128,11 +199,11 @@ export function createFakeMonacoAdapter(container, options = {}) {
             return matches;
         },
         saveViewState() {
-            return { selection: { ...selection } };
+            return { selection: { ...local.selection } };
         },
         restoreViewState(viewState) {
             if (viewState?.selection) {
-                selection = { ...viewState.selection };
+                local.selection = { ...viewState.selection };
             }
         },
         revealOffset() {},
@@ -159,8 +230,8 @@ export function createFakeMonacoAdapter(container, options = {}) {
         // Test helpers: simulate what a user does inside Monaco.
         typeText(text) {
             const insert = String(text || '');
-            const start = selection.start;
-            adapter.replaceRange(selection.start, selection.end, insert);
+            const start = local.selection.start;
+            adapter.replaceRange(local.selection.start, local.selection.end, insert);
             const caret = start + insert.length;
             select(caret, caret);
             // Monaco's onDidType, which the adapter forwards as a 'type' request.

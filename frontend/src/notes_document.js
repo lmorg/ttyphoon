@@ -26,6 +26,8 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         uri: String(uri || ''),
         fileType,
         buffer: buffer || createDocumentBuffer(),
+        // The document's Monaco model, created when a view first shows it.
+        editorModel: null,
         dirty: false,
         autosaveTimer: null,
         lspOpenFile: '',
@@ -46,9 +48,10 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
 
 const DOCUMENT_TIMERS = ['autosaveTimer', 'lspChangeTimer', 'typosChangeTimer'];
 
-// onClose runs after a document leaves the registry, to release what it holds
-// elsewhere (LSP registrations, kernels). Its result is returned by close().
-export function createNotesDocumentRegistry({ onClose } = {}) {
+// create builds new documents (default createNotesDocument). onClose runs after
+// a document leaves the registry, to release what it holds elsewhere (LSP
+// registrations, kernels). Its result is returned by close().
+export function createNotesDocumentRegistry({ create = createNotesDocument, onClose } = {}) {
     const documents = new Map();
 
     function get(path, project = '') {
@@ -62,7 +65,7 @@ export function createNotesDocumentRegistry({ onClose } = {}) {
         if (existing) {
             return existing;
         }
-        const doc = createNotesDocument({ ...fields, path });
+        const doc = create({ ...fields, path });
         if (!doc.key) {
             throw new Error('NotesDocument needs a path');
         }

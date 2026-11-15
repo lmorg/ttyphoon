@@ -45,7 +45,6 @@ import { createHyperlinkTooltip } from './hyperlink-tooltip';
 import { captureRenderedElement, captureRenderedElements, createRenderedSelectionCopier } from './copy-formatted';
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck, createSpellCheckEngine } from './spellcheck';
-import { createDocumentBuffer } from './notes_document_buffer';
 import { createNotesDocument, createNotesDocumentRegistry, notesDocumentKey } from './notes_document';
 import {
     LSP_CHANGE_DEBOUNCE_MS,
@@ -776,20 +775,84 @@ const AI_BOTTOM_THRESHOLD_PX = 24;
 const AI_BOTTOM_CHASE_MS = 400;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
-const mainDocument = createDocumentBuffer();
+// Each NotesDocument has its own buffer and Monaco model (ADR 0100 decision
+// 2). mainDocument is the active document's buffer; its change listeners hear
+// only edits to the active document.
+const activeDocumentChangeListeners = new Set();
+const mainDocument = {
+    getValue: () => activeNotesDocument.buffer.getValue(),
+    getSelection: () => activeNotesDocument.buffer.getSelection(),
+    setSelection: (start, end) => activeNotesDocument.buffer.setSelection(start, end),
+    setValue: (text) => activeNotesDocument.buffer.setValue(text),
+    replaceRange: (start, end, insert, options) => activeNotesDocument.buffer.replaceRange(start, end, insert, options),
+    replaceAll: (text, options) => activeNotesDocument.buffer.replaceAll(text, options),
+    onChange(listener) {
+        activeDocumentChangeListeners.add(listener);
+        return () => activeDocumentChangeListeners.delete(listener);
+    },
+};
+
+function newNotesDocument(fields = {}) {
+    const doc = createNotesDocument(fields);
+    doc.buffer.onChange((event) => {
+        if (doc !== activeNotesDocument) {
+            return;
+        }
+        for (const listener of [...activeDocumentChangeListeners]) {
+            listener(event);
+        }
+    });
+    return doc;
+}
 
 // Open documents (ADR 0100). Notes still shows one document at a time, so
 // switching file closes the previous one. With no file open, the active
 // document is a detached placeholder so its fields always have a home.
-const notesDocuments = createNotesDocumentRegistry({ onClose: releaseNotesDocument });
-let activeNotesDocument = createNotesDocument({ buffer: mainDocument });
+const notesDocuments = createNotesDocumentRegistry({
+    create: newNotesDocument,
+    onClose: releaseNotesDocument,
+});
+let activeNotesDocument = newNotesDocument();
+
+// Shows a document in a view's editor, creating the document's model the first
+// time. The buffer attaches to the model, so its edits are Monaco edits on the
+// document's own undo stack whether or not the document is shown.
+function showDocumentInView(view, doc) {
+    if (!view.editor) {
+        return;
+    }
+    if (!doc.editorModel) {
+        doc.editorModel = view.editor.createDocumentModel({
+            value: doc.buffer.getValue(),
+            language: state.editorLanguage || 'plaintext',
+            onChange: () => doc.buffer.handleViewChange('monaco'),
+        });
+        doc.buffer.attachView(doc.editorModel);
+    }
+    view.editor.showModel(doc.editorModel);
+}
+
+// Placeholders are not in the registry, so they are released here.
+function retireNotesDocument(doc) {
+    if (isNotesDocumentOpen(doc)) {
+        notesDocuments.close(doc);
+    } else {
+        doc.editorModel?.dispose();
+        doc.editorModel = null;
+    }
+}
+
+function setActiveNotesDocument(next) {
+    const previous = activeNotesDocument;
+    activeNotesDocument = next;
+    showDocumentInView(mainView, next);
+    retireNotesDocument(previous);
+}
 
 function activateNotesDocument(path, { project = '' } = {}) {
-    const previous = activeNotesDocument;
-    const next = notesDocuments.open(path, { project, buffer: mainDocument });
-    if (next !== previous) {
-        notesDocuments.close(previous);
-        activeNotesDocument = next;
+    const next = notesDocuments.open(path, { project });
+    if (next !== activeNotesDocument) {
+        setActiveNotesDocument(next);
     }
     return next;
 }
@@ -805,6 +868,8 @@ function releaseNotesDocument(doc) {
     doc.runningJupyterBlocks.clear();
     const blocks = doc.jupyterCodeBlocks;
     doc.jupyterCodeBlocks = {};
+    doc.editorModel?.dispose();
+    doc.editorModel = null;
     return Promise.all([
         settleLspDocumentCloses(releaseLspDocument(doc)),
         releaseJupyterBlockLspDocuments(blocks),
@@ -816,8 +881,7 @@ function isNotesDocumentOpen(doc) {
 }
 
 function closeActiveNotesDocument() {
-    notesDocuments.close(activeNotesDocument);
-    activeNotesDocument = createNotesDocument({ buffer: mainDocument });
+    setActiveNotesDocument(newNotesDocument());
 }
 
 // The current-file fields read the active document. currentFile and
@@ -1047,9 +1111,6 @@ async function createMonacoMainEditor() {
         fontFamily: typography.fontFamily,
         lineHeight: typography.lineHeight,
         themeColors: latestWindowStyle?.colors || null,
-        onChange: () => {
-            mainDocument.handleViewChange('monaco');
-        },
         onSelectionChange: (start, end, activeOffset) => {
             scheduleHistoryPosition(state.currentFile, activeOffset);
             if (isCurrentFileLspEligible() && state.lspOpenFile === state.currentFile) {
@@ -1090,7 +1151,7 @@ async function createMonacoMainEditor() {
 
     // Monaco boot can race against file loading, so the buffer hands over
     // whatever text it holds now.
-    mainDocument.attachView(mainView.editor);
+    showDocumentInView(mainView, activeNotesDocument);
 
     mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
     mainView.editor.setTypography(getMonacoTypographyOptions());
