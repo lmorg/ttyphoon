@@ -1,5 +1,10 @@
 <div class="notes-view">
     <div class="notes-doc-tabs" role="tablist" aria-label="Open documents" hidden data-part="docTabs"></div>
+    <div class="notes-doc-conflict" role="alert" hidden data-part="docConflict">
+        <span class="notes-doc-conflict-message" data-part="docConflictMessage"></span>
+        <button type="button" class="notes-doc-conflict-keep" data-part="docConflictKeep">Keep my edits</button>
+        <button type="button" class="notes-doc-conflict-reload" data-part="docConflictReload">Load disk version</button>
+    </div>
     <div class="notes-tabs" role="tablist" data-part="tabs">
         <button type="button" class="tab notes-tab-viewer" role="tab" aria-selected="true" data-part="tabViewer">View</button>
         <button type="button" class="tab notes-tab-editor" role="tab" aria-selected="false" data-part="tabEditor">Edit</button>

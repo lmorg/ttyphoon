@@ -22,7 +22,6 @@ const (
 )
 
 type expectedWriteT struct {
-	path    string
 	hash    [32]byte
 	size    int64
 	hasHash bool
@@ -31,11 +30,12 @@ type expectedWriteT struct {
 
 var (
 	watcher *fsnotify.Watcher
-	file    atomic.Value
 	onEvent atomic.Value
 
-	mu            sync.Mutex
-	expectedWrite expectedWriteT
+	mu             sync.Mutex
+	files          = map[string]struct{}{}
+	dirs           = map[string]struct{}{}
+	expectedWrites = map[string]expectedWriteT{}
 )
 
 func init() {
@@ -44,35 +44,66 @@ func init() {
 	if err != nil {
 		log.Println(err)
 	} else {
-		file.Store("") // initialize it as a string
 		onEvent.Store((func(string))(nil))
 		go listen()
 	}
 }
 
-func Watch(filename string) {
+// CleanPath returns a file's path in the form used by change events.
+func CleanPath(filename string) string {
+	if abs, err := filepath.Abs(filename); err == nil {
+		filename = abs
+	}
+	return filepath.Clean(filename)
+}
+
+// SetFiles replaces the set of watched files. Their parent directories are
+// watched, so files that are replaced by a rename are still seen.
+func SetFiles(filenames []string) {
 	if watcher == nil {
 		return
 	}
 
-	for _, f := range watcher.WatchList() {
-		err := watcher.Remove(f)
-		if err != nil {
-			log.Println(err)
+	nextFiles := make(map[string]struct{}, len(filenames))
+	nextDirs := make(map[string]struct{}, len(filenames))
+	for _, filename := range filenames {
+		if filename == "" {
+			continue
+		}
+		clean := CleanPath(filename)
+		nextFiles[clean] = struct{}{}
+		nextDirs[filepath.Dir(clean)] = struct{}{}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	for dir := range dirs {
+		if _, ok := nextDirs[dir]; ok {
+			continue
+		}
+		if err := watcher.Remove(dir); err != nil {
+			log.Printf("[debug] watcher: cannot unwatch %s: %v", dir, err)
 		}
 	}
-
-	abs, err := filepath.Abs(filename)
-	if err == nil {
-		filename = abs
+	for dir := range nextDirs {
+		if _, ok := dirs[dir]; ok {
+			continue
+		}
+		if err := watcher.Add(dir); err != nil {
+			log.Printf("[warn] watcher: cannot watch %s: %v", dir, err)
+			delete(nextDirs, dir)
+		}
 	}
+	files = nextFiles
+	dirs = nextDirs
+}
 
-	clean := filepath.Clean(filename)
-	file.Store(clean)
-	err = watcher.Add(filepath.Dir(clean))
-	if err != nil {
-		log.Println(err)
-	}
+func isWatched(filename string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	_, ok := files[filename]
+	return ok
 }
 
 func SetEventCallback(fn func(string)) {
@@ -81,73 +112,64 @@ func SetEventCallback(fn func(string)) {
 
 // NoteWrite records an expected self-write so watcher events from this process
 // can be suppressed. Files up to maxHashBytes use hash matching; larger files
-// fall back to a short time-window suppression.
+// fall back to a short time-window suppression. Each file has its own
+// expectation, so saving several files at once suppresses each one's events.
 func NoteWrite(filename string, content []byte) {
-	abs, err := filepath.Abs(filename)
-	if err == nil {
-		filename = abs
-	}
-
-	clean := filepath.Clean(filename)
+	clean := CleanPath(filename)
 	now := time.Now()
 
 	mu.Lock()
 	defer mu.Unlock()
 
-	expectedWrite = expectedWriteT{path: clean}
+	for path, expected := range expectedWrites {
+		if now.After(expected.until) {
+			delete(expectedWrites, path)
+		}
+	}
 
 	if int64(len(content)) <= maxHashBytes {
-		expectedWrite.hash = sha256.Sum256(content)
-		expectedWrite.size = int64(len(content))
-		expectedWrite.hasHash = true
-		expectedWrite.until = now.Add(expectedWriteTTL)
+		expectedWrites[clean] = expectedWriteT{
+			hash:    sha256.Sum256(content),
+			size:    int64(len(content)),
+			hasHash: true,
+			until:   now.Add(expectedWriteTTL),
+		}
 		return
 	}
 
 	// Large file fallback: keep a short suppression window to avoid expensive hashing.
-	expectedWrite.hasHash = false
-	expectedWrite.until = now.Add(largeFileIgnoreWindow)
+	expectedWrites[clean] = expectedWriteT{until: now.Add(largeFileIgnoreWindow)}
 }
 
+// shouldIgnoreSelfWrite reports whether an event is from this process's own
+// write. A write can raise several events, so a match stays until it expires.
 func shouldIgnoreSelfWrite(eventPath string) bool {
 	mu.Lock()
-	defer mu.Unlock()
+	expected, ok := expectedWrites[eventPath]
+	if ok && time.Now().After(expected.until) {
+		delete(expectedWrites, eventPath)
+		ok = false
+	}
+	mu.Unlock()
 
-	if expectedWrite.path == "" || expectedWrite.path != eventPath {
+	if !ok {
 		return false
 	}
-
-	if time.Now().After(expectedWrite.until) {
-		expectedWrite = expectedWriteT{}
-		return false
-	}
-
-	if !expectedWrite.hasHash {
+	if !expected.hasHash {
 		return true
 	}
 
 	fi, err := os.Stat(eventPath)
-	if err != nil {
-		return false
-	}
-	if fi.Size() != expectedWrite.size || fi.Size() > maxHashBytes {
+	if err != nil || fi.Size() != expected.size || fi.Size() > maxHashBytes {
 		return false
 	}
 
 	b, err := os.ReadFile(eventPath)
-	if err != nil {
-		return false
-	}
-	if int64(len(b)) != expectedWrite.size {
+	if err != nil || int64(len(b)) != expected.size {
 		return false
 	}
 
-	if sha256.Sum256(b) == expectedWrite.hash {
-		expectedWrite = expectedWriteT{}
-		return true
-	}
-
-	return false
+	return sha256.Sum256(b) == expected.hash
 }
 
 func listen() {
@@ -161,13 +183,8 @@ func listen() {
 				continue
 			}
 
-			f, ok := file.Load().(string)
-			if !ok || f == "" {
-				continue
-			}
-
 			eventPath := filepath.Clean(event.Name)
-			if eventPath != f {
+			if !isWatched(eventPath) {
 				continue
 			}
 

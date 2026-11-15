@@ -29,6 +29,10 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         // The document's Monaco model, created when a view first shows it.
         editorModel: null,
         dirty: false,
+        // The file changed on disk while the document had unsaved edits, and
+        // the user has not yet chosen which version to keep. Nothing saves it
+        // automatically until they do.
+        conflicted: false,
         autosaveTimer: null,
         lspOpenFile: '',
         lspChangeTimer: null,

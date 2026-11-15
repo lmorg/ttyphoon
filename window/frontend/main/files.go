@@ -59,7 +59,6 @@ func (a *WApp) GetFile(filename string) GetFileReturnT {
 	}
 
 	a.setMarkdownBaseDir(filepath.Dir(filename))
-	watcher.Watch(filename)
 
 	if bytes.Contains(b[:min(1024, len(b))], []byte{0}) {
 		return GetFileReturnT{Contents: base64.StdEncoding.EncodeToString(b), Binary: true}

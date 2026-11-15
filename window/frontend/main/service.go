@@ -53,6 +53,9 @@ type WApp struct {
 	typosMu               sync.Mutex
 	syntaxEngine          *syntaxcompletion.Engine
 	notesTables           *tablecore.Registry
+	notesWatchMu          sync.Mutex
+	notesWatchGeneration  int
+	notesWatchKeys        map[string][]string
 }
 
 // NewApp creates a new App application struct

@@ -23,7 +23,7 @@ func (a *WApp) ServiceStartup(ctx context.Context, _ application.ServiceOptions)
 		if a.ctx == nil {
 			return
 		}
-		runtime.EventsEmit(a.ctx, "notesFileChanged", filename)
+		runtime.EventsEmit(a.ctx, "notesFileChanged", a.notesFileChangedEvent(filename))
 	})
 
 	globalhotkeys.Register(func(key string) {

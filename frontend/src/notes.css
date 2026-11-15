@@ -1759,6 +1759,48 @@ body {
     font-size: inherit;
 }
 
+.notes-view .notes-doc-tab[data-conflicted="true"] .notes-doc-tab-name {
+    color: var(--red);
+}
+
+/* The active document changed on disk while it had unsaved edits. */
+.notes-view .notes-doc-conflict {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    color: var(--fg);
+    background-color: rgba(var(--fg-rgb), 0.08);
+    border-bottom: 1px solid var(--red);
+    box-sizing: border-box;
+}
+
+.notes-view .notes-doc-conflict[hidden] {
+    display: none;
+}
+
+.notes-view .notes-doc-conflict-message {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-view .notes-doc-conflict button {
+    flex: 0 0 auto;
+    border: 1px solid rgba(var(--fg-rgb), 0.3);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    padding: 2px 8px;
+    cursor: pointer;
+}
+
+.notes-view .notes-doc-conflict button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .notes-view .notes-doc-tab[data-dirty="true"]:hover .notes-doc-tab-close::before {
     content: none;
 }
@@ -3349,6 +3391,7 @@ body {
 [data-log-maximized="true"] #notes-splitter,
 [data-log-maximized="true"] .notes-view .notes-tabs,
 [data-log-maximized="true"] .notes-view .notes-doc-tabs,
+[data-log-maximized="true"] .notes-view .notes-doc-conflict,
 [data-log-maximized="true"] .notes-view .notes-editor-wrap,
 [data-log-maximized="true"] .notes-view .notes-hex-wrap,
 [data-log-maximized="true"] .notes-view .notes-preview-wrap,
@@ -3391,6 +3434,7 @@ body {
 [data-ai-maximized="true"] #notes-splitter,
 [data-ai-maximized="true"] .notes-view .notes-tabs,
 [data-ai-maximized="true"] .notes-view .notes-doc-tabs,
+[data-ai-maximized="true"] .notes-view .notes-doc-conflict,
 [data-ai-maximized="true"] .notes-view .notes-editor-wrap,
 [data-ai-maximized="true"] .notes-view .notes-hex-wrap,
 [data-ai-maximized="true"] .notes-view .notes-preview-wrap,

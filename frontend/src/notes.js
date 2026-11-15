@@ -9,7 +9,7 @@ import {
     NotesTableSort, NotesTableClearSort, NotesTableFilter, NotesTableReconcile, NotesTableRestore, NotesTableSetGraph, NotesTableRenderGraph, NotesTableDisposeAll,
     GetNotesStructViewMaxSizeKB,
     GetNotesContext, GetNotesFilesSnapshot, SaveFile, SaveBinaryFile, DeleteFile, RenameFile,
-    RunNote, RunFunction, StopNote, SendIpc, SendToTerminal,
+    RunNote, RunFunction, StopNote, SendIpc, SendToTerminal, WatchNotesFiles,
     GetLanguageDescriptions, GetAllLanguageDescriptions, TerminalCopyImageDataURL,
     ResolveFilePath, GetHyperlinkMenuActions, RunHyperlinkMenuAction,
     DisplayHyperlinkMenu, GetHyperlinkTooltip,
@@ -867,8 +867,29 @@ function setActiveNotesDocument(next) {
     renderNotesTabs(mainView);
 }
 
+// The backend watches the files of open documents for changes made outside
+// Notes. Changes to the open set are sent once per task, numbered so the
+// backend can ignore an older set that arrives late.
+let notesWatchGeneration = 0;
+let notesWatchSyncQueued = false;
+
+function syncWatchedNotesFiles() {
+    if (notesWatchSyncQueued) {
+        return;
+    }
+    notesWatchSyncQueued = true;
+    queueMicrotask(() => {
+        notesWatchSyncQueued = false;
+        const files = notesDocuments.list().map(({ key, path, project }) => ({ key, path, project }));
+        Promise.resolve(WatchNotesFiles(++notesWatchGeneration, files)).catch((err) => {
+            console.error('Failed to watch open notes:', err);
+        });
+    });
+}
+
 function activateNotesDocument(path, { project = '' } = {}) {
     const next = notesDocuments.open(path, { project });
+    syncWatchedNotesFiles();
     if (next !== activeNotesDocument) {
         setActiveNotesDocument(next);
     } else if (!isNotesDocumentInTab(next)) {
@@ -932,6 +953,7 @@ function finishJupyterRun(runId) {
 // A closed document stops its block runs and releases its own and its
 // blocks' LSP and typos documents.
 function releaseNotesDocument(doc) {
+    syncWatchedNotesFiles();
     for (const runId of doc.runningJupyterBlocks.values()) {
         jupyterRuns.delete(runId);
         Promise.resolve(StopNote(runId)).catch((err) => {
@@ -971,6 +993,7 @@ function renderNotesTabs(view) {
         tab.setAttribute('aria-selected', String(doc === activeNotesDocument));
         tab.dataset.docKey = doc.key;
         tab.dataset.dirty = String(doc.dirty === true);
+        tab.dataset.conflicted = String(doc.conflicted === true);
         tab.title = doc.path;
         const label = document.createElement('span');
         label.className = 'notes-doc-tab-name';
@@ -983,6 +1006,87 @@ function renderNotesTabs(view) {
         tab.append(label, close);
         return tab;
     }));
+    renderNotesConflict(view);
+}
+
+function renderNotesConflict(view) {
+    const doc = activeNotesDocument;
+    view.parts.docConflict.hidden = !doc.conflicted;
+    view.parts.docConflictMessage.textContent = doc.conflicted
+        ? `${getPathFileName(doc.path)} changed on disk while it had unsaved edits.`
+        : '';
+}
+
+// The file of a document with unsaved edits changed on disk. Autosave stops
+// until the user chooses which version to keep.
+function markNotesDocumentConflicted(doc) {
+    clearTimeout(doc.autosaveTimer);
+    doc.autosaveTimer = null;
+    doc.conflicted = true;
+    renderNotesTabs(mainView);
+    if (doc === activeNotesDocument) {
+        setStatus(`${doc.path} changed on disk: keep your edits or load the disk version`, true);
+    }
+}
+
+async function keepNotesDocumentEdits(doc = activeNotesDocument) {
+    doc.conflicted = false;
+    renderNotesTabs(mainView);
+    await saveFile(doc);
+}
+
+async function loadNotesDocumentFromDisk(doc = activeNotesDocument) {
+    if (doc !== activeNotesDocument) {
+        return;
+    }
+    clearTimeout(doc.autosaveTimer);
+    doc.autosaveTimer = null;
+    doc.conflicted = false;
+    setDirty(false);
+    renderNotesTabs(mainView);
+    await reloadActiveNotesDocument();
+}
+
+// A file changed on disk. A clean document reloads: the active one now, a
+// background one when it is next shown, as showing a tab reads the file. A
+// document with unsaved edits is conflicted unless the disk text matches.
+async function handleNotesDocumentChangedOnDisk(doc) {
+    if (!doc?.path || doc.path === state.mutatingFile) {
+        return;
+    }
+    if (!doc.dirty) {
+        if (doc === activeNotesDocument) {
+            await reloadActiveNotesDocument();
+        }
+        return;
+    }
+    if (doc !== activeNotesDocument) {
+        markNotesDocumentConflicted(doc);
+        return;
+    }
+    let result = null;
+    try {
+        result = await GetFile(doc.path);
+    } catch (err) {
+        console.error(err);
+    }
+    if (!isNotesDocumentOpen(doc) && doc !== activeNotesDocument) {
+        return;
+    }
+    const diskText = result && !result.error && !(result.binary ?? result.text)
+        ? normaliseLineEndings(result.contents)
+        : null;
+    if (diskText !== null && diskText === doc.buffer.getValue()) {
+        doc.conflicted = false;
+        if (doc === activeNotesDocument) {
+            setDirty(false);
+        } else {
+            doc.dirty = false;
+        }
+        renderNotesTabs(mainView);
+        return;
+    }
+    markNotesDocumentConflicted(doc);
 }
 
 function markActiveNotesTabDirty() {
@@ -1054,6 +1158,14 @@ mainView.parts.docTabs.addEventListener('click', (event) => {
     } else {
         void activateNotesTab(mainView, tab.dataset.docKey);
     }
+});
+
+mainView.parts.docConflictKeep.addEventListener('click', () => {
+    void keepNotesDocumentEdits();
+});
+
+mainView.parts.docConflictReload.addEventListener('click', () => {
+    void loadNotesDocumentFromDisk();
 });
 
 mainView.parts.docTabs.addEventListener('auxclick', (event) => {
@@ -4900,9 +5012,12 @@ function scheduleAutoSave() {
     if (doc.autosaveTimer) {
         clearTimeout(doc.autosaveTimer);
     }
+    if (doc.conflicted) {
+        return;
+    }
     doc.autosaveTimer = setTimeout(() => {
         doc.autosaveTimer = null;
-        if (doc === activeNotesDocument) {
+        if (doc === activeNotesDocument && !doc.conflicted) {
             saveFile();
         }
     }, 1000);
@@ -8515,8 +8630,9 @@ async function loadFile(file, options = {}) {
     const previousDocument = activeNotesDocument;
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
-        // Background tabs are kept saved, so save pending edits now.
-        if (state.dirty) {
+        // Background tabs are kept saved, so save pending edits now. A
+        // conflicted document keeps its edits until the user chooses.
+        if (state.dirty && !previousDocument.conflicted) {
             clearTimeout(state.autosaveTimer);
             state.autosaveTimer = null;
             await saveFile();
@@ -8654,6 +8770,12 @@ async function loadFile(file, options = {}) {
 
         const isBinaryFile = Boolean(result.binary ?? result.text);
         const doc = keepsUnsavedEdits && !isBinaryFile ? mainDocument.getValue() : result.contents;
+        // Edits that match the file on disk are no longer unsaved.
+        const diskMatchesEdits = keepsUnsavedEdits && !isBinaryFile
+            && normaliseLineEndings(result.contents) === doc;
+        if (diskMatchesEdits) {
+            loadedDocument.conflicted = false;
+        }
 
         if (isBinaryFile) {
             state.currentFileType = 'binary';
@@ -8824,7 +8946,7 @@ async function loadFile(file, options = {}) {
             applyDocumentCache(documentCache, loadingSvg ? 'image-view' : 'editor');
         }
         
-        setDirty(keepsUnsavedEdits);
+        setDirty(keepsUnsavedEdits && !diskMatchesEdits);
         mainView.shownDocumentKey = activeNotesDocument.key;
         mainView.editor?.restoreViewState(rememberedView?.editorState);
         renderFileList();
@@ -8894,6 +9016,10 @@ async function saveFile(doc = activeNotesDocument) {
         setStatus('Select a note before saving', true);
         return false;
     }
+    if (doc.conflicted) {
+        setStatus(`${doc.path} changed on disk: keep your edits or load the disk version first`, true);
+        return false;
+    }
 
     const file = doc.path;
     try {
@@ -8947,6 +9073,9 @@ async function saveAndFormat() {
     } catch (err) {
         console.error('format on save failed:', err);
     }
+    // Saving explicitly keeps the edits over a version changed on disk.
+    activeNotesDocument.conflicted = false;
+    renderNotesTabs(mainView);
     await saveFile();
 }
 
@@ -12748,16 +12877,9 @@ EventsOn('notesFileIndexChanged', (event) => {
     }
 });
 
-EventsOn("notesFileChanged", async () => {
-    if (!state.currentFile || state.currentFile === state.mutatingFile) {
-        return;
-    }
-
-    if (state.dirty) {
-        setStatus('File changed on disk but has unsaved edits in Notes', true);
-        return;
-    }
-
+// Reloads the active document from disk, keeping the editor caret roughly in
+// place.
+async function reloadActiveNotesDocument() {
     const shouldRestoreCaret = state.viewMode === 'editor' || state.viewMode === 'swagger-edit';
     const previousSelection = shouldRestoreCaret
         ? {
@@ -12784,6 +12906,16 @@ EventsOn("notesFileChanged", async () => {
     } catch (err) {
         setStatus(`Failed to reload ${state.currentFile}`, true);
         console.error(err);
+    }
+}
+
+// The event names the open documents of the changed file. Without names, the
+// change is to the active document.
+EventsOn("notesFileChanged", async (event) => {
+    const keys = Array.isArray(event?.keys) ? event.keys : null;
+    const docs = keys ? keys.map(findNotesDocument).filter(Boolean) : [activeNotesDocument];
+    for (const doc of docs) {
+        await handleNotesDocumentChangedOnDisk(doc);
     }
 });
 

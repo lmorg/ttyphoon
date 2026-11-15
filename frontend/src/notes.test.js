@@ -82,6 +82,7 @@ const renameFileMock = vi.fn(() => Promise.resolve());
 const runNoteMock = vi.fn(() => Promise.resolve());
 const runFunctionMock = vi.fn(() => Promise.resolve(''));
 const stopNoteMock = vi.fn(() => Promise.resolve());
+const watchNotesFilesMock = vi.fn(() => Promise.resolve());
 const sendIpcMock = vi.fn(() => Promise.resolve());
 const sendToTerminalMock = vi.fn(() => Promise.resolve());
 const getLanguageDescriptionsMock = vi.fn(() => Promise.resolve([]));
@@ -294,6 +295,7 @@ vi.mock('./wails-bindings.js', () => ({
     RunNote: runNoteMock,
     RunFunction: runFunctionMock,
     StopNote: stopNoteMock,
+    WatchNotesFiles: watchNotesFilesMock,
     SendIpc: sendIpcMock,
     SendToTerminal: sendToTerminalMock,
     GetLanguageDescriptions: getLanguageDescriptionsMock,
@@ -600,6 +602,7 @@ describe('notes rendering', () => {
         runNoteMock.mockClear();
         runFunctionMock.mockClear();
         stopNoteMock.mockClear();
+        watchNotesFilesMock.mockClear();
         sendIpcMock.mockClear();
         sendToTerminalMock.mockClear();
         getLanguageDescriptionsMock.mockReset().mockResolvedValue([]);
@@ -3966,6 +3969,128 @@ describe('notes rendering', () => {
         expect(document.querySelectorAll('.notes-doc-tab')).toHaveLength(0);
         expect(document.querySelector('.notes-doc-tabs').hidden).toBe(true);
         expect(editor.getValue()).toBe('');
+    });
+
+    it('watches the files of every open document', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$PROJECT/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector(`[data-file="${second}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(watchNotesFilesMock.mock.calls.at(-1)[1]).toEqual([
+            { key: first, path: first, project: '' },
+            { key: second, path: second, project: '' },
+        ]);
+
+        await closeDocumentTab(first);
+        const [generation, files] = watchNotesFilesMock.mock.calls.at(-1);
+        expect(files).toEqual([{ key: second, path: second, project: '' }]);
+        expect(generation).toBeGreaterThan(watchNotesFilesMock.mock.calls.at(-2)[0]);
+    });
+
+    it('marks the active document conflicted when its file changes while it has unsaved edits', async () => {
+        const file = '$NOTES/conflict.md';
+        const disk = new Map([[file, 'start']]);
+        listFilesMock.mockResolvedValue([file]);
+        getFileMock.mockImplementation(async (name) => ({ contents: disk.get(name), text: '', error: '' }));
+        saveFileMock.mockImplementation(async (name, content) => { disk.set(name, content); });
+        await importNotesModule();
+        document.querySelector(`[data-file="${file}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+        const banner = document.querySelector('.notes-doc-conflict');
+
+        vi.useFakeTimers();
+        try {
+            // A change that matches the edits is not a conflict.
+            editor.typeText('same ');
+            disk.set(file, 'same start');
+            await getEventHandler('notesFileChanged')({ path: '/notes/conflict.md', keys: [file] });
+            expect(banner.hidden).toBe(true);
+            expect(documentTab(file).dataset.dirty).toBe('false');
+
+            editor.typeText('mine ');
+            disk.set(file, 'theirs');
+            await getEventHandler('notesFileChanged')({ path: '/notes/conflict.md', keys: [file] });
+            expect(banner.hidden).toBe(false);
+            expect(documentTab(file).dataset.conflicted).toBe('true');
+
+            saveFileMock.mockClear();
+            editor.typeText('more ');
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(saveFileMock).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+
+        document.querySelector('.notes-doc-conflict-reload').click();
+        await flushPromises();
+        await flushPromises();
+        expect(editor.getValue()).toBe('theirs');
+        expect(banner.hidden).toBe(true);
+        expect(documentTab(file).dataset).toMatchObject({ dirty: 'false', conflicted: 'false' });
+
+        editor.typeText('mine ');
+        disk.set(file, 'theirs again');
+        await getEventHandler('notesFileChanged')({ path: '/notes/conflict.md', keys: [file] });
+        document.querySelector('.notes-doc-conflict-keep').click();
+        await flushPromises();
+        expect(editor.getValue()).toContain('mine');
+        expect(disk.get(file)).toBe(editor.getValue());
+        expect(banner.hidden).toBe(true);
+        expect(documentTab(file).dataset).toMatchObject({ dirty: 'false', conflicted: 'false' });
+    });
+
+    it('marks a background document with unsaved edits conflicted and keeps the edits', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: disk.get(file), text: '', error: '' }));
+        saveFileMock.mockImplementation(async (file, content) => { disk.set(file, content); });
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+        editor.typeText('mine ');
+        // The save on switching fails, so first.md keeps its edits in the background.
+        saveFileMock.mockRejectedValueOnce(new Error('disk full'));
+        document.querySelector(`[data-file="${second}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(documentTab(first).dataset.dirty).toBe('true');
+
+        getFileMock.mockClear();
+        disk.set(first, 'theirs');
+        await getEventHandler('notesFileChanged')({ path: '/notes/first.md', keys: [first] });
+        expect(getFileMock).not.toHaveBeenCalled();
+        expect(documentTab(first).dataset.conflicted).toBe('true');
+        expect(document.querySelector('.notes-doc-conflict').hidden).toBe(true);
+
+        documentTab(first).click();
+        await flushPromises();
+        await flushPromises();
+        expect(editor.getValue()).toBe('mine first text');
+        expect(document.querySelector('.notes-doc-conflict').hidden).toBe(false);
+
+        // Switching away does not save over the version on disk.
+        saveFileMock.mockClear();
+        documentTab(second).click();
+        await flushPromises();
+        await flushPromises();
+        expect(saveFileMock).not.toHaveBeenCalled();
+        expect(disk.get(first)).toBe('theirs');
     });
 
     it('keeps output from a run that continues while its document is in a background tab', async () => {

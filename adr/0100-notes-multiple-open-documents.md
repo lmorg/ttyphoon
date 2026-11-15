@@ -455,6 +455,28 @@ as `lspOpenFile === currentFile`.
 - `loadFile` no longer clears `state.currentFileUri` before switching, which
   had wiped the outgoing document's URI.
 
+*Done (Stage 7, task 4):*
+
+- The backend watches the files of every open document, not just the last
+  file read. `GetFile` no longer changes what is watched. Instead the frontend
+  sends the open documents with `WatchNotesFiles(generation, files)` whenever
+  the set changes; a call older than the last one applied is ignored. The
+  `notesFileChanged` event carries `{path, keys}`, the keys of the documents
+  open on that file.
+- The watcher keeps a self-write expectation per file, kept until it expires,
+  so saving several documents together, or one write raising several events,
+  is not reported as an external change.
+- A clean active document reloads when its file changes, as before. A clean
+  background document needs nothing: showing a tab reads the file, so it shows
+  the disk version when next activated.
+- A document with unsaved edits is conflicted when its file changes, unless
+  the disk text matches its edits. A conflicted document is never saved
+  automatically: autosave, saving on switching tabs and saving on closing a tab
+  all leave the disk version alone. Its tab is marked, and while it is active a
+  banner in the view offers "Keep my edits" (save over the disk version) or
+  "Load disk version" (discard the edits). Saving with Cmd+S keeps the edits.
+- Showing a background document whose edits now match the disk marks it clean.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

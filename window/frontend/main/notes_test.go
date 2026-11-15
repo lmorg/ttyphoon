@@ -12,6 +12,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/copy_format"
+	"github.com/lmorg/ttyphoon/utils/file/watcher"
 	"github.com/lmorg/ttyphoon/utils/notes"
 	"golang.design/x/clipboard"
 )
@@ -261,5 +262,23 @@ func TestSelectionClipboardItemsIncludeChromiumData(t *testing.T) {
 		if got := chromiumClipboardType(goos); got != want {
 			t.Errorf("%s clipboard type = %q, want %q", goos, got, want)
 		}
+	}
+}
+
+func TestWatchNotesFilesMapsChangesToDocumentsAndIgnoresStaleCalls(t *testing.T) {
+	root := t.TempDir()
+	app := &WApp{projRoot: root, homeDir: t.TempDir()}
+	t.Cleanup(func() { watcher.SetFiles(nil) })
+	readme := watcher.CleanPath(filepath.Join(root, "README.md"))
+	other := watcher.CleanPath(filepath.Join(root, "other.md"))
+
+	app.WatchNotesFiles(2, []NotesWatchedFileT{{Key: root + "/README.md", Path: "$PROJECT/README.md"}})
+	app.WatchNotesFiles(1, []NotesWatchedFileT{{Key: "$PROJECT/other.md", Path: "$PROJECT/other.md"}})
+
+	if got := app.notesFileChangedEvent(readme); !reflect.DeepEqual(got.Keys, []string{root + "/README.md"}) {
+		t.Fatalf("README.md change = %+v", got)
+	}
+	if got := app.notesFileChangedEvent(other); len(got.Keys) != 0 {
+		t.Fatalf("a stale call's file is watched: %+v", got)
 	}
 }
