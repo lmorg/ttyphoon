@@ -83,7 +83,7 @@ const runNoteMock = vi.fn(() => Promise.resolve());
 const runFunctionMock = vi.fn(() => Promise.resolve(''));
 const stopNoteMock = vi.fn(() => Promise.resolve());
 const watchNotesFilesMock = vi.fn(() => Promise.resolve());
-const getNotesOpenTabsMock = vi.fn(() => Promise.resolve({ workspace: '', files: [], active: 0 }));
+const getNotesOpenTabsMock = vi.fn(() => Promise.resolve({ workspace: '', views: [], layout: '', focused: '' }));
 const setNotesOpenTabsMock = vi.fn(() => Promise.resolve(true));
 const sendIpcMock = vi.fn(() => Promise.resolve());
 const sendToTerminalMock = vi.fn(() => Promise.resolve());
@@ -608,7 +608,7 @@ describe('notes rendering', () => {
         stopNoteMock.mockClear();
         watchNotesFilesMock.mockClear();
         getNotesOpenTabsMock.mockReset();
-        getNotesOpenTabsMock.mockResolvedValue({ workspace: '', files: [], active: 0 });
+        getNotesOpenTabsMock.mockResolvedValue({ workspace: '', views: [], layout: '', focused: '' });
         setNotesOpenTabsMock.mockClear();
         sendIpcMock.mockClear();
         sendToTerminalMock.mockClear();
@@ -4286,6 +4286,14 @@ describe('notes rendering', () => {
         expect(selectedTabTitle()).toBe(second);
     });
 
+    // The backend keeps views with tabs, by path.
+    const savedNotesLayout = (workspace, { views, layout, focused }) => ({
+        workspace,
+        views: views.filter(({ tabs }) => tabs.length > 0)
+            .map(({ id, tabs, active }) => ({ id, files: tabs.map((tab) => tab.path), active })),
+        layout,
+        focused,
+    });
     const notesViewRoots = () => [...document.querySelectorAll('.notes-view')];
     const viewTabTitles = (view) => [...view.querySelectorAll('.notes-doc-tab')].map((tab) => tab.title);
 
@@ -4547,16 +4555,18 @@ describe('notes rendering', () => {
         const second = '$NOTES/second.md';
         const third = '$NOTES/third.md';
         let workspace = 'One';
+        // Tabs saved before views could be split are one view without an ID.
         const saved = {
-            One: { workspace: 'One', files: [first, second], active: 1 },
-            Two: { workspace: 'Two', files: [third], active: 0 },
+            One: { workspace: 'One', views: [{ id: '', files: [first, second], active: 1 }], layout: '', focused: '' },
+            Two: { workspace: 'Two', views: [{ id: '', files: [third], active: 0 }], layout: '', focused: '' },
         };
+        const savedTabs = (name) => saved[name].views.map(({ files, active }) => ({ files, active }));
         listFilesMock.mockResolvedValue([first, second, third]);
         getCurrentGroupNameMock.mockImplementation(async () => workspace);
         getFileMock.mockImplementation(async (file) => ({ contents: `${file} text`, text: '', error: '' }));
         getNotesOpenTabsMock.mockImplementation(async () => saved[workspace]);
-        setNotesOpenTabsMock.mockImplementation(async (name, tabs, active) => {
-            saved[name] = { workspace: name, files: tabs.map((tab) => tab.path), active };
+        setNotesOpenTabsMock.mockImplementation(async (name, layout) => {
+            saved[name] = savedNotesLayout(name, layout);
             return true;
         });
 
@@ -4566,26 +4576,82 @@ describe('notes rendering', () => {
         // Background tabs are read when first shown, and history is not used.
         expect(getFileMock).not.toHaveBeenCalledWith(first);
         expect(notesHistoryCurrentPositionMock).not.toHaveBeenCalled();
-        expect(saved.One).toEqual({ workspace: 'One', files: [first, second], active: 1 });
+        expect(savedTabs('One')).toEqual([{ files: [first, second], active: 1 }]);
 
         document.querySelector(`[data-file="${third}"]`).click();
         await flushPromises();
         await flushPromises();
-        expect(saved.One).toEqual({ workspace: 'One', files: [first, second, third], active: 2 });
+        expect(savedTabs('One')).toEqual([{ files: [first, second, third], active: 2 }]);
 
         const callsBeforeSwitch = setNotesOpenTabsMock.mock.calls.length;
         workspace = 'Two';
         getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'Two' });
         await vi.waitFor(() => expect(tabTitles()).toEqual([third]));
         expect(selectedTabTitle()).toBe(third);
-        expect(saved.One.files).toEqual([first, second, third]);
+        expect(savedTabs('One')).toEqual([{ files: [first, second, third], active: 2 }]);
         expect(setNotesOpenTabsMock.mock.calls.slice(callsBeforeSwitch).filter(([name]) => name !== 'Two')).toEqual([]);
 
         workspace = 'One';
         getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'One' });
         await vi.waitFor(() => expect(tabTitles()).toEqual([first, second, third]));
         expect(selectedTabTitle()).toBe(third);
-        expect(saved.Two).toEqual({ workspace: 'Two', files: [third], active: 0 });
+        expect(savedTabs('Two')).toEqual([{ files: [third], active: 0 }]);
+    });
+
+    it('restores and saves each workspace\'s split views, their tabs and the focused view', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const third = '$NOTES/third.md';
+        let workspace = 'One';
+        const layout = { type: 'split', direction: 'row', children: [{ type: 'view', id: 'a' }, { type: 'view', id: 'b' }], sizes: [0.3, 0.7] };
+        const saved = {
+            One: {
+                workspace: 'One',
+                views: [{ id: 'a', files: [first, second], active: 0 }, { id: 'b', files: [third], active: 0 }],
+                layout: JSON.stringify(layout),
+                focused: 'a',
+            },
+            Two: { workspace: 'Two', views: [], layout: '', focused: '' },
+        };
+        listFilesMock.mockResolvedValue([first, second, third]);
+        getCurrentGroupNameMock.mockImplementation(async () => workspace);
+        getFileMock.mockImplementation(async (file) => ({ contents: `${file} text`, text: '', error: '' }));
+        getNotesOpenTabsMock.mockImplementation(async () => saved[workspace]);
+        setNotesOpenTabsMock.mockImplementation(async (name, next) => {
+            saved[name] = savedNotesLayout(name, next);
+            return true;
+        });
+
+        await importNotesModule();
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(2));
+        const [leftRoot, rightRoot] = notesViewRoots();
+        await vi.waitFor(() => expect(leftRoot.dataset.focused).toBe('true'));
+        expect(viewTabTitles(leftRoot)).toEqual([first, second]);
+        expect(viewTabTitles(rightRoot)).toEqual([third]);
+        expect(leftRoot.style.flex).toMatch(/^0\.3 /);
+        // Each view's shown document is loaded.
+        expect(getFileMock).toHaveBeenCalledWith(third);
+        expect(getFileMock).not.toHaveBeenCalledWith(second);
+
+        // Changes are saved with the views' own IDs, which the next restore maps.
+        await getEventHandler('notesDocumentTabCommand')('split-down');
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(3));
+        await vi.waitFor(() => expect(saved.One.views).toHaveLength(3));
+        const tree = JSON.parse(saved.One.layout);
+        expect(tree.direction).toBe('row');
+        expect(tree.children[0]).toMatchObject({ type: 'split', direction: 'column' });
+        expect(saved.One.views.map(({ files }) => files)).toEqual([[first, second], [first], [third]]);
+        expect(saved.One.focused).toBe(tree.children[0].children[1].id);
+
+        workspace = 'Two';
+        getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'Two' });
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(1));
+        workspace = 'One';
+        getEventHandler('notesContextChanged')({ projectRoot: '', groupName: 'One' });
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(3));
+        const roots = notesViewRoots();
+        expect(roots.map(viewTabTitles)).toEqual([[first, second], [first], [third]]);
+        await vi.waitFor(() => expect(roots[1].dataset.focused).toBe('true'));
     });
 
     it('closes a clean background document when its file is deleted outside the app', async () => {

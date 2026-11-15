@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/utils/copy_format"
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
 	"github.com/lmorg/ttyphoon/utils/notes"
@@ -335,27 +336,59 @@ func TestNotesOpenTabsAreRememberedPerWorkspace(t *testing.T) {
 	workspace := t.Name() + root
 	app := &WApp{projRoot: root, groupName: workspace, homeDir: t.TempDir()}
 	external := filepath.Join(outside, "external.md")
-	if !app.SetNotesOpenTabs(workspace, []NotesOpenTabT{
-		{Path: "$PROJECT/a.md", Project: root},
-		{Path: external},
-	}, 1) {
+	layout := `{"type":"split","direction":"row","children":[{"type":"view","id":"a"},{"type":"view","id":"b"}],"sizes":[0.5,0.5]}`
+	if !app.SetNotesOpenTabs(workspace, NotesOpenLayoutT{
+		Views: []NotesOpenViewT{
+			{ID: "a", Tabs: []NotesOpenTabT{{Path: "$PROJECT/a.md", Project: root}, {Path: external}}, Active: 1},
+			{ID: "b", Tabs: []NotesOpenTabT{{Path: external}}},
+			{ID: "empty"},
+		},
+		Layout:  layout,
+		Focused: "b",
+	}) {
 		t.Fatal("tabs of the current workspace were not saved")
 	}
-	want := NotesOpenTabsT{Workspace: workspace, Files: []string{"$PROJECT/a.md", external}, Active: 1}
+	want := NotesOpenTabsT{
+		Workspace: workspace,
+		Views: []NotesSavedViewT{
+			{ID: "a", Files: []string{"$PROJECT/a.md", external}, Active: 1},
+			{ID: "b", Files: []string{external}},
+		},
+		Layout:  layout,
+		Focused: "b",
+	}
 	if got := app.GetNotesOpenTabs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("restored tabs = %+v, want %+v", got, want)
 	}
 
 	app.groupName = workspace + "-other"
-	if got := app.GetNotesOpenTabs(); len(got.Files) != 0 {
+	if got := app.GetNotesOpenTabs(); len(got.Views) != 0 {
 		t.Fatalf("another workspace inherited tabs: %+v", got)
 	}
 	// A save sent before the switch to this workspace is ignored.
-	if app.SetNotesOpenTabs(workspace, nil, 0) {
+	if app.SetNotesOpenTabs(workspace, NotesOpenLayoutT{}) {
 		t.Fatal("a save for a previous workspace was accepted")
 	}
 	app.groupName = workspace
 	if got := app.GetNotesOpenTabs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tabs after a stale save = %+v, want %+v", got, want)
+	}
+}
+
+// Tabs saved before views could be split are restored as one view.
+func TestNotesOpenTabsReadsSingleViewTabs(t *testing.T) {
+	root := t.TempDir()
+	workspace := t.Name() + root
+	app := &WApp{projRoot: root, groupName: workspace, homeDir: t.TempDir()}
+	cache.Write(cache.NS_NOTESW_HISTORY, "tabs:workspace:"+workspace, &struct {
+		Files  []string `json:"files"`
+		Active int      `json:"active"`
+	}{Files: []string{filepath.Join(root, "a.md"), filepath.Join(root, "b.md")}, Active: 1}, cache.Days(1))
+	want := NotesOpenTabsT{
+		Workspace: workspace,
+		Views:     []NotesSavedViewT{{Files: []string{"$PROJECT/a.md", "$PROJECT/b.md"}, Active: 1}},
+	}
+	if got := app.GetNotesOpenTabs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("restored tabs = %+v, want %+v", got, want)
 	}
 }

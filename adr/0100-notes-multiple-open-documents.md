@@ -669,6 +669,19 @@ Known limitations, for the following tasks:
 - A view focused and then left before its document finished loading keeps
   tracking that document.
 
+*Done (Stage 8, task 9):*
+
+- Each workspace's cache entry now stores a list of views (an ID, its tabs and
+  its active tab), the serialised layout tree and the focused view ID. There
+  are at most 16 views and 50 tabs per view.
+- Stage 7 entries (a flat `Files`/`Active` list) are read as a single view, so
+  existing tab lists survive the upgrade.
+- On restore, the layout is parsed keeping only views that were saved, and it
+  falls back to the first view alone if the tree is unusable. Each view shows
+  its active tab, and the saved focused view takes focus.
+- Saves happen when tabs, views or focus change. Divider drags are saved after
+  300ms without movement.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

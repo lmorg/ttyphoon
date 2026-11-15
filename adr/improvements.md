@@ -26,7 +26,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## refactors
 
-- [ ] Notes: move LSP code into new JS file (now tracked as ADR 0100 stage 2, under future ambitions)
+- [x] Notes: move LSP code into new JS file (now tracked as ADR 0100 stage 2, under future ambitions)
 
 ## functional tweaks
 
@@ -86,7 +86,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Draggable dividers with minimum sizes; double-click a divider to equalise (Q20)
     - [x] Drag a tab onto another view's tab strip (Q19)
     - [x] External changes, renames, deletes, Jupyter output and LSP diagnostics update every view showing the document; typos stay open while any view shows it
-    - [ ] Persist the layout tree, each view's tabs and the focused view per workspace, loading Stage 7 tab lists as one view (Q21)
+    - [x] Persist the layout tree, each view's tabs and the focused view per workspace, loading Stage 7 tab lists as one view (Q21)
 - [ ] Extensibility: plugin support (no idea how this would be implemented, what features would be available to plugins, etc)
 - [ ] Notes, image: support for annotating images. Add text, highlights, ovals and rounded rectangles, with an option to export the annotations flattened onto a PNG while preserving the original image.
 - [ ] AI: run agents inside a docker container. $GLOBAL, $PROJECT and $NOTES should all be mounted directories. Tools and MCP should still work but inside the docker container. We should use the dev containers specification

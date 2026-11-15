@@ -94,7 +94,7 @@ import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
 import notesTemplate from './notes.html?raw';
 import { createNotesView } from './notes_view.js';
-import { closeLayoutView, createLayout, layoutViewIds, neighbourLayoutView, splitLayoutView } from './notes_layout.js';
+import { closeLayoutView, createLayout, layoutViewIds, neighbourLayoutView, parseLayout, serialiseLayout, splitLayoutView } from './notes_layout.js';
 import { bindNotesLayoutDividers, renderNotesLayout } from './notes_layout_dom.js';
 
 import { marked } from "marked";
@@ -504,15 +504,25 @@ let notesLayout = createLayout(firstNotesView.id);
 let notesFocusedView = firstNotesView;
 firstNotesView.root.dataset.focused = 'true';
 
-function renderNotesViewsLayout() {
+function drawNotesViewsLayout() {
     renderNotesLayout(document.getElementById('notes-views'), notesLayout, (id) => notesViews.get(id)?.root);
 }
-renderNotesViewsLayout();
+drawNotesViewsLayout();
+
+function renderNotesViewsLayout() {
+    drawNotesViewsLayout();
+    saveNotesOpenTabs();
+}
+
+// A divider drag saves the layout once it settles.
+let notesLayoutSaveTimer = null;
 bindNotesLayoutDividers(document.getElementById('notes-views'), {
     getLayout: () => notesLayout,
     setLayout: (next) => {
         notesLayout = next;
-        renderNotesViewsLayout();
+        drawNotesViewsLayout();
+        clearTimeout(notesLayoutSaveTimer);
+        notesLayoutSaveTimer = setTimeout(saveNotesOpenTabs, 300);
     },
 });
 
@@ -526,12 +536,6 @@ function focusedView() {
 
 function notesViewList() {
     return layoutViewIds(notesLayout).map((id) => notesViews.get(id)).filter(Boolean);
-}
-
-// The view whose tabs are remembered per workspace, until the whole layout is
-// (ADR 0100 Stage 8).
-function primaryNotesView() {
-    return notesViewList()[0] || notesFocusedView;
 }
 
 const notesToolbar = document.getElementById('notes-toolbar');
@@ -930,7 +934,8 @@ function syncWatchedNotesFiles() {
     });
 }
 
-// Open tabs are remembered per workspace (ADR 0100 question 8). Saving waits
+// Open tabs are remembered per workspace (ADR 0100 question 8), with the
+// views they are in, the layout and the focused view (Stage 8). Saving waits
 // until the workspace's tabs have been restored, so the empty strip at
 // startup or during a workspace change never overwrites them.
 let notesTabsWorkspace = null;
@@ -948,41 +953,125 @@ function saveNotesOpenTabs() {
         if (workspace === null || workspace !== state.currentWorkspaceName) {
             return;
         }
-        const docs = primaryNotesView().tabs.map(findNotesDocument).filter(Boolean);
-        const tabs = docs.map(({ path, project }) => ({ path, project }));
-        const active = Math.max(0, docs.indexOf(activeNotesDocument));
-        const saved = JSON.stringify([workspace, tabs, active]);
+        const views = notesViewList().map((view) => {
+            const docs = view.tabs.map(findNotesDocument).filter(Boolean);
+            return {
+                id: view.id,
+                tabs: docs.map(({ path, project }) => ({ path, project })),
+                active: Math.max(0, docs.indexOf(notesViewDocument(view))),
+            };
+        });
+        const layout = {
+            views,
+            layout: JSON.stringify(serialiseLayout(notesLayout)),
+            focused: focusedView().id,
+        };
+        const saved = JSON.stringify([workspace, layout]);
         if (saved === notesTabsLastSaved) {
             return;
         }
         notesTabsLastSaved = saved;
-        Promise.resolve(SetNotesOpenTabs(workspace, tabs, active)).catch((err) => {
+        Promise.resolve(SetNotesOpenTabs(workspace, layout)).catch((err) => {
             notesTabsLastSaved = '';
             console.error('Failed to save open notes tabs:', err);
         });
     });
 }
 
-// Reopens a workspace's remembered tabs. Background documents are read when
-// their tab is first shown; the focused one loads now unless loadActive is
-// false. Returns whether there were tabs to restore.
+function savedNotesViews(saved) {
+    return (Array.isArray(saved?.views) ? saved.views : [])
+        .map((view) => ({
+            id: String(view?.id || ''),
+            files: Array.isArray(view?.files) ? view.files.filter(Boolean) : [],
+            active: Number(view?.active) || 0,
+        }))
+        .filter((view) => view.files.length > 0);
+}
+
+function hasSavedNotesTabs(saved) {
+    return savedNotesViews(saved).length > 0;
+}
+
+// The saved layout over the saved views, or the first view alone when the
+// layout is missing or names none of them, as for tabs saved before views
+// could be split.
+function savedNotesLayout(saved, views) {
+    const byId = new Map(views.filter((view) => view.id).map((view) => [view.id, view]));
+    let tree = null;
+    try {
+        tree = parseLayout(JSON.parse(saved?.layout || 'null'), {
+            parseView: (leaf) => (byId.has(leaf.id) ? createLayout(leaf.id) : null),
+        });
+    } catch {
+        tree = null;
+    }
+    if (!tree) {
+        return { tree: null, views: [views[0]] };
+    }
+    return { tree, views: layoutViewIds(tree).map((id) => byId.get(id)) };
+}
+
+function renameLayoutViews(node, ids) {
+    if (node.type === 'view') {
+        return createLayout(ids.get(node.id));
+    }
+    return { ...node, children: node.children.map((child) => renameLayoutViews(child, ids)) };
+}
+
+// Reopens a workspace's remembered views and tabs into the single view left
+// after startup or a workspace change. The focused view takes the place of
+// the saved focused view. Each view's shown document loads now unless
+// loadActive is false, when the others load as they are focused. Returns
+// whether there were tabs to restore.
 async function restoreNotesOpenTabs(saved, { loadActive = true, isCurrent = () => true } = {}) {
-    const files = Array.isArray(saved?.files) ? saved.files.filter(Boolean) : [];
-    if (files.length === 0) {
+    const savedViews = savedNotesViews(saved);
+    if (savedViews.length === 0) {
         return false;
     }
     const project = await GetCurrentProject();
     if (!isCurrent()) {
         return true;
     }
-    const view = focusedView();
-    for (const path of files) {
-        view.addTab(notesDocuments.open(path, { project }).key);
+    const { tree, views } = savedNotesLayout(saved, savedViews);
+    const focusedSaved = views.find((view) => view.id === saved.focused) || views[0];
+    const base = focusedView();
+    const ids = new Map();
+    const restored = views.map((savedView) => {
+        let view = base;
+        if (savedView !== focusedSaved) {
+            view = createNotesView();
+            notesViews.set(view.id, view);
+            bindNotesView(view);
+        }
+        ids.set(savedView.id, view.id);
+        const keys = savedView.files.map((path) => notesDocuments.open(path, { project }).key);
+        keys.forEach((key) => view.addTab(key));
+        if (view !== base) {
+            view.shownDocumentKey = keys[savedView.active] || keys[0];
+        }
+        return { view, active: savedView.files[savedView.active] || savedView.files[0] };
+    });
+    if (tree) {
+        notesLayout = renameLayoutViews(tree, ids);
+        renderNotesViewsLayout();
     }
     syncWatchedNotesFiles();
-    renderNotesTabs(view);
-    const active = files[saved.active] || files[0];
-    if (loadActive && active) {
+    restored.forEach(({ view }) => renderNotesTabs(view));
+    if (!loadActive) {
+        return true;
+    }
+    for (const { view } of restored) {
+        if (view !== base) {
+            await focusNotesView(view);
+            if (!isCurrent()) {
+                return true;
+            }
+        }
+    }
+    const { active } = restored.find(({ view }) => view === base);
+    if (base !== focusedView()) {
+        await focusNotesView(base, notesDocuments.get(active, project)?.key);
+    } else {
         await loadFile(active);
     }
     return true;
@@ -1130,9 +1219,7 @@ function renderNotesTabs(view) {
         return tab;
     }));
     renderNotesNotice(view);
-    if (view === primaryNotesView()) {
-        saveNotesOpenTabs();
-    }
+    saveNotesOpenTabs();
 }
 
 const NOTES_DOCUMENT_NOTICES = {
@@ -7543,7 +7630,7 @@ async function refreshFiles(options = {}) {
         const savedTabs = workspaceScopedRefresh ? await GetNotesOpenTabs() : null;
         if (!isCurrent()) return;
         const hasSavedTabs = savedTabs?.workspace === state.currentWorkspaceName
-            && Array.isArray(savedTabs.files) && savedTabs.files.length > 0;
+            && hasSavedNotesTabs(savedTabs);
         await loadProjectCache({
             skipHistoryRestore: skipHistoryRestore || !workspaceScopedRefresh || hasSavedTabs,
             isCurrent,
