@@ -4,9 +4,7 @@ Date: 2026-11-14
 
 ## Status
 
-Proposed. Scope, same-file and fallback-editor decisions were made on
-2026-11-14. The remaining open questions must be answered before the UI
-stages (stage 7 onwards) start.
+Accepted and implemented on 2026-11-15 (stages 1 to 8).
 
 ## Context
 
