@@ -4004,7 +4004,7 @@ describe('notes rendering', () => {
         expect([...document.querySelectorAll('.notes-doc-tab')].map((tab) => [tab.title, tab.getAttribute('aria-selected')]))
             .toEqual([[first, 'false'], [second, 'true']]);
         // Tabs close from their right-click menu, so they have no close button.
-        expect(document.querySelector('.notes-doc-tabs button')).toBeNull();
+        expect(document.querySelector('.notes-doc-tab button')).toBeNull();
         expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(first);
 
         documentTab(first).click();

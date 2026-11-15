@@ -1197,7 +1197,9 @@ function renderNotesTabs(view) {
     strip.hidden = docs.length === 0;
     strip.replaceChildren(...docs.map((doc) => {
         const name = getPathFileName(doc.path);
-        const tab = document.createElement('div');
+        // A button, so it takes the same font as the other tabs.
+        const tab = document.createElement('button');
+        tab.type = 'button';
         tab.className = 'tab notes-doc-tab';
         tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-selected', String(doc === shown));
