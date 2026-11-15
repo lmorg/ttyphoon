@@ -526,6 +526,14 @@ as `lspOpenFile === currentFile`.
   strip at startup or during a switch never overwrites them. The backend also
   ignores a save that names a workspace other than its current one.
 
+*Done (Stage 7, task 8):*
+
+- typos-lsp only has the shown document open (Q13). Moving a document to a
+  background tab closes its typos document, and showing it again reopens it.
+  Language LSP documents stay open for every open document, as before.
+- AI Ask sends only the focused document's contents (Q11). It already did, so
+  this needed no change.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

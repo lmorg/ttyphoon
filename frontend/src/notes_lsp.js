@@ -1520,6 +1520,22 @@ export function releaseLspDocument(doc) {
     return closes;
 }
 
+// typos-lsp only checks documents a view shows (ADR 0100 question 13), so a
+// document moving to a background tab releases its typos registration. It is
+// opened again when the document is next shown.
+export function releaseTyposDocument(doc) {
+    clearTimeout(doc.typosChangeTimer);
+    doc.typosChangeTimer = null;
+    const file = doc.typosOpenFile;
+    doc.typosOpenFile = '';
+    if (!file) {
+        return Promise.resolve();
+    }
+    return Promise.resolve(NotesTyposCloseDocument(file)).catch((err) => {
+        console.error('notes typos close failed:', err);
+    });
+}
+
 // When the editor stops showing a document, clear the LSP and spellcheck UI
 // that belonged to it.
 export function resetLspViewState() {
@@ -1814,14 +1830,11 @@ export async function openCurrentTyposDocument(content) {
             showAspell();
             return;
         }
-        if (!isNotesDocumentOpen(doc) || doc.typosOpenFile) {
+        if (!isNotesDocumentOpen(doc) || doc.typosOpenFile || doc !== getActiveNotesDocument()) {
             await NotesTyposCloseDocument(file).catch((err) => console.error('notes typos close failed:', err));
             return;
         }
         doc.typosOpenFile = file;
-        if (doc !== getActiveNotesDocument()) {
-            return;
-        }
         getNotesSpellCheckHandle()?.setMode('external');
         const diagnostics = doc.uri ? (typosDiagnosticsStore.get(doc.uri) || []) : [];
         getNotesSpellCheckHandle()?.setMisspellings(typosDiagnosticsToMisspellings(diagnostics, getMainEditorValue()));

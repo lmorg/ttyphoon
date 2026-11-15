@@ -2523,6 +2523,31 @@ describe('notes rendering', () => {
         expect(notesLspOpenDocumentMock).toHaveBeenLastCalledWith('$NOTES/other.go', 'go', 'package main\n');
     });
 
+    it('keeps typos documents open only for the shown document, and LSP documents for every open one', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go', '$NOTES/other.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+        getFileMock.mockResolvedValue({ contents: 'package main\n', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/main.go"]').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('[data-file="$NOTES/other.go"]').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesTyposCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go']]);
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalled();
+
+        notesTyposOpenDocumentMock.mockClear();
+        documentTab('$NOTES/main.go').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesTyposOpenDocumentMock).toHaveBeenCalledWith('$NOTES/main.go', 'go', 'package main\n');
+        expect(notesTyposCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go'], ['$NOTES/other.go']]);
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith('$NOTES/other.go');
+    });
+
     it('releases Jupyter block LSP documents when the Run view re-renders', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/blocks.md']);
         getFileMock.mockResolvedValue({ contents: '```python\nprint("hello")\n```', text: '', error: '' });

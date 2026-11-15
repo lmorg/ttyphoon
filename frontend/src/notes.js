@@ -74,6 +74,7 @@ import {
     openCurrentLspDocument,
     openCurrentTyposDocument,
     releaseLspDocument,
+    releaseTyposDocument,
     renderLspEditorDecorations,
     requestLspCompletion,
     requestLspCompletionAfterSync,
@@ -866,6 +867,8 @@ function setActiveNotesDocument(next) {
     showDocumentInView(mainView, next);
     if (!isNotesDocumentInTab(previous)) {
         retireNotesDocument(previous);
+    } else if (previous !== next) {
+        void releaseTyposDocument(previous);
     }
     renderNotesTabs(mainView);
 }
