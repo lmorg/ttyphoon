@@ -179,6 +179,8 @@ Or use markdown tables if you want to build your own formula functions
 
 The Notes editor and Jupyter code blocks support Vim-style keyboard navigation. See [docs/Vim-Editor-Keys.md](docs/Vim-Editor-Keys.md) for the full keybinding reference.
 
+For Notes document tabs and split-view shortcuts, see [docs/Notes-Shortcuts.md](docs/Notes-Shortcuts.md).
+
 ### Swagger
 
 Native support for Swagger and OpenAPI files. So you don't need to be a `curl` expert all of the time

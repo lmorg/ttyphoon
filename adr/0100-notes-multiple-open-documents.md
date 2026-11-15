@@ -452,9 +452,11 @@ as `lspOpenFile === currentFile`.
   to it keeps its buffer instead of the disk text.
 - Switching back to a document keeps its model, so undo history survives.
   `loadFile` only replaces the text when it differs from the disk text.
+- Document tabs match the other tab strips and show a dot for unsaved edits.
+  They have no close button; use the tab's context menu, middle-click or Cmd+W.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
-  tab leaves no document open and hides the strip. Middle-click also closes.
+  tab leaves no document open and hides the strip.
 - Changing workspace closes the background tabs. Persisting tabs per workspace
   (Q8) will replace this.
 - `doc.jupyterOutputs` records each block's output, so output from a run that
@@ -510,8 +512,8 @@ as `lspOpenFile === currentFile`.
 
 - With Notes focused, Cmd+Shift+] and Cmd+Shift+[ step to the next and
   previous document tab, wrapping round. Cmd+W closes the active tab, saving
-  it as clicking its close button does. Cmd+Shift+T reopens the most recently
-  closed tab that is not open again; up to 20 closed tabs are remembered.
+  it as closing it from the context menu does. Cmd+Shift+T reopens the most
+  recently closed tab that is not open again; up to 20 closed tabs are remembered.
   Tabs closed because their file was deleted, or whose edits were discarded,
   are not remembered. Ctrl+Tab still cycles the Notes mode tabs.
 - The keys are handled by Notes in the capture phase, so they do not reach the
@@ -827,22 +829,19 @@ Answered on 2026-11-15 (Stage 8):
   by side or stacked, to any depth (decision 1). Terminal, AI and logs are
   unchanged.
 
-Still open (Stage 8). Each has a recommendation that Stage 8 follows unless
-amended:
-
-- **17. Splitting:** *Recommendation:* "Split right" and "Split down" in the
+- **17. Splitting:** "Split right" and "Split down" in the
   tab context menu and the command palette, with `Cmd+\` for Split right as in
   VS Code. The new view opens the same document. Dragging a tab to the edge
   of a view to split it comes later.
-- **18. Moving focus between views:** *Recommendation:* clicking a view
+- **18. Moving focus between views:** clicking a view
   focuses it, and Cmd+Option+arrow keys move focus to the neighbouring view
   in that direction.
-- **19. Moving tabs:** *Recommendation:* a tab can be dragged onto another
+- **19. Moving tabs:** a tab can be dragged onto another
   view's tab strip, and "Move to other view" is not needed beyond that.
-- **20. Sizes:** *Recommendation:* dividers can be dragged, double-clicking a
+- **20. Sizes:** dividers can be dragged, double-clicking a
   divider makes its neighbours equal, and a view cannot shrink below a
   minimum width or height. There is no depth limit.
-- **21. Persistence:** *Recommendation:* the whole layout tree, with each
+- **21. Persistence:** the whole layout tree, with each
   view's tabs and the focused view, replaces Stage 7's per-workspace tab list.
   Saved tab lists from Stage 7 load as a single view.
 

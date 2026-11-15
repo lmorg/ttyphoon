@@ -72,6 +72,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model
     - [x] Backend Jupyter run IDs and `noteRun`/`noteComplete` events identify the document as well as the block, so blocks in two open documents can run at once
     - [x] Tab strip in a view: opening a file from the file list, history or go-to-definition opens or focuses a tab; closing a tab releases its document when no view shows it (Q16: tab strip per view)
+    - [x] Match file tabs to the other tab strips, show unsaved edits with a dot, and close via the context menu, middle-click or hotkey instead of a close button
     - [x] External changes to open documents: reload clean documents silently; mark dirty ones as conflicted and let the user choose which version to keep, in every view
     - [x] Renames and deletes of open documents in background tabs and other views (Q12: tabs follow renames; deleted clean tabs close, dirty ones stay)
     - [x] Hotkeys and command palette entries for next/previous tab, close tab and reopen closed tab (Q14: Cmd+Shift+]/[, Cmd+W, Cmd+Shift+T)
