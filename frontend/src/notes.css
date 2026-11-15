@@ -1681,6 +1681,88 @@ body {
     box-sizing: border-box;
 }
 
+/* Open documents (ADR 0100), above the view mode tabs. */
+.notes-view .notes-doc-tabs {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background-color: var(--darken-background-overlay);
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.2);
+    box-sizing: border-box;
+}
+
+.notes-view .notes-doc-tabs[hidden] {
+    display: none;
+}
+
+.notes-view .notes-doc-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-width: 220px;
+    padding: 4px 6px 4px 12px;
+    border-right: 1px solid rgba(var(--fg-rgb), 0.2);
+    color: rgba(var(--fg-rgb), 0.7);
+    cursor: pointer;
+    user-select: none;
+}
+
+.notes-view .notes-doc-tab[aria-selected="true"] {
+    color: var(--fg);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.notes-view .notes-doc-tab:not([aria-selected="true"]):hover {
+    color: var(--accent);
+}
+
+.notes-view .notes-doc-tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-view .notes-doc-tab-close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1.2;
+    visibility: hidden;
+}
+
+.notes-view .notes-doc-tab[aria-selected="true"] .notes-doc-tab-close,
+.notes-view .notes-doc-tab:hover .notes-doc-tab-close {
+    visibility: visible;
+}
+
+.notes-view .notes-doc-tab-close:hover {
+    background-color: rgba(var(--fg-rgb), 0.2);
+}
+
+/* Unsaved edits show a dot in place of the close button until hovered. */
+.notes-view .notes-doc-tab[data-dirty="true"] .notes-doc-tab-close {
+    visibility: visible;
+    font-size: 0;
+}
+
+.notes-view .notes-doc-tab[data-dirty="true"] .notes-doc-tab-close::before {
+    content: '●';
+    font-size: 10px;
+}
+
+.notes-view .notes-doc-tab[data-dirty="true"]:hover .notes-doc-tab-close {
+    font-size: inherit;
+}
+
+.notes-view .notes-doc-tab[data-dirty="true"]:hover .notes-doc-tab-close::before {
+    content: none;
+}
+
 .notes-view .notes-tabs button {
     border-radius: 0;
     border: 1px solid transparent;
@@ -3266,6 +3348,7 @@ body {
 [data-log-maximized="true"] #notes-sidebar,
 [data-log-maximized="true"] #notes-splitter,
 [data-log-maximized="true"] .notes-view .notes-tabs,
+[data-log-maximized="true"] .notes-view .notes-doc-tabs,
 [data-log-maximized="true"] .notes-view .notes-editor-wrap,
 [data-log-maximized="true"] .notes-view .notes-hex-wrap,
 [data-log-maximized="true"] .notes-view .notes-preview-wrap,
@@ -3307,6 +3390,7 @@ body {
 [data-ai-maximized="true"] #notes-sidebar,
 [data-ai-maximized="true"] #notes-splitter,
 [data-ai-maximized="true"] .notes-view .notes-tabs,
+[data-ai-maximized="true"] .notes-view .notes-doc-tabs,
 [data-ai-maximized="true"] .notes-view .notes-editor-wrap,
 [data-ai-maximized="true"] .notes-view .notes-hex-wrap,
 [data-ai-maximized="true"] .notes-view .notes-preview-wrap,

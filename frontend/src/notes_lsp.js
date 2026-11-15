@@ -1853,6 +1853,27 @@ export async function closeCurrentTyposDocument() {
     }
 }
 
+// Sends a document's debounced LSP and typos changes now, so a document that
+// moves to a background tab leaves the servers with its latest text.
+export function flushDocumentChanges(doc) {
+    const pending = [
+        ['lspChangeTimer', doc.lspOpenFile, NotesLspChangeDocument],
+        ['typosChangeTimer', doc.typosOpenFile, NotesTyposChangeDocument],
+    ];
+    for (const [timer, file, send] of pending) {
+        if (!doc[timer]) {
+            continue;
+        }
+        clearTimeout(doc[timer]);
+        doc[timer] = null;
+        if (file) {
+            Promise.resolve(send(file, doc.buffer.getValue())).catch((err) => {
+                console.error('notes document change failed:', err);
+            });
+        }
+    }
+}
+
 export function scheduleTyposDidChange() {
     if (!state.typosOpenFile || state.typosOpenFile !== state.currentFile) {
         return;

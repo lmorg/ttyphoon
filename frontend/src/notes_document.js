@@ -38,6 +38,9 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         jupyterBlockCounter: 0,
         // Block ID to the run ID of its run in progress on the backend.
         runningJupyterBlocks: new Map(),
+        // Block ID to the output lines of its latest run ({ text, isError }),
+        // kept so output survives re-rendering and switching tabs.
+        jupyterOutputs: new Map(),
         // Find in the document (ADR 0100 question 10).
         findQuery: '',
         findMatches: [],

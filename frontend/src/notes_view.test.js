@@ -17,4 +17,16 @@ describe('createNotesView', () => {
         first.destroy();
         expect(host.children).toHaveLength(1);
     });
+
+    it('keeps tabs in order, opening new ones after the given tab', () => {
+        const view = createNotesView();
+        view.addTab('a');
+        view.addTab('b');
+        view.addTab('c', 'a');
+        view.addTab('a');
+        expect(view.tabs).toEqual(['a', 'c', 'b']);
+        expect(view.removeTab('c')).toBe(1);
+        expect(view.removeTab('missing')).toBe(-1);
+        expect(view.tabs).toEqual(['a', 'b']);
+    });
 });

@@ -36,6 +36,29 @@ export function createNotesView({ host, before = null } = {}) {
         editorInit: null,
         // Key of the document whose content the view's editor currently holds.
         shownDocumentKey: '',
+        // Keys of the documents open as tabs in this view, in tab order
+        // (ADR 0100 question 16).
+        tabs: [],
+        // Adds a tab after afterKey's tab, or at the end.
+        addTab(key, afterKey = '') {
+            if (!key || this.tabs.includes(key)) {
+                return;
+            }
+            const index = afterKey ? this.tabs.indexOf(afterKey) : -1;
+            if (index < 0) {
+                this.tabs.push(key);
+            } else {
+                this.tabs.splice(index + 1, 0, key);
+            }
+        },
+        // Returns the removed tab's index, or -1.
+        removeTab(key) {
+            const index = this.tabs.indexOf(key);
+            if (index >= 0) {
+                this.tabs.splice(index, 1);
+            }
+            return index;
+        },
         contains(node) {
             return Boolean(node) && root.contains(node);
         },
@@ -51,6 +74,7 @@ export function createNotesView({ host, before = null } = {}) {
             this.editor?.dispose?.();
             this.editor = null;
             documentStates.clear();
+            this.tabs = [];
             root.remove();
         },
     };

@@ -431,6 +431,30 @@ as `lspOpenFile === currentFile`.
   so that switching back to a document shows output from runs that continued
   while it was hidden.
 
+*Done (Stage 7, task 3):*
+
+- Each `NotesView` keeps an ordered list of tabs, one per document key. Opening
+  a file from the file list, history or go-to-definition opens a tab after the
+  current one, or focuses the file's tab if it is already open. A document
+  stays open while a view has a tab for it, and is closed (releasing its model,
+  LSP and typos documents) once no view does.
+- Switching tabs saves the outgoing document if it is dirty, and flushes its
+  pending LSP and typos changes. Background tabs are therefore normally clean.
+  A background document is dirty only if its save failed, and switching back
+  to it keeps its buffer instead of the disk text.
+- Switching back to a document keeps its model, so undo history survives.
+  `loadFile` only replaces the text when it differs from the disk text.
+- Closing a tab saves the document first if it is dirty, and keeps the tab if
+  the save fails. Closing the active tab opens its neighbour; closing the last
+  tab leaves no document open and hides the strip. Middle-click also closes.
+- Changing workspace closes the background tabs. Persisting tabs per workspace
+  (Q8) will replace this.
+- `doc.jupyterOutputs` records each block's output, so output from a run that
+  continues while its document is in the background shows when the document
+  is reopened.
+- `loadFile` no longer clears `state.currentFileUri` before switching, which
+  had wiped the outgoing document's URI.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

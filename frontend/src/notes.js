@@ -46,11 +46,13 @@ import { captureRenderedElement, captureRenderedElements, createRenderedSelectio
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck, createSpellCheckEngine } from './spellcheck';
 import { createNotesDocument, createNotesDocumentRegistry, notesDocumentKey } from './notes_document';
+import { normaliseLineEndings } from './notes_document_buffer.js';
 import {
     LSP_CHANGE_DEBOUNCE_MS,
     applyLspSpellCheckExclusions,
     clearCurrentFileLspDiagnosticsCache,
     clearVisibleLspDiagnostics,
+    flushDocumentChanges,
     closeCurrentTyposDocument,
     closeOpenLspDocument,
     closeOpenLspTooltips,
@@ -805,9 +807,9 @@ function newNotesDocument(fields = {}) {
     return doc;
 }
 
-// Open documents (ADR 0100). Notes still shows one document at a time, so
-// switching file closes the previous one. With no file open, the active
-// document is a detached placeholder so its fields always have a home.
+// Open documents (ADR 0100). A document stays open while a view has a tab for
+// it. With no file open, the active document is a detached placeholder so its
+// fields always have a home.
 const notesDocuments = createNotesDocumentRegistry({
     create: newNotesDocument,
     onClose: releaseNotesDocument,
@@ -842,17 +844,36 @@ function retireNotesDocument(doc) {
     }
 }
 
+function findNotesDocument(key) {
+    return notesDocuments.list().find((doc) => doc.key === key) || null;
+}
+
+function isNotesDocumentInTab(doc) {
+    return Boolean(doc?.key) && mainView.tabs.includes(doc.key);
+}
+
+// Activating an open document opens or focuses its tab, next to the tab that
+// was active. The previous document stays open if it still has a tab.
 function setActiveNotesDocument(next) {
     const previous = activeNotesDocument;
     activeNotesDocument = next;
+    if (isNotesDocumentOpen(next)) {
+        mainView.addTab(next.key, previous.key);
+    }
     showDocumentInView(mainView, next);
-    retireNotesDocument(previous);
+    if (!isNotesDocumentInTab(previous)) {
+        retireNotesDocument(previous);
+    }
+    renderNotesTabs(mainView);
 }
 
 function activateNotesDocument(path, { project = '' } = {}) {
     const next = notesDocuments.open(path, { project });
     if (next !== activeNotesDocument) {
         setActiveNotesDocument(next);
+    } else if (!isNotesDocumentInTab(next)) {
+        mainView.addTab(next.key);
+        renderNotesTabs(mainView);
     }
     return next;
 }
@@ -868,6 +889,34 @@ function startJupyterRun(doc, blockId) {
     doc.runningJupyterBlocks.set(blockId, runId);
     jupyterRuns.set(runId, { doc, blockId });
     return runId;
+}
+
+function appendJupyterOutput(outputBlock, text, isError) {
+    if (outputBlock.childNodes.length > 0 && text.length > 0 && text[0] !== '\n' && text[0] !== '\r') {
+        outputBlock.appendChild(document.createTextNode('\n'));
+    }
+    const span = document.createElement('span');
+    span.className = isError ? 'jupyter-output-line-error' : 'jupyter-output-line';
+    span.textContent = text;
+    outputBlock.appendChild(span);
+}
+
+// Shows a rendered block's recorded output and whether it is still running.
+function restoreJupyterBlockRun(blockId, { runButton, stopButton, outputWrapper, outputBlock }) {
+    const doc = activeNotesDocument;
+    const output = doc.jupyterOutputs.get(blockId);
+    const running = doc.runningJupyterBlocks.has(blockId);
+    if (!output && !running) {
+        return;
+    }
+    outputWrapper.style.display = 'block';
+    for (const line of output || []) {
+        appendJupyterOutput(outputBlock, line.text, line.isError);
+    }
+    if (running) {
+        runButton.style.display = 'none';
+        stopButton.style.display = 'inline-block';
+    }
 }
 
 function finishJupyterRun(runId) {
@@ -890,6 +939,7 @@ function releaseNotesDocument(doc) {
         });
     }
     doc.runningJupyterBlocks.clear();
+    doc.jupyterOutputs.clear();
     const blocks = doc.jupyterCodeBlocks;
     doc.jupyterCodeBlocks = {};
     doc.editorModel?.dispose();
@@ -905,8 +955,114 @@ function isNotesDocumentOpen(doc) {
 }
 
 function closeActiveNotesDocument() {
+    mainView.removeTab(activeNotesDocument.key);
     setActiveNotesDocument(newNotesDocument());
 }
+
+function renderNotesTabs(view) {
+    const strip = view.parts.docTabs;
+    const docs = view.tabs.map(findNotesDocument).filter(Boolean);
+    strip.hidden = docs.length === 0;
+    strip.replaceChildren(...docs.map((doc) => {
+        const name = getPathFileName(doc.path);
+        const tab = document.createElement('div');
+        tab.className = 'notes-doc-tab';
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', String(doc === activeNotesDocument));
+        tab.dataset.docKey = doc.key;
+        tab.dataset.dirty = String(doc.dirty === true);
+        tab.title = doc.path;
+        const label = document.createElement('span');
+        label.className = 'notes-doc-tab-name';
+        label.textContent = name;
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'notes-doc-tab-close';
+        close.setAttribute('aria-label', `Close ${name}`);
+        close.textContent = '×';
+        tab.append(label, close);
+        return tab;
+    }));
+}
+
+function markActiveNotesTabDirty() {
+    const tab = [...mainView.parts.docTabs.children].find((el) => el.dataset.docKey === activeNotesDocument.key);
+    if (tab) {
+        tab.dataset.dirty = String(state.dirty === true);
+    }
+}
+
+async function activateNotesTab(view, key) {
+    const doc = findNotesDocument(key);
+    if (doc && doc !== activeNotesDocument) {
+        await loadFile(doc.path);
+    }
+}
+
+// Closing a tab saves the document's unsaved edits (keeping the tab if that
+// fails) and closes the document unless another tab shows it. Closing the
+// active tab activates its neighbour.
+async function closeNotesTab(view, key) {
+    const doc = findNotesDocument(key);
+    if (doc?.dirty) {
+        clearTimeout(doc.autosaveTimer);
+        doc.autosaveTimer = null;
+        if (!await saveFile(doc)) {
+            return;
+        }
+    }
+    const index = view.removeTab(key);
+    if (index < 0) {
+        return;
+    }
+    if (doc && doc !== activeNotesDocument && !isNotesDocumentInTab(doc)) {
+        notesDocuments.close(doc);
+    }
+    renderNotesTabs(view);
+    if (doc !== activeNotesDocument) {
+        return;
+    }
+    const neighbour = findNotesDocument(view.tabs[Math.min(index, view.tabs.length - 1)]);
+    if (neighbour) {
+        await loadFile(neighbour.path);
+    } else {
+        await showNoNotesDocument();
+    }
+}
+
+// Closes every tab, leaving the active document open but untabbed until
+// another document replaces it, as on switching workspace.
+async function closeBackgroundNotesTabs() {
+    const docs = mainView.tabs.map(findNotesDocument).filter((doc) => doc && doc !== activeNotesDocument);
+    mainView.tabs = [];
+    for (const doc of docs) {
+        if (doc.dirty) {
+            await saveFile(doc);
+        }
+        notesDocuments.close(doc);
+    }
+    renderNotesTabs(mainView);
+}
+
+mainView.parts.docTabs.addEventListener('click', (event) => {
+    const tab = event.target.closest('.notes-doc-tab');
+    if (!tab) {
+        return;
+    }
+    if (event.target.closest('.notes-doc-tab-close')) {
+        void closeNotesTab(mainView, tab.dataset.docKey);
+    } else {
+        void activateNotesTab(mainView, tab.dataset.docKey);
+    }
+});
+
+mainView.parts.docTabs.addEventListener('auxclick', (event) => {
+    const tab = event.target.closest('.notes-doc-tab');
+    if (tab && event.button === 1) {
+        event.preventDefault();
+        void closeNotesTab(mainView, tab.dataset.docKey);
+    }
+});
 
 // The current-file fields read the active document. currentFile and
 // currentFileProject identify it, so they change only by switching document.
@@ -5123,6 +5279,7 @@ function scheduleTyposBlockChange(blockId, editableCode) {
 
 function setDirty(isDirty) {
     state.dirty = isDirty;
+    markActiveNotesTabDirty();
     const label = state.currentFile ? state.currentFile : 'No file selected';
     elements.status.textContent = isDirty ? `${label} (unsaved)` : label;
 }
@@ -6196,6 +6353,7 @@ function convertToJupyterCodeBlocks() {
         codeEditor.appendChild(codeArea);
         wrapper.appendChild(codeEditor);
         wrapper.appendChild(outputWrapper);
+        restoreJupyterBlockRun(blockId, { runButton: runNotesBtn, stopButton: stopNotesBtn, outputWrapper, outputBlock });
 
         attachVimMode(editableCode, {
             mutationAdapter: notesMutationAdapter,
@@ -6246,6 +6404,7 @@ async function runCodeBlockInNotes(blockId) {
     }
     
     const doc = activeNotesDocument;
+    doc.jupyterOutputs.set(blockId, []);
     const runId = startJupyterRun(doc, blockId);
     try {
         await RunNote(doc.path, blockId, runId, block.currentContent, block.runtime);
@@ -6568,6 +6727,8 @@ async function refreshFiles(options = {}) {
             clearTimeout(state.historyPositionTimer);
             state.historyPositionTimer = null;
             notesGitPanel?.setCommitsActive(false);
+            await closeBackgroundNotesTabs();
+            if (sequence !== fileListRefreshSequence) return;
         }
 
         state.currentWorkspaceName = String(workspaceName || '');
@@ -6659,24 +6820,29 @@ async function loadProjectCache(options = {}) {
             }
         } else if (state.currentFile) {
             if (options.isCurrent && !options.isCurrent()) return;
-            resetLspViewState();
-            closeActiveNotesDocument();
-            state.swaggerSpec = null;
-            state.swaggerRunAvailable = false;
-            emitCurrentFileName();
-            setMainEditorValue('');
-            clearHexSource();
-            clearVisibleLspDiagnostics();
-            hideLspHoverTooltip();
-            updateTabVisibility('markdown');
-            setViewMode('viewer');
-            await renderMarkdown();
-            await renderJupyterView();
-            setDirty(false);
+            await showNoNotesDocument();
         }
     } catch (err) {
         console.error('Failed to load project cache:', err);
     }
+}
+
+// Closes the active document and shows an empty editor.
+async function showNoNotesDocument() {
+    resetLspViewState();
+    closeActiveNotesDocument();
+    state.swaggerSpec = null;
+    state.swaggerRunAvailable = false;
+    emitCurrentFileName();
+    setMainEditorValue('');
+    clearHexSource();
+    clearVisibleLspDiagnostics();
+    hideLspHoverTooltip();
+    updateTabVisibility('markdown');
+    setViewMode('viewer');
+    await renderMarkdown();
+    await renderJupyterView();
+    setDirty(false);
 }
 
 // Records what the view shows for the current document, so returning to the
@@ -8320,6 +8486,14 @@ function setupSwaggerTabSwitching() {
 
 let notesLoadSeq = 0;
 
+// Puts loaded text in the active document. Unchanged text is left alone, so a
+// document reopened from a background tab keeps its undo history.
+function loadDocumentText(text) {
+    if (mainDocument.getValue() !== normaliseLineEndings(text)) {
+        setMainEditorValue(text);
+    }
+}
+
 async function loadFile(file, options = {}) {
     if (!file) {
         return;
@@ -8338,10 +8512,10 @@ async function loadFile(file, options = {}) {
 
     rememberShownDocumentState();
 
+    const previousDocument = activeNotesDocument;
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
-        // Closing the document drops its autosave timer, so save pending
-        // edits now while the editor still holds them.
+        // Background tabs are kept saved, so save pending edits now.
         if (state.dirty) {
             clearTimeout(state.autosaveTimer);
             state.autosaveTimer = null;
@@ -8350,6 +8524,7 @@ async function loadFile(file, options = {}) {
                 return;
             }
         }
+        flushDocumentChanges(previousDocument);
     }
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
@@ -8365,7 +8540,6 @@ async function loadFile(file, options = {}) {
         lspSpellCheckExclusions.keywords = [];
         notesSpellCheckHandle?.setExclusions([]);
         // Clear rendered diagnostics immediately while the new file loads.
-        state.currentFileUri = '';
         clearVisibleLspDiagnostics();
     }
 
@@ -8449,6 +8623,9 @@ async function loadFile(file, options = {}) {
             return;
         }
 
+        const reopenedDocument = notesDocuments.get(file, project);
+        // A background tab whose save failed keeps its unsaved edits.
+        const keepsUnsavedEdits = Boolean(reopenedDocument?.dirty) && reopenedDocument !== previousDocument;
         loadedDocument = activateNotesDocument(file, { project });
         const fileUri = await resolveNotesFileUri(file);
         if (isStale()) {
@@ -8475,8 +8652,8 @@ async function loadFile(file, options = {}) {
             return;
         }
 
-        const doc = result.contents;
         const isBinaryFile = Boolean(result.binary ?? result.text);
+        const doc = keepsUnsavedEdits && !isBinaryFile ? mainDocument.getValue() : result.contents;
 
         if (isBinaryFile) {
             state.currentFileType = 'binary';
@@ -8538,7 +8715,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('json');
             
             // Set editor content (use regular editor with line numbers for JSON/YAML)
-            setMainEditorValue(doc || '');
+            loadDocumentText(doc || '');
             refreshEditorLanguage(file, doc || '');
             applyDocumentCache(documentCache, 'swagger-edit');
 
@@ -8583,7 +8760,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('markdown');
 
             // Set editor content
-            setMainEditorValue(doc || '');
+            loadDocumentText(doc || '');
             refreshEditorLanguage(file, doc || '');
             applyDocumentCache(documentCache, 'viewer');
 
@@ -8607,7 +8784,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('html');
 
             // Set editor content
-            setMainEditorValue(doc || '');
+            loadDocumentText(doc || '');
             refreshEditorLanguage(file, doc || '');
             applyDocumentCache(documentCache, 'viewer');
 
@@ -8623,7 +8800,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('csv');
 
             // Set editor content (raw text for Edit tab)
-            setMainEditorValue(doc || '');
+            loadDocumentText(doc || '');
             applyDocumentCache(documentCache, 'csv-view');
         } else {
             state.currentFileType = 'code';
@@ -8636,7 +8813,7 @@ async function loadFile(file, options = {}) {
             updateTabVisibility('code');
             
             // Set editor content
-            setMainEditorValue(doc || '');
+            loadDocumentText(doc || '');
             refreshEditorLanguage(file, doc || '');
             if (loadingSvg) {
                 await configureImagePreview(file, fileName);
@@ -8647,7 +8824,7 @@ async function loadFile(file, options = {}) {
             applyDocumentCache(documentCache, loadingSvg ? 'image-view' : 'editor');
         }
         
-        setDirty(false);
+        setDirty(keepsUnsavedEdits);
         mainView.shownDocumentKey = activeNotesDocument.key;
         mainView.editor?.restoreViewState(rememberedView?.editorState);
         renderFileList();
@@ -8710,10 +8887,9 @@ async function configureImagePreview(file, fileName, refresh = false) {
     enableImageContextMenus(elements.imageViewWrap);
 }
 
-// Saves the active document. The document is captured when the save starts,
-// and only updated afterwards if it is still open.
-async function saveFile() {
-    const doc = activeNotesDocument;
+// Saves a document, by default the active one. The document is captured when
+// the save starts, and only updated afterwards if it is still open.
+async function saveFile(doc = activeNotesDocument) {
     if (!doc.path) {
         setStatus('Select a note before saving', true);
         return false;
@@ -8733,7 +8909,10 @@ async function saveFile() {
             await NotesLspSaveDocument(file);
         }
         if (doc !== activeNotesDocument) {
-            doc.dirty = false;
+            if (doc.buffer.getValue() === content) {
+                doc.dirty = false;
+                renderNotesTabs(mainView);
+            }
             return true;
         }
         if (doc.fileType === 'markdown' && state.viewMode === 'editor') {
@@ -12671,27 +12850,24 @@ EventsOn("notesRunLspGoToWorkspaceSymbol", async () => {
     await goToWorkspaceLspSymbol();
 });
 
-// Output is shown only for runs started from the active document.
+// Output is recorded for the document that started the run, and shown if that
+// document is active.
 EventsOn("noteRun", (data) => {
     const { runId, output, isError } = data;
     const run = jupyterRuns.get(String(runId ?? ''));
-    if (!run || run.doc !== activeNotesDocument) return;
-    const { blockId } = run;
+    if (!run) return;
+    const { doc, blockId } = run;
+    const text = String(output ?? '');
+    const isErr = String(isError) === 'true';
+    if (!doc.jupyterOutputs.has(blockId)) {
+        doc.jupyterOutputs.set(blockId, []);
+    }
+    doc.jupyterOutputs.get(blockId).push({ text, isError: isErr });
+    if (doc !== activeNotesDocument) return;
 
     const outputBlock = elements.jupyter.querySelector(`[data-block-id="${blockId}"] .jupyter-output`);
     if (!outputBlock) return;
-
-    const text = String(output ?? '');
-    const isErr = String(isError) === 'true';
-
-    if (outputBlock.childNodes.length > 0 && text.length > 0 && text[0] !== '\n' && text[0] !== '\r') {
-        outputBlock.appendChild(document.createTextNode('\n'));
-    }
-
-    const span = document.createElement('span');
-    span.className = isErr ? 'jupyter-output-line-error' : 'jupyter-output-line';
-    span.textContent = text;
-    outputBlock.appendChild(span);
+    appendJupyterOutput(outputBlock, text, isErr);
     scrollJupyterOutputToBottom(outputBlock);
 });
 

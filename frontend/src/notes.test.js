@@ -530,6 +530,16 @@ async function importNotesModule() {
     await flushPromises();
 }
 
+function documentTab(file) {
+    return [...document.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file) || null;
+}
+
+async function closeDocumentTab(file) {
+    documentTab(file).querySelector('.notes-doc-tab-close').click();
+    await flushPromises();
+    await flushPromises();
+}
+
 function getEventHandler(eventName) {
     const call = eventsOnMock.mock.calls.find(([name]) => name === eventName);
     return call ? call[1] : null;
@@ -582,7 +592,8 @@ describe('notes rendering', () => {
         getNotesFilesSnapshotMock.mockImplementation(async (context) => ({
             context, files: await listFilesMock(), roots: [], state: 'ready', error: '', truncated: false,
         }));
-        saveFileMock.mockClear();
+        saveFileMock.mockReset();
+        saveFileMock.mockImplementation(() => Promise.resolve());
         saveBinaryFileMock.mockClear();
         deleteFileMock.mockClear();
         renameFileMock.mockClear();
@@ -2410,7 +2421,9 @@ describe('notes rendering', () => {
         await createAndOpenHandler({ filename: '$NOTES/readme.md', contents: '# Readme' });
         await flushPromises();
         await flushPromises();
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith('$NOTES/todo.md');
 
+        await closeDocumentTab('$NOTES/todo.md');
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('$NOTES/todo.md');
     });
 
@@ -2492,6 +2505,9 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/other.go"]').click();
         await flushPromises();
         await flushPromises();
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalled();
+
+        await closeDocumentTab('$NOTES/main.go');
         expect(notesLspCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go']]);
         expect(notesTyposCloseDocumentMock.mock.calls).toEqual([['$NOTES/main.go']]);
         expect(notesLspOpenDocumentMock).toHaveBeenLastCalledWith('$NOTES/other.go', 'go', 'package main\n');
@@ -2561,7 +2577,9 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/other.md"]').click();
         await flushPromises();
         await flushPromises();
+        expect(stopNoteMock).not.toHaveBeenCalled();
 
+        await closeDocumentTab('$NOTES/blocks.md');
         expect(stopNoteMock).toHaveBeenCalledWith(runId);
         expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
         expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
@@ -3902,6 +3920,91 @@ describe('notes rendering', () => {
         expect(editor.getModelUri()).not.toBe(firstUri);
         expect(editor.undo()).toBe(false);
         expect(editor.getValue()).toBe(`${second} text`);
+    });
+
+    it('keeps switched-away documents open as tabs with their text and undo history', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: disk.get(file), text: '', error: '' }));
+        saveFileMock.mockImplementation(async (file, content) => { disk.set(file, content); });
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        const editor = mainEditorAdapter();
+        editor.typeText('typed ');
+
+        document.querySelector(`[data-file="${second}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(saveFileMock).toHaveBeenCalledWith(first, 'typed first text', expect.any(String));
+        expect([...document.querySelectorAll('.notes-doc-tab')].map((tab) => [tab.title, tab.getAttribute('aria-selected')]))
+            .toEqual([[first, 'false'], [second, 'true']]);
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(first);
+
+        documentTab(first).click();
+        await flushPromises();
+        await flushPromises();
+        expect(editor.getValue()).toBe('typed first text');
+        expect(editor.undo()).toBe(true);
+        expect(editor.getValue()).toBe('first text');
+        expect(documentTab(first).dataset.dirty).toBe('true');
+
+        // Closing the active tab activates its neighbour; closing the last
+        // tab leaves no document open.
+        await closeDocumentTab(first);
+        expect(saveFileMock).toHaveBeenLastCalledWith(first, 'first text', expect.any(String));
+        expect(editor.getValue()).toBe('second text');
+        expect([...document.querySelectorAll('.notes-doc-tab')].map((tab) => tab.title)).toEqual([second]);
+
+        await closeDocumentTab(second);
+        expect(document.querySelectorAll('.notes-doc-tab')).toHaveLength(0);
+        expect(document.querySelector('.notes-doc-tabs').hidden).toBe(true);
+        expect(editor.getValue()).toBe('');
+    });
+
+    it('keeps output from a run that continues while its document is in a background tab', async () => {
+        const blocks = '$NOTES/blocks.md';
+        const other = '$NOTES/other.md';
+        listFilesMock.mockResolvedValue([blocks, other]);
+        getFileMock.mockImplementation(async (file) => ({
+            contents: file === blocks ? '```python\nprint("hello")\n```' : '# other\n',
+            text: '',
+            error: '',
+        }));
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${blocks}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-jupyter').click();
+        await flushPromises();
+        document.querySelector('.jupyter-run-notes').click();
+        await flushPromises();
+        const runId = runNoteMock.mock.calls.at(-1)[2];
+        getEventHandler('noteRun')({ runId, output: 'before', isError: 'false' });
+
+        document.querySelector(`[data-file="${other}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        getEventHandler('noteRun')({ runId, output: 'while hidden', isError: 'true' });
+
+        documentTab(blocks).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-jupyter').click();
+        await flushPromises();
+        expect([...document.querySelectorAll('.jupyter-output span')].map((span) => [span.textContent, span.className]))
+            .toEqual([['before', 'jupyter-output-line'], ['while hidden', 'jupyter-output-line-error']]);
+        expect(document.querySelector('.jupyter-stop-notes').style.display).toBe('inline-block');
+
+        getEventHandler('noteComplete')({ runId });
+        expect(document.querySelector('.jupyter-run-notes').style.display).toBe('inline-block');
     });
 
     it('restores the view mode and editor cursor the view last used for a document', async () => {
@@ -6956,6 +7059,7 @@ describe('notes rendering', () => {
         document.querySelector('[data-file="$NOTES/b.md"]').click();
         await flushPromises();
         await flushPromises();
+        await closeDocumentTab('$NOTES/a.go');
         expect(notesLspCloseDocumentMock).not.toHaveBeenCalled();
 
         finishOpen();
