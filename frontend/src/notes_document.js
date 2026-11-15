@@ -36,6 +36,11 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         jupyterBlockCounter: 0,
         // Block IDs with a run in progress on the backend.
         runningJupyterBlocks: new Set(),
+        // Find in the document (ADR 0100 question 10).
+        findQuery: '',
+        findMatches: [],
+        findCurrentIndex: -1,
+        findDocLastExecutedSignature: '',
     };
 }
 

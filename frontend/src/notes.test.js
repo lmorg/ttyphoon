@@ -6992,6 +6992,70 @@ describe('notes rendering', () => {
         expect(mainEditorAdapter().getValue()).toBe('# $NOTES/b.md\n');
     });
 
+    it('keeps project-search results but shows the new document\'s own Find query when switching files', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockResolvedValue({ contents: 'alpha two', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.getElementById('notes-tools-tab-find').click();
+
+        const findFilesInput = document.getElementById('notes-find-files-input');
+        findFilesInput.value = 'alpha';
+        findFilesInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await flushPromises();
+        const findInput = document.getElementById('notes-find-input');
+        findInput.value = 'two';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+
+        notesHistoryPreviousPositionMock.mockResolvedValue({ file: second, line: 1 });
+        document.getElementById('notes-history-prev').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(getFileMock).toHaveBeenCalledWith(second);
+        expect(findFilesInput.value).toBe('alpha');
+        expect(notesGrepStreamMock).toHaveBeenCalledTimes(1);
+        expect(findInput.value).toBe('');
+    });
+
+    it('keeps a document\'s Find query and finds it again when the document reloads', async () => {
+        const file = '$NOTES/guide.md';
+        listFilesMock.mockResolvedValue([file]);
+        getFileMock.mockResolvedValue({ contents: 'one two\ntwo three', text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${file}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        document.getElementById('notes-tools-tab-find').click();
+        const findInput = document.getElementById('notes-find-input');
+        findInput.value = 'two';
+        findInput.dispatchEvent(new Event('input', { bubbles: true }));
+        await flushPromises();
+        const counter = document.getElementById('notes-find-counter');
+        const matches = counter.textContent;
+        expect(matches).not.toBe('');
+
+        notesHistoryPreviousPositionMock.mockResolvedValue({ file, line: 1 });
+        document.getElementById('notes-history-prev').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+
+        expect(getFileMock).toHaveBeenCalledTimes(2);
+        expect(findInput.value).toBe('two');
+        expect(counter.textContent).toBe(matches);
+    });
+
     it('invalidates and re-runs project grep after autosave while keeping find mode active', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide\n\nalpha', text: '', error: '' });

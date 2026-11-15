@@ -376,6 +376,23 @@ as `lspOpenFile === currentFile`.
 - Preview scroll positions are not restored; the preview re-renders on
   activation.
 
+*Done (Stage 6, task 3):*
+
+- `focusedView()` in `notes.js` returns the view that global chrome follows;
+  for now it is the one view. The LSP code reaches the editor and its host
+  through it (`getMonacoMainEditor`, `getFocusedEditorHost`) to place hover,
+  completion and LSP-menu overlays. The status bar and Tools panel show the
+  active `NotesDocument`, which is the focused view's document.
+- The Find query, its matches and current match are `NotesDocument` fields
+  (question 10). Loading a document shows its own query: switching files
+  starts with an empty query, and reloading the shown file keeps its query
+  and finds it again. Search options (case, regex, whole word) stay global.
+- Loading a file no longer clears project-search results, which belong to no
+  document, so they survive switching files. The `keepFindTabOpen` load
+  option, which existed only to protect them, is gone.
+- Until Stage 7 keeps documents open, a document's Find query is lost when
+  another file replaces it.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

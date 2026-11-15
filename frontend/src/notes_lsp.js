@@ -25,7 +25,7 @@ let
     resolveNotesFileFromAbsolutePath, runProjectFindSearch, setMainEditorSelectionRange,
     setMainEditorValue, setProjectReferencesResults, setToolsPanelCollapsed, setToolsTab,
     shouldMonacoTabIndent, showNotesLocalMenu, updateFindOptionButtons, getMonacoMainEditor,
-    getNotesSpellCheckHandle, getActiveNotesDocument, isNotesDocumentOpen;
+    getNotesSpellCheckHandle, getActiveNotesDocument, isNotesDocumentOpen, getFocusedEditorHost;
 
 export function initNotesLsp(deps) {
     ({
@@ -38,7 +38,7 @@ export function initNotesLsp(deps) {
         setMainEditorSelectionRange, setMainEditorValue, setProjectReferencesResults,
         setToolsPanelCollapsed, setToolsTab, shouldMonacoTabIndent, showNotesLocalMenu,
         updateFindOptionButtons, getMonacoMainEditor, getNotesSpellCheckHandle,
-        getActiveNotesDocument, isNotesDocumentOpen,
+        getActiveNotesDocument, isNotesDocumentOpen, getFocusedEditorHost,
     } = deps);
 
     EventsOn('notesLspDiagnostics', payload => {
@@ -408,7 +408,7 @@ function getMonacoCompletionMenuAnchor() {
         return caretPoint;
     }
 
-    const rect = elements.monacoEditor?.getBoundingClientRect?.();
+    const rect = getFocusedEditorHost()?.getBoundingClientRect?.();
     if (rect) {
         return {
             x: rect.left + 24,
@@ -1378,7 +1378,7 @@ function getLspAnchorViewportPoint() {
         };
     }
 
-    const fallbackRect = elements.monacoEditor?.getBoundingClientRect();
+    const fallbackRect = getFocusedEditorHost()?.getBoundingClientRect();
     if (fallbackRect) {
         return {
             x: fallbackRect.left + 20,

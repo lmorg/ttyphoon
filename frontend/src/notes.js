@@ -491,6 +491,12 @@ initLineNavigationKeys(document);
 app.innerHTML = notesTemplate;
 
 const mainView = createNotesView({ host: document.getElementById('notes-views') });
+
+// The view that global chrome (status bar, Tools panel, LSP overlays) follows.
+// Its document is the active NotesDocument. Notes has one view for now.
+function focusedView() {
+    return mainView;
+}
 mainView.parts.toolbarSlot.replaceWith(document.getElementById('notes-toolbar'));
 
 const elements = {
@@ -676,10 +682,6 @@ const state = {
     gitBranchPromptHandler: null,
     deletingFile: null,
     deleteConfirmAction: null,
-    findMatches: [],
-    findCurrentIndex: -1,
-    findQuery: '',
-    findDocLastExecutedSignature: '',
     findDocOptions: {
         caseSensitive: false,
         regex: false,
@@ -837,6 +839,10 @@ Object.defineProperties(state, {
         ['typosChangeTimer', 'typosChangeTimer'],
         ['jupyterCodeBlocks', 'jupyterCodeBlocks'],
         ['jupyterBlockCounter', 'jupyterBlockCounter'],
+        ['findQuery', 'findQuery'],
+        ['findMatches', 'findMatches'],
+        ['findCurrentIndex', 'findCurrentIndex'],
+        ['findDocLastExecutedSignature', 'findDocLastExecutedSignature'],
     ].map(([name, field]) => [name, {
         enumerable: true,
         get: () => activeNotesDocument[field],
@@ -8259,7 +8265,6 @@ async function loadFile(file, options = {}) {
     }
 
     const skipDocumentCacheRestore = Boolean(options?.skipDocumentCacheRestore);
-    const keepFindTabOpen = Boolean(options?.keepFindTabOpen);
 
     state.suspendDocumentCacheSave = true;
 
@@ -8342,9 +8347,7 @@ async function loadFile(file, options = {}) {
             saveDocumentCache();
             setDirty(false);
             renderFileList();
-            if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-                closeFindBar();
-            }
+            showDocumentFindState();
             return;
         }
 
@@ -8409,9 +8412,7 @@ async function loadFile(file, options = {}) {
             mainView.shownDocumentKey = activeNotesDocument.key;
             renderFileList();
 
-            if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-                closeFindBar();
-            }
+            showDocumentFindState();
             return;
         }
 
@@ -8565,10 +8566,7 @@ async function loadFile(file, options = {}) {
 
         // JSON/YAML tree view render is deferred until the View tab is clicked (see swaggerViewCurrent).
 
-        // Clear active Find state when loading a new file.
-        if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
-            closeFindBar();
-        }
+        showDocumentFindState();
 
         await refreshMainReservedWords(file);
         if (isStale()) {
@@ -9370,7 +9368,6 @@ async function openProjectFindResult(item) {
         await NotesHistoryAddPosition(file, Number.parseInt(String(item?.line), 10) || 1);
         await loadFile(file, {
             skipDocumentCacheRestore: true,
-            keepFindTabOpen: true,
         });
         setViewMode(editViewModeForCurrentFileType());
         setToolsPanelCollapsed(false);
@@ -9598,6 +9595,27 @@ function isMainEditorFindActive() {
     }
 
     return false;
+}
+
+// Shows the active document's Find query after a load (ADR 0100 question 10).
+// Matches are found again for the loaded content: here for the editor, and by
+// the rendered panes once they render. Project-search results are not tied to
+// a document, so they are left alone.
+function showDocumentFindState() {
+    clearHighlights();
+    state.findMatches = [];
+    state.findCurrentIndex = -1;
+    state.findDocLastExecutedSignature = '';
+    elements.findInput.value = state.findQuery;
+    updateFindInputClearButtonVisibility();
+    if (state.findQuery
+        && elements.toolsTabFind?.getAttribute('aria-selected') === 'true'
+        && isFindAvailableInCurrentMode()
+        && isMainEditorFindActive()) {
+        performFind();
+        return;
+    }
+    updateFindCounter();
 }
 
 function clearHighlights() {
@@ -12478,7 +12496,7 @@ EventsOn("notesFileChanged", async () => {
         ? {
             ...mainDocument.getSelection(),
             length: mainDocument.getValue().length,
-            hadFocus: Boolean(elements.monacoEditor?.contains(document.activeElement)),
+            hadFocus: Boolean(focusedView().parts.monacoEditor?.contains(document.activeElement)),
         }
         : null;
 
@@ -12514,7 +12532,7 @@ EventsOn("notesShowLspOptions", async () => {
         return;
     }
 
-    const rect = elements.monacoEditor.getBoundingClientRect();
+    const rect = focusedView().parts.monacoEditor.getBoundingClientRect();
     const x = Math.max(rect.left + 24, Math.min(rect.right - 24, rect.left + rect.width / 2));
     const y = Math.max(rect.top + 24, Math.min(rect.bottom - 24, rect.top + rect.height / 2));
     await showEditorLspOptionsMenu(x, y);
@@ -14597,7 +14615,8 @@ initNotesLsp({
     shouldMonacoTabIndent,
     showNotesLocalMenu,
     updateFindOptionButtons,
-    getMonacoMainEditor: () => mainView.editor,
+    getMonacoMainEditor: () => focusedView().editor,
+    getFocusedEditorHost: () => focusedView().parts.monacoEditor,
     getNotesSpellCheckHandle: () => notesSpellCheckHandle,
     getActiveNotesDocument: () => activeNotesDocument,
     isNotesDocumentOpen,
