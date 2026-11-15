@@ -199,6 +199,58 @@ func TestDocumentStore_didCloseTwiceIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDocumentStore_referenceCountsOpenAndClose(t *testing.T) {
+	tr, spy, closer := newSpyTransport()
+	defer closer.Close()
+
+	ds := NewDocumentStore()
+	ctx := context.Background()
+
+	_ = ds.DidOpen(ctx, tr, "/proj/main.go", "go", "package main")
+	_ = ds.DidOpen(ctx, tr, "/proj/main.go", "go", "package main")
+	_ = ds.DidOpen(ctx, tr, "/proj/main.go", "go", "package main\n\nfunc main() {}")
+	waitForSpy(t, spy, 2)
+
+	_ = ds.DidClose(ctx, tr, "/proj/main.go")
+	_ = ds.DidClose(ctx, tr, "/proj/main.go")
+	if !ds.IsOpen("/proj/main.go") {
+		t.Fatal("document should stay open while a reference remains")
+	}
+	if got := ds.Get("/proj/main.go").Content(); got != "package main\n\nfunc main() {}" {
+		t.Errorf("content = %q, want the last opened content", got)
+	}
+
+	_ = ds.DidClose(ctx, tr, "/proj/main.go")
+	waitForSpy(t, spy, 3)
+	if ds.IsOpen("/proj/main.go") {
+		t.Error("document should close when the last reference closes")
+	}
+
+	spy.mu.Lock()
+	got := append([]string(nil), spy.methods...)
+	spy.mu.Unlock()
+	want := []string{"textDocument/didOpen", "textDocument/didChange", "textDocument/didClose"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("notifications = %v, want %v", got, want)
+	}
+}
+
+func TestDocumentStore_didCloseWithoutTransportOnlyUpdatesStore(t *testing.T) {
+	tr, _, closer := newSpyTransport()
+	defer closer.Close()
+
+	ds := NewDocumentStore()
+	ctx := context.Background()
+
+	_ = ds.DidOpen(ctx, tr, "/proj/main.go", "go", "")
+	if err := ds.DidClose(ctx, nil, "/proj/main.go"); err != nil {
+		t.Fatalf("DidClose: %v", err)
+	}
+	if ds.IsOpen("/proj/main.go") {
+		t.Error("document should be removed from the store")
+	}
+}
+
 func TestDocumentStore_didChangeUnknownDocReturnsError(t *testing.T) {
 	tr, _, closer := newSpyTransport()
 	defer closer.Close()

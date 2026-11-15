@@ -335,11 +335,8 @@ func (a *WApp) NotesTyposOpenDocument(filePath, languageID, content string) bool
 		languageID = "plaintext"
 	}
 
-	// Re-open cleanly if it was already tracked as open (e.g. on reload).
-	if a.typosDocs.IsOpen(absPath) {
-		a.typosDocs.DidClose(a.ctx, t, absPath) //nolint:errcheck // best-effort reset
-	}
-
+	// Opens are reference counted: reopening an open document adds a
+	// reference and sends didChange if its content changed.
 	if err := a.typosDocs.DidOpen(a.ctx, t, absPath, languageID, content); err != nil {
 		log.Printf("lsp: typos DidOpen %q: %v", absPath, err)
 		return false

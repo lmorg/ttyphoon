@@ -5275,9 +5275,31 @@ function markMarkdownRunSourceBlocks(container, markdown, sourceOffset, source) 
     }
 }
 
+// The backend reference-counts LSP and typos opens, so block documents must be
+// released before their blocks are discarded; restored blocks reopen them.
+async function releaseJupyterBlockLspDocuments(blocks) {
+    const closes = [];
+    for (const block of Object.values(blocks || {})) {
+        if (block?.lspFilePath) {
+            closes.push(NotesLspCloseDocument(block.lspFilePath));
+        }
+        if (block?.typosFilePath) {
+            closes.push(NotesTyposCloseDocument(block.typosFilePath));
+        }
+    }
+    const results = await Promise.allSettled(closes);
+    for (const result of results) {
+        if (result.status === 'rejected') {
+            console.error('Error closing LSP document for code block:', result.reason);
+        }
+    }
+}
+
 async function renderJupyterView() {
     // Reset jupyter state for the new render
+    const previousBlocks = state.jupyterCodeBlocks;
     state.jupyterCodeBlocks = {};
+    void releaseJupyterBlockLspDocuments(previousBlocks);
     state.jupyterBlockCounter = 0;
     
     const source = getMainEditorValue();

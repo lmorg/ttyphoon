@@ -215,6 +215,32 @@ as `lspOpenFile === currentFile`.
   and `didChange` scheduling still follow the focused main editor and
   `state.lspOpenFile`. They move with `NotesDocument` (Stage 4).
 
+*Done (Stage 3):*
+
+- `utils/lsp.DocumentStore` counts references per URI. The first `DidOpen`
+  sends `didOpen`; later opens add a reference and send `didChange` only if
+  the text differs (their language ID is ignored). Only the last `DidClose`
+  sends `didClose`. Closing an unknown document does nothing. The counts do not
+  depend on order, so concurrent Wails calls are safe.
+- `DidClose` with a nil transport only updates the store.
+  `NotesLspCloseDocument` calls it that way, and before this it could panic.
+- `NotesTyposOpenDocument` no longer closes and reopens a document that is
+  already open. Reopening it adds a reference and sends `didChange`.
+- Each frontend holder now pairs every open with exactly one close. The
+  holders are the main document (`state.lspOpenFile`, `state.typosOpenFile`)
+  and each Jupyter block (`lspFilePath`, `typosFilePath`).
+  - `openCurrentLspDocument` closes the previous document first.
+    `lspOpenFile` is set even when no server started, so closing first means
+    a failed start is retried.
+  - `openCurrentTyposDocument` opens the new document and then releases the
+    old reference, so reloading the same file becomes a `didChange`.
+  - `renderJupyterView` releases the previous blocks' documents
+    (`releaseJupyterBlockLspDocuments`).
+- Remaining gap: after switching to another file, the previous file's Jupyter
+  block documents stay open until the next Jupyter render. This predates the
+  change. They are released once block runtimes move onto `NotesDocument`
+  (Stage 4).
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

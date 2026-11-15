@@ -64,6 +64,7 @@ type Document struct {
 	mu         sync.RWMutex
 	content    string
 	open       bool
+	refs       int // guarded by DocumentStore.mu
 }
 
 func newDocument(absPath, languageID, content string) *Document {
@@ -73,6 +74,7 @@ func newDocument(absPath, languageID, content string) *Document {
 		LanguageID: languageID,
 		content:    content,
 		open:       true,
+		refs:       1,
 	}
 	d.version.Store(1)
 	return d
@@ -100,7 +102,9 @@ func (d *Document) close() {
 // ----------------------------------------------------------------------------
 
 // DocumentStore tracks open documents and sends sync notifications to a
-// Transport.
+// Transport. Opens are reference counted per URI so that several holders (for
+// example two editor views of one file) can share a document: the first
+// DidOpen sends didOpen and the last DidClose sends didClose.
 type DocumentStore struct {
 	mu   sync.RWMutex
 	docs map[string]*Document // keyed by URI
@@ -110,11 +114,21 @@ func NewDocumentStore() *DocumentStore {
 	return &DocumentStore{docs: make(map[string]*Document)}
 }
 
-// DidOpen records the document as open and sends textDocument/didOpen.
+// DidOpen adds a reference to the document. The first reference sends
+// textDocument/didOpen; later ones send textDocument/didChange if content
+// differs from what the server last saw.
 func (ds *DocumentStore) DidOpen(ctx context.Context, t *Transport, absPath, languageID, content string) error {
 	uri := FilePathToURI(absPath)
 
 	ds.mu.Lock()
+	if doc, ok := ds.docs[uri]; ok {
+		doc.refs++
+		ds.mu.Unlock()
+		if doc.Content() == content {
+			return nil
+		}
+		return ds.notifyChange(t, doc, content)
+	}
 	doc := newDocument(absPath, languageID, content)
 	ds.docs[uri] = doc
 	ds.mu.Unlock()
@@ -143,11 +157,15 @@ func (ds *DocumentStore) DidChange(ctx context.Context, t *Transport, absPath, c
 		return fmt.Errorf("lsp: DidChange: document %q is not open", uri)
 	}
 
+	return ds.notifyChange(t, doc, content)
+}
+
+func (ds *DocumentStore) notifyChange(t *Transport, doc *Document, content string) error {
 	version := doc.update(content)
 
 	params := map[string]any{
 		"textDocument": map[string]any{
-			"uri":     uri,
+			"uri":     doc.URI,
 			"version": version,
 		},
 		"contentChanges": []map[string]any{
@@ -165,19 +183,25 @@ func (ds *DocumentStore) DidSave(ctx context.Context, t *Transport, absPath stri
 	})
 }
 
-// DidClose removes the document and sends textDocument/didClose.
+// DidClose drops a reference to the document. The last reference removes it
+// and sends textDocument/didClose; t may be nil to only update the store.
 func (ds *DocumentStore) DidClose(ctx context.Context, t *Transport, absPath string) error {
 	uri := FilePathToURI(absPath)
 
 	ds.mu.Lock()
 	doc, ok := ds.docs[uri]
 	if ok {
+		doc.refs--
+		if doc.refs > 0 {
+			ds.mu.Unlock()
+			return nil
+		}
 		doc.close()
 		delete(ds.docs, uri)
 	}
 	ds.mu.Unlock()
 
-	if !ok {
+	if !ok || t == nil {
 		return nil // already closed; not an error
 	}
 

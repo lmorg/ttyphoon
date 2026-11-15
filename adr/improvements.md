@@ -54,8 +54,8 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Move Notes LSP code from `notes.js` into its own module with no behaviour change (replaces the "move LSP code into new JS file" refactor)
     - [x] Monaco LSP providers resolve their document from `model.uri` and read text from that model, replacing `state.lspOpenFile === state.currentFile` guards and `getMainEditorValue()`
   - Stage 3: backend reference counting
-    - [ ] `utils/lsp.DocumentStore`: reference-count `DidOpen`/`DidClose` per URI (first open sends `didOpen`, last close sends `didClose`), with tests
-    - [ ] `NotesTyposOpenDocument`: stop closing and reopening an already-open URI; use the reference count and send `didChange` for new content
+    - [x] `utils/lsp.DocumentStore`: reference-count `DidOpen`/`DidClose` per URI (first open sends `didOpen`, last close sends `didClose`), with tests
+    - [x] `NotesTyposOpenDocument`: stop closing and reopening an already-open URI; use the reference count and send `didChange` for new content
   - Stage 4: `NotesDocument`
     - [ ] Add a `NotesDocument` record and registry keyed by absolute path (open, get, close), holding the per-document fields in ADR 0100 decision 4, with unit tests
     - [ ] Route `state.currentFile`, `currentFileUri`, file type, project, dirty state, Monaco model and autosave timer through the active document. Still one document

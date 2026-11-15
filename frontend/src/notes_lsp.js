@@ -1475,6 +1475,11 @@ export async function closeOpenLspDocument() {
 }
 
 export async function openCurrentLspDocument(content) {
+    // The backend reference-counts opens, so release the document this editor
+    // holds before taking a new reference, even when reloading the same file.
+    // lspOpenFile is set even if no server started, so closing first (rather
+    // than reopening and then closing) keeps a failed start retryable.
+    await closeOpenLspDocument();
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         return;
     }
@@ -1675,16 +1680,25 @@ export async function openCurrentTyposDocument(content) {
     }
     if (!state.currentFile || !isCurrentFileLspEligible()) {
         // Non-eligible files keep aspell.
-        getNotesSpellCheckHandle().setMode('aspell');
-        if (isMonacoActive()) {
-            getMonacoMainEditor().setTyposMisspellings([]);
-        }
+        await closeCurrentTyposDocument();
         return;
     }
 
+    // The backend reference-counts opens. typosOpenFile is only set after a
+    // successful open, so reopening first and then releasing the old reference
+    // turns a same-file reload into a didChange.
+    let previousFile = state.typosOpenFile;
+    const releasePrevious = async () => {
+        const file = previousFile;
+        previousFile = '';
+        if (file) {
+            await NotesTyposCloseDocument(file).catch((err) => console.error('notes typos close failed:', err));
+        }
+    };
     try {
         const languageID = await ResolveNotesLspLanguage(state.currentFile);
         const ok = await NotesTyposOpenDocument(state.currentFile, languageID || '', String(content || ''));
+        await releasePrevious();
         if (ok) {
             state.typosOpenFile = state.currentFile;
             getNotesSpellCheckHandle().setMode('external');
@@ -1698,6 +1712,7 @@ export async function openCurrentTyposDocument(content) {
             }
         }
     } catch (err) {
+        await releasePrevious();
         state.typosOpenFile = '';
         getNotesSpellCheckHandle().setMode('aspell');
         if (isMonacoActive()) {

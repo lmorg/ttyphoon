@@ -2437,6 +2437,66 @@ describe('notes rendering', () => {
         );
     });
 
+    it('keeps LSP and typos opens balanced when the open file reloads', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/main.go']);
+        resolveNotesLspLanguageMock.mockResolvedValue('go');
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+        getFileMock.mockResolvedValue({ contents: 'package main\n', text: '', error: '' });
+
+        await importNotesModule();
+
+        document.querySelector('[data-file="$NOTES/main.go"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const calls = [];
+        notesLspOpenDocumentMock.mockImplementation(() => { calls.push('lsp-open'); return Promise.resolve(); });
+        notesLspCloseDocumentMock.mockImplementation(() => { calls.push('lsp-close'); return Promise.resolve(); });
+        notesTyposOpenDocumentMock.mockImplementation(() => { calls.push('typos-open'); return Promise.resolve(true); });
+        notesTyposCloseDocumentMock.mockImplementation(() => { calls.push('typos-close'); return Promise.resolve(); });
+        getFileMock.mockResolvedValue({ contents: 'package main\n\nfunc main() {}\n', text: '', error: '' });
+
+        await getEventHandler('notesFileChanged')();
+        await flushPromises();
+
+        // LSP releases first so a failed server start is retried; typos
+        // reopens first so the backend sends didChange rather than close/open.
+        expect(calls).toEqual(['lsp-close', 'lsp-open', 'typos-open', 'typos-close']);
+        expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('$NOTES/main.go');
+        expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('$NOTES/main.go');
+    });
+
+    it('releases Jupyter block LSP documents when the Run view re-renders', async () => {
+        listFilesMock.mockResolvedValue(['$NOTES/blocks.md']);
+        getFileMock.mockResolvedValue({ contents: '```python\nprint("hello")\n```', text: '', error: '' });
+        notesTyposOpenDocumentMock.mockResolvedValue(true);
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/blocks.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const { FormatCodeBlock } = await import('./wails-bindings.js');
+        FormatCodeBlock.mockResolvedValueOnce({ Code: 'print("hello")', FilePath: '/tmp/block.py', Err: '' });
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.jupyter-lsp-notes').click();
+        await flushPromises();
+        await flushPromises();
+        expect(notesLspOpenDocumentMock).toHaveBeenCalledWith('/tmp/block.py', '', 'print("hello")');
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith('/tmp/block.py');
+
+        document.getElementById('notes-tab-editor').click();
+        await flushPromises();
+        document.getElementById('notes-tab-jupyter').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(notesLspCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
+        expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith('/tmp/block.py');
+    });
+
     it('resolves Monaco LSP provider requests from the model URI', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/main.go', '$NOTES/notes.txt']);
         resolveNotesLspLanguageMock.mockImplementation((file) => Promise.resolve(file.endsWith('.go') ? 'go' : ''));
