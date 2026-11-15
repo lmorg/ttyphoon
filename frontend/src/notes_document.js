@@ -33,6 +33,9 @@ export function createNotesDocument({ path, project = '', uri = '', fileType = '
         // the user has not yet chosen which version to keep. Nothing saves it
         // automatically until they do.
         conflicted: false,
+        // The file was deleted while the document had unsaved edits. Saving
+        // explicitly recreates it; nothing saves it automatically.
+        deleted: false,
         autosaveTimer: null,
         lspOpenFile: '',
         lspChangeTimer: null,
@@ -97,10 +100,29 @@ export function createNotesDocumentRegistry({ create = createNotesDocument, onCl
         return onClose ? onClose(doc) : undefined;
     }
 
+    // Moves an open document to a new path, as when its file is renamed. A
+    // different document already open at that path is closed first, as the
+    // rename replaced its file.
+    function move(doc, path, project = doc.project) {
+        if (!doc || documents.get(doc.key) !== doc) {
+            return undefined;
+        }
+        const key = notesDocumentKey(path, project);
+        const replaced = documents.get(key);
+        const closed = replaced && replaced !== doc ? close(replaced) : undefined;
+        documents.delete(doc.key);
+        doc.path = String(path || '');
+        doc.project = String(project || '');
+        doc.key = key;
+        documents.set(key, doc);
+        return closed;
+    }
+
     return {
         open,
         get,
         close,
+        move,
         has: (path, project = '') => Boolean(get(path, project)),
         list: () => [...documents.values()],
         get size() {

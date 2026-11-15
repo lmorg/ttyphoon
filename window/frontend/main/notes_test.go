@@ -3,6 +3,7 @@ package mainwindow
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -280,5 +281,51 @@ func TestWatchNotesFilesMapsChangesToDocumentsAndIgnoresStaleCalls(t *testing.T)
 	}
 	if got := app.notesFileChangedEvent(other); len(got.Keys) != 0 {
 		t.Fatalf("a stale call's file is watched: %+v", got)
+	}
+}
+
+func TestNotifyNotesFileChangedReportsOnlyFilesThatStayDeleted(t *testing.T) {
+	root := t.TempDir()
+	app := &WApp{projRoot: root, homeDir: t.TempDir()}
+	t.Cleanup(func() { watcher.SetFiles(nil) })
+	app.WatchNotesFiles(1, []NotesWatchedFileT{
+		{Key: "$PROJECT/kept.md", Path: "$PROJECT/kept.md"},
+		{Key: "$PROJECT/gone.md", Path: "$PROJECT/gone.md"},
+	})
+	kept := watcher.CleanPath(filepath.Join(root, "kept.md"))
+	gone := watcher.CleanPath(filepath.Join(root, "gone.md"))
+	if err := os.WriteFile(kept, []byte("kept"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	events := make(chan NotesFileChangedT, 4)
+	emit := func(event NotesFileChangedT) { events <- event }
+	app.notifyNotesFileChanged(kept, emit)
+	if got := <-events; got.Deleted || !reflect.DeepEqual(got.Keys, []string{"$PROJECT/kept.md"}) {
+		t.Fatalf("change to an existing file = %+v", got)
+	}
+
+	app.notifyNotesFileChanged(gone, emit)
+	// Missing, then recreated before the delay ends, as when an editor replaces it.
+	if err := os.Remove(kept); err != nil {
+		t.Fatal(err)
+	}
+	app.notifyNotesFileChanged(kept, emit)
+	if err := os.WriteFile(kept, []byte("replaced"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case got := <-events:
+		if !got.Deleted || got.Path != gone || !reflect.DeepEqual(got.Keys, []string{"$PROJECT/gone.md"}) {
+			t.Fatalf("deleted file event = %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no event for the deleted file")
+	}
+	select {
+	case got := <-events:
+		t.Fatalf("a replaced file was reported: %+v", got)
+	case <-time.After(notesDeletedFileDelay + 200*time.Millisecond):
 	}
 }

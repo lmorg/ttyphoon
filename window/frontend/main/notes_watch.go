@@ -1,8 +1,15 @@
 package mainwindow
 
 import (
+	"os"
+	"time"
+
 	"github.com/lmorg/ttyphoon/utils/file/watcher"
 )
+
+// Editors that save by replacing a file remove it briefly, so a missing file
+// is only reported deleted if it is still missing after this delay.
+var notesDeletedFileDelay = 300 * time.Millisecond
 
 // NotesWatchedFileT is an open Notes document whose file is watched for
 // changes made outside Notes. Key is the document's frontend key.
@@ -13,10 +20,11 @@ type NotesWatchedFileT struct {
 }
 
 // NotesFileChangedT is the notesFileChanged event: a watched file changed on
-// disk, and Keys are the open documents of that file.
+// disk, or was deleted, and Keys are the open documents of that file.
 type NotesFileChangedT struct {
-	Path string   `json:"path"`
-	Keys []string `json:"keys"`
+	Path    string   `json:"path"`
+	Keys    []string `json:"keys"`
+	Deleted bool     `json:"deleted"`
 }
 
 // WatchNotesFiles replaces the watched files with those of the open documents
@@ -53,4 +61,22 @@ func (a *WApp) notesFileChangedEvent(path string) NotesFileChangedT {
 		Path: path,
 		Keys: append([]string{}, a.notesWatchKeys[path]...),
 	}
+}
+
+// notifyNotesFileChanged emits notesFileChanged for a watched file. A missing
+// file is checked again after a delay, and reported deleted if still missing.
+func (a *WApp) notifyNotesFileChanged(path string, emit func(NotesFileChangedT)) {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		emit(a.notesFileChangedEvent(path))
+		return
+	}
+	time.AfterFunc(notesDeletedFileDelay, func() {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			// Recreated: the event for its creation reports the change.
+			return
+		}
+		event := a.notesFileChangedEvent(path)
+		event.Deleted = true
+		emit(event)
+	})
 }

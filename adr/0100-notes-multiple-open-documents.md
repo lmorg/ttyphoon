@@ -477,6 +477,27 @@ as `lspOpenFile === currentFile`.
   "Load disk version" (discard the edits). Saving with Cmd+S keeps the edits.
 - Showing a background document whose edits now match the disk marks it clean.
 
+*Done (Stage 7, task 5):*
+
+- Renaming a file or folder moves every open document inside it, active or in
+  the background, to its new path. Each tab keeps its place and its remembered
+  view state, and the watch set follows. Unsaved edits are saved before the
+  rename so they move with the file. The active document reloads from its new
+  path, keeping any edits that could not be saved.
+- The backend now reports deletes. A missing file is checked again after a
+  short delay, and reported as `{path, keys, deleted: true}` only if it is
+  still missing, so an editor that replaces a file is not reported as deleting
+  it. An external rename looks like a delete, because fsnotify does not link
+  the old and new names.
+- When an open document's file is deleted, in the app or outside it, a clean
+  document's tab closes. A document with unsaved edits stays open with its tab
+  marked deleted, and is never saved automatically. The view's banner offers
+  "Recreate file" (save it, which recreates the file) or "Discard edits" (close
+  the tab). Saving with Cmd+S also recreates it, and closing the tab drops the
+  edits.
+- Deleting the active file activates its neighbouring tab. History (ADR 0064)
+  decides what opens only when no tabs remain.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

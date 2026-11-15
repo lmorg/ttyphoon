@@ -4006,7 +4006,7 @@ describe('notes rendering', () => {
         document.querySelector('.notes-tab-editor').click();
         await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
         const editor = mainEditorAdapter();
-        const banner = document.querySelector('.notes-doc-conflict');
+        const banner = document.querySelector('.notes-doc-notice');
 
         vi.useFakeTimers();
         try {
@@ -4031,7 +4031,7 @@ describe('notes rendering', () => {
             vi.useRealTimers();
         }
 
-        document.querySelector('.notes-doc-conflict-reload').click();
+        document.querySelector('.notes-doc-notice-discard').click();
         await flushPromises();
         await flushPromises();
         expect(editor.getValue()).toBe('theirs');
@@ -4041,7 +4041,7 @@ describe('notes rendering', () => {
         editor.typeText('mine ');
         disk.set(file, 'theirs again');
         await getEventHandler('notesFileChanged')({ path: '/notes/conflict.md', keys: [file] });
-        document.querySelector('.notes-doc-conflict-keep').click();
+        document.querySelector('.notes-doc-notice-keep').click();
         await flushPromises();
         expect(editor.getValue()).toContain('mine');
         expect(disk.get(file)).toBe(editor.getValue());
@@ -4076,13 +4076,13 @@ describe('notes rendering', () => {
         await getEventHandler('notesFileChanged')({ path: '/notes/first.md', keys: [first] });
         expect(getFileMock).not.toHaveBeenCalled();
         expect(documentTab(first).dataset.conflicted).toBe('true');
-        expect(document.querySelector('.notes-doc-conflict').hidden).toBe(true);
+        expect(document.querySelector('.notes-doc-notice').hidden).toBe(true);
 
         documentTab(first).click();
         await flushPromises();
         await flushPromises();
         expect(editor.getValue()).toBe('mine first text');
-        expect(document.querySelector('.notes-doc-conflict').hidden).toBe(false);
+        expect(document.querySelector('.notes-doc-notice').hidden).toBe(false);
 
         // Switching away does not save over the version on disk.
         saveFileMock.mockClear();
@@ -4091,6 +4091,146 @@ describe('notes rendering', () => {
         await flushPromises();
         expect(saveFileMock).not.toHaveBeenCalled();
         expect(disk.get(first)).toBe('theirs');
+    });
+
+    async function openDocumentTabs(disk) {
+        listFilesMock.mockResolvedValue([...disk.keys()]);
+        getFileMock.mockImplementation(async (file) => (
+            disk.has(file) ? { contents: disk.get(file), text: '', error: '' } : { contents: '', text: '', error: 'missing' }
+        ));
+        saveFileMock.mockImplementation(async (file, content) => { disk.set(file, content); });
+        await importNotesModule();
+        for (const file of disk.keys()) {
+            document.querySelector(`[data-file="${file}"]`).click();
+            await flushPromises();
+            await flushPromises();
+        }
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        return mainEditorAdapter();
+    }
+
+    const tabTitles = () => [...document.querySelectorAll('.notes-doc-tab')].map((tab) => tab.title);
+    const selectedTabTitle = () => document.querySelector('.notes-doc-tab[aria-selected="true"]')?.title;
+
+    async function renameNote(from, name, disk) {
+        renameFileMock.mockImplementationOnce(async (oldPath, newPath) => {
+            disk.set(newPath, disk.get(oldPath));
+            disk.delete(oldPath);
+            listFilesMock.mockResolvedValue([...disk.keys()]);
+        });
+        getEventHandler('fileActionDialog')({ action: 'rename', filePath: from });
+        await flushPromises();
+        document.getElementById('notes-modal-input').value = name;
+        document.getElementById('notes-modal-create').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+    }
+
+    it('moves the tabs of renamed documents and keeps unsaved edits of the active one', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const editor = await openDocumentTabs(disk);
+
+        await renameNote(first, 'renamed.md', disk);
+        expect(tabTitles()).toEqual(['$NOTES/renamed.md', second]);
+        expect(selectedTabTitle()).toBe(second);
+        expect(editor.getValue()).toBe('second text');
+        await vi.waitFor(() => expect(watchNotesFilesMock.mock.calls.at(-1)[1].map((file) => file.path).sort())
+            .toEqual(['$NOTES/renamed.md', second]));
+
+        editor.typeText('mine ');
+        await renameNote(second, 'moved.md', disk);
+        expect(tabTitles()).toEqual(['$NOTES/renamed.md', '$NOTES/moved.md']);
+        expect(selectedTabTitle()).toBe('$NOTES/moved.md');
+        expect(editor.getValue()).toContain('mine');
+        expect(disk.get('$NOTES/moved.md')).toContain('mine');
+    });
+
+    it('closes the tab of a deleted clean document and activates the neighbouring tab', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const third = '$NOTES/third.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text'], [third, 'third text']]);
+        const editor = await openDocumentTabs(disk);
+        documentTab(second).click();
+        await flushPromises();
+        await flushPromises();
+        notesHistoryCurrentPositionMock.mockClear();
+
+        getEventHandler('fileActionDialog')({ action: 'delete', filePath: first });
+        await flushPromises();
+        document.getElementById('notes-delete-confirm').click();
+        await flushPromises();
+        await flushPromises();
+        expect(tabTitles()).toEqual([second, third]);
+        expect(editor.getValue()).toBe('second text');
+
+        getEventHandler('fileActionDialog')({ action: 'delete', filePath: second });
+        await flushPromises();
+        document.getElementById('notes-delete-confirm').click();
+        await flushPromises();
+        await flushPromises();
+        await flushPromises();
+        expect(tabTitles()).toEqual([third]);
+        expect(editor.getValue()).toBe('third text');
+        expect(notesHistoryCurrentPositionMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps a deleted document with unsaved edits open until it is recreated or discarded', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const editor = await openDocumentTabs(disk);
+        const banner = document.querySelector('.notes-doc-notice');
+
+        vi.useFakeTimers();
+        try {
+            editor.typeText('mine ');
+            disk.delete(second);
+            await getEventHandler('notesFileChanged')({ path: '/notes/second.md', keys: [second], deleted: true });
+            expect(documentTab(second).dataset.deleted).toBe('true');
+            expect(banner.hidden).toBe(false);
+            saveFileMock.mockClear();
+            editor.typeText('more ');
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(saveFileMock).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+
+        document.querySelector('.notes-doc-notice-keep').click();
+        await flushPromises();
+        await flushPromises();
+        expect(disk.get(second)).toBe(editor.getValue());
+        expect(documentTab(second).dataset.deleted).toBe('false');
+        expect(banner.hidden).toBe(true);
+
+        editor.typeText('again ');
+        disk.delete(second);
+        await getEventHandler('notesFileChanged')({ path: '/notes/second.md', keys: [second], deleted: true });
+        saveFileMock.mockClear();
+        document.querySelector('.notes-doc-notice-discard').click();
+        await flushPromises();
+        await flushPromises();
+        expect(saveFileMock).not.toHaveBeenCalled();
+        expect(tabTitles()).toEqual([first]);
+        expect(editor.getValue()).toBe('first text');
+    });
+
+    it('closes a clean background document when its file is deleted outside the app', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const disk = new Map([[first, 'first text'], [second, 'second text']]);
+        const editor = await openDocumentTabs(disk);
+
+        disk.delete(first);
+        await getEventHandler('notesFileChanged')({ path: '/notes/first.md', keys: [first], deleted: true });
+        await flushPromises();
+        expect(tabTitles()).toEqual([second]);
+        expect(editor.getValue()).toBe('second text');
     });
 
     it('keeps output from a run that continues while its document is in a background tab', async () => {

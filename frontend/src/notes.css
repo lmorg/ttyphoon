@@ -1763,8 +1763,14 @@ body {
     color: var(--red);
 }
 
-/* The active document changed on disk while it had unsaved edits. */
-.notes-view .notes-doc-conflict {
+.notes-view .notes-doc-tab[data-deleted="true"] .notes-doc-tab-name {
+    color: var(--red);
+    text-decoration: line-through;
+}
+
+/* The active document's file changed on disk or was deleted while it had
+   unsaved edits. */
+.notes-view .notes-doc-notice {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1775,18 +1781,18 @@ body {
     box-sizing: border-box;
 }
 
-.notes-view .notes-doc-conflict[hidden] {
+.notes-view .notes-doc-notice[hidden] {
     display: none;
 }
 
-.notes-view .notes-doc-conflict-message {
+.notes-view .notes-doc-notice-message {
     flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.notes-view .notes-doc-conflict button {
+.notes-view .notes-doc-notice button {
     flex: 0 0 auto;
     border: 1px solid rgba(var(--fg-rgb), 0.3);
     border-radius: 3px;
@@ -1796,7 +1802,7 @@ body {
     cursor: pointer;
 }
 
-.notes-view .notes-doc-conflict button:hover {
+.notes-view .notes-doc-notice button:hover {
     border-color: var(--accent);
     color: var(--accent);
 }
@@ -3391,7 +3397,7 @@ body {
 [data-log-maximized="true"] #notes-splitter,
 [data-log-maximized="true"] .notes-view .notes-tabs,
 [data-log-maximized="true"] .notes-view .notes-doc-tabs,
-[data-log-maximized="true"] .notes-view .notes-doc-conflict,
+[data-log-maximized="true"] .notes-view .notes-doc-notice,
 [data-log-maximized="true"] .notes-view .notes-editor-wrap,
 [data-log-maximized="true"] .notes-view .notes-hex-wrap,
 [data-log-maximized="true"] .notes-view .notes-preview-wrap,
@@ -3434,7 +3440,7 @@ body {
 [data-ai-maximized="true"] #notes-splitter,
 [data-ai-maximized="true"] .notes-view .notes-tabs,
 [data-ai-maximized="true"] .notes-view .notes-doc-tabs,
-[data-ai-maximized="true"] .notes-view .notes-doc-conflict,
+[data-ai-maximized="true"] .notes-view .notes-doc-notice,
 [data-ai-maximized="true"] .notes-view .notes-editor-wrap,
 [data-ai-maximized="true"] .notes-view .notes-hex-wrap,
 [data-ai-maximized="true"] .notes-view .notes-preview-wrap,

@@ -62,4 +62,19 @@ describe('createNotesDocumentRegistry', () => {
             vi.useRealTimers();
         }
     });
+
+    it('moves a document to its new path, closing a document it replaces', () => {
+        const onClose = vi.fn();
+        const registry = createNotesDocumentRegistry({ onClose });
+        const doc = registry.open('$PROJECT/a.md', { project: '/work' });
+        const replaced = registry.open('$PROJECT/b.md', { project: '/work' });
+
+        registry.move(doc, '$PROJECT/b.md');
+
+        expect(onClose).toHaveBeenCalledExactlyOnceWith(replaced);
+        expect(doc).toMatchObject({ path: '$PROJECT/b.md', project: '/work', key: '/work/b.md' });
+        expect(registry.get('$PROJECT/b.md', '/work')).toBe(doc);
+        expect(registry.has('$PROJECT/a.md', '/work')).toBe(false);
+        expect(registry.size).toBe(1);
+    });
 });

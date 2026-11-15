@@ -40,6 +40,10 @@ returns, causing the frontend to reload a path that no longer exists.
   Edit mode and restore its saved line through the live-surface navigation helpers
   from ADR 0021. If no entry remains, keep the editor empty. Deleting another note
   leaves the open document unchanged.
+- With several documents open (ADR 0100), deleting the open note activates its
+  neighbouring tab, and the history position is used only when no tabs remain.
+  Renames move every open document under the renamed path, not just the active
+  one.
 - Reuse asynchronous `loadFile` and indexed list refreshes rather than adding
   synchronous filesystem reads or full rescans (ADR 0058).
 

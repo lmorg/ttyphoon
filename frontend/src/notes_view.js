@@ -59,6 +59,23 @@ export function createNotesView({ host, before = null } = {}) {
             }
             return index;
         },
+        // A document moved to a new key, as when its file is renamed.
+        renameDocument(oldKey, newKey) {
+            if (!oldKey || !newKey || oldKey === newKey) {
+                return;
+            }
+            if (this.tabs.includes(oldKey)) {
+                this.removeTab(newKey);
+                this.tabs[this.tabs.indexOf(oldKey)] = newKey;
+            }
+            if (documentStates.has(oldKey)) {
+                documentStates.set(newKey, documentStates.get(oldKey));
+                documentStates.delete(oldKey);
+            }
+            if (this.shownDocumentKey === oldKey) {
+                this.shownDocumentKey = newKey;
+            }
+        },
         contains(node) {
             return Boolean(node) && root.contains(node);
         },

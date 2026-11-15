@@ -29,4 +29,20 @@ describe('createNotesView', () => {
         expect(view.removeTab('missing')).toBe(-1);
         expect(view.tabs).toEqual(['a', 'b']);
     });
+
+    it('moves the tab and remembered state of a renamed document to its new key', () => {
+        const view = createNotesView();
+        view.addTab('a');
+        view.addTab('b');
+        view.addTab('c');
+        view.rememberDocument('a', { viewMode: 'editor' });
+        view.shownDocumentKey = 'a';
+
+        view.renameDocument('a', 'c');
+
+        expect(view.tabs).toEqual(['c', 'b']);
+        expect(view.recallDocument('c')).toEqual({ viewMode: 'editor' });
+        expect(view.recallDocument('a')).toBeNull();
+        expect(view.shownDocumentKey).toBe('c');
+    });
 });

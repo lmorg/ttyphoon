@@ -667,6 +667,8 @@ const elements = {
 const state = {
     files: [],
     mutatingFile: '',
+    // A folder being renamed; changes to files under it are not external.
+    mutatingFolder: '',
     suspendDocumentCacheSave: false,
     viewTainted: false,
     renderTimer: null,
@@ -994,6 +996,7 @@ function renderNotesTabs(view) {
         tab.dataset.docKey = doc.key;
         tab.dataset.dirty = String(doc.dirty === true);
         tab.dataset.conflicted = String(doc.conflicted === true);
+        tab.dataset.deleted = String(doc.deleted === true);
         tab.title = doc.path;
         const label = document.createElement('span');
         label.className = 'notes-doc-tab-name';
@@ -1006,15 +1009,70 @@ function renderNotesTabs(view) {
         tab.append(label, close);
         return tab;
     }));
-    renderNotesConflict(view);
+    renderNotesNotice(view);
 }
 
-function renderNotesConflict(view) {
+const NOTES_DOCUMENT_NOTICES = {
+    deleted: {
+        message: (name) => `${name} was deleted while it had unsaved edits.`,
+        keep: 'Recreate file',
+        discard: 'Discard edits',
+    },
+    conflicted: {
+        message: (name) => `${name} changed on disk while it had unsaved edits.`,
+        keep: 'Keep my edits',
+        discard: 'Load disk version',
+    },
+};
+
+function notesDocumentNotice(doc) {
+    if (doc.deleted) {
+        return 'deleted';
+    }
+    return doc.conflicted ? 'conflicted' : '';
+}
+
+// Explains why the active document is not being saved, and offers the
+// choices.
+function renderNotesNotice(view) {
     const doc = activeNotesDocument;
-    view.parts.docConflict.hidden = !doc.conflicted;
-    view.parts.docConflictMessage.textContent = doc.conflicted
-        ? `${getPathFileName(doc.path)} changed on disk while it had unsaved edits.`
-        : '';
+    const notice = notesDocumentNotice(doc);
+    const text = NOTES_DOCUMENT_NOTICES[notice];
+    view.parts.docNotice.hidden = !text;
+    view.parts.docNotice.dataset.notice = notice;
+    view.parts.docNoticeMessage.textContent = text ? text.message(getPathFileName(doc.path)) : '';
+    view.parts.docNoticeKeep.textContent = text?.keep || '';
+    view.parts.docNoticeDiscard.textContent = text?.discard || '';
+}
+
+// A conflicted or deleted document keeps its unsaved edits until the user
+// chooses what to do with them, so nothing saves it automatically.
+function savesNotesDocumentAutomatically(doc) {
+    return !doc.conflicted && !doc.deleted;
+}
+
+// The file of an open document was deleted. A clean document's tab closes;
+// one with unsaved edits stays open, marked deleted (ADR 0100 question 12).
+async function handleNotesDocumentDeleted(doc) {
+    if (!isNotesDocumentOpen(doc)) {
+        return;
+    }
+    if (doc.dirty) {
+        clearTimeout(doc.autosaveTimer);
+        doc.autosaveTimer = null;
+        doc.conflicted = false;
+        doc.deleted = true;
+        renderNotesTabs(mainView);
+        if (doc === activeNotesDocument) {
+            setStatus(`${doc.path} was deleted: recreate it or discard your edits`, true);
+        }
+        return;
+    }
+    if (isNotesDocumentInTab(doc)) {
+        await closeNotesTab(mainView, doc.key, { discard: true });
+    } else if (doc !== activeNotesDocument) {
+        notesDocuments.close(doc);
+    }
 }
 
 // The file of a document with unsaved edits changed on disk. Autosave stops
@@ -1029,6 +1087,8 @@ function markNotesDocumentConflicted(doc) {
     }
 }
 
+// Saves the document's edits over the version on disk, or recreates its
+// deleted file.
 async function keepNotesDocumentEdits(doc = activeNotesDocument) {
     doc.conflicted = false;
     renderNotesTabs(mainView);
@@ -1047,11 +1107,16 @@ async function loadNotesDocumentFromDisk(doc = activeNotesDocument) {
     await reloadActiveNotesDocument();
 }
 
+function isNotesPathMutating(path) {
+    return path === state.mutatingFile
+        || Boolean(state.mutatingFolder && path.startsWith(`${state.mutatingFolder}${PRIMARY_PATH_SEPARATOR}`));
+}
+
 // A file changed on disk. A clean document reloads: the active one now, a
 // background one when it is next shown, as showing a tab reads the file. A
 // document with unsaved edits is conflicted unless the disk text matches.
 async function handleNotesDocumentChangedOnDisk(doc) {
-    if (!doc?.path || doc.path === state.mutatingFile) {
+    if (!doc?.path || isNotesPathMutating(doc.path)) {
         return;
     }
     if (!doc.dirty) {
@@ -1105,10 +1170,11 @@ async function activateNotesTab(view, key) {
 
 // Closing a tab saves the document's unsaved edits (keeping the tab if that
 // fails) and closes the document unless another tab shows it. Closing the
-// active tab activates its neighbour.
-async function closeNotesTab(view, key) {
+// active tab activates its neighbour. The edits of a deleted document, or of
+// any document with discard, are dropped.
+async function closeNotesTab(view, key, { discard = false } = {}) {
     const doc = findNotesDocument(key);
-    if (doc?.dirty) {
+    if (doc?.dirty && !discard && !doc.deleted) {
         clearTimeout(doc.autosaveTimer);
         doc.autosaveTimer = null;
         if (!await saveFile(doc)) {
@@ -1140,7 +1206,7 @@ async function closeBackgroundNotesTabs() {
     const docs = mainView.tabs.map(findNotesDocument).filter((doc) => doc && doc !== activeNotesDocument);
     mainView.tabs = [];
     for (const doc of docs) {
-        if (doc.dirty) {
+        if (doc.dirty && savesNotesDocumentAutomatically(doc)) {
             await saveFile(doc);
         }
         notesDocuments.close(doc);
@@ -1160,12 +1226,16 @@ mainView.parts.docTabs.addEventListener('click', (event) => {
     }
 });
 
-mainView.parts.docConflictKeep.addEventListener('click', () => {
+mainView.parts.docNoticeKeep.addEventListener('click', () => {
     void keepNotesDocumentEdits();
 });
 
-mainView.parts.docConflictReload.addEventListener('click', () => {
-    void loadNotesDocumentFromDisk();
+mainView.parts.docNoticeDiscard.addEventListener('click', () => {
+    if (activeNotesDocument.deleted) {
+        void closeNotesTab(mainView, activeNotesDocument.key, { discard: true });
+    } else {
+        void loadNotesDocumentFromDisk();
+    }
 });
 
 mainView.parts.docTabs.addEventListener('auxclick', (event) => {
@@ -5012,12 +5082,12 @@ function scheduleAutoSave() {
     if (doc.autosaveTimer) {
         clearTimeout(doc.autosaveTimer);
     }
-    if (doc.conflicted) {
+    if (!savesNotesDocumentAutomatically(doc)) {
         return;
     }
     doc.autosaveTimer = setTimeout(() => {
         doc.autosaveTimer = null;
-        if (doc === activeNotesDocument && !doc.conflicted) {
+        if (doc === activeNotesDocument && savesNotesDocumentAutomatically(doc)) {
             saveFile();
         }
     }, 1000);
@@ -8631,8 +8701,9 @@ async function loadFile(file, options = {}) {
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
         // Background tabs are kept saved, so save pending edits now. A
-        // conflicted document keeps its edits until the user chooses.
-        if (state.dirty && !previousDocument.conflicted) {
+        // conflicted or deleted document keeps its edits until the user
+        // chooses.
+        if (state.dirty && savesNotesDocumentAutomatically(previousDocument)) {
             clearTimeout(state.autosaveTimer);
             state.autosaveTimer = null;
             await saveFile();
@@ -8740,8 +8811,10 @@ async function loadFile(file, options = {}) {
         }
 
         const reopenedDocument = notesDocuments.get(file, project);
-        // A background tab whose save failed keeps its unsaved edits.
-        const keepsUnsavedEdits = Boolean(reopenedDocument?.dirty) && reopenedDocument !== previousDocument;
+        // A background tab whose save failed keeps its unsaved edits, as does
+        // the active document when reloaded after a rename.
+        const keepsUnsavedEdits = Boolean(reopenedDocument?.dirty)
+            && (reopenedDocument !== previousDocument || Boolean(options?.keepUnsavedEdits));
         loadedDocument = activateNotesDocument(file, { project });
         const fileUri = await resolveNotesFileUri(file);
         if (isStale()) {
@@ -9031,6 +9104,10 @@ async function saveFile(doc = activeNotesDocument) {
         if (!isNotesDocumentOpen(doc)) {
             return true;
         }
+        if (doc.deleted) {
+            doc.deleted = false;
+            renderNotesTabs(mainView);
+        }
         if (doc.lspOpenFile === file) {
             await NotesLspSaveDocument(file);
         }
@@ -9142,14 +9219,19 @@ async function confirmDelete() {
 
     const fileToDelete = state.deletingFile;
     const fileName = getPathFileName(fileToDelete);
-    const deletingCurrentFile = state.currentFile === fileToDelete;
-    const fileUri = state.currentFile === fileToDelete
+    const project = await GetCurrentProject();
+    const deletedKey = notesDocumentKey(fileToDelete, project);
+    const openDocuments = notesDocuments.list().filter((doc) => doc.key === deletedKey);
+    // The active document closes here unless it keeps unsaved edits; other
+    // open documents of the file are handled like an external delete.
+    const deletingCurrentFile = activeNotesDocument.key === deletedKey && !state.dirty;
+    const fileUri = deletingCurrentFile
         ? state.currentFileUri
         : await resolveNotesFileUri(fileToDelete);
 
     state.mutatingFile = fileToDelete;
     try {
-        if (state.currentFile === fileToDelete) {
+        if (deletingCurrentFile) {
             await closeOpenLspDocument();
             await closeCurrentTyposDocument();
         }
@@ -9157,7 +9239,13 @@ async function confirmDelete() {
         if (fileUri) {
             lspDiagnosticsStore.delete(fileUri);
         }
-        if (state.currentFile === fileToDelete) {
+        for (const doc of openDocuments) {
+            if (!deletingCurrentFile || doc !== activeNotesDocument) {
+                await handleNotesDocumentDeleted(doc);
+            }
+        }
+        const tabIndex = mainView.tabs.indexOf(deletedKey);
+        if (deletingCurrentFile) {
             closeActiveNotesDocument();
             state.lspHoverLastKey = '';
             emitCurrentFileName();
@@ -9171,8 +9259,13 @@ async function confirmDelete() {
         closeDeletePrompt();
         await refreshFiles({ skipHistoryRestore: true });
         if (deletingCurrentFile) {
-            const entry = await NotesHistoryCurrentPosition();
-            if (entry?.file && entry.file !== fileToDelete) {
+            // The next open tab takes over; with none, the surviving history
+            // position (ADR 0064).
+            const neighbour = findNotesDocument(mainView.tabs[Math.min(tabIndex, mainView.tabs.length - 1)]);
+            const entry = neighbour ? null : await NotesHistoryCurrentPosition();
+            if (neighbour) {
+                await loadFile(neighbour.path);
+            } else if (entry?.file && entry.file !== fileToDelete) {
                 await loadFile(entry.file);
                 setViewMode(editViewModeForCurrentFileType());
                 await ensureMonacoVisibleAndLaidOut();
@@ -12720,13 +12813,27 @@ async function createNewFile() {
 
         const oldPath = state.renamingFile;
         const oldPrefix = `${oldPath}${PRIMARY_PATH_SEPARATOR}`;
-        const renamingCurrent = state.currentFile === oldPath
-            || (state.renamingFolder && state.currentFile.startsWith(oldPrefix));
-        const renamedCurrent = renamingCurrent ? fileName + state.currentFile.slice(oldPath.length) : '';
+        const renamingFolder = Boolean(state.renamingFolder);
+        const project = await GetCurrentProject();
+        const oldKey = notesDocumentKey(oldPath, project);
+        // Open documents of the renamed file, or of files in the renamed
+        // folder, follow it to the new path (ADR 0100 question 12).
+        const renamedDocuments = notesDocuments.list().filter((doc) => doc.path.startsWith(oldPath)
+            && (doc.key === oldKey || (renamingFolder && doc.key.startsWith(`${oldKey}${PRIMARY_PATH_SEPARATOR}`))));
+        const renamingCurrent = renamedDocuments.includes(activeNotesDocument);
         state.mutatingFile = renamingCurrent ? state.currentFile : oldPath;
+        state.mutatingFolder = renamingFolder ? oldPath : '';
         try {
+            // Unsaved edits are saved so they move with the file.
+            for (const doc of renamedDocuments) {
+                if (doc.dirty && savesNotesDocumentAutomatically(doc)) {
+                    clearTimeout(doc.autosaveTimer);
+                    doc.autosaveTimer = null;
+                    await saveFile(doc);
+                }
+            }
             await RenameFile(oldPath, fileName);
-            if (state.renamingFolder) {
+            if (renamingFolder) {
                 for (const key of Object.keys(state.expandedFolders)) {
                     if (key === oldPath || key.startsWith(oldPrefix)) {
                         state.expandedFolders[fileName + key.slice(oldPath.length)] = state.expandedFolders[key];
@@ -12735,8 +12842,19 @@ async function createNewFile() {
                 }
                 saveProjectCache();
             }
+            for (const doc of renamedDocuments) {
+                await settleLspDocumentCloses(releaseLspDocument(doc));
+                const previousKey = doc.key;
+                doc.uri = '';
+                await notesDocuments.move(doc, fileName + doc.path.slice(oldPath.length));
+                mainView.renameDocument(previousKey, doc.key);
+            }
+            if (renamedDocuments.length > 0) {
+                syncWatchedNotesFiles();
+                renderNotesTabs(mainView);
+            }
             if (renamingCurrent) {
-                await loadFile(renamedCurrent);
+                await loadFile(activeNotesDocument.path, { keepUnsavedEdits: true });
             }
             await refreshFiles({ skipHistoryRestore: true });
             closeNewFilePrompt();
@@ -12746,6 +12864,7 @@ async function createNewFile() {
             console.error(err);
         } finally {
             state.mutatingFile = '';
+            state.mutatingFolder = '';
         }
         return;
     }
@@ -12909,13 +13028,17 @@ async function reloadActiveNotesDocument() {
     }
 }
 
-// The event names the open documents of the changed file. Without names, the
-// change is to the active document.
+// The event names the open documents of the changed or deleted file. Without
+// names, the change is to the active document.
 EventsOn("notesFileChanged", async (event) => {
     const keys = Array.isArray(event?.keys) ? event.keys : null;
     const docs = keys ? keys.map(findNotesDocument).filter(Boolean) : [activeNotesDocument];
     for (const doc of docs) {
-        await handleNotesDocumentChangedOnDisk(doc);
+        if (event?.deleted && doc.path && !isNotesPathMutating(doc.path)) {
+            await handleNotesDocumentDeleted(doc);
+        } else {
+            await handleNotesDocumentChangedOnDisk(doc);
+        }
     }
 });
 
