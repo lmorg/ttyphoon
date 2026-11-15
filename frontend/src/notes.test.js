@@ -540,8 +540,16 @@ function documentTab(file) {
     return [...document.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file) || null;
 }
 
+// Tabs close from their right-click menu.
+function closeTabElement(tab) {
+    showLocalMenuMock.mockClear();
+    tab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const menu = showLocalMenuMock.mock.calls[0][0];
+    menu.onSelect(menu.options.indexOf('Close tab'));
+}
+
 async function closeDocumentTab(file) {
-    documentTab(file).querySelector('.notes-doc-tab-close').click();
+    closeTabElement(documentTab(file));
     await flushPromises();
     await flushPromises();
 }
@@ -3995,6 +4003,8 @@ describe('notes rendering', () => {
         expect(saveFileMock).toHaveBeenCalledWith(first, 'typed first text', expect.any(String));
         expect([...document.querySelectorAll('.notes-doc-tab')].map((tab) => [tab.title, tab.getAttribute('aria-selected')]))
             .toEqual([[first, 'false'], [second, 'true']]);
+        // Tabs close from their right-click menu, so they have no close button.
+        expect(document.querySelector('.notes-doc-tabs button')).toBeNull();
         expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(first);
 
         documentTab(first).click();
@@ -4414,8 +4424,7 @@ describe('notes rendering', () => {
         const [leftRoot, rightRoot] = notesViewRoots();
 
         // Closing the left view's tab leaves the document open on the right.
-        [...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second)
-            .querySelector('.notes-doc-tab-close').click();
+        closeTabElement([...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second));
         await flushPromises();
         await flushPromises();
         expect(viewTabTitles(leftRoot)).toEqual([first]);
@@ -4483,8 +4492,7 @@ describe('notes rendering', () => {
         expect(notesTyposCloseDocumentMock).not.toHaveBeenCalledWith(second);
 
         // Once no view shows it, its typos registration is released.
-        [...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second)
-            .querySelector('.notes-doc-tab-close').click();
+        closeTabElement([...leftRoot.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second));
         await vi.waitFor(() => expect(notesTyposCloseDocumentMock).toHaveBeenCalledWith(second));
         expect(viewTabTitles(rightRoot)).toContain(second);
     });
@@ -4497,8 +4505,7 @@ describe('notes rendering', () => {
         await splitRight();
         const [leftRoot, rightRoot] = notesViewRoots();
         const closeIn = async (root, file) => {
-            [...root.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file)
-                .querySelector('.notes-doc-tab-close').click();
+            closeTabElement([...root.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === file));
             await flushPromises();
             await flushPromises();
         };

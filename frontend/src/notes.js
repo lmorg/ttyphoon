@@ -1198,7 +1198,7 @@ function renderNotesTabs(view) {
     strip.replaceChildren(...docs.map((doc) => {
         const name = getPathFileName(doc.path);
         const tab = document.createElement('div');
-        tab.className = 'notes-doc-tab';
+        tab.className = 'tab notes-doc-tab';
         tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-selected', String(doc === shown));
         tab.dataset.docKey = doc.key;
@@ -1210,12 +1210,7 @@ function renderNotesTabs(view) {
         const label = document.createElement('span');
         label.className = 'notes-doc-tab-name';
         label.textContent = name;
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'notes-doc-tab-close';
-        close.setAttribute('aria-label', `Close ${name}`);
-        close.textContent = '×';
-        tab.append(label, close);
+        tab.append(label);
         return tab;
     }));
     renderNotesNotice(view);
@@ -1833,12 +1828,7 @@ function bindNotesViewTabs(view) {
 
     view.parts.docTabs.addEventListener('click', (event) => {
         const tab = event.target.closest('.notes-doc-tab');
-        if (!tab) {
-            return;
-        }
-        if (event.target.closest('.notes-doc-tab-close')) {
-            void closeNotesTab(view, tab.dataset.docKey);
-        } else {
+        if (tab) {
             void activateNotesTab(view, tab.dataset.docKey);
         }
     });
