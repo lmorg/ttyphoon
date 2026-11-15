@@ -358,6 +358,24 @@ as `lspOpenFile === currentFile`.
   are pixel-identical, and computed styles match except the tab row's
   background, which composites to the same colour.
 
+*Done (Stage 6, task 2):*
+
+- The view owns its Monaco editor (`view.editor`, created lazily into the
+  view's editor host). The module-level `monacoMainEditor` is gone.
+- Each view keeps, per document key, the view mode and Monaco's view state
+  (cursor, selection and scroll) it last showed (question 15).
+  `loadFile` records them for the outgoing document and restores them for
+  the incoming one. The view's remembered mode overrides the persisted
+  document cache, which still supplies the mode for a document the view has
+  not shown, and is still written so it survives restarts.
+- State is recorded only once a load has put the document's content in the
+  editor (`view.shownDocumentKey`), so an interrupted load cannot store one
+  file's cursor under another. Loads that ask to skip the cache (opening a
+  project-search result) skip it too, and callers that jump to a line after
+  loading still win.
+- Preview scroll positions are not restored; the preview re-renders on
+  activation.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

@@ -127,6 +127,14 @@ export function createFakeMonacoAdapter(container, options = {}) {
             }
             return matches;
         },
+        saveViewState() {
+            return { selection: { ...selection } };
+        },
+        restoreViewState(viewState) {
+            if (viewState?.selection) {
+                selection = { ...viewState.selection };
+            }
+        },
         revealOffset() {},
         getCursorViewportPoint: () => ({ x: 0, y: 0 }),
         focus() {

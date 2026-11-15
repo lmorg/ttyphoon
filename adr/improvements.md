@@ -66,7 +66,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] LSP responses, rendering, table queries and Jupyter output capture their document and paint only if it is still shown. Tests close or replace the document mid-await
   - Stage 6: `NotesView`
     - [x] Create the editor area (tab strip host, Monaco host, preview/structured-view host) from a `NotesView` factory and template, with lookups scoped to the view root; the existing view is created through it. Still one view
-    - [ ] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (Q15: view mode per view)
+    - [x] Per-view Monaco editor instance, saving and restoring cursor, scroll and view mode per document (Q15: view mode per view)
     - [ ] Global chrome (tools panel, LSP hover/completion overlays, status bar) follows `focusedView()` (Q10: Find query per document)
   - Stage 7: tabs
     - [ ] One Monaco model per `NotesDocument`: the adapter swaps models with `setModel()` when the active tab changes, and the document's buffer attaches to its own model

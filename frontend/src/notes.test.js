@@ -3829,6 +3829,35 @@ describe('notes rendering', () => {
         scrollSpy.mockRestore();
     });
 
+    it('restores the view mode and editor cursor the view last used for a document', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: `${file}\nline two\nline three`, text: '', error: '' }));
+        getDocumentCacheMock.mockResolvedValue({ DocumentTab: '' });
+
+        await importNotesModule();
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        document.querySelector('.notes-tab-editor').click();
+        await vi.waitFor(() => expect(createMonacoAdapterMock).toHaveBeenCalled());
+        mainEditorAdapter().moveCursor(first.length + 3);
+
+        document.querySelector(`[data-file="${second}"]`).click();
+        await flushPromises();
+        await flushPromises();
+        expect(document.querySelector('.notes-tab-viewer').getAttribute('aria-selected')).toBe('true');
+        mainEditorAdapter().moveCursor(1);
+
+        document.querySelector(`[data-file="${first}"]`).click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(document.querySelector('.notes-tab-editor').getAttribute('aria-selected')).toBe('true');
+        expect(mainEditorAdapter().getSelectionOffsets().start).toBe(first.length + 3);
+    });
+
     it.each(['viewer', 'editor'])('preserves the cached %s tab when returning to a workspace with a saved cursor position', async (mode) => {
         const file = '$NOTES/guide.md';
         const contents = 'one\ntwo\nthree\nfour';

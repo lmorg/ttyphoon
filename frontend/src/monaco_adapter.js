@@ -1633,6 +1633,16 @@ export async function createMonacoAdapter(container, options = {}) {
             });
         },
 
+        saveViewState() {
+            return editor.saveViewState();
+        },
+
+        restoreViewState(viewState) {
+            if (viewState) {
+                editor.restoreViewState(viewState);
+            }
+        },
+
         revealOffset(offset) {
             const pos = model.getPositionAt(Math.max(0, Math.min(Number(offset) || 0, model.getValueLength())));
             editor.revealPositionInCenter(pos);

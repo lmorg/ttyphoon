@@ -22,14 +22,35 @@ export function createNotesView({ host, before = null } = {}) {
         host.insertBefore(root, before);
     }
 
+    // What this view last showed for each document, keyed by document key:
+    // view mode and editor view state (cursor and scroll). A view keeps its
+    // own, so two views of one document can differ (ADR 0100 question 15).
+    const documentStates = new Map();
+
     return {
         id,
         root,
         parts,
+        // The view's Monaco adapter, created lazily into parts.monacoEditor.
+        editor: null,
+        editorInit: null,
+        // Key of the document whose content the view's editor currently holds.
+        shownDocumentKey: '',
         contains(node) {
             return Boolean(node) && root.contains(node);
         },
+        rememberDocument(key, data) {
+            if (key) {
+                documentStates.set(key, { ...documentStates.get(key), ...data });
+            }
+        },
+        recallDocument(key) {
+            return documentStates.get(key) || null;
+        },
         destroy() {
+            this.editor?.dispose?.();
+            this.editor = null;
+            documentStates.clear();
             root.remove();
         },
     };

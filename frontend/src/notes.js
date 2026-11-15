@@ -46,7 +46,7 @@ import { captureRenderedElement, captureRenderedElements, createRenderedSelectio
 import { attachVimMode } from './vim-mode';
 import { attachSpellCheck, createSpellCheckEngine } from './spellcheck';
 import { createDocumentBuffer } from './notes_document_buffer';
-import { createNotesDocument, createNotesDocumentRegistry } from './notes_document';
+import { createNotesDocument, createNotesDocumentRegistry, notesDocumentKey } from './notes_document';
 import {
     LSP_CHANGE_DEBOUNCE_MS,
     applyLspSpellCheckExclusions,
@@ -774,7 +774,6 @@ const AI_BOTTOM_THRESHOLD_PX = 24;
 const AI_BOTTOM_CHASE_MS = 400;
 const NOTE_LOCATIONS = ['$GLOBAL', '$NOTES', '$PROJECT'];
 
-let monacoMainEditor = null;
 const mainDocument = createDocumentBuffer();
 
 // Open documents (ADR 0100). Notes still shows one document at a time, so
@@ -844,7 +843,6 @@ Object.defineProperties(state, {
         set: (value) => { activeNotesDocument[field] = value; },
     }])),
 });
-let monacoMainEditorInit = null;
 let latestWindowStyle = null;
 let aiPromptJumpRefreshTimer = null;
 let aiPromptJumpRefreshDeadline = 0;
@@ -876,7 +874,7 @@ function scheduleAIScrollButtonUpdate() {
 // Monaco is created lazily the first time the editor becomes visible. Until
 // then mainDocument holds the text (e.g. for a file opened in preview).
 function isMonacoActive() {
-    return monacoMainEditor !== null;
+    return mainView.editor !== null;
 }
 
 function isGitDiffActive() {
@@ -1011,22 +1009,22 @@ function getMonacoTypographyOptions() {
 }
 
 async function ensureMonacoMainEditor() {
-    if (!elements.monacoEditor || monacoMainEditor) {
+    if (!elements.monacoEditor || mainView.editor) {
         return;
     }
 
-    // monacoMainEditor is only assigned after an await, so concurrent callers must
+    // mainView.editor is only assigned after an await, so concurrent callers must
     // share one creation or Monaco is created twice on the same container.
-    if (!monacoMainEditorInit) {
-        monacoMainEditorInit = createMonacoMainEditor().finally(() => {
-            monacoMainEditorInit = null;
+    if (!mainView.editorInit) {
+        mainView.editorInit = createMonacoMainEditor().finally(() => {
+            mainView.editorInit = null;
         });
     }
 
     try {
-        await monacoMainEditorInit;
+        await mainView.editorInit;
     } catch (err) {
-        // A failed boot leaves monacoMainEditor null and silently degrades every
+        // A failed boot leaves mainView.editor null and silently degrades every
         // Monaco-dependent path, so surface it rather than reject unhandled.
         console.error('Monaco editor creation failed:', err);
     }
@@ -1035,7 +1033,7 @@ async function ensureMonacoMainEditor() {
 async function createMonacoMainEditor() {
     const typography = getMonacoTypographyOptions();
 
-    monacoMainEditor = await createMonacoAdapter(elements.monacoEditor, {
+    mainView.editor = await createMonacoAdapter(elements.monacoEditor, {
         value: mainDocument.getValue(),
         language: state.editorLanguage || 'plaintext',
         highlightJs: hljs,
@@ -1079,28 +1077,28 @@ async function createMonacoMainEditor() {
         onEscape: closeOpenLspTooltips,
     });
 
-    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
+    mainView.editor.setWordWrap(Boolean(state.markdownWrapMode));
     if (latestWindowStyle?.colors) {
-        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+        mainView.editor.applyTheme(latestWindowStyle.colors);
     }
 
     // Monaco boot can race against file loading, so the buffer hands over
     // whatever text it holds now.
-    mainDocument.attachView(monacoMainEditor);
+    mainDocument.attachView(mainView.editor);
 
-    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
-    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
+    mainView.editor.setTypography(getMonacoTypographyOptions());
     const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
     if (Array.isArray(spellcheckMisspellings)) {
-        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+        mainView.editor.setTyposMisspellings(spellcheckMisspellings);
     }
-    monacoMainEditor.layout();
+    mainView.editor.layout();
 
     requestAnimationFrame(() => {
         if (!isMonacoActive()) {
             return;
         }
-        monacoMainEditor.layout();
+        mainView.editor.layout();
     });
 }
 
@@ -1117,10 +1115,10 @@ function scheduleMonacoRelayout() {
         if (!isMonacoActive()) {
             return;
         }
-        monacoMainEditor.layout();
+        mainView.editor.layout();
         requestAnimationFrame(() => {
             if (isMonacoActive()) {
-                monacoMainEditor.layout();
+                mainView.editor.layout();
             }
         });
     });
@@ -1135,18 +1133,18 @@ async function ensureMonacoVisibleAndLaidOut() {
         return;
     }
 
-    monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
-    monacoMainEditor.setWordWrap(Boolean(state.markdownWrapMode));
-    monacoMainEditor.setTypography(getMonacoTypographyOptions());
+    mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
+    mainView.editor.setWordWrap(Boolean(state.markdownWrapMode));
+    mainView.editor.setTypography(getMonacoTypographyOptions());
     const spellcheckMisspellings = notesSpellCheckHandle?.getMisspellings?.();
     if (Array.isArray(spellcheckMisspellings)) {
-        monacoMainEditor.setTyposMisspellings(spellcheckMisspellings);
+        mainView.editor.setTyposMisspellings(spellcheckMisspellings);
     }
     if (latestWindowStyle?.colors) {
-        monacoMainEditor.applyTheme(latestWindowStyle.colors);
+        mainView.editor.applyTheme(latestWindowStyle.colors);
     }
 
-    monacoMainEditor.layout();
+    mainView.editor.layout();
     scheduleMonacoRelayout();
 }
 
@@ -1381,13 +1379,13 @@ function renderEditorDecorations() {
         return;
     }
     renderLspEditorDecorations();
-    monacoMainEditor.layout();
+    mainView.editor.layout();
 }
 
 function refreshEditorLanguage(file, content) {
     state.editorLanguage = inferEditorLanguage(file, content);
     if (isMonacoActive()) {
-        monacoMainEditor.setLanguage(state.editorLanguage || 'plaintext');
+        mainView.editor.setLanguage(state.editorLanguage || 'plaintext');
     }
     renderEditorDecorations();
 }
@@ -4587,7 +4585,7 @@ function updateMarkdownTableOfContents() {
     hideLspHoverTooltip();
     hideLspCompletion();
     if (isMonacoActive()) {
-        monacoMainEditor.revealOffset(0);
+        mainView.editor.revealOffset(0);
     }
     setDirty(true);
     scheduleRender();
@@ -4710,7 +4708,7 @@ function buildLineIndentationEdit(source, start, end, indentation, outdent = fal
 }
 
 function shouldMonacoTabIndent() {
-    const selection = monacoMainEditor?.getSelectionOffsets?.();
+    const selection = mainView.editor?.getSelectionOffsets?.();
     const cursor = Number(selection?.start) || 0;
     const source = getMainEditorValue();
     const lineStart = source.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
@@ -4723,16 +4721,16 @@ async function applyMonacoTabIndent() {
         return;
     }
 
-    const selection = monacoMainEditor.getSelectionOffsets();
+    const selection = mainView.editor.getSelectionOffsets();
     const start = Number(selection?.start) || 0;
     const end = Number(selection?.end) || start;
     const indentation = await getIndentationString();
 
     hideLspCompletion();
-    monacoMainEditor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
+    mainView.editor.replaceRange(start, end, indentation, 'notes-monaco-tab-indent');
     const next = start + indentation.length;
-    monacoMainEditor.setSelectionOffsets(next, next);
-    monacoMainEditor.focus();
+    mainView.editor.setSelectionOffsets(next, next);
+    mainView.editor.focus();
 }
 
 async function applyMonacoLineIndentationForSelection(outdent = false) {
@@ -4740,7 +4738,7 @@ async function applyMonacoLineIndentationForSelection(outdent = false) {
         return false;
     }
 
-    const selection = monacoMainEditor.getSelectionOffsets();
+    const selection = mainView.editor.getSelectionOffsets();
     const start = Number(selection?.start) || 0;
     const end = Number(selection?.end) || start;
     if (end <= start) {
@@ -4754,9 +4752,9 @@ async function applyMonacoLineIndentationForSelection(outdent = false) {
     }
 
     hideLspCompletion();
-    monacoMainEditor.replaceRange(edit.start, edit.end, edit.text, outdent ? 'notes-monaco-shift-tab-outdent' : 'notes-monaco-tab-indent-lines');
-    monacoMainEditor.setSelectionOffsets(edit.selectionStart, edit.selectionEnd);
-    monacoMainEditor.focus();
+    mainView.editor.replaceRange(edit.start, edit.end, edit.text, outdent ? 'notes-monaco-shift-tab-outdent' : 'notes-monaco-tab-indent-lines');
+    mainView.editor.setSelectionOffsets(edit.selectionStart, edit.selectionEnd);
+    mainView.editor.focus();
     return true;
 }
 
@@ -5073,7 +5071,7 @@ function focusActiveEditorForViewMode() {
         }
 
         if (isMonacoActive()) {
-            monacoMainEditor.focus();
+            mainView.editor.focus();
         }
     }, 0);
 }
@@ -5262,7 +5260,7 @@ function setEditorWrapMode(enabled) {
     state.markdownWrapMode = wrapEnabled;
     elements.editorShell.dataset.wrapMode = wrapEnabled ? 'true' : 'false';
     if (isMonacoActive()) {
-        monacoMainEditor.setWordWrap(wrapEnabled);
+        mainView.editor.setWordWrap(wrapEnabled);
     }
     if (isGitDiffActive()) {
         notesGitDiffAdapter.setWordWrap(wrapEnabled);
@@ -6585,6 +6583,20 @@ async function loadProjectCache(options = {}) {
     } catch (err) {
         console.error('Failed to load project cache:', err);
     }
+}
+
+// Records what the view shows for the current document, so returning to the
+// document restores it. Skipped while a load has not yet put the document's
+// content in the editor, as the editor state would belong to another file.
+function rememberShownDocumentState() {
+    const key = activeNotesDocument?.key;
+    if (!state.currentFile || !key || mainView.shownDocumentKey !== key) {
+        return;
+    }
+    mainView.rememberDocument(key, {
+        viewMode: state.viewMode,
+        editorState: mainView.editor?.saveViewState() ?? null,
+    });
 }
 
 function applyDocumentCache(documentCache, defaultMode) {
@@ -8230,6 +8242,8 @@ async function loadFile(file, options = {}) {
     const isStale = () => loadSeq !== notesLoadSeq
         || (loadedDocument !== null && loadedDocument !== activeNotesDocument);
 
+    rememberShownDocumentState();
+
     if (state.currentFile && state.currentFile !== file) {
         saveDocumentCache();
         // Closing the document drops its autosave timer, so save pending
@@ -8273,12 +8287,19 @@ async function loadFile(file, options = {}) {
         if (isStale()) {
             return;
         }
-        const documentCachePromise = skipDocumentCacheRestore
+        // The view's own memory of this document takes priority over the
+        // persisted cache, which records the mode last used in any view.
+        const rememberedView = skipDocumentCacheRestore
+            ? null
+            : mainView.recallDocument(notesDocumentKey(file, project));
+        const documentCachePromise = (skipDocumentCacheRestore
             ? Promise.resolve(null)
             : GetDocumentCache(file).catch((error) => {
                 console.error('Failed to load document cache:', error);
                 return null;
-            });
+            })).then((cache) => (rememberedView?.viewMode
+            ? { ...cache, DocumentTab: rememberedView.viewMode }
+            : cache));
 
         const loadingJsonByExtension = isStructuredDataFile(file);
         const loadingMarkdown = isMarkdownNotesFile(file);
@@ -8385,6 +8406,7 @@ async function loadFile(file, options = {}) {
             }
 
             setDirty(false);
+            mainView.shownDocumentKey = activeNotesDocument.key;
             renderFileList();
 
             if (!keepFindTabOpen && elements.toolsTabFind?.getAttribute('aria-selected') === 'true') {
@@ -8537,6 +8559,8 @@ async function loadFile(file, options = {}) {
         }
         
         setDirty(false);
+        mainView.shownDocumentKey = activeNotesDocument.key;
+        mainView.editor?.restoreViewState(rememberedView?.editorState);
         renderFileList();
 
         // JSON/YAML tree view render is deferred until the View tab is clicked (see swaggerViewCurrent).
@@ -9034,8 +9058,8 @@ function jumpEditorToOffset(start, end = start) {
     setMainEditorSelectionRange(start, end);
 
     if (isMonacoActive()) {
-        monacoMainEditor.revealOffset(start);
-        monacoMainEditor.focus();
+        mainView.editor.revealOffset(start);
+        mainView.editor.focus();
         return;
     }
 
@@ -9045,9 +9069,9 @@ function jumpEditorToOffset(start, end = start) {
 
     const tryRevealWhenReady = (remainingFrames) => {
         if (isMonacoActive()) {
-            monacoMainEditor.setSelectionOffsets(start, end);
-            monacoMainEditor.revealOffset(start);
-            monacoMainEditor.focus();
+            mainView.editor.setSelectionOffsets(start, end);
+            mainView.editor.revealOffset(start);
+            mainView.editor.focus();
             return;
         }
 
@@ -9642,7 +9666,7 @@ function findInEditor(findPattern) {
             return;
         }
 
-        const matches = monacoMainEditor.findMatches(request.query, {
+        const matches = mainView.editor.findMatches(request.query, {
             isRegex: request.isRegex,
             matchCase: request.matchCase,
             limit: 10000,
@@ -9746,10 +9770,10 @@ function highlightCurrentMatch({ focusEditor = true } = {}) {
         }
 
         if (focusEditor) {
-            monacoMainEditor.focus();
+            mainView.editor.focus();
         }
-        monacoMainEditor.setSelectionOffsets(match.start, match.end);
-        monacoMainEditor.revealOffset(match.start);
+        mainView.editor.setSelectionOffsets(match.start, match.end);
+        mainView.editor.revealOffset(match.start);
         return;
     }
 
@@ -12469,7 +12493,7 @@ EventsOn("notesFileChanged", async () => {
 
             mainDocument.setSelection(nextStart, nextEnd);
             if (previousSelection.hadFocus && isMonacoActive()) {
-                monacoMainEditor.focus();
+                mainView.editor.focus();
             }
         }
     } catch (err) {
@@ -14309,8 +14333,8 @@ function applyWindowStyle(result) {
     `;
 
     if (isMonacoActive()) {
-        monacoMainEditor.setTypography(getMonacoTypographyOptions());
-        monacoMainEditor.applyTheme(result.colors);
+        mainView.editor.setTypography(getMonacoTypographyOptions());
+        mainView.editor.applyTheme(result.colors);
     }
 }
 
@@ -14573,7 +14597,7 @@ initNotesLsp({
     shouldMonacoTabIndent,
     showNotesLocalMenu,
     updateFindOptionButtons,
-    getMonacoMainEditor: () => monacoMainEditor,
+    getMonacoMainEditor: () => mainView.editor,
     getNotesSpellCheckHandle: () => notesSpellCheckHandle,
     getActiveNotesDocument: () => activeNotesDocument,
     isNotesDocumentOpen,
@@ -14680,7 +14704,7 @@ notesSpellCheckHandle = createSpellCheckEngine({
         if (!isMonacoActive()) {
             return;
         }
-        monacoMainEditor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
+        mainView.editor.setTyposMisspellings(Array.isArray(misspellings) ? misspellings : []);
     },
 });
 notesSpellCheckHandle.scheduleCheck();
@@ -14835,7 +14859,7 @@ function openMainEditorContextMenu(e) {
                         if (isGitDiffActive()) {
                             notesGitDiffAdapter?.openCommandPalette?.();
                         } else {
-                            monacoMainEditor?.openCommandPalette?.();
+                            mainView.editor?.openCommandPalette?.();
                         }
                     }, 0);
                 },
