@@ -177,6 +177,20 @@ as `lspOpenFile === currentFile`.
 - Move LSP code from `notes.js` into its own module first (already on the
   refactor list), keyed by document from the start.
 
+*Done (Stage 2, task 1):*
+
+- `frontend/src/notes_lsp.js` holds the main document's LSP and typos code:
+  open, change and close, diagnostics, hover, completion, signature help,
+  code actions, rename, symbols, references, and the Monaco provider
+  callbacks. Nothing changed behaviour; the code moved as is.
+- It does not import `notes.js`, which is the side-effecting entry point.
+  `notes.js` calls `initNotesLsp(deps)` once, passing the shared state and
+  helpers it needs. `monacoMainEditor` and `notesSpellCheckHandle` are
+  reassigned in `notes.js`, so they are passed as getters. `initNotesLsp` also
+  subscribes to the `notesLspDiagnostics` and `notesTyposDiagnostics` events.
+- The semantic-tokens delta callback called `NotesLspSemanticTokensDelta`
+  without importing it. The new module imports it.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco
