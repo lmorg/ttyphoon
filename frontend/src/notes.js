@@ -94,6 +94,8 @@ import { initMarkdownModal } from './markdown-modal';
 import './notes.css';
 import notesTemplate from './notes.html?raw';
 import { createNotesView } from './notes_view.js';
+import { createLayout } from './notes_layout.js';
+import { renderNotesLayout } from './notes_layout_dom.js';
 
 import { marked } from "marked";
 import hljs from "highlight.js/lib/common";
@@ -493,7 +495,17 @@ initLineNavigationKeys(document);
 
 app.innerHTML = notesTemplate;
 
-const mainView = createNotesView({ host: document.getElementById('notes-views') });
+const mainView = createNotesView();
+
+// Every open view, by ID, and the layout tree that arranges them in the editor
+// area (ADR 0100 decision 2). There is only the main view for now.
+const notesViews = new Map([[mainView.id, mainView]]);
+let notesLayout = createLayout(mainView.id);
+
+function renderNotesViewsLayout() {
+    renderNotesLayout(document.getElementById('notes-views'), notesLayout, (id) => notesViews.get(id)?.root);
+}
+renderNotesViewsLayout();
 
 // The view that global chrome (status bar, Tools panel, LSP overlays) follows.
 // Its document is the active NotesDocument. Notes has one view for now.

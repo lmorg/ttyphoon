@@ -564,6 +564,18 @@ as `lspOpenFile === currentFile`.
   which task 9 uses for tabs.
 - Not yet used by the UI.
 
+*Done (Stage 8, task 2):*
+
+- `notes_layout_dom.js` renders a layout tree into `#notes-views`. Views are
+  placed by their root elements; each split is a `.notes-layout-split` flex
+  container with a `data-direction`, and its children's `flex-grow` is their
+  share. A single view is placed directly in the host, so the DOM is unchanged.
+- Rendering only moves an element that is not already in place, because
+  moving a view's root reloads its iframes and resets Monaco's layout. Changes
+  to the tree's structure still move the views whose parent changes.
+- `notes.js` keeps `notesViews` (views by ID) and `notesLayout`, creates the
+  main view detached, and renders the one-view layout.
+
 ### 7. Remove the textarea fallback editor
 
 *Decided:* remove `notes-editor-monaco = 0` and the textarea fallback. Monaco

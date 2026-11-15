@@ -1872,6 +1872,17 @@ body {
     min-width: 0;
 }
 
+.notes-layout-split {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+}
+
+.notes-layout-split[data-direction="column"] {
+    flex-direction: column;
+}
+
 .notes-view {
     flex: 1;
     display: flex;

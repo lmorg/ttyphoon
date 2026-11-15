@@ -79,7 +79,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
     - [x] Decide typos-lsp behaviour for background tabs (Q13: shown documents only) and AI Ask context with several documents open (Q11: focused document only)
   - Stage 8: split views (Q1: recursive splits, side by side or stacked)
     - [x] Layout tree module: view leaves and split branches (direction, children, sizes), with split, close, resize and serialise operations that keep the tree normalised. Unit tests only, no UI
-    - [ ] Render the Notes editor area from the layout tree, with the existing view as its only leaf. Behaviour unchanged
+    - [x] Render the Notes editor area from the layout tree, with the existing view as its only leaf. Behaviour unchanged
     - [ ] Split right and Split down from the tab context menu, command palette and `Cmd+\` (Q17); the new view shows the same document through the shared model and `NotesDocument`; track selection per view rather than per model handle (see Stage 7 task 1 limitation)
     - [ ] Focus follows the clicked view; Cmd+Option+arrows move focus between neighbouring views (Q18); global chrome and the focused-view outline follow
     - [ ] Close a view when its last tab closes and collapse the tree; release a document only when no view shows it
