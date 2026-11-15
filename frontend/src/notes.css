@@ -1946,6 +1946,10 @@ body {
     z-index: 5;
 }
 
+#notes-pane[data-terminal-focused="true"] .notes-layout-split .notes-view[data-focused="true"]::after {
+    display: none;
+}
+
 .notes-view-panel {
     position: relative;
     flex: 1;

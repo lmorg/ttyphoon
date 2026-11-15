@@ -1377,6 +1377,12 @@ describe('notes rendering', () => {
         expect(menu.y).toBe(92);
     });
 
+    it('hides the focused-view outline while the terminal has focus', () => {
+        expect(getNotesStyleProperties(
+            '#notes-pane[data-terminal-focused="true"] .notes-layout-split .notes-view[data-focused="true"]::after',
+        )).toMatchObject({ display: 'none' });
+    });
+
     it('sizes the Monaco editor from the Notes font settings', () => {
         // Monaco takes its font from this container's computed style.
         expect(getNotesStyleProperties('.notes-view .notes-monaco-editor')).toMatchObject({
