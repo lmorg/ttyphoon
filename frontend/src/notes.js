@@ -1690,7 +1690,12 @@ function bindNotesViewFocus(view) {
         }
         swallowing = true;
         swallow(event);
-        void focusNotesView(view);
+        // The swallowed mousedown never reaches #notes-pane, which takes
+        // keyboard focus from the terminal, so take it here.
+        if (window.terminalFocusedState === true) {
+            window.dispatchEvent(new CustomEvent('ttyphoon-focus-notes'));
+        }
+        void focusNotesView(view).then(focusActiveEditorForViewMode);
     }, true);
     view.root.addEventListener('mousedown', swallow, true);
     view.root.addEventListener('mouseup', swallow, true);

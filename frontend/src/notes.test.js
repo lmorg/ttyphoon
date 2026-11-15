@@ -4348,6 +4348,28 @@ describe('notes rendering', () => {
         expect(createMonacoAdapterMock).toHaveBeenCalledTimes(2);
     });
 
+    it('takes keyboard focus from the terminal when a click focuses another view', async () => {
+        const disk = new Map([['$NOTES/first.md', 'first text']]);
+        const left = await openDocumentTabs(disk);
+        await splitRight();
+        const [leftRoot] = notesViewRoots();
+        // As ttyphoon.js does.
+        const focusNotes = vi.fn(() => { window.terminalFocusedState = false; });
+        window.addEventListener('ttyphoon-focus-notes', focusNotes);
+        const previous = window.terminalFocusedState;
+        window.terminalFocusedState = true;
+        try {
+            leftRoot.querySelector('.notes-view-panel').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+            expect(focusNotes).toHaveBeenCalledOnce();
+            const focusCount = left.focusCount;
+            await vi.waitFor(() => expect(leftRoot.dataset.focused).toBe('true'));
+            await vi.waitFor(() => expect(left.focusCount).toBeGreaterThan(focusCount));
+        } finally {
+            window.removeEventListener('ttyphoon-focus-notes', focusNotes);
+            window.terminalFocusedState = previous;
+        }
+    });
+
     it('moves focus between views with Cmd+Option+arrows, leaving the keys to Monaco otherwise', async () => {
         const first = '$NOTES/first.md';
         const disk = new Map([[first, 'first text']]);
