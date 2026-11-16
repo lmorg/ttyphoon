@@ -1790,7 +1790,7 @@ body {
 
 .notes-mode-tab:hover,
 .tools-tab:hover {
-    color: var(--fg);
+    color: var(--accent);
 }
 
 #notes-new:hover {

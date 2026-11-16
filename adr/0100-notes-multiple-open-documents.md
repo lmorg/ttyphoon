@@ -456,7 +456,8 @@ as `lspOpenFile === currentFile`.
   They have no close button; use the tab's context menu, middle-click or Cmd+W.
 - Mode tabs (View, Edit, Run, etc.) and Tools tabs (Find, Git, etc.) instead
   use the flat Swagger request/response tab style: muted inactive text and an
-  accent underline on the selected tab. Document and terminal tabs retain
+  accent underline on the selected tab, with accent-coloured text on hover.
+  Document and terminal tabs retain
   their rounded, bordered style.
 - `.notes-mode-tab` and `.tools-tab` share the underline styling.
   `.notes-toolbar-btn` owns toolbar-button styling independently; do not use

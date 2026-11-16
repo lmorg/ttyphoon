@@ -1446,7 +1446,7 @@ describe('notes rendering', () => {
                 color: 'var(--fg)',
                 'border-bottom-color': 'var(--accent)',
             });
-            expect(getNotesStyleProperties(`${selector}:hover`).color).toBe('var(--fg)');
+            expect(getNotesStyleProperties(`${selector}:hover`).color).toBe('var(--accent)');
         }
         expect(document.querySelectorAll('.notes-tabs .tab')).toHaveLength(0);
         expect(getNotesStyleProperties('.tab')['border-top-left-radius']).toBe('5px');
