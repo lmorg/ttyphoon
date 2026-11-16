@@ -1423,6 +1423,16 @@ describe('notes rendering', () => {
         }
     });
 
+    it('underlines Monaco spelling errors without masking the misspelled text', () => {
+        const styles = getNotesStyleProperties('.notes-view .notes-monaco-editor .notes-monaco-typo-squiggle');
+        expect(styles).toMatchObject({
+            'text-decoration': 'underline wavy var(--red) 1.5px',
+            'text-underline-offset': '3px',
+        });
+        expect(styles['mask-image']).toBeUndefined();
+        expect(styles['-webkit-mask-image']).toBeUndefined();
+    });
+
     it('sizes the Monaco editor from the Notes font settings', () => {
         // Monaco takes its font from this container's computed style.
         expect(getNotesStyleProperties('.notes-view .notes-monaco-editor')).toMatchObject({

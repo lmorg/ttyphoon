@@ -3609,21 +3609,8 @@ body {
 }
 
 .notes-view .notes-monaco-editor .notes-monaco-typo-squiggle {
-    text-decoration: none;
-    background-color: transparent;
-    background-image: linear-gradient(var(--red), var(--red));
-    background-position: 0 100%;
-    background-repeat: repeat-x;
-    background-size: 100% 6px;
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 6'%3E%3Cpath d='M0 4 C1 2.5, 3 2.5, 4 4 S7 5.5, 8 4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 6'%3E%3Cpath d='M0 4 C1 2.5, 3 2.5, 4 4 S7 5.5, 8 4' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-    -webkit-mask-position: 0 100%;
-    mask-position: 0 100%;
-    -webkit-mask-repeat: repeat-x;
-    mask-repeat: repeat-x;
-    -webkit-mask-size: 8px 6px;
-    mask-size: 8px 6px;
-    padding-bottom: 3px;
+    text-decoration: underline wavy var(--red) 1.5px;
+    text-underline-offset: 3px;
 }
 
 .notes-view .notes-preview-wrap,

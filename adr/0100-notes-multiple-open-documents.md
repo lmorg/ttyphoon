@@ -473,6 +473,8 @@ as `lspOpenFile === currentFile`.
   border does not change colour on focus. Unfocused Monaco editors are
   darkened with a non-interactive overlay above their opaque backgrounds,
   also shown when the terminal owns focus.
+- Monaco spelling decorations use native red wavy text underlines. Do not mask
+  their inline spans: a mask clips the misspelled word as well as its background.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
   tab leaves no document open and hides the strip.
