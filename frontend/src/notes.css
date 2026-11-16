@@ -1224,7 +1224,7 @@ body {
     gap: 4px;
     margin-left: auto;
     align-items: center;
-    height: 20px;
+    align-self: center;
 }
 
 .notes-toolbar-btn {
@@ -1643,12 +1643,9 @@ body {
 .notes-view .notes-tabs {
     display: flex;
     gap: 0;
-    /* Matches the #notes-main background this row sat on before it moved into the view. */
-    background-color: var(--darken-background-overlay);
+    background-color: var(--bg);
     padding: 0 8px;
     border-bottom: 1px solid rgba(var(--fg-rgb), 0.2);
-    /*align-items: center;*/
-
     box-sizing: border-box;
 }
 

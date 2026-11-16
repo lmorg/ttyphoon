@@ -464,6 +464,8 @@ as `lspOpenFile === currentFile`.
 - Document toolbar buttons share the Git toolbar icon buttons' border,
   padding, sizing and hover treatment. New keeps its green highlight;
   maximize uses the Git toggle buttons' selected treatment while enabled.
+  The toolbar is vertically centred in the mode bar, whose background uses
+  the normal theme background rather than the document strip's dark overlay.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
   tab leaves no document open and hides the strip.

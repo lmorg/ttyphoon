@@ -1422,6 +1422,17 @@ describe('notes rendering', () => {
             .toMatchObject({ 'background-color': 'rgba(var(--fg-rgb), 0.1)' });
     });
 
+    it('centres the document toolbar in an undarkened mode bar', () => {
+        expect(getNotesStyleProperties('.notes-toolbar')).toMatchObject({
+            'align-self': 'center',
+            'align-items': 'center',
+        });
+        expect(getNotesStyleProperties('.notes-toolbar').height).toBeUndefined();
+        expect(getNotesStyleProperties('.notes-view .notes-tabs')['background-color']).toBe('var(--bg)');
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tabs')['background-color'])
+            .toBe('var(--darken-background-overlay)');
+    });
+
     it('keeps toolbar buttons separate from the mode-tab styling', async () => {
         await importNotesModule();
         const tabs = [...document.querySelectorAll('.notes-tabs [role="tab"]')];
