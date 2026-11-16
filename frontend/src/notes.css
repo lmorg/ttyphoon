@@ -1671,10 +1671,10 @@ body {
 
 .notes-view .notes-tabs {
     display: flex;
-    gap: 8px;
+    gap: 0;
     /* Matches the #notes-main background this row sat on before it moved into the view. */
     background-color: var(--darken-background-overlay);
-    padding: 6px 8px 0px 8px;
+    padding: 0 8px;
     border-bottom: 1px solid rgba(var(--fg-rgb), 0.2);
     /*align-items: center;*/
 
@@ -1697,7 +1697,7 @@ body {
     display: none;
 }
 
-/* Shares the .tab shape with the terminal and Tools panel tabs. */
+/* Shares the .tab shape with the terminal tabs. */
 .notes-view .notes-doc-tab {
     display: flex;
     align-items: center;
@@ -1788,21 +1788,22 @@ body {
     color: var(--accent);
 }
 
-.notes-view .notes-tabs button {
+.notes-view .notes-tabs button,
+.tools-tab {
     border-radius: 0;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--fg);
-    padding: 6px 12px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: rgba(var(--fg-rgb), 0.6);
+    padding: 8px 16px;
     cursor: pointer;
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.notes-view .notes-tabs button[aria-selected="true"] {
-    border-color: rgba(var(--fg-rgb), 0.2);
-    border-bottom: 5px;
-    background-color: rgba(var(--fg-rgb), 0.1);
-    border-color: rgba(var(--fg-rgb), 0.2) !important;
+.notes-view .notes-tabs button[aria-selected="true"],
+.tools-tab[aria-selected="true"] {
+    color: var(--fg);
+    border-bottom-color: var(--accent);
 }
 
 .tab {
@@ -1819,8 +1820,9 @@ body {
     border-color: var(--accent) !important;
 }
 
-.notes-view .notes-tabs button:not([aria-selected="true"]):hover {
-    color: var(--accent);
+.notes-view .notes-tabs button:hover,
+.tools-tab:hover {
+    color: var(--fg);
 }
 
 #notes-new:hover {
@@ -2214,37 +2216,7 @@ body {
 
 .tools-tabs-container {
     display: flex;
-    gap: 8px;
-    padding-top: 6px;
-}
-
-.tools-tab {
-    border-radius: 0;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--fg);
-    padding: 6px 12px;
-    cursor: pointer;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    border: 1px solid;
-    border-bottom: 0;
-    border-color: rgba(var(--fg-rgb), 0.2);
-    transition: color 0.3s ease, border-color 0.3s ease;
-}
-
-.tools-tab[aria-selected="true"] {
-    background-color: rgba(var(--fg-rgb), 0.1);
-    border-color: rgba(var(--fg-rgb), 0.2) !important;
-}
-
-.tools-tab[aria-selected="false"] {
-    opacity: 0.85;
-}
-
-.tools-tab:not([aria-selected="true"]):hover {
-    border-color: var(--accent) !important;
-    color: var(--accent);
+    gap: 0;
 }
 
 .notes-tools-minimize,

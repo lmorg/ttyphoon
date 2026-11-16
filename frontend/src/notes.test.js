@@ -1400,6 +1400,28 @@ describe('notes rendering', () => {
         });
     });
 
+    it('uses underline tabs for modes and tools without changing document tabs', async () => {
+        await importNotesModule();
+        for (const selector of ['.notes-view .notes-tabs button', '.tools-tab']) {
+            expect(getNotesStyleProperties(selector)).toMatchObject({
+                border: 'none',
+                'border-bottom': '2px solid transparent',
+                background: 'none',
+                color: 'rgba(var(--fg-rgb), 0.6)',
+                padding: '8px 16px',
+            });
+            expect(getNotesStyleProperties(`${selector}[aria-selected="true"]`)).toMatchObject({
+                color: 'var(--fg)',
+                'border-bottom-color': 'var(--accent)',
+            });
+            expect(getNotesStyleProperties(`${selector}:hover`).color).toBe('var(--fg)');
+        }
+        expect(document.querySelectorAll('.notes-tabs .tab')).toHaveLength(0);
+        expect(getNotesStyleProperties('.tab')['border-top-left-radius']).toBe('5px');
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab[aria-selected="true"]'))
+            .toMatchObject({ 'background-color': 'rgba(var(--fg-rgb), 0.1)' });
+    });
+
     it('opens the terminal window menu next to the workspace title click', async () => {
         const terminalTabs = document.createElement('div');
         terminalTabs.id = 'terminal-tabs';

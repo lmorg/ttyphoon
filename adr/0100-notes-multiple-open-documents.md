@@ -452,8 +452,12 @@ as `lspOpenFile === currentFile`.
   to it keeps its buffer instead of the disk text.
 - Switching back to a document keeps its model, so undo history survives.
   `loadFile` only replaces the text when it differs from the disk text.
-- Document tabs match the other tab strips and show a dot for unsaved edits.
+- Document tabs match the terminal tab strip and show a dot for unsaved edits.
   They have no close button; use the tab's context menu, middle-click or Cmd+W.
+- Mode tabs (View, Edit, Run, etc.) and Tools tabs (Find, Git, etc.) instead
+  use the flat Swagger request/response tab style: muted inactive text and an
+  accent underline on the selected tab. Document and terminal tabs retain
+  their rounded, bordered style.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
   tab leaves no document open and hides the strip.
