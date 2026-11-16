@@ -1719,10 +1719,10 @@ function bindNotesViewFocus(view) {
             await splitNotesView(direction);
         };
         showNotesLocalMenu([
-            { title: 'Split right', onSelect: () => void splitWith('row')() },
-            { title: 'Split down', onSelect: () => void splitWith('column')() },
+            { title: 'Split right', icon: 0xf101, onSelect: () => void splitWith('row')() },
+            { title: 'Split down', icon: 0xf103, onSelect: () => void splitWith('column')() },
             { title: '-' },
-            { title: 'Close tab', onSelect: () => void closeNotesTab(view, key) },
+            { title: 'Close tab', icon: 0xf00d, onSelect: () => void closeNotesTab(view, key) },
         ], event.clientX, event.clientY, 'Document tab');
     });
 }
