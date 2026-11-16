@@ -467,6 +467,11 @@ as `lspOpenFile === currentFile`.
   maximize uses the Git toggle buttons' selected treatment while enabled.
   The toolbar is vertically centred in the mode bar, whose background uses
   the normal theme background rather than the document strip's dark overlay.
+- The focused Notes view has an accent outline in both single-view and split
+  layouts, hidden while the terminal has focus. Monaco's inner editor-shell
+  border does not change colour on focus. Unfocused Monaco editors are
+  darkened with a non-interactive overlay above their opaque backgrounds,
+  also shown when the terminal owns focus.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
   tab leaves no document open and hides the strip.

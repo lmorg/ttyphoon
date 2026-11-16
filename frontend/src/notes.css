@@ -1871,11 +1871,11 @@ body {
     opacity: 0.75;
 }
 
-.notes-layout-split .notes-view[data-focused="true"] {
+.notes-view[data-focused="true"] {
     position: relative;
 }
 
-.notes-layout-split .notes-view[data-focused="true"]::after {
+.notes-view[data-focused="true"]::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -1884,7 +1884,7 @@ body {
     z-index: 5;
 }
 
-#notes-pane[data-terminal-focused="true"] .notes-layout-split .notes-view[data-focused="true"]::after {
+#notes-pane[data-terminal-focused="true"] .notes-view[data-focused="true"]::after {
     display: none;
 }
 
@@ -3525,12 +3525,17 @@ body {
     min-width: 0;
     align-content: stretch;
     border: 1px solid rgba(var(--fg-rgb), 0);
-    background-color: rgba(0, 0, 0, 0.22);
+    background-color: transparent;
 }
 
-.notes-view .notes-editor-shell:focus-within {
-    border-color: var(--accent);
-    background-color: transparent;
+.notes-view .notes-editor-shell:not(:focus-within)::after,
+#notes-pane[data-terminal-focused="true"] .notes-view .notes-editor-shell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--darken-background-overlay);
+    pointer-events: none;
+    z-index: 4;
 }
 
 #notes-pane[data-fullsize="true"] #notes-panel:has(#notes-tools-panel[data-collapsed="true"]) .notes-view .notes-editor-shell:focus-within {

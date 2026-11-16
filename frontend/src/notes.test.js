@@ -1387,8 +1387,40 @@ describe('notes rendering', () => {
 
     it('hides the focused-view outline while the terminal has focus', () => {
         expect(getNotesStyleProperties(
-            '#notes-pane[data-terminal-focused="true"] .notes-layout-split .notes-view[data-focused="true"]::after',
+            '#notes-pane[data-terminal-focused="true"] .notes-view[data-focused="true"]::after',
         )).toMatchObject({ display: 'none' });
+    });
+
+    it('outlines the focused Notes pane without requiring a split', async () => {
+        await importNotesModule();
+        const view = document.querySelector('.notes-view[data-focused="true"]');
+        expect(view).not.toBeNull();
+        expect(view.closest('.notes-layout-split')).toBeNull();
+        expect(getNotesStyleProperties('.notes-view[data-focused="true"]')).toMatchObject({
+            position: 'relative',
+        });
+        expect(getNotesStyleProperties('.notes-view[data-focused="true"]::after')).toMatchObject({
+            border: '1px solid var(--accent)',
+            'pointer-events': 'none',
+        });
+        expect(getNotesStyleProperties('.notes-view .notes-editor-shell:focus-within')['border-color'])
+            .toBeUndefined();
+    });
+
+    it('darkens an unfocused Monaco editor above its opaque background without blocking clicks', () => {
+        for (const selector of [
+            '.notes-view .notes-editor-shell:not(:focus-within)::after',
+            '#notes-pane[data-terminal-focused="true"] .notes-view .notes-editor-shell::after',
+        ]) {
+            expect(getNotesStyleProperties(selector)).toMatchObject({
+                content: "''",
+                position: 'absolute',
+                inset: '0',
+                'background-color': 'var(--darken-background-overlay)',
+                'pointer-events': 'none',
+                'z-index': '4',
+            });
+        }
     });
 
     it('sizes the Monaco editor from the Notes font settings', () => {
