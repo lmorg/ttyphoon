@@ -9,7 +9,6 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/lmorg/ttyphoon/app"
-	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/utils/cache"
 	"github.com/lmorg/ttyphoon/window"
 )
@@ -32,8 +31,6 @@ func main() {
 			panic(err)
 		}
 	}
-
-	config.ReadEnvConfig()
 
 	cacheDbFile := "cache.db"
 	cacheDbPath, err := xdg.CacheFile(cacheDbFile)

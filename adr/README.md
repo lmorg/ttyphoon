@@ -108,6 +108,7 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0099](0099-pause-terminal-rendering-when-hidden.md) | Pause terminal rendering while the window is hidden | Rendering / Performance |
 | [0100](0100-notes-multiple-open-documents.md) | Notes: multiple open documents | Notes |
 | [0101](0101-notes-documents-in-separate-windows.md) | (proposed) Notes documents in separate windows | Notes |
+| [0102](0102-feature-scoped-environment-files.md) | (proposed) Feature-scoped environment files | Config / Environment |
 
 ## Recurring themes
 

@@ -135,7 +135,9 @@ func (tmux *Tmux) initSessionPanes(renderer types.Renderer) error {
 }
 
 func (tmux *Tmux) newPane(info *paneInfo) *PaneT {
-	debug.Log(info)
+	if !tmux.privateEnvironment.Load() {
+		debug.Log(info)
+	}
 	startup := paneStartupState{
 		workingDirectory: info.workingDirectory("", true),
 		environment:      cloneEnvironment(tmux.initialEnvVars),

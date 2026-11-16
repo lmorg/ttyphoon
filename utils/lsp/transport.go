@@ -141,6 +141,7 @@ type Transport struct {
 	pending  map[string]*pendingRequest
 	nextID   atomic.Int64
 	notifyCh chan *Message // incoming notifications / server pushes
+	redact   func(string) string
 }
 
 // NewTransport creates a Transport connected to the given stdin/stdout streams.
@@ -231,6 +232,9 @@ func (t *Transport) Call(ctx context.Context, method string, params any, timeout
 	select {
 	case resp := <-pr.ch:
 		if resp.Error != nil {
+			if t.redact != nil {
+				resp.Error.Message = t.redact(resp.Error.Message)
+			}
 			return resp, resp.Error
 		}
 

@@ -2,12 +2,12 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 const (
@@ -44,36 +44,26 @@ func (agt *Agent) ProviderName() string {
 	return service.Provider
 }
 
-func (agt *Agent) serviceEnv(name string) string {
-	service := findService(agt.serviceName)
-	if service != nil {
-		if value, ok := service.Env[name]; ok {
-			return value
-		}
-	}
-	return ""
+func (agt *Agent) ServiceEnvironment() (*envvars.Environment, error) {
+	return resolveServiceEnvironment(findService(agt.serviceName))
 }
 
-func (agt *Agent) EnvironmentValue(name string) string {
-	if value := agt.serviceEnv(name); value != "" {
-		return value
-	}
-	return os.Getenv(name)
-}
-
-func (agt *Agent) ImageGenerationEnvironmentValue(name string) string {
+func (agt *Agent) ImageGenerationEnvironment() (*envvars.Environment, error) {
 	service := findService(agt.serviceName)
 	if service != nil && service.ImageGenService != "" {
-		imageService := findService(service.ImageGenService)
-		if imageService != nil {
-			if value := imageService.Env[name]; value != "" {
-				return value
-			}
-		}
-		return os.Getenv(name)
+		service = findService(service.ImageGenService)
 	}
+	return resolveServiceEnvironment(service)
+}
 
-	return agt.EnvironmentValue(name)
+func resolveServiceEnvironment(service *config.AIServiceT) (*envvars.Environment, error) {
+	files := slices.Clone(config.Config.Ai.EnvFiles)
+	var values map[string]string
+	if service != nil {
+		files = append(files, service.EnvFiles...)
+		values = service.Env
+	}
+	return envvars.Resolve(files, values)
 }
 
 type ServiceModelIndexT struct {

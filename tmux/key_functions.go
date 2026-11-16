@@ -266,7 +266,12 @@ func _fnKeySplitWindow(tmux *Tmux, flag string) error {
 		settings := config.Config.Workspaces.Workspace(win.name)
 		if pwd := settings.Pwd; pwd != "" {
 			log.Printf("[trace] setting pwd of new pane to %s\n", pwd)
-			workingDirectory = os.ExpandEnv(pwd)
+			workingDirectory = os.Expand(pwd, func(name string) string {
+				if value, ok := environment[name]; ok {
+					return value
+				}
+				return os.Getenv(name)
+			})
 		}
 	}
 	if workingDirectory != "" {

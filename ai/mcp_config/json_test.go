@@ -45,6 +45,7 @@ func TestOptionalServerDescriptionInBothConfigFormats(t *testing.T) {
 				} else {
 					content = `{"mcp.servers":` + servers + `}`
 				}
+
 				path := filepath.Join(t.TempDir(), "config.json")
 				if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 					t.Fatal(err)
@@ -62,5 +63,29 @@ func TestOptionalServerDescriptionInBothConfigFormats(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestServerEnvironmentFilesInBothConfigFormats(t *testing.T) {
+	for _, field := range []string{"mcp", "mcp.servers"} {
+		t.Run(field, func(t *testing.T) {
+			servers := `{"example":{"command":"example","envFiles":["shared.vars","/tmp/private.vars"],"env":{"KEY":"value"}}}`
+			content := `{"mcp":{"servers":` + servers + `}}`
+			if field == "mcp.servers" {
+				content = `{"mcp.servers":` + servers + `}`
+			}
+			path := filepath.Join(t.TempDir(), "config.json")
+			if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			config, err := ReadJson(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := config.Mcp.Servers["example"]
+			if len(server.EnvFiles) != 2 || server.EnvFiles[0] != "shared.vars" || server.EnvFiles[1] != "/tmp/private.vars" || server.Env["KEY"] != "value" {
+				t.Fatal("server environment configuration was not decoded")
+			}
+		})
 	}
 }

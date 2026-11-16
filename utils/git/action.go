@@ -131,7 +131,7 @@ func actionArguments(gitPath, repoRoot string, action ActionRequest) ([]string, 
 		}
 		return []string{"commit", "-m", message}, nil
 	case "push":
-		return []string{"push"}, nil
+		return []string{"-c", "push.autoSetupRemote=true", "push"}, nil
 	case "status":
 		return []string{"--no-pager", "status", "--short", "--branch"}, nil
 	case "diff":

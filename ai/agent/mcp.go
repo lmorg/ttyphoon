@@ -14,6 +14,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/ai/skills"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 	"github.com/lmorg/ttyphoon/utils/file"
 )
 
@@ -212,8 +213,28 @@ func (agent *Agent) startServerFromConfigEntryContext(parent context.Context, so
 	case "http", "https":
 		return startServerHttp(ctx, source, agent, name, svr)
 	default:
+		envs, err = resolveMcpCommandEnvironment(svr.EnvFiles, envs)
+		if err != nil {
+			return fmt.Errorf("resolve MCP server environment: %w", err)
+		}
 		return startServerCmdLine(ctx, source, agent, envs, name, svr)
 	}
+}
+
+func resolveMcpCommandEnvironment(files, entries []string) ([]string, error) {
+	values := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		name, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid MCP environment entry")
+		}
+		values[name] = value
+	}
+	environment, err := envvars.Resolve(files, values)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_config.EnvVarsT(environment.Overlay(nil)).Slice(), nil
 }
 
 func (agent *Agent) ListMcpServers() []map[string]interface{} {

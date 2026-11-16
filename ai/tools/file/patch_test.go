@@ -9,6 +9,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 type pathTestAgent struct {
@@ -20,8 +21,12 @@ func (a *pathTestAgent) ServiceName() string                                  { 
 func (a *pathTestAgent) GetMeta() *aitypes.Meta                               { return nil }
 func (a *pathTestAgent) ProjectRoot() string                                  { return a.projectRoot }
 func (a *pathTestAgent) RequestWritePermission(context.Context, string) error { return nil }
-func (a *pathTestAgent) EnvironmentValue(string) string                       { return "" }
-func (a *pathTestAgent) ImageGenerationEnvironmentValue(string) string        { return "" }
+func (a *pathTestAgent) ServiceEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, nil)
+}
+func (a *pathTestAgent) ImageGenerationEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, nil)
+}
 
 type dynamicPathTestAgent struct {
 	directoryTestAgent

@@ -35,23 +35,34 @@ func (tmux *Tmux) SendCommand(b []byte) (*tmuxResponseT, error) {
 	default:
 	}
 
-	debug.Log(b)
+	description := string(b)
+	sensitive := (strings.HasPrefix(description, "new-window ") || strings.HasPrefix(description, "split-window ")) && strings.Contains(description, " -e ")
+	if sensitive || tmux.privateEnvironment.Load() {
+		fields := strings.Fields(description)
+		if len(fields) > 0 {
+			description = fields[0] + " [arguments omitted]"
+		}
+	}
+	debug.Log(description)
 	_, err := tmux.tty.Write(append(b, '\n'))
 	//_, err := tmux.writePipe.Write(append(b, '\n'))
 	if err != nil {
-		debug.Log(fmt.Sprintf("error (%s): %v", string(b), err))
+		debug.Log(fmt.Sprintf("error (%s): %v", description, err))
 		return nil, err
 	}
 
 	select {
 	case resp := <-tmux.resp:
 		if resp.IsErr {
+			if sensitive && tmux.privateEnvironment.Load() {
+				return nil, errors.New("tmux pane creation failed (details withheld to protect environment values)")
+			}
 			return nil, fmt.Errorf("tmux command failed: %s", string(bytes.Join(resp.Message, []byte(": "))))
 		}
 		return resp, nil
 
 	case <-time.After(tmuxCommandTimeout):
-		return nil, fmt.Errorf("timed out after %s waiting for tmux response to: %s", tmuxCommandTimeout, string(b))
+		return nil, fmt.Errorf("timed out after %s waiting for tmux response to: %s", tmuxCommandTimeout, description)
 	}
 }
 

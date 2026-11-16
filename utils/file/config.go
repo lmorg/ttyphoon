@@ -52,9 +52,20 @@ func GetConfigFile(subDir string, resourceName string) (string, error) {
 }
 
 func OpenConfigFile(subDir string, resourceName string) (*os.File, error) {
+	return openConfigFile(subDir, resourceName, true)
+}
+
+// OpenConfigFileQuiet searches the same directories without logging paths.
+func OpenConfigFileQuiet(subDir string, resourceName string) (*os.File, error) {
+	return openConfigFile(subDir, resourceName, false)
+}
+
+func openConfigFile(subDir string, resourceName string, logPaths bool) (*os.File, error) {
 	for _, dir := range xdg.ConfigDirs {
 		filename := fmt.Sprintf("%s/%s/%s/%s", dir, app.DirName, subDir, resourceName)
-		debug.Log(filename)
+		if logPaths {
+			debug.Log(filename)
+		}
 
 		if Exists(filename) {
 			return os.Open(filename)

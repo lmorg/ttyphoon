@@ -3,13 +3,205 @@ package websearch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
+
+type scopedSearchTestAgent struct{}
+
+type scopedSearchTestRenderer struct{ types.Renderer }
+
+func (scopedSearchTestRenderer) DisplayNotification(types.NotificationType, string) {}
+
+func (scopedSearchTestAgent) Renderer() types.Renderer { return scopedSearchTestRenderer{} }
+func (scopedSearchTestAgent) ServiceName() string      { return "test" }
+func (scopedSearchTestAgent) GetMeta() *aitypes.Meta   { return nil }
+func (scopedSearchTestAgent) ProjectRoot() string      { return "" }
+func (scopedSearchTestAgent) ServiceEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, map[string]string{"TTYPHOON_WEB_SEARCH_PROVIDER": "duckduckgo"})
+}
+func (scopedSearchTestAgent) ImageGenerationEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, nil)
+}
+
+func TestWebSearchUsesAIWideFilesAndRedactsHeaders(t *testing.T) {
+	t.Setenv("TTYPHOON_WEB_SEARCH_PROVIDER", "duckduckgo")
+	t.Setenv("TTYPHOON_SEARXNG_HEADERS", `{"Authorization":"Bearer host-secret"}`)
+	const secret = "scoped-search-secret"
+	requests := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requests <- request.Header.Get("Authorization")
+		_, _ = io.WriteString(writer, `{"results":[{"title":"`+secret+`","url":"https://example.org"}]}`)
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	first, second := filepath.Join(dir, "first.vars"), filepath.Join(dir, "second.vars")
+	if err := os.WriteFile(first, []byte("TTYPHOON_WEB_SEARCH_PROVIDER=duckduckgo\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	content := "TTYPHOON_WEB_SEARCH_PROVIDER=searxng\nTTYPHOON_SEARXNG_URL=" + server.URL +
+		"\nTTYPHOON_SEARXNG_HEADERS={\"Authorization\":\"Bearer " + secret + "\"}\nTTYPHOON_SEARXNG_MAX_CONCURRENT=3\n"
+	if err := os.WriteFile(second, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	previous := config.Config.Ai.EnvFiles
+	config.Config.Ai.EnvFiles = []string{first, second}
+	t.Cleanup(func() { config.Config.Ai.EnvFiles = previous })
+	tool, err := (&DuckDuckGoSearch{}).New(scopedSearchTestAgent{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	search := tool.(*DuckDuckGoSearch)
+	if search.provider != "searxng" || cap(search.gate.slots) != 3 {
+		t.Fatal("web search did not use AI-wide file settings")
+	}
+	input := &duckDuckGoInputT{Query: "test"}
+	output, err := search.CallStructured(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if <-requests != "Bearer "+secret || os.Getenv("TTYPHOON_WEB_SEARCH_PROVIDER") != "duckduckgo" {
+		t.Fatal("web search did not use isolated scoped headers")
+	}
+	observation := search.ObservationStructured(input, output, nil)
+	for _, text := range []string{output, observation.Summary, search.Description()} {
+		if strings.Contains(text, secret) {
+			t.Fatal("scoped search credential leaked")
+		}
+	}
+	if !strings.Contains(output, "[REDACTED]") {
+		t.Fatal("scoped search credential was not redacted")
+	}
+}
+
+func TestWebSearchAIWideEmptyAndFileErrors(t *testing.T) {
+	t.Setenv("TTYPHOON_WEB_SEARCH_PROVIDER", "searxng")
+	t.Setenv("TTYPHOON_SEARXNG_URL", "http://127.0.0.1:13757")
+	t.Setenv("TTYPHOON_SEARXNG_HEADERS", `{"Authorization":"Bearer host-secret"}`)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "search.vars")
+	if err := os.WriteFile(path, []byte("TTYPHOON_WEB_SEARCH_PROVIDER=\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	previous := config.Config.Ai.EnvFiles
+	config.Config.Ai.EnvFiles = []string{path}
+	t.Cleanup(func() { config.Config.Ai.EnvFiles = previous })
+	tool, err := (&DuckDuckGoSearch{}).New(nil)
+	if err != nil || tool.(*DuckDuckGoSearch).provider != "duckduckgo" {
+		t.Fatalf("empty scoped provider did not override host: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("TTYPHOON_SEARXNG_HEADERS=\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	tool, err = (&DuckDuckGoSearch{}).New(nil)
+	if err != nil || tool.(*DuckDuckGoSearch).headers.Get("Authorization") != "" {
+		t.Fatalf("empty scoped headers did not override host: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("TTYPHOON_SEARXNG_HEADERS=secret-invalid-header\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&DuckDuckGoSearch{}).New(nil); err == nil || strings.Contains(err.Error(), "secret-invalid-header") {
+		t.Fatalf("invalid scoped headers error exposed its value: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("TTYPHOON_WEB_SEARCH_PROVIDER=secret-invalid-provider\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&DuckDuckGoSearch{}).New(nil); err == nil || strings.Contains(err.Error(), "secret-invalid-provider") {
+		t.Fatalf("invalid scoped provider error exposed its value: %v", err)
+	}
+	config.Config.Ai.EnvFiles = []string{filepath.Join(dir, "missing.vars")}
+	if _, err := (&DuckDuckGoSearch{}).New(nil); err == nil || !strings.Contains(err.Error(), "resolve AI environment") {
+		t.Fatalf("missing AI environment file was not reported: %v", err)
+	}
+}
+
+func TestWebSearchRefreshesAIWideFilesAfterConfigReload(t *testing.T) {
+	t.Setenv("TTYPHOON_WEB_SEARCH_PROVIDER", "searxng")
+	t.Setenv("TTYPHOON_SEARXNG_URL", "http://127.0.0.1:1")
+	t.Setenv("TTYPHOON_SEARXNG_HEADERS", "")
+	requests := make(chan string, 2)
+	newServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			requests <- request.Header.Get("Authorization")
+			_, _ = io.WriteString(writer, `{"results":[]}`)
+		}))
+	}
+	first, second := newServer(), newServer()
+	defer first.Close()
+	defer second.Close()
+	dir := t.TempDir()
+	path1, path2 := filepath.Join(dir, "first.vars"), filepath.Join(dir, "second.vars")
+	secondContent := "TTYPHOON_SEARXNG_URL=" + second.URL + "\nTTYPHOON_SEARXNG_HEADERS={\"Authorization\":\"Bearer second-key\"}\n"
+	for path, content := range map[string]string{
+		path1: "TTYPHOON_SEARXNG_URL=" + first.URL + "\nTTYPHOON_SEARXNG_HEADERS={\"Authorization\":\"Bearer first-key\"}\n",
+		path2: secondContent,
+	} {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previousConfig, previousDirs := config.Config, xdg.ConfigDirs
+	config.Config.Ai = config.AiT{EnvFiles: []string{path1}}
+	config.Config.Terminal.ColorTheme = ""
+	config.Config.Notes.Languages = nil
+	xdg.ConfigDirs = []string{dir}
+	t.Cleanup(func() { config.Config, xdg.ConfigDirs = previousConfig, previousDirs })
+	configDir := filepath.Join(dir, app.DirName)
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "test.yaml")
+	reload := func(path string) {
+		t.Helper()
+		if err := os.WriteFile(configPath, []byte(fmt.Sprintf("AI:\n  EnvFiles: [%q]\n", path)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := config.LoadConfig(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tool, err := (&DuckDuckGoSearch{}).New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	search := tool.(*DuckDuckGoSearch)
+	if _, err := search.CallStructured(context.Background(), &duckDuckGoInputT{Query: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if <-requests != "Bearer first-key" {
+		t.Fatal("first search did not use the initial AI file")
+	}
+	reload(path2)
+	if err := os.Remove(path2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := search.CallStructured(context.Background(), &duckDuckGoInputT{Query: "missing"}); err == nil {
+		t.Fatal("search reused old credentials after a reloaded file went missing")
+	}
+	if err := os.WriteFile(path2, []byte(secondContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := search.CallStructured(context.Background(), &duckDuckGoInputT{Query: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	if <-requests != "Bearer second-key" {
+		t.Fatal("existing search tool did not use the reloaded AI file")
+	}
+}
 
 func TestWebSearchExposeStructuredInputType(t *testing.T) {
 	search := &DuckDuckGoSearch{}

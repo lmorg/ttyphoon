@@ -1,7 +1,9 @@
 # Build the binary
 .PHONY: build
 build:
+	@echo "Building assets..."
 	wails task common:update:build-assets
+	@echo "Building application..."
 	wails build
 
 .PHONY: build-flags
@@ -16,19 +18,20 @@ clean:
 # Generate code
 .PHONY: generate
 generate:
-	@echo "Running code generation..."
-	go run ./build/buildflags -increment-version
+	@echo "Updating version number..."
+	go run -v ./build/buildflags -increment-version
 	go generate ./...
 	wails generate bindings
 
 .PHONY: package
-package:
-	wails task common:update:build-assets
+package: generate
+	@echo "Building package..."
 	wails package
 
 # Run the application
 .PHONY: run-darwin
-run-darwin: generate package
+run-darwin: package
+	@echo "Launching application..."
 	./build/bin/ttyphoon.app/Contents/MacOS/ttyphoon
 
 .PHONY: run-webkit

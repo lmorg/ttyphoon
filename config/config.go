@@ -3,16 +3,19 @@ package config
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lmorg/murex/utils/lists"
 	"github.com/lmorg/murex/utils/which"
 	"github.com/lmorg/ttyphoon/codes"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 	"github.com/lmorg/ttyphoon/utils/file"
 	"github.com/lmorg/ttyphoon/utils/jupyter"
 	"github.com/lmorg/ttyphoon/utils/themes/iterm2"
@@ -27,6 +30,7 @@ var defaults []byte
 var reservedWords []byte
 
 var langCache = LanguagesT{}
+var configRevision atomic.Uint64
 
 func init() {
 	if err := LoadConfig(); err != nil {
@@ -34,8 +38,47 @@ func init() {
 	}
 }
 
-func LoadConfig() error {
-	err := readConfigFile(bytes.NewReader(defaults))
+func LoadConfig() (err error) {
+	previousS3 := Config.Social.S3
+	previousTheme, previousThemeFiles := Config.Terminal.ColorTheme, Config.Terminal.EnvFiles
+	Config.Terminal.ColorTheme, Config.Terminal.EnvFiles = "", nil
+	previousLSPFiles := make(map[string][]string, len(Config.Notes.Languages))
+	for language, settings := range Config.Notes.Languages {
+		if settings != nil {
+			previousLSPFiles[language] = settings.LSP.EnvFiles
+			settings.LSP.EnvFiles = nil
+		}
+	}
+	previousTyposFiles := Config.Notes.SpellCheck.TyposLsp.EnvFiles
+	Config.Notes.SpellCheck.TyposLsp.EnvFiles = nil
+	Config.Social.S3 = nil
+	defer func() {
+		if err != nil {
+			Config.Social.S3 = previousS3
+			Config.Terminal.ColorTheme, Config.Terminal.EnvFiles = previousTheme, previousThemeFiles
+			for language, files := range previousLSPFiles {
+				if settings := Config.Notes.Languages[language]; settings != nil {
+					settings.LSP.EnvFiles = files
+				}
+			}
+			Config.Notes.SpellCheck.TyposLsp.EnvFiles = previousTyposFiles
+		}
+	}()
+	Config.Ai.EnvFiles = nil
+	for _, service := range Config.Ai.services {
+		if service != nil {
+			service.EnvFiles = nil
+			service.Env = nil
+		}
+	}
+	for _, service := range Config.Ai.ServicesYaml {
+		if service != nil {
+			service.EnvFiles = nil
+			service.Env = nil
+		}
+	}
+
+	err = readConfigFile(bytes.NewReader(defaults))
 	if err != nil {
 		return err
 	}
@@ -57,13 +100,31 @@ func LoadConfig() error {
 		}
 	}
 
+	if Config.Terminal.ColorTheme != "" {
+		environment, err := envvars.Resolve(Config.Terminal.EnvFiles, nil)
+		if err != nil {
+			return fmt.Errorf("terminal color theme environment: %w", err)
+		}
+		colorTheme := os.Expand(Config.Terminal.ColorTheme, environment.Value)
+		home, _ := os.UserHomeDir()
+		colorTheme = strings.ReplaceAll(colorTheme, "~", home)
+		if err := iterm2.GetTheme(colorTheme); err != nil {
+			return fmt.Errorf("terminal color theme: %s", environment.Redactor()(err.Error()))
+		}
+	}
+
 	for _, v := range Config.Notes.Languages {
 		if len(v.Jupyter) != 0 {
 			jupyter.Append(v.Jupyter)
 		}
 	}
 
+	configRevision.Add(1)
 	return nil
+}
+
+func Revision() uint64 {
+	return configRevision.Load()
 }
 
 func readConfigFile(r io.Reader) error {
@@ -74,16 +135,6 @@ func readConfigFile(r io.Reader) error {
 	if err != nil {
 		log.Printf("[error] %v", err)
 		return err
-	}
-
-	if Config.Terminal.ColorTheme != "" {
-		colorTheme := os.ExpandEnv(Config.Terminal.ColorTheme)
-		home, _ := os.UserHomeDir()
-		colorTheme = strings.ReplaceAll(colorTheme, "~", home)
-		err = iterm2.GetTheme(colorTheme)
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, custom := range Config.Terminal.Widgets.AutoHyperlink.CustomRegexp {
@@ -155,14 +206,15 @@ type configT struct {
 	} `yaml:"Hotkeys"`
 
 	Terminal struct {
-		ColorTheme              string `yaml:"ColorTheme"`
-		PaneAutoCloseDelay      string `yaml:"PaneAutoCloseDelay"`
-		ScrollbackHistory       int    `yaml:"ScrollbackHistory"`
-		ScrollbackCloseKeyPress bool   `yaml:"ScrollbackCloseKeyPress"`
-		WriteMarkdownHistory    bool   `yaml:"WriteMarkdownHistory"`
-		JumpScrollLineCount     int    `yaml:"JumpScrollLineCount"`
-		AutoHyperlink           bool   `yaml:"AutoHyperlink"`
-		OSC8Hyperlinks          bool   `yaml:"OSC8Hyperlinks"`
+		ColorTheme              string   `yaml:"ColorTheme"`
+		EnvFiles                []string `yaml:"EnvFiles"`
+		PaneAutoCloseDelay      string   `yaml:"PaneAutoCloseDelay"`
+		ScrollbackHistory       int      `yaml:"ScrollbackHistory"`
+		ScrollbackCloseKeyPress bool     `yaml:"ScrollbackCloseKeyPress"`
+		WriteMarkdownHistory    bool     `yaml:"WriteMarkdownHistory"`
+		JumpScrollLineCount     int      `yaml:"JumpScrollLineCount"`
+		AutoHyperlink           bool     `yaml:"AutoHyperlink"`
+		OSC8Hyperlinks          bool     `yaml:"OSC8Hyperlinks"`
 
 		Widgets struct {
 			Table struct {
@@ -228,12 +280,14 @@ type LanguageOptionsT struct {
 }
 
 type LspT struct {
-	Command     []string       `yaml:"command"`
-	InitOptions map[string]any `yaml:"initializationOptions"`
+	Command     []string       `yaml:"Command"`
+	InitOptions map[string]any `yaml:"InitializationOptions"`
+	EnvFiles    []string       `yaml:"EnvFiles"`
 }
 
 type AiT struct {
 	OAuthUseBuiltinWebview      bool                   `yaml:"OAuthUseBuiltinWebview"`
+	EnvFiles                    []string               `yaml:"EnvFiles"`
 	MaxIterations               int                    `yaml:"MaxIterations"`
 	MaxContinuations            int                    `yaml:"MaxContinuations"`
 	RequestTimeout              string                 `yaml:"RequestTimeout"`
@@ -241,6 +295,10 @@ type AiT struct {
 	services                    map[string]*AIServiceT `yaml:"-"`
 	DefaultService              string                 `yaml:"DefaultService"`
 	ToolSummariseThresholdChars int                    `yaml:"ToolSummariseThresholdChars"`
+}
+
+func (ai *AiT) Environment() (*envvars.Environment, error) {
+	return envvars.Resolve(ai.EnvFiles, nil)
 }
 
 func (ai *AiT) RequestTimeoutDuration() time.Duration {
@@ -275,6 +333,7 @@ type AIServiceT struct {
 	Models             []string          `yaml:"Models"`
 	DefaultModel       string            `yaml:"DefaultModel"`
 	SummariseModelYaml string            `yaml:"SummariseModel"`
+	EnvFiles           []string          `yaml:"EnvFiles"`
 	Env                map[string]string `yaml:"Env"`
 }
 

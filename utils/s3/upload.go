@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/google/uuid"
 	"github.com/lmorg/ttyphoon/config"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 type Uploader struct {
@@ -38,6 +39,27 @@ func FromConfig() (*Uploader, error) {
 }
 
 func New(settings config.S3Config) (*Uploader, error) {
+	environment, err := envvars.Resolve(settings.EnvFiles, nil)
+	if err != nil {
+		return nil, fmt.Errorf("resolve Social/S3 environment: %w", err)
+	}
+	if settings.Region == "" {
+		if region, ok := environment.Lookup("AWS_REGION"); ok {
+			settings.Region = region
+		} else {
+			settings.Region = environment.Value("AWS_DEFAULT_REGION")
+		}
+	}
+	if settings.AccessKeyID == "" {
+		settings.AccessKeyID = environment.Value("AWS_ACCESS_KEY_ID")
+	}
+	if settings.SecretAccessKey == "" {
+		settings.SecretAccessKey = environment.Value("AWS_SECRET_ACCESS_KEY")
+	}
+	if settings.SessionToken == "" {
+		settings.SessionToken = environment.Value("AWS_SESSION_TOKEN")
+	}
+
 	for _, field := range []struct{ name, value string }{
 		{"Region", settings.Region}, {"AccessKeyID", settings.AccessKeyID},
 		{"SecretAccessKey", settings.SecretAccessKey}, {"Bucket", settings.Bucket},

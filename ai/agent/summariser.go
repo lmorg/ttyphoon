@@ -31,7 +31,11 @@ func (r *einoRuntime) summariseToolOutput(ctx context.Context, toolName, toolInp
 	if streamBlock != nil {
 		emitStream = streamBlock.Emit
 	}
-	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), r.agent.EnvironmentValue).Run(ctx, subagent.Request{
+	environment, err := r.agent.ServiceEnvironment()
+	if err != nil {
+		return "", fmt.Errorf("resolve AI service environment: %w", err)
+	}
+	content, err := subagent.New(r.agent.ProviderName(), r.agent.SummariseModelName(), environment).Run(ctx, subagent.Request{
 		SystemPrompt:         summariserSystemPrompt,
 		Prompt:               toolOutputSummaryPrompt(ctx, toolName, toolInput, rawOutput),
 		EmitStream:           emitStream,

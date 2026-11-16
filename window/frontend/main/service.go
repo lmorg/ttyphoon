@@ -50,6 +50,7 @@ type WApp struct {
 	lspDocs               *lsp.DocumentStore
 	typosDocs             *lsp.DocumentStore
 	typosUnavail          map[string]bool
+	typosUnavailRevision  uint64
 	typosMu               sync.Mutex
 	syntaxEngine          *syntaxcompletion.Engine
 	notesTables           *tablecore.Registry

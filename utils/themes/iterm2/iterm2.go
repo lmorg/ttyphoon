@@ -23,9 +23,9 @@ func GetTheme(filename string) error {
 		if err != nil {
 			return fmt.Errorf("error opening theme file: %v", err)
 		}
-	} else if f, err = file.OpenConfigFile("themes", filename); err == nil {
+	} else if f, err = file.OpenConfigFileQuiet("themes", filename); err == nil {
 	} else {
-		f, err = file.OpenConfigFile(".", filename)
+		f, err = file.OpenConfigFileQuiet(".", filename)
 		if err != nil {
 			return fmt.Errorf("error opening theme file: %v", err)
 		}

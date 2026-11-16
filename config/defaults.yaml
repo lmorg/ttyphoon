@@ -4,11 +4,12 @@
 # PublicBaseURL is the bucket root; Prefix is appended to it.
 # Social:
 #   S3:
+#     EnvFiles: [s3.vars] # optional; relative paths use ttyphoon XDG config directories
 #     Endpoint: "" # optional HTTPS S3-compatible endpoint; path-style requests
-#     Region: us-east-1
-#     AccessKeyID: "YOUR_ACCESS_KEY_ID" # literal config value, no env expansion
+#     Region: us-east-1 # or AWS_REGION / AWS_DEFAULT_REGION
+#     AccessKeyID: "YOUR_ACCESS_KEY_ID" # or AWS_ACCESS_KEY_ID
 #     SecretAccessKey: "YOUR_SECRET_ACCESS_KEY"
-#     SessionToken: "" # optional temporary-credential token
+#     SessionToken: "" # optional; AWS_SESSION_TOKEN when omitted
 #     Bucket: my-bucket
 #     Prefix: clipboard/images
 #     PublicBaseURL: https://cdn.example.com
@@ -83,6 +84,8 @@ Terminal:
   JumpScrollLineCount: -1
 
   #ColorTheme: "~/Chalk.itermcolors"
+  # EnvFiles are used only for expanding ColorTheme, not terminal panes.
+  #EnvFiles: [theme.vars]
 
   # Turn anything that looks like a URL or file on disk into a hyperlink.
   AutoHyperlink: true
@@ -171,7 +174,8 @@ Notes:
     TyposLsp:
       # Command/argv used to launch the typos-lsp server. Leave empty to disable
       # typos-lsp and always use aspell.
-      command: [ typos-lsp ]
+      Command: [ typos-lsp ]
+      # EnvFiles: [typos-lsp.vars]
 
 Window:
   StatusBar: true

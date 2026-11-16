@@ -22,7 +22,13 @@ func EnvsTmux(envMap map[string]string) string {
 }
 
 func QuoteString(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.NewReplacer(
+		`\`, `\\`,
+		`"`, `\"`,
+		`$`, `\$`,
+		"\n", `\n`,
+		"\r", `\r`,
+		"\t", `\t`,
+	).Replace(s)
 	return fmt.Sprintf(`"%s"`, s)
 }

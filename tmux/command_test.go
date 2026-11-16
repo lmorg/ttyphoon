@@ -2,7 +2,9 @@ package tmux
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -61,6 +63,50 @@ func TestPaneListReadsPerPaneZoomFlag(t *testing.T) {
 func TestQuoteStringEscapesTmuxArgument(t *testing.T) {
 	if got, want := workspace.QuoteString(`CUSTOM_ENV=/tmp/value\"quoted`), `"CUSTOM_ENV=/tmp/value\\\"quoted"`; got != want {
 		t.Fatalf("quoteString() = %q, want %q", got, want)
+	}
+	if got, want := workspace.QuoteString("KEY=$HOME\nnext\tline\r"), `"KEY=\$HOME\nnext\tline\r"`; got != want {
+		t.Fatalf("quoteString() = %q, want %q", got, want)
+	}
+}
+
+func TestWorkspaceEnvironmentSurvivesTmuxParsing(t *testing.T) {
+	tmuxPath, err := exec.LookPath("tmux")
+	if err != nil {
+		t.Skip("tmux is not installed")
+	}
+	dir := t.TempDir()
+	socket := "ttyphoon-env-" + filepath.Base(filepath.Dir(dir))
+	run := func(args ...string) ([]byte, error) {
+		cmd := exec.Command(tmuxPath, append([]string{"-L", socket, "-f", "/dev/null"}, args...)...)
+		cmd.Env = append(os.Environ(), "TMUX=")
+		return cmd.CombinedOutput()
+	}
+	if output, err := run("new-session", "-d", "-s", "test"); err != nil {
+		t.Fatalf("start isolated tmux server: %v: %s", err, output)
+	}
+	t.Cleanup(func() { _, _ = run("kill-server") })
+
+	value := "literal $HOME \"quotes\" \\ slash\nsecond\tline"
+	outputPath := filepath.Join(dir, "value")
+	shellCommand := `printf '%s' "$SCOPED_TEST" > ` + quoteShellArgument(outputPath)
+	command := "new-window -d" + workspace.EnvsTmux(map[string]string{"SCOPED_TEST": value}) + " " + workspace.QuoteString(shellCommand) + "\n"
+	commandPath := filepath.Join(dir, "commands")
+	if err := os.WriteFile(commandPath, []byte(command), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := run("source-file", commandPath); err != nil {
+		t.Fatalf("execute tmux command: %v: %s", err, output)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		actual, err := os.ReadFile(outputPath)
+		if err == nil && string(actual) == value {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pane environment = %q, read error = %v; want %q", actual, err, value)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -190,10 +236,15 @@ func TestSplitWindowUsesWorkspaceDirectoryWhenSupplied(t *testing.T) {
 func TestSplitWindowPassesAndSeedsActivePaneEnvironment(t *testing.T) {
 	previous := config.Config.Workspaces
 	config.Config.Workspaces = &workspace.WorkspaceT{
-		Defaults:  workspace.TermT{Envs: map[string]string{}},
-		Terminals: map[string]workspace.TermT{"project": {Envs: map[string]string{}}},
+		Defaults: workspace.TermT{Envs: map[string]string{}},
+		Terminals: map[string]workspace.TermT{"project": {
+			Pwd:      "$CLONE_TEST",
+			EnvFiles: []string{filepath.Join(t.TempDir(), "missing.env")},
+			Envs:     map[string]string{"CLONE_TEST": "workspace override"},
+		}},
 	}
 	t.Cleanup(func() { config.Config.Workspaces = previous })
+	t.Setenv("CLONE_TEST", "host value")
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -227,6 +278,9 @@ func TestSplitWindowPassesAndSeedsActivePaneEnvironment(t *testing.T) {
 	command := <-commands
 	if !strings.Contains(command, `-e "CLONE_TEST=inherited value"`) {
 		t.Fatalf("split command omitted pane environment: %q", command)
+	}
+	if !strings.Contains(command, `-c "inherited value"`) {
+		t.Fatalf("split command did not expand directory from pane environment: %q", command)
 	}
 	if !reflect.DeepEqual(childTerm.initialEnvVars, map[string]string{"CLONE_TEST": "inherited value"}) {
 		t.Fatalf("split pane initial environment = %#v", childTerm.initialEnvVars)
@@ -350,6 +404,116 @@ func TestWorkspaceStartSeedsApplicationAndWorkspaceEnvironment(t *testing.T) {
 	}
 	_ = writer.Close()
 	<-done
+}
+
+func TestWorkspaceStartUsesScopedFilesForEnvironmentAndDirectory(t *testing.T) {
+	t.Setenv("WORKSPACE_ROOT", "/host")
+	t.Setenv("WORKSPACE_SHARED", "host")
+	t.Setenv("WORKSPACE_EMPTY", "host")
+	dir := t.TempDir()
+	defaults := filepath.Join(dir, "defaults.env")
+	project := filepath.Join(dir, "project.env")
+	if err := os.WriteFile(defaults, []byte("WORKSPACE_ROOT=/defaults\nWORKSPACE_SHARED=defaults-file\nWORKSPACE_DEFAULT=from-file\nWORKSPACE_EMPTY=file\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(project, []byte("WORKSPACE_ROOT=/project\nWORKSPACE_SHARED=project-file\nWORKSPACE_QUOTED=value $HOME \"quoted\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	previous := config.Config.Workspaces
+	config.Config.Workspaces = &workspace.WorkspaceT{
+		Defaults: workspace.TermT{
+			EnvFiles: []string{defaults},
+			Envs:     map[string]string{"WORKSPACE_SHARED": "defaults-explicit", "WORKSPACE_EMPTY": ""},
+		},
+		Terminals: map[string]workspace.TermT{
+			"project": {Pwd: "$WORKSPACE_ROOT/subdir", EnvFiles: []string{project}},
+		},
+	}
+	t.Cleanup(func() { config.Config.Workspaces = previous })
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	tmux := &Tmux{
+		tty: writer, resp: make(chan *tmuxResponseT, 1), wins: newWindowMap(), panes: newPaneMap(),
+		renderer: &paneCloseTestRenderer{}, initialEnvVars: map[string]string{"APP_VALUE": "app", "WORKSPACE_SHARED": "host"},
+	}
+	commands := make(chan string, 1)
+	go func() {
+		if scanner := bufio.NewScanner(reader); scanner.Scan() {
+			commands <- scanner.Text()
+			tmux.resp <- &tmuxResponseT{Message: [][]byte{[]byte("%8")}}
+		}
+	}()
+	tmux.WorkspaceStart("project")
+	command := <-commands
+	for _, expected := range []string{
+		`-c "/project/subdir"`,
+		`-e "WORKSPACE_SHARED=defaults-explicit"`,
+		`-e "WORKSPACE_DEFAULT=from-file"`,
+		`-e "WORKSPACE_QUOTED=value \$HOME \"quoted\""`,
+		`-e "WORKSPACE_EMPTY="`,
+	} {
+		if !strings.Contains(command, expected) {
+			t.Errorf("workspace command %q does not contain %q", command, expected)
+		}
+	}
+	seed := tmux.pendingPaneState["%8"]
+	want := map[string]string{
+		"APP_VALUE": "app", "WORKSPACE_ROOT": "/project",
+		"WORKSPACE_SHARED": "defaults-explicit", "WORKSPACE_DEFAULT": "from-file",
+		"WORKSPACE_QUOTED": `value $HOME "quoted"`, "WORKSPACE_EMPTY": "",
+	}
+	if seed.workingDirectory != "/project/subdir" || !reflect.DeepEqual(seed.environment, want) {
+		t.Fatalf("workspace seed = %#v, want directory /project/subdir and environment %#v", seed, want)
+	}
+	if got := os.Getenv("WORKSPACE_SHARED"); got != "host" {
+		t.Fatalf("host environment changed to %q", got)
+	}
+	if strings.Count(command, `-e "WORKSPACE_SHARED=`) != 1 || !tmux.privateEnvironment.Load() {
+		t.Fatal("workspace command did not protect or uniquely pass its environment")
+	}
+}
+
+func TestWorkspaceStartReportsEnvFileErrorsWithoutStartingPane(t *testing.T) {
+	previous := config.Config.Workspaces
+	config.Config.Workspaces = &workspace.WorkspaceT{
+		Defaults: workspace.TermT{EnvFiles: []string{filepath.Join(t.TempDir(), "missing.env")}},
+	}
+	t.Cleanup(func() { config.Config.Workspaces = previous })
+	renderer := &workspaceStartTestRenderer{}
+	tmux := &Tmux{renderer: renderer}
+	tmux.WorkspaceStart("project")
+	if len(renderer.notifications) != 1 || renderer.levels[0] != types.NOTIFY_ERROR || !strings.Contains(renderer.notifications[0], "Cannot load workspace environment") {
+		t.Fatalf("notifications = %#v, levels = %#v", renderer.notifications, renderer.levels)
+	}
+}
+
+func TestPaneCreationErrorsDoNotExposeEnvironment(t *testing.T) {
+	var logged bytes.Buffer
+	previousLogOutput := log.Writer()
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(previousLogOutput) })
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+	tmux := &Tmux{tty: writer, resp: make(chan *tmuxResponseT, 1)}
+	tmux.privateEnvironment.Store(true)
+	go func() {
+		if scanner := bufio.NewScanner(reader); scanner.Scan() {
+			tmux.resp <- &tmuxResponseT{IsErr: true, Message: [][]byte{[]byte("synthetic-secret")}}
+		}
+	}()
+	_, err = tmux.SendCommand([]byte(`new-window -e "TOKEN=synthetic-secret"`))
+	if err == nil || strings.Contains(err.Error(), "synthetic-secret") || !strings.Contains(err.Error(), "tmux pane creation failed") {
+		t.Fatalf("error = %v, want failure without environment value", err)
+	}
+	if strings.Contains(logged.String(), "synthetic-secret") {
+		t.Fatal("debug log exposed an environment value")
+	}
 }
 
 func TestNewWindowInheritsAndSeedsActivePaneEnvironment(t *testing.T) {

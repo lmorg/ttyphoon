@@ -12,6 +12,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 )
 
@@ -42,6 +43,10 @@ type DuckDuckGoSearch struct {
 	endpoint   string
 	headers    http.Header
 	gate       *searxngRequestGate
+	managed    bool
+	revision   uint64
+	reloadMu   sync.Mutex
+	reloaded   *DuckDuckGoSearch
 
 	discoveryMu      sync.Mutex
 	discoveryData    string
@@ -58,7 +63,11 @@ func (t *DuckDuckGoSearch) Toggle()       { t.enabled = !t.enabled }
 func (t *DuckDuckGoSearch) Name() string  { return "webSearch" }
 func (t *DuckDuckGoSearch) Path() string  { return "internal" }
 func (t *DuckDuckGoSearch) Description() string {
-	if t.provider == "searxng" {
+	current, err := t.current()
+	if err != nil {
+		return "Web search configuration is invalid; correct the AI environment before using this tool."
+	}
+	if current.provider == "searxng" {
 		return strings.TrimSpace(searxngDescription)
 	}
 	return strings.TrimSpace(duckDuckGoDescription)
@@ -69,7 +78,31 @@ func (t *DuckDuckGoSearch) DefaultPermissions() aitypes.DefaultPermissions {
 
 func (t *DuckDuckGoSearch) InputType() reflect.Type { return reflect.TypeOf(duckDuckGoInputT{}) }
 
+func (t *DuckDuckGoSearch) current() (*DuckDuckGoSearch, error) {
+	if !t.managed || t.revision == config.Revision() {
+		return t, nil
+	}
+	t.reloadMu.Lock()
+	defer t.reloadMu.Unlock()
+	if t.reloaded != nil && t.reloaded.revision == config.Revision() {
+		return t.reloaded, nil
+	}
+	tool, err := (&DuckDuckGoSearch{}).New(t.agent)
+	if err != nil {
+		return nil, err
+	}
+	t.reloaded = tool.(*DuckDuckGoSearch)
+	return t.reloaded, nil
+}
+
 func (t *DuckDuckGoSearch) CallStructured(ctx context.Context, input any) (output string, callErr error) {
+	current, err := t.current()
+	if err != nil {
+		return "", err
+	}
+	if current != t {
+		return current.CallStructured(ctx, input)
+	}
 	defer func() {
 		if t.provider == "searxng" {
 			output = t.redactSecrets(output)

@@ -41,6 +41,43 @@ Startup permission is separate from permissions for the tools the server exposes
 The usual per-invocation/per-prompt choices apply, and AI settings can override the
 startup tool's default approval policy. Startup is not available to sub-agents.
 
+## Command Server Environment
+
+Command servers can load feature-scoped environment files:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "tickets": {
+        "type": "command",
+        "command": "ticket-mcp",
+        "envFiles": ["tickets.vars", "/secure/path/private.vars"],
+        "env": { "TICKET_PROJECT": "example" }
+      }
+    }
+  }
+}
+```
+
+Absolute paths are read directly. Relative paths are searched in every ttyphoon
+XDG configuration directory, not relative to the MCP JSON or working
+directory; every matching file is loaded in directory order. Later files win,
+and `env` overrides all files, including with an empty value. The resulting
+values override the inherited host environment and are passed only to that
+server, not other servers or AI services. AI-wide and service-specific files
+are not included. `envFiles` applies to command servers, not HTTP servers.
+
+Files contain literal `NAME=value` lines, without shell expansion or the
+legacy `!` prefix; blank lines and comments are ignored. Existing input
+substitution remains available in `env` values. A missing, unreadable or
+invalid file prevents that server from starting. Restart the server to apply
+file changes; automatic reconnects reuse its startup settings.
+
+Files are never loaded automatically at application startup. List existing
+`.env` files explicitly for each server that needs them, and remove any legacy
+`!` prefixes from variable names.
+
 ## Tool Permission Defaults
 
 Each server can configure defaults for every tool it exposes:

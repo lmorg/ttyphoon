@@ -15,7 +15,9 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/lmorg/ttyphoon/ai/modelenv"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 const EmitInterval = types.AI_EMIT_INTERVAL * time.Millisecond
@@ -32,33 +34,27 @@ type Client struct {
 	newModel modelFactory
 }
 
-func New(provider, modelName string, environmentValue func(string) string) *Client {
+func New(provider, modelName string, environment *envvars.Environment) *Client {
 	return &Client{newModel: func(ctx context.Context) (model.BaseChatModel, error) {
 		switch provider {
 		case ProviderOpenAI:
-			return openai.NewChatModel(ctx, &openai.ChatModelConfig{
-				APIKey:  environmentValue("OPENAI_API_KEY"),
-				Model:   modelName,
-				BaseURL: environmentValue("OPENAI_BASE_URL"),
-				ByAzure: strings.EqualFold(strings.TrimSpace(environmentValue("OPENAI_BY_AZURE")), "true"),
-			})
+			settings, err := modelenv.OpenAIConfig(environment, modelName)
+			if err != nil {
+				return nil, err
+			}
+			return openai.NewChatModel(ctx, &settings)
 		case ProviderAnthropic:
-			var baseURL *string
-			if value := strings.TrimSpace(environmentValue("CLAUDE_BASE_URL")); value != "" {
-				baseURL = &value
+			settings, err := modelenv.ClaudeConfig(environment, modelName, 8192)
+			if err != nil {
+				return nil, err
 			}
-			return claude.NewChatModel(ctx, &claude.Config{
-				APIKey: environmentValue("ANTHROPIC_API_KEY"), BaseURL: baseURL,
-				Model: modelName, MaxTokens: 8192,
-			})
+			return claude.NewChatModel(ctx, &settings)
 		case ProviderOllama:
-			baseURL := strings.TrimSpace(environmentValue("OLLAMA_HOST"))
-			if baseURL == "" {
-				baseURL = "http://localhost:11434"
-			} else if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-				baseURL = "http://" + baseURL
+			settings, err := modelenv.OllamaConfig(environment, modelName)
+			if err != nil {
+				return nil, err
 			}
-			return einoOllama.NewChatModel(ctx, &einoOllama.ChatModelConfig{BaseURL: baseURL, Model: modelName})
+			return einoOllama.NewChatModel(ctx, &settings)
 		default:
 			return nil, fmt.Errorf("sub-agent service %q is not supported", provider)
 		}

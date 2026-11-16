@@ -81,6 +81,12 @@ type imageRequestT struct {
 	InputReferences []inputReferenceT `json:"input_references,omitempty"`
 }
 
+type imageEnvironment struct {
+	apiKey  string
+	baseURL string
+	model   string
+}
+
 // inputReferenceT is OpenRouter's image-to-image mechanism: unlike OpenAI,
 // which takes an uploaded file on a separate /images/edits endpoint,
 // OpenRouter's single /images endpoint takes reference images inline as part
@@ -115,9 +121,22 @@ func (t *GenerateImage) generate(ctx context.Context, request *generateImageInpu
 		return "ERROR: 'prompt' is required", nil
 	}
 
-	apiKey := t.agent.ImageGenerationEnvironmentValue("OPENAI_API_KEY")
-	if strings.TrimSpace(apiKey) == "" {
+	environment, err := t.agent.ImageGenerationEnvironment()
+	if err != nil {
+		return "", fmt.Errorf("resolve image service environment: %w", err)
+	}
+	settings := imageEnvironment{
+		apiKey: environment.Value("OPENAI_API_KEY"), baseURL: environment.Value("OPENAI_BASE_URL"),
+		model: environment.Value("OPENAI_IMAGE_MODEL"),
+	}
+	if strings.TrimSpace(settings.apiKey) == "" {
 		return t.fail("ERROR: no OPENAI_API_KEY configured for this service"), nil
+	}
+	scoped := environment.Overlay(nil)
+	for _, name := range []string{"OPENAI_BASE_URL", "OPENAI_IMAGE_MODEL"} {
+		if value, ok := scoped[name]; ok && strings.TrimSpace(value) == "" {
+			return "", fmt.Errorf("scoped %s cannot be empty for image generation", name)
+		}
 	}
 
 	relative, filename, err := t.resolveOutputPath(request.File)
@@ -138,13 +157,13 @@ func (t *GenerateImage) generate(ctx context.Context, request *generateImageInpu
 	var b []byte
 	switch {
 	case inputImagePath == "":
-		b, err = t.requestImage(ctx, *request, "")
-	case isOpenRouterBaseURL(t.agent.ImageGenerationEnvironmentValue("OPENAI_BASE_URL")):
+		b, err = t.requestImage(ctx, *request, "", settings)
+	case isOpenRouterBaseURL(settings.baseURL):
 		// OpenRouter has no separate edits endpoint; it takes the reference
 		// image inline on the same generation request.
-		b, err = t.requestImage(ctx, *request, inputImagePath)
+		b, err = t.requestImage(ctx, *request, inputImagePath, settings)
 	default:
-		b, err = t.requestImageEdit(ctx, *request, inputImagePath)
+		b, err = t.requestImageEdit(ctx, *request, inputImagePath, settings)
 	}
 	if err != nil {
 		return t.fail(fmt.Sprintf("ERROR: %s", err)), nil
@@ -231,8 +250,8 @@ func imageOutputPathFromResult(output string) string {
 	return rest[:end]
 }
 
-func (t *GenerateImage) requestImage(ctx context.Context, request generateImageInputT, inputImagePath string) ([]byte, error) {
-	model := t.agent.ImageGenerationEnvironmentValue("OPENAI_IMAGE_MODEL")
+func (t *GenerateImage) requestImage(ctx context.Context, request generateImageInputT, inputImagePath string, settings imageEnvironment) ([]byte, error) {
+	model := settings.model
 	if strings.TrimSpace(model) == "" {
 		model = defaultImageModel
 	}
@@ -268,12 +287,12 @@ func (t *GenerateImage) requestImage(ctx context.Context, request generateImageI
 	ctx, cancel := context.WithTimeout(ctx, imageRequestTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(t.agent.ImageGenerationEnvironmentValue("OPENAI_BASE_URL"), "generations"), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(settings.baseURL, "generations"), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+t.agent.ImageGenerationEnvironmentValue("OPENAI_API_KEY"))
+	req.Header.Set("Authorization", "Bearer "+settings.apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -286,8 +305,8 @@ func (t *GenerateImage) requestImage(ctx context.Context, request generateImageI
 
 // requestImageEdit sends the existing image plus the prompt to the edits
 // endpoint so gpt-image-1 modifies it instead of generating one from scratch.
-func (t *GenerateImage) requestImageEdit(ctx context.Context, request generateImageInputT, inputImagePath string) ([]byte, error) {
-	model := t.agent.ImageGenerationEnvironmentValue("OPENAI_IMAGE_MODEL")
+func (t *GenerateImage) requestImageEdit(ctx context.Context, request generateImageInputT, inputImagePath string, settings imageEnvironment) ([]byte, error) {
+	model := settings.model
 	if strings.TrimSpace(model) == "" {
 		model = defaultImageModel
 	}
@@ -335,12 +354,12 @@ func (t *GenerateImage) requestImageEdit(ctx context.Context, request generateIm
 	ctx, cancel := context.WithTimeout(ctx, imageRequestTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(t.agent.ImageGenerationEnvironmentValue("OPENAI_BASE_URL"), "edits"), &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, imageEndpoint(settings.baseURL, "edits"), &body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", form.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+t.agent.ImageGenerationEnvironmentValue("OPENAI_API_KEY"))
+	req.Header.Set("Authorization", "Bearer "+settings.apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

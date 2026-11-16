@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"image"
 	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,6 +19,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/app"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 	"github.com/lmorg/ttyphoon/utils/imageattachment"
 )
 
@@ -44,20 +47,81 @@ func TestGenerateImageAcceptsExactSavedInputboxAttachmentPath(t *testing.T) {
 }
 
 type fakeAgent struct {
-	pwd string
-	env map[string]string
+	pwd      string
+	env      map[string]string
+	envFiles []string
+	renderer types.Renderer
 }
 
-func (a *fakeAgent) Renderer() types.Renderer { return nil }
+func (a *fakeAgent) Renderer() types.Renderer { return a.renderer }
 func (a *fakeAgent) ServiceName() string      { return "test" }
 func (a *fakeAgent) GetMeta() *aitypes.Meta   { return &aitypes.Meta{Pwd: a.pwd} }
 func (a *fakeAgent) ProjectRoot() string      { return a.pwd }
 func (a *fakeAgent) RequestWritePermission(context.Context, string) error {
 	return nil
 }
-func (a *fakeAgent) EnvironmentValue(n string) string { return a.env[n] }
-func (a *fakeAgent) ImageGenerationEnvironmentValue(n string) string {
-	return a.env[n]
+func (a *fakeAgent) ServiceEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(a.envFiles, a.env)
+}
+func (a *fakeAgent) ImageGenerationEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(a.envFiles, a.env)
+}
+
+type imageTestRenderer struct{ types.Renderer }
+
+func (*imageTestRenderer) DisplayNotification(types.NotificationType, string) {}
+
+func TestGenerateImageUsesScopedEnvironment(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "host-key")
+	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:1")
+	var pngData bytes.Buffer
+	if err := png.Encode(&pngData, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	type imageRequest struct {
+		authorization string
+		path          string
+		model         string
+	}
+	requests := make(chan imageRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		requests <- imageRequest{r.Header.Get("Authorization"), r.URL.Path, body.Model}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"b64_json": base64.StdEncoding.EncodeToString(pngData.Bytes())}}})
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "image.vars")
+	content := "OPENAI_API_KEY=scoped-key\nOPENAI_BASE_URL=" + server.URL + "\nOPENAI_IMAGE_MODEL=scoped-image-model\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	tool := &GenerateImage{agent: &fakeAgent{pwd: dir, envFiles: []string{path}, renderer: &imageTestRenderer{}}}
+	result, err := tool.generate(context.Background(), &generateImageInputT{Prompt: "test", File: "test.png"})
+	if err != nil || !strings.Contains(result, "image written") {
+		t.Fatalf("image generation result = %q, error = %v", result, err)
+	}
+	request := <-requests
+	if request.authorization != "Bearer scoped-key" || request.path != "/images/generations" || request.model != "scoped-image-model" {
+		t.Fatal("image request did not use the scoped credentials, endpoint and model")
+	}
+	if got := os.Getenv("OPENAI_API_KEY"); got != "host-key" {
+		t.Fatal("image generation changed the host environment")
+	}
+}
+
+func TestGenerateImageReportsEnvironmentFileErrors(t *testing.T) {
+	tool := &GenerateImage{agent: &fakeAgent{envFiles: []string{filepath.Join(t.TempDir(), "missing.vars")}}}
+	_, err := tool.generate(context.Background(), &generateImageInputT{Prompt: "test"})
+	if err == nil || !strings.Contains(err.Error(), "resolve image service environment") {
+		t.Fatalf("error = %v, want environment file failure", err)
+	}
 }
 
 func TestGenerateImageStructuredInputSchema(t *testing.T) {

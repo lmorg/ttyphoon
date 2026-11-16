@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 type Agent interface {
@@ -12,10 +13,8 @@ type Agent interface {
 	ServiceName() string
 	GetMeta() *Meta
 	ProjectRoot() string
-	// EnvironmentValue resolves a service-scoped value, falling back to the process environment.
-	EnvironmentValue(string) string
-	// ImageGenerationEnvironmentValue resolves image-generation settings for the configured service.
-	ImageGenerationEnvironmentValue(string) string
+	ServiceEnvironment() (*envvars.Environment, error)
+	ImageGenerationEnvironment() (*envvars.Environment, error)
 }
 
 type Tool interface {

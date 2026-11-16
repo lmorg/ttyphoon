@@ -1,9 +1,115 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/adrg/xdg"
+	"github.com/lmorg/ttyphoon/app"
+	"gopkg.in/yaml.v3"
 )
+
+func TestAIEnvironmentFilesDecodeFromYAML(t *testing.T) {
+	var settings AiT
+	if err := yaml.Unmarshal([]byte("EnvFiles: [global.vars]\nServices:\n  example:\n    EnvFiles: [service.vars]\n"), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if len(settings.EnvFiles) != 1 || settings.EnvFiles[0] != "global.vars" ||
+		len(settings.ServicesYaml["example"].EnvFiles) != 1 || settings.ServicesYaml["example"].EnvFiles[0] != "service.vars" {
+		t.Fatal("AI environment files did not decode")
+	}
+}
+
+func TestReloadClearsRemovedAIEnvironmentFiles(t *testing.T) {
+	previousConfig, previousCache, previousDirs := Config, langCache, xdg.ConfigDirs
+	t.Cleanup(func() {
+		Config, langCache, xdg.ConfigDirs = previousConfig, previousCache, previousDirs
+	})
+	Config, langCache = configT{}, LanguagesT{}
+	xdg.ConfigDirs = []string{t.TempDir()}
+	dir := filepath.Join(xdg.ConfigDirs[0], app.DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "test.yaml")
+	write := func(content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("Social:\n  S3:\n    EnvFiles: [s3.vars]\n    Bucket: test\nAI:\n  EnvFiles: [global.vars]\n  Services:\n    test-service:\n      Label: test-service\n      EnvFiles: [service.vars]\n      Env:\n        TEST_KEY: old-value\n")
+	if err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(Config.Ai.EnvFiles) != 1 || len(Config.Ai.Services()["test-service"].EnvFiles) != 1 {
+		t.Fatal("initial AI environment files were not loaded")
+	}
+	if Config.Social.S3 == nil {
+		t.Fatal("initial S3 configuration was not loaded")
+	}
+	write("AI:\n  Services:\n    test-service:\n      Label: test-service\n")
+	if err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(Config.Ai.EnvFiles) != 0 || len(Config.Ai.Services()["test-service"].EnvFiles) != 0 || len(Config.Ai.Services()["test-service"].Env) != 0 {
+		t.Fatal("reload retained removed AI environment settings")
+	}
+	if Config.Social.S3 != nil {
+		t.Fatal("reload retained a removed S3 configuration")
+	}
+}
+
+func TestReloadLSPEnvironmentFiles(t *testing.T) {
+	previousConfig, previousCache, previousDirs := Config, langCache, xdg.ConfigDirs
+	t.Cleanup(func() { Config, langCache, xdg.ConfigDirs = previousConfig, previousCache, previousDirs })
+	Config, langCache = configT{}, LanguagesT{}
+	xdg.ConfigDirs = []string{t.TempDir()}
+	dir := filepath.Join(xdg.ConfigDirs[0], app.DirName)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "test.yaml")
+	write := func(content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("Notes:\n  Languages:\n    go:\n      LSP:\n        command: [gopls]\n        EnvFiles: [old.vars]\n  SpellCheck:\n    TyposLsp:\n      EnvFiles: [typos.vars]\n")
+	if err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(Config.Notes.Languages["go"].LSP.EnvFiles) != 1 || len(Config.Notes.SpellCheck.TyposLsp.EnvFiles) != 1 {
+		t.Fatal("initial LSP environment files not loaded")
+	}
+	write("Notes: [")
+	if err := LoadConfig(); err == nil {
+		t.Fatal("invalid configuration was accepted")
+	}
+	if len(Config.Notes.Languages["go"].LSP.EnvFiles) != 1 || len(Config.Notes.SpellCheck.TyposLsp.EnvFiles) != 1 {
+		t.Fatal("failed reload lost LSP environment files")
+	}
+	write("Notes:\n  Languages:\n    go:\n      LSP:\n        command: [gopls]\n        EnvFiles: [new.vars]\n  SpellCheck:\n    TyposLsp:\n      EnvFiles: [new-typos.vars]\n")
+	if err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if files := Config.Notes.Languages["go"].LSP.EnvFiles; len(files) != 1 || files[0] != "new.vars" {
+		t.Fatal("reload did not replace language server environment files")
+	}
+	if files := Config.Notes.SpellCheck.TyposLsp.EnvFiles; len(files) != 1 || files[0] != "new-typos.vars" {
+		t.Fatal("reload did not replace spellchecker environment files")
+	}
+	write("Notes:\n  Languages:\n    go:\n      LSP:\n        command: [gopls]\n")
+	if err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if len(Config.Notes.Languages["go"].LSP.EnvFiles) != 0 || len(Config.Notes.SpellCheck.TyposLsp.EnvFiles) != 0 {
+		t.Fatal("reload retained removed LSP environment files")
+	}
+}
 
 func TestPaneAutoCloseDelayUsesConfiguredGoDuration(t *testing.T) {
 	previous := Config.Terminal.PaneAutoCloseDelay

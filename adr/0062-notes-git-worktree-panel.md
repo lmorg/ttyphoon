@@ -183,10 +183,12 @@ are unavailable, so it can explain the current context's limitations.
   `0xf022`. Place the icon-only Push button (`0xf093`) beside the Commit toggle
   in the Git toolbar, using the same icon-button style as other toolbar actions.
   Push opens the shared danger-style confirmation inputbox; Cancel does nothing.
-  Confirm runs `git push` through the interactive action policy and ClonePane,
-  honoring the repository's configured push behavior. Report one completion
-  notification on success or an error notification with terminal output on
-  failure. The collapsible row contains a themed single-line `Commit message`
+  Confirm runs `git -c push.autoSetupRemote=true push` through the interactive
+  action policy and ClonePane. For Git's `simple`, `current`, and `upstream`
+  default push modes, this sets an upstream when pushing a branch without one,
+  while honoring the repository's configured push destination and behavior.
+  Report one completion notification on success or an error notification with
+  terminal output on failure. The collapsible row contains a themed single-line `Commit message`
   input, a Commit button, and Stage all aligned right to the existing 72-by-24
   Staged/Unstaged actions. Clicking Commit while the row is hidden opens it and
   focuses the message input; clicking it while the row is open submits the

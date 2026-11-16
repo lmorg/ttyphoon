@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -72,9 +73,8 @@ func ConnectCmdLineGoSDKContext(ctx context.Context, overrides *mcp_config.Overr
 	// on every call because a Cmd cannot be restarted once run.
 	connect := func(ctx context.Context) (*mcp_sdk.ClientSession, error) {
 		cmd := exec.Command(command, args...)
-		// inherit envvars if provided
 		if len(envvars) > 0 {
-			cmd.Env = append(cmd.Env, envvars...)
+			cmd.Env = append(os.Environ(), envvars...)
 		}
 
 		transport := &mcp_sdk.CommandTransport{Command: cmd}

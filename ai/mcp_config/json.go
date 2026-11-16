@@ -26,6 +26,8 @@ type ServerT struct {
 	Args []string `json:"args"`
 	// Env are environment variables to set for the command
 	Env EnvVarsT `json:"env"`
+	// EnvFiles are environment files scoped to the command server.
+	EnvFiles []string `json:"envFiles,omitempty"`
 	// Type is "command" for stdio or "http" for HTTP/HTTPS
 	Type string `json:"type"`
 	// Url is the HTTP endpoint for HTTP servers

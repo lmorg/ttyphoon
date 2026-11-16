@@ -33,6 +33,7 @@ present but incomplete section is an error, not an implicit opt-out.
 ```yaml
 Social:
   S3:
+    EnvFiles: [s3.vars] # optional scoped environment file
     Endpoint: "" # optional S3-compatible HTTPS endpoint
     Region: us-east-1
     AccessKeyID: "YOUR_ACCESS_KEY_ID"
@@ -45,20 +46,31 @@ Social:
 
 | Field | Required | Meaning |
 |---|---|---|
+| EnvFiles | No | Scoped files for credential and region fallbacks |
 | Endpoint | No | HTTPS service root, optionally including a path; defaults to `https://s3.<Region>.amazonaws.com` |
-| Region | Yes | SigV4 signing region, including for custom endpoints |
-| AccessKeyID | Yes | Explicit signing credential |
-| SecretAccessKey | Yes | Explicit signing secret |
-| SessionToken | No | Token for temporary credentials |
+| Region | Yes | SigV4 signing region; can come from the environment |
+| AccessKeyID | Yes | Signing credential; can come from the environment |
+| SecretAccessKey | Yes | Signing secret; can come from the environment |
+| SessionToken | No | Token for temporary credentials; can come from the environment |
 | Bucket | Yes | Bucket name, not a bucket path or URL |
 | Prefix | No | Object-key directory within the bucket |
 | PublicBaseURL | Yes | Public bucket/CDN root, excluding Prefix |
 
-All fields are literal configuration values: the constructor does not expand
-environment references or populate credentials from host environment variables.
+Updated 2026-11-16: literal fields remain authoritative and are never expanded.
+When a literal credential or region is empty, the uploader resolves
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and
+`AWS_REGION` from S3 `EnvFiles` over the host environment. Only when
+`AWS_REGION` is absent does it try `AWS_DEFAULT_REGION`; a present empty value
+does not fall through. Later files override earlier files. Absolute paths are
+read directly; relative paths load all matches under ttyphoon's XDG config
+directories. Missing or invalid listed files are errors even when literal
+fields are supplied. Settings reload replaces the S3 configuration, including
+disabling it if its section is removed.
+
 The uploader does not use AWS profiles, instance metadata, or the default
-credential-provider chain. Protect credential-bearing configuration files and
-keep them out of source control. No credentials are sent to the frontend.
+credential-provider chain. Protect credential-bearing files and keep them out
+of source control. No credentials are sent to the frontend. Existing `.env`
+files must be listed explicitly; remove legacy `!` prefixes from their names.
 
 Endpoint and PublicBaseURL must use HTTPS and cannot contain URL credentials,
 queries, or fragments. Prefix rejects traversal segments and unsafe path
@@ -212,6 +224,8 @@ There is no document mutation: only the export snapshot's image references chang
   public URLs, and the absence of a public ACL.
 - Tests cover omitted/incomplete configuration, literal values without environment expansion, invalid
   URLs/paths, non-PNG input, HTTP failures, and redirect rejection.
+- Scoped environment tests cover XDG and absolute files, precedence, empty
+  values, host fallback, AWS profile isolation, reload, and signed requests.
 - Converter tests cover successful URL propagation, per-copy deduplication,
   skipping existing HTTP(S) sources, table figure references, inline HTML/RTF
   preservation, alt-text warnings, metadata stripping, and complete validation

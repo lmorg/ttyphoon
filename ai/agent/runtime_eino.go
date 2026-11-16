@@ -33,6 +33,7 @@ import (
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
+	"github.com/lmorg/ttyphoon/ai/modelenv"
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
 	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
@@ -732,12 +733,15 @@ func (r *einoRuntime) initOpenAI() error {
 		return err
 	}
 
-	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
-		APIKey:  r.agent.EnvironmentValue("OPENAI_API_KEY"),
-		Model:   r.agent.ModelName(),
-		BaseURL: r.agent.EnvironmentValue("OPENAI_BASE_URL"),
-		ByAzure: strings.EqualFold(strings.TrimSpace(r.agent.EnvironmentValue("OPENAI_BY_AZURE")), "true"),
-	})
+	environment, err := r.agent.ServiceEnvironment()
+	if err != nil {
+		return fmt.Errorf("resolve AI service environment: %w", err)
+	}
+	settings, err := modelenv.OpenAIConfig(environment, r.agent.ModelName())
+	if err != nil {
+		return err
+	}
+	chatModel, err := openai.NewChatModel(context.Background(), &settings)
 	if err != nil {
 		return err
 	}
@@ -765,26 +769,23 @@ func (r *einoRuntime) initAnthropic() error {
 		return err
 	}
 
-	var baseURL *string
-	rawBaseURL := strings.TrimSpace(r.agent.EnvironmentValue("CLAUDE_BASE_URL"))
-	if rawBaseURL != "" {
-		baseURL = &rawBaseURL
+	environment, err := r.agent.ServiceEnvironment()
+	if err != nil {
+		return fmt.Errorf("resolve AI service environment: %w", err)
 	}
-
-	chatModel, err := claude.NewChatModel(context.Background(), &claude.Config{
-		APIKey:    r.agent.EnvironmentValue("ANTHROPIC_API_KEY"),
-		BaseURL:   baseURL,
-		Model:     r.agent.ModelName(),
-		MaxTokens: einoAnthropicMaxTokens,
-		ThinkingConfig: &anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+	settings, err := modelenv.ClaudeConfig(environment, r.agent.ModelName(), einoAnthropicMaxTokens)
+	if err != nil {
+		return err
+	}
+	settings.ThinkingConfig = &anthropic.ThinkingConfigParamUnion{
+		OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+	}
+	settings.AdditionalRequestFields = map[string]any{
+		"output_config": map[string]any{
+			"effort": "high",
 		},
-		AdditionalRequestFields: map[string]any{
-			"output_config": map[string]any{
-				"effort": "high",
-			},
-		},
-	})
+	}
+	chatModel, err := claude.NewChatModel(context.Background(), &settings)
 	if err != nil {
 		return err
 	}
@@ -810,18 +811,16 @@ func (r *einoRuntime) initOllama() error {
 		return err
 	}
 
-	baseURL := strings.TrimSpace(r.agent.EnvironmentValue("OLLAMA_HOST"))
-	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+	environment, err := r.agent.ServiceEnvironment()
+	if err != nil {
+		return fmt.Errorf("resolve AI service environment: %w", err)
 	}
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "http://" + baseURL
+	settings, err := modelenv.OllamaConfig(environment, r.agent.ModelName())
+	if err != nil {
+		return err
 	}
 
-	chatModel, err := einoOllama.NewChatModel(context.Background(), &einoOllama.ChatModelConfig{
-		BaseURL: baseURL,
-		Model:   r.agent.ModelName(),
-	})
+	chatModel, err := einoOllama.NewChatModel(context.Background(), &settings)
 	if err != nil {
 		return err
 	}

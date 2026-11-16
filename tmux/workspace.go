@@ -7,31 +7,38 @@ import (
 
 	"github.com/lmorg/ttyphoon/config"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 	"github.com/lmorg/ttyphoon/utils/workspace"
 )
 
 func (tmux *Tmux) WorkspaceStart(name string) {
 	settings := config.Config.Workspaces.Workspace(name)
+	scoped, err := envvars.Resolve(settings.EnvFiles, settings.Envs)
+	if err != nil {
+		tmux.renderer.DisplayNotification(types.NOTIFY_ERROR, fmt.Sprintf("Cannot load workspace environment: %v", err))
+		return
+	}
+	if len(settings.EnvFiles) > 0 || len(settings.Envs) > 0 {
+		tmux.privateEnvironment.Store(true)
+	}
 	workingDirectory := ""
 	if settings.Pwd != "" {
-		workingDirectory = os.ExpandEnv(settings.Pwd)
+		workingDirectory = os.Expand(settings.Pwd, func(name string) string {
+			value, _ := scoped.Lookup(name)
+			return value
+		})
 	} else if pane, err := tmux.ActivePane(); err == nil && pane != nil {
 		workingDirectory = pane.Pwd()
 	}
-	environment := cloneEnvironment(tmux.initialEnvVars)
-	for key, value := range settings.Envs {
-		environment[key] = value
-	}
-	baseEnvironment := cloneEnvironment(tmux.initialEnvVars)
-	for key := range settings.Envs {
-		delete(baseEnvironment, key)
-	}
-	cmd := fmt.Sprintf(`new-window -n "%s" -P -F '#{pane_id}'`, name)
+	environment := scoped.Overlay(tmux.initialEnvVars)
+	cmd := fmt.Sprintf(`new-window -n %s -P -F '#{pane_id}'`, workspace.QuoteString(name))
 	if workingDirectory != "" {
 		cmd += " -c " + workspace.QuoteString(workingDirectory)
 	}
-	cmd += workspace.EnvsTmux(baseEnvironment)
-	cmd += workspaceTermCmdBuilder(&workspace.TermT{Envs: settings.Envs, Cmd: settings.Cmd})
+	cmd += workspace.EnvsTmux(environment)
+	if settings.Cmd != "" {
+		cmd += " " + workspace.QuoteString(settings.Cmd)
+	}
 
 	resp, err := tmux.SendCommand([]byte(cmd))
 	if err != nil {
@@ -58,33 +65,3 @@ func (tmux *Tmux) WorkspaceStart(name string) {
 		tmux.renderer.DisplayNotification(icon, msg)
 	}
 }
-
-func workspaceTermCmdBuilder(t *workspace.TermT) string {
-	if t == nil {
-		return ""
-	}
-
-	var cmd string
-	if t.Pwd != "" {
-		cmd += fmt.Sprintf(` -c "%s"`, os.ExpandEnv(t.Pwd))
-	}
-	for k, v := range t.Envs {
-		cmd += fmt.Sprintf(` -e "%s=%s"`, k, v)
-	}
-	if t.Cmd != "" {
-		cmd += fmt.Sprintf(` "%s"`, t.Cmd)
-	}
-	return cmd
-}
-
-/*
-tmux -C new-session -d -s build <<'EOF'
-new-window -n services -c ~/src/api -e LOG_LEVEL=debug 'npm run dev'
-split-window -h -c ~/src/web -e PORT=3000 'npm run start'
-split-window -v -c ~/src/worker -e QUEUE=default
-send-keys -t %2 'make watch' Enter
-select-layout tiled
-refresh-client -f no-output
-detach-client
-EOF
-*/

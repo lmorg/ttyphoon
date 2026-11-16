@@ -119,10 +119,12 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 	selectedLanguageID := ""
 	var argv []string
 	var initOptions map[string]any
+	var envFiles []string
 	for _, id := range candidateIDs {
 		if settings, ok := config.Config.Notes.Languages[id]; ok && len(settings.LSP.Command) > 0 {
 			argv = settings.LSP.Command
 			initOptions = settings.LSP.InitOptions
+			envFiles = settings.LSP.EnvFiles
 			selectedLanguageID = id
 			break
 		}
@@ -134,7 +136,7 @@ func (a *WApp) notesLspServerFor(absPath, languageID string) *lsp.ServerProcess 
 
 	alreadyRunning := a.lspManager.Has(a.GetCurrentProject(), selectedLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), selectedLanguageID, argv, initOptions)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), selectedLanguageID, argv, initOptions, envFiles)
 	if err != nil {
 		a.notifyLspStartError(selectedLanguageID, err)
 		return nil
@@ -267,6 +269,10 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 	}
 
 	a.typosMu.Lock()
+	if revision := config.Revision(); a.typosUnavailRevision != revision {
+		clear(a.typosUnavail)
+		a.typosUnavailRevision = revision
+	}
 	unavailable := a.typosUnavail[a.GetCurrentProject()]
 	a.typosMu.Unlock()
 	if unavailable {
@@ -276,7 +282,7 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 	initOptions := config.Config.Notes.SpellCheck.TyposLsp.InitOptions
 	alreadyRunning := a.lspManager.Has(a.GetCurrentProject(), typosLspLanguageID)
 
-	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), typosLspLanguageID, argv, initOptions)
+	sp, err := a.lspManager.GetOrStart(a.ctx, a.GetCurrentProject(), typosLspLanguageID, argv, initOptions, config.Config.Notes.SpellCheck.TyposLsp.EnvFiles)
 	if err != nil {
 		// typos-lsp is optional; do not surface a user-facing error. Record the
 		// failure so a missing binary isn't repeatedly respawned.
@@ -298,6 +304,7 @@ func (a *WApp) notesTyposServer() *lsp.ServerProcess {
 
 	if err := sp.EnsureInitialized(a.ctx, a.GetCurrentProject()); err != nil {
 		log.Printf("lsp: typos-lsp init failed (%v); falling back to aspell", err)
+		a.lspManager.Stop(a.GetCurrentProject(), typosLspLanguageID)
 		a.markTyposUnavailable()
 		return nil
 	}

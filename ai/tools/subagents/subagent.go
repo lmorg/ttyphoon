@@ -14,6 +14,7 @@ import (
 	"github.com/lmorg/ttyphoon/ai/agent/sessiondb"
 	"github.com/lmorg/ttyphoon/ai/subagent"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 type Subagent struct {
@@ -34,7 +35,7 @@ type subagentInputT struct {
 type configT interface {
 	ProviderName() string
 	ModelName() string
-	EnvironmentValue(string) string
+	ServiceEnvironment() (*envvars.Environment, error)
 }
 
 type delegateToolRunner interface {
@@ -185,7 +186,12 @@ func (t *Subagent) runRequests(ctx context.Context, requests []*requestT) (strin
 				subagentRequest.RunWithTools = runner.RunSubagentWithTools
 			}
 
-			s, err := subagent.New(configured.ProviderName(), configured.ModelName(), configured.EnvironmentValue).Run(subagentCtx, subagentRequest)
+			environment, err := configured.ServiceEnvironment()
+			if err != nil {
+				resp.store(i, request.Name, "", fmt.Errorf("resolve AI service environment: %w", err))
+				return
+			}
+			s, err := subagent.New(configured.ProviderName(), configured.ModelName(), environment).Run(subagentCtx, subagentRequest)
 			resp.store(i, request.Name, s, err)
 
 			blockMu.Lock()

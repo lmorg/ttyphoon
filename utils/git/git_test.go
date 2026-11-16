@@ -734,7 +734,7 @@ func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 		{name: "fetch-branch", parameters: map[string]string{"branch": "main"}, wantArgs: []string{"fetch", "--", "origin", "refs/heads/main:refs/remotes/origin/main"}},
 		{name: "pull-tags", wantArgs: []string{"fetch", "origin", "refs/tags/*:refs/tags/*"}},
 		{name: "push-tag", parameters: map[string]string{"tag": "v1.2.3"}, wantArgs: []string{"push", "origin", "refs/tags/v1.2.3"}},
-		{name: "push", wantArgs: []string{"push"}},
+		{name: "push", wantArgs: []string{"-c", "push.autoSetupRemote=true", "push"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var called bool
@@ -749,6 +749,59 @@ func TestRunActionUsesInteractivePolicyForRemoteOperations(t *testing.T) {
 			})
 			if result["mode"] != string(ActionModeInteractive) || result["error"] != "" || !called {
 				t.Fatalf("RunAction() = %v, interactive runner called = %v; want interactive execution", result, called)
+			}
+		})
+	}
+}
+
+func TestRunActionPushSetsUpstreamAndPreservesConfiguredRemote(t *testing.T) {
+	for _, remote := range []string{"origin", "other"} {
+		t.Run(remote, func(t *testing.T) {
+			root := initGitTestRepo(t)
+			gitPath := mustLookPathGit(t)
+			remoteRoot := t.TempDir()
+			runGitTestCommand(t, gitPath, remoteRoot, "init", "--quiet", "--bare")
+			if remote != "origin" {
+				originRoot := t.TempDir()
+				runGitTestCommand(t, gitPath, originRoot, "init", "--quiet", "--bare")
+				runGitTestCommand(t, gitPath, root, "remote", "add", "origin", originRoot)
+				runGitTestCommand(t, gitPath, root, "config", "remote.pushDefault", remote)
+			}
+			runGitTestCommand(t, gitPath, root, "remote", "add", remote, remoteRoot)
+			runGitTestCommand(t, gitPath, root, "config", "push.default", "simple")
+			runGitTestCommand(t, gitPath, root, "config", "push.autoSetupRemote", "false")
+			runGitTestCommand(t, gitPath, root, "checkout", "-b", "feature/new")
+
+			push := func() {
+				t.Helper()
+				result := RunAction(root, ActionRequest{Name: "push"}, func(command string, complete func(InteractiveActionResult)) error {
+					output, err := exec.Command("sh", "-c", command).CombinedOutput()
+					exitCode := 0
+					if err != nil {
+						exitCode = 1
+					}
+					complete(InteractiveActionResult{Output: string(output), ExitCode: exitCode, Err: err})
+					return nil
+				})
+				if result["error"] != "" {
+					t.Fatalf("push failed: %v", result)
+				}
+			}
+			push()
+			upstream, err := runGit(gitPath, root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+			if err != nil || strings.TrimSpace(string(upstream)) != remote+"/feature/new" {
+				t.Fatalf("upstream = %q, error = %v", upstream, err)
+			}
+			runGitTestCommand(t, gitPath, remoteRoot, "--git-dir", remoteRoot, "show-ref", "--verify", "refs/heads/feature/new")
+			runGitTestCommand(t, gitPath, root, "commit", "--quiet", "--allow-empty", "-m", "second")
+			push()
+			localHead, err := runGit(gitPath, root, "rev-parse", "HEAD")
+			if err != nil {
+				t.Fatal(err)
+			}
+			remoteHead, err := runGit(gitPath, remoteRoot, "--git-dir", remoteRoot, "rev-parse", "refs/heads/feature/new")
+			if err != nil || string(remoteHead) != string(localHead) {
+				t.Fatalf("remote head = %q, local head = %q, error = %v", remoteHead, localHead, err)
 			}
 		})
 	}

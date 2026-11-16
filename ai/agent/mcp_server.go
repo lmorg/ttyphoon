@@ -12,15 +12,13 @@ import (
 	"github.com/lmorg/ttyphoon/ai/mcp_client"
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/config"
-	"github.com/lmorg/ttyphoon/debug"
 	"github.com/lmorg/ttyphoon/types"
 	runtime "github.com/lmorg/ttyphoon/utils/wailsruntime"
 	mcp_sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func startServerCmdLine(ctx context.Context, cfgPath string, agent *Agent, envvars []string, server string, svr mcp_config.ServerT) error {
-	debug.Log(envvars)
-	log.Printf("[info] MCP server %s: %s %v", server, svr.Command, svr.Args)
+	log.Printf("[info] MCP server %s: %s (%d arguments)", server, svr.Command, len(svr.Args))
 
 	c, err := mcp_client.ConnectCmdLineContext(ctx, &svr.Override, envvars, svr.Command, svr.Args...)
 	if err != nil {

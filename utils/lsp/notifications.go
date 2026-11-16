@@ -38,6 +38,36 @@ type progressParams struct {
 	} `json:"value"`
 }
 
+func redactNotification(msg *Message, redact func(string) string) {
+	switch msg.Method {
+	case "window/logMessage":
+		var params logMessageParams
+		if json.Unmarshal(msg.Params, &params) == nil {
+			params.Message = redact(params.Message)
+			raw, err := json.Marshal(params)
+			if err != nil {
+				log.Printf("[error] lsp: encode redacted log notification: %v", err)
+				msg.Params = nil
+			} else {
+				msg.Params = raw
+			}
+		}
+	case "$/progress":
+		var params progressParams
+		if json.Unmarshal(msg.Params, &params) == nil {
+			params.Value.Title = redact(params.Value.Title)
+			params.Value.Message = redact(params.Value.Message)
+			raw, err := json.Marshal(params)
+			if err != nil {
+				log.Printf("[error] lsp: encode redacted progress notification: %v", err)
+				msg.Params = nil
+			} else {
+				msg.Params = raw
+			}
+		}
+	}
+}
+
 // ListenForNotifications consumes server notifications and dispatches known
 // payloads to corresponding emitters.
 func ListenForNotifications(
@@ -54,6 +84,8 @@ func ListenForNotifications(
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-sp.done:
 			return
 		case msg, ok := <-ch:
 			if !ok {

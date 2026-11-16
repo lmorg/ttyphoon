@@ -70,7 +70,9 @@ func (tmux *Tmux) GetTermTiles() *types.AppWindowTerms {
 		return aw.Tabs[i].Index() < aw.Tabs[j].Index()
 	})
 
-	debug.Log(aw)
+	if !tmux.privateEnvironment.Load() {
+		debug.Log(aw)
+	}
 
 	tmux.appWindow = aw
 	return aw

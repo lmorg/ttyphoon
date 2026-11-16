@@ -8,10 +8,13 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 // backoff constants for restart.
@@ -26,9 +29,11 @@ const (
 type ServerProcess struct {
 	argv        []string
 	initOptions map[string]any
+	envFiles    []string
 	transport   *Transport
 
 	mu          sync.Mutex
+	environment map[string]string
 	cmd         *exec.Cmd
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -40,12 +45,13 @@ type ServerProcess struct {
 	initMu      sync.Mutex
 
 	notifyCh chan *Message // re-exported from transport
+	done     chan struct{}
 }
 
 // NewServerProcess creates a ServerProcess but does not start it yet.
 // initOptions is optional; when non-empty it is sent as initializationOptions
 // during the LSP initialize handshake (env vars in string values are expanded).
-func NewServerProcess(argv []string, initOptions map[string]any) (*ServerProcess, error) {
+func NewServerProcess(argv []string, initOptions map[string]any, envFiles []string) (*ServerProcess, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("lsp: argv must not be empty")
 	}
@@ -53,27 +59,29 @@ func NewServerProcess(argv []string, initOptions map[string]any) (*ServerProcess
 	return &ServerProcess{
 		argv:        argv,
 		initOptions: initOptions,
+		envFiles:    slices.Clone(envFiles),
 		notifyCh:    make(chan *Message, 64),
+		done:        make(chan struct{}),
 		positionEnc: PositionEncodingUTF16,
 	}, nil
 }
 
 // expandEnvVarsInOptions recursively expands environment variables in string
 // values within a map[string]any tree, leaving non-string values untouched.
-func expandEnvVarsInOptions(v any) any {
+func expandEnvVarsInOptions(v any, environment map[string]string) any {
 	switch val := v.(type) {
 	case string:
-		return os.ExpandEnv(val)
+		return os.Expand(val, func(name string) string { return environment[name] })
 	case map[string]any:
 		out := make(map[string]any, len(val))
 		for k, v2 := range val {
-			out[k] = expandEnvVarsInOptions(v2)
+			out[k] = expandEnvVarsInOptions(v2, environment)
 		}
 		return out
 	case []any:
 		out := make([]any, len(val))
 		for i, v2 := range val {
-			out[i] = expandEnvVarsInOptions(v2)
+			out[i] = expandEnvVarsInOptions(v2, environment)
 		}
 		return out
 	default:
@@ -95,10 +103,29 @@ func (sp *ServerProcess) Start(ctx context.Context) error {
 }
 
 func (sp *ServerProcess) startLocked(ctx context.Context) error {
+	scoped, err := envvars.Resolve(sp.envFiles, nil)
+	if err != nil {
+		return fmt.Errorf("lsp: resolve environment files: %w", err)
+	}
+	host := make(map[string]string)
+	for _, entry := range os.Environ() {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok {
+			host[name] = value
+		}
+	}
+	environment := scoped.Overlay(host)
+	cmdEnv := make([]string, 0, len(environment))
+	for name, value := range environment {
+		cmdEnv = append(cmdEnv, name+"="+value)
+	}
+	slices.Sort(cmdEnv)
+	redact := scoped.Redactor()
 	log.Println("[info] starting lsp: ", sp.argv)
 	procCtx, cancel := context.WithCancel(ctx)
 
 	cmd := exec.CommandContext(procCtx, sp.argv[0], sp.argv[1:]...)
+	cmd.Env = cmdEnv
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -125,20 +152,28 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	}
 
 	transport := NewTransport(stdin, stdout)
+	transport.redact = redact
 
 	sp.cmd = cmd
 	sp.ctx = procCtx
 	sp.cancel = cancel
 	sp.transport = transport
+	sp.environment = environment
 	sp.initialized = false
 	sp.positionEnc = PositionEncodingUTF16
 
 	// Forward server notifications to our own channel.
 	go func() {
-		for msg := range transport.Notifications() {
+		for {
 			select {
-			case sp.notifyCh <- msg:
-			default:
+			case <-procCtx.Done():
+				return
+			case msg := <-transport.Notifications():
+				redactNotification(msg, redact)
+				select {
+				case sp.notifyCh <- msg:
+				default:
+				}
 			}
 		}
 	}()
@@ -147,7 +182,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("[trace] lsp %s stderr: %s", sp.argv[0], scanner.Text())
+			log.Printf("[trace] lsp %s stderr: %s", sp.argv[0], redact(scanner.Text()))
 		}
 	}()
 
@@ -155,6 +190,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 	go func() {
 		readErr := transport.ReadLoop(procCtx)
 		cmd.Wait() //nolint:errcheck
+		cancel()
 
 		sp.mu.Lock()
 		stopped := sp.stopped
@@ -165,7 +201,7 @@ func (sp *ServerProcess) startLocked(ctx context.Context) error {
 		}
 
 		if readErr != nil {
-			log.Printf("[warn] lsp[%s] read loop exited: %v — will restart", sp.argv[0], readErr)
+			log.Printf("[warn] lsp[%s] read loop exited: %s — will restart", sp.argv[0], redact(readErr.Error()))
 		} else {
 			log.Printf("[warn] lsp[%s] process exited — will restart", sp.argv[0])
 		}
@@ -224,6 +260,9 @@ func (sp *ServerProcess) Stop() {
 	}
 
 	sp.stopped = true
+	if sp.done != nil {
+		close(sp.done)
+	}
 	t := sp.transport
 	initialized := sp.initialized
 	cancel := sp.cancel
@@ -277,6 +316,7 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	}
 
 	t := sp.transport
+	environment := sp.environment
 	sp.mu.Unlock()
 
 	if t == nil {
@@ -322,7 +362,7 @@ func (sp *ServerProcess) EnsureInitialized(ctx context.Context, workspaceRoot st
 	}
 
 	if len(sp.initOptions) > 0 {
-		params["initializationOptions"] = expandEnvVarsInOptions(sp.initOptions)
+		params["initializationOptions"] = expandEnvVarsInOptions(sp.initOptions, environment)
 	}
 
 	resp, err := t.Call(ctx, "initialize", params, 8*time.Second)

@@ -156,9 +156,10 @@ type Tmux struct {
 
 	paneCreationMu sync.Mutex
 
-	limiter    sync.Mutex
-	readerDead atomic.Bool
-	prefixTtl  time.Time
+	limiter            sync.Mutex
+	readerDead         atomic.Bool
+	privateEnvironment atomic.Bool
+	prefixTtl          time.Time
 
 	layoutRefreshMu      sync.Mutex
 	layoutRefreshRunning bool
@@ -238,7 +239,9 @@ func NewStartSession(renderer types.Renderer, size *types.XY, startCommand strin
 
 		for scanner.Scan() {
 			b := scanner.Bytes()
-			debug.Log(b)
+			if !tmux.privateEnvironment.Load() {
+				debug.Log(b)
+			}
 
 			prefix := bytes.SplitN(b, []byte{' '}, 2)
 
@@ -592,7 +595,9 @@ func _respDefault(tmux *Tmux, b []byte) {
 
 func __respIgnored(tmux *Tmux, b []byte) {
 	// do nothing
-	debug.Log(b)
+	if !tmux.privateEnvironment.Load() {
+		debug.Log(b)
+	}
 }
 
 func __respPanic(tmux *Tmux, b []byte) {

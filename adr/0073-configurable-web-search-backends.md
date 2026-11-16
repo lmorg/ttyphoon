@@ -37,8 +37,12 @@ or a provider-specific model integration.
   instance path prefixes and append `/search` when needed. Reject unknown
   providers, invalid URLs, and URLs containing a query or fragment. Setup
   failures use the existing tool-initialization error path; there is no silent
-  cross-provider fallback. These variables belong to the application's launch
-  environment, not the active terminal pane's environment.
+  cross-provider fallback. Updated 2026-11-16: resolve these settings from
+  AI-wide `EnvFiles` over the launch environment, not from service settings
+  or the active terminal pane. Reloading configuration refreshes existing
+  search tools on their next use; file errors use the tool error path. Existing
+  `.env` files must be listed explicitly and cannot use the legacy `!` prefix;
+  see ADR 0102.
 - Read optional `TTYPHOON_SEARXNG_HEADERS` as a JSON object of header names to
   string values, limited to 32 KiB, when constructing the tool. Use it for
   Authorization, API-key, cookie, or private-proxy authentication on both search
@@ -182,7 +186,7 @@ is deferred. Full-page retrieval continues through `scrapeWebPage`.
 - `ai/tools/websearch/results_test.go`
 - `ai/tools/websearch/transport_test.go`
 - `ai/tools/webtools/web_tools.go` - separate page scraper
-- `README.md` - AI Web Search setup
+- `docs/AI-Web-Search.md` - AI Web Search setup
 - [SearXNG Search API](https://docs.searxng.org/dev/search_api.html)
 - [SearXNG search syntax](https://docs.searxng.org/user/search-syntax.html)
 - [SearXNG webapp source](https://github.com/searxng/searxng/blob/master/searx/webapp.py) - `/config` response fields

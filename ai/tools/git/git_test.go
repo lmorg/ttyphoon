@@ -10,6 +10,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
 	"github.com/lmorg/ttyphoon/types"
+	"github.com/lmorg/ttyphoon/utils/envvars"
 )
 
 type gitToolTestRenderer struct {
@@ -30,12 +31,16 @@ type gitToolTestAgent struct {
 	renderer types.Renderer
 }
 
-func (agent *gitToolTestAgent) Renderer() types.Renderer                      { return agent.renderer }
-func (agent *gitToolTestAgent) ServiceName() string                           { return "test" }
-func (agent *gitToolTestAgent) GetMeta() *aitypes.Meta                        { return nil }
-func (agent *gitToolTestAgent) ProjectRoot() string                           { return agent.root }
-func (agent *gitToolTestAgent) EnvironmentValue(string) string                { return "" }
-func (agent *gitToolTestAgent) ImageGenerationEnvironmentValue(string) string { return "" }
+func (agent *gitToolTestAgent) Renderer() types.Renderer { return agent.renderer }
+func (agent *gitToolTestAgent) ServiceName() string      { return "test" }
+func (agent *gitToolTestAgent) GetMeta() *aitypes.Meta   { return nil }
+func (agent *gitToolTestAgent) ProjectRoot() string      { return agent.root }
+func (agent *gitToolTestAgent) ServiceEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, nil)
+}
+func (agent *gitToolTestAgent) ImageGenerationEnvironment() (*envvars.Environment, error) {
+	return envvars.Resolve(nil, nil)
+}
 
 func TestGitToolEnabledAndAllowedByDefault(t *testing.T) {
 	tool, err := (&Git{}).New(nil)

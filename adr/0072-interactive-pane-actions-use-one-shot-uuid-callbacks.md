@@ -166,9 +166,17 @@ terminal text; it must correspond to an outstanding invocation.
   callback a no-op.
 - Horizontal and vertical split hotkeys pass `-c` with the workspace directory
   configured for the active window's name, falling back to `Workspaces.Defaults.Pwd`.
-  Expand environment variables and quote the directory as a tmux argument. With
+  Expand environment variables from the inherited pane environment, falling back
+  to the host, and quote the directory as a tmux argument. With
   no configured directory, omit `-c` and preserve tmux's normal split behavior.
   Splitting does not reapply the workspace's command or environment settings.
+- Workspace start resolves default and named `EnvFiles`, followed by their
+  `Envs`, and overlays them on the sanitized tmux startup environment. Pass the
+  same resulting values to tmux and the pane startup snapshot; expand the
+  configured workspace directory using the scoped lookup. Escape tmux variables
+  and control characters in arguments so values survive parsing. When scoped
+  workspace values are used, omit command arguments and raw control-stream
+  lines from debug logging for the lifetime of that tmux connection.
 - A pane-local Clone control (icon `0xf24d`) appears before zoom with the same
   hover/finished visibility rule. It calls `ClonePane` with an empty command
   and no callback. `ClonePane` resolves the active source pane internally,

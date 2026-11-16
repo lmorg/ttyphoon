@@ -6,12 +6,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lmorg/ttyphoon/ai/agent/aitypes"
+	"github.com/lmorg/ttyphoon/config"
 )
 
 const duckDuckGoURL = "https://api.duckduckgo.com/"
@@ -19,7 +19,11 @@ const duckDuckGoURL = "https://api.duckduckgo.com/"
 const maxSearchResponseBytes = 2 << 20
 
 func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
-	provider := strings.ToLower(strings.TrimSpace(os.Getenv("TTYPHOON_WEB_SEARCH_PROVIDER")))
+	environment, err := config.Config.Ai.Environment()
+	if err != nil {
+		return nil, fmt.Errorf("resolve AI environment for web search: %w", err)
+	}
+	provider := strings.ToLower(strings.TrimSpace(environment.Value("TTYPHOON_WEB_SEARCH_PROVIDER")))
 	endpoint := duckDuckGoURL
 	var headers http.Header
 	var gate *searxngRequestGate
@@ -27,7 +31,7 @@ func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 	case "", "duckduckgo":
 		provider = "duckduckgo"
 	case "searxng":
-		raw := strings.TrimSpace(os.Getenv("TTYPHOON_SEARXNG_URL"))
+		raw := strings.TrimSpace(environment.Value("TTYPHOON_SEARXNG_URL"))
 		if raw == "" {
 			return nil, fmt.Errorf("TTYPHOON_SEARXNG_URL is required for the searxng search provider")
 		}
@@ -44,7 +48,7 @@ func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 			instance.Path += "/search"
 		}
 		endpoint = instance.String()
-		headers, err = searxngHeaders(os.Getenv("TTYPHOON_SEARXNG_HEADERS"))
+		headers, err = searxngHeaders(environment.Value("TTYPHOON_SEARXNG_HEADERS"))
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +60,7 @@ func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 			}
 		}
 		concurrent := 2
-		if configured := strings.TrimSpace(os.Getenv("TTYPHOON_SEARXNG_MAX_CONCURRENT")); configured != "" {
+		if configured := strings.TrimSpace(environment.Value("TTYPHOON_SEARXNG_MAX_CONCURRENT")); configured != "" {
 			concurrent, err = strconv.Atoi(configured)
 			if err != nil || concurrent < 1 || concurrent > 16 {
 				return nil, fmt.Errorf("TTYPHOON_SEARXNG_MAX_CONCURRENT must be an integer between 1 and 16")
@@ -67,7 +71,7 @@ func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported TTYPHOON_WEB_SEARCH_PROVIDER %q: use duckduckgo or searxng", provider)
+		return nil, fmt.Errorf("unsupported TTYPHOON_WEB_SEARCH_PROVIDER: use duckduckgo or searxng")
 	}
 	client := &http.Client{Timeout: 20 * time.Second}
 	if provider == "searxng" {
@@ -82,6 +86,8 @@ func (t *DuckDuckGoSearch) New(agentInst aitypes.Agent) (aitypes.Tool, error) {
 		client:     client,
 		headers:    headers,
 		gate:       gate,
+		managed:    true,
+		revision:   config.Revision(),
 	}, nil
 }
 

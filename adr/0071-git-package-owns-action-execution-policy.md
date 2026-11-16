@@ -27,6 +27,9 @@ couple domain logic to the terminal implementation.
   single-tag push, and branch `push` use the interactive runner. Remote
   operations that may need credentials must be reachable through this path.
   Add or change execution modes only in the Git package.
+- Branch push enables `push.autoSetupRemote` for that invocation, so a first
+  push can create the configured remote branch and establish its upstream
+  without changing the repository's push settings.
 - `frontend.go` remains a thin Wails adapter: it supplies environment data and an
   interactive runner that forwards the command to the active renderer/tmux pane
   and returns the completion result.

@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/lmorg/ttyphoon/ai/mcp_config"
 	"github.com/lmorg/ttyphoon/app"
+	"github.com/lmorg/ttyphoon/config"
 
 	authsdk "github.com/modelcontextprotocol/go-sdk/auth"
 	oauthex "github.com/modelcontextprotocol/go-sdk/oauthex"
@@ -196,6 +196,10 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	if oauthCfg.RedirectURI == "" {
 		return nil, fmt.Errorf("redirect URI required for interactive OAuth")
 	}
+	environment, err := config.Config.Ai.Environment()
+	if err != nil {
+		return nil, fmt.Errorf("resolve AI environment for MCP OAuth: %w", err)
+	}
 
 	log.Printf("[debug] MCP OAuth: buildGoSDKAuthHandler redirect_host=%q auth_metadata_host=%q", hostFromURL(oauthCfg.RedirectURI), hostFromURL(oauthCfg.AuthServerMetadataURL))
 
@@ -286,7 +290,10 @@ func buildGoSDKAuthHandler(oauthCfg OAuthConfig, overrides *mcp_config.OverrideT
 	log.Printf("[debug] MCP OAuth: NewAuthorizationCodeHandler created")
 
 	// Wrap the handler to persist tokens to file
-	return &gosdkOAuthHandler{inner: h, tokenFile: oauthCfg.TokenFile, onAuthenticated: hooks.OnAuthenticated}, nil
+	return &gosdkOAuthHandler{
+		inner: h, tokenFile: oauthCfg.TokenFile, onAuthenticated: hooks.OnAuthenticated,
+		forcePRMShim: isPRMShimEnabled(environment.Value("TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM")),
+	}, nil
 }
 
 func ensureAuthorizationRequestScopes(rawURL string, scopes []string) string {
@@ -331,6 +338,7 @@ type gosdkOAuthHandler struct {
 	onAuthenticated       func()
 	inner                 *authsdk.AuthorizationCodeHandler
 	tokenFile             string
+	forcePRMShim          bool
 	prmMu                 sync.Mutex
 	prmMetadataBaseURL    string
 	prmMetadataServer     *http.Server
@@ -471,7 +479,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 
 	rmURL := resourceMetadataURLFromChallenges(challenges)
 	if rmURL == "" {
-		if isPRMShimEnabled() {
+		if g.forcePRMShim {
 			log.Printf("[debug] MCP OAuth: PRM shim forced but the challenge carried no resource_metadata to normalize")
 		}
 		return
@@ -520,7 +528,7 @@ func (g *gosdkOAuthHandler) maybeInjectProtectedResourceMetadata(req *http.Reque
 	switch {
 	case issuerMismatch:
 		log.Printf("[info] MCP OAuth: authorization server metadata issuer %q does not match advertised issuer %q (RFC 8414 mismatch); applying PRM shim", metaIssuer, rawIssuer)
-	case isPRMShimEnabled():
+	case g.forcePRMShim:
 		log.Printf("[info] MCP OAuth: applying PRM shim (forced via TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM) issuer=%q", rawIssuer)
 	default:
 		log.Printf("[debug] MCP OAuth: PRM shim not needed; authorization server issuer validates normally issuer=%q", rawIssuer)
@@ -1021,8 +1029,8 @@ func enrichOAuthConnectError(err error, oauthCfg OAuthConfig) error {
 	return err
 }
 
-func isPRMShimEnabled() bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv("TTYPHOON_MCP_OAUTH_ENABLE_PRM_SHIM")))
+func isPRMShimEnabled(value string) bool {
+	v := strings.TrimSpace(strings.ToLower(value))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
