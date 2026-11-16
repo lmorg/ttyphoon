@@ -1452,7 +1452,10 @@ describe('notes rendering', () => {
             ...getNotesStyleProperties('.notes-tools-clear'),
             ...getNotesStyleProperties('.notes-tools-icon'),
         };
-        expect(getNotesStyleProperties('.notes-toolbar-btn')).toMatchObject(gitButton);
+        expect(getNotesStyleProperties('.notes-toolbar-btn')).toMatchObject({
+            ...gitButton,
+            'font-size': 'var(--notes-font-size)',
+        });
         expect(getNotesStyleProperties('.notes-toolbar-btn:hover')).toMatchObject(
             getNotesStyleProperties('.notes-tools-clear:hover'),
         );

@@ -2205,6 +2205,10 @@ body {
     border: 0;
 }
 
+.notes-toolbar-btn {
+    font-size: var(--notes-font-size);
+}
+
 .notes-tools-icon,
 .notes-toolbar-btn {
     min-width: 32px;

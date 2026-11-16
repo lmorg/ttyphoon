@@ -462,7 +462,8 @@ as `lspOpenFile === currentFile`.
   `.notes-toolbar-btn` owns toolbar-button styling independently; do not use
   descendant button selectors on the mode bar, which also hosts the toolbar.
 - Document toolbar buttons share the Git toolbar icon buttons' border,
-  padding, sizing and hover treatment. New keeps its green highlight;
+  padding and hover treatment, but use the normal Notes font size for larger
+  icons rather than the Git buttons' two-pixel-smaller font. New keeps its green highlight;
   maximize uses the Git toggle buttons' selected treatment while enabled.
   The toolbar is vertically centred in the mode bar, whose background uses
   the normal theme background rather than the document strip's dark overlay.
