@@ -4709,6 +4709,140 @@ describe('notes rendering', () => {
         expect(right.getValue()).toBe('mine second text');
     });
 
+    function tabDragEvent(target, type, clientX = 0, clientY = 0, relatedTarget = null) {
+        const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY, relatedTarget });
+        target.dispatchEvent(event);
+        return event;
+    }
+
+    function setPaneDropBounds(root) {
+        vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+            left: 0, top: 0, right: 800, bottom: 400, width: 800, height: 400,
+        });
+    }
+
+    it.each([
+        ['right', 'row', 760, 200],
+        ['bottom', 'column', 400, 380],
+    ])('moves a tab into a new split at its own pane\'s %s edge', async (_edge, direction, x, y) => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        const editor = await openDocumentTabs(new Map([[first, 'first text'], [second, 'second text']]));
+        editor.typeText('mine ');
+        editor.setSelectionOffsets(2, 5);
+        const [source] = notesViewRoots();
+        setPaneDropBounds(source);
+        const tab = documentTab(second);
+        const target = source.querySelector('.notes-monaco-editor');
+        tabDragEvent(tab, 'dragstart');
+        expect(tabDragEvent(target, 'dragover', x, y).defaultPrevented).toBe(true);
+        expect(source.dataset.dropSplit).toBe(direction);
+        expect(getNotesStyleProperties('.notes-view[data-drop-split]::before')).toMatchObject({
+            'border': '1px solid var(--accent)',
+            'background-color': 'rgba(var(--accent-rgb), 0.2)',
+            'pointer-events': 'none',
+        });
+        expect(getNotesStyleProperties(`.notes-view[data-drop-split="${direction}"]::before`))
+            .toMatchObject(direction === 'row' ? { left: '50%' } : { top: '50%' });
+        expect(tabDragEvent(target, 'drop', x, y).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(notesViewRoots()).toHaveLength(2));
+        await flushPromises();
+        await flushPromises();
+        const [, destination] = notesViewRoots();
+        expect(viewTabTitles(source)).toEqual([first]);
+        expect(viewTabTitles(destination)).toEqual([second]);
+        expect(destination.dataset.focused).toBe('true');
+        expect(document.querySelector('.notes-layout-split').dataset.direction).toBe(direction);
+        expect(document.querySelector('[data-drop-split]')).toBeNull();
+        expect(editor.getValue()).toBe('first text');
+        const moved = mainEditorAdapter();
+        expect(moved.getValue()).toBe('mine second text');
+        expect(moved.getSelectionOffsets()).toEqual({ start: 2, end: 5 });
+        moved.undo();
+        expect(moved.getValue()).toBe('second text');
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(second);
+    });
+
+    it('splits the target pane and removes an emptied source pane when moving a tab across panes', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        await openDocumentTabs(new Map([[first, 'first text'], [second, 'second text']]));
+        await splitRight();
+        const [source, target] = notesViewRoots();
+        closeTabElement([...source.querySelectorAll('.notes-doc-tab')].find((tab) => tab.title === second));
+        await flushPromises();
+        await flushPromises();
+        setPaneDropBounds(target);
+        tabDragEvent(documentTab(first), 'dragstart');
+        expect(tabDragEvent(target, 'dragover', 400, 380).defaultPrevented).toBe(true);
+        expect(target.dataset.dropSplit).toBe('column');
+        tabDragEvent(target, 'drop', 400, 380);
+        await vi.waitFor(() => expect(source.isConnected).toBe(false));
+        const [remaining, destination] = notesViewRoots();
+        expect(remaining).toBe(target);
+        expect(viewTabTitles(remaining)).toEqual([second]);
+        expect(viewTabTitles(destination)).toEqual([first]);
+        expect(destination.dataset.focused).toBe('true');
+        expect(document.querySelector('.notes-layout-split').dataset.direction).toBe('column');
+        expect(destination.querySelector('.notes-tab-viewer').getAttribute('aria-selected')).toBe('true');
+        expect(destination.querySelector('.notes-preview').textContent).toContain('first text');
+        expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(first);
+    });
+
+    it('clears split previews on leaving, cancellation and centre drops, and leaves tab-bar drops unchanged', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        await openDocumentTabs(new Map([[first, 'first text'], [second, 'second text']]));
+        const [source] = notesViewRoots();
+        setPaneDropBounds(source);
+        expect(tabDragEvent(source, 'dragover', 760, 200).defaultPrevented).toBe(false);
+        const tab = documentTab(first);
+        tabDragEvent(tab, 'dragstart');
+        tabDragEvent(source, 'dragover', 760, 200);
+        expect(source.dataset.dropSplit).toBe('row');
+        tabDragEvent(source, 'dragover', 780, 395);
+        expect(source.dataset.dropSplit).toBe('column');
+        tabDragEvent(source, 'dragover', 795, 380);
+        expect(source.dataset.dropSplit).toBe('row');
+        expect(tabDragEvent(source, 'dragover', 400, 200).defaultPrevented).toBe(false);
+        expect(source.dataset.dropSplit).toBeUndefined();
+        tabDragEvent(source, 'dragover', 760, 200);
+        tabDragEvent(source, 'dragleave', 760, 200, source.querySelector('.notes-monaco-editor'));
+        expect(source.dataset.dropSplit).toBe('row');
+        tabDragEvent(source, 'dragleave', 760, 200, document.body);
+        expect(source.dataset.dropSplit).toBeUndefined();
+        tabDragEvent(source, 'dragover', 760, 200);
+        tabDragEvent(tab, 'dragend');
+        expect(source.dataset.dropSplit).toBeUndefined();
+        tabDragEvent(tab, 'dragstart');
+        tabDragEvent(source, 'dragover', 760, 200);
+        tabDragEvent(source, 'drop', 400, 200);
+        expect(notesViewRoots()).toEqual([source]);
+        expect(source.dataset.dropSplit).toBeUndefined();
+        tabDragEvent(tab, 'dragstart');
+        const strip = source.querySelector('.notes-doc-tabs');
+        expect(tabDragEvent(strip, 'dragover', 760, 20).defaultPrevented).toBe(true);
+        expect(source.dataset.dropSplit).toBeUndefined();
+        expect(strip.dataset.dropTarget).toBe('true');
+        tabDragEvent(strip, 'drop', 760, 20);
+        await flushPromises();
+        expect(viewTabTitles(source)).toEqual([second, first]);
+        expect(notesViewRoots()).toEqual([source]);
+    });
+
+    it('does not split when a pane\'s only tab is dropped on its own edge', async () => {
+        const first = '$NOTES/first.md';
+        await openDocumentTabs(new Map([[first, 'first text']]));
+        const [source] = notesViewRoots();
+        setPaneDropBounds(source);
+        tabDragEvent(documentTab(first), 'dragstart');
+        expect(tabDragEvent(source, 'dragover', 760, 200).defaultPrevented).toBe(false);
+        expect(source.dataset.dropSplit).toBeUndefined();
+        tabDragEvent(source, 'drop', 760, 200);
+        expect(notesViewRoots()).toEqual([source]);
+        expect(viewTabTitles(source)).toEqual([first]);
+    });
+
     it('collapses split views to one on switching workspace', async () => {
         const first = '$NOTES/first.md';
         const disk = new Map([[first, 'first text']]);

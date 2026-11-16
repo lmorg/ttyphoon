@@ -676,6 +676,12 @@ Known limitations, for the following tasks:
   the document stays open. A view emptied this way closes.
 - The drag uses a module-level record of the dragged tab rather than
   `dataTransfer`, which can't be read during `dragover`.
+- Dragging onto a view's outer right or bottom quarter previews the new half
+  with an accent overlay; dropping splits that target and moves the tab into
+  the new view, removing it from its source. At the bottom-right corner the
+  nearest proportional edge wins. Tab strips retain reorder/move priority.
+  Dragging a view's only tab onto its own edge does nothing, rather than
+  leaving an empty view. Preview markers clear on leaving, cancellation or drop.
 
 *Done (Stage 8, task 8):*
 
@@ -855,8 +861,8 @@ Answered on 2026-11-15 (Stage 8):
 
 - **17. Splitting:** "Split right" and "Split down" in the
   tab context menu and the command palette, with `Cmd+\` for Split right as in
-  VS Code. The new view opens the same document. Dragging a tab to the edge
-  of a view to split it comes later.
+  VS Code. The new view opens the same document. Dragging a tab to the right
+  or bottom edge instead splits and moves that tab into the new view.
 - **18. Moving focus between views:** clicking a view
   focuses it, and Cmd+Option+arrow keys move focus to the neighbouring view
   in that direction.

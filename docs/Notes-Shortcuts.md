@@ -22,6 +22,13 @@ The document tab context menu also offers **Close tab**, **Split right**, and
 **Split down**. Middle-click closes a tab. The command palette offers the tab
 navigation, close, reopen and split commands, including Split down.
 
+Drag a document tab onto a pane's right or bottom edge to move it into a new
+split. The outer quarter of the pane activates an accent-coloured preview of
+the new half-pane; dropping there creates the split and removes the tab from
+its original tab bar. An emptied source pane closes. Dragging a pane's only tab
+onto its own edge does nothing. Dropping on a tab bar still reorders or moves
+the tab without splitting.
+
 For editor Vim keys, see [Vim-Editor-Keys.md](Vim-Editor-Keys.md). Configurable
 application hotkey defaults are listed in [defaults.yaml](../config/defaults.yaml);
 this page is not a complete reference for every application shortcut.

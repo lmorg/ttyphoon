@@ -1648,17 +1648,22 @@ function removeNotesView(view) {
     renderNotesViewsLayout();
 }
 
+function createSplitNotesView(source, direction) {
+    const view = createNotesView();
+    notesViews.set(view.id, view);
+    bindNotesView(view);
+    notesLayout = splitLayoutView(notesLayout, source.id, view.id, direction);
+    renderNotesViewsLayout();
+    return view;
+}
+
 // Splits the focused view, side by side (row) or stacked (column), opening its
 // document in the new view, which takes focus (ADR 0100 question 17).
 async function splitNotesView(direction) {
     const source = focusedView();
     const doc = state.currentFile ? activeNotesDocument : null;
     rememberShownDocumentState();
-    const view = createNotesView();
-    notesViews.set(view.id, view);
-    bindNotesView(view);
-    notesLayout = splitLayoutView(notesLayout, source.id, view.id, direction);
-    renderNotesViewsLayout();
+    const view = createSplitNotesView(source, direction);
     if (doc) {
         view.addTab(doc.key);
         const remembered = source.recallDocument(doc.key);
@@ -1757,7 +1762,41 @@ async function moveNotesTab(from, key, to, beforeKey) {
     await closeNotesTab(from, key, { moving: true });
 }
 
+async function splitAndMoveNotesTab(from, key, target, direction) {
+    if (!notesViews.has(from.id) || !notesViews.has(target.id) || !from.tabs.includes(key)
+        || (from === target && from.tabs.length < 2)) {
+        return;
+    }
+    rememberShownDocumentState();
+    const view = createSplitNotesView(target, direction);
+    const remembered = from.recallDocument(key);
+    if (remembered) {
+        view.rememberDocument(key, remembered);
+    }
+    await moveNotesTab(from, key, view, '');
+}
+
 let draggedNotesTab = null;
+
+function notesTabSplitDirection(view, event) {
+    if (!draggedNotesTab || view.parts.docTabs.contains(event.target)
+        || (draggedNotesTab.view === view && view.tabs.length < 2)) {
+        return '';
+    }
+    const rect = view.root.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0
+        || event.clientX < rect.left || event.clientX > rect.right
+        || event.clientY < rect.top || event.clientY > rect.bottom) {
+        return '';
+    }
+    const right = (rect.right - event.clientX) / rect.width;
+    const bottom = (rect.bottom - event.clientY) / rect.height;
+    // The outer quarter activates a half-pane preview; corners use the nearer edge.
+    if (right <= 0.25 && right <= bottom) {
+        return 'row';
+    }
+    return bottom <= 0.25 ? 'column' : '';
+}
 
 function notesTabDropTarget(event) {
     const tab = event.target instanceof Element ? event.target.closest('.notes-doc-tab') : null;
@@ -1773,14 +1812,49 @@ function notesTabDropTarget(event) {
 }
 
 function clearNotesTabDropMarker() {
-    document.querySelectorAll('.notes-doc-tabs[data-drop-target], .notes-doc-tab[data-drop-before]').forEach((el) => {
+    document.querySelectorAll('.notes-doc-tabs[data-drop-target], .notes-doc-tab[data-drop-before], .notes-view[data-drop-split]').forEach((el) => {
         delete el.dataset.dropTarget;
         delete el.dataset.dropBefore;
+        delete el.dataset.dropSplit;
     });
 }
 
 function bindNotesViewTabs(view) {
     const strip = view.parts.docTabs;
+    view.root.addEventListener('dragover', (event) => {
+        if (!draggedNotesTab || strip.contains(event.target)) {
+            return;
+        }
+        const direction = notesTabSplitDirection(view, event);
+        clearNotesTabDropMarker();
+        if (direction) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'move';
+            }
+            view.root.dataset.dropSplit = direction;
+        }
+    }, true);
+    view.root.addEventListener('dragleave', (event) => {
+        if (!view.root.contains(event.relatedTarget)) {
+            clearNotesTabDropMarker();
+        }
+    });
+    view.root.addEventListener('drop', (event) => {
+        if (!draggedNotesTab || strip.contains(event.target)) {
+            return;
+        }
+        const dragged = draggedNotesTab;
+        const direction = notesTabSplitDirection(view, event);
+        draggedNotesTab = null;
+        clearNotesTabDropMarker();
+        if (direction) {
+            event.preventDefault();
+            event.stopPropagation();
+            void splitAndMoveNotesTab(dragged.view, dragged.key, view, direction);
+        }
+    }, true);
     strip.addEventListener('dragstart', (event) => {
         const tab = event.target instanceof Element ? event.target.closest('.notes-doc-tab') : null;
         if (!tab) {

@@ -1871,8 +1871,27 @@ body {
     opacity: 0.75;
 }
 
-.notes-view[data-focused="true"] {
+.notes-view[data-focused="true"],
+.notes-view[data-drop-split] {
     position: relative;
+}
+
+.notes-view[data-drop-split]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--accent);
+    background-color: rgba(var(--accent-rgb), 0.2);
+    pointer-events: none;
+    z-index: 6;
+}
+
+.notes-view[data-drop-split="row"]::before {
+    left: 50%;
+}
+
+.notes-view[data-drop-split="column"]::before {
+    top: 50%;
 }
 
 .notes-view[data-focused="true"]::after {
