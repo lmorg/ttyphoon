@@ -42,6 +42,21 @@ describe('style-utils', () => {
         expect(css).toContain('.swagger-endpoint-filter');
     });
 
+    it('uses accent hover text on both selected and inactive Swagger tabs', () => {
+        const style = document.createElement('style');
+        style.textContent = getSwaggerUIStyles(colors, 14);
+        document.head.appendChild(style);
+        const rules = Array.from(style.sheet.cssRules);
+        style.remove();
+        for (const tab of ['swagger-request-tab', 'swagger-response-tab']) {
+            const hoverIndex = rules.findIndex((rule) => rule.selectorText?.includes(`.${tab}:hover`));
+            const selectedIndex = rules.findIndex((rule) => rule.selectorText?.includes(`.${tab}[aria-selected="true"]`));
+            expect(selectedIndex).toBeGreaterThanOrEqual(0);
+            expect(hoverIndex).toBeGreaterThan(selectedIndex);
+            expect(rules[hoverIndex].style.getPropertyValue('color')).toBe('var(--accent)');
+        }
+    });
+
     it.each(['', 'markdown-body'])('uses a single grid without collapsed header borders with prefix "%s"', (classPrefix) => {
         const css = getMarkdownContentStyles(colors, 14, classPrefix);
         const prefix = classPrefix ? `.${classPrefix} ` : '';

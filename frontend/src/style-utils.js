@@ -644,15 +644,15 @@ export function getSwaggerUIStyles(colors, fontSize) {
             font-size: 1em;
         }
 
-        .swagger-request-tab:hover,
-        .swagger-response-tab:hover {
-            color: var(--fg);
-        }
-
         .swagger-request-tab[aria-selected="true"],
         .swagger-response-tab[aria-selected="true"] {
             color: var(--fg);
             border-bottom-color: var(--accent);
+        }
+
+        .swagger-request-tab:hover,
+        .swagger-response-tab:hover {
+            color: var(--accent);
         }
 
         /* Tab Panels */
