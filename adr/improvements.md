@@ -45,6 +45,7 @@ All improvements should consider if actions are blocking the UI -- particularly 
 
 ## future ambitions
 
+- [ ] Notes: open documents in separate windows that retain their original workspace context when the main workspace changes ([ADR 0101](0101-notes-documents-in-separate-windows.md))
 - [x] Notes: support having multiple documents open at a time ([ADR 0100](0100-notes-multiple-open-documents.md)). Each stage ships on `main` with no behaviour change until stage 7. "Blocked by Qn" refers to ADR 0100's open questions.
   - Stage 1: remove the fallback editor
     - [x] Add a Monaco editor/model fake for jsdom (`getValue`/`setValue`, `setModel`, view state, selections, `onDidChangeContent`) and run `notes.test.js` with Monaco active instead of the textarea fallback

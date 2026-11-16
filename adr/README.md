@@ -106,7 +106,8 @@ Each record uses: **Status**, **Context**, **Decision**, **Consequences**,
 | [0097](0097-cloned-pane-hang-diagnosis.md) | (proposed) Cloned panes that hang blank: diagnosis and proposed fixes | Terminal / Concurrency |
 | [0098](0098-backend-logging-conventions.md) | Backend logging conventions: `log` package with `[level] area:` prefixes | Cross-cutting / Diagnostics |
 | [0099](0099-pause-terminal-rendering-when-hidden.md) | Pause terminal rendering while the window is hidden | Rendering / Performance |
-| [0100](0100-notes-multiple-open-documents.md) | (proposed) Notes: multiple open documents | Notes |
+| [0100](0100-notes-multiple-open-documents.md) | Notes: multiple open documents | Notes |
+| [0101](0101-notes-documents-in-separate-windows.md) | (proposed) Notes documents in separate windows | Notes |
 
 ## Recurring themes
 
