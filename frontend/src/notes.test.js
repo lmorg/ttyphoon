@@ -1423,14 +1423,31 @@ describe('notes rendering', () => {
         }
     });
 
-    it('underlines Monaco spelling errors without masking the misspelled text', () => {
+    it('keeps the original SVG spelling undercurl on a separate layer without masking Monaco text', () => {
         const styles = getNotesStyleProperties('.notes-view .notes-monaco-editor .notes-monaco-typo-squiggle');
         expect(styles).toMatchObject({
-            'text-decoration': 'underline wavy var(--red) 1.5px',
-            'text-underline-offset': '3px',
+            position: 'relative',
+            'text-decoration': 'none',
+            'padding-bottom': '3px',
         });
         expect(styles['mask-image']).toBeUndefined();
         expect(styles['-webkit-mask-image']).toBeUndefined();
+        const underline = getNotesStyleProperties('.notes-view .notes-monaco-editor .notes-monaco-typo-squiggle::after');
+        expect(underline).toMatchObject({
+            content: "''",
+            position: 'absolute',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            height: '6px',
+            'background-color': 'var(--red)',
+            'mask-size': '8px 6px',
+            'mask-repeat': 'repeat-x',
+            'pointer-events': 'none',
+        });
+        expect(underline['mask-image']).toContain("d='M0 4 C1 2.5, 3 2.5, 4 4 S7 5.5, 8 4'");
+        expect(underline['mask-image']).toContain("stroke-width='1.5'");
+        expect(underline['-webkit-mask-image']).toBe(underline['mask-image']);
     });
 
     it('sizes the Monaco editor from the Notes font settings', () => {
