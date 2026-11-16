@@ -1402,7 +1402,7 @@ describe('notes rendering', () => {
 
     it('uses underline tabs for modes and tools without changing document tabs', async () => {
         await importNotesModule();
-        for (const selector of ['.notes-view .notes-tabs button', '.tools-tab']) {
+        for (const selector of ['.notes-mode-tab', '.tools-tab']) {
             expect(getNotesStyleProperties(selector)).toMatchObject({
                 border: 'none',
                 'border-bottom': '2px solid transparent',
@@ -1420,6 +1420,30 @@ describe('notes rendering', () => {
         expect(getNotesStyleProperties('.tab')['border-top-left-radius']).toBe('5px');
         expect(getNotesStyleProperties('.notes-view .notes-doc-tab[aria-selected="true"]'))
             .toMatchObject({ 'background-color': 'rgba(var(--fg-rgb), 0.1)' });
+    });
+
+    it('keeps toolbar buttons separate from the mode-tab styling', async () => {
+        await importNotesModule();
+        const tabs = [...document.querySelectorAll('.notes-tabs [role="tab"]')];
+        expect(tabs.length).toBeGreaterThan(0);
+        expect(tabs.every((tab) => tab.classList.contains('notes-mode-tab'))).toBe(true);
+        const toolbar = document.querySelector('.notes-tabs .notes-toolbar');
+        expect(toolbar).not.toBeNull();
+        const buttons = [...toolbar.querySelectorAll('button')];
+        expect(buttons.length).toBeGreaterThan(0);
+        postcss.parse(notesCss).walkRules((rule) => {
+            if (!rule.nodes.some((node) => node.prop === 'border-bottom' && node.value === '2px solid transparent')) return;
+            for (const button of buttons) {
+                expect(button.matches(rule.selector)).toBe(false);
+            }
+        });
+        expect(getNotesStyleProperties('.notes-toolbar-btn')).toMatchObject({
+            border: '1px solid transparent',
+            color: 'var(--fg)',
+            padding: '6px 12px',
+            'border-radius': '0',
+        });
+        expect(getNotesStyleProperties('.notes-toolbar-btn:hover').color).toBe('var(--accent)');
     });
 
     it('opens the terminal window menu next to the workspace title click', async () => {

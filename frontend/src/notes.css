@@ -1228,20 +1228,24 @@ body {
 }
 
 .notes-toolbar-btn {
-    border: none;
+    border: 1px solid transparent;
     background: transparent;
     color: var(--fg);
     font-size: 16px;
     cursor: pointer;
-    padding: 6px 8px;
+    padding: 6px 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 0;
     font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
     font-weight: 400;
-    transition: color 0.2s, background-color 0.2s;
+    transition: color 0.2s ease, border-color 0.2s ease;
     border-width: 1px !important;
+}
+
+.notes-toolbar-btn:hover {
+    color: var(--accent);
 }
 
 #notes-fullsize-btn:hover {
@@ -1788,7 +1792,7 @@ body {
     color: var(--accent);
 }
 
-.notes-view .notes-tabs button,
+.notes-mode-tab,
 .tools-tab {
     border-radius: 0;
     border: none;
@@ -1800,7 +1804,7 @@ body {
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.notes-view .notes-tabs button[aria-selected="true"],
+.notes-mode-tab[aria-selected="true"],
 .tools-tab[aria-selected="true"] {
     color: var(--fg);
     border-bottom-color: var(--accent);
@@ -1820,7 +1824,7 @@ body {
     border-color: var(--accent) !important;
 }
 
-.notes-view .notes-tabs button:hover,
+.notes-mode-tab:hover,
 .tools-tab:hover {
     color: var(--fg);
 }

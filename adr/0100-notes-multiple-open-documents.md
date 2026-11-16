@@ -458,6 +458,9 @@ as `lspOpenFile === currentFile`.
   use the flat Swagger request/response tab style: muted inactive text and an
   accent underline on the selected tab. Document and terminal tabs retain
   their rounded, bordered style.
+- `.notes-mode-tab` and `.tools-tab` share the underline styling.
+  `.notes-toolbar-btn` owns toolbar-button styling independently; do not use
+  descendant button selectors on the mode bar, which also hosts the toolbar.
 - Closing a tab saves the document first if it is dirty, and keeps the tab if
   the save fails. Closing the active tab opens its neighbour; closing the last
   tab leaves no document open and hides the strip.
