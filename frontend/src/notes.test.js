@@ -1437,13 +1437,22 @@ describe('notes rendering', () => {
                 expect(button.matches(rule.selector)).toBe(false);
             }
         });
-        expect(getNotesStyleProperties('.notes-toolbar-btn')).toMatchObject({
-            border: '1px solid transparent',
-            color: 'var(--fg)',
-            padding: '6px 12px',
-            'border-radius': '0',
+        const gitButton = {
+            ...getNotesStyleProperties('.notes-tools-clear'),
+            ...getNotesStyleProperties('.notes-tools-icon'),
+        };
+        expect(getNotesStyleProperties('.notes-toolbar-btn')).toMatchObject(gitButton);
+        expect(getNotesStyleProperties('.notes-toolbar-btn:hover')).toMatchObject(
+            getNotesStyleProperties('.notes-tools-clear:hover'),
+        );
+        expect(getNotesStyleProperties('#notes-new:hover')).toMatchObject({
+            'border-color': 'var(--green)',
+            color: 'var(--green)',
+            'background-color': 'rgba(var(--green-rgb), 0.2)',
         });
-        expect(getNotesStyleProperties('.notes-toolbar-btn:hover').color).toBe('var(--accent)');
+        expect(getNotesStyleProperties('#notes-fullsize-btn[data-enabled="true"]')).toEqual(
+            getNotesStyleProperties('.notes-git-commits-toggle[aria-pressed="true"]'),
+        );
     });
 
     it('opens the terminal window menu next to the workspace title click', async () => {

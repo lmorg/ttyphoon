@@ -1228,46 +1228,13 @@ body {
 }
 
 .notes-toolbar-btn {
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--fg);
-    font-size: 16px;
-    cursor: pointer;
-    padding: 6px 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 0;
-    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
-    font-weight: 400;
-    transition: color 0.2s ease, border-color 0.2s ease;
-    border-width: 1px !important;
 }
 
 .notes-toolbar-btn:hover {
     color: var(--accent);
-}
-
-#notes-fullsize-btn:hover {
-    color: var(--accent) !important;
-    border-radius: 5px;
-    border-color: var(--accent) !important;
-    background-color: rgba(var(--accent-rgb), 0.3) !important;
-}
-
-#notes-fullsize-btn[data-enabled="true"] {
-    color: var(--bg) !important;
-    border-radius: 5px;
-    border-color: var(--accent) !important;
-    background-color: var(--accent) !important;
-}
-
-#notes-history-prev:hover,
-#notes-history-next:hover {
-    color: var(--accent) !important;
-    border-radius: 5px;
-    border-color: var(--accent) !important;
-    background-color: rgba(var(--accent-rgb), 0.3);
 }
 
 #notes-modal-create:hover {
@@ -1830,10 +1797,9 @@ body {
 }
 
 #notes-new:hover {
-    border-color: var(--green) !important;
-    color: var(--green) !important;
+    border-color: var(--green);
+    color: var(--green);
     background-color: rgba(var(--green-rgb), 0.2);
-    border-radius: 5px;
 }
 
 
@@ -2224,7 +2190,8 @@ body {
 }
 
 .notes-tools-minimize,
-.notes-tools-clear {
+.notes-tools-clear,
+.notes-toolbar-btn {
     border: 1px solid rgba(var(--fg-rgb), 0.3);
     background: transparent;
     color: var(--fg);
@@ -2241,7 +2208,8 @@ body {
     border: 0;
 }
 
-.notes-tools-icon {
+.notes-tools-icon,
+.notes-toolbar-btn {
     min-width: 32px;
     padding: 4px 6px;
     font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
@@ -2256,7 +2224,8 @@ body {
 }
 
 .notes-tools-minimize:hover,
-.notes-tools-clear:hover {
+.notes-tools-clear:hover,
+.notes-toolbar-btn:hover {
     border: 1px solid var(--accent);
     background-color: rgba(var(--accent-rgb), 0.2);
 }
@@ -2368,12 +2337,8 @@ body {
     display: none;
 }
 
-.notes-git-commits-toggle[aria-pressed="true"] {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(var(--selection-rgb), 0.22);
-}
-
+.notes-git-commits-toggle[aria-pressed="true"],
+#notes-fullsize-btn[data-enabled="true"],
 .notes-git-commit-toggle[aria-pressed="true"] {
     color: var(--accent);
     border-color: var(--accent);
