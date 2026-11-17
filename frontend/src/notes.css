@@ -1717,6 +1717,18 @@ body {
     text-decoration: line-through;
 }
 
+.notes-view .notes-doc-tab.notes-doc-tab-drag-image {
+    position: fixed;
+    margin: 0;
+    box-sizing: border-box;
+    border: 1px solid rgba(var(--fg-rgb), 0.2);
+    border-radius: 5px;
+    background-color: var(--bg);
+    opacity: 0.75;
+    pointer-events: none;
+    transition: none;
+}
+
 /* The active document's file changed on disk or was deleted while it had
    unsaved edits. */
 .notes-view .notes-doc-notice {

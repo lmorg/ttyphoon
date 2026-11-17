@@ -22,6 +22,9 @@ The document tab context menu also offers **Close tab**, **Split right**, and
 **Split down**. Middle-click closes a tab. The command palette offers the tab
 navigation, close, reopen and split commands, including Split down.
 
+Dragged document tabs have four rounded corners, a border on every edge and
+75% opacity; tabs in the tab bar keep their usual style.
+
 Drag a document tab onto a pane's right or bottom edge to move it into a new
 split. The outer quarter of the pane activates an accent-coloured preview of
 the new half-pane; dropping there creates the split and removes the tab from

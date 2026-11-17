@@ -4663,6 +4663,44 @@ describe('notes rendering', () => {
         expect(viewTabTitles(only)).toEqual([]);
     });
 
+    it('uses a rounded, fully bordered translucent drag image without restyling the tab bar', async () => {
+        const file = '$NOTES/first.md';
+        await openDocumentTabs(new Map([[file, 'first text']]));
+        const tab = documentTab(file);
+        const strip = tab.parentElement;
+        vi.spyOn(tab, 'getBoundingClientRect').mockReturnValue({
+            left: 40, top: 20, right: 180, bottom: 52, width: 140, height: 32,
+        });
+        const frames = [];
+        vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+            frames.push(callback);
+            return frames.length;
+        });
+        const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn() };
+        const event = new MouseEvent('dragstart', { bubbles: true, clientX: 65, clientY: 28 });
+        Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+        tab.dispatchEvent(event);
+        const dragImage = document.querySelector('.notes-doc-tab-drag-image');
+        expect(dataTransfer.setDragImage).toHaveBeenCalledWith(dragImage, 25, 8);
+        expect(dragImage.isConnected).toBe(true);
+        expect(dragImage.textContent).toBe(tab.textContent);
+        expect(dragImage.classList.contains('tab')).toBe(false);
+        expect(dragImage.getAttribute('aria-hidden')).toBe('true');
+        expect(dragImage.style.cssText).toContain('width: 140px');
+        expect(dragImage.style.cssText).toContain('height: 32px');
+        expect(strip.querySelectorAll('.notes-doc-tab')).toHaveLength(1);
+        expect(tab.className).toBe('tab notes-doc-tab');
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab.notes-doc-tab-drag-image')).toMatchObject({
+            border: '1px solid rgba(var(--fg-rgb), 0.2)',
+            'border-radius': '5px',
+            opacity: '0.75',
+            'pointer-events': 'none',
+        });
+        frames.forEach((callback) => callback(0));
+        expect(dragImage.isConnected).toBe(false);
+        tab.dispatchEvent(new Event('dragend', { bubbles: true }));
+    });
+
     it('reorders tabs and moves them between views by dragging', async () => {
         const first = '$NOTES/first.md';
         const second = '$NOTES/second.md';

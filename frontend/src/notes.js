@@ -1864,6 +1864,24 @@ function bindNotesViewTabs(view) {
         if (event.dataTransfer) {
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('application/x-ttyphoon-notes-tab', tab.dataset.docKey);
+            const rect = tab.getBoundingClientRect();
+            const dragImage = tab.cloneNode(true);
+            dragImage.classList.remove('tab');
+            dragImage.classList.add('notes-doc-tab-drag-image');
+            dragImage.removeAttribute('data-drop-before');
+            dragImage.setAttribute('aria-hidden', 'true');
+            dragImage.tabIndex = -1;
+            dragImage.draggable = false;
+            Object.assign(dragImage.style, {
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+            });
+            view.root.appendChild(dragImage);
+            event.dataTransfer.setDragImage(dragImage, event.clientX - rect.left, event.clientY - rect.top);
+            // The browser snapshots the drag image before the next paint.
+            requestAnimationFrame(() => dragImage.remove());
         }
     });
     strip.addEventListener('dragover', (event) => {
