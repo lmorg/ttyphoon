@@ -6775,6 +6775,32 @@ describe('notes rendering', () => {
         }));
     });
 
+    it('updates the ToC highlight while a nested Markdown View surface scrolls', async () => {
+        const markdown = '# Guide\n\nIntro\n\n## First section\n\nBody\n\n## Second section\n\nMore body\n';
+        listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
+        getFileMock.mockResolvedValue({ contents: markdown, text: '', error: '' });
+
+        await importNotesModule();
+        document.querySelector('[data-file="$NOTES/guide.md"]').click();
+        await flushPromises();
+        await flushPromises();
+
+        const previewWrap = document.querySelector('.notes-preview-wrap');
+        const preview = document.querySelector('.notes-preview');
+        const headings = Array.from(preview.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+        const entries = Array.from(document.querySelectorAll('.notes-tools-toc-item'));
+        const secondSection = entries.find((entry) => entry.textContent === 'Second section');
+        expect(document.getElementById('notes-tools-tab-toc').textContent).toBe('Table of Contents');
+        previewWrap.getBoundingClientRect = () => ({ top: 100 });
+        headings[0].getBoundingClientRect = () => ({ top: -100 });
+        headings[1].getBoundingClientRect = () => ({ top: 120 });
+        headings[2].getBoundingClientRect = () => ({ top: 125 });
+
+        preview.dispatchEvent(new Event('scroll'));
+
+        expect(secondSection.dataset.active).toBe('true');
+    });
+
     it('reuses markdown processing pipeline for AI sections', async () => {
         listFilesMock.mockResolvedValue(['$NOTES/guide.md']);
         getFileMock.mockResolvedValue({ contents: '# Guide', text: '', error: '' });

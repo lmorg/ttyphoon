@@ -16257,7 +16257,7 @@ function bindNotesView(view) {
     if (view.parts.previewWrap) {
         view.parts.previewWrap.addEventListener('scroll', () => {
             syncToolsToCHighlightForMode();
-        });
+        }, { capture: true, passive: true });
     }
     if (view.parts.jupyterWrap) {
         view.parts.jupyterWrap.addEventListener('scroll', () => {
