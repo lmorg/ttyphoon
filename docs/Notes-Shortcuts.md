@@ -25,12 +25,14 @@ navigation, close, reopen and split commands, including Split down.
 Dragged document tabs have four rounded corners, a border on every edge and
 75% opacity; tabs in the tab bar keep their usual style.
 
-Drag a document tab onto a pane's right or bottom edge to move it into a new
-split. The outer quarter of the pane activates an accent-coloured preview of
-the new half-pane; dropping there creates the split and removes the tab from
-its original tab bar. An emptied source pane closes. Dragging a pane's only tab
-onto its own edge does nothing. Dropping on a tab bar still reorders or moves
-the tab without splitting.
+Drag a document tab onto a pane's left, right, top or bottom edge to move it
+into a new split on that side of the existing tab group. The outer quarter of
+the pane activates an accent-coloured preview of the new half-pane; at corners,
+the nearest proportional edge wins. Dropping there creates the split and
+removes the tab from its original tab bar. An emptied source pane closes.
+Dragging a pane's only tab onto its own edge does nothing. Dropping on a tab
+bar still reorders or moves the tab without splitting, including at the top
+and left edges.
 
 For editor Vim keys, see [Vim-Editor-Keys.md](Vim-Editor-Keys.md). Configurable
 application hotkey defaults are listed in [defaults.yaml](../config/defaults.yaml);

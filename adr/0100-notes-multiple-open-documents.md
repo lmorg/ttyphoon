@@ -676,10 +676,22 @@ Known limitations, for the following tasks:
   the document stays open. A view emptied this way closes.
 - The drag uses a module-level record of the dragged tab rather than
   `dataTransfer`, which can't be read during `dragover`.
-- Dragging onto a view's outer right or bottom quarter previews the new half
-  with an accent overlay; dropping splits that target and moves the tab into
-  the new view, removing it from its source. At the bottom-right corner the
-  nearest proportional edge wins. Tab strips retain reorder/move priority.
+- A temporary cloned tab supplies `dataTransfer.setDragImage`, with all four
+  corners rounded to 5px, a 1px border on every edge and opacity 0.75. Its
+  separate `.notes-doc-tab-drag-image` class replaces the shared `.tab` border
+  shape without changing the source tab. It keeps the source dimensions and
+  pointer offset, and is removed on the next animation frame after the browser
+  snapshots it. The tab-bar and terminal-tab styles are unchanged.
+- Dragging onto any of a view's four outer quarters previews the new half
+  with an accent overlay; dropping splits that target on the indicated side
+  and moves the tab into the new view, removing it from its source. Left and
+  top drops use `splitLayoutView`'s `before` option; right and bottom drops use
+  the usual after ordering. The new view takes focus and retains the dragged
+  document's remembered mode, selection, edits and model undo history.
+- At every corner the nearest proportional edge wins, with left/right winning
+  exact ties. `data-drop-split` identifies the edge
+  (`left`, `right`, `top`, `bottom`), while the layout still uses row/column.
+  Tab strips retain reorder/move priority, even along the top or left edge.
   Dragging a view's only tab onto its own edge does nothing, rather than
   leaving an empty view. Preview markers clear on leaving, cancellation or drop.
 
@@ -853,7 +865,7 @@ Answered on 2026-11-15 (Stage 7):
 - **16. Tabs and views:** each view has its own tab strip. A file can be a tab
   in both views; the tabs share one `NotesDocument`.
 
-Answered on 2026-11-15 (Stage 8):
+Answered on 2026-11-15 (Stage 8), updated 2026-11-17 for four-edge tab drops:
 
 - **1. Version 1 layout:** tabs plus recursive splits of document views, side
   by side or stacked, to any depth (decision 1). Terminal, AI and logs are
@@ -861,13 +873,15 @@ Answered on 2026-11-15 (Stage 8):
 
 - **17. Splitting:** "Split right" and "Split down" in the
   tab context menu and the command palette, with `Cmd+\` for Split right as in
-  VS Code. The new view opens the same document. Dragging a tab to the right
-  or bottom edge instead splits and moves that tab into the new view.
+  VS Code. The new view opens the same document. Dragging a tab to any edge
+  instead splits and moves that tab into a new view on that side. Top and left
+  drops insert before the existing tab group; bottom and right insert after it.
 - **18. Moving focus between views:** clicking a view
   focuses it, and Cmd+Option+arrow keys move focus to the neighbouring view
   in that direction.
 - **19. Moving tabs:** a tab can be dragged onto another
-  view's tab strip, and "Move to other view" is not needed beyond that.
+  view's tab strip, or onto any pane edge to split and move it. "Move to other
+  view" is not needed beyond that.
 - **20. Sizes:** dividers can be dragged, double-clicking a
   divider makes its neighbours equal, and a view cannot shrink below a
   minimum width or height. There is no depth limit.

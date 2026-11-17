@@ -1898,12 +1898,20 @@ body {
     z-index: 6;
 }
 
-.notes-view[data-drop-split="row"]::before {
+.notes-view[data-drop-split="right"]::before {
     left: 50%;
 }
 
-.notes-view[data-drop-split="column"]::before {
+.notes-view[data-drop-split="left"]::before {
+    right: 50%;
+}
+
+.notes-view[data-drop-split="bottom"]::before {
     top: 50%;
+}
+
+.notes-view[data-drop-split="top"]::before {
+    bottom: 50%;
 }
 
 .notes-view[data-focused="true"]::after {

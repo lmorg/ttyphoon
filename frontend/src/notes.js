@@ -1648,11 +1648,11 @@ function removeNotesView(view) {
     renderNotesViewsLayout();
 }
 
-function createSplitNotesView(source, direction) {
+function createSplitNotesView(source, direction, options) {
     const view = createNotesView();
     notesViews.set(view.id, view);
     bindNotesView(view);
-    notesLayout = splitLayoutView(notesLayout, source.id, view.id, direction);
+    notesLayout = splitLayoutView(notesLayout, source.id, view.id, direction, options);
     renderNotesViewsLayout();
     return view;
 }
@@ -1762,13 +1762,14 @@ async function moveNotesTab(from, key, to, beforeKey) {
     await closeNotesTab(from, key, { moving: true });
 }
 
-async function splitAndMoveNotesTab(from, key, target, direction) {
+async function splitAndMoveNotesTab(from, key, target, edge) {
     if (!notesViews.has(from.id) || !notesViews.has(target.id) || !from.tabs.includes(key)
         || (from === target && from.tabs.length < 2)) {
         return;
     }
     rememberShownDocumentState();
-    const view = createSplitNotesView(target, direction);
+    const direction = edge === 'left' || edge === 'right' ? 'row' : 'column';
+    const view = createSplitNotesView(target, direction, { before: edge === 'left' || edge === 'top' });
     const remembered = from.recallDocument(key);
     if (remembered) {
         view.rememberDocument(key, remembered);
@@ -1778,7 +1779,7 @@ async function splitAndMoveNotesTab(from, key, target, direction) {
 
 let draggedNotesTab = null;
 
-function notesTabSplitDirection(view, event) {
+function notesTabSplitEdge(view, event) {
     if (!draggedNotesTab || view.parts.docTabs.contains(event.target)
         || (draggedNotesTab.view === view && view.tabs.length < 2)) {
         return '';
@@ -1789,13 +1790,17 @@ function notesTabSplitDirection(view, event) {
         || event.clientY < rect.top || event.clientY > rect.bottom) {
         return '';
     }
+    const left = (event.clientX - rect.left) / rect.width;
     const right = (rect.right - event.clientX) / rect.width;
+    const top = (event.clientY - rect.top) / rect.height;
     const bottom = (rect.bottom - event.clientY) / rect.height;
+    const horizontal = Math.min(left, right);
+    const vertical = Math.min(top, bottom);
     // The outer quarter activates a half-pane preview; corners use the nearer edge.
-    if (right <= 0.25 && right <= bottom) {
-        return 'row';
+    if (horizontal <= 0.25 && horizontal <= vertical) {
+        return left < right ? 'left' : 'right';
     }
-    return bottom <= 0.25 ? 'column' : '';
+    return vertical <= 0.25 ? (top < bottom ? 'top' : 'bottom') : '';
 }
 
 function notesTabDropTarget(event) {
@@ -1825,15 +1830,15 @@ function bindNotesViewTabs(view) {
         if (!draggedNotesTab || strip.contains(event.target)) {
             return;
         }
-        const direction = notesTabSplitDirection(view, event);
+        const edge = notesTabSplitEdge(view, event);
         clearNotesTabDropMarker();
-        if (direction) {
+        if (edge) {
             event.preventDefault();
             event.stopPropagation();
             if (event.dataTransfer) {
                 event.dataTransfer.dropEffect = 'move';
             }
-            view.root.dataset.dropSplit = direction;
+            view.root.dataset.dropSplit = edge;
         }
     }, true);
     view.root.addEventListener('dragleave', (event) => {
@@ -1846,13 +1851,13 @@ function bindNotesViewTabs(view) {
             return;
         }
         const dragged = draggedNotesTab;
-        const direction = notesTabSplitDirection(view, event);
+        const edge = notesTabSplitEdge(view, event);
         draggedNotesTab = null;
         clearNotesTabDropMarker();
-        if (direction) {
+        if (edge) {
             event.preventDefault();
             event.stopPropagation();
-            void splitAndMoveNotesTab(dragged.view, dragged.key, view, direction);
+            void splitAndMoveNotesTab(dragged.view, dragged.key, view, edge);
         }
     }, true);
     strip.addEventListener('dragstart', (event) => {
