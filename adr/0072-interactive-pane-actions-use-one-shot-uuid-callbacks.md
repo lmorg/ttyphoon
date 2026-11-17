@@ -50,7 +50,10 @@ terminal text; it must correspond to an outstanding invocation.
   ClonePane, new-window, hotkey splits, and WorkspaceStart pass their exact
   child environment with `-e` and seed it by pane ID. ClonePane also passes and
   seeds the source pane's known working directory; new windows and splits seed
-  their configured or inherited directory. Keep pending seeds until pane
+  their configured or inherited directory. If pane discovery wins the race and
+  the seed arrives after terminal creation, update the terminal's active row
+  source and refresh Notes and the renderer as well as the pane's working
+  directory. Keep pending seeds until pane
   discovery completes so early `%output` initialization cannot lose them. A
   pane discovered without a ttyphoon creation request falls back to tmux's
   `pane_start_path`/`pane_current_path` metadata and the application's startup

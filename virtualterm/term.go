@@ -530,6 +530,31 @@ func (term *Term) SetInitialEnvVars(envvars map[string]string) {
 	term._mutex.Unlock()
 }
 
+func (term *Term) SetInitialWorkingDirectory(pwd string) {
+	if term == nil || pwd == "" {
+		return
+	}
+
+	term._mutex.Lock()
+	if term.tile != nil {
+		term.tile.SetPwd(pwd)
+	}
+	rowSource := types.RowSource{Pwd: pwd}
+	if term._rowSource != nil {
+		rowSource.Host = term._rowSource.Host
+	}
+	term._rowSource = &rowSource
+	if term.screen != nil && term._curPos.Y >= 0 && int(term._curPos.Y) < len(*term.screen) {
+		(*term.screen)[term._curPos.Y].Source = term._rowSource
+	}
+	term._mutex.Unlock()
+
+	if term.renderer != nil {
+		term.renderer.RefreshNotes()
+		term.renderer.TriggerRedraw()
+	}
+}
+
 func cloneEnvVars(envvars map[string]string) map[string]string {
 	clone := make(map[string]string, len(envvars))
 	for key, value := range envvars {

@@ -47,6 +47,51 @@ func TestGetEnvVarsFallsBackToInitialEnvironmentUntilShellSnapshot(t *testing.T)
 	}
 }
 
+type initialWorkingDirectoryTestTile struct {
+	types.Tile
+	pwd string
+}
+
+func (tile *initialWorkingDirectoryTestTile) Pwd() string       { return tile.pwd }
+func (tile *initialWorkingDirectoryTestTile) SetPwd(pwd string) { tile.pwd = pwd }
+
+type initialWorkingDirectoryTestRenderer struct {
+	types.Renderer
+	refreshes int
+	redraws   int
+}
+
+func (renderer *initialWorkingDirectoryTestRenderer) RefreshNotes()  { renderer.refreshes++ }
+func (renderer *initialWorkingDirectoryTestRenderer) TriggerRedraw() { renderer.redraws++ }
+
+func TestSetInitialWorkingDirectoryUpdatesCurrentRowMetadata(t *testing.T) {
+	tile := &initialWorkingDirectoryTestTile{pwd: "/old"}
+	renderer := &initialWorkingDirectoryTestRenderer{}
+	term := &Term{
+		tile:       tile,
+		renderer:   renderer,
+		_rowSource: &types.RowSource{Host: "test-host", Pwd: "/old"},
+		_normBuf:   types.Screen{&types.Row{}},
+	}
+	term.screen = &term._normBuf
+	term._normBuf[0].Source = term._rowSource
+
+	term.SetInitialWorkingDirectory("/workspace/project")
+
+	if tile.Pwd() != "/workspace/project" {
+		t.Fatalf("tile working directory = %q", tile.Pwd())
+	}
+	if term.Pwd(&types.XY{}) != "/workspace/project" {
+		t.Fatalf("terminal working directory metadata = %q", term.Pwd(&types.XY{}))
+	}
+	if term._rowSource.Host != "test-host" {
+		t.Fatalf("terminal metadata host = %q", term._rowSource.Host)
+	}
+	if renderer.refreshes != 1 || renderer.redraws != 1 {
+		t.Fatalf("renderer updates = refresh %d, redraw %d", renderer.refreshes, renderer.redraws)
+	}
+}
+
 type testCondition struct {
 	Screen    string
 	Operation func(t *testing.T, term *Term)

@@ -402,6 +402,9 @@ func TestWorkspaceStartSeedsApplicationAndWorkspaceEnvironment(t *testing.T) {
 	if !reflect.DeepEqual(childTerm.initialEnvVars, wantEnvironment) {
 		t.Fatalf("workspace pane initial environment = %#v, want %#v", childTerm.initialEnvVars, wantEnvironment)
 	}
+	if child.Pwd() != "/workspace/project" || childTerm.initialWorkingDirectory != "/workspace/project" {
+		t.Fatalf("workspace pane startup directory = %q, metadata directory = %q", child.Pwd(), childTerm.initialWorkingDirectory)
+	}
 	_ = writer.Close()
 	<-done
 }
@@ -1171,7 +1174,8 @@ func TestRespawnedPaneClearsCompletionState(t *testing.T) {
 
 type shellCloneTestTerm struct {
 	paneGeometryTestTerm
-	initialEnvVars map[string]string
+	initialEnvVars          map[string]string
+	initialWorkingDirectory string
 }
 
 func (term *shellCloneTestTerm) GetEnvVars() map[string]string {
@@ -1183,6 +1187,11 @@ func (term *shellCloneTestTerm) GetEnvVars() map[string]string {
 
 func (term *shellCloneTestTerm) SetInitialEnvVars(environment map[string]string) {
 	term.initialEnvVars = cloneEnvironment(environment)
+}
+
+func (term *shellCloneTestTerm) SetInitialWorkingDirectory(workingDirectory string) {
+	term.initialWorkingDirectory = workingDirectory
+	term.pane.SetPwd(workingDirectory)
 }
 
 func TestClonePaneInheritsActivePaneDirectoryAndEnvironment(t *testing.T) {

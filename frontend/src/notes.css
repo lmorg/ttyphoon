@@ -1665,6 +1665,12 @@ body {
     display: none;
 }
 
+.notes-view .notes-doc-tab-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    max-width: 220px;
+}
+
 /* Shares the .tab shape with the terminal tabs. */
 .notes-view .notes-doc-tab {
     display: flex;
@@ -1678,6 +1684,48 @@ body {
     user-select: none;
     white-space: nowrap;
     transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.notes-view .notes-doc-tab-close {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--terminal-menu-border, rgba(var(--fg-rgb), 0.3));
+    border-radius: 3px;
+    background: var(--terminal-bg-50, rgba(var(--bg-rgb), 0.5));
+    color: var(--terminal-fg, var(--fg));
+    font-family: "Font Awesome Regular", "Font Awesome Solid", "Font Awesome", sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
+}
+
+.notes-view .notes-doc-tab-wrap:hover .notes-doc-tab-close,
+.notes-view .notes-doc-tab-wrap:focus-within .notes-doc-tab-close {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 120ms ease, transform 120ms ease, visibility 0s;
+}
+
+.notes-view .notes-doc-tab-close:hover,
+.notes-view .notes-doc-tab-close:focus-visible {
+    color: var(--terminal-bg, var(--bg));
+    background: var(--terminal-accent, var(--accent));
+    border-color: var(--terminal-accent, var(--accent));
 }
 
 .notes-view .notes-doc-tab[aria-selected="true"] {
@@ -1972,9 +2020,7 @@ body {
 .notes-view[data-git-diff="true"] .notes-jupyter-wrap,
 .notes-view[data-git-diff="true"] .notes-csv-view-wrap,
 .notes-view[data-git-diff="true"] .notes-image-view-wrap,
-.notes-view[data-git-diff="true"] .notes-meta-wrap,
-.notes-view[data-git-diff="true"] .notes-swagger-view-wrap,
-.notes-view[data-git-diff="true"] .notes-swagger-run-wrap {
+.notes-view[data-git-diff="true"] .notes-meta-wrap {
     display: none !important;
 }
 
@@ -2063,6 +2109,11 @@ body {
 .notes-view .notes-swagger-view-wrap[data-active="true"],
 .notes-view .notes-swagger-run-wrap[data-active="true"] {
     display: flex !important;
+}
+
+.notes-view[data-git-diff="true"] .notes-swagger-view-wrap,
+.notes-view[data-git-diff="true"] .notes-swagger-run-wrap {
+    display: none !important;
 }
 
 .notes-view .notes-image-view-wrap {

@@ -1459,6 +1459,41 @@ describe('notes rendering', () => {
         });
     });
 
+    it('shows document close controls on hover with terminal close-button styling', () => {
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab').padding).toBe('6px 12px');
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab-close')).toMatchObject({
+            border: '1px solid var(--terminal-menu-border, rgba(var(--fg-rgb), 0.3))',
+            'border-radius': '3px',
+            background: 'var(--terminal-bg-50, rgba(var(--bg-rgb), 0.5))',
+            color: 'var(--terminal-fg, var(--fg))',
+            'font-size': '12px',
+            'z-index': '1',
+        });
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab-wrap:hover .notes-doc-tab-close'))
+            .toMatchObject({ opacity: '1', visibility: 'visible', 'pointer-events': 'auto' });
+        expect(getNotesStyleProperties('.notes-view .notes-doc-tab-close:hover')).toMatchObject({
+            color: 'var(--terminal-bg, var(--bg))',
+            background: 'var(--terminal-accent, var(--accent))',
+            'border-color': 'var(--terminal-accent, var(--accent))',
+        });
+    });
+
+    it('hides active structured views when the Diff tab is selected', () => {
+        const rules = [];
+        postcss.parse(notesCss).walkRules((rule) => rules.push(rule));
+        const activeViewRule = rules.findIndex((rule) =>
+            rule.selectors.includes('.notes-view .notes-swagger-view-wrap[data-active="true"]'));
+        const diffHideRule = rules.findIndex((rule) =>
+            rule.selectors.includes('.notes-view[data-git-diff="true"] .notes-swagger-view-wrap'));
+
+        expect(activeViewRule).toBeGreaterThanOrEqual(0);
+        expect(diffHideRule).toBeGreaterThan(activeViewRule);
+        expect(rules[diffHideRule].nodes.find((node) => node.prop === 'display')).toMatchObject({
+            value: 'none',
+            important: true,
+        });
+    });
+
     it('uses underline tabs for modes and tools without changing document tabs', async () => {
         await importNotesModule();
         for (const selector of ['.notes-mode-tab', '.tools-tab']) {
@@ -4131,7 +4166,8 @@ describe('notes rendering', () => {
         expect(saveFileMock).toHaveBeenCalledWith(first, 'typed first text', expect.any(String));
         expect([...document.querySelectorAll('.notes-doc-tab')].map((tab) => [tab.title, tab.getAttribute('aria-selected')]))
             .toEqual([[first, 'false'], [second, 'true']]);
-        // Tabs close from their right-click menu, so they have no close button.
+        expect(documentTab(first).parentElement.querySelector('.notes-doc-tab-close').getAttribute('aria-label'))
+            .toBe('Close first.md');
         expect(document.querySelector('.notes-doc-tab button')).toBeNull();
         expect(notesLspCloseDocumentMock).not.toHaveBeenCalledWith(first);
 
@@ -4154,6 +4190,57 @@ describe('notes rendering', () => {
         expect(document.querySelectorAll('.notes-doc-tab')).toHaveLength(0);
         expect(document.querySelector('.notes-doc-tabs').hidden).toBe(true);
         expect(editor.getValue()).toBe('');
+    });
+
+    it('closes a document from its tab close button without selecting that tab', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: file, text: '', error: '' }));
+
+        await importNotesModule();
+        for (const file of [first, second]) {
+            document.querySelector(`[data-file="${file}"]`).click();
+            await flushPromises();
+            await flushPromises();
+        }
+
+        documentTab(first).parentElement.querySelector('.notes-doc-tab-close').click();
+        await flushPromises();
+        await flushPromises();
+
+        expect(documentTab(first)).toBeNull();
+        expect(documentTab(second).getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('scrolls overflowing document tabs with the vertical mouse wheel', async () => {
+        const first = '$NOTES/first.md';
+        const second = '$NOTES/second.md';
+        listFilesMock.mockResolvedValue([first, second]);
+        getFileMock.mockImplementation(async (file) => ({ contents: file, text: '', error: '' }));
+
+        await importNotesModule();
+        for (const file of [first, second]) {
+            document.querySelector(`[data-file="${file}"]`).click();
+            await flushPromises();
+            await flushPromises();
+        }
+
+        const strip = document.querySelector('.notes-doc-tabs');
+        Object.defineProperties(strip, {
+            scrollWidth: { configurable: true, value: 200 },
+            clientWidth: { configurable: true, value: 100 },
+        });
+
+        const down = new WheelEvent('wheel', { deltaY: 40, cancelable: true });
+        strip.dispatchEvent(down);
+        expect(strip.scrollLeft).toBe(40);
+        expect(down.defaultPrevented).toBe(true);
+
+        const up = new WheelEvent('wheel', { deltaY: -15, cancelable: true });
+        strip.dispatchEvent(up);
+        expect(strip.scrollLeft).toBe(25);
+        expect(up.defaultPrevented).toBe(true);
     });
 
     it('watches the files of every open document', async () => {

@@ -241,7 +241,10 @@ filesystems on macOS and Linux, not a way to support additional platforms.
   `pane_current_path`. Unknown cwd does not fall back to the application's
   working directory. Resolution is cached until cwd or group changes.
   `RefreshNotes` now emits `notesContextChanged` only when resolved roots or
-  group change; unchanged focus and prompt reports do not trigger scans.
+  group change; unchanged focus and prompt reports do not trigger scans. A late
+  pane startup-directory seed updates the terminal row source and calls
+  `RefreshNotes`, so a configured workspace Pwd reaches context resolution even
+  when the pane was discovered before its startup seed arrived.
   Backend workspace fields update independently of scanning through locked
   accessors. `GetNotesContext` and `ListFilesForContext` keep title, project,
   and scan roots together; cancelled or superseded scans reject rather than
@@ -346,7 +349,8 @@ filesystems on macOS and Linux, not a way to support additional platforms.
 - `utils/file/dirwatch` - macOS/Linux directory watches and polling recovery
 - `utils/notes/file_index_watch.go` - batched reconciliation and delta publication
 - `utils/notes/file_changes.go` - known-write notifications
-- `virtualterm/term.go` - `SetFocus` → `RefreshNotes`
+- `virtualterm/term.go` - `SetInitialWorkingDirectory` and `SetFocus` →
+  `RefreshNotes`; startup directory seeds also trigger a renderer redraw
 - `virtualterm/osc_functions.go` - OSC 7 → `RefreshNotes`
 - `window/backend/renderer_webkit/interface.go` - `RefreshWindowList` → `RefreshNotes`
 - `window/backend/renderer_webkit/notes.go` - deduplicated context publication

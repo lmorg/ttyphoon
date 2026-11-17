@@ -1197,6 +1197,9 @@ function renderNotesTabs(view) {
     strip.hidden = docs.length === 0;
     strip.replaceChildren(...docs.map((doc) => {
         const name = getPathFileName(doc.path);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'notes-doc-tab-wrap';
+        wrapper.setAttribute('role', 'presentation');
         // A button, so it takes the same font as the other tabs.
         const tab = document.createElement('button');
         tab.type = 'button';
@@ -1213,7 +1216,17 @@ function renderNotesTabs(view) {
         label.className = 'notes-doc-tab-name';
         label.textContent = name;
         tab.append(label);
-        return tab;
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'notes-doc-tab-close';
+        close.dataset.docKey = doc.key;
+        close.setAttribute('aria-label', `Close ${name}`);
+        close.title = `Close ${name}`;
+        close.textContent = '\uf00d';
+
+        wrapper.append(tab, close);
+        return wrapper;
     }));
     renderNotesNotice(view);
     saveNotesOpenTabs();
@@ -1388,7 +1401,8 @@ async function handleNotesDocumentChangedOnDisk(doc) {
 
 function markActiveNotesTabDirty() {
     for (const view of notesViewList()) {
-        const tab = [...view.parts.docTabs.children].find((el) => el.dataset.docKey === activeNotesDocument.key);
+        const tab = [...view.parts.docTabs.querySelectorAll('.notes-doc-tab')]
+            .find((el) => el.dataset.docKey === activeNotesDocument.key);
         if (tab) {
             tab.dataset.dirty = String(state.dirty === true);
         }
@@ -1810,7 +1824,7 @@ function notesTabDropTarget(event) {
     }
     const rect = tab.getBoundingClientRect();
     if (event.clientX > rect.left + rect.width / 2) {
-        const next = tab.nextElementSibling;
+        const next = tab.parentElement?.nextElementSibling?.querySelector('.notes-doc-tab') || null;
         return { tab: next, beforeKey: next?.dataset.docKey || '' };
     }
     return { tab, beforeKey: tab.dataset.docKey };
@@ -1826,6 +1840,20 @@ function clearNotesTabDropMarker() {
 
 function bindNotesViewTabs(view) {
     const strip = view.parts.docTabs;
+    strip.addEventListener('wheel', (event) => {
+        if (strip.scrollWidth <= strip.clientWidth) {
+            return;
+        }
+
+        const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+        if (delta === 0) {
+            return;
+        }
+
+        strip.scrollLeft += delta;
+        event.preventDefault();
+    }, { passive: false });
+
     view.root.addEventListener('dragover', (event) => {
         if (!draggedNotesTab || strip.contains(event.target)) {
             return;
@@ -1926,6 +1954,13 @@ function bindNotesViewTabs(view) {
     });
 
     view.parts.docTabs.addEventListener('click', (event) => {
+        const close = event.target.closest('.notes-doc-tab-close');
+        if (close) {
+            event.preventDefault();
+            event.stopPropagation();
+            void closeNotesTab(view, close.dataset.docKey);
+            return;
+        }
         const tab = event.target.closest('.notes-doc-tab');
         if (tab) {
             void activateNotesTab(view, tab.dataset.docKey);

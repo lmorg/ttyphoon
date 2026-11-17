@@ -175,7 +175,11 @@ func (pane *PaneT) setStartupState(state paneStartupState) {
 		return
 	}
 	if state.workingDirectory != "" {
-		pane.SetPwd(state.workingDirectory)
+		if setter, ok := pane.term.(interface{ SetInitialWorkingDirectory(string) }); ok {
+			setter.SetInitialWorkingDirectory(state.workingDirectory)
+		} else {
+			pane.SetPwd(state.workingDirectory)
+		}
 	}
 	if setter, ok := pane.term.(interface{ SetInitialEnvVars(map[string]string) }); ok {
 		setter.SetInitialEnvVars(state.environment)
